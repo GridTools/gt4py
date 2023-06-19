@@ -425,55 +425,6 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
-def test_something(reduction_setup):
-    rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
-    V2EDim = rs.V2EDim
-    V2E = rs.V2E
-
-    @field_operator
-    def reduction_tuple(a: Field[[Edge], int64], b: Field[[Edge], int64]) -> Field[[Vertex], int64]:
-        a = neighbor_sum(a(V2E), axis=V2EDim)
-        b = neighbor_sum(b(V2E), axis=V2EDim)
-        return a + b
-
-    reduction_tuple(rs.inp, rs.inp, out=rs.out, offset_provider=rs.offset_provider)
-
-    ref = np.sum(rs.v2e_table, axis=1) * 2
-    assert np.allclose(ref, rs.out)
-
-
-def test_something2(reduction_setup):
-    rs = reduction_setup
-    Edge = rs.Edge
-    Vertex = rs.Vertex
-    V2EDim = rs.V2EDim
-    V2E = rs.V2E
-    E2VDim = rs.E2VDim
-    E2V = rs.E2V
-
-    num_vertices = rs.num_vertices
-    num_edges = rs.num_edges
-
-    # TODO(tehrengruber): use different values per location
-    a = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
-    b = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
-    out = np_as_located_field(Vertex)(np.ones((num_vertices,), dtype=np.int64))
-
-    @field_operator
-    def nested_reduction(
-        a: Field[[Vertex], int64], b: Field[[Vertex], int64]
-    ) -> Field[[Vertex], int64]:
-        edge_avg = a(E2V[0]) + a(E2V[1])
-        return edge_avg(V2E[0]) + edge_avg(V2E[1]) + a
-
-    nested_reduction(a, a, out=out, offset_provider=rs.offset_provider)
-
-    ref = np.sum(rs.v2e_table, axis=1) * 2
-    assert np.allclose(ref, rs.out)
-
-
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
