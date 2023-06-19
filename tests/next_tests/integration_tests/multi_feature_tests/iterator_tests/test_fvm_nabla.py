@@ -135,7 +135,11 @@ def nabla(
 
 def test_compute_zavgS(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative, gtfn_cpu.run_gtfn_with_temporaries]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
@@ -195,7 +199,11 @@ def compute_zavgS2_fencil(
 
 def test_compute_zavgS2(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative, gtfn_cpu.run_gtfn_with_temporaries]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
@@ -235,7 +243,11 @@ def test_compute_zavgS2(program_processor, lift_mode):
 
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative, gtfn_cpu.run_gtfn_with_temporaries]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
@@ -296,7 +308,11 @@ def nabla2(
 
 def test_nabla2(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative, gtfn_cpu.run_gtfn_with_temporaries]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
@@ -381,7 +397,11 @@ def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("test is broken due to bad lift semantics in iterator IR")
-    if program_processor in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative, gtfn_cpu.run_gtfn_with_temporaries]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
