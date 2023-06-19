@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, float64, int64, max_over, min_over, neighbor_sum, where
+from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
@@ -49,7 +49,9 @@ def test_maxover_execution(unstructured_case):
         pytest.skip("not yet supported.")
 
     @gtx.field_operator
-    def maxover_fieldoperator(inp_field: gtx.Field[[Vertex, V2EDim], int64]) -> cases.VField:
+    def maxover_fieldoperator(
+        inp_field: gtx.Field[[Vertex, V2EDim], int32]
+    ) -> gtx.Field[[Vertex], int32]:
         return max_over(inp_field, axis=V2EDim)
 
     inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
@@ -205,7 +207,7 @@ def test_broadcast_scalar(cartesian_case):
 
 def test_broadcast_two_fields(cartesian_case):
     @gtx.field_operator
-    def broadcast_two_fields(inp1: cases.IField, inp2: gtx.Field[[JDim], int64]) -> cases.IJField:
+    def broadcast_two_fields(inp1: cases.IField, inp2: gtx.Field[[JDim], int32]) -> cases.IJField:
         a = broadcast(inp1, (IDim, JDim))
         b = broadcast(inp2, (IDim, JDim))
         return a + b

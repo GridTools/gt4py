@@ -26,7 +26,7 @@ def _neighbors(offset: ir.Expr, it: ir.Expr) -> ir.FunCall:
 
 def test_list_get_neighbors():
     testee = _list_get(
-        ir.Literal(value="42", type="int"),
+        ir.Literal(value="42", type="int32"),
         _neighbors(ir.OffsetLiteral(value="foo"), ir.SymRef(id="bar")),
     )
 
@@ -52,7 +52,7 @@ def test_list_get_neighbors():
 
 def test_list_get_make_const_list():
     testee = _list_get(
-        ir.Literal(value="42", type="int"),
+        ir.Literal(value="42", type="int32"),
         ir.FunCall(
             fun=ir.SymRef(id="make_const_list"), args=[ir.Literal(value="3.14", type="float64")]
         ),

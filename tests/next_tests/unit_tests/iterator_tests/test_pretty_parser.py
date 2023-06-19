@@ -40,12 +40,15 @@ def test_arithmetic():
                 args=[
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
-                        args=[ir.Literal(value="1", type="int"), ir.Literal(value="2", type="int")],
+                        args=[
+                            ir.Literal(value="1", type="int32"),
+                            ir.Literal(value="2", type="int32"),
+                        ],
                     ),
-                    ir.Literal(value="3", type="int"),
+                    ir.Literal(value="3", type="int32"),
                 ],
             ),
-            ir.Literal(value="4", type="int"),
+            ir.Literal(value="4", type="int32"),
         ],
     )
     actual = pparse(testee)
@@ -105,7 +108,8 @@ def test_shift():
 def test_tuple_get():
     testee = "x[42]"
     expected = ir.FunCall(
-        fun=ir.SymRef(id="tuple_get"), args=[ir.Literal(value="42", type="int"), ir.SymRef(id="x")]
+        fun=ir.SymRef(id="tuple_get"),
+        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     actual = pparse(testee)
     assert actual == expected

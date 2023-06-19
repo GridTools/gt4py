@@ -155,9 +155,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
-            assert (
-                isinstance(slice_bound.type, ts.ScalarType)
-                and slice_bound.type.kind == ts.ScalarKind.INT
+            assert isinstance(slice_bound.type, ts.ScalarType) and type_info.is_integral(
+                slice_bound.type
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -217,7 +216,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    itir.Literal(value="0", type="int"),
+                    itir.Literal(value="0", type=itir.INTEGER_INDEX_BUILTIN),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
@@ -336,8 +335,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
             typename = node.type.kind.name.lower()
-            if typename.startswith("int"):
-                typename = "int"
             return itir.Literal(value=str(node.value), type=typename)
 
         raise NotImplementedError("Only scalar literals supported currently.")

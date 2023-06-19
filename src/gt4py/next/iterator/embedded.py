@@ -48,7 +48,7 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.iterator import builtins, runtime, utils
+from gt4py.next.iterator import builtins, runtime
 
 
 EMBEDDED = "embedded"
@@ -141,6 +141,13 @@ MaybePosition: TypeAlias = Optional[Position]
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, np.integer))
+
+
+def _tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
 
 
 @runtime_checkable
@@ -892,7 +899,7 @@ class LocatedFieldImpl(MutableLocatedField):
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = utils.tupelize(indices)
+        indices = _tupelize(indices)
         return self.getter(indices)
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
@@ -1008,7 +1015,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = utils.tupelize(indices)
+            indices = _tupelize(indices)
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):

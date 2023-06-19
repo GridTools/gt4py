@@ -34,7 +34,7 @@ def scan():
                 ),
             ),
             ir.Literal(value="True", type="bool"),
-            ir.Literal(value="0.0", type="float"),
+            ir.Literal(value="0.0", type="float64"),
         ],
     )
 

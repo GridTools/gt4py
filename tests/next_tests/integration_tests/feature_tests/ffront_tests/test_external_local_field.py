@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import int64, neighbor_sum
+from gt4py.next import int32, neighbor_sum
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
@@ -35,7 +35,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_external_local_field(unstructured_case):
     @gtx.field_operator
-    def testee(inp: gtx.Field[[Vertex, V2EDim], int64], ones: cases.EField) -> cases.VField:
+    def testee(
+        inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
+    ) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(
             inp * ones(V2E), axis=V2EDim
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
@@ -60,7 +62,7 @@ def test_external_local_field_only(unstructured_case):
         )
 
     @gtx.field_operator
-    def testee(inp: gtx.Field[[Vertex, V2EDim], int64]) -> cases.VField:
+    def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(inp, axis=V2EDim)
 
     inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
