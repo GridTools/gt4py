@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import copy
 
 from gt4py.eve.utils import UIDs
 from gt4py.next.iterator import ir, ir_makers as im
@@ -154,209 +155,101 @@ def test_update_cartesian_domains():
                 ir.StencilClosure(
                     domain=AUTO_DOMAIN,
                     stencil=im.lambda_("foo_inp")(im.deref("foo_inp")),
-                    output=ir.SymRef(id="_gtmp_1"),
-                    inputs=[ir.SymRef(id="inp")],
+                    output=im.ref("_gtmp_1"),
+                    inputs=[im.ref("inp")],
                 ),
                 ir.StencilClosure(
                     domain=AUTO_DOMAIN,
-                    stencil=ir.SymRef(id="deref"),
-                    output=ir.SymRef(id="_gtmp_0"),
-                    inputs=[ir.SymRef(id="_gtmp_1")],
+                    stencil=im.ref("deref"),
+                    output=im.ref("_gtmp_0"),
+                    inputs=[im.ref("_gtmp_1")],
                 ),
                 ir.StencilClosure(
-                    domain=ir.FunCall(
-                        fun=ir.SymRef(id="cartesian_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                    ir.SymRef(id=s),
-                                ],
+                    domain=im.call("cartesian_domain")(
+                        *(
+                            im.call("named_range")(
+                                ir.AxisLiteral(value=a),
+                                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                im.ref(s),
                             )
                             for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
-                        ],
+                        )
                     ),
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
-                        expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
-                            args=[
-                                ir.FunCall(
-                                    fun=ir.FunCall(
-                                        fun=ir.SymRef(id="shift"),
-                                        args=[
-                                            ir.OffsetLiteral(value="I"),
-                                            ir.OffsetLiteral(value=1),
-                                        ],
-                                    ),
-                                    args=[ir.SymRef(id="_lift_2")],
-                                )
-                            ],
-                        ),
-                    ),
-                    output=ir.SymRef(id="out"),
-                    inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_0")],
+                    stencil=im.lambda_("baz_inp", "_lift_2")(im.deref(im.shift("I", 1)("_lift_2"))),
+                    output=im.ref("out"),
+                    inputs=[im.ref("inp"), im.ref("_gtmp_0")],
                 ),
             ],
         ),
         params=[
-            ir.Sym(id="i"),
-            ir.Sym(id="j"),
-            ir.Sym(id="k"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
+            im.sym("i"),
+            im.sym("j"),
+            im.sym("k"),
+            im.sym("inp"),
+            im.sym("out"),
         ],
         tmps=[
             Temporary(id="_gtmp_0"),
             Temporary(id="_gtmp_1"),
         ],
     )
-    expected = FencilWithTemporaries(
-        fencil=ir.FencilDefinition(
-            id="f",
-            function_definitions=[],
-            params=[
-                ir.Sym(id="i"),
-                ir.Sym(id="j"),
-                ir.Sym(id="k"),
-                ir.Sym(id="inp"),
-                ir.Sym(id="out"),
-                ir.Sym(id="_gtmp_0"),
-                ir.Sym(id="_gtmp_1"),
-            ],
-            closures=[
-                ir.StencilClosure(
-                    domain=ir.FunCall(
-                        fun=ir.SymRef(id="cartesian_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value="IDim"),
-                                    im.plus(
-                                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
-                                    ),
-                                    ir.FunCall(
-                                        fun=ir.SymRef(id="plus"),
-                                        args=[
-                                            ir.SymRef(id="i"),
-                                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                                        ],
-                                    ),
-                                ],
-                            )
-                        ]
-                        + [
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=a),
-                                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                    ir.SymRef(id=s),
-                                ],
-                            )
-                            for a, s in (("JDim", "j"), ("KDim", "k"))
-                        ],
+    expected = copy.deepcopy(testee)
+    assert expected.fencil.params.pop() == im.sym("_gtmp_auto_domain")
+    expected.fencil.closures[0].domain = ir.FunCall(
+        fun=im.ref("cartesian_domain"),
+        args=[
+            ir.FunCall(
+                fun=im.ref("named_range"),
+                args=[
+                    ir.AxisLiteral(value="IDim"),
+                    im.plus(
+                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="foo_inp")],
-                        expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
-                            args=[ir.SymRef(id="foo_inp")],
-                        ),
-                    ),
-                    output=ir.SymRef(id="_gtmp_1"),
-                    inputs=[ir.SymRef(id="inp")],
-                ),
-                ir.StencilClosure(
-                    domain=ir.FunCall(
-                        fun=ir.SymRef(id="cartesian_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value="IDim"),
-                                    im.plus(
-                                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
-                                    ),
-                                    ir.FunCall(
-                                        fun=ir.SymRef(id="plus"),
-                                        args=[
-                                            ir.SymRef(id="i"),
-                                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                                        ],
-                                    ),
-                                ],
-                            )
-                        ]
-                        + [
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                    ir.SymRef(id=s),
-                                ],
-                            )
-                            for a, s in (("JDim", "j"), ("KDim", "k"))
-                        ],
-                    ),
-                    stencil=ir.SymRef(id="deref"),
-                    output=ir.SymRef(id="_gtmp_0"),
-                    inputs=[ir.SymRef(id="_gtmp_1")],
-                ),
-                ir.StencilClosure(
-                    domain=ir.FunCall(
-                        fun=ir.SymRef(id="cartesian_domain"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
-                                args=[
-                                    ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                    ir.SymRef(id=s),
-                                ],
-                            )
-                            for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
-                        ],
-                    ),
-                    stencil=ir.Lambda(
-                        params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
-                        expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
-                            args=[
-                                ir.FunCall(
-                                    fun=ir.FunCall(
-                                        fun=ir.SymRef(id="shift"),
-                                        args=[
-                                            ir.OffsetLiteral(value="I"),
-                                            ir.OffsetLiteral(value=1),
-                                        ],
-                                    ),
-                                    args=[ir.SymRef(id="_lift_2")],
-                                )
-                            ],
-                        ),
-                    ),
-                    output=ir.SymRef(id="out"),
-                    inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_0")],
-                ),
-            ],
-        ),
-        params=[
-            ir.Sym(id="i"),
-            ir.Sym(id="j"),
-            ir.Sym(id="k"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
+                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
+                ],
+            )
+        ]
+        + [
+            ir.FunCall(
+                fun=im.ref("named_range"),
+                args=[
+                    ir.AxisLiteral(value=a),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                    im.ref(s),
+                ],
+            )
+            for a, s in (("JDim", "j"), ("KDim", "k"))
         ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
+    )
+    expected.fencil.closures[1].domain = ir.FunCall(
+        fun=im.ref("cartesian_domain"),
+        args=[
+            ir.FunCall(
+                fun=im.ref("named_range"),
+                args=[
+                    ir.AxisLiteral(value="IDim"),
+                    im.plus(
+                        im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                        im.literal("1", ir.INTEGER_INDEX_BUILTIN),
+                    ),
+                    im.plus(
+                        im.ref("i"),
+                        ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
+                    ),
+                ],
+            )
+        ]
+        + [
+            ir.FunCall(
+                fun=im.ref("named_range"),
+                args=[
+                    ir.AxisLiteral(value=a),
+                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.ref(s),
+                ],
+            )
+            for a, s in (("JDim", "j"), ("KDim", "k"))
         ],
     )
     actual = update_domains(testee, {"I": CartesianAxis("IDim")})
@@ -365,17 +258,17 @@ def test_update_cartesian_domains():
 
 def test_collect_tmps_info():
     tmp_domain = ir.FunCall(
-        fun=ir.SymRef(id="cartesian_domain"),
+        fun=im.ref("cartesian_domain"),
         args=[
             ir.FunCall(
-                fun=ir.SymRef(id="named_range"),
+                fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value="IDim"),
                     ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                     ir.FunCall(
-                        fun=ir.SymRef(id="plus"),
+                        fun=im.ref("plus"),
                         args=[
-                            ir.SymRef(id="i"),
+                            im.ref("i"),
                             ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
                         ],
                     ),
@@ -384,11 +277,11 @@ def test_collect_tmps_info():
         ]
         + [
             ir.FunCall(
-                fun=ir.SymRef(id="named_range"),
+                fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
                     ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                    ir.SymRef(id=s),
+                    im.ref(s),
                 ],
             )
             for a, s in (("JDim", "j"), ("KDim", "k"))
@@ -413,29 +306,29 @@ def test_collect_tmps_info():
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="foo_inp")],
                         expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
-                            args=[ir.SymRef(id="foo_inp")],
+                            fun=im.ref("deref"),
+                            args=[im.ref("foo_inp")],
                         ),
                     ),
-                    output=ir.SymRef(id="_gtmp_1"),
-                    inputs=[ir.SymRef(id="inp")],
+                    output=im.ref("_gtmp_1"),
+                    inputs=[im.ref("inp")],
                 ),
                 ir.StencilClosure(
                     domain=tmp_domain,
-                    stencil=ir.SymRef(id="deref"),
-                    output=ir.SymRef(id="_gtmp_0"),
-                    inputs=[ir.SymRef(id="_gtmp_1")],
+                    stencil=im.ref("deref"),
+                    output=im.ref("_gtmp_0"),
+                    inputs=[im.ref("_gtmp_1")],
                 ),
                 ir.StencilClosure(
                     domain=ir.FunCall(
-                        fun=ir.SymRef(id="cartesian_domain"),
+                        fun=im.ref("cartesian_domain"),
                         args=[
                             ir.FunCall(
-                                fun=ir.SymRef(id="named_range"),
+                                fun=im.ref("named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
                                     ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
-                                    ir.SymRef(id=s),
+                                    im.ref(s),
                                 ],
                             )
                             for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
@@ -444,23 +337,23 @@ def test_collect_tmps_info():
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="baz_inp"), ir.Sym(id="_lift_2")],
                         expr=ir.FunCall(
-                            fun=ir.SymRef(id="deref"),
+                            fun=im.ref("deref"),
                             args=[
                                 ir.FunCall(
                                     fun=ir.FunCall(
-                                        fun=ir.SymRef(id="shift"),
+                                        fun=im.ref("shift"),
                                         args=[
                                             ir.OffsetLiteral(value="I"),
                                             ir.OffsetLiteral(value=1),
                                         ],
                                     ),
-                                    args=[ir.SymRef(id="_lift_2")],
+                                    args=[im.ref("_lift_2")],
                                 )
                             ],
                         ),
                     ),
-                    output=ir.SymRef(id="out"),
-                    inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_gtmp_0")],
+                    output=im.ref("out"),
+                    inputs=[im.ref("inp"), im.ref("_gtmp_0")],
                 ),
             ],
         ),
