@@ -192,7 +192,7 @@ FFront feature tests utility functions can be found under feature_tests/ffront_t
 - structured and unstructured dimensions definitions
 - reduction setup fixture, including offsets definitions and tables
 
-Note: _The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones)._
+Note: The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones).\_
 
 TODO: add missing test conventions.
 
