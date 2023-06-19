@@ -473,7 +473,7 @@ def _tuple_constituents(node: ir.Expr) -> Iterable[ir.Expr]:
 
 
 def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> FencilWithTemporaries:
-    """Perform type inference for finding the types of temporaries öö sets the temporary size."""
+    """Perform type inference for finding the types of temporaries and sets the temporary size."""
     tmps = {tmp.id for tmp in node.tmps}
     domains: dict[str, ir.Expr] = {}
     for closure in node.fencil.closures:
