@@ -114,8 +114,8 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         used_symbol_ids: set[int] = set()
 
         # Special handling of `if_(condition, true_branch, false_branch)` like expressions that
-        # avoids extracting subexpressions unless they are used in at least two of the three
-        # arguments.
+        # avoids extracting subexpressions unless they are used in either the condition or both
+        # branches.
         if isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="if_"):
             assert len(node.args) == 3
             # collect subexpressions for all arguments to the `if_`
@@ -123,15 +123,9 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             for arg, state in zip(node.args, arg_states):
                 self.visit(arg, state=state, **kwargs)
 
-            # for each subexpression find in how many of the three arguments they occur
-            subexpr_count: dict[ir.Node, int] = {}
-            for arg_state in arg_states:
-                for subexpr in arg_state.subexprs.keys():
-                    subexpr_count.setdefault(subexpr, 0)
-                    subexpr_count[subexpr] += 1
-
             # remove all subexpressions that are not eligible for collection
-            eligible_subexprs = {subexpr for subexpr, count in subexpr_count.items() if count >= 2}
+            #  (either they occur in the condition or in both branches)
+            eligible_subexprs = arg_states[0].subexprs.keys() | (arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys())
             for arg_state in arg_states:
                 arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
