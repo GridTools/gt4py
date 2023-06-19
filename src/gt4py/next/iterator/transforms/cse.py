@@ -125,7 +125,9 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
 
             # remove all subexpressions that are not eligible for collection
             #  (either they occur in the condition or in both branches)
-            eligible_subexprs = arg_states[0].subexprs.keys() | (arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys())
+            eligible_subexprs = arg_states[0].subexprs.keys() | (
+                arg_states[1].subexprs.keys() & arg_states[2].subexprs.keys()
+            )
             for arg_state in arg_states:
                 arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 

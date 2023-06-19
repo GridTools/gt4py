@@ -178,6 +178,7 @@ def test_if_can_deref_eligible_extraction():
     actual = CSE().visit(testee)
     assert actual == expected
 
+
 def test_if_eligible_extraction():
     # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
     # if statement.
@@ -189,9 +190,7 @@ def test_if_eligible_extraction():
         "d",
     )
     # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
-    expected = im.let("_cs_1", im.and_("a", "b"))(
-        im.if_(im.and_("_cs_1", "_cs_1"), "c", "d")
-    )
+    expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
     actual = CSE().visit(testee)
     assert actual == expected
