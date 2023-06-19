@@ -20,17 +20,15 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
 )
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
-I = offset("I")
-J = offset("J")
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+I = Ioff
+J = Joff
 
 
 @fundef
