@@ -90,67 +90,29 @@ def test_shift_by_one_execution(cartesian_case):
 def test_copy_execution(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
-    in_field = cases.allocate(cartesian_case, copy_program, "in_field").strategy(
-        cases.ConstInitializer(1)
-    )()
-    out_field = cases.allocate(cartesian_case, copy_program, "out_field").strategy(
-        cases.ConstInitializer(0)
-    )()
-
-    cases.verify(
-        cartesian_case,
-        copy_program,
-        in_field,
-        out_field,
-        inout=out_field.array(),
-        ref=np.ones((cartesian_case.default_sizes[IDim])),
-    )
+    cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):
     double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.backend)
 
-    in_field = cases.allocate(cartesian_case, double_copy_program, "in_field").strategy(
-        cases.ConstInitializer(1)
-    )()
-    intermediate_field = cases.allocate(
-        cartesian_case, double_copy_program, "intermediate_field"
-    ).strategy(cases.ConstInitializer(0))()
-    out_field = cases.allocate(cartesian_case, double_copy_program, "out_field").strategy(
-        cases.ConstInitializer(0)
-    )()
-
-    cases.verify(
-        cartesian_case,
-        double_copy_program,
-        in_field,
-        intermediate_field,
-        out_field,
-        inout=out_field.array(),
-        ref=np.ones((cartesian_case.default_sizes[IDim])),
+    cases.verify_with_default_data(
+        cartesian_case, double_copy_program, ref=lambda in_field, intermediate_field: in_field
     )
 
 
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
     copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
-    expected = np.array(
-        [1 if i in range(1, 2) else 0 for i in range(0, cartesian_case.default_sizes[IDim])]
-    )
 
-    in_field = cases.allocate(cartesian_case, copy_restrict_program, "in_field").strategy(
-        cases.ConstInitializer(1)
-    )()
-    out_field = cases.allocate(cartesian_case, copy_restrict_program, "out_field").strategy(
-        cases.ConstInitializer(0)
-    )()
-
-    cases.verify(
+    cases.verify_with_default_data(
         cartesian_case,
         copy_restrict_program,
-        in_field,
-        out_field,
-        inout=out_field.array(),
-        ref=expected,
+        ref=lambda in_field: np.array(
+            [
+                in_field[i] if i in range(1, 2) else 0
+                for i in range(0, cartesian_case.default_sizes[IDim])
+            ]
+        ),
     )
 
 
@@ -195,17 +157,9 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
     out_a = cases.allocate(cartesian_case, prog, "out_a")()
     out_b = cases.allocate(cartesian_case, prog, "out_b")()
 
-    cases.verify(
-        cartesian_case,
-        prog,
-        a,
-        b,
-        out_a,
-        out_b,
-        inout=(out_a.array(), out_b.array()),
-        ref=(a.array(), b.array()),
-        comparison=lambda a, b: (np.all(a == out_a), np.all(b == out_b)),
-    )
+    cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
+
+    assert np.allclose((a, b), (out_a, out_b))
 
 
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
@@ -229,22 +183,10 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     out_a = cases.allocate(cartesian_case, prog, "out_a").strategy(cases.ConstInitializer(0))()
     out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
 
-    cases.verify(
-        cartesian_case,
-        prog,
-        a,
-        b,
-        out_a,
-        out_b,
-        inout=(out_a.array()[1:], out_b.array()[1:]),
-        ref=(a.array()[1:], b.array()[1:]),
-        comparison=lambda a, b: (
-            np.all(a[1:] == out_a[1:]),
-            np.all(b[1:] == out_b[1:]),
-            out_a[0] == 0.0,
-            out_b[0] == 0.0,
-        ),
-    )
+    cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
+
+    assert np.allclose((a.array()[1:], b.array()[1:]), (out_a.array()[1:], out_b.array()[1:]))
+    assert out_a[0] == 0 and out_b[0] == 0
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
@@ -272,28 +214,16 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     out_b = cases.allocate(cartesian_case, prog, "out_b").strategy(cases.ConstInitializer(0))()
     out_c = cases.allocate(cartesian_case, prog, "out_c").strategy(cases.ConstInitializer(0))()
 
-    cases.verify(
-        cartesian_case,
-        prog,
-        a,
-        b,
-        c,
-        out_a,
-        out_b,
-        out_c,
-        inout=((out_a.array(), out_b.array()), out_c.array()),
-        ref=((a.array(), b.array()), c.array()),
-        comparison=lambda a, b: (np.all(a == out_a), np.all(b == out_b)),
-    )
+    cases.run(cartesian_case, prog, a, b, c, out_a, out_b, out_c, offset_provider={})
+
+    assert np.allclose((a, b, c), (out_a, out_b, out_c))
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     inp = gtx.np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
-    out = cases.allocate(cartesian_case, copy_program, "out_field").strategy(
-        cases.ConstInitializer(1)
-    )()
+    out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
     with pytest.raises(ProgramTypeError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
