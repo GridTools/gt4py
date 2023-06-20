@@ -59,24 +59,24 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type=itir.INTEGER_INDEX_BUILTIN),
-                        P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
+                        P(itir.Literal, value="0", type="int32"),
+                        P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
                     ],
                 )
             ],
         ),
         stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
         inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
-        output=P(itir.SymRef, id=eve.SymbolRef("out_field")),
+        output=P(itir.SymRef, id=eve.SymbolRef("out")),
     )
     fencil_pattern = P(
         itir.FencilDefinition,
         id=eve.SymbolName("copy_program"),
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("out")),
             P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
         ],
         closures=[closure_pattern],
     )
@@ -112,9 +112,9 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
         id=eve.SymbolName("copy_restrict_program"),
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("out")),
             P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
         ],
         closures=[closure_pattern],
     )
