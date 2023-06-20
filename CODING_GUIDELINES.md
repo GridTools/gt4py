@@ -139,10 +139,9 @@ Temporarily it may be allowed to split unit tests for a module into multiple `te
 
 Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
 
-#### Feature Test Utils
+#### Integration Tests Utils
 
-Feature tests comprise their own utility functions, found under `integration_tests/cases.py` and are used throughout the directory.
-These utils comprise features for better test automation and simplification:
+Integrations tests comprise their own utility functions for features' testing, found in `cases.py` for better test automation and simplification:
 
     - Fields definitions, e.g. IJKField = Field[[IDim, JDim, KDim], np.int64]:
     - Cases fixtures: cartesian_case for structured, e.g. IDim, JDim; unstructured_case, e.g. EdgeDim.
@@ -156,11 +155,9 @@ These utils comprise features for better test automation and simplification:
         - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
 
-FFront feature tests utility functions can be found under feature_tests/ffront_tests/ffront_test_utils.py:
-
-    - Fieldview backend fixture
-    - structured and unstructured dimensions definitions
-    - reduction setup fixture, including offsets definitions and tables
+In case new test utils need to be written, it is important to first check whether any utilities can be use or modified.
+If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect its purpose.
+In case that the new utility is a completely stand-alone component, a new file shall be created in the mutual directory of all usages.
 
 Note: The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones).\_
 
