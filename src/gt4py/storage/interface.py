@@ -12,8 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import numbers
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Optional, Protocol, Sequence, Union, Tuple
 
 import numpy as np
 
@@ -34,7 +36,17 @@ else:
     ArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
     DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
 
-from . import layout, utils as storage_utils
+from gt4py._core import definitions
+from . import allocators, layout, utils as storage_utils
+
+class GTDimsInterface(Protocol):
+    __gt_dims__: Tuple[str, ...]
+
+
+class GTOriginInterface(Protocol):
+    __gt_origin__: Tuple[int, ...]
+
+
 
 
 def _error_on_invalid_backend(backend):
@@ -87,8 +99,10 @@ def empty(
     storage_info = layout.from_name(backend)
     assert storage_info is not None
     if storage_info["device"] == "gpu":
+        device = definitions.Device(definitions.DeviceType.GPU, 0)
         allocate_f = storage_utils.allocate_gpu
     else:
+        device = definitions.Device(definitions.DeviceType.CPU, 0)
         allocate_f = storage_utils.allocate_cpu
 
     aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
@@ -101,8 +115,10 @@ def empty(
     layout_map = storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
-    _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
-    return res
+    dtype = definitions.DType.from_np_dtype(dtype)
+    buffer = allocators.allocate(shape, dtype, layout_map, device=device, byte_alignment=alignment, aligned_index=aligned_index)
+    #_, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
+    return buffer.ndarray
 
 
 def ones(

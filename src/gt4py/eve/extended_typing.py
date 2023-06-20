@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Typing definitions working across different Python versions (via `typing_extensions`).
+"""
+Typing definitions working across different Python versions (via `typing_extensions`).
 
 Definitions in 'typing_extensions' take priority over those in 'typing'.
 """
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import abc as _abc
 import array as _array
+import ctypes as _ctypes
 import collections.abc as _collections_abc
 import dataclasses as _dataclasses
 import enum as _enum
@@ -234,6 +236,56 @@ class HashlibAlgorithm(Protocol):
 
 
 # -- Third party protocols --
+class ArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    descr: NotRequired[List[Tuple]]
+    data: NotRequired[Tuple[int, bool]]
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    mask: NotRequired[Optional["StrictArrayInterface"]]
+    offset: NotRequired[int]
+    version: int
+
+
+class StrictArrayInterface(Protocol):
+    __array_interface__: ArrayInterfaceTypedDict
+
+
+class ArrayInterface(Protocol):
+    __array_interface__: Dict[str, Any]
+
+
+class CUDAArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    data: Tuple[int, bool]
+    version: int
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    descr: NotRequired[List[Tuple]]
+    mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
+    stream: NotRequired[Optional[int]]
+
+
+class StrictCUDAArrayInterface(Protocol):
+    __cuda_array_interface__: CUDAArrayInterfaceTypedDict
+
+
+class CUDAArrayInterface(Protocol):
+    __cuda_array_interface__: Dict[str, Any]
+
+
+PyCapsule = NewType("PyCapsule", object)
+DLDevice = Tuple[int, int]
+
+
+class DLPackBuffer(Protocol):
+    def __dlpack__(self, stream: Optional[int] = None) -> PyCapsule:
+        ...
+
+    def __dlpack_device__(self) -> DLDevice:
+        ...
+
+
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
