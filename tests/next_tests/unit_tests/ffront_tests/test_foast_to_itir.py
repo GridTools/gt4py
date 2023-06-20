@@ -235,7 +235,9 @@ def test_call():
     field_type = type_translation.from_type_hint(gtx.Field[[TDim], float64])
     identity = SimpleNamespace(
         __gt_type__=lambda: ts_ffront.FieldOperatorType(
-            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+            definition=ts.FunctionType(
+                pos_only_args=[field_type], pos_or_kw_args={}, kw_only_args={}, returns=field_type
+            )
         )
     )
 

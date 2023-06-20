@@ -90,32 +90,6 @@ def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> 
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
 
 
-def _canonicalize_args(
-    node_params: list[foast.DataSymbol] | list[past.DataSymbol],
-    args: tuple[Any],
-    kwargs: dict[str, Any],
-) -> tuple[tuple, dict]:
-    new_args = []
-    new_kwargs = {**kwargs}
-
-    for param_i, param in enumerate(node_params):
-        if param.id in new_kwargs:
-            if param_i < len(args):
-                raise ProgramTypeError(f"got multiple values for argument {param.id}.")
-            new_args.append(kwargs[param.id])
-            new_kwargs.pop(param.id)
-        elif param_i < len(args):
-            new_args.append(args[param_i])
-        else:
-            # case when param in function definition but not in function call
-            # e.g. function expects 3 parameters, but only 2 were given.
-            # Error covered later in `accept_args`.
-            pass
-
-    args = tuple(new_args)
-    return args, new_kwargs
-
-
 def _deduce_grid_type(
     requested_grid_type: Optional[GridType],
     offsets_and_dimensions: Iterable[FieldOffset | Dimension],
@@ -305,9 +279,6 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        if kwargs:
-            raise NotImplementedError("Keyword-only arguments are not supported yet.")
-
         arg_types = [type_translation.from_value(arg) for arg in args]
         kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
@@ -324,9 +295,9 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
-
         self._validate_args(*args, **kwargs)
+
+        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
@@ -587,7 +558,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
+        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []

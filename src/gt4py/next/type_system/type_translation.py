@@ -149,7 +149,10 @@ def from_type_hint(
 
             # TODO(tehrengruber): print better error when no return type annotation is given
             return ts.FunctionType(
-                args=args, kwargs=kwargs, returns=recursive_make_symbol(return_type)
+                pos_only_args=args,
+                pos_or_kw_args=kwargs,
+                kw_only_args={},  # TODO
+                returns=recursive_make_symbol(return_type),
             )
 
     raise TypingError(f"'{type_hint}' type is not supported")
