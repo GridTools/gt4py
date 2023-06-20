@@ -18,7 +18,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, scan, shift
 from gt4py.next.iterator.runtime import fundef, offset
 
-from next_tests.integration_tests.cases import IDim, KDim, Koff
+from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
@@ -27,6 +27,7 @@ def test_scan_in_stencil(program_processor, lift_mode):
 
     isize = 1
     ksize = 3
+    Koff = offset("Koff")
     inp = gtx.np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
 
