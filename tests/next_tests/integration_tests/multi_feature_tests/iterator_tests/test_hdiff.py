@@ -26,8 +26,10 @@ from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_refer
 )
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
+
 I = offset("I")
 J = offset("J")
+
 
 @fundef
 def laplacian(inp):
