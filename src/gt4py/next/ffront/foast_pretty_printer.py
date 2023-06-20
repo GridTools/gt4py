@@ -151,7 +151,11 @@ class _PrettyPrinter(TemplatedGenerator):
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
         return f"{true_expr} if {cond} else {false_expr}"
 
-    Call = as_fmt("{func}({', '.join(args)})")  # TODO: kwargs
+    def visit_Call(self, node: foast.Call, **kwargs):
+        args = self.visit(node.args, **kwargs)
+        for k, v in node.kwargs.items():
+            args.append(f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}")
+        return f"{node.func}({', '.join(args)})"
 
     Assign = as_fmt("{target} = {value}")
 

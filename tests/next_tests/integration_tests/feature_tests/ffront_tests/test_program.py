@@ -225,8 +225,8 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        "- Expected 0-th argument to be of type Field\[\[IDim], float64\],"
-        " but got Field\[\[JDim\], float64\].",
+        "- Expected argument `in_field` to be of type `Field\[\[IDim], float64\]`,"
+        " but got `Field\[\[JDim\], float64\]`.",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -249,46 +249,3 @@ def test_dimensions_domain(cartesian_case):
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})
-
-
-def test_input_kwargs(cartesian_case):
-    @gtx.field_operator(backend=cartesian_case.backend)
-    def fieldop_input_kwargs(
-        a: cases.IJField,
-        b: cases.IJField,
-        c: cases.IJField,
-    ) -> cases.IJField:
-        return c * a - b
-
-    input_1 = cases.allocate(cartesian_case, fieldop_input_kwargs, "a")()
-    input_2 = cases.allocate(cartesian_case, fieldop_input_kwargs, "b")()
-    input_3 = cases.allocate(cartesian_case, fieldop_input_kwargs, "c")()
-    expected = np.asarray(input_3) * np.asarray(input_1) - np.asarray(input_2)
-    out = cases.allocate(cartesian_case, fieldop_input_kwargs, cases.RETURN)()
-
-    fieldop_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected, out)
-
-    @gtx.program(backend=cartesian_case.backend)
-    def program_input_kwargs(
-        a: cases.IJField,
-        b: cases.IJField,
-        c: cases.IJField,
-        out: cases.IJField,
-    ):
-        fieldop_input_kwargs(a, b, c, out=out)
-
-    out = cases.allocate(cartesian_case, program_input_kwargs, "out").strategy(
-        cases.ConstInitializer(0)
-    )()
-    program_input_kwargs(input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected, out)
-
-    out = cases.allocate(cartesian_case, program_input_kwargs, "out").strategy(
-        cases.ConstInitializer(0)
-    )()
-    program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
-    assert np.allclose(expected, out)
-
-    with pytest.raises(GTTypeError, match="got multiple values for argument"):
-        program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})

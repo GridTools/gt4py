@@ -251,7 +251,7 @@ def test_conditional_wrong_mask_type():
     ) -> gtx.Field[[TDim], float64]:
         return where(a, a, a)
 
-    msg = r"Expected a field with dtype bool."
+    msg = r"Expected a field with dtype `bool`."
     with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
 
