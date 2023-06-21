@@ -47,7 +47,7 @@ def test_invalid_syntax_error_empty_return():
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
     assert exc_info.value.location
-    assert exc_info.value.location.source.find("test_func_to_foast_error_line_number.py")
+    assert exc_info.value.location.filename.find("test_func_to_foast_error_line_number.py")
     assert exc_info.value.location.line == line + 3
     assert exc_info.value.location.end_line == line + 3
     assert exc_info.value.location.column == 9
@@ -71,7 +71,7 @@ def test_syntax_error_without_function():
         _ = f2f.FieldOperatorParser.apply(source_definition, {}, {})
 
     assert exc_info.value.location
-    assert exc_info.value.location.source.find("test_func_to_foast_error_line_number.py")
+    assert exc_info.value.location.filename.find("test_func_to_foast_error_line_number.py")
     assert exc_info.value.location.line == 66
     assert exc_info.value.location.end_line == 66
     assert exc_info.value.location.column == 9
@@ -92,7 +92,7 @@ def test_fo_type_deduction_error():
     exc = exc_info.value
 
     assert exc_info.value.location
-    assert exc_info.value.location.source.find("test_func_to_foast_error_line_number.py")
+    assert exc_info.value.location.filename.find("test_func_to_foast_error_line_number.py")
     assert exc_info.value.location.line == line + 3
     assert exc_info.value.location.end_line == line + 3
     assert exc_info.value.location.column == 16

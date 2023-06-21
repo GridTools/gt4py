@@ -2,7 +2,7 @@ from gt4py.next.errors import CompilerError
 from gt4py.eve import SourceLocation
 
 
-loc = SourceLocation(5, 2, "/source/file.py", end_line=5, end_column=9)
+loc = SourceLocation("/source/file.py", 5, 2, end_line=5, end_column=9)
 msg = "a message"
 
 

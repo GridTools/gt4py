@@ -38,7 +38,7 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
         loc = SourceLocation(
             line=err.lineno + source_definition.line_offset if err.lineno is not None else None,
             column=err.offset + source_definition.column_offset if err.offset is not None else None,
-            source=source_definition.filename,
+            filename=source_definition.filename,
             end_line=err.end_lineno + source_definition.line_offset if err.end_lineno is not None else None,
             end_column=err.end_offset + source_definition.column_offset if err.end_offset is not None else None
         )
@@ -107,5 +107,5 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         column = 1 + node.col_offset + col_offset if node.col_offset is not None else None
         end_column = 1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None
 
-        loc = SourceLocation(line, column, file, end_line=end_line, end_column=end_column)
+        loc = SourceLocation(file, line, column, end_line=end_line, end_column=end_column)
         return loc

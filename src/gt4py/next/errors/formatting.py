@@ -5,7 +5,7 @@ import pathlib
 
 def get_source_from_location(location: SourceLocation):
     try:
-        source_file = pathlib.Path(location.source)
+        source_file = pathlib.Path(location.filename)
         source_code = source_file.read_text()
         source_lines = source_code.splitlines(False)
         start_line = location.line
@@ -17,7 +17,7 @@ def get_source_from_location(location: SourceLocation):
 
 
 def format_location(loc: SourceLocation, caret: bool = False):
-    filename = loc.source or "<unknown>"
+    filename = loc.filename or "<unknown>"
     lineno = loc.line or "<unknown>"
     loc_str = f"File \"{filename}\", line {lineno}"
 
