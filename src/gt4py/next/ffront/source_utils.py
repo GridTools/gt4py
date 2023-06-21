@@ -106,11 +106,11 @@ class SourceDefinition:
     >>> def foo(a):
     ...     return a
     >>> src_def = SourceDefinition.from_function(foo)
-    >>> print(src_def)
-    SourceDefinition(source='def foo(a):... starting_line=1)
+    >>> print(src_def) # doctest:+ELLIPSIS
+    SourceDefinition(source='def foo(a):...', filename='...', line_offset=0, column_offset=0)
 
     >>> source, filename, starting_line = src_def
-    >>> print(source)
+    >>> print(source) # doctest:+ELLIPSIS
     def foo(a):
         return a
     ...

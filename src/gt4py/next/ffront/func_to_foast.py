@@ -77,8 +77,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     >>> try:                # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except CompilerError as err:
-    ...     print(f"Error at [{err.lineno}, {err.offset}] in {err.filename})")
-    Error at [2, 5] in ...gt4py.next.ffront.func_to_foast.FieldOperatorParser[...]>)
+    ...     print(f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})")
+    Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
 
     @classmethod
