@@ -19,8 +19,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef
 from gt4py.next.program_processors.runners import roundtrip
 
-
-IDim = gtx.Dimension("IDim")
+from next_tests.integration_tests.cases import IDim
 
 
 def test_constant():

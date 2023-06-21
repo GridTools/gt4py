@@ -36,6 +36,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
@@ -50,9 +51,6 @@ def compute_shift(cond):
 @fundef
 def conditional_indirection(inp, cond):
     return deref(compute_shift(cond)(inp))
-
-
-IDim = gtx.Dimension("IDim")
 
 
 def test_simple_indirection(program_processor):

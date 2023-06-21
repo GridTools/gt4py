@@ -23,14 +23,8 @@ import gt4py.next as gtx
 from gt4py.next.common import GTTypeError
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
-    IDim,
-    Ioff,
-    JDim,
-    cartesian_case,
-    fieldview_backend,
-)
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
