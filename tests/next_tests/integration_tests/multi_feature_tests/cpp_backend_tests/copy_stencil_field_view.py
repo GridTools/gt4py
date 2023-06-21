@@ -16,8 +16,7 @@ import sys
 
 from numpy import float64
 
-from gt4py.next.common import Field
-from gt4py.next.ffront.decorator import field_operator, program
+from gt4py.next import Field, field_operator, program
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 

@@ -17,17 +17,15 @@ import traceback
 
 import pytest
 
-from gt4py.next import common
-from gt4py.next.common import Dimension, Field
+import gt4py.next as gtx
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.errors import *
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
 
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def test_invalid_syntax_error_empty_return():
@@ -35,7 +33,7 @@ def test_invalid_syntax_error_empty_return():
 
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
-    def wrong_syntax(inp: common.Field[[TDim], float]):
+    def wrong_syntax(inp: gtx.Field[[TDim], float]):
         return  # <-- this line triggers the syntax error
 
     with pytest.raises(
@@ -84,7 +82,7 @@ def test_fo_type_deduction_error():
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
     def field_operator_with_undeclared_symbol():
-        return undeclared_symbol
+        return undeclared_symbol  # noqa: F821  # undefined on purpose
 
     with pytest.raises(CompilerError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)

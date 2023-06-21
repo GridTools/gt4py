@@ -15,8 +15,8 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -36,8 +36,8 @@ def test_conditional_w_tuple(program_processor):
 
     shape = [5]
 
-    inp = np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
-    out = np_as_located_field(IDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),

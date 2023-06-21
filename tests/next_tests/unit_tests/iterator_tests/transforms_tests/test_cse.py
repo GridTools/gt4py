@@ -143,14 +143,14 @@ def test_if_can_deref_no_extraction():
         im.call("can_deref")(im.shift("I", 1)("it")),
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
         # use something more involved where a subexpression can still be eliminated
-        im.literal("1", "int"),
+        im.literal("1", "int32"),
     )
     # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
     expected = im.let("_cs_1", im.shift("I", 1)("it"))(
         im.if_(
             im.call("can_deref")("_cs_1"),
             im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
-            im.literal("1", "int"),
+            im.literal("1", "int32"),
         )
     )
 
@@ -174,6 +174,23 @@ def test_if_can_deref_eligible_extraction():
             im.if_(im.call("can_deref")("_cs_3"), "_cs_1", im.plus("_cs_1", "_cs_1"))
         )
     )
+
+    actual = CSE().visit(testee)
+    assert actual == expected
+
+
+def test_if_eligible_extraction():
+    # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
+    # if statement.
+
+    # if ((a ∧ b) ∧ (a ∧ b)) then c else d
+    testee = im.if_(
+        im.and_(im.and_("a", "b"), im.and_("a", "b")),
+        "c",
+        "d",
+    )
+    # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
+    expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
     actual = CSE().visit(testee)
     assert actual == expected

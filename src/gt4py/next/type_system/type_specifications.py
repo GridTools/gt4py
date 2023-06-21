@@ -15,8 +15,6 @@
 from dataclasses import dataclass
 from typing import Optional
 
-import numpy as np
-
 from gt4py.eve.type_definitions import IntEnum
 from gt4py.next import common as func_common
 
@@ -77,12 +75,8 @@ class ScalarKind(IntEnum):
     BOOL = 1
     INT32 = 32
     INT64 = 64
-    # Python's "int" type in the Python AST should be mapped to ScalarKind.INT in our ASTs. The size, as
-    # determined by numpy, varies by platform. (Size is the same as C's "long" type.)
-    INT = INT32 if np.int_ == np.int32 else INT64
     FLOAT32 = 1032
     FLOAT64 = 1064
-    DIMENSION = 2001
     STRING = 3001
 
 
@@ -118,12 +112,13 @@ class FieldType(DataType, CallableType):
 
 @dataclass(frozen=True)
 class FunctionType(TypeSpec, CallableType):
-    args: list[DataType | DeferredType]
-    kwargs: dict[str, DataType | DeferredType]
+    pos_only_args: list[DataType | DeferredType]
+    pos_or_kw_args: dict[str, DataType | DeferredType]
+    kw_only_args: dict[str, DataType | DeferredType]
     returns: DataType | DeferredType | VoidType
 
     def __str__(self):
-        arg_strs = [str(arg) for arg in self.args]
-        kwarg_strs = [f"{key}: {value}" for key, value in self.kwargs.items()]
+        arg_strs = [str(arg) for arg in self.pos_only_args]
+        kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
         return f"({args_str}) -> {self.returns}"

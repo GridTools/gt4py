@@ -18,9 +18,9 @@ from collections import abc
 from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.next.common import Connectivity, Dimension, DimensionKind
+import gt4py.next as gtx
+from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
@@ -281,6 +281,22 @@ class Primitive(Type):
         return True
 
 
+class UnionPrimitive(Type):
+    """Union of primitive types."""
+
+    names: tuple[str, ...]
+
+    def handle_constraint(
+        self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
+    ) -> bool:
+        if isinstance(other, UnionPrimitive):
+            raise AssertionError("`UnionPrimitive` may only appear on one side of a constraint.")
+        if not isinstance(other, Primitive):
+            return False
+
+        return other.name in self.names
+
+
 class Value(Type):
     """Marker for values."""
 
@@ -339,9 +355,16 @@ class LetPolymorphic(Type):
     dtype: Type
 
 
+def _default_constraints():
+    return {
+        (FLOAT_DTYPE, UnionPrimitive(names=("float32", "float64"))),
+        (INT_DTYPE, UnionPrimitive(names=("int32", "int64"))),
+    }
+
+
 BOOL_DTYPE = Primitive(name="bool")
-INT_DTYPE = Primitive(name="int")
-FLOAT_DTYPE = Primitive(name="float")
+INT_DTYPE = TypeVar.fresh()
+FLOAT_DTYPE = TypeVar.fresh()
 AXIS_DTYPE = Primitive(name="axis")
 NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
@@ -523,9 +546,13 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                 axis = offset_provider[offset]
                 if isinstance(axis, CartesianAxis):
                     continue  # Cartesian shifts don’t change the location type
-                elif isinstance(axis, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider)):
+                elif isinstance(
+                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
+                ):
                     assert (
-                        axis.origin_axis.kind == axis.neighbor_axis.kind == DimensionKind.HORIZONTAL
+                        axis.origin_axis.kind
+                        == axis.neighbor_axis.kind
+                        == gtx.DimensionKind.HORIZONTAL
                     )
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
@@ -549,9 +576,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             See `unify` for more information.
     """
 
-    offset_provider: Optional[dict[str, Connectivity | Dimension]]
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]]
     collected_types: dict[int, Type] = dataclasses.field(default_factory=dict)
-    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=set)
+    constraints: set[tuple[Type, Type]] = dataclasses.field(default_factory=_default_constraints)
 
     def visit(self, node, **kwargs) -> typing.Any:
         result = super().visit(node, **kwargs)
@@ -589,14 +616,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if node.id in ir.BUILTINS:
             if node.id in BUILTIN_TYPES:
                 return freshen(BUILTIN_TYPES[node.id])
-            elif node.id in (
-                "make_tuple",
-                "tuple_get",
-                "shift",
-                "cartesian_domain",
-                "unstructured_domain",
-                "cast_",
-            ):
+            elif node.id in ir.GRAMMAR_BUILTINS:
                 raise TypeError(
                     f"Builtin '{node.id}' is only allowed as applied/called function by the type "
                     f"inference."
@@ -657,8 +677,14 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
             raise TypeError("`tuple_get` requires exactly two arguments.")
-        if not isinstance(node.args[0], ir.Literal) or node.args[0].type != "int":
-            raise TypeError("The first argument to `tuple_get` must be a literal int.")
+        if (
+            not isinstance(node.args[0], ir.Literal)
+            or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
+        ):
+            raise TypeError(
+                f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
+            )
+        self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
         tup = self.visit(node.args[1], **kwargs)
         kind = TypeVar.fresh()  # `kind == Iterator()` means splitting an iterator of tuples
@@ -902,15 +928,34 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         )
 
 
+def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
+    for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
+        try:
+            child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
+        except KeyError:
+            if not (
+                isinstance(child_node, ir.SymRef)
+                and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
+            ):
+                raise AssertionError(
+                    f"Expected a type to be inferred for node `{child_node}`, but none was found."
+                )
+
+
 def infer_all(
     node: ir.Node,
-    offset_provider: Optional[dict[str, Connectivity | Dimension]] = None,
+    *,
+    offset_provider: Optional[dict[str, Connectivity | gtx.Dimension]] = None,
     reindex: bool = True,
+    save_to_annex=False,
 ) -> dict[int, Type]:
     """
     Infer the types of the child expressions of a given iterator IR expression.
 
     The result is a dictionary mapping the (Python) id of child nodes to their type.
+
+    The `save_to_annex` flag should only be used as a last resort when the  return dictionary is
+    not enough.
     """
     # Collect preliminary types of all nodes and constraints on them
     inferrer = _TypeInferrer(offset_provider=offset_provider)
@@ -925,15 +970,24 @@ def infer_all(
     if reindex:
         unified_types = reindex_vars(list(unified_types))
 
-    return {id_: unified_type for id_, unified_type in zip(collected_types.keys(), unified_types)}
+    result = {
+        id_: unified_type
+        for id_, unified_type in zip(collected_types.keys(), unified_types, strict=True)
+    }
+
+    if save_to_annex:
+        _save_types_to_annex(node, result)
+
+    return result
 
 
 def infer(
     expr: ir.Node,
     offset_provider: typing.Optional[dict[str, typing.Any]] = None,
+    save_to_annex: bool = False,
 ) -> Type:
     """Infer the type of the given iterator IR expression."""
-    inferred_types = infer_all(expr, offset_provider)
+    inferred_types = infer_all(expr, offset_provider=offset_provider, save_to_annex=save_to_annex)
     return inferred_types[id(expr)]
 
 
