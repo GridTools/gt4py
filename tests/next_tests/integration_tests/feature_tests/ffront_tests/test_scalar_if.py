@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from gt4py.next import Field, field_operator, float64, index_field, np_as_located_field
-from gt4py.next.program_processors.runners import gtfn_cpu
 from gt4py.next.errors import *
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import (
@@ -370,9 +370,7 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-    with pytest.raises(
-        CompilerError, match="Condition for `if` must be of boolean type."
-    ):
+    with pytest.raises(CompilerError, match="Condition for `if` must be of boolean type."):
 
         @field_operator
         def if_non_boolean_condition(

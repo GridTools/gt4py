@@ -31,9 +31,9 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
+from gt4py.next.errors import *
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn_cpu
-from gt4py.next.errors import *
 
 from next_tests.integration_tests.feature_tests import cases
 from next_tests.integration_tests.feature_tests.cases import (
@@ -929,9 +929,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(
-        CompilerError, match=(r"Assignment value must be of type tuple!")
-    ):
+    with pytest.raises(CompilerError, match=(r"Assignment value must be of type tuple!")):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:

@@ -158,9 +158,7 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(common.Field[[IDim], None])
 
     # Functions
-    with pytest.raises(
-        ValueError, match="Not annotated functions are not supported"
-    ):
+    with pytest.raises(ValueError, match="Not annotated functions are not supported"):
         type_translation.from_type_hint(typing.Callable)
 
     with pytest.raises(ValueError, match="Invalid callable annotations"):

@@ -37,9 +37,7 @@ def _flatten_tuple_expr(
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise ValueError(
-        "Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed."
-    )
+    raise ValueError("Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed.")
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):

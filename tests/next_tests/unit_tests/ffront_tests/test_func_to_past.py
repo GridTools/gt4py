@@ -20,10 +20,10 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import float64
+from gt4py.next.errors import *
 from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.errors import *
 
 from next_tests.past_common_fixtures import (
     IDim,

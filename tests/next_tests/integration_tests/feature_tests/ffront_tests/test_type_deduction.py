@@ -31,11 +31,11 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
+from gt4py.next.errors import *
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.errors import *
 
 
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.

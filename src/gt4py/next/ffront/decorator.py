@@ -54,7 +54,6 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-from gt4py.next.errors import *
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor

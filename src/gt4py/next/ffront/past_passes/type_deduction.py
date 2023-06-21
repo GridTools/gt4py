@@ -15,13 +15,13 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
+from gt4py.next.errors import CompilerError
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
     type_specifications as ts_ffront,
 )
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.errors import *
 
 
 def _ensure_no_sliced_field(entry: past.Expr):
@@ -231,9 +231,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         except ValueError as ex:
-            raise CompilerError(
-                node.location, f"Invalid call to `{node.func.id}`."
-            ) from ex
+            raise CompilerError(node.location, f"Invalid call to `{node.func.id}`.") from ex
 
         return past.Call(
             func=new_func,
@@ -246,8 +244,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise CompilerError(
-                node.location, f"Undeclared or untyped symbol `{node.id}`."
-            )
+            raise CompilerError(node.location, f"Undeclared or untyped symbol `{node.id}`.")
 
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)

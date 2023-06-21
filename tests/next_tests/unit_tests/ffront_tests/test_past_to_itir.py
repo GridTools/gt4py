@@ -19,10 +19,10 @@ import pytest
 import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
+from gt4py.next.errors import *
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
-from gt4py.next.errors import *
 
 from next_tests.past_common_fixtures import (
     IDim,

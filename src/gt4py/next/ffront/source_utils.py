@@ -23,8 +23,6 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast
 
-from gt4py.next import common
-
 
 MISSING_FILENAME = "<string>"
 
@@ -38,12 +36,13 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
         filename = str(pathlib.Path(inspect.getabsfile(func)).resolve())
         if not filename:
-            raise ValueError("Can not create field operator from a function that is not in a source file!")
+            raise ValueError(
+                "Can not create field operator from a function that is not in a source file!"
+            )
         source_lines, line_offset = inspect.getsourcelines(func)
         source_code = textwrap.dedent(inspect.getsource(func))
         column_offset = min(
-            [len(line) - len(line.lstrip()) for line in source_lines if line.lstrip()],
-            default=0
+            [len(line) - len(line.lstrip()) for line in source_lines if line.lstrip()], default=0
         )
         return SourceDefinition(source_code, filename, line_offset - 1, column_offset)
 

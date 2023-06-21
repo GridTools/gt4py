@@ -19,7 +19,12 @@ import builtins
 from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import gt4py.eve as eve
-from gt4py.next import common
+from gt4py.next.errors import (
+    CompilerError,
+    InvalidParameterAnnotationError,
+    MissingParameterAnnotationError,
+    UnsupportedPythonFeatureError,
+)
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
@@ -28,7 +33,6 @@ from gt4py.next.ffront.ast_passes import (
     UnchainComparesPass,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
-from gt4py.next.errors import *
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
@@ -107,7 +111,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 raise CompilerError(
                     foast_node.location,
                     f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                    f", but got `{annotated_return_type}`."
+                    f", but got `{annotated_return_type}`.",
                 )
         return foast_node
 
@@ -166,7 +170,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
-            raise CompilerError(loc, "function is expected to return a value, return statement not found")
+            raise CompilerError(
+                loc, "function is expected to return a value, return statement not found"
+            )
 
         return foast.FunctionDefinition(
             id=node.name,
@@ -286,7 +292,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         try:
             index = self._match_index(node.slice)
         except ValueError:
-            raise CompilerError(self.get_location(node.slice), "expected an integral index") from None
+            raise CompilerError(
+                self.get_location(node.slice), "expected an integral index"
+            ) from None
 
         return foast.Subscript(
             value=self.visit(node.value),
@@ -318,7 +326,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
         return foast.UnaryOp(
-            op=self.visit(node.op), operand=self.visit(node.operand), location=self.get_location(node)
+            op=self.visit(node.op),
+            operand=self.visit(node.operand),
+            location=self.get_location(node),
         )
 
     def visit_UAdd(self, node: ast.UAdd, **kwargs) -> dialect_ast_enums.UnaryOperator:
@@ -372,7 +382,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return dialect_ast_enums.BinaryOperator.BIT_XOR
 
     def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
-        raise UnsupportedPythonFeatureError(self.get_location(node), "logical operators `and`, `or`")
+        raise UnsupportedPythonFeatureError(
+            self.get_location(node), "logical operators `and`, `or`"
+        )
 
     def visit_IfExp(self, node: ast.IfExp, **kwargs) -> foast.TernaryExpr:
         return foast.TernaryExpr(
@@ -459,8 +471,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)
-        except ValueError as e:
-            raise CompilerError(loc, f"constants of type {type(node.value)} are not permitted") from None
+        except ValueError:
+            raise CompilerError(
+                loc, f"constants of type {type(node.value)} are not permitted"
+            ) from None
 
         return foast.Constant(
             value=node.value,

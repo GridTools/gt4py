@@ -19,13 +19,11 @@ from dataclasses import dataclass
 from typing import Callable
 
 from gt4py.eve.concepts import SourceLocation
-from gt4py.eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
-from gt4py.next import common
-from gt4py.next.errors import *
+from gt4py.eve.extended_typing import Any, Generic, TypeVar
+from gt4py.next.errors import CompilerError, UnsupportedPythonFeatureError
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
-from gt4py.next.errors import UnsupportedPythonFeatureError
 
 
 DialectRootT = TypeVar("DialectRootT")
@@ -35,12 +33,18 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
     try:
         return ast.parse(textwrap.dedent(source_definition.source)).body[0]
     except SyntaxError as err:
+        assert err.lineno
+        assert err.offset
         loc = SourceLocation(
-            line=err.lineno + source_definition.line_offset if err.lineno is not None else None,
-            column=err.offset + source_definition.column_offset if err.offset is not None else None,
+            line=err.lineno + source_definition.line_offset,
+            column=err.offset + source_definition.column_offset,
             filename=source_definition.filename,
-            end_line=err.end_lineno + source_definition.line_offset if err.end_lineno is not None else None,
-            end_column=err.end_offset + source_definition.column_offset if err.end_offset is not None else None
+            end_line=err.end_lineno + source_definition.line_offset
+            if err.end_lineno is not None
+            else None,
+            end_column=err.end_offset + source_definition.column_offset
+            if err.end_offset is not None
+            else None,
         )
         raise CompilerError(loc, err.msg).with_traceback(err.__traceback__)
 
@@ -105,7 +109,9 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         line = node.lineno + line_offset if node.lineno is not None else None
         end_line = node.end_lineno + line_offset if node.end_lineno is not None else None
         column = 1 + node.col_offset + col_offset if node.col_offset is not None else None
-        end_column = 1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None
+        end_column = (
+            1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None
+        )
 
         loc = SourceLocation(file, line, column, end_line=end_line, end_column=end_column)
         return loc

@@ -1,7 +1,22 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import textwrap
+from typing import Any, Optional, TypeVar
 
 from gt4py.eve import SourceLocation
-from typing import Any, Optional, TypeVar
+
 from . import formatting
 
 
@@ -72,12 +87,16 @@ class MissingParameterAnnotationError(CompilerTypeError):
 
 class InvalidParameterAnnotationError(CompilerTypeError):
     def __init__(self, location: LocationTraceT, param_name: str, type_: Any):
-        super().__init__(location, f"parameter '{param_name}' has invalid type annotation '{type_}'")
+        super().__init__(
+            location, f"parameter '{param_name}' has invalid type annotation '{type_}'"
+        )
 
 
 class ArgumentCountError(CompilerTypeError):
     def __init__(self, location: LocationTraceT, num_expected: int, num_provided: int):
-        super().__init__(location, f"expected {num_expected} arguments but {num_provided} were provided")
+        super().__init__(
+            location, f"expected {num_expected} arguments but {num_provided} were provided"
+        )
 
 
 class KeywordArgumentError(CompilerTypeError):

@@ -56,9 +56,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
             return constraint
         case ts.TypeSpec() as concrete_type:
             return concrete_type.__class__
-    raise ValueError(
-        f"Invalid type for TypeInfo: requires {ts.TypeSpec}, got {type(symbol_type)}!"
-    )
+    raise ValueError(f"Invalid type for TypeInfo: requires {ts.TypeSpec}, got {type(symbol_type)}!")
 
 
 def primitive_constituents(

@@ -18,7 +18,7 @@ from typing import Any
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
 from gt4py.eve.utils import FrozenNamespace
-from gt4py.next.errors import *
+from gt4py.next.errors import CompilerError, MissingAttributeError
 
 
 @dataclass

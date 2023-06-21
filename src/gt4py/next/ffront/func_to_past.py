@@ -18,13 +18,17 @@ import ast
 from dataclasses import dataclass
 from typing import Any, cast
 
+from gt4py.next.errors import (
+    CompilerError,
+    InvalidParameterAnnotationError,
+    MissingParameterAnnotationError,
+)
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
-from gt4py.next.errors import CompilerError, MissingParameterAnnotationError, InvalidParameterAnnotationError
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -163,9 +167,7 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = type_translation.from_value(node.operand.value)
-            return past.Constant(
-                value=-node.operand.value, type=symbol_type, location=loc
-            )
+            return past.Constant(value=-node.operand.value, type=symbol_type, location=loc)
         raise CompilerError(loc, "unary operators are only applicable to literals")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:

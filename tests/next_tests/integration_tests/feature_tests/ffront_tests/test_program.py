@@ -292,5 +292,7 @@ def test_input_kwargs(fieldview_backend):
     program_input_kwargs(a=input_1, b=input_2, c=input_3, out=out, offset_provider={})
     assert np.allclose(expected, out)
 
-    with pytest.raises(ValueError, match="Invalid argument types in call to `program_input_kwargs`!"):
+    with pytest.raises(
+        ValueError, match="Invalid argument types in call to `program_input_kwargs`!"
+    ):
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})

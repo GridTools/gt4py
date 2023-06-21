@@ -16,8 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
-from gt4py.next.errors import *
+from gt4py.next.errors import CompilerError
 from gt4py.next.program_processors.runners import roundtrip
 
 from next_tests.integration_tests.feature_tests import cases

@@ -42,12 +42,12 @@ import pytest
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import astype, broadcast, float32, float64, int32, int64, where
+from gt4py.next.errors import *
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.errors import *
 
 
 DEREF = itir.SymRef(id=itb.deref.fun.__name__)
@@ -77,9 +77,7 @@ def test_untyped_arg():
     def untyped(inp):
         return inp
 
-    with pytest.raises(
-        MissingParameterAnnotationError
-    ):
+    with pytest.raises(MissingParameterAnnotationError):
         _ = FieldOperatorParser.apply_to_function(untyped)
 
 

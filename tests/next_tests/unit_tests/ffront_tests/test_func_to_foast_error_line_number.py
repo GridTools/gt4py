@@ -18,9 +18,9 @@ import traceback
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next.errors import *
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
-from gt4py.next.errors import *
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -38,9 +38,7 @@ def test_invalid_syntax_error_empty_return():
 
     with pytest.raises(
         f2f.CompilerError,
-        match=(
-            r".*return.*"
-        ),
+        match=(r".*return.*"),
     ) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
