@@ -41,7 +41,7 @@ def format_compilation_error(type_: type[Exception], message: str, location_trac
     msg_str = f"{type_.__module__}.{type_.__name__}: {message}"
 
     try:
-        loc_str = "".join([format_location(loc) for loc in location_trace])
+        loc_str = "".join([format_location(loc, caret=True) for loc in location_trace])
         stack_str = f"Source location (most recent call last):\n{textwrap.indent(loc_str, '  ')}\n"
         return [stack_str, msg_str]
     except ValueError:
