@@ -162,18 +162,7 @@ def _builtin_neighbors_indirect_addressing(
     state.add_memlet_path(iterator.indices[shifted_dim], me, shift_tasklet, memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0"), dst_conn="__idx")
     state.add_edge(shift_tasklet, '__result', data_access_tasklet, '__idx', dace.Memlet(data=idx_name, subset='0'))
     state.add_memlet_path(iterator.field, me, data_access_tasklet, memlet=dace.Memlet(data=iterator.field.data, subset=','.join(f"0:{s}" for s in sdfg.arrays[iterator.field.data].shape)), dst_conn="__field")
-    state.add_memlet_path(data_access_tasklet, mx, result_access, memlet=dace.Memlet(data=result_name, subset='0'), src_conn="__result")
-    # state.add_mapped_tasklet(
-    #                        f"{offset_literal.value}_neighbors_map",
-    #                        map_ranges={"neigh_idx": f"0:{table.max_neighbors}"},
-    #                        inputs={"__table": dace.Memlet(data=table_name, subset=','.join(f"0:{s}" for s in table_array.shape)),
-    #                                "__field": dace.Memlet(data=iterator.field.data, subset=','.join(f"0:{s}" for s in sdfg.arrays[iterator.field.data].shape)),
-    #                                "__idx": dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0")},
-    #                        code= f"__result = __field[__table[__idx, neigh_idx]]",
-    #                        outputs={"__result": dace.Memlet(data=result_name, subset="neigh_idx")},
-    #                        external_edges=True,
-    #                        input_nodes = None,
-    #                        output_nodes = {result_name:result_access})
+    state.add_memlet_path(data_access_tasklet, mx, result_access, memlet=dace.Memlet(data=result_name, subset='neigh_idx'), src_conn="__result")
 
 
     return [ValueExpr(result_access, iterator.dtype)]
