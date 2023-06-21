@@ -130,6 +130,66 @@ class Context:
     symbol_map: dict[str, ValueExpr | IteratorExpr]
 
 
+def _builtin_neighbors_indirect_addressing(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    sdfg: dace.SDFG = transformer.context.body
+    state: dace.SDFGState = transformer.context.state
+
+    offset_literal, data = node_args
+    iterator = transformer.visit(data)
+    table: NeighborTableOffsetProvider = transformer.offset_provider[offset_literal.value]
+    assert isinstance(table, NeighborTableOffsetProvider)
+
+    shifted_dim = table.origin_axis.value
+
+    result_name = unique_var_name()
+    sdfg.add_array(result_name, dtype=iterator.dtype, shape=(table.max_neighbors,), transient=True)
+    result_access = state.add_access(result_name)
+
+    table_name = connectivity_identifier(offset_literal.value)
+    table_array = sdfg.arrays[table_name]
+
+    me, mx = state.add_map(
+                           f"{offset_literal.value}_neighbors_map",
+                           ndrange={"neigh_idx": f"0:{table.max_neighbors}"},
+    )
+    shift_tasklet = state.add_tasklet('shift',code="__result = __table[__idx, neigh_idx]", inputs={'__table', '__idx'}, outputs={'__result'})
+    data_access_tasklet = state.add_tasklet('data_access', code="__result = __field[__idx]", inputs={'__field', '__idx'}, outputs={'__result'})
+    idx_name = unique_var_name()
+    sdfg.add_scalar(idx_name, dace.int64, transient=True)
+    state.add_memlet_path(state.add_access(table_name), me, shift_tasklet, memlet=dace.Memlet(data=table_name, subset=','.join(f"0:{s}" for s in table_array.shape)), dst_conn="__table")
+    state.add_memlet_path(iterator.indices[shifted_dim], me, shift_tasklet, memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0"), dst_conn="__idx")
+    state.add_edge(shift_tasklet, '__result', data_access_tasklet, '__idx', dace.Memlet(data=idx_name, subset='0'))
+    state.add_memlet_path(iterator.field, me, data_access_tasklet, memlet=dace.Memlet(data=iterator.field.data, subset=','.join(f"0:{s}" for s in sdfg.arrays[iterator.field.data].shape)), dst_conn="__field")
+    state.add_memlet_path(data_access_tasklet, mx, result_access, memlet=dace.Memlet(data=result_name, subset='0'), src_conn="__result")
+    # state.add_mapped_tasklet(
+    #                        f"{offset_literal.value}_neighbors_map",
+    #                        map_ranges={"neigh_idx": f"0:{table.max_neighbors}"},
+    #                        inputs={"__table": dace.Memlet(data=table_name, subset=','.join(f"0:{s}" for s in table_array.shape)),
+    #                                "__field": dace.Memlet(data=iterator.field.data, subset=','.join(f"0:{s}" for s in sdfg.arrays[iterator.field.data].shape)),
+    #                                "__idx": dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0")},
+    #                        code= f"__result = __field[__table[__idx, neigh_idx]]",
+    #                        outputs={"__result": dace.Memlet(data=result_name, subset="neigh_idx")},
+    #                        external_edges=True,
+    #                        input_nodes = None,
+    #                        output_nodes = {result_name:result_access})
+
+
+    return [ValueExpr(result_access, iterator.dtype)]
+
+def builtin_neighbors(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    dimension = node_args[0].value
+    offset = transformer.offset_provider[dimension]
+    if isinstance(offset, Dimension):
+        raise NotImplementedError
+    else:
+        return _builtin_neighbors_indirect_addressing(transformer, node, node_args)
+
+
+
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -140,6 +200,8 @@ def builtin_if(
     assert isinstance(node_type, itir_typing.Val)
     type_ = itir_type_as_dace_type(node_type.dtype)
     return transformer.add_expr_tasklet(list(zip(args, internals)), expr, type_, "if")
+
+
 
 
 def builtin_cast(
@@ -184,6 +246,7 @@ _GENERAL_BUILTIN_MAPPING: dict[
     "tuple_get": builtin_tuple_get,
     "if_": builtin_if,
     "cast_": builtin_cast,
+    "neighbors": builtin_neighbors,
 }
 
 
@@ -309,34 +372,37 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
-        elif (
+
+        if (
             isinstance(node.fun, itir.FunCall)
-            and isinstance(node.fun.fun, itir.SymRef)
-            and node.fun.fun.id == "shift"
-        ):
-            offset = node.fun.args[0]
-            assert isinstance(offset, itir.OffsetLiteral)
-            offset_name = offset.value
-            assert isinstance(offset_name, str)
-            if offset_name not in self.offset_provider:
-                raise ValueError(f"offset provider for `{offset_name}` is missing")
-            offset_provider = self.offset_provider[offset_name]
-            if isinstance(offset_provider, Dimension):
-                return self._visit_direct_addressing(node)
-            else:
-                return self._visit_indirect_addressing(node)
-        elif isinstance(node.fun, itir.SymRef):
+            and isinstance(node.fun.fun, itir.SymRef)):
+            if node.fun.fun.id == "shift":
+
+                offset = node.fun.args[0]
+                assert isinstance(offset, itir.OffsetLiteral)
+                offset_name = offset.value
+                assert isinstance(offset_name, str)
+                if offset_name not in self.offset_provider:
+                    raise ValueError(f"offset provider for `{offset_name}` is missing")
+                offset_provider = self.offset_provider[offset_name]
+                if isinstance(offset_provider, Dimension):
+                    return self._visit_direct_addressing(node)
+                else:
+                    return self._visit_indirect_addressing(node)
+            elif node.fun.fun.id=='reduce':
+                return self._visit_reduce(node)
+
+        if isinstance(node.fun, itir.SymRef):
             if str(node.fun.id) in _MATH_BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)
             elif str(node.fun.id) in _GENERAL_BUILTIN_MAPPING:
                 return self._visit_general_builtin(node)
             else:
                 raise NotImplementedError()
-        else:
-            return self._visit_call(node)
+        return self._visit_call(node)
 
     def _visit_call(self, node: itir.FunCall):
-        args = [self.visit(arg) for arg in node.args]
+        args = self.visit(node.args)
         args = [arg if isinstance(arg, Sequence) else [arg] for arg in args]
         args = list(itertools.chain(*args))
 
@@ -500,6 +566,24 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         shifted_index[target_dim] = shifted_value
 
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
+    def _visit_reduce(self, node: itir.FunCall):
+        assert isinstance(node.args[0], itir.FunCall) and isinstance(node.args[0].fun, itir.SymRef) and node.args[0].fun.id == 'neighbors'
+        args = self.visit(node.args)
+        assert len(args) == 1
+        args = args[0]
+        assert len(args) == 1
+        op_name, init = node.fun.args
+        if not op_name != 'plus':
+            raise NotImplementedError("Only neighbor_sum is supported.")
+        nreduce = self.context.body.arrays[args[0].value.data].shape[0]
+
+        result_name = unique_var_name()
+        result_access = self.context.state.add_access(result_name)
+        self.context.body.add_scalar(result_name, args[0].dtype, transient=True)
+        reduce_tasklet = self.context.state.add_tasklet('reduce', code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = __result + __values[__idx]", inputs={'__values'}, outputs={"__result"})
+        self.context.state.add_edge(args[0].value, None, reduce_tasklet, "__values", dace.Memlet(data=args[0].value.data, subset=f"0:{nreduce}"))
+        self.context.state.add_edge(reduce_tasklet, "__result" ,result_access, None, dace.Memlet(data=result_name, subset=f"0"))
+        return [ValueExpr(result_access, args[0].dtype)]
 
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
@@ -595,4 +679,7 @@ def closure_to_tasklet_sdfg(
     outputs = translator.visit(call)
     for output in outputs:
         context.body.arrays[output.value.data].transient = False
+    context.body.view()
+    context.body.simplify()
+    context.body.view()
     return context, outputs

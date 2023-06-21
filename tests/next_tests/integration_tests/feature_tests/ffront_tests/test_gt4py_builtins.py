@@ -129,8 +129,6 @@ def test_minover_execution_float(reduction_setup, fieldview_backend):
 
 def test_reduction_execution(reduction_setup, fieldview_backend):
     """Testing a trivial neighbor sum."""
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
     rs = reduction_setup
     V2EDim, V2E = rs.V2EDim, rs.V2E
 
