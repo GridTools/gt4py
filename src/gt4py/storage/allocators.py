@@ -23,9 +23,11 @@ import types
 
 import numpy as np
 
+from gt4py._core import scalars
 from gt4py._core import definitions
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
+    Any,
     Generic,
     NewType,
     Optional,
@@ -43,7 +45,7 @@ except ImportError:
     cp = None
 
 
-_ScalarT = TypeVar("_ScalarT", bound=definitions.ScalarType)
+_ScalarT = TypeVar("_ScalarT", bound=scalars.ScalarType)
 _NDBufferT = TypeVar(
     "_NDBufferT",
     bound=Union[xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer],
@@ -58,7 +60,7 @@ LayoutMap = NewType("LayoutMap", Tuple[int, ...])
 
 def is_valid_shape(value: tuple[int, ...]) -> TypeGuard[Shape]:
     return isinstance(value, tuple) and all(
-        isinstance(v, (int, definitions.int16)) and v > 0 for v in value
+        isinstance(v, int) and v > 0 for v in value
     )
 
 
@@ -127,10 +129,7 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
 
 
 class BufferAllocator(Protocol[_NDBufferT]):
-    @property
-    @abc.abstractmethod
-    def device_type(self) -> definitions.DeviceType:
-        ...
+    device_type: definitions.DeviceType
 
     @abc.abstractmethod
     def allocate(
@@ -161,6 +160,7 @@ class BufferAllocator(Protocol[_NDBufferT]):
 ALLOCATORS: dict[definitions.DeviceType, BufferAllocator] = {}
 
 
+@dataclasses.dataclass(frozen=True)
 class BaseNDArrayBufferAllocator(BufferAllocator[_NDBufferT]):
     def allocate(
         self,
@@ -248,20 +248,35 @@ class BaseNDArrayBufferAllocator(BufferAllocator[_NDBufferT]):
         shape: Shape,
         dtype: definitions.DType[_ScalarT],
         allocated_shape: Shape,
-        strides: tuple[int, ...],
+        strides: Sequence[int],
         byte_offset: int,
         item_size: int,
     ) -> _NDBufferT:
         pass
 
 
-class _XPArrayBufferAllocator(BaseNDArrayBufferAllocator[_NDBufferT]):
+class _NumPyLibLikeModule(Protocol):
+    stride_tricks: Any
+
+
+class _NumPyLikeModule(Protocol):
+    def empty(self, shape: Shape, dtype: np.dtype) -> np.ndarray:
+        ...
+
+    lib: _NumPyLibLikeModule
+
+
+@dataclasses.dataclass(frozen=True)
+class NumPyLikeArrayBufferAllocator(BaseNDArrayBufferAllocator[_NDBufferT]):
+    device_type: definitions.DeviceType
+    np_module: _NumPyLikeModule
+
     def _raw_alloc(self, length: int, device: definitions.Device) -> tuple[_NDBufferT, int]:
-        xp = self._xp
+        nnp = self.np_module
         if device.device_type != definitions.DeviceType.CPU or device.device_id != 0:
             raise ValueError(f"Unsupported device {device} for memory allocation")
 
-        buffer = xp.empty(shape=(length,), dtype=np.uint8)
+        buffer = nnp.empty(shape=(length,), dtype=np.uint8)
         return buffer, buffer.ctypes.data
 
     def _tensorize(
@@ -270,51 +285,33 @@ class _XPArrayBufferAllocator(BaseNDArrayBufferAllocator[_NDBufferT]):
         shape: Shape,
         dtype: definitions.DType[_ScalarT],
         allocated_shape: Shape,
-        strides: tuple[int, ...],
+        strides: Sequence[int],
         byte_offset: int,
         item_size: int,
     ) -> _NDBufferT:
-        xp = self._xp
-        aligned_buffer = buffer[byte_offset : xp.prod(allocated_shape) * item_size]
+        nnp = self.np_module
+        aligned_buffer = buffer[byte_offset : byte_offset + nnp.prod(allocated_shape) * item_size]
         flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
-        tensor_view = xp.lib.stride_tricks.as_strided(
+        tensor_view = nnp.lib.stride_tricks.as_strided(
             flat_ndarray, shape=allocated_shape, strides=strides
         )
         if len(shape) and shape != allocated_shape:
-            tensor_view = tensor_view[tuple(slice(0, s, None) for s in shape)]
+            shape_slices = tuple(slice(0, s, None) for s in shape)
+            tensor_view = tensor_view[shape_slices]
 
         return tensor_view
 
-    @property
-    @abc.abstractmethod
-    def _xp(self) -> types.Module:
-        pass
 
-
-class NumPyArrayBufferAllocator(_XPArrayBufferAllocator[np.ndarray]):
-    @property
-    def device_type(self) -> definitions.DeviceType:
-        return definitions.DeviceType.CPU
-
-    @property
-    def _xp(self) -> types.Module:
-        return np
-
-
-ALLOCATORS[definitions.DeviceType.CPU] = NumPyArrayBufferAllocator()
+ALLOCATORS[definitions.DeviceType.CPU] = NumPyLikeArrayBufferAllocator(
+    device_type=definitions.DeviceType.CPU,
+    np_module=np,
+)
 
 if cp:
-
-    class CuPyArrayBufferAllocator(_XPArrayBufferAllocator[cp.ndarray]):
-        @property
-        def device_type(self) -> definitions.DeviceType:
-            return definitions.DeviceType.CUDA
-
-        @property
-        def _xp(self) -> types.Module:
-            return cp
-
-    ALLOCATORS[definitions.DeviceType.CUDA] = CuPyArrayBufferAllocator()
+    ALLOCATORS[definitions.DeviceType.CUDA] = NumPyLikeArrayBufferAllocator(
+        device_type=definitions.DeviceType.CPU,
+        np_module=cp,
+    )
 
 
 def allocate(

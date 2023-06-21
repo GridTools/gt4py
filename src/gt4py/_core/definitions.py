@@ -17,6 +17,8 @@ from __future__ import annotations
 import dataclasses
 import enum
 import functools
+import math
+import types
 from collections.abc import Iterable
 
 import numpy as np
@@ -24,58 +26,18 @@ import numpy.typing as npt
 
 from gt4py.eve.extended_typing import (
     Final,
-    Generic,
     Literal,
     Mapping,
-    Type,
-    TypeVar,
-    Union,
-    TypeAlias,
 )
-
-# Scalar types supported by GT4Py
-bool_ = np.bool_
-
-int8 = np.int8
-int16 = np.int16
-int32 = np.int32
-int64 = np.int64
-
-uint8 = np.uint8
-uint16 = np.uint16
-uint32 = np.uint32
-uint64 = np.uint64
-
-float32 = np.float32
-float64 = np.float64
-
-# TODO(egparedes): add support for complex numbers (complex64, complex128)
-
-BOOL_TYPES: Final[tuple[type, ...]] = (bool, bool_)
-ScalarBoolType: TypeAlias = Union[bool, bool_]
-
-SINT_TYPES: Final[tuple[type, ...]] = (int8, int16, int32, int64, int)
-ScalarSignedIntType: TypeAlias = Union[int8, int16, int32, int64, int]
-
-UINT_TYPES: Final[tuple[type, ...]] = (uint8, uint16, uint32, uint64)
-ScalarUnsignedIntType: TypeAlias = Union[uint8, uint16, uint32, uint64]
-
-INT_TYPES: Final[tuple[type, ...]] = (*SINT_TYPES, *UINT_TYPES)
-ScalarIntType: TypeAlias = Union[ScalarSignedIntType, ScalarUnsignedIntType]
-
-FLOAT_TYPES: Final[tuple[type, ...]] = (float32, float64, float)
-ScalarFloatType: TypeAlias = Union[float32, float64, float]
+from gt4py._core import scalars
 
 
-SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INT_TYPES, *FLOAT_TYPES)
-#: Type alias for all scalar types supported by GT4Py
-ScalarType: TypeAlias = Union[ScalarBoolType, ScalarIntType, ScalarFloatType]
+class DeviceType(enum.Enum):
+    """The type of the device where a memory buffer is allocated.
 
-_SC = TypeVar("_SC", bound=ScalarType)
-
-
-class DeviceType(enum.IntEnum):
-    """The type of the device where a memory buffer is allocated."""
+    Enum values taken from DLPack reference implementation at:
+    https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
+    """
 
     CPU = 1
     CUDA = 2
@@ -106,36 +68,43 @@ class Device:
         return iter((self.device_type, self.device_id))
 
 
-class DTypeCode(int, enum.Enum):
+class DTypeCode(enum.Enum):
     """
     Kind of a specific data type.
 
-    Actual values taken from DLPack reference implementation at:
-    https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
+    Character codes match the value for the corresponding kind in NumPy `dtype.kind`.
     """
 
-    INT = 0
-    UINT = 1
-    FLOAT = 2
-    OPAQUE_POINTER = 3
-    COMPLEX = 5  # bfloat16 is defined as BFLOAT = 4 in DLPack
+    INT = "i"
+    UINT = "u"
+    FLOAT = "f"
+    OPAQUE_POINTER = "V"
+    COMPLEX = "c"
+
+    def dlpack_type_code(self) -> int:
+        """
+        DLPAck type code.
+
+        Actual values taken from DLPack reference implementation at:
+            https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
+        """
+        return _DTYPECODE_TO_DLPACK_CODE[self.value]
 
 
-_DTYPECODE_TO_NUMPY_KIND: Final[Mapping[DTypeCode, Literal["i", "u", "f", "c", "V"]]] = {
-    DTypeCode.INT: "i",
-    DTypeCode.UINT: "u",
-    DTypeCode.FLOAT: "f",
-    DTypeCode.OPAQUE_POINTER: "V",
-    DTypeCode.COMPLEX: "c",
-}
+_DTYPECODE_TO_DLPACK_CODE: Final[
+    Mapping[DTypeCode, Literal[0, 1, 2, 3, 5]]
+] = types.MappingProxyType(
+    {
+        DTypeCode.INT: 0,
+        DTypeCode.UINT: 1,
+        DTypeCode.FLOAT: 2,
+        DTypeCode.OPAQUE_POINTER: 3,
+        DTypeCode.COMPLEX: 5,  # In DLPack bfloat16 is defined as BFLOAT = 4
+    }
+)
 
-_NUMPY_KIND_TO_DTYPECODE: Final[Mapping[Literal["i", "u", "f", "c", "V"], DTypeCode]] = {
-    kind: code for code, kind in _DTYPECODE_TO_NUMPY_KIND.items()
-}
 
-
-@dataclasses.dataclass(frozen=True)
-class DType(Generic[_SC]):
+class DType(enum.Enum):
     """
     Descriptor of data type for field elements.
 
@@ -144,70 +113,60 @@ class DType(Generic[_SC]):
     `lanes`, which should be interpreted as packed `lanes` repetitions
     of elements from `type_code` data-category of width `bits`.
 
+    The Array API standard only requires DTypes to be comparable with `__eq__`.
+
+    Additionally, instances of this class can also be used as valid NumPy
+    `dtype`s definitions due to the `.dtype` attribute.
+
     Note:
-        Array API standard only requires DTypes to be comparable with `__eq__`.
+        This DType definition is implemented in a non-extensible way on purpose
+        to avoid the complexity of dealing with user-defined data types.
     """
 
-    name: str
-    type_code: DTypeCode
-    bits: int
-    lanes: int
+    bool_ = scalars.bool_
+    int8 = scalars.int8
+    int16 = scalars.int16
+    int32 = scalars.int32
+    int64 = scalars.int64
+    uint8 = scalars.uint8
+    uint16 = scalars.uint16
+    uint32 = scalars.uint32
+    uint64 = scalars.uint64
+    float32 = scalars.float32
+    float64 = scalars.float64
 
-    def __post_init__(self) -> None:
-        if self.bits not in (1, 8, 16, 32, 64):
-            raise ValueError(f"Non byte-sized dtypes (bits={self.bits}) are not supported")
-
-    @classmethod
-    def from_np_dtype(cls, dtype: np.dtype) -> DType[_SC]:
-        bits = dtype.itemsize * 8
-        type_code = _NUMPY_KIND_TO_DTYPECODE.get(dtype.kind, None)
-        if type_code is None:
-            raise ValueError(f"NumPy dtype {dtype} cannot be converted to DType")
-
-        return cls(name=dtype.name, type_code=type_code, bits=dtype.itemsize * 8, lanes=1)
+    # Definition properties
+    @functools.cached_property
+    def type_code(self) -> DTypeCode:
+        return DTypeCode(self.dtype.kind)
 
     @functools.cached_property
-    def np_dtype(self) -> np.dtype:
-        if self.bits % 8 != 0:
-            raise RuntimeError(f"NumPy dtype is not supported {self.bits} bits types")
-        spec = f"{_DTYPECODE_TO_NUMPY_KIND[self.type_code]}{self.bits // 8}"
-        if self.lanes > 1:
-            spec = f"({self.lanes},){spec}"
-        return np.dtype(spec)
+    def bits(self) -> int:
+        assert self.dtype.itemsize % self.lanes == 0
+        return 8 * (self.dtype.itemsize // self.lanes)
+
+    @functools.cached_property
+    def lanes(self) -> int:
+        shape = self.dtype.shape or (1,)
+        return math.prod(shape)
+
+    # Convenience functions
+    @functools.cached_property
+    def scalar_type(self) -> type:
+        return self.value
 
     @functools.cached_property
     def byte_size(self) -> int:
-        return (self.bits // 8) * self.lanes
+        return self.dtype.itemsize
 
-    #: For compatibility with NumPy
-    @property
-    def dtype(self) -> np.dtype:
-        return self.np_dtype
-
+    # NumPy compatibility functions
     @functools.cached_property
-    def scalar_type(self) -> Type[_SC]:
-        return self.np_dtype.type
+    def dtype(self) -> np.dtype:
+        return np.dtype(self.value)
 
-    def __int__(self) -> int:
-        return self.type_code.value * 100000 + self.lanes * 1000 + self.bits
-
-    def __str__(self) -> str:
-        return f"<{self.name}>"
+    @classmethod
+    def from_np_dtype(cls, np_dtype: npt.DTypeLike) -> DType:
+        return cls(np.dtype(np_dtype).type)
 
 
-DTypeLike = Union[DType, npt.DTypeLike]
-
-BOOL_DTYPE: Final[DType[bool_]] = DType("bool", DTypeCode.UINT, 1, 1)
-INT8_DTYPE: Final[DType[int8]] = DType("int8", DTypeCode.INT, 8, 1)
-INT16_DTYPE: Final[DType[int16]] = DType("int16", DTypeCode.INT, 16, 1)
-INT32_DTYPE: Final[DType[int32]] = DType("int32", DTypeCode.INT, 32, 1)
-INT64_DTYPE: Final[DType[int64]] = DType("int64", DTypeCode.INT, 64, 1)
-UINT8_DTYPE: Final[DType[uint8]] = DType("uint8", DTypeCode.UINT, 8, 1)
-UINT16_DTYPE: Final[DType[uint16]] = DType("uint16", DTypeCode.UINT, 16, 1)
-UINT32_DTYPE: Final[DType[uint32]] = DType("uint32", DTypeCode.UINT, 32, 1)
-UINT64_DTYPE: Final[DType[uint64]] = DType("uint64", DTypeCode.UINT, 64, 1)
-FLOAT32_DTYPE: Final[DType[float32]] = DType("float32", DTypeCode.FLOAT, 32, 1)
-FLOAT64_DTYPE: Final[DType[float64]] = DType("float64", DTypeCode.FLOAT, 64, 1)
-# TODO(egparedes): add support for complex types
-# TODO(egparedes):  complex64: Final[DType[np.complex64]] = DType("complex64", DTypeCode.COMPLEX, 64, 1)
-# TODO(egparedes):  complex128: Final[DType[np.complex128]] = DType("complex128", DTypeCode.COMPLEX, 128, 1)
+# DTypeLike = Union[DType, npt.DTypeLike]
