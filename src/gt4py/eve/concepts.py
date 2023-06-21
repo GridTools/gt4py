@@ -92,8 +92,8 @@ class SourceLocation:
             end_str = f"{end_line_str}"
 
         if end_str is not None:
-            return f"{filename_str}:{self.line}:{self.column} to {end_str}"
-        return f"{filename_str}:{self.line}:{self.column}"
+            return f"<{filename_str}:{self.line}:{self.column} to {end_str}>"
+        return f"<{filename_str}:{self.line}:{self.column}>"
 
 
 @datamodels.datamodel(slots=True, frozen=True)
