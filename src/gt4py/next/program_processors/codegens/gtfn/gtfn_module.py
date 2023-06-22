@@ -248,11 +248,7 @@ def _gtfn_backend_class_decl(kind: GTFNBackendKind) -> str:
         case GTFNBackendKind.GPU:
             return textwrap.dedent(
                 """
-                using backend_t = gridtools::fn::backend::gpu<
-                                    gridtools::meta::list<
-                                        gridtools::meta::list<I_t, gridtools::integral_constant<int, 32>>,
-                                        gridtools::meta::list<J_t, gridtools::integral_constant<int, 8>>,
-                                        gridtools::meta::list<K_t, gridtools::integral_constant<int, 1>>>>;
+                using backend_t = gridtools::fn::backend::gpu<generated::block_sizes_t>;
                 """
             )
     raise ValueError("kind argument must be a GTFNBackendKind!")
