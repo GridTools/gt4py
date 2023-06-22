@@ -220,7 +220,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 f"gridtools::meta::list<{tag.name.id}_t, "
                 f"gridtools::integral_constant<int, {block_sizes[i]}>>"
             )
-        sizes_str = "\n".join(block_dims)
+        sizes_str = ",\n".join(block_dims)
         return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
 
     def visit_FencilDefinition(
