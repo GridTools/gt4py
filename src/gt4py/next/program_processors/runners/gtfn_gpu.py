@@ -23,8 +23,8 @@ from gt4py.next.program_processors.runners import gtfn_cpu
 CPP_WITH_CUDA = languages.LanguageWithHeaderFilesSettings(
     formatter_key="cpp",
     formatter_style="llvm",
-    file_extension=".cpp.cu",
-    header_extension=".hpp.cu",
+    file_extension="cpp.cu",
+    header_extension="hpp",
 )
 
 
