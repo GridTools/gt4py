@@ -20,6 +20,7 @@ from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Uni
 import numpy as np
 import numpy.typing as npt
 
+from gt4py.cartesian import config as gt_config
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
@@ -242,6 +243,17 @@ def allocate_gpu(
     )
     if device_field.ndim > 0:
         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
+
+    if gt_config.GT4PY_USE_HIP:
+        device_field.__hip_array_interface__ = {
+            "shape": padded_shape,
+            "typestr": device_field.dtype.descr[0][1],
+            "descr": device_field.dtype.descr,
+            "stream": 1,
+            "version": 3,
+            "strides": strides,
+            "data": (device_field.data.ptr, False),
+        }
 
     return device_raw_buffer, device_field
 
