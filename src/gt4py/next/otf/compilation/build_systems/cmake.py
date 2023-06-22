@@ -72,6 +72,7 @@ class CMakeFactory(
                     name,
                     source.library_deps,
                     [header_name, bindings_name],
+                    source.program_source.language_settings,
                 ),
             },
             program_name=name,

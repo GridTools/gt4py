@@ -17,6 +17,7 @@ from typing import Sequence
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja
+from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import common
 
@@ -33,12 +34,17 @@ class LinkDependency(eve.Node):
     library: str
 
 
+class ExtraLanguage(eve.Node):
+    name: str
+
+
 class CMakeListsFile(eve.Node):
     project_name: str
     find_deps: Sequence[FindDependency]
     link_deps: Sequence[LinkDependency]
     source_names: Sequence[str]
     bin_output_suffix: str
+    extra_languages: Sequence[ExtraLanguage]
 
 
 class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
@@ -51,7 +57,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         # Languages
         enable_language(CXX)
-        enable_language(CUDA)
+        {{"\\n".join(extra_languages)}}
 
         # Paths
         list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
@@ -79,16 +85,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         # Link dependencies
         {{"\\n".join(link_deps)}}
-
-        # hack to try and make the gpu backend work
-        # target_compile_definitions({{project_name}} PRIVATE GT_FN_GPU)
-        # target_compile_definitions({{project_name}} PRIVATE GT_FN_BACKEND=gpu)
-        # gridtools_setup_target({{project_name}} CUDA_ARCH sm_60)
         """
         )
     )
 
-    LinkDependency = as_jinja("""target_link_libraries({{target}} PUBLIC {{library}})""")
+    LinkDependency = as_jinja("target_link_libraries({{target}} PUBLIC {{library}})")
+
+    ExtraLanguage = as_jinja("enable_language({{name}})")
 
     def visit_FindDependency(self, dep: FindDependency):
         match dep.name:
@@ -108,6 +111,7 @@ def generate_cmakelists_source(
     project_name: str,
     dependencies: tuple[interface.LibraryDependency, ...],
     source_names: Sequence[str],
+    language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> str:
     """
     Generate CMakeLists file contents.
@@ -131,5 +135,6 @@ def generate_cmakelists_source(
         ],
         source_names=source_names,
         bin_output_suffix=common.python_module_suffix(),
+        extra_languages=[ExtraLanguage(name=n) for n in language_settings.extra_languages],
     )
     return CMakeListsGenerator.apply(cmakelists_file)

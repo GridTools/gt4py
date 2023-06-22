@@ -247,7 +247,10 @@ def _cc_create_compiledb(
             incl_file_name: "",
             impl_file_name: "",
             "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name, prototype_program_source.library_deps, [incl_file_name, impl_file_name]
+                name,
+                prototype_program_source.library_deps,
+                [incl_file_name, impl_file_name],
+                prototype_program_source.language_settings,
             ),
         },
         program_name=name,

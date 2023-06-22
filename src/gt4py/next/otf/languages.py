@@ -50,6 +50,7 @@ class LanguageWithHeaderFilesSettings(LanguageSettings):
     """Add a header file extension setting on top of the basic set."""
 
     header_extension: str
+    extra_languages: list[str] = dataclasses.field(default_factory=list)
 
 
 class Python(LanguageTag):

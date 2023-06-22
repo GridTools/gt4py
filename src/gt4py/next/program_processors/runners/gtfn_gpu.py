@@ -25,6 +25,7 @@ CPP_WITH_CUDA = languages.LanguageWithHeaderFilesSettings(
     formatter_style="llvm",
     file_extension="cpp.cu",
     header_extension="hpp",
+    extra_languages=["CUDA"],
 )
 
 
