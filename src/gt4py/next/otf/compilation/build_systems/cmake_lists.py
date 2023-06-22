@@ -98,15 +98,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case "gridtools":
                 import gridtools_cpp
 
-                snippet = f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
-                if "GridTools::fn_gpu" in dep.libraries:
-                    snippet = textwrap.dedent(
-                        f"""
-                        enable_language(CUDA)
-                        {snippet}
-                        """
-                    )
-                return snippet
+                return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 

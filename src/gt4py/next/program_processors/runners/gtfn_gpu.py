@@ -20,11 +20,21 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 
+CPP_WITH_CUDA = languages.LanguageWithHeaderFilesSettings(
+    formatter_key="cpp",
+    formatter_style="llvm",
+    file_extension=".cpp.cu",
+    header_extension=".hpp.cu",
+)
+
+
 gtfn_gpu: otf_compile_executor.OTFCompileExecutor[
     languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
 ] = otf_compile_executor.OTFCompileExecutor(
     name="gpu_backend",
     otf_workflow=gtfn_cpu.run_gtfn.otf_workflow.replace(
-        translation=gtfn_module.GTFNTranslationStep(gtfn_backend=gtfn_module.GTFNBackendKind.GPU)
+        translation=gtfn_module.GTFNTranslationStep(
+            language_settings=CPP_WITH_CUDA, gtfn_backend=gtfn_module.GTFNBackendKind.GPU
+        ),
     ),
 )

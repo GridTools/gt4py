@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import textwrap
 from typing import Any, Final, TypeVar
 
 import numpy as np
@@ -182,7 +183,7 @@ class GTFNTranslationStep(
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         args_expr: list[str] = [
-            _gtfn_backend_class(self.gtfn_backend),
+            "backend_t{}",
             *regular_args_expr,
         ]  # TODO(ricoh): This is where the backend is instantiated
 
@@ -205,6 +206,7 @@ class GTFNTranslationStep(
                     #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
+                    {_gtfn_backend_class_decl(self.gtfn_backend)}
                     {decl_src}
                     """.strip(),
         )  # TODO(ricoh): This is where the backend header is included
@@ -239,12 +241,20 @@ def _gtfn_backend_include(kind: GTFNBackendKind) -> str:
     raise ValueError("kind argument must be a GTFNBackendKind!")
 
 
-def _gtfn_backend_class(kind: GTFNBackendKind) -> str:
+def _gtfn_backend_class_decl(kind: GTFNBackendKind) -> str:
     match kind:
         case GTFNBackendKind.NAIVE:
-            return "gridtools::fn::backend::naive{}"
+            return "using backend_t = gridtools::fn::backend::naive;"
         case GTFNBackendKind.GPU:
-            return "gridtools::fn::backend::gpu{}"
+            return textwrap.dedent(
+                """
+                using backend_t = gridtools::fn::backend::gpu<
+                                    gridtools::meta::list<
+                                        gridtools::meta::list<I_t, gridtools::integral_constant<int, 32>>,
+                                        gridtools::meta::list<J_t, gridtools::integral_constant<int, 8>>,
+                                        gridtools::meta::list<K_t, gridtools::integral_constant<int, 1>>>>;
+                """
+            )
     raise ValueError("kind argument must be a GTFNBackendKind!")
 
 
