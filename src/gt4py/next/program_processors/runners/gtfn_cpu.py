@@ -30,7 +30,7 @@ from gt4py.next.type_system.type_translation import from_value
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    from gt4py.next.iterator.embedded import get_ordered_indices, LocatedField
+    from gt4py.next.iterator.embedded import LocatedField, get_ordered_indices
 
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
