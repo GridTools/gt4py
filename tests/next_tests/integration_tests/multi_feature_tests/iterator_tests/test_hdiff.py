@@ -74,7 +74,9 @@ def hdiff(inp, coeff, out, x, y):
 def test_hdiff(hdiff_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("origin not yet supported in gtfn")
+        from gt4py.next.iterator import transforms
+        if lift_mode != transforms.LiftMode.FORCE_INLINE:
+            pytest.xfail("origin not yet supported in gtfn")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
