@@ -22,6 +22,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.common import GTTypeError
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
+from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
@@ -131,6 +132,9 @@ def test_calling_fo_from_fo_execution(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
@@ -157,6 +161,9 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
@@ -184,6 +191,9 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
 
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField, c: cases.IFloatField

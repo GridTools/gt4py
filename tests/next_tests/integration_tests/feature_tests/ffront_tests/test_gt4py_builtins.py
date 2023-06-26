@@ -135,7 +135,7 @@ def test_reduction_expression(unstructured_case):
     """Test reduction with an expression directly inside the call."""
     if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Has a bug.")
-    if fieldview_backend == dace_iterator.run_dace_iterator:
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: reductions")
 
     @gtx.field_operator
