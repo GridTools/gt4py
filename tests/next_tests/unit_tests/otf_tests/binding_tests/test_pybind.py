@@ -28,7 +28,6 @@ def test_bindings(program_source_example):
 
         #include <gridtools/common/defs.hpp>
         #include <gridtools/common/tuple_util.hpp>
-        #include <gridtools/fn/backend/naive.hpp>
         #include <gridtools/fn/cartesian.hpp>
         #include <gridtools/fn/unstructured.hpp>
         #include <gridtools/sid/composite.hpp>

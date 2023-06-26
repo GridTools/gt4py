@@ -117,3 +117,4 @@ test py310:
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
+      SUBVARIANT: [-cuda112, -cpu]

@@ -24,6 +24,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+@pytest.mark.requires_gpu
 @pytest.mark.parametrize("fieldview_backend", [gtfn_gpu.gtfn_gpu])
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator

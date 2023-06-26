@@ -214,7 +214,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
         block_dims = []
-        block_sizes = [32, 8, 1]
+        block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
         for i, tag in enumerate(offset_definitions):
             block_dims.append(
                 f"gridtools::meta::list<{tag.name.id}_t, "
