@@ -65,7 +65,7 @@ def test_invalid_scalar_kind():
             typing.Tuple[int, float],
             ts.TupleType(
                 types=[
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                 ]
             ),
@@ -77,7 +77,7 @@ def test_invalid_scalar_kind():
                     ts.ScalarType(kind=ts.ScalarKind.BOOL),
                     ts.TupleType(
                         types=[
-                            ts.ScalarType(kind=ts.ScalarKind.INT),
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                         ]
                     ),
@@ -100,12 +100,13 @@ def test_invalid_scalar_kind():
                 typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             ts.FunctionType(
-                args=[
+                pos_only_args=[
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                 ],
-                kwargs={},
-                returns=ts.ScalarType(kind=ts.ScalarKind.INT),
+                pos_or_kw_args={},
+                kw_only_args={},
+                returns=ts.ScalarType(kind=ts.ScalarKind.INT64),
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),

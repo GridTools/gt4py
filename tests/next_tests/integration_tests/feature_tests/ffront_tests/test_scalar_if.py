@@ -22,8 +22,8 @@ from gt4py.next import Field, field_operator, float64, index_field, np_as_locate
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     E2VDim,
@@ -37,13 +37,11 @@ from next_tests.integration_tests.feature_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    no_default_backend,
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
     fieldview_backend,
-    reduction_setup,
     size,
 )
 

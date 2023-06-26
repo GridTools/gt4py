@@ -24,7 +24,7 @@ def _make_scan(*args: list[str]):
                 params=[ir.Sym(id="state")] + [ir.Sym(id=f"{arg}") for arg in args],
                 expr=ir.SymRef(id="foo"),
             ),
-            ir.Literal(value="0.0", type="float"),
+            ir.Literal(value="0.0", type="float64"),
             ir.Literal(value="True", type="bool"),
         ],
     )

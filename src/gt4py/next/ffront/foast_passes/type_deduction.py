@@ -252,7 +252,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 msg=f"Function must return `DataType`, `DeferredType`, or `VoidType`, got `{return_type}`.",
             )
         new_type = ts.FunctionType(
-            args=[new_param.type for new_param in new_params], kwargs={}, returns=return_type
+            pos_only_args=[],
+            pos_or_kw_args={str(new_param.id): new_param.type for new_param in new_params},
+            kw_only_args={},
+            returns=return_type,
         )
         return foast.FunctionDefinition(
             id=node.id,
@@ -862,7 +865,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Incompatible argument in call to `{str(node.func)}`. Expected "
-                f"a field with dtype bool, but got `{mask_type}`.",
+                f"a field with dtype `bool`, but got `{mask_type}`.",
             )
 
         try:

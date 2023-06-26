@@ -16,9 +16,7 @@ import numpy as np
 import gt4py.next as gtx
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
+from next_tests.integration_tests.cases import IDim, JDim
 
 
 def test_different_buffer_sizes():

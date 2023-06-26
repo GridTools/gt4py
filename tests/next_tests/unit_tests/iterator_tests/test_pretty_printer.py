@@ -118,14 +118,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int"),
-                            ir.Literal(value="2", type="int"),
+                            ir.Literal(value="1", type="int64"),
+                            ir.Literal(value="2", type="int64"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int"),
+                    ir.Literal(value="3", type="int64"),
                 ],
             ),
-            ir.Literal(value="4", type="int"),
+            ir.Literal(value="4", type="int64"),
         ],
     )
     expected = "(1 + 2) × 3 / 4"
@@ -140,15 +140,15 @@ def test_associativity():
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    ir.Literal(value="1", type="int"),
-                    ir.Literal(value="2", type="int"),
+                    ir.Literal(value="1", type="int64"),
+                    ir.Literal(value="2", type="int64"),
                 ],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    ir.Literal(value="3", type="int"),
-                    ir.Literal(value="4", type="int"),
+                    ir.Literal(value="3", type="int64"),
+                    ir.Literal(value="4", type="int64"),
                 ],
             ),
         ],
@@ -210,7 +210,8 @@ def test_shift():
 
 def test_tuple_get():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="tuple_get"), args=[ir.Literal(value="42", type="int"), ir.SymRef(id="x")]
+        fun=ir.SymRef(id="tuple_get"),
+        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     expected = "x[42]"
     actual = pformat(testee)

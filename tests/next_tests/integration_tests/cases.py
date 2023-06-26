@@ -29,11 +29,12 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded, ir as itir
+from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+    Cell,
     Edge,
     IDim,
     Ioff,
@@ -48,19 +49,30 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 # mypy does not accept [IDim, ...] as a type
-IField: TypeAlias = gtx.Field[[IDim], np.int64]  # type: ignore [valid-type]
-IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
+
+IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
+IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
+IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
+KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
+IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
+IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int32]  # type: ignore [valid-type]
+IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
+IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = gtx.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = gtx.Field[[Edge], np.int64]  # type: ignore [valid-type]
+VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
+CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
+EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
 #   by `unstructured_case`.
 V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
 E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
@@ -355,9 +367,9 @@ def verify(
             does not take an ``out`` keyword argument, so some of the other
             arguments must be in/out parameters. Pass the according field
             or tuple of fields here and they will be compared to ``ref`` under
-            the assumption that the fieldview code stores it's results in
+            the assumption that the fieldview code stores its results in
             them.
-        offset_provied: An override for the test case's offset_provider.
+        offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
@@ -424,16 +436,7 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def no_default_backend():
-    """Temporarily switch off default backend for feature tests."""
-    backup_backend = decorator.DEFAULT_BACKEND
-    decorator.DEFAULT_BACKEND = no_backend
-    yield
-    decorator.DEFAULT_BACKEND = backup_backend
-
-
-@pytest.fixture
-def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
@@ -443,15 +446,15 @@ def cartesian_case(no_default_backend, fieldview_backend):  # noqa: F811 # fixtu
 
 
 @pytest.fixture
-def unstructured_case(
-    no_default_backend, reduction_setup, fieldview_backend  # noqa: F811 # fixtures
-):
+def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
+            Cell: reduction_setup.num_cells,
+            KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
@@ -548,11 +551,6 @@ def get_default_data(
         param_types.pop("out")
     inps = tuple(allocate(case, fieldview_prog, name)() for name in param_types)
     return inps, kwfields
-
-
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 @dataclasses.dataclass
