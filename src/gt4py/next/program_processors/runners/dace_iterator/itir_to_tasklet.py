@@ -727,7 +727,8 @@ def closure_to_tasklet_sdfg(
     outputs = translator.visit(call)
     for output in outputs:
         context.body.arrays[output.value.data].transient = False
-    context.body.view()
-    context.body.simplify()
-    context.body.view()
+    # context.body.view()
+    context.body.validate()
+    # context.body.simplify()
+    # context.body.view()
     return context, outputs
