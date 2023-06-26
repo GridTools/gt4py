@@ -17,8 +17,8 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.program_processors.runners import gtfn_gpu
 
+from next_tests.integration_tests.cases import cartesian_case, no_default_backend
 from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import cartesian_case, no_default_backend
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
 )
