@@ -164,6 +164,14 @@ class _Dedup(eve.NodeTranslator):
         return node
 
 
+def _assert_constituent_types(value: typing.Any, allowed_types: tuple[type, ...]) -> None:
+    if isinstance(value, tuple):
+        for el in value:
+            _assert_constituent_types(el, allowed_types)
+    else:
+        assert isinstance(value, allowed_types)
+
+
 class _Renamer:
     """Efficiently rename (that is, replace) nodes in a type expression.
 
@@ -191,7 +199,7 @@ class _Renamer:
                     self._parents.setdefault(child, []).append((node, typing.cast(str, field)))
                     collect_parents(child)
                 else:
-                    assert isinstance(child, (int, str))
+                    _assert_constituent_types(child, (int, str))
 
         collect_parents(dtype)
 

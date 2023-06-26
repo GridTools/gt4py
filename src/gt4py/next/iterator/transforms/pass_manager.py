@@ -56,7 +56,6 @@ def apply_common_transforms(
     offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
-    force_inline_lift=False,
     unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
