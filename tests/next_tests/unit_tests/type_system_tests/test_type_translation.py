@@ -19,9 +19,9 @@ import typing
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.ffront.fbuiltins import Dimension
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -31,8 +31,8 @@ class CustomInt32DType:
         return np.dtype(np.int32)
 
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
 
 
 @pytest.mark.parametrize(
@@ -65,7 +65,7 @@ def test_invalid_scalar_kind():
             typing.Tuple[int, float],
             ts.TupleType(
                 types=[
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                 ]
             ),
@@ -77,7 +77,7 @@ def test_invalid_scalar_kind():
                     ts.ScalarType(kind=ts.ScalarKind.BOOL),
                     ts.TupleType(
                         types=[
-                            ts.ScalarType(kind=ts.ScalarKind.INT),
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                         ]
                     ),
@@ -85,13 +85,13 @@ def test_invalid_scalar_kind():
             ),
         ),
         (
-            common.Field[[IDim], float],
+            gtx.Field[[IDim], float],
             ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         ),
         (
-            common.Field[[IDim, JDim], float],
+            gtx.Field[[IDim, JDim], float],
             ts.FieldType(
-                dims=[Dimension("IDim"), Dimension("JDim")],
+                dims=[gtx.Dimension("IDim"), gtx.Dimension("JDim")],
                 dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ),
@@ -100,12 +100,13 @@ def test_invalid_scalar_kind():
                 typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             ts.FunctionType(
-                args=[
+                pos_only_args=[
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                 ],
-                kwargs={},
-                returns=ts.ScalarType(kind=ts.ScalarKind.INT),
+                pos_or_kw_args={},
+                kw_only_args={},
+                returns=ts.ScalarType(kind=ts.ScalarKind.INT64),
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
@@ -145,16 +146,16 @@ def test_invalid_symbol_types():
 
     # Fields
     with pytest.raises(type_translation.TypingError, match="Field type requires two arguments"):
-        type_translation.from_type_hint(common.Field)
+        type_translation.from_type_hint(gtx.Field)
     with pytest.raises(type_translation.TypingError, match="Invalid field dimensions"):
-        type_translation.from_type_hint(common.Field[int, int])
+        type_translation.from_type_hint(gtx.Field[int, int])
     with pytest.raises(type_translation.TypingError, match="Invalid field dimension"):
-        type_translation.from_type_hint(common.Field[[int, int], int])
+        type_translation.from_type_hint(gtx.Field[[int, int], int])
 
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[[IDim], str])
+        type_translation.from_type_hint(gtx.Field[[IDim], str])
     with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(common.Field[[IDim], None])
+        type_translation.from_type_hint(gtx.Field[[IDim], None])
 
     # Functions
     with pytest.raises(

@@ -13,14 +13,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import numpy as np
 
-from gt4py.next import common
-from gt4py.next.ffront import decorator, fbuiltins
-from gt4py.next.iterator.embedded import np_as_located_field
+import gt4py.next as gtx
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-
-IDim = common.Dimension("IDim")
-JDim = common.Dimension("JDim")
+from next_tests.integration_tests.cases import IDim, JDim
 
 
 def test_different_buffer_sizes():
@@ -36,13 +32,13 @@ def test_different_buffer_sizes():
     out_nx = 5
     out_ny = 5
 
-    inp = np_as_located_field(IDim, JDim)(np.reshape(np.arange(nx * ny, dtype=np.int32), (nx, ny)))
-    out = np_as_located_field(IDim, JDim)(np.zeros((out_nx, out_ny), dtype=np.int32))
+    inp = gtx.np_as_located_field(IDim, JDim)(
+        np.reshape(np.arange(nx * ny, dtype=np.int32), (nx, ny))
+    )
+    out = gtx.np_as_located_field(IDim, JDim)(np.zeros((out_nx, out_ny), dtype=np.int32))
 
-    @decorator.field_operator(backend=gtfn_cpu.run_gtfn)
-    def copy(
-        inp: common.Field[[IDim, JDim], fbuiltins.int32]
-    ) -> common.Field[[IDim, JDim], fbuiltins.int32]:
+    @gtx.field_operator(backend=gtfn_cpu.run_gtfn)
+    def copy(inp: gtx.Field[[IDim, JDim], gtx.int32]) -> gtx.Field[[IDim, JDim], gtx.int32]:
         return inp
 
     copy(inp, out=out, offset_provider={})

@@ -14,16 +14,17 @@
 
 import numpy as np
 
+import gt4py.next as gtx
 from gt4py.eve.datamodels import field
 from gt4py.next.iterator import embedded
 
 
 def make_located_field(dtype=np.float64):
-    return embedded.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
+    return gtx.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=dtype))
 
 
 def test_located_field_1d():
-    foo = embedded.np_as_located_field("foo")(np.zeros((1,)))
+    foo = gtx.np_as_located_field("foo")(np.zeros((1,)))
 
     foo[0] = 42
 
@@ -32,7 +33,7 @@ def test_located_field_1d():
 
 
 def test_located_field_2d():
-    foo = embedded.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
+    foo = gtx.np_as_located_field("foo", "bar")(np.zeros((1, 1), dtype=np.float64))
 
     foo[0, 0] = 42
 
@@ -49,7 +50,7 @@ def test_tuple_field_concept():
     assert embedded.can_be_tuple_field(field_of_tuples)
 
     # TODO think about if that makes sense
-    # field_with_unnamed_dimensions = embedded.np_as_located_field("foo", unnamed_as_tuple=True)(
+    # field_with_unnamed_dimensions = gtx.np_as_located_field("foo", unnamed_as_tuple=True)(
     #     np.zeros((1, 2))
     # )
     # assert embedded.is_tuple_field(field_with_unnamed_dimensions)

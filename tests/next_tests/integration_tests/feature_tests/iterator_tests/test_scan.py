@@ -14,12 +14,11 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension, DimensionKind
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, scan, shift
-from gt4py.next.iterator.embedded import index_field, np_as_located_field
 from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 
+from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
@@ -28,11 +27,9 @@ def test_scan_in_stencil(program_processor, lift_mode):
 
     isize = 1
     ksize = 3
-    IDim = Dimension("I")
-    KDim = Dimension("K")
     Koff = offset("Koff")
-    inp = np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
-    out = np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
 
     reference = np.zeros((isize, ksize - 1))
     reference[:, 0] = inp[:, 0] + inp[:, 1]

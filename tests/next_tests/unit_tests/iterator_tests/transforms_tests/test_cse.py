@@ -114,14 +114,15 @@ def test_lambda_redef_same_arg_scope():
     def common_expr():
         return im.lambda_("a")(im.plus("a", im.plus(1, 1)))
 
-    # (λ(f1) → (λ(f2) → f1(2) + f2(2))(λ(a) → a + 1))(λ(a) → a + 1)
+    # (λ(f1) → (λ(f2) → f1(2) + f2(2))(λ(a) → a + (1 + 1)))(λ(a) → a + (1 + 1)) + (1 + 1 + (1 + 1))
     testee = im.plus(
         im.let("f1", common_expr())(
             im.let("f2", common_expr())(im.plus(im.call("f1")(2), im.call("f2")(2)))
         ),
         im.plus(im.plus(1, 1), im.plus(1, 1)),
     )
-    # (λ(_cs_1) → (λ(_cs_2) → _cs_2 + _cs_2)(_cs_1(2)))(λ(a) → a + 1)
+    # (λ(_cs_3) → (λ(_cs_1) → (λ(_cs_4) → _cs_4 + _cs_4 + (_cs_3 + _cs_3))(_cs_1(2)))(
+    #   λ(a) → a + _cs_3))(1 + 1)
     expected = im.let("_cs_3", im.plus(1, 1))(
         im.let("_cs_1", im.lambda_("a")(im.plus("a", "_cs_3")))(
             im.let("_cs_4", im.call("_cs_1")(2))(
@@ -133,23 +134,63 @@ def test_lambda_redef_same_arg_scope():
     assert actual == expected
 
 
-def test_if_can_deref():
-    """
-    Test no subexpression is moved outside expressions of the form `if_(can_deref(...), ..., ...)`
-    """
+def test_if_can_deref_no_extraction():
+    # Test that a subexpression only occurring in one branch of an `if_` is not moved outside the
+    # if statement. A case using `can_deref` is used here as it is common.
+
+    # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it) else 1
+    testee = im.if_(
+        im.call("can_deref")(im.shift("I", 1)("it")),
+        im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
+        # use something more involved where a subexpression can still be eliminated
+        im.literal("1", "int32"),
+    )
+    # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
+    expected = im.let("_cs_1", im.shift("I", 1)("it"))(
+        im.if_(
+            im.call("can_deref")("_cs_1"),
+            im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
+            im.literal("1", "int32"),
+        )
+    )
+
+    actual = CSE().visit(testee)
+    assert actual == expected
+
+
+def test_if_can_deref_eligible_extraction():
+    # Test that a subexpression only occurring in both branches of an `if_` is moved outside the
+    # if statement. A case using `can_deref` is used here as it is common.
+
     # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else ·⟪Iₒ, 1ₒ⟫(it) + ·⟪Iₒ, 1ₒ⟫(it)
     testee = im.if_(
         im.call("can_deref")(im.shift("I", 1)("it")),
         im.deref(im.shift("I", 1)("it")),
-        # use something more involved where a subexpression can still be eliminated
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
     )
-    # if can_deref(⟪Iₒ, 1ₒ⟫(it)) then ·⟪Iₒ, 1ₒ⟫(it) else (λ(_cs_1) → _cs_1 + _cs_1)(·⟪Iₒ, 1ₒ⟫(it))
-    expected = im.if_(
-        im.call("can_deref")(im.shift("I", 1)("it")),
-        im.deref(im.shift("I", 1)("it")),
-        im.let("_cs_1", im.deref(im.shift("I", 1)("it")))(im.plus("_cs_1", "_cs_1")),
+    # (λ(_cs_3) → (λ(_cs_1) → if can_deref(_cs_3) then _cs_1 else _cs_1 + _cs_1)(·_cs_3))(⟪Iₒ, 1ₒ⟫(it))
+    expected = im.let("_cs_3", im.shift("I", 1)("it"))(
+        im.let("_cs_1", im.deref("_cs_3"))(
+            im.if_(im.call("can_deref")("_cs_3"), "_cs_1", im.plus("_cs_1", "_cs_1"))
+        )
     )
+
+    actual = CSE().visit(testee)
+    assert actual == expected
+
+
+def test_if_eligible_extraction():
+    # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
+    # if statement.
+
+    # if ((a ∧ b) ∧ (a ∧ b)) then c else d
+    testee = im.if_(
+        im.and_(im.and_("a", "b"), im.and_("a", "b")),
+        "c",
+        "d",
+    )
+    # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
+    expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
 
     actual = CSE().visit(testee)
     assert actual == expected
