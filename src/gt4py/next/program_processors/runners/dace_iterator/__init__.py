@@ -38,7 +38,10 @@ def convert_arg(arg: Any):
 
 def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
     program = apply_common_transforms(
-        program, offset_provider=offset_provider, lift_mode=LiftMode.FORCE_INLINE
+        program,
+        offset_provider=offset_provider,
+        lift_mode=LiftMode.FORCE_INLINE,
+        common_subexpression_elimination=False,
     )
     return program
 

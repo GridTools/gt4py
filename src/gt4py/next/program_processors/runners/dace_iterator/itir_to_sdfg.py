@@ -164,12 +164,14 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add DaCe arrays for inputs, output and connectivities to closure SDFG.
         for name in [*input_names, *conn_names, *output_names]:
-            closure_sdfg.add_array(
-                name,
-                shape=array_table[name].shape,
-                strides=array_table[name].strides,
-                dtype=array_table[name].dtype,
-            )
+            assert name not in closure_sdfg.arrays or (name in input_names and name in output_names)
+            if name not in closure_sdfg.arrays:
+                closure_sdfg.add_array(
+                    name,
+                    shape=array_table[name].shape,
+                    strides=array_table[name].strides,
+                    dtype=array_table[name].dtype,
+                )
 
         # Get output domain of the closure
         program_arg_syms: dict[str, ValueExpr | IteratorExpr] = {}
