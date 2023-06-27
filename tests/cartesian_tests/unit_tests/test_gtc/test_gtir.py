@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -181,5 +181,5 @@ def test_variable_k_offset_in_access():
 
 
 def test_visit_ScalarIf_HorizontalMask_fail():
-    with pytest.raises(Exception):
+    with pytest.raises(TypeError, match="HorizontalMask"):
         ScalarIfStmtFactory(cond=HorizontalMaskFactory())

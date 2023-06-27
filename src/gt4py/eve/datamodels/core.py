@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,15 +31,12 @@ import attrs
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz  # type: ignore[import]
+    import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # type: ignore[import] # noqa: F401
+    import toolz  # noqa: F401
 
-from .. import exceptions
-from .. import extended_typing as xtyping
-from .. import type_validation as type_val
-from .. import utils
+from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
     Any,
     Callable,
@@ -97,7 +94,7 @@ class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
         utils.FrozenNamespace[Attribute], None
     )
     __datamodel_root_validators__: ClassVar[
-        Tuple[xtyping.NonDataDescriptor["DataModelTP", "BoundRootValidator"], ...]
+        Tuple[xtyping.NonDataDescriptor[DataModelTP, BoundRootValidator], ...]
     ] = ()
     # Optional
     __auto_init__: ClassVar[Callable[..., None]] = cast(Callable[..., None], None)
@@ -436,7 +433,6 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
-
     # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
@@ -951,9 +947,9 @@ def _make_post_init(has_post_init: bool) -> Callable[[DataModel], None]:
     return __attrs_post_init__
 
 
-def _make_devtools_pretty() -> Callable[
-    [DataModel, Callable[[Any], Any]], Generator[Any, None, None]
-]:
+def _make_devtools_pretty() -> (
+    Callable[[DataModel, Callable[[Any], Any]], Generator[Any, None, None]]
+):
     def __pretty__(
         self: DataModel, fmt: Callable[[Any], Any], **kwargs: Any
     ) -> Generator[Any, None, None]:

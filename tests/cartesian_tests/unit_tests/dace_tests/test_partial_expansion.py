@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -18,7 +18,10 @@ import pytest
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 
-from ...stencil_definitions import EXTERNALS_REGISTRY, REGISTRY
+from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
+    EXTERNALS_REGISTRY,
+    REGISTRY,
+)
 
 
 dace = pytest.importorskip("dace")

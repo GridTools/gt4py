@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -269,7 +269,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         sdfg_ctx: "StencilComputationSDFGBuilder.SDFGContext",
         **kwargs,
     ) -> None:
-
         sdfg_ctx.add_state()
         read_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
         write_acc_and_conn: Dict[Optional[str], Tuple[dace.nodes.Node, Optional[str]]] = {}
@@ -330,7 +329,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         symtable: ChainMap[eve.SymbolRef, Any],
         **kwargs,
     ) -> dace.nodes.NestedSDFG:
-
         sdfg = dace.SDFG(node.label)
         inner_sdfg_ctx = StencilComputationSDFGBuilder.SDFGContext(
             sdfg=sdfg, state=sdfg.add_state(is_start_state=True)

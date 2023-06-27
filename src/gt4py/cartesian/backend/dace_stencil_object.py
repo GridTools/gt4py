@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -67,7 +67,6 @@ def add_optional_fields(
 
 @dataclass(frozen=True)
 class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
-
     stencil_object: "DaCeStencilObject"
     origin: Dict[str, Tuple[int, ...]]
     domain: Tuple[int, ...]
@@ -89,7 +88,6 @@ class DaCeFrozenStencil(FrozenStencil, SDFGConvertible):
 
 
 class DaCeStencilObject(StencilObject, SDFGConvertible):
-
     _sdfg = None
     SDFG_PATH: str
 
@@ -108,7 +106,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
     def freeze(
         self: "DaCeStencilObject", *, origin: Dict[str, Tuple[int, ...]], domain: Tuple[int, ...]
     ) -> DaCeFrozenStencil:
-
         key = DaCeStencilObject._get_domain_origin_key(domain, origin)
         if key in self._frozen_cache:
             return self._frozen_cache[key]
@@ -138,7 +135,6 @@ class DaCeStencilObject(StencilObject, SDFGConvertible):
 
     @classmethod
     def sdfg(cls) -> dace.SDFG:
-
         if getattr(cls, "_sdfg", None) is None:
             cls._sdfg = dace.SDFG.from_file(cls.SDFG_PATH)
 

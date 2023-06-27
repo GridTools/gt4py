@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,9 +23,7 @@ import dataclasses
 import functools
 import typing as _typing
 
-from . import exceptions
-from . import extended_typing as xtyping
-from . import utils
+from . import exceptions, extended_typing as xtyping, utils
 from .extended_typing import (
     Any,
     Dict,
@@ -197,7 +195,6 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]:
-
         # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
         #
         if name is None:

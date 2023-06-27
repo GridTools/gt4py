@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -59,13 +59,20 @@ class SymbolTableTrait:
                         )
                     self.collected_symbols[symbol_name] = node
 
-            if not isinstance(node, SymbolTableTrait):
+            # TODO(egparedes): revisit and generalize mechanism to resolve name collisions.
+            if hasattr(node.annex, "propagated_symbols"):
+                # ensure we have no collisions
+                assert not set(self.collected_symbols.keys()) & set(
+                    node.annex.propagated_symbols.keys()
+                )
+                self.collected_symbols = {**self.collected_symbols, **node.annex.propagated_symbols}
+            elif not isinstance(node, SymbolTableTrait):
                 # Stop recursion if the node opens a new scope (i.e. node with SymbolTableTrait)
                 self.generic_visit(node)
 
         def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                self.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[union-attr]  # _NODE_SYMBOLS_ is optional
+                self.visit(node.__class__._NODE_SYMBOLS_)
             return super().visit(node, **kwargs)
 
         @classmethod
@@ -76,7 +83,7 @@ class SymbolTableTrait:
             # traversal here calling `generic_visit()` to directly inspect the children (after
             # adding any extra node symbols defined in the node class).
             if hasattr(node.__class__, "_NODE_SYMBOLS_"):
-                collector.visit(node.__class__._NODE_SYMBOLS_)  # type: ignore[attr-defined]  # _NODE_SYMBOLS_ is optional
+                collector.visit(node.__class__._NODE_SYMBOLS_)
             collector.generic_visit(node)
             return collector.collected_symbols
 

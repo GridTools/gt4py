@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -22,8 +22,7 @@ import warnings
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Optional, Protocol, Tuple, Type, Union
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian import definitions as gt_definitions
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import definitions as gt_definitions, utils as gt_utils
 
 from . import pyext_builder
 from .module_generator import BaseModuleGenerator, ModuleData, make_args_data_from_gtir
@@ -56,7 +55,6 @@ def register(backend_cls: Type["Backend"]) -> None:
 
 
 class Backend(abc.ABC):
-
     #: Backend name
     name: ClassVar[str]
 
@@ -229,7 +227,6 @@ class CLIBackendMixin(Backend):
 
 
 class BaseBackend(Backend):
-
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
 
     def load(self) -> Optional[Type["StencilObject"]]:

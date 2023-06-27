@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass, field
-from typing import Any, List, Set, Union
+from typing import Any, List, Optional, Set, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common, gtir, oir, utils
@@ -125,7 +125,7 @@ class GTIRToOIR(eve.NodeTranslator):
 
     # --- Stmts ---
     def visit_ParAssignStmt(
-        self, node: gtir.ParAssignStmt, *, mask: oir.Expr = None, **kwargs: Any
+        self, node: gtir.ParAssignStmt, *, mask: Optional[oir.Expr] = None, **kwargs: Any
     ) -> Union[oir.AssignStmt, oir.MaskStmt]:
         stmt: Union[oir.AssignStmt, oir.MaskStmt] = oir.AssignStmt(
             left=self.visit(node.left), right=self.visit(node.right)
@@ -149,7 +149,7 @@ class GTIRToOIR(eve.NodeTranslator):
         return oir.HorizontalRestriction(mask=node.mask, body=body_stmts)
 
     def visit_While(
-        self, node: gtir.While, *, mask: oir.Expr = None, **kwargs: Any
+        self, node: gtir.While, *, mask: Optional[oir.Expr] = None, **kwargs: Any
     ) -> Union[oir.While, oir.MaskStmt]:
         body_stmts: List[oir.Stmt] = []
         for st in node.body:
@@ -166,7 +166,12 @@ class GTIRToOIR(eve.NodeTranslator):
         return stmt
 
     def visit_FieldIfStmt(
-        self, node: gtir.FieldIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
+        self,
+        node: gtir.FieldIfStmt,
+        *,
+        mask: Optional[oir.Expr] = None,
+        ctx: Context,
+        **kwargs: Any,
     ) -> List[oir.Stmt]:
         mask_field_decl = oir.Temporary(
             name=f"mask_{id(node)}", dtype=DataType.BOOL, dimensions=(True, True, True)
@@ -213,7 +218,12 @@ class GTIRToOIR(eve.NodeTranslator):
     # For now we represent ScalarIf (and FieldIf) both as masks on the HorizontalExecution.
     # This is not meant to be set in stone...
     def visit_ScalarIfStmt(
-        self, node: gtir.ScalarIfStmt, *, mask: oir.Expr = None, ctx: Context, **kwargs: Any
+        self,
+        node: gtir.ScalarIfStmt,
+        *,
+        mask: Optional[oir.Expr] = None,
+        ctx: Context,
+        **kwargs: Any,
     ) -> List[oir.Stmt]:
         current_mask = self.visit(node.cond)
         combined_mask = current_mask

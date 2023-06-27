@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -149,6 +149,9 @@ class TestExtendedProtocol:
         assert not isinstance(IncompleteClass(), NoDataProto)
 
     def test_instance_check_shortcut_performance(self, sample_class_defs):
+        # TODO(egparedes): change testing strategy to avoid timings
+        pytest.skip()
+
         PASS_STMT = "isinstance(ConcreteClass(), NoDataProto)"
         FAIL_STMT = "isinstance(IncompleteClass(), NoDataProto)"
         DEFINITIONS = sample_class_defs.__dict__

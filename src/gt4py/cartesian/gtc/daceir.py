@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -356,7 +356,6 @@ class TileInterval(eve.Node):
         )
 
     def to_dace_symbolic(self):
-
         start = self.axis.tile_dace_symbol() + self.start_offset
         end = start + self.dace_symbolic_size()
         return start, end
@@ -371,7 +370,6 @@ class Range(eve.Node):
     def from_axis_and_interval(
         cls, axis: Axis, interval: Union[DomainInterval, TileInterval], stride=1
     ):
-
         return cls(
             var=axis.iteration_symbol(),
             interval=interval,
@@ -774,7 +772,6 @@ class IndexAccess(common.FieldAccess, Expr):
 
 
 class AssignStmt(common.AssignStmt[Union[ScalarAccess, IndexAccess], Expr], Stmt):
-
     _dtype_validation = common.assign_stmt_dtype_validation(strict=True)
 
 

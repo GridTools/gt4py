@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,8 +24,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from cached_property import cached_property
 
-from gt4py.cartesian import config as gt_config
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import config as gt_config, utils as gt_utils
 from gt4py.cartesian.definitions import StencilID
 
 

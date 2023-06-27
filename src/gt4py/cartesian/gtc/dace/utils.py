@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -21,9 +21,7 @@ import dace.data
 import numpy as np
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc import daceir as dcir
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.common import CartesianOffset
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
 
@@ -198,7 +196,6 @@ class AccessInfoCollector(eve.NodeVisitor):
         self.visit(node.body, is_conditional=True, region=region, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
-
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
         self.visit(node.body, is_conditional=True, **kwargs)
 

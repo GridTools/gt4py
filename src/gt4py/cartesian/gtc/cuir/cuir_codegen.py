@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -26,13 +26,11 @@ from gt4py.cartesian.gtc.common import (
 )
 from gt4py.cartesian.gtc.cuir import cuir
 from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.eve.concepts import LeafNode
 
 
 class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
-
     LocalScalar = as_fmt("{dtype} {name};")
 
     FieldDecl = as_fmt("{name}")
@@ -171,6 +169,7 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         NativeFunction.POW: "std::pow",
         NativeFunction.EXP: "std::exp",
         NativeFunction.LOG: "std::log",
+        NativeFunction.LOG10: "std::log10",
         NativeFunction.GAMMA: "std::tgamma",
         NativeFunction.CBRT: "std::cbrt",
         NativeFunction.ISFINITE: "std::isfinite",
@@ -304,7 +303,6 @@ class CUIRCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_VerticalLoop(
         self, node: cuir.VerticalLoop, *, symtable: Dict[str, Any], **kwargs: Any
     ) -> Union[str, Collection[str]]:
-
         fields = {
             name: data_dims
             for name, data_dims in node.walk_values()

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,16 +15,16 @@
 import collections.abc
 import math
 import numbers
-from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Protocol, Sequence, Tuple, Union, cast
 
 import numpy as np
+import numpy.typing as npt
 
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
-    from numpy.typing import ArrayLike, DTypeLike
+    from numpy.typing import DTypeLike
 else:
-    ArrayLike = Any
-    DTypeLike = Any
+    DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
 
 try:
     import cupy as cp
@@ -67,7 +67,7 @@ def normalize_storage_spec(
     shape: Sequence[int],
     dtype: DTypeLike,
     dimensions: Optional[Sequence[str]],
-) -> Tuple[Sequence[int], Sequence[int], DTypeLike, Tuple[str, ...]]:
+) -> Tuple[Sequence[int], Sequence[int], np.dtype, Tuple[str, ...]]:
     """Normalize the fields of the storage spec in a homogeneous representation.
 
     Returns
@@ -137,10 +137,11 @@ def normalize_storage_spec(
     dtype = np.dtype(dtype)
     if dtype.shape:
         # Subarray dtype
+        sub_dtype, sub_shape = cast(Tuple[np.dtype, Tuple[int, ...]], dtype.subdtype)
         aligned_index = (*aligned_index, *((0,) * dtype.ndim))
-        shape = (*shape, *(dtype.subdtype[1]))
+        shape = (*shape, *sub_shape)
         dimensions = (*dimensions, *(str(d) for d in range(dtype.ndim)))
-        dtype = dtype.subdtype[0]
+        dtype = sub_dtype
 
     return aligned_index, shape, dtype, dimensions
 
@@ -289,7 +290,7 @@ def allocate_cpu(
     return raw_buffer, field
 
 
-def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]):
+def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
     if cp is not None:
         # it's not clear from the documentation if cp.asnumpy guarantees a copy.
         # worst case, this copies twice.
@@ -306,14 +307,14 @@ def as_cupy(array: FieldLike) -> "cp.ndarray":
     return cp.asarray(array)
 
 
-def get_dims(obj: GtDimsInterface) -> Optional[Tuple[str, ...]]:
+def get_dims(obj: Union[GtDimsInterface, npt.NDArray]) -> Optional[Tuple[str, ...]]:
     dims = getattr(obj, "__gt_dims__", None)
     if dims is None:
         return dims
     return tuple(str(d) for d in dims)
 
 
-def get_origin(obj: GtOriginInterface) -> Optional[Tuple[int, ...]]:
+def get_origin(obj: Union[GtDimsInterface, npt.NDArray]) -> Optional[Tuple[int, ...]]:
     origin = getattr(obj, "__gt_origin__", None)
     if origin is None:
         return origin

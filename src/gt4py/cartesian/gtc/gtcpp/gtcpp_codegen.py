@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Dict, Union
+from typing import Any, Collection, Dict, Optional, Union
 
 import numpy as np
 
@@ -27,8 +27,7 @@ from gt4py.cartesian.gtc.common import (
 )
 from gt4py.cartesian.gtc.gtcpp import gtcpp
 from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.codegen import MakoTemplate as as_mako
+from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.eve.concepts import LeafNode
 
 
@@ -42,7 +41,6 @@ def _offset_limit(root: eve.Node) -> int:
 
 
 class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
-
     GTExtent = as_fmt("extent<{i[0]},{i[1]},{j[0]},{j[1]},{k[0]},{k[1]}>")
 
     GTAccessor = as_fmt("using {name} = {intent}_accessor<{id}, {extent}, {ndim}>;")
@@ -86,7 +84,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         accessor_ref: gtcpp.AccessorRef,
         *,
         symtable: Dict[str, gtcpp.GTAccessor],
-        temp_decls: Dict[str, gtcpp.Temporary] = None,
+        temp_decls: Optional[Dict[str, gtcpp.Temporary]] = None,
         **kwargs: Any,
     ):
         temp_decls = temp_decls or {}
@@ -175,6 +173,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.POW: "std::pow",
                 NativeFunction.EXP: "std::exp",
                 NativeFunction.LOG: "std::log",
+                NativeFunction.LOG10: "std::log10",
                 NativeFunction.GAMMA: "std::tgamma",
                 NativeFunction.CBRT: "std::cbrt",
                 NativeFunction.ISFINITE: "std::isfinite",

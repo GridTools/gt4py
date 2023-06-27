@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -113,6 +113,5 @@ Examples:
 
 """
 
-from . import core as core  # noqa: F401  # imported but unused
-from . import validators as validators  # noqa: F401  # imported but unused
+from . import core as core, validators as validators  # noqa: F401  # imported but unused
 from .core import *  # noqa:   # star unused import

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -46,7 +46,7 @@ BinaryOperator enumeration (:class:`BinaryOperator`)
 NativeFunction enumeration (:class:`NativeFunction`)
     Native function identifier
     [`ABS`, `MAX`, `MIN, `MOD`, `SIN`, `COS`, `TAN`, `ARCSIN`, `ARCCOS`, `ARCTAN`,
-    `SQRT`, `EXP`, `LOG`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
+    `SQRT`, `EXP`, `LOG`, `LOG10`, `ISFINITE`, `ISINF`, `ISNAN`, `FLOOR`, `CEIL`, `TRUNC`]
 
 LevelMarker enumeration (:class:`LevelMarker`)
     Special axis levels
@@ -148,14 +148,17 @@ import numpy as np
 
 from gt4py.cartesian.definitions import AccessKind, CartesianSpace
 from gt4py.cartesian.gtc.definitions import Extent, Index
-from gt4py.cartesian.utils.attrib import Any as Any
-from gt4py.cartesian.utils.attrib import Dict as DictOf
-from gt4py.cartesian.utils.attrib import List as ListOf
-from gt4py.cartesian.utils.attrib import Optional as OptionalOf
-from gt4py.cartesian.utils.attrib import Tuple as TupleOf
-from gt4py.cartesian.utils.attrib import Union as UnionOf
-from gt4py.cartesian.utils.attrib import attribkwclass as attribclass
-from gt4py.cartesian.utils.attrib import attribute, attributes_of
+from gt4py.cartesian.utils.attrib import (
+    Any as Any,
+    Dict as DictOf,
+    List as ListOf,
+    Optional as OptionalOf,
+    Tuple as TupleOf,
+    Union as UnionOf,
+    attribkwclass as attribclass,
+    attribute,
+    attributes_of,
+)
 
 
 # ---- Foundations ----
@@ -410,6 +413,7 @@ class NativeFunction(enum.Enum):
     SQRT = enum.auto()
     EXP = enum.auto()
     LOG = enum.auto()
+    LOG10 = enum.auto()
     GAMMA = enum.auto()
     CBRT = enum.auto()
 
@@ -445,6 +449,7 @@ NativeFunction.IR_OP_TO_NUM_ARGS = {
     NativeFunction.SQRT: 1,
     NativeFunction.EXP: 1,
     NativeFunction.LOG: 1,
+    NativeFunction.LOG10: 1,
     NativeFunction.GAMMA: 1,
     NativeFunction.CBRT: 1,
     NativeFunction.ISFINITE: 1,

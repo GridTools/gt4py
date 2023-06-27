@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -155,7 +155,6 @@ def _to_device(sdfg: dace.SDFG, device: str) -> None:
 
 
 def _pre_expand_trafos(gtir_pipeline: GtirPipeline, sdfg: dace.SDFG, layout_map):
-
     args_data = make_args_data_from_gtir(gtir_pipeline)
 
     # stencils without effect
@@ -209,7 +208,6 @@ def _post_expand_trafos(sdfg: dace.SDFG):
 def _sdfg_add_arrays_and_edges(
     field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins
 ):
-
     for name, array in inner_sdfg.arrays.items():
         if isinstance(array, dace.data.Array) and not array.transient:
             axes = field_info[name].axes
@@ -342,7 +340,6 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
 
 
 class SDFGManager:
-
     _loaded_sdfgs: Dict[str, dace.SDFG] = dict()
 
     def __init__(self, builder):
@@ -368,11 +365,9 @@ class SDFGManager:
         )
 
         if path not in SDFGManager._loaded_sdfgs:
-
             try:
                 sdfg = dace.SDFG.from_file(path)
             except FileNotFoundError:
-
                 base_oir = GTIRToOIR().visit(self.builder.gtir)
                 oir_pipeline = self.builder.options.backend_opts.get(
                     "oir_pipeline", DefaultPipeline(skip=[MaskInlining])
@@ -441,7 +436,6 @@ class DaCeExtGenerator(BackendCodegen):
         self.backend = backend
 
     def __call__(self, stencil_ir: gtir.Stencil) -> Dict[str, Dict[str, str]]:
-
         manager = SDFGManager(self.backend.builder)
         sdfg = manager.expanded_sdfg()
 
@@ -461,7 +455,6 @@ class DaCeExtGenerator(BackendCodegen):
 
 
 class DaCeComputationCodegen:
-
     template = as_mako(
         """
         auto ${name}(const std::array<gt::uint_t, 3>& domain) {
@@ -480,17 +473,19 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-
-        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        global_fmt = (
+            "__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        )
         threadlocal_fmt = (
-            "{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
+            "__{sdfg_id}_{name} = __full__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
         )
         res = []
         for array_sdfg, name, array in sdfg.arrays_recursive():
             if array.transient and array.lifetime == dace.AllocationLifetime.Persistent:
                 if array.storage != dace.StorageType.CPU_ThreadLocal:
+                    fmt = "dace_handle." + global_fmt
                     res.append(
-                        global_fmt.format(
+                        fmt.format(
                             name=name,
                             sdfg_id=array_sdfg.sdfg_id,
                             dtype=array.dtype.ctype,
@@ -498,7 +493,13 @@ class DaCeComputationCodegen:
                         )
                     )
                 else:
-                    fmts = [global_fmt, "#pragma omp parallel", "{{", threadlocal_fmt, "}}"]
+                    fmts = [
+                        "{dtype} *__full" + global_fmt,
+                        "#pragma omp parallel",
+                        "{{",
+                        threadlocal_fmt,
+                        "}}",
+                    ]
                     res.extend(
                         [
                             fmt.format(
@@ -728,7 +729,6 @@ class DaCeBindingsCodegen:
         return res
 
     def generate_sdfg_bindings(self, stencil_ir: gtir.Stencil, sdfg, module_name) -> str:
-
         return self.mako_template.render_values(
             name=sdfg.name,
             module_name=module_name,
@@ -774,7 +774,6 @@ class DaCeCUDAPyExtModuleGenerator(DaCePyExtModuleGenerator, CUDAPyExtModuleGene
 
 
 class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
-
     GT_BACKEND_T = "dace"
     PYEXT_GENERATOR_CLASS = DaCeExtGenerator  # type: ignore
 
@@ -796,7 +795,6 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
 @register
 class DaceCPUBackend(BaseDaceBackend):
-
     name = "dace:cpu"
     languages = {"computation": "c++", "bindings": ["python"]}
     storage_info = {

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -22,18 +22,15 @@ import textwrap
 import time
 import types
 import warnings
-from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Union
+from typing import Any, Dict, Final, List, Literal, Optional, Sequence, Set, Tuple, Type, Union
 
 import numpy as np
 
-from gt4py.cartesian import definitions as gt_definitions
-from gt4py.cartesian import gtscript
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import definitions as gt_definitions, gtscript, utils as gt_utils
 from gt4py.cartesian.frontend import node_util, nodes
 from gt4py.cartesian.frontend.defir_to_gtir import DefIRToGTIR, UnrollVectorAssignments
 from gt4py.cartesian.gtc import utils as gtc_utils
-from gt4py.cartesian.utils import NOTHING
-from gt4py.cartesian.utils import meta as gt_meta
+from gt4py.cartesian.utils import NOTHING, meta as gt_meta
 
 from .base import Frontend, register
 from .exceptions import (
@@ -704,6 +701,7 @@ class IRMaker(ast.NodeVisitor):
         *,
         domain: nodes.Domain,
         temp_decls: Optional[Dict[str, nodes.FieldDecl]] = None,
+        dtypes: Optional[Dict[Type, Type]] = None,
     ):
         fields = fields or {}
         parameters = parameters or {}
@@ -723,6 +721,7 @@ class IRMaker(ast.NodeVisitor):
         self.decls_stack = []
         self.parsing_horizontal_region = False
         self.written_vars: Set[str] = set()
+        self.dtypes = dtypes
         nodes.NativeFunction.PYTHON_SYMBOL_TO_IR_OP = {
             "abs": nodes.NativeFunction.ABS,
             "min": nodes.NativeFunction.MIN,
@@ -743,6 +742,7 @@ class IRMaker(ast.NodeVisitor):
             "sqrt": nodes.NativeFunction.SQRT,
             "exp": nodes.NativeFunction.EXP,
             "log": nodes.NativeFunction.LOG,
+            "log10": nodes.NativeFunction.LOG10,
             "gamma": nodes.NativeFunction.GAMMA,
             "cbrt": nodes.NativeFunction.CBRT,
             "isfinite": nodes.NativeFunction.ISFINITE,
@@ -999,7 +999,12 @@ class IRMaker(ast.NodeVisitor):
                 loc=nodes.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):
-            data_type = nodes.DataType.from_dtype(np.dtype(type(value)))
+            value_type = (
+                self.dtypes[type(value)]
+                if self.dtypes and type(value) in self.dtypes.keys()
+                else np.dtype(type(value))
+            )
+            data_type = nodes.DataType.from_dtype(value_type)
             return nodes.ScalarLiteral(value=value, data_type=data_type)
         else:
             raise GTScriptSyntaxError(
@@ -1606,7 +1611,6 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
 
 
 class GTScriptParser(ast.NodeVisitor):
-
     CONST_VALUE_TYPES = (
         *gtscript._VALID_DATA_TYPES,
         types.FunctionType,
@@ -1615,7 +1619,7 @@ class GTScriptParser(ast.NodeVisitor):
         gtscript.Axis,
     )
 
-    def __init__(self, definition, *, options, externals=None):
+    def __init__(self, definition, *, options, externals=None, dtypes=None):
         assert isinstance(definition, types.FunctionType)
         self.definition = definition
         self.filename = inspect.getfile(definition)
@@ -1628,6 +1632,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.external_context = externals or {}
         self.resolved_externals = {}
         self.block = None
+        self.dtypes = dtypes
 
     def __str__(self):
         result = "<GT4Py.GTScriptParser> {\n"
@@ -2028,6 +2033,7 @@ class GTScriptParser(ast.NodeVisitor):
             local_symbols={},  # Not used
             domain=domain,
             temp_decls=temp_decls,
+            dtypes=self.dtypes,
         )(self.ast_root)
 
         self.definition_ir = nodes.StencilDefinition(
@@ -2080,13 +2086,13 @@ class GTScriptFrontend(Frontend):
         return GTScriptParser.annotate_definition(definition, externals)
 
     @classmethod
-    def generate(cls, definition, externals, options):
+    def generate(cls, definition, externals, dtypes, options):
         if options.build_info is not None:
             start_time = time.perf_counter()
 
         if not hasattr(definition, "_gtscript_"):
             cls.prepare_stencil_definition(definition, externals)
-        translator = GTScriptParser(definition, externals=externals, options=options)
+        translator = GTScriptParser(definition, externals=externals, dtypes=dtypes, options=options)
         definition_ir = translator.run()
 
         # GTIR only supports LatLonGrids

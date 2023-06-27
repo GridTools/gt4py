@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Python library for generating high-performance implementations of stencil kernels for weather and climate modeling."""
+
+import sys as _sys
 
 from . import cartesian, eve, storage
 from .__about__ import __author__, __copyright__, __license__, __version__, __version_info__
@@ -28,3 +30,9 @@ __all__ = [
     "eve",
     "storage",
 ]
+
+
+if _sys.version_info >= (3, 10):
+    from . import next
+
+    __all__ += ["next"]

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -24,9 +24,7 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc import daceir as dcir
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion_specification import (
     ExpansionItem,
     Loop,
@@ -83,7 +81,6 @@ def _access_iter(node: oir.HorizontalExecution, get_outputs: bool):
 
 
 def _get_tasklet_inout_memlets(node: oir.HorizontalExecution, *, get_outputs, global_ctx, **kwargs):
-
     access_infos = compute_dcir_access_infos(
         node,
         block_extents=global_ctx.library_node.get_extents,
@@ -550,7 +547,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx: "DaCeIRBuilder.GlobalContext",
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
     ):
-
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.NestedSDFG, dcir.DomainMap, dcir.Tasklet)) for n in nodes):
             return nodes
@@ -585,7 +581,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         ]
 
     def to_state(self, nodes, *, grid_subset: dcir.GridSubset):
-
         nodes = flatten_list(nodes)
         if all(isinstance(n, (dcir.ComputationState, dcir.DomainLoop)) for n in nodes):
             return nodes
@@ -604,7 +599,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
-
         grid_subset = iteration_ctx.grid_subset
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_dataflow(
@@ -707,7 +701,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
         **kwargs,
     ):
-
         grid_subset = union_node_grid_subsets(list(scope_nodes))
         read_memlets, write_memlets, _ = union_inout_memlets(list(scope_nodes))
         scope_nodes = self.to_state(scope_nodes, grid_subset=grid_subset)

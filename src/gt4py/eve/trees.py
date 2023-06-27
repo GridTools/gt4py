@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -40,10 +40,10 @@ from .type_definitions import Enum
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz  # type: ignore[import]
+    import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # type: ignore[import] # noqa: F401  # imported but unused
+    import toolz  # noqa: F401  # imported but unused
 
 
 TreeKey = Union[int, str]
@@ -104,14 +104,14 @@ register_tree_like(str, bytes, iter_values_fn=lambda _: iter(()), iter_items_fn=
 
 
 register_tree_like(
-    collections.abc.Sequence,  # type: ignore[misc]  # It should be concrete class
-    collections.abc.Set,  # type: ignore[misc]  # It should be concrete class
+    collections.abc.Sequence,  # type: ignore[type-abstract]  # It should be concrete class
+    collections.abc.Set,  # type: ignore[type-abstract]  # It should be concrete class
     iter_values_fn=lambda x: iter(x),
     iter_items_fn=lambda x: enumerate(x),
 )
 
 register_tree_like(
-    collections.abc.Mapping,  # type: ignore[misc]  # It should be concrete class
+    collections.abc.Mapping,  # type: ignore[type-abstract]  # It should be concrete class
     iter_values_fn=lambda x: x.values(),
     iter_items_fn=lambda x: x.items(),
 )

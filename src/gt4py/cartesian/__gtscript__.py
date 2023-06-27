@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,4 +23,4 @@ import sys
 from gt4py.cartesian.gtscript import *
 
 
-sys.modules["__gtscript__"] = sys.modules["gt4py.__gtscript__"]
+sys.modules["__gtscript__"] = sys.modules["gt4py.cartesian.__gtscript__"]

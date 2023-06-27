@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -14,9 +14,15 @@
 
 import abc
 import numbers
-import os
+import sys
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Set, cast
+
+
+if sys.version_info >= (3, 9):
+    import importlib.resources as importlib_resources
+else:
+    import importlib_resources  # type: ignore[no-redef]
 
 import jinja2
 import numpy
@@ -113,14 +119,13 @@ def make_args_data_from_gtir(pipeline: GtirPipeline) -> ModuleData:
 
 
 class BaseModuleGenerator(abc.ABC):
-
     SOURCE_LINE_LENGTH = 120
     TEMPLATE_INDENT_SIZE = 4
     DOMAIN_ARG_NAME = "_domain_"
     ORIGIN_ARG_NAME = "_origin_"
     SPLITTERS_NAME = "_splitters_"
 
-    TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "templates", "stencil_module.py.in")
+    TEMPLATE_RESOURCE = "stencil_module.py.in"
 
     _builder: Optional["StencilBuilder"]
     args_data: ModuleData
@@ -129,8 +134,11 @@ class BaseModuleGenerator(abc.ABC):
     def __init__(self, builder: Optional["StencilBuilder"] = None):
         self._builder = builder
         self.args_data = ModuleData()
-        with open(self.TEMPLATE_PATH, "r") as f:
-            self.template = jinja2.Template(f.read())
+        self.template = jinja2.Template(
+            importlib_resources.files("gt4py.cartesian.backend.templates")
+            .joinpath(self.TEMPLATE_RESOURCE)
+            .read_text()
+        )
 
     def __call__(
         self,

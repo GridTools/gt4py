@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,7 +19,7 @@ import distutils.sysconfig
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, overload
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast, overload
 
 import pybind11
 import setuptools
@@ -54,7 +54,6 @@ def get_gt_pyext_build_opts(
     uses_cuda: bool = False,
     gt_version: int = 1,
 ) -> Dict[str, Union[str, List[str], Dict[str, Any]]]:
-
     include_dirs = [gt_config.build_settings["boost_include_path"]]
     extra_compile_args_from_config = gt_config.build_settings["extra_compile_args"]
 
@@ -164,7 +163,26 @@ def build_pybind_ext(
     target_path: str,
     **kwargs: str,
 ) -> Tuple[str, str]:
-    pass
+    ...
+
+
+@overload
+def build_pybind_ext(
+    name: str,
+    sources: list,
+    build_path: str,
+    target_path: str,
+    *,
+    include_dirs: Optional[List[str]] = None,
+    library_dirs: Optional[List[str]] = None,
+    libraries: Optional[List[str]] = None,
+    extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
+    extra_link_args: Optional[List[str]] = None,
+    build_ext_class: Type = None,
+    verbose: bool = False,
+    clean: bool = False,
+) -> Tuple[str, str]:
+    ...
 
 
 def build_pybind_ext(
@@ -182,7 +200,6 @@ def build_pybind_ext(
     verbose: bool = False,
     clean: bool = False,
 ) -> Tuple[str, str]:
-
     # Hack to remove warning about "-Wstrict-prototypes" not having effect in C++
     replaced_flags_backup = copy.deepcopy(distutils.sysconfig._config_vars)
     _clean_build_flags(distutils.sysconfig._config_vars)
@@ -220,7 +237,8 @@ def build_pybind_ext(
         setuptools_args["cmdclass"] = {"build_ext": build_ext_class}
 
     if verbose:
-        setuptools_args["script_args"].append("-v")
+        script_args = cast(List[str], setuptools_args["script_args"])
+        script_args.append("-v")
         setuptools.setup(**setuptools_args)
     else:
         setuptools_args["script_args"].append("-q")
@@ -274,7 +292,6 @@ def build_pybind_cuda_ext(
     verbose: bool = False,
     clean: bool = False,
 ) -> Tuple[str, str]:
-
     include_dirs = include_dirs or []
     include_dirs = [*include_dirs, gt_config.build_settings["cuda_include_path"]]
     library_dirs = library_dirs or []

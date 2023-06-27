@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -33,22 +33,22 @@ import typing
 import uuid
 import warnings
 
-import deepdiff  # type: ignore[import]
-import xxhash  # type: ignore[import]
-from boltons.iterutils import flatten as flatten  # type: ignore[import]  # noqa: F401
-from boltons.iterutils import flatten_iter as flatten_iter  # type: ignore[import]  # noqa: F401
-from boltons.iterutils import is_collection as is_collection  # type: ignore[import]  # noqa: F401
-from boltons.strutils import a10n as a10n  # type: ignore[import]  # noqa: F401
-from boltons.strutils import asciify as asciify  # type: ignore[import]  # noqa: F401
-from boltons.strutils import (  # type: ignore[import]  # noqa: F401
+import deepdiff
+import xxhash
+from boltons.iterutils import (  # noqa: F401
+    flatten as flatten,
+    flatten_iter as flatten_iter,
+    is_collection as is_collection,
+)
+from boltons.strutils import (  # noqa: F401
+    a10n as a10n,
+    asciify as asciify,
     format_int_list as format_int_list,
-)
-from boltons.strutils import (  # type: ignore[import]  # noqa: F401
     iter_splitlines as iter_splitlines,
+    parse_int_list as parse_int_list,
+    slugify as slugify,
+    unwrap_text as unwrap_text,
 )
-from boltons.strutils import parse_int_list as parse_int_list  # type: ignore[import]  # noqa: F401
-from boltons.strutils import slugify as slugify  # type: ignore[import]  # noqa: F401
-from boltons.strutils import unwrap_text as unwrap_text  # type: ignore[import]  # noqa: F401
 
 from . import extended_typing as xtyping
 from .extended_typing import (
@@ -68,6 +68,7 @@ from .extended_typing import (
     Type,
     TypeVar,
     Union,
+    cast,
     overload,
 )
 from .type_definitions import NOTHING, NothingType
@@ -75,10 +76,10 @@ from .type_definitions import NOTHING, NothingType
 
 try:
     # For perfomance reasons, try to use cytoolz when possible (using cython)
-    import cytoolz as toolz  # type: ignore[import]
+    import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # type: ignore[import]  # noqa: F401
+    import toolz  # noqa: F401
 
 
 T = TypeVar("T")
@@ -360,7 +361,7 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()
+        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
     elif isinstance(hash_algorithm, str):
         hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
 
@@ -596,17 +597,17 @@ class UIDGenerator:
     """Simple unique id generator using different methods."""
 
     prefix: Optional[str] = (
-        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        dataclasses.field(default=None, kw_only=True)
         if sys.version_info >= (3, 10)
         else dataclasses.field(default=None)
     )
     width: Optional[int] = (
-        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        dataclasses.field(default=None, kw_only=True)
         if sys.version_info >= (3, 10)
         else dataclasses.field(default=None)
     )
     warn_unsafe: Optional[bool] = (
-        dataclasses.field(default=None, kw_only=True)  # type: ignore[call-overload]
+        dataclasses.field(default=None, kw_only=True)
         if sys.version_info >= (3, 10)
         else dataclasses.field(default=None)
     )
@@ -1337,7 +1338,7 @@ class XIterable(Iterable[T]):
         if callable(key):
             groupby_key = key
         elif isinstance(key, list):
-            groupby_key = operator.itemgetter(*key)
+            groupby_key = cast(Callable[[T], Any], operator.itemgetter(*key))
         else:
             assert isinstance(key, str)
             groupby_key = operator.attrgetter(key, *attr_keys)

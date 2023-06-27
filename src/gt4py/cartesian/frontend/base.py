@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -36,7 +36,6 @@ def register(frontend_cls: Type["Frontend"]) -> None:
 
 
 class Frontend(abc.ABC):
-
     name: str
     """Frontend name."""
 
@@ -74,7 +73,11 @@ class Frontend(abc.ABC):
     @classmethod
     @abc.abstractmethod
     def generate(
-        cls, definition: AnyStencilFunc, externals: Dict[str, Any], options: BuildOptions
+        cls,
+        definition: AnyStencilFunc,
+        externals: Dict[str, Any],
+        dtypes: Dict[Type, Type],
+        options: BuildOptions,
     ) -> gtir.Stencil:
         """
         Generate a StencilDefinition from a stencil Python function.

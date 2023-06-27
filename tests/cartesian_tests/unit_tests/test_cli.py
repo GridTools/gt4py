@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -105,7 +105,6 @@ BACKEND_ROW_PATTERN_BY_NAME = {
 
 @pytest.fixture
 def list_backends_line_pattern(backend_name):
-
     yield BACKEND_ROW_PATTERN_BY_NAME[backend_name]
 
 

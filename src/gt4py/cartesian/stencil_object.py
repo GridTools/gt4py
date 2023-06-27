@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,7 +16,6 @@ import abc
 import collections.abc
 import sys
 import time
-import typing
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
@@ -470,7 +469,7 @@ class StencilObject(abc.ABC):
                         f"Origin for field {name} too small. Must be at least {min_origin}, is {field_domain_origin}"
                     )
 
-                spatial_domain = typing.cast(Shape, domain).filter_mask(field_domain_mask)
+                spatial_domain = domain.filter_mask(field_domain_mask)
                 lower_indices = field_info.boundary.lower_indices.filter_mask(field_domain_mask)
                 upper_indices = field_info.boundary.upper_indices.filter_mask(field_domain_mask)
                 min_shape = tuple(

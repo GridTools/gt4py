@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -21,8 +21,7 @@ a high-level stencil function definition using a specific code generating backen
 import types
 from typing import TYPE_CHECKING, Any, Dict, Type
 
-from gt4py.cartesian import backend as gt_backend
-from gt4py.cartesian import frontend as gt_frontend
+from gt4py.cartesian import backend as gt_backend, frontend as gt_frontend
 from gt4py.cartesian.stencil_builder import StencilBuilder
 from gt4py.cartesian.type_hints import StencilFunc
 
@@ -37,6 +36,7 @@ def load_stencil(
     backend_name: str,
     definition_func: StencilFunc,
     externals: Dict[str, Any],
+    dtypes: Dict[Type, Type],
     build_options: "BuildOptions",
 ) -> Type["StencilObject"]:
     """Generate a new class object implementing the provided definition."""
@@ -49,9 +49,13 @@ def load_stencil(
     if frontend is None:
         raise ValueError(f"Invalid frontend name ({frontend_name})")
 
-    builder = StencilBuilder(
-        definition_func, options=build_options, backend=backend_name, frontend=frontend
-    ).with_externals(externals)
+    builder = (
+        StencilBuilder(
+            definition_func, options=build_options, backend=backend_name, frontend=frontend
+        )
+        .with_externals(externals)
+        .with_dtypes(dtypes)
+    )
 
     return builder.build()
 
@@ -61,12 +65,15 @@ def gtscript_loader(
     backend: str,
     build_options: "BuildOptions",
     externals: Dict[str, Any],
+    dtypes: Dict[Type, Type],
 ) -> "StencilObject":
     if not isinstance(definition_func, types.FunctionType):
         raise ValueError("Invalid stencil definition object ({obj})".format(obj=definition_func))
 
     if not build_options.name:
         build_options.name = f"{definition_func.__name__}"
-    stencil_class = load_stencil("gtscript", backend, definition_func, externals, build_options)
+    stencil_class = load_stencil(
+        "gtscript", backend, definition_func, externals, dtypes, build_options
+    )
 
     return stencil_class()

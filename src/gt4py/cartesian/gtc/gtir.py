@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -257,9 +257,10 @@ def _variablek_fieldaccess(node) -> bool:
     return isinstance(node, FieldAccess) and isinstance(node.offset, VariableKOffset)
 
 
+# TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
 def _written_and_read_with_offset(stmts: List[Stmt]) -> Set[str]:
     """Return a list of names that are written to and read with offset."""
-    # TODO(havogt): either move to eve or will be removed in the attr-based eve if a List[Node] is represented as a CollectionNode
+
     def _writes(stmts: List[Stmt]) -> Set[str]:
         result = set()
         for left in eve.walk_values(stmts).if_isinstance(ParAssignStmt).getattr("left"):

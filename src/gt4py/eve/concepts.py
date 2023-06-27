@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -21,9 +21,7 @@ import ast
 import copy
 import re
 
-from . import datamodels, exceptions
-from . import extended_typing as xtyping
-from . import trees, utils
+from . import datamodels, exceptions, extended_typing as xtyping, trees, utils
 from .datamodels import validators as _validators
 from .extended_typing import (
     Any,
@@ -198,7 +196,13 @@ class Node(datamodels.DataModel, trees.Tree, kw_only=True):  # type: ignore[call
     frozen classes. Data in the `annex` do not affect the hash or equality
     comparisons of the node, since it is not really a field. Thus, visitors
     and pipeline passes can freely attach computed attributes into the instance
-    `annex`.
+    `annex`. Note that `annex` attribute is not implicitly copied in the
+    :class:`NodeTranslator`. If you want it to persist across multiple
+    :class:`NodeTranslator`s either use a `root_validator` to dynamically
+    (re)compute the annex on node construction (see e.g.
+    :class:`SymbolTableTrait`) or add the parts of the annex that should be
+    preserved to the `PRESERVED_ANNEX_ATTRS` attribute in the
+    :class:`NodeTranslator` class..
     """
 
     __slots__ = ()
@@ -273,7 +277,6 @@ class GenericNode(datamodels.GenericDataModel, Node, kw_only=True):  # type: ign
 
 
 class VType(datamodels.FrozenModel):
-
     # Unique name
     name: str
 

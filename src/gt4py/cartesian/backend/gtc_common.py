@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -20,8 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py.cartesian import backend as gt_backend
-from gt4py.cartesian import utils as gt_utils
+from gt4py.cartesian import backend as gt_backend, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir
@@ -227,7 +226,6 @@ class BackendCodegen:
 
 
 class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
-
     GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
@@ -252,10 +250,11 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         return {dir_name: src_files["computation"]}
 
     def generate_bindings(
-        self, language_name: str, *, stencil_ir: gtir.Stencil = None
+        self, language_name: str, *, stencil_ir: Optional[gtir.Stencil] = None
     ) -> Dict[str, Union[str, Dict]]:
         if not stencil_ir:
             stencil_ir = self.builder.gtir
+        assert stencil_ir is not None
         if language_name != "python":
             return super().generate_bindings(language_name)
         dir_name = f"{self.builder.options.name}_src"
@@ -280,6 +279,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
 
         if not stencil_ir:
             stencil_ir = self.builder.gtir
+        assert stencil_ir is not None
+
         # Generate source
         gt_pyext_files: Dict[str, Any]
         gt_pyext_sources: Dict[str, Any]

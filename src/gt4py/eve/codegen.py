@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -31,7 +31,7 @@ import types
 
 import black
 import jinja2
-from mako import template as mako_tpl  # type: ignore[import]
+from mako import template as mako_tpl
 
 from . import exceptions, utils
 from .concepts import CollectionNode, LeafNode, Node, RootNode
@@ -112,10 +112,7 @@ def format_python_source(
 ) -> str:
     """Format Python source code using black formatter."""
     python_versions = python_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(
-        black.TargetVersion[f"PY{v.replace('.', '')}"]  # type: ignore[attr-defined]
-        for v in python_versions
-    )
+    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)  # type: ignore[attr-defined]  # .TargetVersion implicitly exported
 
     formatted_source = black.format_str(
         source,
@@ -506,7 +503,7 @@ class JinjaTemplate(BaseTemplate):
                 message += f" created at {self.definition_loc[0]}:{self.definition_loc[1]}"
                 try:
                     if hasattr(e, "lineno"):
-                        message += f" (error likely around line: {e.lineno})"  # type: ignore  # assume Jinja exception
+                        message += f" (error likely around line: {e.lineno})"
                 except Exception:
                     message = f"{message}:\n---\n{definition}\n---\n"
 

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -21,8 +21,7 @@ from gt4py import eve
 from gt4py.cartesian.gtc import common
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.eve import codegen
-from gt4py.eve.codegen import FormatTemplate as as_fmt
-from gt4py.eve.codegen import JinjaTemplate as as_jinja
+from gt4py.eve.codegen import FormatTemplate as as_fmt, JinjaTemplate as as_jinja
 
 
 __all__ = ["NpirCodegen"]
@@ -245,17 +244,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
     def visit_NativeFunction(
         self, node: common.NativeFunction, **kwargs: Any
     ) -> Union[str, Collection[str]]:
-        if node == common.NativeFunction.MIN:
-            return "np.minimum"
-        elif node == common.NativeFunction.MAX:
-            return "np.maximum"
-        elif node == common.NativeFunction.POW:
-            return "np.power"
-        elif node == common.NativeFunction.GAMMA:
-            return "scipy.special.gamma"
-        name = self.generic_visit(node, **kwargs)
-        assert isinstance(name, str)
-        return f"np.{name}"
+        return f"ufuncs.{common.OP_TO_UFUNC_NAME[common.NativeFunction][node]}"
 
     def visit_NativeFuncCall(
         self, node: npir.NativeFuncCall, *, mask: Optional[str] = None, **kwargs: Any
@@ -399,7 +388,7 @@ class NpirCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
             from typing import Tuple
 
             import numpy as np
-            import scipy.special
+            from gt4py.cartesian.gtc import ufuncs
 
             {{ data_view_class }}
 

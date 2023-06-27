@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,8 +23,7 @@ from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
 if TYPE_CHECKING:
-    from gt4py.cartesian.backend.base import Backend as BackendType
-    from gt4py.cartesian.backend.base import CLIBackendMixin
+    from gt4py.cartesian.backend.base import Backend as BackendType, CLIBackendMixin
     from gt4py.cartesian.frontend.base import Frontend as FrontendType
     from gt4py.cartesian.stencil_object import StencilObject
 
@@ -80,6 +79,7 @@ class StencilBuilder:
         self.frontend: Type["FrontendType"] = frontend
         self.with_caching("jit")
         self._externals: Dict[str, Any] = {}
+        self._dtypes: Dict[Type, Type] = {}
 
     def build(self) -> Type["StencilObject"]:
         """Generate, compile and/or load everything necessary to provide a usable stencil class."""
@@ -219,6 +219,12 @@ class StencilBuilder:
             "externals", self._externals.copy()
         )
 
+    @property
+    def dtypes(self) -> Dict[Type, Type]:
+        return self._build_data.get("dtypes") or self._build_data.setdefault(
+            "dtypes", self._dtypes.copy()
+        )
+
     def with_externals(self: "StencilBuilder", externals: Dict[str, Any]) -> "StencilBuilder":
         """
         Fluidly set externals for this build.
@@ -227,6 +233,12 @@ class StencilBuilder:
         """
         self._build_data = {}
         self._externals = externals
+        self.with_caching(self.caching.name)
+        return self
+
+    def with_dtypes(self: "StencilBuilder", dtypes: Dict[Type, Type]) -> "StencilBuilder":
+        self._build_data = {}
+        self._dtypes = dtypes
         self.with_caching(self.caching.name)
         return self
 
@@ -269,7 +281,7 @@ class StencilBuilder:
         return self._build_data.get("gtir_pipeline") or self._build_data.setdefault(
             "gtir_pipeline",
             GtirPipeline(
-                self.frontend.generate(self.definition, self.externals, self.options),
+                self.frontend.generate(self.definition, self.externals, self.dtypes, self.options),
                 self.stencil_id,
             ),
         )

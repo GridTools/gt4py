@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -29,8 +29,29 @@ try:
 except ImportError:
     pass
 
-from .cuda_backend import CudaBackend  # noqa: F401
-from .gtcpp_backend import GTCpuIfirstBackend  # noqa: F401
-from .gtcpp_backend import GTCpuKfirstBackend, GTGpuBackend
+from .cuda_backend import CudaBackend
+from .gtcpp_backend import GTCpuIfirstBackend, GTCpuKfirstBackend, GTGpuBackend
 from .module_generator import BaseModuleGenerator
-from .numpy_backend import NumpyBackend  # noqa: F401
+from .numpy_backend import NumpyBackend
+
+
+__all__ = [
+    "REGISTRY",
+    "Backend",
+    "BaseBackend",
+    "BaseModuleGenerator",
+    "BasePyExtBackend",
+    "CLIBackendMixin",
+    "CudaBackend",
+    "GTGpuBackend",
+    "GTCpuIfirstBackend",
+    "GTCpuKfirstBackend",
+    "NumpyBackend",
+    "PurePythonBackendCLIMixin",
+    "from_name",
+    "register",
+]
+
+
+if "DaceCPUBackend" in globals():
+    __all__ += ["DaceCPUBackend", "DaceGPUBackend"]

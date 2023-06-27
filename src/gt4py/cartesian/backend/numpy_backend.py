@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,7 +16,8 @@ import pathlib
 from typing import TYPE_CHECKING, Any, ClassVar, Dict, Type, Union, cast
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import BaseBackend, BaseModuleGenerator, CLIBackendMixin, register
+from gt4py.cartesian.backend.base import BaseBackend, CLIBackendMixin, register
+from gt4py.cartesian.backend.module_generator import BaseModuleGenerator
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.cartesian.gtc.numpy.npir_codegen import NpirCodegen
@@ -67,7 +68,7 @@ def recursive_write(root_path: pathlib.Path, tree: Dict[str, Union[str, dict]]):
             recursive_write(root_path / key, value)
         else:
             src_path = root_path / key
-            src_path.write_text(cast(str, value))
+            src_path.write_text(value)
 
 
 @register

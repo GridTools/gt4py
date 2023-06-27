@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -36,6 +36,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    no_type_check,
 )
 
 import devtools
@@ -168,12 +169,14 @@ class TestInitialization:
         assert model.list_value == [1, 2, 3]
 
     def test_custom_init(self):
-        class ModelWithCustomInit(datamodels.DataModel):
+        @no_type_check
+        @datamodels.datamodel
+        class ModelWithCustomInit:
             value: float
             enum_value: SampleEnum
             list_value: List[float]
 
-            def __init__(self, single_value: float) -> None:
+            def __init__(self: datamodels.DataModel, single_value: float) -> None:
                 self.__auto_init__(single_value, SampleEnum.BLA, [1.0] * int(single_value))
 
         model = ModelWithCustomInit(3.5)
@@ -199,17 +202,18 @@ class TestInitialization:
         assert model.value == 3.5 * 10
 
     def test_custom_init_and_hooks(self):
-        class ModelWithCustomInitAndHooks(datamodels.DataModel):
+        @datamodels.datamodel
+        class ModelWithCustomInitAndHooks:
             value: float
             STATIC_INT: ClassVar[int] = 0
 
-            def __init__(self, str_value: str) -> None:
+            def __init__(self: datamodels.DataModel, str_value: str) -> None:
                 self.__auto_init__(float(str_value))
 
-            def __pre_init__(self) -> None:  # type: ignore[override]
+            def __pre_init__(self) -> None:
                 self.__class__.STATIC_INT += 1
 
-            def __post_init__(self) -> None:  # type: ignore[override]
+            def __post_init__(self) -> None:
                 self.value *= 10
 
         assert ModelWithCustomInitAndHooks.STATIC_INT == 0
@@ -817,7 +821,6 @@ class ChildModelWithValidators(ModelWithValidators):
 @typing.no_type_check
 @pytest.mark.parametrize("model_class", [ModelWithValidators, ChildModelWithValidators])
 def test_field_validators(model_class: Type[Union[ModelWithValidators, ChildModelWithValidators]]):
-
     with pytest.raises(ValueError, match="int_value"):
         model_class(int_value=-1)
 
@@ -993,7 +996,7 @@ def test_field_metadata():
 # Test datamodel options
 class TestDatamodelOptions:
     def test_frozen(self):
-        import attr  # type: ignore[import] # Missing library stubs for Python 3.10)
+        import attr  # Missing library stubs for Python 3.10)
 
         @datamodels.datamodel(frozen=True)
         class FrozenModel:
@@ -1214,7 +1217,7 @@ class TestGenericModelValidation:
         self, type_hint: str, valid_values: Sequence[Any], wrong_values: Sequence[Any]
     ):
         concrete_type: Type = eval(type_hint)
-        Model: Type[datamodels.DataModel] = GenericModel[concrete_type]  # type: ignore[valid-type,misc,assignment]  # concrete_type
+        Model: Type[datamodels.DataModel] = GenericModel[concrete_type]  # type: ignore[valid-type,misc]  # concrete_type
 
         for value in valid_values:
             Model(value=value)

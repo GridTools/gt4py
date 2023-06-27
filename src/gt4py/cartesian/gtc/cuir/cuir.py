@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -16,7 +16,13 @@ from typing import Any, List, Optional, Tuple, Union
 
 from gt4py import eve
 from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc.common import AxisBound, CartesianOffset, DataType, LocNode, LoopOrder
+from gt4py.cartesian.gtc.common import (
+    AxisBound as AxisBound,
+    CartesianOffset as CartesianOffset,
+    DataType as DataType,
+    LocNode as LocNode,
+    LoopOrder as LoopOrder,
+)
 from gt4py.eve import datamodels
 
 

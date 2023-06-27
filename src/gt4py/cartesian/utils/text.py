@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -23,7 +23,11 @@ import black
 
 
 black_mode = black.FileMode(
-    target_versions={black.TargetVersion.PY36, black.TargetVersion.PY37}, line_length=120
+    target_versions={
+        black.TargetVersion.PY36,  # type: ignore[attr-defined]  # black.TargetVersion
+        black.TargetVersion.PY37,  # type: ignore[attr-defined]  # black.TargetVersion
+    },
+    line_length=120,
 )
 
 

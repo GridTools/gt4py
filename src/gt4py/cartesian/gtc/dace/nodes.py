@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -15,7 +15,7 @@
 import base64
 import pickle
 import typing
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Optional, Set, Union
 
 import dace.data
 import dace.dtypes
@@ -25,9 +25,7 @@ import numpy as np
 from dace import library
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc import daceir as dcir
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
 from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
 from gt4py.cartesian.gtc.definitions import Extent
@@ -120,9 +118,9 @@ class StencilComputation(library.LibraryNode):
     def __init__(
         self,
         name="unnamed_vloop",
-        oir_node: VerticalLoop = None,
-        extents: Dict[int, Extent] = None,
-        declarations: Dict[eve.SymbolRef, Decl] = None,
+        oir_node: Optional[VerticalLoop] = None,
+        extents: Optional[Dict[int, Extent]] = None,
+        declarations: Optional[Dict[str, Decl]] = None,
         expansion_order=None,
         *args,
         **kwargs,

@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -20,9 +20,7 @@ import dace.library
 import dace.subsets
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc import daceir as dcir
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.definitions import Extent
 
 
@@ -31,7 +29,6 @@ if TYPE_CHECKING:
 
 
 def get_dace_debuginfo(node: common.LocNode):
-
     if node.loc is not None:
         return dace.dtypes.DebugInfo(
             node.loc.line,
@@ -56,7 +53,6 @@ class HorizontalIntervalRemover(eve.NodeTranslator):
 
 class HorizontalMaskRemover(eve.NodeTranslator):
     def visit_Tasklet(self, node: "dcir.Tasklet"):
-
         res_body = []
         for stmt in node.stmts:
             newstmt = self.visit(stmt)
@@ -180,7 +176,6 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
 
 
 def split_horizontal_executions_regions(node: "StencilComputation"):
-
     extents: List[Extent] = []
 
     node.oir_node = HorizontalExecutionSplitter().visit(

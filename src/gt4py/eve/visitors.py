@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import collections.abc
 import copy
+from typing import ClassVar
 
 from . import concepts, trees
 from .extended_typing import Any
@@ -151,8 +152,9 @@ class NodeTranslator(NodeVisitor):
 
     """
 
-    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ()
 
+    def generic_visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         memo = kwargs.get("__memo__", None)
 
         if isinstance(node, concepts.Node):
@@ -163,6 +165,14 @@ class NodeTranslator(NodeVisitor):
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
                 },
             )
+            if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
+                # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
+                new_annex_dict = new_node.annex.__dict__
+                for key in self.PRESERVED_ANNEX_ATTRS:
+                    if value := getattr(old_annex, key, None):
+                        assert key not in new_annex_dict
+                        new_annex_dict[key] = value
+
             return new_node
 
         if isinstance(node, (list, tuple, set, collections.abc.Set)) or (
