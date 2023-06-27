@@ -202,7 +202,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
         pytest.xfail("Not supported in DaCe backend: broadcast")
 
     @gtx.field_operator
-    def testee_inner(a: int) -> cases.VField:
+    def testee_inner(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
     @gtx.field_operator
@@ -221,7 +221,7 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
         pytest.xfail("Not supported in DaCe backend: index fields, constant fields")
 
     @gtx.field_operator
-    def testee(a: cases.IJKField, b: int) -> cases.IJKField:
+    def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
         return tmp(Ioff[1])
 
