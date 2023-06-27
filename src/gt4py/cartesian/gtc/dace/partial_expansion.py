@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -26,9 +26,7 @@ from dace.transformation import transformation
 from dace.transformation.helpers import nest_sdfg_subgraph
 
 from gt4py import eve
-from gt4py.cartesian.gtc import common
-from gt4py.cartesian.gtc import daceir as dcir
-from gt4py.cartesian.gtc import oir
+from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
 from gt4py.cartesian.gtc.dace.expansion_specification import Map, Skip
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
@@ -195,7 +193,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
         return True
 
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
-
         stencil_computations = list(
             filter(
                 lambda n: isinstance(n[0], StencilComputation),
@@ -339,7 +336,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
         return True
 
     def _solve_domain_subsets(self, sdfg, node, access_infos, outer_subsets):
-
         # Collect equations and symbols from arguments and shapes
         equations = []
         symbols = set()
@@ -675,7 +671,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
                     )
                     all_access_infos[node] = node_access_infos, node_access_infos, node_access_infos
                 elif isinstance(node, StencilComputation):
-
                     to_sdfg_name_map = PartialExpansion._get_name_map(state, node)
                     in_node_access_infos, out_node_access_infos = _get_field_access_infos(
                         state, node

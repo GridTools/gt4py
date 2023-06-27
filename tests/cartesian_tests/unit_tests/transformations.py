@@ -1,6 +1,6 @@
 # GT4Py - GridTools Framework
 #
-# Copyright (c) 2014-2022, ETH Zurich
+# Copyright (c) 2014-2023, ETH Zurich
 # All rights reserved.
 #
 # This file is part of the GT4Py project and the GridTools framework.
@@ -22,7 +22,6 @@ class NoEmptyEdgeTrivialMapElimination(TrivialMapElimination):
     """Eliminate trivial maps like TrivialMapElimination, with additional conditions in can_be_applied."""
 
     def can_be_applied(self, graph, expr_index, sdfg, permissive=False):
-
         if not super().can_be_applied(graph, expr_index, sdfg, permissive=permissive):
             return False
 
