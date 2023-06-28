@@ -87,35 +87,26 @@ def get_gt_pyext_build_opts(
             *extra_compile_args_from_config["cxx"],
         ]
     )
+    extra_compile_args["cuda"] = [
+        "-std=c++17",
+        "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+        "-isystem{}".format(gt_include_path),
+        "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
+        "-DBOOST_PP_VARIADICS",
+        "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
+        "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
+        *extra_compile_args_from_config["cuda"],
+    ]
     if gt_config.GT4PY_USE_HIP:
-        extra_compile_args["cuda"] = [
-            "-std=c++17",
-            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-            "-I{}".format(gt_include_path),
-            "-I{}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
-            "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-            "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
-            "-fvisibility=hidden",
-            "-fPIC",
-            *extra_compile_args_from_config["cuda"],
-        ]
+        extra_compile_args["cuda"] += ["-fvisibility=hidden", "-fPIC"]
     else:
-        extra_compile_args["cuda"] = [
-            "-std=c++17",
-            "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
+        extra_compile_args["cuda"] += [
             "-arch=sm_{}".format(cuda_arch),
-            "-isystem={}".format(gt_include_path),
-            "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
-            "-DBOOST_PP_VARIADICS",
-            "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
-            "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
             "--expt-relaxed-constexpr",
             "--compiler-options",
             "-fvisibility=hidden",
             "--compiler-options",
             "-fPIC",
-            *extra_compile_args_from_config["cuda"],
         ]
     extra_link_args = gt_config.build_settings["extra_link_args"]
 
@@ -127,17 +118,17 @@ def get_gt_pyext_build_opts(
     if dace_path := get_dace_module_path():
         if gt_config.GT4PY_USE_HIP:
             extra_compile_args["cxx"].append(
-                "-I{}".format(os.path.join(dace_path, "runtime/include"))
+                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
             extra_compile_args["cuda"].append(
-                "-I{}".format(os.path.join(dace_path, "runtime/include"))
+                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
         else:
             extra_compile_args["cxx"].append(
-                "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
             extra_compile_args["cuda"].append(
-                "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
+                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
 
     if add_profile_info:
