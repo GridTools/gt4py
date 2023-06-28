@@ -50,7 +50,7 @@ build_settings: Dict[str, Any] = {
     "openmp_ldflags": os.environ.get("OPENMP_LDFLAGS", "-fopenmp").split(),
     "extra_compile_args": {
         "cxx": [],
-        "nvcc": [],
+        "cuda": [],
     },
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
@@ -62,7 +62,7 @@ else:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib64")
 
 if CUDA_HOST_CXX is not None:
-    build_settings["extra_compile_args"]["nvcc"].append(f"-ccbin={CUDA_HOST_CXX}")
+    build_settings["extra_compile_args"]["cuda"].append(f"-ccbin={CUDA_HOST_CXX}")
 
 cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),

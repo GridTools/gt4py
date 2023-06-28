@@ -88,7 +88,7 @@ def get_gt_pyext_build_opts(
         ]
     )
     if gt_config.GT4PY_USE_HIP:
-        extra_compile_args["nvcc"] = [
+        extra_compile_args["cuda"] = [
             "-std=c++17",
             "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-I{}".format(gt_include_path),
@@ -98,10 +98,10 @@ def get_gt_pyext_build_opts(
             "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
             "-fvisibility=hidden",
             "-fPIC",
-            *extra_compile_args_from_config["nvcc"],
+            *extra_compile_args_from_config["cuda"],
         ]
     else:
-        extra_compile_args["nvcc"] = [
+        extra_compile_args["cuda"] = [
             "-std=c++17",
             "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
             "-arch=sm_{}".format(cuda_arch),
@@ -115,13 +115,13 @@ def get_gt_pyext_build_opts(
             "-fvisibility=hidden",
             "--compiler-options",
             "-fPIC",
-            *extra_compile_args_from_config["nvcc"],
+            *extra_compile_args_from_config["cuda"],
         ]
     extra_link_args = gt_config.build_settings["extra_link_args"]
 
     mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
     extra_compile_args["cxx"].extend(mode_flags)
-    extra_compile_args["nvcc"].extend(mode_flags)
+    extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
 
     if dace_path := get_dace_module_path():
@@ -129,21 +129,21 @@ def get_gt_pyext_build_opts(
             extra_compile_args["cxx"].append(
                 "-I{}".format(os.path.join(dace_path, "runtime/include"))
             )
-            extra_compile_args["nvcc"].append(
+            extra_compile_args["cuda"].append(
                 "-I{}".format(os.path.join(dace_path, "runtime/include"))
             )
         else:
             extra_compile_args["cxx"].append(
                 "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
             )
-            extra_compile_args["nvcc"].append(
+            extra_compile_args["cuda"].append(
                 "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
             )
 
     if add_profile_info:
         profile_flags = ["-pg"]
         extra_compile_args["cxx"].extend(profile_flags)
-        extra_compile_args["nvcc"].extend(profile_flags)
+        extra_compile_args["cuda"].extend(profile_flags)
         extra_link_args.extend(profile_flags)
 
     if uses_cuda:
@@ -168,7 +168,7 @@ def get_gt_pyext_build_opts(
                     cuda_flags.extend([cpp_flag])
                 else:
                     cuda_flags.extend(["--compiler-options", cpp_flag])
-            build_opts["extra_compile_args"]["nvcc"].extend(cuda_flags)
+            build_opts["extra_compile_args"]["cuda"].extend(cuda_flags)
         elif cpp_flags:
             build_opts["extra_compile_args"].extend(cpp_flags)
 
@@ -370,19 +370,19 @@ class CUDABuildExtension(build_ext, object):
         # Save references to the original methods
         original_compile = self.compiler._compile
 
-        def nvcc_compile(obj, src, ext, cc_args, extra_postargs, pp_opts):
+        def cuda_compile(obj, src, ext, cc_args, extra_postargs, pp_opts):
             original_compiler_so = self.compiler.compiler_so
             # Copy before we make any modifications.
             cflags = copy.deepcopy(extra_postargs)
             try:
                 if os.path.splitext(src)[-1] == ".cu":
                     if gt_config.GT4PY_USE_HIP:
-                        nvcc_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "hipcc")
+                        cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "hipcc")
                     else:
-                        nvcc_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "nvcc")
-                    self.compiler.set_executable("compiler_so", [nvcc_exec])
+                        cuda_exec = os.path.join(gt_config.build_settings["cuda_bin_path"], "nvcc")
+                    self.compiler.set_executable("compiler_so", [cuda_exec])
                     if isinstance(cflags, dict):
-                        cflags = cflags["nvcc"]
+                        cflags = cflags["cuda"]
                 elif isinstance(cflags, dict):
                     cflags = cflags["cxx"]
 
@@ -391,6 +391,6 @@ class CUDABuildExtension(build_ext, object):
                 # Put the original compiler back in place.
                 self.compiler.set_executable("compiler_so", original_compiler_so)
 
-        self.compiler._compile = nvcc_compile
+        self.compiler._compile = cuda_compile
         build_ext.build_extensions(self)
         self.compiler._compile = original_compile
