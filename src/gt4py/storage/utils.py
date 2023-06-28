@@ -245,6 +245,7 @@ def allocate_gpu(
         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
 
     if gt_config.GT4PY_USE_HIP:
+        # HIP/ROCm lack support for __cuda_array_interface__
         device_field.__hip_array_interface__ = {
             "shape": padded_shape,
             "typestr": device_field.dtype.descr[0][1],
