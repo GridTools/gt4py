@@ -22,6 +22,7 @@ import numpy.typing as npt
 
 from gt4py.cartesian import config as gt_config
 
+
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
 else:
