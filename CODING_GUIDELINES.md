@@ -159,7 +159,7 @@ In case new test utils need to be written, it is important to first check whethe
 If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect the purpose.
 In case that the new utility is a completely stand-alone component, a new file should be created in the bottom-most directory enclosing all usages of the utility.
 
-Note: The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones).
+Note: The name `cases` for the new test module was chosen based on the idea that details like backend, grid size, etc. should be summarized in a parametrizable “test case”, of which there are two major types: cartesian and unstructured.
 
 TODO: add missing test conventions.
 
