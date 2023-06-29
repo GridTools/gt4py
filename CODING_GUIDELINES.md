@@ -155,7 +155,7 @@ Integrations tests comprise their own utility functions for features' testing, f
         - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
 
-In case new test utils need to be written, it is important to first check whether any utilities can be use or modified.
+In case new test utils need to be written, it is important to first check whether any utilities can be used or modified.
 If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect its purpose.
 In case that the new utility is a completely stand-alone component, a new file shall be created in the mutual directory of all usages.
 
