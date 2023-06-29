@@ -292,6 +292,8 @@ class ItirToSDFG(eve.NodeVisitor):
             output_nodes = {
                 memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
             }
+        if not inputs:
+            state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
         for name, memlet in inputs.items():
             state.add_memlet_path(
                 input_nodes[memlet.data],
@@ -301,6 +303,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 src_conn=None,
                 dst_conn=name,
             )
+        if not outputs:
+            state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
         for name, memlet in outputs.items():
             state.add_memlet_path(
                 nsdfg_node,
