@@ -156,7 +156,7 @@ Integrations tests comprise their own utility functions for features' testing, f
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
 
 In case new test utils need to be written, it is important to first check whether any utilities can be used or modified.
-If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect its purpose.
+If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect the purpose.
 In case that the new utility is a completely stand-alone component, a new file shall be created in the mutual directory of all usages.
 
 Note: The name cases for the new test module was based on the idea that details like backend, grid size etc should be summarized in a parametrizable “test case” (there being two types, cartesian and unstructured ones).
