@@ -141,7 +141,7 @@ Temporarily, tests for testing utilities can be placed next to the module contai
 
 #### Integration Tests Utils
 
-Integrations tests comprise their own utility functions for features' testing, found in `cases.py` for better test automation and simplification:
+Integrations tests come with their own utility functions, found in `cases.py`, for better test automation and simplification:
 
     - Field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
     - Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
