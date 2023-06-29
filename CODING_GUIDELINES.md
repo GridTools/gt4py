@@ -150,7 +150,7 @@ Integrations tests comprise their own utility functions for features' testing, f
            input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
         ```
     - Data initialization/modification classes, such as `ConstInitializer()`, to be used as `allocate(...).strategy()` parameters
-    - Decorators verification functions:
+    - Decorator verification functions:
         - `cases.verify()`: used when input and output fields generation cannot be automated. This is for example the case when the `extend()` method needs to be used for an offset or sparse fields are part of the input dataset:
         - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
