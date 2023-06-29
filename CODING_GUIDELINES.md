@@ -143,7 +143,7 @@ Temporarily, tests for testing utilities can be placed next to the module contai
 
 Integrations tests comprise their own utility functions for features' testing, found in `cases.py` for better test automation and simplification:
 
-    - Fields definitions, e.g. IJKField = Field[[IDim, JDim, KDim], np.int64]:
+    - Field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
     - Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
     - Parameters allocations to objects, derived directly from the decorator's function definition:
         ```
