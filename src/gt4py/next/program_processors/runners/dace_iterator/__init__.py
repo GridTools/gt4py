@@ -20,6 +20,7 @@ import numpy as np
 import gt4py.next.iterator.ir as itir
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
+from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
 
@@ -94,6 +95,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
+    sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("compiler", "build_type", value="Debug")
