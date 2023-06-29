@@ -145,7 +145,7 @@ Integrations tests comprise their own utility functions for features' testing, f
 
     - Field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
     - Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
-    - Parameters allocations to objects, derived directly from the decorator's function definition:
+    - Parameter allocations for objects, derived directly from the decorator's function definition:
         ```
            input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
         ```
