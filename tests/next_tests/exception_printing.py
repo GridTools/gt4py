@@ -22,4 +22,4 @@ frameinfo = inspect.getframeinfo(inspect.currentframe())
 loc = SourceLocation(
     frameinfo.filename, frameinfo.lineno, 1, end_line=frameinfo.lineno, end_column=5
 )
-raise CompilerError(loc, "this is an error message")
+raise CompilerError(loc, "this is an error message") from ValueError("asd")

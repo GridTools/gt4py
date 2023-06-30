@@ -15,6 +15,7 @@
 from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
     excepthook,
 )
+from .excepthook import set_developer_mode
 from .exceptions import (
     ArgumentCountError,
     CompilerError,
@@ -36,4 +37,5 @@ __all__ = [
     "MissingParameterAnnotationError",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
+    "set_developer_mode",
 ]
