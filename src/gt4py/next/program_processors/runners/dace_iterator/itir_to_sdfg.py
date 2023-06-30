@@ -217,9 +217,26 @@ class ItirToSDFG(eve.NodeVisitor):
             create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names
         ]
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
-        output_memlets = [
-            create_memlet_at(name, tuple(idx for idx in map_domain.keys())) for name in output_names
-        ]
+        output_memlets = []
+        output_transient_names = {}
+        for output_name in output_names:
+            if output_name in input_names:
+                # create and write to transient that is then copied back to actual output array to avoid aliasing of
+                # same memory in nested SDFG with different names
+                name = unique_var_name()
+                output_transient_names[output_name] = name
+                descriptor = closure_sdfg.arrays[output_name]
+                closure_sdfg.add_array(
+                    name,
+                    shape=descriptor.shape,
+                    strides=descriptor.strides,
+                    dtype=descriptor.dtype,
+                    transient=True,
+                )
+                memlet = create_memlet_at(name, tuple(idx for idx in map_domain.keys()))
+            else:
+                memlet = create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
+            output_memlets.append(memlet)
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {param.value.data: arg for param, arg in zip(results, output_memlets)}
@@ -237,6 +254,22 @@ class ItirToSDFG(eve.NodeVisitor):
             symbol_mapping=symbol_mapping,
             schedule=dace.ScheduleType.Sequential,
         )
+        access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
+        for output_name, transient_name in output_transient_names.items():
+            access_node = access_nodes[transient_name]
+            in_edges = closure_state.in_edges(access_node)
+            assert len(in_edges) == 1
+            in_memlet = in_edges[0].data
+            closure_state.add_edge(
+                access_node,
+                None,
+                closure_state.add_access(output_name),
+                None,
+                dace.Memlet(
+                    data=transient_name, subset=in_memlet.subset, other_subset=in_memlet.subset
+                ),
+            )
+
         for _, (lb, ub) in closure_domain:
             map_entry.add_in_connector(lb.value.data)
             map_entry.add_in_connector(ub.value.data)
@@ -292,6 +325,8 @@ class ItirToSDFG(eve.NodeVisitor):
             output_nodes = {
                 memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
             }
+        if not inputs:
+            state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
         for name, memlet in inputs.items():
             state.add_memlet_path(
                 input_nodes[memlet.data],
@@ -301,6 +336,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 src_conn=None,
                 dst_conn=name,
             )
+        if not outputs:
+            state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
         for name, memlet in outputs.items():
             state.add_memlet_path(
                 nsdfg_node,
