@@ -370,8 +370,9 @@ def lazy_stencil(
             If this is True, the call will raise an exception if the stencil does not
             exist in the cache, or if the cache is inconsistent. (`False` by default).
 
-        eager : `bool`, optional
+        eager : `bool|str`, optional
             If true do not defer stencil building and instead return the fully built raw implementation object.
+            If set to "async" will schedule compilation immediately to a queue processed by subprocesses.
 
         check_syntax: `bool`, default=True, optional
             If true, build and cache the IR build stage already, which checks stencil definition syntax.
