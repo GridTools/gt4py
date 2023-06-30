@@ -191,17 +191,20 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
     def is_let(node: ir.Expr):
         return isinstance(node, ir.FunCall) and isinstance(node.fun, ir.Lambda)
 
-    testee = im.let(
-        "c",
+    testee = im.plus(
         im.let(
-            "a",
-            1,
-            "b",
-            2,
-        )(im.plus("a", "b")),
-        "d",
-        3,
-    )(im.plus("c", "d"))
+            "c",
+            im.let(
+                "a",
+                1,
+                "b",
+                2,
+            )(im.plus("a", "b")),
+            "d",
+            3,
+        )(im.plus("c", "d")),
+        4,
+    )
 
     expected = textwrap.dedent(
         """
@@ -209,7 +212,8 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
         b = 2
         c = a + b
         d = 3
-        return c + d
+        _let_result_1 = c + d
+        return _let_result_1 + 4
     """
     ).strip()
 
