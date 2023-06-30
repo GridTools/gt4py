@@ -14,6 +14,7 @@
 
 import pathlib
 import textwrap
+from typing import Optional
 
 from gt4py.eve import SourceLocation
 
@@ -52,13 +53,12 @@ def format_location(loc: SourceLocation, caret: bool = False):
 
 
 def format_compilation_error(
-    type_: type[Exception], message: str, location_trace: list[SourceLocation]
+    type_: type[Exception], message: str, location: Optional[SourceLocation]
 ):
     msg_str = f"{type_.__module__}.{type_.__name__}: {message}"
 
-    try:
-        loc_str = "".join([format_location(loc, caret=True) for loc in location_trace])
-        stack_str = f"Source location (most recent call last):\n{textwrap.indent(loc_str, '  ')}\n"
+    if location is not None:
+        loc_str = format_location(location, caret=True)
+        stack_str = f"Source location:\n{textwrap.indent(loc_str, '  ')}\n"
         return [stack_str, msg_str]
-    except ValueError:
-        return [msg_str]
+    return [msg_str]

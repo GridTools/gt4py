@@ -25,4 +25,4 @@ def test_message():
 
 
 def test_location():
-    assert CompilerError(loc, msg).location_trace[0] == loc
+    assert CompilerError(loc, msg).location == loc

@@ -91,9 +91,7 @@ def compilation_error_hook(fallback: Callable, type_: type, value: BaseException
         if _developer_mode:
             _print_cause(value)
             _print_traceback(value)
-        exc_strs = formatting.format_compilation_error(
-            type(value), value.message, value.location_trace
-        )
+        exc_strs = formatting.format_compilation_error(type(value), value.message, value.location)
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)

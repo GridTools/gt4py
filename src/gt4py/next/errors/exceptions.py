@@ -13,33 +13,26 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import textwrap
-from typing import Any, Optional, TypeVar
+from typing import Any, Optional
 
 from gt4py.eve import SourceLocation
 
 from . import formatting
 
 
-LocationTraceT = TypeVar("LocationTraceT", SourceLocation, list[SourceLocation], None)
-
-
 class CompilerError(Exception):
-    location_trace: list[SourceLocation]
+    location: Optional[SourceLocation]
 
-    def __init__(self, location: LocationTraceT, message: str):
-        self.location_trace = CompilerError._make_location_trace(location)
+    def __init__(self, location: Optional[SourceLocation], message: str):
+        self.location = location
         super().__init__(message)
 
     @property
     def message(self) -> str:
         return self.args[0]
 
-    @property
-    def location(self) -> Optional[SourceLocation]:
-        return self.location_trace[0] if self.location_trace else None
-
-    def with_location(self, location: LocationTraceT) -> "CompilerError":
-        self.location_trace = CompilerError._make_location_trace(location)
+    def with_location(self, location: Optional[SourceLocation]) -> "CompilerError":
+        self.location = location
         return self
 
     def __str__(self):
@@ -48,57 +41,46 @@ class CompilerError(Exception):
             return f"{self.message}\n{textwrap.indent(loc_str, '  ')}"
         return self.message
 
-    @staticmethod
-    def _make_location_trace(location: LocationTraceT) -> list[SourceLocation]:
-        if isinstance(location, SourceLocation):
-            return [location]
-        elif isinstance(location, list):
-            return location
-        elif location is None:
-            return []
-        else:
-            raise TypeError("expected 'SourceLocation', 'list', or 'None' for 'location'")
-
 
 class UnsupportedPythonFeatureError(CompilerError):
-    def __init__(self, location: LocationTraceT, feature: str):
+    def __init__(self, location: Optional[SourceLocation], feature: str):
         super().__init__(location, f"unsupported Python syntax: '{feature}'")
 
 
 class UndefinedSymbolError(CompilerError):
-    def __init__(self, location: LocationTraceT, name: str):
+    def __init__(self, location: Optional[SourceLocation], name: str):
         super().__init__(location, f"name '{name}' is not defined")
 
 
 class MissingAttributeError(CompilerError):
-    def __init__(self, location: LocationTraceT, attr_name: str):
+    def __init__(self, location: Optional[SourceLocation], attr_name: str):
         super().__init__(location, f"object does not have attribute '{attr_name}'")
 
 
 class CompilerTypeError(CompilerError):
-    def __init__(self, location: LocationTraceT, message: str):
+    def __init__(self, location: Optional[SourceLocation], message: str):
         super().__init__(location, message)
 
 
 class MissingParameterAnnotationError(CompilerTypeError):
-    def __init__(self, location: LocationTraceT, param_name: str):
+    def __init__(self, location: Optional[SourceLocation], param_name: str):
         super().__init__(location, f"parameter '{param_name}' is missing type annotations")
 
 
 class InvalidParameterAnnotationError(CompilerTypeError):
-    def __init__(self, location: LocationTraceT, param_name: str, type_: Any):
+    def __init__(self, location: Optional[SourceLocation], param_name: str, type_: Any):
         super().__init__(
             location, f"parameter '{param_name}' has invalid type annotation '{type_}'"
         )
 
 
 class ArgumentCountError(CompilerTypeError):
-    def __init__(self, location: LocationTraceT, num_expected: int, num_provided: int):
+    def __init__(self, location: Optional[SourceLocation], num_expected: int, num_provided: int):
         super().__init__(
             location, f"expected {num_expected} arguments but {num_provided} were provided"
         )
 
 
 class KeywordArgumentError(CompilerTypeError):
-    def __init__(self, location: LocationTraceT, provided_names: str):
+    def __init__(self, location: Optional[SourceLocation], provided_names: str):
         super().__init__(location, f"unexpected keyword argument(s) '{provided_names}' provided")
