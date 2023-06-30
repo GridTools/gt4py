@@ -32,8 +32,17 @@ CUDA_ROOT: str = os.environ.get(
 
 CUDA_HOST_CXX: Optional[str] = os.environ.get("CUDA_HOST_CXX", None)
 
-GT4PY_USE_HIP: int = int(os.environ.get("GT4PY_USE_HIP", 0))
+if "GT4PY_USE_HIP" in os.environ:
+    GT4PY_USE_HIP: bool = bool(int(os.environ["GT4PY_USE_HIP"]))
+else:
+    # Autodetect cupy with ROCm/HIP support
+    try:
+        import cupy as _cp
 
+        GT4PY_USE_HIP = _cp.cuda.get_hipcc_path() is not None
+        del _cp
+    except Exception:
+        GT4PY_USE_HIP = False
 
 GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 
