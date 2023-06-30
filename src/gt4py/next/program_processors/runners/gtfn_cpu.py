@@ -30,19 +30,12 @@ from gt4py.next.type_system.type_translation import from_value
 
 # TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
 def convert_arg(arg: Any) -> Any:
-    from gt4py.next.iterator.embedded import LocatedField, get_ordered_indices
-
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if isinstance(arg, LocatedField):
+    if hasattr(arg, "__array__") and hasattr(arg, "axes"):
         arr = np.asarray(arg)
-        if origin := getattr(arg, "origin", None):
-            dims = getattr(arg, "axes", None)
-            assert dims is not None
-            offsets = get_ordered_indices(dims, {k.value: v for k, v in origin.items()})
-        else:
-            offsets = tuple([0] * arr.ndim)
-        return arr, offsets
+        origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
+        return arr, origin
     else:
         return arg
 

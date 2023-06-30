@@ -182,6 +182,10 @@ class LocatedField(Protocol):
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
+    @property
+    def __gt_origin__(self) -> tuple[int]:
+        return tuple([0] * len(self.axes))
+
 
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
@@ -912,6 +916,10 @@ class LocatedFieldImpl(MutableLocatedField):
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __gt_origin__(self) -> tuple[int]:
+        return cast(tuple[int], get_ordered_indices(self.axes, {k.value: v for k, v in self.origin.items()}))
 
     @property
     def shape(self):
