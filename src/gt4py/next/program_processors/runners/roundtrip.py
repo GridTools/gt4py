@@ -201,7 +201,7 @@ def execute_roundtrip(
     *args,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = True,
+    debug: bool = False,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,
 ) -> None:
