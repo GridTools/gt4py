@@ -89,10 +89,9 @@ def _type_string(type_: ts.TypeSpec) -> str:
     if isinstance(type_, ts.TupleType):
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
-        ndims = len(type_.dims)
-        buffer_t = "pybind11::buffer"
-        origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
-        return f"std::pair<{buffer_t}, {origin_t}>"
+        dtype = cpp_interface.render_scalar_type(type_.dtype)
+        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * len(type_.dims))}>"
+        return f"nanobind::ndarray<{dtype}, {shape}>"
     elif isinstance(type_, ts.ScalarType):
         return cpp_interface.render_scalar_type(type_)
     else:
@@ -131,7 +130,7 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     BindingModule = as_jinja(
         """\
-        PYBIND11_MODULE({{name}}, module) {
+        NB_MODULE({{name}}, module) {
             module.doc() = "{{doc}}";
             {{"\n".join(functions)}}
         }\
@@ -187,7 +186,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
     elif isinstance(type_, ts.ScalarType):
         return name
     else:
-        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+        raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
 def create_bindings(
@@ -210,8 +209,9 @@ def create_bindings(
     file_binding = BindingFile(
         callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
         header_files=[
-            "pybind11/pybind11.h",
-            "pybind11/stl.h",
+            "nanobind/nanobind.h",
+            "nanobind/stl/tuple.h",
+            "nanobind/ndarray.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
             "gridtools/sid/composite.hpp",
             "gridtools/sid/unknown_kind.hpp",
@@ -258,7 +258,7 @@ def create_bindings(
 
     return stages.BindingSource(
         src,
-        (interface.LibraryDependency("pybind11", "2.9.2"),),
+        (interface.LibraryDependency("nanobind", "1.4.0"),),
     )
 
 
