@@ -300,11 +300,11 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
         testee,
         "inp",
         extend={KDim: (0, 1)},
-        strategy=cases.UniqueInitializer(start=1),
+        strategy=cases.UniqueInitializer(start=2),
     )()
     out = cases.allocate(cartesian_case, testee, "inp").zeros()()
     ksize = cartesian_case.default_sizes[KDim]
-    expected = np.full((ksize), np.arange(start=1, stop=ksize + 1, step=1).astype(float64))
+    expected = np.full((ksize), np.arange(start=3, stop=ksize + 3, step=1).astype(float64))
 
     cases.run(cartesian_case, testee, inp, out=out)
 
