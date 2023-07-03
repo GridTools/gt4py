@@ -136,8 +136,8 @@ def fencil_generator(
 
     program = EmbeddedDSL.apply(ir)
 
-    # format output in debug mode, such for better debuggability (e.g. line numbers, overview in
-    # the debugger).
+    # format output in debug mode for better debuggability (e.g. line numbers, overview in the
+    # debugger).
     if black and debug:
         program = black.format_str(program, mode=black.FileMode())
 
