@@ -1185,7 +1185,6 @@ class ColumnDescriptor:
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1196,7 +1195,7 @@ class ScanArgIterator:
         return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+        return ScanArgIterator(self.wrapped_iter.shift(*offsets), self.k_pos)
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
@@ -1392,7 +1391,12 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                         col_pos[column.axis] = k
                         assert _is_concrete_position(col_pos)
                         ordered_indices = get_ordered_indices(out.axes, col_pos)
-                        out.field_setitem(ordered_indices, res[k])
+                        if isinstance(res, tuple):
+                            out.field_setitem(
+                                ordered_indices, tuple(res[i][k] for i in range(len(res)))
+                            )  # TODO(tehrengruber): only works for scalars
+                        else:
+                            out.field_setitem(ordered_indices, res[k])
 
         ctx = cvars.copy_context()
         ctx.run(_closure_runner)

@@ -286,6 +286,31 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
+def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
+    def testee_scan(state: float, inp: float) -> float:
+        return inp
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
+        return testee_scan(inp(Koff[1]))
+
+    inp = cases.allocate(
+        cartesian_case,
+        testee,
+        "inp",
+        extend={KDim: (0, 1)},
+        strategy=cases.UniqueInitializer(start=1),
+    )()
+    out = cases.allocate(cartesian_case, testee, "inp").zeros()()
+    ksize = cartesian_case.default_sizes[KDim]
+    expected = np.full((ksize), np.arange(start=1, stop=ksize + 1, step=1).astype(float64))
+
+    cases.run(cartesian_case, testee, inp, out=out)
+
+    cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
+
+
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
