@@ -36,7 +36,13 @@ def promote_zero_dims(
 
     def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.TypeSpec:
         def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
-            param_el = reduce(lambda type_, idx: type_.types[idx], path, param)  # type: ignore[attr-defined]
+            param_el = reduce(lambda type_, idx: type_.types[idx] if isinstance(type_, ts.TupleType) else None, path, param)  # type: ignore[attr-defined]
+
+            if param_el is None:
+                # The parameter has a different structure than the actual argument. Just return
+                # the argument unpromoted and let the further error handling take care of printing
+                # a meaningful error.
+                return arg_el
 
             if _is_zero_dim_field(param_el) and type_info.is_number(arg_el):
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
