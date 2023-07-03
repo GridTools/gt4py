@@ -183,7 +183,7 @@ class LocatedField(Protocol):
         ...
 
     @property
-    def __gt_origin__(self) -> tuple[int]:
+    def __gt_origin__(self) -> tuple[int, ...]:
         return tuple([0] * len(self.axes))
 
 
@@ -918,8 +918,12 @@ class LocatedFieldImpl(MutableLocatedField):
         return self.array()
 
     @property
-    def __gt_origin__(self) -> tuple[int]:
-        return cast(tuple[int], get_ordered_indices(self.axes, {k.value: v for k, v in self.origin.items()}))
+    def __gt_origin__(self) -> tuple[int, ...]:
+        if not self.origin:
+            return tuple([0] * len(self.axes))
+        return cast(
+            tuple[int], get_ordered_indices(self.axes, {k.value: v for k, v in self.origin.items()})
+        )
 
     @property
     def shape(self):
