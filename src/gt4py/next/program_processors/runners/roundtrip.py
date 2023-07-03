@@ -21,6 +21,12 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
+
+try:
+    import black
+except ImportError:
+    black = None  # type: ignore[assignment]
+
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
@@ -129,6 +135,12 @@ def fencil_generator(
     ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
+
+    # format output in debug mode, such for better debuggability (e.g. line numbers, overview in
+    # the debugger).
+    if black and debug:
+        program = black.format_str(program, mode=black.FileMode())
+
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
         .if_isinstance(itir.OffsetLiteral)
@@ -189,7 +201,7 @@ def execute_roundtrip(
     *args,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = False,
+    debug: bool = True,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[str] = None,
 ) -> None:
