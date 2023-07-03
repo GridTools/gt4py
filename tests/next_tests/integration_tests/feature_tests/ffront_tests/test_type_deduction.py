@@ -298,14 +298,18 @@ def callable_type_info_cases():
             unary_tuple_arg_func_type,
             [ts.TupleType(types=[float_type, field_type])],
             {},
-            ["Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"],
+            [
+                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+            ],
             ts.VoidType(),
         ),
         (
             unary_tuple_arg_func_type,
             [int_type],
             {},
-            ["Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"],
+            [
+                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+            ],
             ts.VoidType(),
         ),
         # field operator
