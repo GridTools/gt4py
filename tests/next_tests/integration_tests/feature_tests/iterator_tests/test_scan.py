@@ -28,7 +28,9 @@ def test_scan_in_stencil(program_processor, lift_mode):
     isize = 1
     ksize = 3
     Koff = offset("Koff")
-    inp = gtx.np_as_located_field(IDim, KDim)(np.ones((isize, ksize)))
+    inp = gtx.np_as_located_field(IDim, KDim)(
+        np.copy(np.broadcast_to(np.arange(0, ksize), (isize, ksize)))
+    )
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
 
     reference = np.zeros((isize, ksize - 1))
@@ -41,12 +43,8 @@ def test_scan_in_stencil(program_processor, lift_mode):
         return state + deref(k) + deref(kp)
 
     @fundef
-    def shifted(inp):
-        return deref(shift(Koff, 1)(inp))
-
-    @fundef
     def wrapped(inp):
-        return scan(sum, True, 0.0)(inp, lift(shifted)(inp))
+        return scan(sum, True, 0.0)(inp, shift(Koff, 1)(inp))
 
     run_processor(
         wrapped[cartesian_domain(named_range(IDim, 0, isize), named_range(KDim, 0, ksize - 1))],
