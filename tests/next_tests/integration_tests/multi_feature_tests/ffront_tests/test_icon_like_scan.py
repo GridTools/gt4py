@@ -228,9 +228,6 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
-    if fieldview_backend == roundtrip.executor:
-        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
-
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
@@ -258,9 +255,6 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
-    if fieldview_backend == roundtrip.executor:
-        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
-
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
