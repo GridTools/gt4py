@@ -15,16 +15,15 @@
 from dataclasses import dataclass
 
 from gt4py import eve
-from gt4py.next.iterator import ir, type_inference
+from gt4py.next import type_inference
+from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
-def _get_tuple_size(node: ir.Node) -> int:
-    # TODO(havogt): This fails if the tuple is a SymRef. Use type information from (entire) tree when available.
-    infered_type = type_inference.infer(node)
-    assert isinstance(infered_type, type_inference.Val)
-    dtype = infered_type.dtype
-    assert isinstance(dtype, (type_inference.Tuple, type_inference.EmptyTuple))
-    return len(dtype)
+def _get_tuple_size(type_: type_inference.Type) -> int:
+    assert isinstance(type_, it_type_inference.Val) and isinstance(
+        type_.dtype, it_type_inference.Tuple
+    )
+    return len(type_.dtype)
 
 
 @dataclass(frozen=True)
@@ -39,6 +38,8 @@ class CollapseTuple(eve.NodeTranslator):
     ignore_tuple_size: bool
     collapse_make_tuple_tuple_get: bool
     collapse_tuple_get_make_tuple: bool
+
+    _node_types: dict[int, type_inference.Type]
 
     @classmethod
     def apply(
@@ -56,8 +57,13 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
+        node_types = it_type_inference.infer_all(node)
+
         return cls(
-            ignore_tuple_size, collapse_make_tuple_tuple_get, collapse_tuple_get_make_tuple
+            ignore_tuple_size,
+            collapse_make_tuple_tuple_get,
+            collapse_tuple_get_make_tuple,
+            node_types,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
@@ -80,7 +86,9 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
+            if self.ignore_tuple_size or _get_tuple_size(self._node_types[id(first_expr)]) == len(
+                node.args
+            ):
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple

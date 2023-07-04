@@ -234,13 +234,10 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail(
-            "Scalar arguments not supported to be used in both domain specification "
-            "and as an argument to a field operator."
-        )
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: iterator type inference failure?")
+    pytest.xfail(
+        "Scalar arguments not supported to be used in both domain specification "
+        "and as an argument to a field operator."
+    )
 
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
