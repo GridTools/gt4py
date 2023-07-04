@@ -19,14 +19,8 @@ import gt4py.next as gtx
 from gt4py.next import int32, neighbor_sum
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
-    V2E,
-    Edge,
-    V2EDim,
-    Vertex,
-    unstructured_case,
-)
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
     reduction_setup,

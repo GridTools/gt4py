@@ -16,12 +16,11 @@ import numpy as np
 
 import gt4py.next as gtx
 
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-
-Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
-Joff = gtx.FieldOffset("Joff", source=JDim, target=(JDim,))
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    fieldview_backend,
+)
 
 
 @gtx.field_operator
@@ -61,15 +60,27 @@ def lap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[:-2, 1:-1] + inp[2:, 1:-1] + inp[1:-1, :-2] + inp[1:-1, 2:]
 
 
-def test_ffront_lap():
-    shape = (20, 20)
-    as_ij = gtx.np_as_located_field(IDim, JDim)
-    inp = as_ij(np.fromfunction(lambda x, y: x**2 + y**2, shape))
+def test_ffront_lap(cartesian_case):
+    in_field = cases.allocate(cartesian_case, lap_program, "in_field")()
+    out_field = cases.allocate(cartesian_case, lap_program, "out_field")()
 
-    result_lap = as_ij(np.zeros_like(inp))
-    lap_program(inp, result_lap, offset_provider={"Ioff": IDim, "Joff": JDim})
-    assert np.allclose(np.asarray(result_lap)[1:-1, 1:-1], lap_ref(np.asarray(inp)))
+    cases.verify(
+        cartesian_case,
+        lap_program,
+        in_field,
+        out_field,
+        inout=out_field.array()[1:-1, 1:-1],
+        ref=lap_ref(np.asarray(in_field)),
+    )
 
-    result_laplap = as_ij(np.zeros_like(inp))
-    laplap_program(inp, result_laplap, offset_provider={"Ioff": IDim, "Joff": JDim})
-    assert np.allclose(np.asarray(result_laplap)[2:-2, 2:-2], lap_ref(lap_ref(np.asarray(inp))))
+    in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
+    out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
+
+    cases.verify(
+        cartesian_case,
+        laplap_program,
+        in_field,
+        out_field,
+        inout=out_field.array()[2:-2, 2:-2],
+        ref=lap_ref(lap_ref(np.asarray(in_field))),
+    )

@@ -35,17 +35,15 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     C2E,
     E2V,
     V2E,
     E2VDim,
-    Edge,
     IDim,
     Ioff,
     JDim,
-    Joff,
     KDim,
     Koff,
     V2EDim,
@@ -222,11 +220,10 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail(
-            "Scalar arguments not supported to be used in both domain specification "
-            "and as an argument to a field operator."
-        )
+    pytest.xfail(
+        "Scalar arguments not supported to be used in both domain specification "
+        "and as an argument to a field operator."
+    )
 
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:

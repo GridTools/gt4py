@@ -367,9 +367,9 @@ def verify(
             does not take an ``out`` keyword argument, so some of the other
             arguments must be in/out parameters. Pass the according field
             or tuple of fields here and they will be compared to ``ref`` under
-            the assumption that the fieldview code stores it's results in
+            the assumption that the fieldview code stores its results in
             them.
-        offset_provied: An override for the test case's offset_provider.
+        offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
