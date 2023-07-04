@@ -44,7 +44,9 @@ def promote_zero_dims(
                 # a meaningful error.
                 return arg_el
 
-            if _is_zero_dim_field(param_el) and type_info.is_number(arg_el):
+            if _is_zero_dim_field(param_el) and (
+                type_info.is_number(arg_el) or type_info.is_logical(arg_el)
+            ):
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
                 else:
