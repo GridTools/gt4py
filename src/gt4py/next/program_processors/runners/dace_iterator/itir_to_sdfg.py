@@ -236,7 +236,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {
-            param.value.data: arg_memlet.data
+            param.value.data: arg_memlet
             for param, arg_memlet in zip(results, output_memlets.values())
         }
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
