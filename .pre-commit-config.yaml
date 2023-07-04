@@ -62,7 +62,7 @@ repos:
   ## version = re.search('black==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"rev: '{version}'  # version from constraints.txt")
   ##]]]
-  rev: '23.1.0'  # version from constraints.txt
+  rev: '23.3.0'  # version from constraints.txt
   ##[[[end]]]
   hooks:
   - id: black
@@ -97,14 +97,14 @@ repos:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - darglint==1.8.1
-    - flake8-bugbear==23.2.13
+    - flake8-bugbear==23.3.12
     - flake8-builtins==2.1.0
     - flake8-debugger==4.1.2
     - flake8-docstrings==1.7.0
     - flake8-eradicate==1.4.0
     - flake8-mutable==1.2.0
-    - flake8-pyproject==1.2.2
-    - pygments==2.14.0
+    - flake8-pyproject==1.2.3
+    - pygments==2.15.1
     ##[[[end]]]
     # - flake8-rst-docstrings  # Disabled for now due to random false positives
     exclude: |
@@ -125,13 +125,19 @@ repos:
       src/gt4py/cartesian/utils/meta.py |
       src/gt4py/eve/extended_typing.py |
       tests/conftest.py |
-      tests/cartesian_tests/integration_tests/stencil_definitions.py |
-      tests/cartesian_tests/integration_tests/test_code_generation.py |
-      tests/cartesian_tests/integration_tests/test_cpp_regression.py |
-      tests/cartesian_tests/integration_tests/utils.py |
-      tests/cartesian_tests/unit_tests/test_call_interface.py |
-      tests/cartesian_tests/unit_tests/test_gtscript_frontend.py |
-      tests/next_tests/.*
+      tests/cartesian_tests/integration_tests/multi_feature_tests/stencil_definitions.py |
+      tests/cartesian_tests/integration_tests/multi_feature_tests/test_code_generation.py |
+      tests/cartesian_tests/integration_tests/multi_feature_tests/utils.py |
+      tests/cartesian_tests/integration_tests/feature_tests/test_call_interface.py |
+      tests/cartesian_tests/unit_tests/frontend_tests/test_gtscript_frontend.py |
+      tests/next_tests/unit_tests/.* |
+      tests/next_tests/integration_tests/multi_feature_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
+      tests/next_tests/past_common_fixtures.py |
+      tests/next_tests/toy_connectivity.py |
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
@@ -140,9 +146,9 @@ repos:
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.0.1 =========
+  #========= FROM constraints.txt: v1.3.0 =========
   ##[[[end]]]
-  rev: v1.0.1  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.3.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
@@ -155,30 +161,27 @@ repos:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
-    - attrs==22.2.0
-    - black==23.1.0
+    - attrs==23.1.0
+    - black==23.3.0
     - boltons==23.0.0
     - cached-property==1.5.2
     - click==8.1.3
-    - cmake==3.25.2
+    - cmake==3.26.3
     - cytoolz==0.12.1
-    - deepdiff==6.2.3
-    - devtools==0.10.0
-    - frozendict==2.3.5
-    - gridtools-cpp==2.2.3
+    - deepdiff==6.3.0
+    - devtools==0.11.0
+    - frozendict==2.3.8
+    - gridtools-cpp==2.3.0
     - importlib-resources==5.12.0
     - jinja2==3.1.2
     - lark==1.1.5
     - mako==1.2.4
-    - networkx==3.0
     - ninja==1.11.1
-    - numpy==1.24.2
-    - packaging==23.0
-    - pybind11==2.10.3
-    - scipy==1.10.1
-    - setuptools==67.5.1
+    - numpy==1.24.3
+    - packaging==23.1
+    - pybind11==2.10.4
+    - setuptools==67.8.0
     - tabulate==0.9.0
-    - toolz==0.12.0
     - typing-extensions==4.5.0
     - xxhash==3.0.0
     ##[[[end]]]
@@ -191,5 +194,15 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
+      tests/conftest.py |
+      tests/cartesian_tests/.* |
+      tests/next_tests/unit_tests/.* |
+      tests/next_tests/integration_tests/multi_feature_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
+      tests/next_tests/past_common_fixtures.py |
+      tests/next_tests/toy_connectivity.py |
       tests/.*
       )$

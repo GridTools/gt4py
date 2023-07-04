@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Union
+import typing
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -38,6 +39,24 @@ class Node(eve.Node):
 
 class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
+    # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
+    #   type inference.
+    kind: typing.Literal["Iterator", "Value", None] = None
+    dtype: Optional[
+        tuple[str, bool]
+    ] = None  # format: name of primitive type, boolean indicating if it is a list
+
+    @datamodels.validator("kind")
+    def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value not in ["Iterator", "Value"]:
+            raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")
+
+    @datamodels.validator("dtype")
+    def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
+        if value and value[0] not in TYPEBUILTINS:
+            raise ValueError(
+                f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
+            )
 
 
 @noninstantiable
@@ -48,6 +67,11 @@ class Expr(Node):
 class Literal(Expr):
     value: str
     type: str  # noqa: A003
+
+    @datamodels.validator("type")
+    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
+        if value not in TYPEBUILTINS:
+            raise ValueError(f"{value} is not a valid builtin type.")
 
 
 class NoneLiteral(Expr):
@@ -129,6 +153,7 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "multiplies",
     "divides",
     "mod",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
 BINARY_MATH_COMPARISON_BUILTINS = {
     "eq",
@@ -144,27 +169,34 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_BUILTINS = {"int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float32", "float64"}
+TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
-BUILTINS = {
+GRAMMAR_BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
-    "named_range",
+    "make_tuple",
+    "tuple_get",
+    "shift",
     "neighbors",
+    "cast_",
+}
+
+BUILTINS = {
+    *GRAMMAR_BUILTINS,
+    "named_range",
     "list_get",
     "map_",
     "make_const_list",
     "lift",
-    "make_tuple",
-    "tuple_get",
     "reduce",
     "deref",
     "can_deref",
-    "shift",
     "scan",
     "if_",
-    "cast_",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
@@ -186,15 +218,15 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
-Sym.__hash__ = Node.__hash__  # type: ignore[assignment]
-Expr.__hash__ = Node.__hash__  # type: ignore[assignment]
-Literal.__hash__ = Node.__hash__  # type: ignore[assignment]
-NoneLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-AxisLiteral.__hash__ = Node.__hash__  # type: ignore[assignment]
-SymRef.__hash__ = Node.__hash__  # type: ignore[assignment]
-Lambda.__hash__ = Node.__hash__  # type: ignore[assignment]
-FunCall.__hash__ = Node.__hash__  # type: ignore[assignment]
-FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
-StencilClosure.__hash__ = Node.__hash__  # type: ignore[assignment]
-FencilDefinition.__hash__ = Node.__hash__  # type: ignore[assignment]
+Sym.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Expr.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Literal.__hash__ = Node.__hash__  # type: ignore[method-assign]
+NoneLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+OffsetLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+AxisLiteral.__hash__ = Node.__hash__  # type: ignore[method-assign]
+SymRef.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Lambda.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
+StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
+FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]

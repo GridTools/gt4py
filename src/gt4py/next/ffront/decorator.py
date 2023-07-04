@@ -31,14 +31,14 @@ from devtools import debug
 
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import DimensionKind, GridType, GTTypeError, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError, Scalar
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import Dimension, FieldOffset
+from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -88,32 +88,6 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
 
 def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> dict[str, Any]:
     return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
-
-
-def _canonicalize_args(
-    node_params: list[foast.DataSymbol] | list[past.DataSymbol],
-    args: tuple[Any],
-    kwargs: dict[str, Any],
-) -> tuple[tuple, dict]:
-    new_args = []
-    new_kwargs = {**kwargs}
-
-    for param_i, param in enumerate(node_params):
-        if param.id in new_kwargs:
-            if param_i < len(args):
-                raise ProgramTypeError(f"got multiple values for argument {param.id}.")
-            new_args.append(kwargs[param.id])
-            new_kwargs.pop(param.id)
-        elif param_i < len(args):
-            new_args.append(args[param_i])
-        else:
-            # case when param in function definition but not in function call
-            # e.g. function expects 3 parameters, but only 2 were given.
-            # Error covered later in `accept_args`.
-            pass
-
-    args = tuple(new_args)
-    return args, new_kwargs
 
 
 def _deduce_grid_type(
@@ -187,12 +161,14 @@ class Program:
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
     @classmethod
@@ -236,13 +212,11 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> "Program":
-        return Program(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
-        )
+    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
+        return dataclasses.replace(self, backend=backend)
+
+    def with_grid_type(self, grid_type: GridType) -> Program:
+        return dataclasses.replace(self, grid_type=grid_type)
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -305,9 +279,6 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        if kwargs:
-            raise NotImplementedError("Keyword-only arguments are not supported yet.")
-
         arg_types = [type_translation.from_value(arg) for arg in args]
         kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
@@ -324,9 +295,9 @@ class Program:
             ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        args, kwargs = _canonicalize_args(self.past_node.params, args, kwargs)
-
         self._validate_args(*args, **kwargs)
+
+        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
@@ -443,18 +414,22 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             specified for the program takes precedence.
         definition: The original Python function object the field operator
             was created from.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            it will be deduced from actually occurring dimensions.
     """
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    backend: Optional[ppi.ProgramExecutor]
     definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
+    grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
         backend: Optional[ppi.ProgramExecutor] = None,
+        grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
@@ -480,8 +455,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
-            backend=backend,
             definition=definition,
+            backend=backend,
+            grid_type=grid_type,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -490,12 +466,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return type_
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
-        return FieldOperator(
-            foast_node=self.foast_node,
-            closure_vars=self.closure_vars,
-            backend=backend,
-            definition=self.definition,  # type: ignore[arg-type]  # mypy wrongly deduces definition as method here
-        )
+        return dataclasses.replace(self, backend=backend)
+
+    def with_grid_type(self, grid_type: GridType) -> FieldOperator:
+        return dataclasses.replace(self, grid_type=grid_type)
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
@@ -574,6 +548,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
+            grid_type=self.grid_type,
         )
 
     def __call__(
@@ -583,7 +558,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = _canonicalize_args(self.foast_node.definition.params, args, kwargs)
+        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
         # TODO(tehrengruber): check all offset providers are given
         # deduce argument types
         arg_types = []
@@ -612,11 +587,7 @@ def field_operator(
     ...
 
 
-def field_operator(
-    definition=None,
-    *,
-    backend=None,
-):
+def field_operator(definition=None, *, backend=None, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -634,7 +605,7 @@ def field_operator(
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend)
+        return FieldOperator.from_function(definition, backend, grid_type)
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
@@ -686,12 +657,13 @@ def scan_operator(
 
     Examples:
         >>> import numpy as np
+        >>> import gt4py.next as gtx
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-        >>> inp = embedded.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = embedded.np_as_located_field(KDim)(np.zeros((10,)))
-        >>> @scan_operator(axis=KDim, forward=True, init=0.)
+        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
+        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP

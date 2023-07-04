@@ -3,6 +3,7 @@
 ![license](https://img.shields.io/github/license/GridTools/gt4py)
 [![slack](https://img.shields.io/badge/slack-join-orange?logo=slack&labelColor=3a3a3a)](https://join.slack.com/t/gridtools/shared_invite/zt-1mceuj747-59swuowC3MKAuCFyNAnc1g)
 
+[![Daily CI](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml/badge.svg)](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml)
 ![test-cartesian](https://github.com/GridTools/gt4py/actions/workflows/test-cartesian.yml/badge.svg?branch=main)
 ![test-next](https://github.com/GridTools/gt4py/actions/workflows/test-next.yml/badge.svg?branch=main)
 ![test-storage](https://github.com/GridTools/gt4py/actions/workflows/test-storage.yml/badge.svg?branch=main)
@@ -66,7 +67,7 @@ pip install -r ./gt4py/requirements-dev.txt
 and then build the docs with
 
 ```bash
-cd gt4py/docs
+cd gt4py/docs/user/cartesian
 make html  # run 'make help' for a list of targets
 ```
 

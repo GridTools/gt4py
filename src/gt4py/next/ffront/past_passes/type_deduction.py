@@ -102,7 +102,10 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         params = self.visit(node.params, **kwargs)
 
         definition_type = ts.FunctionType(
-            args=[param.type for param in params], kwargs={}, returns=ts.VoidType()
+            pos_only_args=[],
+            pos_or_kw_args={str(param.id): param.type for param in params},
+            kw_only_args={},
+            returns=ts.VoidType(),
         )
         return past.Program(
             id=self.visit(node.id, **kwargs),
@@ -195,7 +198,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             kwarg_types = {
                 name: expr.type
                 for name, expr in new_kwargs.items()
-                if not is_operator and name != "out" and name != "domain"
+                if not (is_operator and name in ["out", "domain"])
             }
 
             type_info.accepts_args(

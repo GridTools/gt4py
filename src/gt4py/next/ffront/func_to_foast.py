@@ -52,7 +52,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     Parse a function into a Field Operator AST (FOAST), which can
     be lowered into Iterator IR (ITIR)
 
-    >>> from gt4py.next.common import Field, Dimension
+    >>> from gt4py.next import Field, Dimension
     >>> float64 = float
     >>> IDim = Dimension("IDim")
     >>> def field_op(inp: Field[[IDim], float64]):
@@ -136,10 +136,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 foast.Symbol(
                     id=name,
                     type=ts.FunctionType(
-                        args=[
+                        pos_only_args=[
                             ts.DeferredType(constraint=ts.ScalarType)
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        kwargs={},
+                        pos_or_kw_args={},
+                        kw_only_args={},
                         returns=cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
@@ -167,7 +168,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         new_body = self._visit_stmts(node.body, self._make_loc(node), **kwargs)
 
-        if deduce_stmt_return_kind(new_body) != StmtReturnKind.UNCONDITIONAL_RETURN:
+        if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
             raise FieldOperatorSyntaxError.from_AST(
                 node, msg="Function must return a value, but no return statement was found."
             )
@@ -389,6 +390,15 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             type=ts.DeferredType(constraint=ts.DataType),
         )
 
+    def visit_If(self, node: ast.If, **kwargs) -> foast.IfStmt:
+        loc = self._make_loc(node)
+        return foast.IfStmt(
+            condition=self.visit(node.test, **kwargs),
+            true_branch=self._visit_stmts(node.body, loc, **kwargs),
+            false_branch=self._visit_stmts(node.orelse, loc, **kwargs),
+            location=loc,
+        )
+
     def _visit_stmts(
         self, stmts: list[ast.stmt], location: eve.SourceLocation, **kwargs
     ) -> foast.BlockStmt:
@@ -427,33 +437,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_NotEq(self, node: ast.NotEq, **kwargs) -> foast.CompareOperator:
         return foast.CompareOperator.NOTEQ
 
-    def _verify_builtin_function(self, node: ast.Call):
-        func_name = self._func_name(node)
-        func_info = getattr(fbuiltins, func_name).__gt_type__()
-        if not len(node.args) == len(func_info.args):
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{func_name}() expected {len(func_info.args)} positional arguments, {len(node.args)} given!",
-            )
-        elif unexpected_kwargs := set(k.arg for k in node.keywords) - set(func_info.kwargs):
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
-            )
-
     def _verify_builtin_type_constructor(self, node: ast.Call):
-        if not len(node.args) == 1:
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() expected 1 positional argument, {len(node.args)} given!",
-            )
-        elif node.keywords:
-            unexpected_kwargs = set(k.arg for k in node.keywords)
-            raise FieldOperatorSyntaxError.from_AST(
-                node,
-                msg=f"{self._func_name(node)}() got unexpected keyword arguments: {unexpected_kwargs}!",
-            )
-        elif not isinstance(node.args[0], ast.Constant):
+        if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
             raise FieldOperatorSyntaxError.from_AST(
                 node,
                 msg=f"{self._func_name(node)}() only takes literal arguments!",
@@ -463,17 +448,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
-        if not isinstance(node.func, ast.Name):
-            raise FieldOperatorSyntaxError.from_AST(
-                node, msg="Functions can only be called directly!"
-            )
-
-        func_name = self._func_name(node)
-
-        if func_name in fbuiltins.FUN_BUILTIN_NAMES:
-            self._verify_builtin_function(node)
-        if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
-            self._verify_builtin_type_constructor(node)
+        # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
+        if isinstance(node.func, ast.Name):
+            func_name = self._func_name(node)
+            if func_name in fbuiltins.TYPE_BUILTIN_NAMES:
+                self._verify_builtin_type_constructor(node)
 
         return foast.Call(
             func=self.visit(node.func, **kwargs),
