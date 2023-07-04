@@ -306,6 +306,9 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
+
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
         return inp
