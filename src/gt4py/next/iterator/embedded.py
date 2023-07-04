@@ -1185,7 +1185,6 @@ class ColumnDescriptor:
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1196,7 +1195,7 @@ class ScanArgIterator:
         return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+        return ScanArgIterator(self.wrapped_iter.shift(*offsets), self.k_pos)
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
