@@ -911,7 +911,7 @@ class DomainLoop(IterationNode, ComputationNode):
 
 
 class SubdomainPredicate(IterationNode, ComputationNode):
-    branches: List[Tuple[GridSubset, Union[ComputationState, "DomainLoop", "SubdomainPredicate"]]]
+    branches: List[Tuple[GridSubset, List[Union[ComputationState, DomainLoop, SubdomainPredicate]]]]
 
 
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
