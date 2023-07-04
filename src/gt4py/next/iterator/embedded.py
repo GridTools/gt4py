@@ -327,7 +327,7 @@ def make_tuple(*args):
         first = tuple(arg[0] for arg in args)
         col = Column(args[0].kstart, np.zeros(len(column_range), dtype=_column_dtype(first)))
         col[0] = first
-        for i in column_range[1:]:
+        for i in range(1, len(column_range)):
             col[i] = tuple(arg[i] for arg in args)
         return col
     return (*args,)
