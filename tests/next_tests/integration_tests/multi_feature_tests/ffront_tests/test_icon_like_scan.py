@@ -214,8 +214,6 @@ def test_setup():
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Needs implementation of scan projector.")
-    if fieldview_backend == roundtrip.executor:
-        pytest.xfail("Inline into scan breaks embedded execution.")
 
     solve_nonhydro_stencil_52_like_z_q.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -231,9 +229,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     if fieldview_backend == roundtrip.executor:
-        pytest.xfail(
-            "Inline into scan breaks embedded execution and relies on CollapseTuple ignore_tuple_size==True."
-        )
+        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -248,9 +244,6 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
-    if fieldview_backend == roundtrip.executor:
-        pytest.xfail("Inline into scan breaks embedded execution.")
-
     solve_nonhydro_stencil_52_like.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
@@ -266,7 +259,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend == roundtrip.executor:
-        pytest.xfail("Only working in gtfn with CollapseTuple ignore_tuple_size==True.")
+        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
         test_setup.z_alpha,
