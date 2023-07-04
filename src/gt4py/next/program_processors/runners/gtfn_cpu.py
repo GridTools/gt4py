@@ -96,7 +96,7 @@ GTFN_DEFAULT_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
 )
 
 GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
-    cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
+    cache_strategy=cache.Strategy.PERSISTENT, builder_factory=cmake.CMakeFactory()
 )
 
 

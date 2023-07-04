@@ -139,8 +139,8 @@ class CMakeProject(
                     f"-DCMAKE_BUILD_TYPE={self.build_type.value}",
                     *self.extra_cmake_flags,
                 ],
-                stdout=sys.stdout,
-                stderr=sys.stderr,
+                stdout=log_file_pointer,
+                stderr=log_file_pointer,
             )
 
         build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)
