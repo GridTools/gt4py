@@ -217,29 +217,28 @@ class ItirToSDFG(eve.NodeVisitor):
             create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names
         ]
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
-        output_memlets = []
-        output_transient_names = {}
+        output_memlets = {}
         for output_name in output_names:
-            if output_name in input_names:
-                # create and write to transient that is then copied back to actual output array to avoid aliasing of
-                # same memory in nested SDFG with different names
-                name = unique_var_name()
-                output_transient_names[output_name] = name
-                descriptor = closure_sdfg.arrays[output_name]
-                closure_sdfg.add_array(
-                    name,
-                    shape=descriptor.shape,
-                    strides=descriptor.strides,
-                    dtype=descriptor.dtype,
-                    transient=True,
-                )
-                memlet = create_memlet_at(name, tuple(idx for idx in map_domain.keys()))
-            else:
-                memlet = create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
-            output_memlets.append(memlet)
+            # create and write to transient that is then copied back to actual output array to avoid aliasing of
+            # same memory in nested SDFG with different names
+            name = unique_var_name()
+            descriptor = closure_sdfg.arrays[output_name]
+            closure_sdfg.add_array(
+                name,
+                shape=descriptor.shape,
+                strides=descriptor.strides,
+                dtype=descriptor.dtype,
+                transient=True,
+            )
+            output_memlets[output_name] = create_memlet_at(
+                name, tuple(idx for idx in map_domain.keys())
+            )
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
-        output_mapping = {param.value.data: arg for param, arg in zip(results, output_memlets)}
+        output_mapping = {
+            param.value.data: arg_memlet.data
+            for param, arg_memlet in zip(results, output_memlets.values())
+        }
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
 
         array_mapping = {**input_mapping, **output_mapping, **conn_mapping}
@@ -255,8 +254,8 @@ class ItirToSDFG(eve.NodeVisitor):
             schedule=dace.ScheduleType.Sequential,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
-        for output_name, transient_name in output_transient_names.items():
-            access_node = access_nodes[transient_name]
+        for output_name, memlet in output_memlets.items():
+            access_node = access_nodes[memlet.data]
             in_edges = closure_state.in_edges(access_node)
             assert len(in_edges) == 1
             in_memlet = in_edges[0].data
@@ -266,7 +265,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 closure_state.add_access(output_name),
                 None,
                 dace.Memlet(
-                    data=transient_name, subset=in_memlet.subset, other_subset=in_memlet.subset
+                    data=memlet.data, subset=in_memlet.subset, other_subset=in_memlet.subset
                 ),
             )
 
