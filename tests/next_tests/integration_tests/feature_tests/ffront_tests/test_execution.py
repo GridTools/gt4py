@@ -508,7 +508,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("Transformation passes fail in putting `scan` to the top.")
+        pytest.xfail("Nested `scan`s requires creating temporaries.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -816,9 +816,6 @@ def test_domain_tuple(cartesian_case):
 
 
 def test_where_k_offset(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("IndexFields are not supported yet.")
-
     @gtx.field_operator
     def fieldop_where_k_offset(
         a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
@@ -828,19 +825,9 @@ def test_where_k_offset(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
-    )
-
-    @gtx.field_operator
-    def fieldop_where_k_offset(
-        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
-    ) -> cases.IKField:
-        return where(k_index > 0, a(Koff[-1]), 2)
-
-    cases.verify_with_default_data(
-        cartesian_case,
-        fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
+        ref=lambda a, k_index: np.where(
+            k_index > 0, np.roll(a, 1, axis=1), 2
+        ),  # TODO the reference is wrong! must shrink the domain!
     )
 
 

@@ -42,41 +42,28 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_maxover_execution(unstructured_case):
     """Testing max_over functionality."""
-    if unstructured_case.backend in [
-        gtfn_cpu.run_gtfn or fieldview_backend,
-        gtfn_cpu.run_gtfn_imperative,
-    ]:
-        pytest.skip("not yet supported.")
 
     @gtx.field_operator
-    def maxover_fieldoperator(
-        inp_field: gtx.Field[[Vertex, V2EDim], int32]
-    ) -> gtx.Field[[Vertex], int32]:
-        return max_over(inp_field, axis=V2EDim)
+    def maxover_fieldoperator(inp_field: cases.EField) -> cases.VField:
+        return max_over(inp_field(V2E), axis=V2EDim)
 
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
-
-    cases.verify(
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+    cases.verify_with_default_data(
         unstructured_case,
         maxover_fieldoperator,
-        inp,
-        out=cases.allocate(unstructured_case, maxover_fieldoperator, cases.RETURN)(),
-        ref=np.max(unstructured_case.offset_provider["V2E"].table, axis=1),
+        ref=lambda edge_f: np.max(edge_f[v2e_table], axis=1),
     )
 
 
 def test_maxover_execution_negatives(unstructured_case):
     """Testing max_over functionality for negative values in array."""
-    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("not yet supported.")
-
-    v2e_table = unstructured_case.offset_provider["V2E"].table
 
     @gtx.field_operator
     def maxover_negvals(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case, maxover_negvals, ref=lambda edge_f: np.max(edge_f[v2e_table], axis=1)
     )
@@ -84,16 +71,13 @@ def test_maxover_execution_negatives(unstructured_case):
 
 def test_minover_execution(unstructured_case):
     """Testing max_over functionality for negative values in array."""
-    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("not yet supported.")
-
-    v2e_table = unstructured_case.offset_provider["V2E"].table
 
     @gtx.field_operator
     def maxover_negvals(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
         return out
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case, maxover_negvals, ref=lambda edge_f: np.min(edge_f[v2e_table], axis=1)
     )
@@ -119,8 +103,6 @@ def test_reduction_execution(unstructured_case):
 
 def test_reduction_expression(unstructured_case):
     """Test reduction with an expression directly inside the call."""
-    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.skip("Has a bug.")
 
     @gtx.field_operator
     def reduce_expr(edge_f: cases.EField) -> cases.VField:

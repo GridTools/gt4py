@@ -77,8 +77,11 @@ def naive_lap(inp):
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: this test does not validate")
+    if program_processor in [run_gtfn, run_gtfn_imperative]:
+        from gt4py.next.iterator import transforms
+
+        if lift_mode != transforms.LiftMode.FORCE_INLINE:
+            pytest.xfail("TODO: issue with temporaries that crashes the application")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
