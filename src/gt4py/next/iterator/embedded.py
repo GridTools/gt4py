@@ -321,6 +321,15 @@ def tuple_get(i, tup):
 
 @builtins.make_tuple.register(EMBEDDED)
 def make_tuple(*args):
+    if isinstance(args[0], Column):
+        column_range = column_range_cvar.get()
+        assert all(isinstance(arg, Column) for arg in args)
+        first = tuple(arg[0] for arg in args)
+        col = Column(args[0].kstart, np.zeros(len(column_range), dtype=_column_dtype(first)))
+        col[0] = first
+        for i in range(1, len(column_range)):
+            col[i] = tuple(arg[i] for arg in args)
+        return col
     return (*args,)
 
 
@@ -736,6 +745,7 @@ def _make_tuple(
     if isinstance(field_or_tuple, tuple):
         if column_axis is not None:
             assert column_range
+            assert isinstance(indices, Iterable)
             # construct a Column of tuples
             column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
             if column_axis_idx is None:
@@ -1373,6 +1383,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
                 ins_iters = list(
                     make_in_iterator(
+                        # TODO(havogt) wrap inp in TupleField?
                         inp,
                         pos,
                         column_axis=column.axis if column else None,
