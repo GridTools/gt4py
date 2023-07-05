@@ -48,28 +48,22 @@ def test_bindings(program_source_example):
               gridtools::sid::rename_numbered_dimensions<
                   generated::I_t, generated::J_t>(gridtools::sid::shift_sid_origin(
                   gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(buf.first),
-                  gridtools::tuple{std::get<0>(buf.second), std::get<1>(buf.second)})),
+                  buf.second)),
               gridtools::sid::composite::keys<gridtools::integral_constant<int, 0>,
                                               gridtools::integral_constant<int, 1>>::
                   make_values(
-                      gridtools::sid::rename_numbered_dimensions<
-                          generated::I_t,
-                          generated::J_t>(gridtools::sid::shift_sid_origin(
-                          gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(
-                              gridtools::tuple_util::get<0>(tup).first),
-                          gridtools::tuple{
-                              std::get<0>(gridtools::tuple_util::get<0>(tup).second),
-                              std::get<1>(gridtools::tuple_util::get<0>(tup).second)})),
+                      gridtools::sid::rename_numbered_dimensions<generated::I_t,
+                                                                 generated::J_t>(
+                          gridtools::sid::shift_sid_origin(
+                              gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(
+                                  gridtools::tuple_util::get<0>(tup).first),
+                              gridtools::tuple_util::get<0>(tup).second)),
                       gridtools::sid::rename_numbered_dimensions<generated::I_t,
                                                                  generated::J_t>(
                           gridtools::sid::shift_sid_origin(
                               gridtools::as_sid<float, 2, gridtools::sid::unknown_kind>(
                                   gridtools::tuple_util::get<1>(tup).first),
-                              gridtools::tuple{
-                                  std::get<0>(
-                                      gridtools::tuple_util::get<1>(tup).second),
-                                  std::get<1>(
-                                      gridtools::tuple_util::get<1>(tup).second)}))),
+                              gridtools::tuple_util::get<1>(tup).second))),
               sc);
         }
         
