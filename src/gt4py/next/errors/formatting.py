@@ -14,6 +14,8 @@
 
 import pathlib
 import textwrap
+import traceback
+import types
 from typing import Optional
 
 from gt4py.eve import SourceLocation
@@ -52,13 +54,40 @@ def format_location(loc: SourceLocation, caret: bool = False):
         return loc_str
 
 
-def format_compilation_error(
-    type_: type[Exception], message: str, location: Optional[SourceLocation]
-):
-    msg_str = f"{type_.__module__}.{type_.__name__}: {message}"
+def _format_cause(cause: BaseException) -> list[str]:
+    """Print the cause of an exception plus the bridging message to STDERR."""
+    bridging_message = "The above exception was the direct cause of the following exception:"
+    cause_strs = [*traceback.format_exception(cause), "\n", f"{bridging_message}\n\n"]
+    return cause_strs
 
+
+def _format_traceback(tb: types.TracebackType) -> list[str]:
+    """Format the traceback of an exception."""
+    intro_message = "Traceback (most recent call last):"
+    traceback_strs = [
+        f"{intro_message}\n",
+        *traceback.format_tb(tb),
+    ]
+    return traceback_strs
+
+
+def format_compilation_error(
+    type_: type[Exception],
+    message: str,
+    location: Optional[SourceLocation],
+    tb: Optional[types.TracebackType] = None,
+    cause: Optional[BaseException] = None,
+):
+    bits: list[str] = []
+
+    if cause is not None:
+        bits = [*bits, *_format_cause(cause)]
+    if tb is not None:
+        bits = [*bits, *_format_traceback(tb)]
     if location is not None:
         loc_str = format_location(location, caret=True)
-        stack_str = f"Source location:\n{textwrap.indent(loc_str, '  ')}\n"
-        return [stack_str, msg_str]
-    return [msg_str]
+        loc_str_all = f"Source location:\n{textwrap.indent(loc_str, '  ')}\n"
+        bits = [*bits, loc_str_all]
+    msg_str = f"{type_.__module__}.{type_.__name__}: {message}"
+    bits = [*bits, msg_str]
+    return bits

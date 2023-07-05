@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 import sys
-import traceback
 from typing import Callable, Optional
 
 import importlib_metadata
@@ -67,31 +66,25 @@ def set_developer_mode(enabled: bool = False):
     _developer_mode = enabled
 
 
-def _print_cause(exc: BaseException):
-    """Print the cause of an exception plus the bridging message to STDERR."""
-    bridging_message = "The above exception was the direct cause of the following exception:"
-
-    if exc.__cause__ or exc.__context__:
-        traceback.print_exception(exc.__cause__ or exc.__context__)
-        print(f"\n{bridging_message}\n", file=sys.stderr)
-
-
-def _print_traceback(exc: BaseException):
-    """Print the traceback of an exception to STDERR."""
-    intro_message = "Traceback (most recent call last):"
-    traceback_strs = [
-        f"{intro_message}\n",
-        *traceback.format_tb(exc.__traceback__),
-    ]
-    print("".join(traceback_strs), file=sys.stderr)
-
-
 def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb):
+    """
+    Format `CompilationError`s in a neat way.
+
+    All other Python exceptions are formatted by the `fallback` hook.
+    """
     if isinstance(value, exceptions.CompilerError):
         if _developer_mode:
-            _print_cause(value)
-            _print_traceback(value)
-        exc_strs = formatting.format_compilation_error(type(value), value.message, value.location)
+            exc_strs = formatting.format_compilation_error(
+                type(value),
+                value.message,
+                value.location,
+                value.__traceback__,
+                value.__cause__,
+            )
+        else:
+            exc_strs = formatting.format_compilation_error(
+                type(value), value.message, value.location
+            )
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)
