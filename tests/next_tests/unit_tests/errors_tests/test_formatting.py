@@ -12,11 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import inspect
+import re
+
 from gt4py.eve import SourceLocation
 from gt4py.next.errors import CompilerError
 from gt4py.next.errors.formatting import format_compilation_error
-import re
-import inspect
 
 
 frameinfo = inspect.getframeinfo(inspect.currentframe())
@@ -34,33 +35,23 @@ except Exception as ex:
 def test_format():
     pattern = f"{module}.{name}: {msg}"
     s = "\n".join(format_compilation_error(CompilerError, msg, None, None, None))
-    assert re.match(pattern, s);
+    assert re.match(pattern, s)
 
 
 def test_format_loc():
-    pattern = \
-        "Source location.*\\n" \
-        "  File \"/source.*\".*\\n" \
-        f"{module}.{name}: {msg}"
+    pattern = "Source location.*\\n" '  File "/source.*".*\\n' f"{module}.{name}: {msg}"
     s = "".join(format_compilation_error(CompilerError, msg, loc, None, None))
-    assert re.match(pattern, s);
+    assert re.match(pattern, s)
 
 
 def test_format_traceback():
-    pattern = \
-        "Traceback.*\\n" \
-        "  File \".*\".*\\n" \
-        ".*\\n" \
-        f"{module}.{name}: {msg}"
+    pattern = "Traceback.*\\n" '  File ".*".*\\n' ".*\\n" f"{module}.{name}: {msg}"
     s = "".join(format_compilation_error(CompilerError, msg, None, tb, None))
-    assert re.match(pattern, s);
+    assert re.match(pattern, s)
 
 
 def test_format_cause():
     cause = ValueError("asd")
-    pattern = \
-        "ValueError: asd\\n\\n" \
-        "The above.*\\n\\n" \
-        f"{module}.{name}: {msg}"
+    pattern = "ValueError: asd\\n\\n" "The above.*\\n\\n" f"{module}.{name}: {msg}"
     s = "".join(format_compilation_error(CompilerError, msg, None, None, cause))
-    assert re.match(pattern, s);
+    assert re.match(pattern, s)
