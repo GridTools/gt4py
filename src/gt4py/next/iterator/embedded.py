@@ -182,6 +182,10 @@ class LocatedField(Protocol):
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
 
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple([0] * len(self.axes))
+
 
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
@@ -887,12 +891,14 @@ class LocatedFieldImpl(MutableLocatedField):
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: Callable[[], npt.NDArray],
+        origin: Optional[dict[common.Dimension, int]] = None,
     ):
         self.getter = getter
         self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
+        self.origin = origin
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
@@ -910,6 +916,14 @@ class LocatedFieldImpl(MutableLocatedField):
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        if not self.origin:
+            return tuple([0] * len(self.axes))
+        return cast(
+            tuple[int], get_ordered_indices(self.axes, {k.value: v for k, v in self.origin.items()})
+        )
 
     @property
     def shape(self):
@@ -1027,6 +1041,7 @@ def np_as_located_field(
             dtype=a.dtype,
             setter=setter,
             array=a.__array__,
+            origin=origin,
         )
 
     return _maker
