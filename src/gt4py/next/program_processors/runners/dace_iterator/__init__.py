@@ -96,8 +96,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
-    sdfg.simplify()
-    sdfg.view()
 
     all_args = {
         **dace_args,
