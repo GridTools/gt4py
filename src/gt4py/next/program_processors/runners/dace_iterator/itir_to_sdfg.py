@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 from typing import Any
 
 import dace
@@ -142,7 +141,6 @@ class ItirToSDFG(eve.NodeVisitor):
             for inner_name, access_node in zip(output_names, output_accesses):
                 memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
-
         program_sdfg.validate()
         return program_sdfg
 
@@ -217,16 +215,15 @@ class ItirToSDFG(eve.NodeVisitor):
             create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_names
         ]
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
+
         output_memlets = {}
         for output_name in output_names:
             # create and write to transient that is then copied back to actual output array to avoid aliasing of
             # same memory in nested SDFG with different names
             name = unique_var_name()
             descriptor = closure_sdfg.arrays[output_name]
-            closure_sdfg.add_array(
+            closure_sdfg.add_scalar(
                 name,
-                shape=descriptor.shape,
-                strides=descriptor.strides,
                 dtype=descriptor.dtype,
                 transient=True,
             )
@@ -254,20 +251,23 @@ class ItirToSDFG(eve.NodeVisitor):
             schedule=dace.ScheduleType.Sequential,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
-        for output_name, memlet in output_memlets.items():
-            access_node = access_nodes[memlet.data]
-            in_edges = closure_state.in_edges(access_node)
-            assert len(in_edges) == 1
-            in_memlet = in_edges[0].data
+        transient_to_arg_name_mapping = {
+            memlet.data: name for name, memlet in output_memlets.items()
+        }
+        for edge in closure_state.in_edges(map_exit):
+            memlet = edge.data
+            transient_access = closure_state.add_access(memlet.data)
             closure_state.add_edge(
-                access_node,
+                nsdfg_node,
+                edge.src_conn,
+                transient_access,
                 None,
-                closure_state.add_access(output_name),
-                None,
-                dace.Memlet(
-                    data=memlet.data, subset=in_memlet.subset, other_subset=in_memlet.subset
-                ),
+                dace.Memlet(data=memlet.data, subset="0"),
             )
+            inner_memlet = dace.Memlet(data=memlet.data, subset="0", other_subset=memlet.subset)
+            closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
+            closure_state.remove_edge(edge)
+            access_nodes[edge.data.data].data = transient_to_arg_name_mapping[edge.data.data]
 
         for _, (lb, ub) in closure_domain:
             map_entry.add_in_connector(lb.value.data)
@@ -334,6 +334,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet=memlet,
                 src_conn=None,
                 dst_conn=name,
+                propagate=True,
             )
         if not outputs:
             state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
@@ -345,6 +346,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet=memlet,
                 src_conn=name,
                 dst_conn=None,
+                propagate=True,
             )
 
         return nsdfg_node, map_entry, map_exit
