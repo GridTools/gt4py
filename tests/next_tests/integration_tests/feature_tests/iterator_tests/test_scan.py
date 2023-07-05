@@ -77,8 +77,6 @@ def test_scan_vertical_boundary_condition(program_processor, lift_mode):
         reference[:, k] = reference[:, k - 1] + (inp[:, k - 1] + inp[:, k + 1])/2
     reference[:, -1] = reference[:, -2] + inp[:, -1]
 
-    bla = np.int32(0)
-
     @fundef
     def scan_pass(state, inp, kindex, ksize):
         value_lowest_level = state+deref(inp)
