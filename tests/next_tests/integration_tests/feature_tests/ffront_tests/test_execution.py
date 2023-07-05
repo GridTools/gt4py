@@ -818,17 +818,19 @@ def test_domain_tuple(cartesian_case):
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator
     def fieldop_where_k_offset(
-        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+        inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, a(Koff[-1]), 2)
+        return where(k_index > 0, inp(Koff[-1]), 2)
 
-    cases.verify_with_default_data(
-        cartesian_case,
-        fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(
-            k_index > 0, np.roll(a, 1, axis=1), 2
-        ),  # TODO the reference is wrong! must shrink the domain!
-    )
+    inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
+    k_index = cases.allocate(
+        cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
+    )()
+    out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
+
+    ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
+
+    cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
