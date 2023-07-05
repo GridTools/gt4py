@@ -101,6 +101,7 @@ def callable_type_info_cases():
     float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     field_type = ts.FieldType(dims=[Dimension("I")], dtype=float_type)
+    tuple_type = ts.TupleType(types=[bool_type, field_type])
     nullary_func_type = ts.FunctionType(
         pos_only_args=[], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
     )
@@ -118,6 +119,9 @@ def callable_type_info_cases():
         pos_or_kw_args={"foo": int_type},
         kw_only_args={"bar": float_type},
         returns=ts.VoidType(),
+    )
+    unary_tuple_arg_func_type = ts.FunctionType(
+        pos_only_args=[tuple_type], pos_or_kw_args={}, kw_only_args={}, returns=ts.VoidType()
     )
     fieldop_type = gt4py.next.ffront.type_specifications.FieldOperatorType(
         definition=ts.FunctionType(
@@ -281,6 +285,31 @@ def callable_type_info_cases():
             [bool_type],
             {"bar": float_type, "foo": int_type},
             [],
+            ts.VoidType(),
+        ),
+        (
+            unary_tuple_arg_func_type,
+            [tuple_type],
+            {},
+            [],
+            ts.VoidType(),
+        ),
+        (
+            unary_tuple_arg_func_type,
+            [ts.TupleType(types=[float_type, field_type])],
+            {},
+            [
+                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+            ],
+            ts.VoidType(),
+        ),
+        (
+            unary_tuple_arg_func_type,
+            [int_type],
+            {},
+            [
+                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+            ],
             ts.VoidType(),
         ),
         # field operator
