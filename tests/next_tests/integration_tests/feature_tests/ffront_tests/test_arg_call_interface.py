@@ -21,7 +21,7 @@ import pytest
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import int64
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -169,6 +169,8 @@ def test_call_field_operator_from_program(cartesian_case):
 def test_call_scan_operator_from_field_operator(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Calling scan from field operator not fully supported in gtfn.")
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
 
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
@@ -194,6 +196,9 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
 
 
 def test_call_scan_operator_from_program(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
+
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y

@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -214,6 +214,8 @@ def test_setup():
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Needs implementation of scan projector.")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
 
     solve_nonhydro_stencil_52_like_z_q.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -230,6 +232,8 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuples, scans")
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -244,6 +248,8 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
 
 
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
     solve_nonhydro_stencil_52_like.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
@@ -260,6 +266,8 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
+    if fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuples, scans")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
         test_setup.z_alpha,
