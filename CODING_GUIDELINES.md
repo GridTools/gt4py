@@ -155,9 +155,7 @@ Integrations tests come with their own utilities, found in `cases.py`, for bette
         - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
     - Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
 
-In case new test utils need to be written, it is important to first check whether any utilities can be used or modified.
-If this is not the case but the new utility supports similar functionalities as others, it should be placed in the same file. Naming convention should mirror other cases and reflect the purpose.
-In case that the new utility is a completely stand-alone component, a new file should be created in the bottom-most directory enclosing all usages of the utility.
+In case new features are needed, check if an existing utility can be extended before implementing a whole new one. The name of new utilities should reflect their purpose and follow the naming conventions of existing tools. If the new utility is a completely stand-alone component, create a new file in the bottom-most directory enclosing all usages of the utility; otherwise, place it in the appropriate file containing utilities with similar functionalities.
 
 Note: The name `cases` for the new test module was chosen based on the idea that details like backend, grid size, etc. should be summarized in a parametrizable “test case”, of which there are two types: cartesian and unstructured.
 
