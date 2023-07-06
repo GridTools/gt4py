@@ -406,7 +406,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return result_exprs
 
     def _visit_deref(self, node: itir.FunCall) -> list[ValueExpr]:
-        iterator: IteratorExpr = self.visit(node.args[0])
+        iterator = self.visit(node.args[0])
+        if not isinstance(iterator, IteratorExpr):
+            # already a list of ValueExpr
+            return iterator
         sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
         flat_index = [
             ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
@@ -596,3 +599,29 @@ def closure_to_tasklet_sdfg(
     for output in outputs:
         context.body.arrays[output.value.data].transient = False
     return context, outputs
+
+
+def lambda_to_tasklet_sdfg(
+    node: itir.StencilClosure,
+    offset_provider: dict[str, Any],
+    node_types: dict[int, next_typing.Type],
+) -> tuple[Context, Sequence[tuple[dace.ndarray, str, ts.TypeSpec]], list[ValueExpr]]:
+    body = dace.SDFG("tasklet_toplevel")
+    state = body.add_state("tasklet_toplevel_entry")
+    symbol_map: dict[str, ValueExpr | IteratorExpr] = {}
+
+    context = Context(body, state, symbol_map)
+
+    call = itir.Lambda(expr=node.stencil.args[0].expr, params=node.stencil.args[0].params)
+    translator = PythonTaskletCodegen(offset_provider, context, node_types)
+
+    # add lambda parameters to symbol map
+    for p in node.stencil.args[0].params:
+        node = state.add_access(p.id)
+        symbol_map[p.id] = ValueExpr(value=node.data, dtype=dace.float64)
+
+    context, inputs, outputs = translator.visit(call, args={})
+
+    for output in outputs:
+        context.body.arrays[output.value.data].transient = True
+    return context, inputs, outputs

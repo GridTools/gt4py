@@ -84,7 +84,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     program = preprocess_program(program, offset_provider)
     arg_types = [type_translation.from_value(arg) for arg in args]
-    sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
+    sdfg_genenerator = ItirToSDFG(param_types=arg_types,
+                                  column_axis=kwargs["column_axis"],
+                                  offset_provider=offset_provider,
+    )
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
 
     dace_args = get_args(program.params, args)
