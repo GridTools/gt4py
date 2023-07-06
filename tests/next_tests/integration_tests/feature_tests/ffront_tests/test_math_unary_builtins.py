@@ -37,7 +37,7 @@ from gt4py.next import (
     tanh,
     trunc,
 )
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -60,6 +60,9 @@ def test_arithmetic(cartesian_case):
 
 
 def test_power(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def pow(inp1: cases.IField) -> cases.IField:
         return inp1**2
@@ -68,7 +71,11 @@ def test_power(cartesian_case):
 
 
 def test_floordiv(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.xfail(
             "FloorDiv not yet supported."
         )  # see https://github.com/GridTools/gt4py/issues/1136
@@ -81,7 +88,11 @@ def test_floordiv(cartesian_case):
 
 
 def test_mod(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]:
         pytest.xfail(
             "Modulo not properly supported for negative numbers."
         )  # see https://github.com/GridTools/gt4py/issues/1219
@@ -190,6 +201,9 @@ def test_unary_not(cartesian_case):
 
 
 def test_basic_trig(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def basic_trig_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return sin(cos(inp1)) - sinh(cosh(inp2)) + tan(inp1) - tanh(inp2)
@@ -205,6 +219,9 @@ def test_basic_trig(cartesian_case):
 
 
 def test_exp_log(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def exp_log_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return log(inp1) - exp(inp2)
@@ -215,6 +232,9 @@ def test_exp_log(cartesian_case):
 
 
 def test_roots(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def roots_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return sqrt(inp1) - cbrt(inp2)
@@ -225,6 +245,9 @@ def test_roots(cartesian_case):
 
 
 def test_is_values(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def is_isinf_fieldop(inp1: cases.IFloatField) -> cases.IBoolField:
         return isinf(inp1)
@@ -251,6 +274,9 @@ def test_is_values(cartesian_case):
 
 
 def test_rounding_funs(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
+
     @gtx.field_operator
     def rounding_funs_fieldop(
         inp1: cases.IFloatField, inp2: cases.IFloatField
