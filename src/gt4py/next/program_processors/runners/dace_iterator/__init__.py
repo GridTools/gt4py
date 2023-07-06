@@ -18,7 +18,6 @@ import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next.iterator.atlas_utils import AtlasTable
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
@@ -55,22 +54,7 @@ def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
 def get_connectivity_args(
     neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]
 ) -> dict[str, Any]:
-    res = {}
-    for offset, table in neighbor_tables:
-        if isinstance(table.table, AtlasTable):
-            rows, cols = table.table.shape
-            table_as_arr = np.empty(shape=table.table.shape, dtype=table.table.dtype)
-            for ridx in range(rows):
-                for cidx in range(cols):
-                    table_as_arr[ridx, cidx] = (
-                        table.table[ridx, cidx] if table.table[ridx, cidx] is not None else -1
-                    )
-
-            res[connectivity_identifier(offset)] = table_as_arr
-        else:
-            res[connectivity_identifier(offset)] = table.table
-    return res
-    # return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
+    return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
 
 
 def get_shape_args(
@@ -99,7 +83,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     program = preprocess_program(program, offset_provider)
-
     arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
@@ -114,16 +97,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
+    all_args = {
+        **dace_args,
+        **dace_conn_args,
+        **dace_shapes,
+        **dace_conn_shapes,
+        **dace_strides,
+        **dace_conn_stirdes,
+    }
+    expected_args = {
+        key: value
+        for key, value in all_args.items()
+        if key in sdfg.signature_arglist(with_types=False)
+    }
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("compiler", "build_type", value="Debug")
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(
-            **dace_args,
-            **dace_conn_args,
-            **dace_shapes,
-            **dace_conn_shapes,
-            **dace_strides,
-            **dace_conn_stirdes,
-        )
+        sdfg(**expected_args)

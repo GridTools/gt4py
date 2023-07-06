@@ -401,7 +401,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
-
         if isinstance(node.fun, itir.FunCall) and isinstance(node.fun.fun, itir.SymRef):
             if node.fun.fun.id == "shift":
                 offset = node.fun.args[0]
@@ -727,8 +726,4 @@ def closure_to_tasklet_sdfg(
     outputs = translator.visit(call)
     for output in outputs:
         context.body.arrays[output.value.data].transient = False
-    # context.body.view()
-    context.body.validate()
-    # context.body.simplify()
-    # context.body.view()
     return context, outputs
