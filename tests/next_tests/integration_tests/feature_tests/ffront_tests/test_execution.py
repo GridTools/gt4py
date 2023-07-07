@@ -546,7 +546,11 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [dace_iterator.run_dace_iterator, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        dace_iterator.run_dace_iterator,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+    ]:
         pytest.xfail("Transformation passes fail in putting `scan` to the top.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))

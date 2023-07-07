@@ -27,7 +27,8 @@ from .itir_to_tasklet import (
     IteratorExpr,
     PythonTaskletCodegen,
     ValueExpr,
-    closure_to_tasklet_sdfg, lambda_to_tasklet_sdfg,
+    closure_to_tasklet_sdfg,
+    lambda_to_tasklet_sdfg,
 )
 from .utility import (
     as_dace_type,
@@ -94,8 +95,12 @@ class ItirToSDFG(eve.NodeVisitor):
             assert isinstance(closure.output, itir.SymRef)
 
             # arguments with scalar type are passed as symbols
-            input_names = list(filter(lambda name: isinstance(self.storages[name], ts.FieldType),
-                                      [str(inp.id) for inp in closure.inputs]))
+            input_names = list(
+                filter(
+                    lambda name: isinstance(self.storages[name], ts.FieldType),
+                    [str(inp.id) for inp in closure.inputs],
+                )
+            )
             connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
             output_names = [str(closure.output.id)]
 
@@ -204,20 +209,22 @@ class ItirToSDFG(eve.NodeVisitor):
         # Map SDFG tasklet arguments to parameters
         input_memlets = [
             create_memlet_full(name, closure_sdfg.arrays[name])
-            for name in map(lambda x:
-                            x if isinstance(self.storages[x], ts.FieldType) else
-                            program_arg_syms[x].value.data, input_names)
+            for name in map(
+                lambda x: x
+                if isinstance(self.storages[x], ts.FieldType)
+                else program_arg_syms[x].value.data,
+                input_names,
+            )
         ]
-        conn_memlet = [
-            create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names
-        ]
+        conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         output_memlets = {}
         scan_dim_index = None
         # scan operator should always be the first function call in a closure
         if self._is_scan(node.stencil):
-            nsdfg, map_domain, nsdfg_out_connectors, scan_dim_index =\
-                self.visit_ScanStencilClosure(node, closure_sdfg.arrays, closure_domain)
+            nsdfg, map_domain, nsdfg_out_connectors, scan_dim_index = self.visit_ScanStencilClosure(
+                node, closure_sdfg.arrays, closure_domain
+            )
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
@@ -235,13 +242,20 @@ class ItirToSDFG(eve.NodeVisitor):
                     transient=True,
                 )
                 output_memlets[output_name] = create_memlet_at(
-                    name, tuple([f"i_{dim}" if f"i_{dim}" in map_domain else output_subset for dim, _ in closure_domain])
+                    name,
+                    tuple(
+                        [
+                            f"i_{dim}" if f"i_{dim}" in map_domain else output_subset
+                            for dim, _ in closure_domain
+                        ]
+                    ),
                 )
         else:
-            nsdfg, map_domain, nsdfg_out_connectors =\
-                self.visit_ParallelStencilClosure(node, closure_sdfg.arrays, closure_domain)
+            nsdfg, map_domain, nsdfg_out_connectors = self.visit_ParallelStencilClosure(
+                node, closure_sdfg.arrays, closure_domain
+            )
 
-            output_subset = '0'
+            output_subset = "0"
 
             for output_name in output_names:
                 # create and write to transient that is then copied back to actual output array to avoid aliasing of
@@ -270,7 +284,7 @@ class ItirToSDFG(eve.NodeVisitor):
         nsdfg_node, map_entry, map_exit = self._add_mapped_nested_sdfg(
             closure_state,
             sdfg=nsdfg,
-            map_ranges=map_domain or {'__dummy' : '0'},
+            map_ranges=map_domain or {"__dummy": "0"},
             inputs=array_mapping,
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
@@ -290,7 +304,9 @@ class ItirToSDFG(eve.NodeVisitor):
                 None,
                 dace.Memlet(data=memlet.data, subset=output_subset),
             )
-            inner_memlet = dace.Memlet(data=memlet.data, subset=output_subset, other_subset=memlet.subset)
+            inner_memlet = dace.Memlet(
+                data=memlet.data, subset=output_subset, other_subset=memlet.subset
+            )
             closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
             closure_state.remove_edge(edge)
             access_nodes[edge.data.data].data = transient_to_arg_name_mapping[edge.data.data]
@@ -308,15 +324,15 @@ class ItirToSDFG(eve.NodeVisitor):
         return closure_sdfg
 
     def visit_ScanStencilClosure(
-            self,
-            node: itir.StencilClosure,
-            array_table: dict[str, dace.data.Array],
-            closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]
+        self,
+        node: itir.StencilClosure,
+        array_table: dict[str, dace.data.Array],
+        closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str], int]:
         # select the scan dimension based on program argument for column axis
         scan_dim = self.column_axis.value
         scan_dim_index = self.storages[node.output.id].dims.index(self.column_axis)
-        assert(isinstance(self.storages[node.output.id].dtype, ts.ScalarType))
+        assert isinstance(self.storages[node.output.id].dtype, ts.ScalarType)
         scan_dtype = self.storages[node.output.id].dtype
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
@@ -337,23 +353,29 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_sdfg = dace.SDFG(name="scan")
 
         # create a state machine for lambda call over the scan dimension
-        start_state = scan_sdfg.add_state('start')
-        lambda_state = scan_sdfg.add_state('lambda_compute')
-        end_state = scan_sdfg.add_state('end')
-        if node.stencil.args[1].value == 'True': # forward scan
-            scan_sdfg.add_loop(start_state, lambda_state, end_state,
-                               loop_var=f"i_{scan_dim}",
-                               initialize_expr=f"{scan_dim_lb.value.data}",
-                               condition_expr=f"i_{scan_dim} < {scan_dim_ub.value.data}",
-                               increment_expr=f"i_{scan_dim} + 1",
+        start_state = scan_sdfg.add_state("start")
+        lambda_state = scan_sdfg.add_state("lambda_compute")
+        end_state = scan_sdfg.add_state("end")
+        if node.stencil.args[1].value == "True":  # forward scan
+            scan_sdfg.add_loop(
+                start_state,
+                lambda_state,
+                end_state,
+                loop_var=f"i_{scan_dim}",
+                initialize_expr=f"{scan_dim_lb.value.data}",
+                condition_expr=f"i_{scan_dim} < {scan_dim_ub.value.data}",
+                increment_expr=f"i_{scan_dim} + 1",
             )
         else:
-            assert(node.stencil.args[1].value == 'False')
-            scan_sdfg.add_loop(start_state, lambda_state, end_state,
-                               loop_var=f"i_{scan_dim}",
-                               initialize_expr=f"{scan_dim_ub.value.data} - 1",
-                               condition_expr=f"i_{scan_dim} >= {scan_dim_lb.value.data}",
-                               increment_expr=f"i_{scan_dim} - 1",
+            assert node.stencil.args[1].value == "False"
+            scan_sdfg.add_loop(
+                start_state,
+                lambda_state,
+                end_state,
+                loop_var=f"i_{scan_dim}",
+                initialize_expr=f"{scan_dim_ub.value.data} - 1",
+                condition_expr=f"i_{scan_dim} >= {scan_dim_lb.value.data}",
+                increment_expr=f"i_{scan_dim} - 1",
             )
 
         # add access nodes to SDFG for inputs
@@ -370,10 +392,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     dtype=array_table[name].dtype,
                 )
             else:
-                scan_sdfg.add_scalar(
-                    name,
-                    dtype=as_dace_type(self.storages[name])
-                )
+                scan_sdfg.add_scalar(name, dtype=as_dace_type(self.storages[name]))
 
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
         lambda_context, lambda_inputs, lambda_outputs = lambda_to_tasklet_sdfg(
@@ -396,23 +415,22 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
 
         carry_init_tasklet = start_state.add_tasklet(
-            'get_carry_init_value',
-            {},
-            {'__result'},
-            f"__result = {carry_init}"
+            "get_carry_init_value", {}, {"__result"}, f"__result = {carry_init}"
         )
         carry_node1 = start_state.add_access(scan_carry_name)
         start_state.add_edge(
-            carry_init_tasklet, '__result',
-            carry_node1, None,
-            dace.Memlet(data=f"{scan_carry_name}", subset='0')
+            carry_init_tasklet,
+            "__result",
+            carry_node1,
+            None,
+            dace.Memlet(data=f"{scan_carry_name}", subset="0"),
         )
 
         carry_node2 = lambda_state.add_access(scan_carry_name)
         lambda_state.add_memlet_path(
             carry_node2,
             scan_inner_node,
-            memlet=dace.Memlet(data=f"{scan_carry_name}", subset='0'),
+            memlet=dace.Memlet(data=f"{scan_carry_name}", subset="0"),
             src_conn=None,
             dst_conn=lambda_carry_name,
         )
@@ -431,7 +449,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 lambda_state.add_memlet_path(
                     lambda_state.add_access(data_name),
                     scan_inner_node,
-                    memlet=dace.Memlet(data=f"{data_name}", subset='0'),
+                    memlet=dace.Memlet(data=f"{data_name}", subset="0"),
                     src_conn=None,
                     dst_conn=connector_name,
                 )
@@ -447,22 +465,22 @@ class ItirToSDFG(eve.NodeVisitor):
             )
 
         # add state to scan SDFG to update the carry value at each loop iteration
-        lambda_update_state = scan_sdfg.add_state_after(lambda_state, 'lambda_update')
+        lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
         result_node = lambda_update_state.add_access(output_names[0])
         carry_node3 = lambda_update_state.add_access(scan_carry_name)
         lambda_update_state.add_memlet_path(
             result_node,
             carry_node3,
-            memlet=dace.Memlet(data=f"{output_names[0]}", subset=f"i_{scan_dim}", other_subset='0')
+            memlet=dace.Memlet(data=f"{output_names[0]}", subset=f"i_{scan_dim}", other_subset="0"),
         )
 
         return scan_sdfg, map_domain, output_names, scan_dim_index
 
     def visit_ParallelStencilClosure(
-            self,
-            node: itir.StencilClosure,
-            array_table: dict[str, dace.data.Array],
-            closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]
+        self,
+        node: itir.StencilClosure,
+        array_table: dict[str, dace.data.Array],
+        closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
@@ -475,9 +493,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
-        input_arrays = [
-            (array_table[name], name, self.storages[name]) for name in input_names
-        ]
+        input_arrays = [(array_table[name], name, self.storages[name]) for name in input_names]
         conn_arrays = [(array_table[name], name) for name in conn_names]
 
         context, results = closure_to_tasklet_sdfg(

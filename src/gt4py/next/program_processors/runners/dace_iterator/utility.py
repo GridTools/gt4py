@@ -58,7 +58,10 @@ def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
 
 
 def map_nested_sdfg_symbols(
-    parent_sdfg: dace.SDFG, nested_sdfg: dace.SDFG, array_mapping: dict[str, dace.Memlet], dim_index: int=None
+    parent_sdfg: dace.SDFG,
+    nested_sdfg: dace.SDFG,
+    array_mapping: dict[str, dace.Memlet],
+    dim_index: int = None,
 ) -> dict[str, Any]:
     symbol_mapping: dict[str, Any] = {}
     for param, arg in array_mapping.items():
@@ -67,12 +70,12 @@ def map_nested_sdfg_symbols(
         if isinstance(param_array, dace.data.Scalar):
             assert arg.subset.num_elements() == 1
         elif dim_index:
-            assert (len(param_array.shape) == 1)
+            assert len(param_array.shape) == 1
             arg_shape = arg.subset.size()[dim_index]
             param_shape = param_array.shape[0]
             if isinstance(param_shape, dace.symbol):
                 symbol_mapping[str(param_shape)] = str(arg_shape)
-            assert (len(param_array.strides) == 1)
+            assert len(param_array.strides) == 1
             arg_stride = arg_array.strides[dim_index]
             param_stride = param_array.strides[0]
             if isinstance(param_stride, dace.symbol):
