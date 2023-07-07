@@ -71,7 +71,7 @@ def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> dict[str, Any]:
     return {
-        str(sym): size / value.itemsize
+        str(sym): size // value.itemsize
         for name, value in args.items()
         for sym, size in zip(arrays[name].strides, value.strides)
     }
@@ -79,13 +79,16 @@ def get_stride_args(
 
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    column_axis = None
+    if "column_axis" in kwargs:
+        column_axis = kwargs["column_axis"]
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     program = preprocess_program(program, offset_provider)
     arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(param_types=arg_types,
-                                  column_axis=kwargs["column_axis"],
+                                  column_axis=column_axis,
                                   offset_provider=offset_provider,
     )
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)

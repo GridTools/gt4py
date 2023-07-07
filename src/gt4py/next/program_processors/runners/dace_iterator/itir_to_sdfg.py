@@ -219,7 +219,7 @@ class ItirToSDFG(eve.NodeVisitor):
             nsdfg, map_domain, nsdfg_out_connectors, scan_dim_index =\
                 self.visit_ScanStencilClosure(node, closure_sdfg.arrays, closure_domain)
 
-            scan_lb, scan_ub = closure_domain[scan_dim_index][1]
+            _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
 
             for output_name in output_names:
@@ -241,7 +241,7 @@ class ItirToSDFG(eve.NodeVisitor):
             nsdfg, map_domain, nsdfg_out_connectors =\
                 self.visit_ParallelStencilClosure(node, closure_sdfg.arrays, closure_domain)
 
-            output_subset = "0"
+            output_subset = '0'
 
             for output_name in output_names:
                 # create and write to transient that is then copied back to actual output array to avoid aliasing of

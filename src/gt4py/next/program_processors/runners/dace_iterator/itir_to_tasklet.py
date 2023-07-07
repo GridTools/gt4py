@@ -617,8 +617,8 @@ def lambda_to_tasklet_sdfg(
 
     # add lambda parameters to symbol map
     for p in node.stencil.args[0].params:
-        node = state.add_access(p.id)
-        symbol_map[p.id] = ValueExpr(value=node.data, dtype=dace.float64)
+        pnode = state.add_access(p.id)
+        symbol_map[p.id] = ValueExpr(value=pnode.data, dtype=dace.float64)
 
     context, inputs, outputs = translator.visit(call, args={})
 
