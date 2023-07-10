@@ -23,7 +23,6 @@ RUN apt-get update -qq && apt-get install -qq -y --no-install-recommends \
     liblzma-dev \
     python-openssl \
     libreadline-dev \
-    gdb \
     git \
     rustc \
     htop && \
