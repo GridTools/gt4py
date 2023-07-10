@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Optional
 
 import dace
 
@@ -61,7 +61,7 @@ def map_nested_sdfg_symbols(
     parent_sdfg: dace.SDFG,
     nested_sdfg: dace.SDFG,
     array_mapping: dict[str, dace.Memlet],
-    dim_index: int = None,
+    dim_index: Optional[int] = None,
 ) -> dict[str, Any]:
     symbol_mapping: dict[str, Any] = {}
     for param, arg in array_mapping.items():

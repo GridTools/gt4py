@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any
+from typing import Any, Optional, Union, cast
 
 import dace
 
@@ -20,7 +20,9 @@ from gt4py.next import type_inference as next_typing
 from gt4py.next.common import Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.iterator.ir import FunCall, Literal, SymRef
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system.type_specifications import FieldType, ScalarType
 
 from .itir_to_tasklet import (
     Context,
@@ -44,6 +46,7 @@ from .utility import (
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storages: dict[str, ts.TypeSpec]
+    column_axis: Optional[Dimension]
     offset_provider: dict[str, Any]
     node_types: dict[int, next_typing.Type]
     unique_id: int
@@ -51,7 +54,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
-        column_axis: Dimension,
+        column_axis: Optional[Dimension],
         offset_provider: dict[str, NeighborTableOffsetProvider],
     ):
         self.param_types = param_types
@@ -188,7 +191,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
 
         # Get output domain of the closure
-        program_arg_syms: dict[str, ValueExpr | IteratorExpr] = {}
+        program_arg_syms: dict[str, Union[ValueExpr, IteratorExpr]] = {}
         for name, type_ in self.storages.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
@@ -212,7 +215,7 @@ class ItirToSDFG(eve.NodeVisitor):
             for name in map(
                 lambda x: x
                 if isinstance(self.storages[x], ts.FieldType)
-                else program_arg_syms[x].value.data,
+                else cast(ValueExpr, program_arg_syms[x]).value.data,
                 input_names,
             )
         ]
@@ -329,12 +332,26 @@ class ItirToSDFG(eve.NodeVisitor):
         array_table: dict[str, dace.data.Array],
         closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str], int]:
-        # select the scan dimension based on program argument for column axis
-        scan_dim = self.column_axis.value
-        scan_dim_index = self.storages[node.output.id].dims.index(self.column_axis)
-        assert isinstance(self.storages[node.output.id].dtype, ts.ScalarType)
-        scan_dtype = self.storages[node.output.id].dtype
+        # extract scan arguments
+        def get_scan_args() -> tuple[Literal, Literal]:
+            stencil_fobj = cast(FunCall, node.stencil)
+            return cast(Literal, stencil_fobj.args[1]), cast(Literal, stencil_fobj.args[2])
 
+        # select the scan dimension based on program argument for column axis
+        def get_scan_dim() -> tuple[str, int, ScalarType]:
+            assert isinstance(node.output, SymRef)
+            field_type = cast(FieldType, self.storages[node.output.id])
+            assert isinstance(self.column_axis, Dimension)
+            return (
+                self.column_axis.value,
+                field_type.dims.index(self.column_axis),
+                field_type.dtype,
+            )
+
+        scan_forward_arg, scan_carry_init = get_scan_args()
+        scan_dim, scan_dim_index, scan_dtype = get_scan_dim()
+
+        assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
@@ -356,7 +373,8 @@ class ItirToSDFG(eve.NodeVisitor):
         start_state = scan_sdfg.add_state("start")
         lambda_state = scan_sdfg.add_state("lambda_compute")
         end_state = scan_sdfg.add_state("end")
-        if node.stencil.args[1].value == "True":  # forward scan
+
+        if scan_forward_arg.value == "True":  # forward scan
             scan_sdfg.add_loop(
                 start_state,
                 lambda_state,
@@ -367,7 +385,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 increment_expr=f"i_{scan_dim} + 1",
             )
         else:
-            assert node.stencil.args[1].value == "False"
+            assert scan_forward_arg.value == "False"
             scan_sdfg.add_loop(
                 start_state,
                 lambda_state,
@@ -392,7 +410,9 @@ class ItirToSDFG(eve.NodeVisitor):
                     dtype=array_table[name].dtype,
                 )
             else:
-                scan_sdfg.add_scalar(name, dtype=as_dace_type(self.storages[name]))
+                scan_sdfg.add_scalar(
+                    name, dtype=as_dace_type(cast(ScalarType, self.storages[name]))
+                )
 
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
         lambda_context, lambda_inputs, lambda_outputs = lambda_to_tasklet_sdfg(
@@ -411,11 +431,10 @@ class ItirToSDFG(eve.NodeVisitor):
         # the carry value of the scan operator exists in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
         lambda_carry_name, _ = lambda_inputs[0]
-        carry_init = node.stencil.args[2]
         scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
 
         carry_init_tasklet = start_state.add_tasklet(
-            "get_carry_init_value", {}, {"__result"}, f"__result = {carry_init}"
+            "get_carry_init_value", {}, {"__result"}, f"__result = {scan_carry_init}"
         )
         carry_node1 = start_state.add_access(scan_carry_name)
         start_state.add_edge(

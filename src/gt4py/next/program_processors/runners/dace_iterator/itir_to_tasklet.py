@@ -15,7 +15,7 @@
 import dataclasses
 import itertools
 from collections.abc import Sequence
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 import dace
 import numpy as np
@@ -25,6 +25,7 @@ from gt4py.next import type_inference as next_typing
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.iterator.ir import FunCall, Lambda
 from gt4py.next.type_system import type_specifications as ts
 
 from .utility import (
@@ -605,18 +606,22 @@ def lambda_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
     node_types: dict[int, next_typing.Type],
-) -> tuple[Context, Sequence[tuple[dace.ndarray, str, ts.TypeSpec]], list[ValueExpr]]:
+) -> tuple[Context, Sequence[tuple[str, ValueExpr]], list[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
     state = body.add_state("tasklet_toplevel_entry")
     symbol_map: dict[str, ValueExpr | IteratorExpr] = {}
 
     context = Context(body, state, symbol_map)
 
-    call = itir.Lambda(expr=node.stencil.args[0].expr, params=node.stencil.args[0].params)
+    def get_lambda() -> Lambda:
+        stencil_fobj = cast(FunCall, node.stencil)
+        return cast(Lambda, stencil_fobj.args[0])
+
+    call = itir.Lambda(expr=get_lambda().expr, params=get_lambda().params)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
 
     # add lambda parameters to symbol map
-    for p in node.stencil.args[0].params:
+    for p in get_lambda().params:
         pnode = state.add_access(p.id)
         symbol_map[p.id] = ValueExpr(value=pnode.data, dtype=dace.float64)
 
