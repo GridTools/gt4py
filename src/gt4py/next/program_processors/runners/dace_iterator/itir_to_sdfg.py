@@ -175,6 +175,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
         closure_state = closure_sdfg.add_state("closure_entry")
+        closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
 
         # Add DaCe arrays for inputs, output and connectivities to closure SDFG.
         for name in [*input_names, *conn_names, *output_names]:
@@ -194,17 +195,21 @@ class ItirToSDFG(eve.NodeVisitor):
         program_arg_syms: dict[str, Union[ValueExpr, IteratorExpr]] = {}
         for name, type_ in self.storages.items():
             if isinstance(type_, ts.ScalarType):
+                if name in input_names:
+                    state = closure_init_state
+                else:
+                    state = closure_state
                 dtype = as_dace_type(type_)
                 closure_sdfg.add_symbol(name, dtype)
                 out_name = unique_var_name()
                 closure_sdfg.add_scalar(out_name, dtype, transient=True)
-                out_tasklet = closure_state.add_tasklet(
+                out_tasklet = state.add_tasklet(
                     f"get_{name}", {}, {"__result"}, f"__result = {name}"
                 )
-                access = closure_state.add_access(out_name)
+                access = state.add_access(out_name)
                 value = ValueExpr(access, dtype)
                 memlet = create_memlet_at(out_name, ("0",))
-                closure_state.add_edge(out_tasklet, "__result", access, None, memlet)
+                state.add_edge(out_tasklet, "__result", access, None, memlet)
                 program_arg_syms[name] = value
         domain_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, domain_ctx)
