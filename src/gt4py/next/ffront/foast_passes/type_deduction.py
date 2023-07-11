@@ -316,7 +316,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Argument `init` to scan operator `{node.id}` must have same type as {list(new_def_type.pos_or_kw_args.keys())[0]}. "
+                msg=f"Argument `init` to scan operator `{node.id}` must have same type as `{carry_arg_name}` argument. "
                 f"Expected {state_type}, but got {new_init.type}",
             )
 
