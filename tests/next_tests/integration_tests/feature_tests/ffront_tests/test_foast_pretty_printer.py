@@ -82,7 +82,7 @@ def test_scanop():
 
     expected = textwrap.dedent(
         f"""
-        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1)
+        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.)
         def scan(inp: int64) -> int64:
           {ssa.unique_name("foo", 0)} = inp
           return inp
