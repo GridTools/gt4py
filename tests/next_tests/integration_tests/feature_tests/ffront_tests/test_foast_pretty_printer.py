@@ -75,8 +75,8 @@ def test_fieldop():
 def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-    @scan_operator(axis=KDim, forward=False, init=int64(1))
-    def scan(inp: int64) -> int64:
+    @scan_operator(axis=KDim, forward=False, init=1)
+    def scan(inp: int32) -> int32:
         foo = inp
         return inp
 
