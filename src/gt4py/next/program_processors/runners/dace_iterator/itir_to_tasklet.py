@@ -21,8 +21,7 @@ import dace
 import numpy as np
 
 import gt4py.eve.codegen
-from gt4py.next import type_inference as next_typing
-from gt4py.next.common import Dimension
+from gt4py.next import Dimension, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda

@@ -16,13 +16,11 @@ from typing import Any, Optional, Union, cast
 import dace
 
 import gt4py.eve as eve
-from gt4py.next import type_inference as next_typing
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Literal, SymRef
 from gt4py.next.type_system import type_specifications as ts, type_translation
-from gt4py.next.type_system.type_specifications import FieldType, ScalarType
 
 from .itir_to_tasklet import (
     Context,
@@ -342,9 +340,9 @@ class ItirToSDFG(eve.NodeVisitor):
             return cast(Literal, stencil_fobj.args[1]), cast(Literal, stencil_fobj.args[2])
 
         # select the scan dimension based on program argument for column axis
-        def get_scan_dim() -> tuple[str, int, ScalarType]:
+        def get_scan_dim() -> tuple[str, int, ts.ScalarType]:
             assert isinstance(node.output, SymRef)
-            field_type = cast(FieldType, self.storages[node.output.id])
+            field_type = cast(ts.FieldType, self.storages[node.output.id])
             assert isinstance(self.column_axis, Dimension)
             return (
                 self.column_axis.value,
@@ -411,7 +409,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
             else:
                 scan_sdfg.add_scalar(
-                    name, dtype=as_dace_type(cast(ScalarType, self.storages[name]))
+                    name, dtype=as_dace_type(cast(ts.ScalarType, self.storages[name]))
                 )
 
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
