@@ -272,12 +272,11 @@ def test_scan_wrong_state_type(cartesian_case):
         match=(r"Argument `init` to scan operator `testee_scan` must have same type as state"),
     ):
 
-        @scan_operator(axis=KDim, forward=True, init=(0.0, 0, 0.0))
+        @scan_operator(axis=KDim, forward=True, init=0)
         def testee_scan(
-            state: tuple[float, float], qc_in: float, param_1: int32, param_2: float, scalar: float
-        ) -> tuple[float, int32, float]:
-            qc = qc_in + state[0] + scalar
-            return (qc, param_1, param_2)
+            state: float,
+        ) -> int32:
+            return 1
 
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
