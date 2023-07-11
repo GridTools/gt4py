@@ -239,19 +239,16 @@ def test_call_scan_operator_from_program(cartesian_case):
 
 
 def test_scan_wrong_return_type(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
-
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as return"),
+        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
         def testee_scan(
             state: int32,
         ) -> float:
-            return 1.
+            return 1.0
 
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
@@ -259,12 +256,11 @@ def test_scan_wrong_return_type(cartesian_case):
 
 
 def test_scan_wrong_state_type(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
-
     with pytest.raises(
         FieldOperatorTypeDeductionError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as state"),
+        match=(
+            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+        ),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
