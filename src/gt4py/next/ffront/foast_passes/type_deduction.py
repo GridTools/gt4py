@@ -316,7 +316,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         elif new_init_type != state_type:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
-                msg=f"Argument `init` to scan operator `{node.id}` must have same type as {state_type}. "
+                msg=f"Argument `init` to scan operator `{node.id}` must have same type as {list(new_def_type.pos_or_kw_args.keys())[0]}. "
                 f"Expected {state_type}, but got {new_init_type}",
             )
 
