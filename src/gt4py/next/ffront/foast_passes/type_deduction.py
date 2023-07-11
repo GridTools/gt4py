@@ -304,9 +304,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
+        new_def_type = new_definition.type
+        if new_def_type.returns != new_init.type:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `init` to scan operator `{node.id}` must have same type as return. "
+                f"Expected {new_def_type.returns}, but got {new_init.type}",
+            )
         new_type = ts_ffront.ScanOperatorType(
             axis=new_axis.type.dim,
-            definition=new_definition.type,
+            definition=new_def_type,
         )
         return foast.ScanOperator(
             id=node.id,

@@ -1015,6 +1015,25 @@ def test_tuple_unpacking_star_multi(cartesian_case):
     )
 
 
+def test_scan_wrong_init_type(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scan")
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Argument `init` to scan operator `testee_scan` must have same type as return"),
+    ):
+
+        @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0))
+        def testee_scan(state: float, qc_in: float, scalar: float) -> tuple[float, int32]:
+            qc = qc_in + state + scalar
+            return qc, 2
+
+        @gtx.program
+        def testee(qc: cases.IKFloatField, scalar: float):
+            testee_scan(qc, scalar, out=(qc, 2))
+
+
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
         FieldOperatorTypeDeductionError,
