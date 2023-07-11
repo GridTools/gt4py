@@ -153,7 +153,7 @@ Integrations tests come with their own utilities, found in `cases.py`, for bette
 - Decorator verification functions:
   - `cases.verify()`: used when input and output field generation cannot be automated. For example the case when the `extend()` method needs to be used for an offset or sparse fields are part of the input dataset.
   - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
-- Backends are set automatically with default switched off. However, if explication is needed, they can be explicated as cases attributes.
+- Backends are set automatically with default switched off. If backend specification is needed, this can be extracted as a cases' attribute.
 
 In case new features are needed, check if an existing utility can be extended before implementing a whole new one. The name of new utilities should reflect their purpose and follow the naming conventions of existing tools. If the new utility is a completely stand-alone component, create a new file in the bottom-most directory enclosing all usages of the utility; otherwise, place it in the appropriate file containing utilities with similar functionalities.
 
