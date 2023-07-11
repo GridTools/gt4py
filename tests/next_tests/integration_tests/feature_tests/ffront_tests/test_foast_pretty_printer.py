@@ -75,14 +75,14 @@ def test_fieldop():
 def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-    @scan_operator(axis=KDim, forward=False, init=1.0)
+    @scan_operator(axis=KDim, forward=False, init=int64(1))
     def scan(inp: int64) -> int64:
         foo = inp
         return inp
 
     expected = textwrap.dedent(
         f"""
-        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.0)
+        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1)
         def scan(inp: int64) -> int64:
           {ssa.unique_name("foo", 0)} = inp
           return inp
