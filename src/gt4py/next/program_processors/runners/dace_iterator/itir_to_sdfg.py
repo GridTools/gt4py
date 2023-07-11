@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional, Union, cast
+from typing import Any, Optional, cast
 
 import dace
 
@@ -96,12 +96,11 @@ class ItirToSDFG(eve.NodeVisitor):
             assert isinstance(closure.output, itir.SymRef)
 
             # arguments with scalar type are passed as symbols
-            input_names = list(
-                filter(
-                    lambda name: isinstance(self.storages[name], ts.FieldType),
-                    [str(inp.id) for inp in closure.inputs],
-                )
-            )
+            input_names = [
+                str(inp.id)
+                for inp in closure.inputs
+                if isinstance(self.storages[inp.id], ts.FieldType)
+            ]
             connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
             output_names = [str(closure.output.id)]
 
@@ -190,7 +189,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
 
         # Get output domain of the closure
-        program_arg_syms: dict[str, Union[ValueExpr, IteratorExpr]] = {}
+        program_arg_syms: dict[str, ValueExpr | IteratorExpr] = {}
         for name, type_ in self.storages.items():
             if isinstance(type_, ts.ScalarType):
                 if name in input_names:
