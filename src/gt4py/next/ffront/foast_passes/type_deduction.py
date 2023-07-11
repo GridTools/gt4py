@@ -294,9 +294,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node, msg=f"Argument `forward` to scan operator `{node.id}` must be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
+        new_init_type = new_init.type
         if not all(
             type_info.is_arithmetic(type_) or type_info.is_logical(type_)
-            for type_ in type_info.primitive_constituents(new_init.type)
+            for type_ in type_info.primitive_constituents(new_init_type)
         ):
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
@@ -305,12 +306,19 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        if new_def_type.returns != new_init.type:
+        if new_init_type != new_def_type.returns:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
                 msg=f"Argument `init` to scan operator `{node.id}` must have same type as return. "
-                f"Expected {new_def_type.returns}, but got {new_init.type}",
+                f"Expected {new_def_type.returns}, but got {new_init_type}",
             )
+        elif new_init_type != list(new_def_type.pos_or_kw_args.values())[0]:
+            raise FieldOperatorTypeDeductionError.from_foast_node(
+                node,
+                msg=f"Argument `init` to scan operator `{node.id}` must have same type as {list(new_def_type.pos_or_kw_args.keys())[0]}. "
+                f"Expected {list(new_def_type.pos_or_kw_args.values())[0]}, but got {new_init_type}",
+            )
+
         new_type = ts_ffront.ScanOperatorType(
             axis=new_axis.type.dim,
             definition=new_def_type,

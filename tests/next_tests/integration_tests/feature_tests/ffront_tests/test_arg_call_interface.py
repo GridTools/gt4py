@@ -20,7 +20,8 @@ import pytest
 
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import int64
+from gt4py.next.ffront.fbuiltins import int32, int64
+from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -235,3 +236,49 @@ def test_call_scan_operator_from_program(cartesian_case):
         ref=(ref, ref, ref, ref),
         comparison=lambda out, ref: all(map(np.allclose, zip(out, ref))),
     )
+
+
+def test_scan_wrong_return_type(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scan")
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Argument `init` to scan operator `testee_scan` must have same type as return"),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=(0.0, 0, 0.0))
+        def testee_scan(
+            state: tuple[float, int32, float],
+            qc_in: float,
+            param_1: int32,
+            param_2: float,
+            scalar: float,
+        ) -> tuple[float, int32]:
+            qc = qc_in + state[0] + scalar
+            return (qc, param_1)
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+def test_scan_wrong_state_type(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scan")
+
+    with pytest.raises(
+        FieldOperatorTypeDeductionError,
+        match=(r"Argument `init` to scan operator `testee_scan` must have same type as state"),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=(0.0, 0, 0.0))
+        def testee_scan(
+            state: tuple[float, float], qc_in: float, param_1: int32, param_2: float, scalar: float
+        ) -> tuple[float, int32, float]:
+            qc = qc_in + state[0] + scalar
+            return (qc, param_1, param_2)
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
