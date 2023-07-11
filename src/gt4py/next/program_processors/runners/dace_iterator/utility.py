@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Optional
+from typing import Any
 
 import dace
 
@@ -58,29 +58,13 @@ def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
 
 
 def map_nested_sdfg_symbols(
-    parent_sdfg: dace.SDFG,
-    nested_sdfg: dace.SDFG,
-    array_mapping: dict[str, dace.Memlet],
-    dim_index: Optional[int] = None,
+    parent_sdfg: dace.SDFG, nested_sdfg: dace.SDFG, array_mapping: dict[str, dace.Memlet]
 ) -> dict[str, Any]:
     symbol_mapping: dict[str, Any] = {}
     for param, arg in array_mapping.items():
         arg_array = parent_sdfg.arrays[arg.data]
         param_array = nested_sdfg.arrays[param]
-        if isinstance(param_array, dace.data.Scalar):
-            assert arg.subset.num_elements() == 1
-        elif dim_index:
-            assert len(param_array.shape) == 1
-            arg_shape = arg.subset.size()[dim_index]
-            param_shape = param_array.shape[0]
-            if isinstance(param_shape, dace.symbol):
-                symbol_mapping[str(param_shape)] = str(arg_shape)
-            assert len(param_array.strides) == 1
-            arg_stride = arg_array.strides[dim_index]
-            param_stride = param_array.strides[0]
-            if isinstance(param_stride, dace.symbol):
-                symbol_mapping[str(param_stride)] = str(arg_stride)
-        else:
+        if not isinstance(param_array, dace.data.Scalar):
             assert len(arg.subset.size()) == len(param_array.shape)
             for arg_shape, param_shape in zip(arg.subset.size(), param_array.shape):
                 if isinstance(param_shape, dace.symbol):
@@ -89,6 +73,8 @@ def map_nested_sdfg_symbols(
             for arg_stride, param_stride in zip(arg_array.strides, param_array.strides):
                 if isinstance(param_stride, dace.symbol):
                     symbol_mapping[str(param_stride)] = str(arg_stride)
+        else:
+            assert arg.subset.num_elements() == 1
     for sym in nested_sdfg.free_symbols:
         if str(sym) not in symbol_mapping:
             symbol_mapping[str(sym)] = str(sym)

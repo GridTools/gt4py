@@ -227,7 +227,6 @@ class ItirToSDFG(eve.NodeVisitor):
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         output_memlets = {}
-        scan_dim_index = None
         # scan operator should always be the first function call in a closure
         if self._is_scan(node.stencil):
             nsdfg, map_domain, nsdfg_out_connectors, scan_dim_index = self.visit_ScanStencilClosure(
@@ -287,7 +286,7 @@ class ItirToSDFG(eve.NodeVisitor):
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
 
         array_mapping = {**input_mapping, **conn_mapping}
-        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, array_mapping, scan_dim_index)
+        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, array_mapping)
 
         nsdfg_node, map_entry, map_exit = self._add_mapped_nested_sdfg(
             closure_state,
@@ -360,7 +359,6 @@ class ItirToSDFG(eve.NodeVisitor):
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-        output_names = [str(node.output.id)]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_domain = {}
@@ -402,16 +400,13 @@ class ItirToSDFG(eve.NodeVisitor):
             )
 
         # add access nodes to SDFG for inputs
-        for name in [*input_names, *conn_names, *output_names]:
-            assert name not in scan_sdfg.arrays or (name in input_names and name in output_names)
-            if name in scan_sdfg.arrays:
-                # in/out parameter, container already added for in parameter
-                continue
+        for name in [*input_names, *conn_names]:
+            assert name not in scan_sdfg.arrays
             if isinstance(self.storages[name], ts.FieldType):
                 scan_sdfg.add_array(
                     name,
-                    shape=(array_table[name].shape[scan_dim_index],),
-                    strides=(array_table[name].strides[scan_dim_index],),
+                    shape=array_table[name].shape,
+                    strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
                 )
             else:
@@ -460,12 +455,13 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # connect access nodes to lambda inputs
+        lambda_input_subset = ", ".join([f"i_{dim}" for dim, _ in closure_domain])
         for (connector_name, _), data_name in zip(lambda_inputs[1:], input_names):
             if isinstance(self.storages[data_name], ts.FieldType):
                 lambda_state.add_memlet_path(
                     lambda_state.add_access(data_name),
                     scan_inner_node,
-                    memlet=dace.Memlet(data=f"{data_name}", subset=f"i_{scan_dim}"),
+                    memlet=dace.Memlet(data=f"{data_name}", subset=lambda_input_subset),
                     src_conn=None,
                     dst_conn=connector_name,
                 )
@@ -478,8 +474,17 @@ class ItirToSDFG(eve.NodeVisitor):
                     dst_conn=connector_name,
                 )
 
+        # create temporary array to not alias the output array
+        assert len(lambda_outputs) == 1
+        output_names = [unique_var_name()]
         # connect lambda output to access node
         for lambda_connector, data_name in zip(lambda_outputs, output_names):
+            scan_sdfg.add_array(
+                data_name,
+                shape=(array_table[node.output.id].shape[scan_dim_index],),
+                strides=(array_table[node.output.id].strides[scan_dim_index],),
+                dtype=array_table[node.output.id].dtype,
+            )
             lambda_state.add_memlet_path(
                 scan_inner_node,
                 lambda_state.add_access(data_name),
