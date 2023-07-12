@@ -21,7 +21,7 @@ from typing import Optional
 from gt4py.eve import SourceLocation
 
 
-def get_source_from_location(location: SourceLocation):
+def get_source_from_location(location: SourceLocation) -> str:
     if not location.filename:
         raise FileNotFoundError()
     source_file = pathlib.Path(location.filename)
@@ -33,7 +33,7 @@ def get_source_from_location(location: SourceLocation):
     return "\n".join(relevant_lines)
 
 
-def format_location(loc: SourceLocation, caret: bool = False):
+def format_location(loc: SourceLocation, caret: bool = False) -> str:
     filename = loc.filename or "<unknown>"
     lineno = loc.line or "<unknown>"
     loc_str = f'File "{filename}", line {lineno}'
@@ -77,7 +77,7 @@ def format_compilation_error(
     location: Optional[SourceLocation],
     tb: Optional[types.TracebackType] = None,
     cause: Optional[BaseException] = None,
-):
+) -> list[str]:
     bits: list[str] = []
 
     if cause is not None:
