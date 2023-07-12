@@ -245,34 +245,38 @@ class ItirToSDFG(eve.NodeVisitor):
         transient_to_arg_name_mapping = {}
         # scan operator should always be the first function call in a closure
         if self._is_scan(node.stencil):
+            if output_name in input_names:
+                # create and write to transient that is then copied back to actual output array to avoid aliasing of
+                # same memory in nested SDFG with different names
+                nsdfg_output_name = unique_var_name()
+                transient_to_arg_name_mapping[nsdfg_output_name] = output_name
+            else:
+                nsdfg_output_name = output_name
+
             (
                 nsdfg,
                 map_domain,
-                nsdfg_out_connectors,
                 scan_dim_index,
-            ) = self._visit_scan_stencil_closure(node, closure_sdfg.arrays, closure_domain)
+            ) = self._visit_scan_stencil_closure(
+                node, closure_sdfg.arrays, closure_domain, nsdfg_output_name
+            )
+            nsdfg_out_connectors = [nsdfg_output_name]
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
 
-            if output_name in input_names:
-                # create and write to transient that is then copied back to actual output array to avoid aliasing of
-                # same memory in nested SDFG with different names
-                name = unique_var_name()
-                transient_to_arg_name_mapping[name] = output_name
+            if nsdfg_output_name != output_name:
                 descriptor = closure_sdfg.arrays[output_name]
                 closure_sdfg.add_array(
-                    name,
+                    nsdfg_output_name,
                     dtype=descriptor.dtype,
                     shape=(array_table[output_name].shape[scan_dim_index],),
                     strides=(array_table[output_name].strides[scan_dim_index],),
                     transient=True,
                 )
-            else:
-                name = output_name
 
             output_memlets[output_name] = create_memlet_at(
-                name,
+                nsdfg_output_name,
                 tuple(
                     f"i_{dim}" if f"i_{dim}" in map_domain else output_subset
                     for dim, _ in closure_domain
@@ -288,19 +292,19 @@ class ItirToSDFG(eve.NodeVisitor):
             if output_name in input_names:
                 # create and write to transient that is then copied back to actual output array to avoid aliasing of
                 # same memory in nested SDFG with different names
-                name = unique_var_name()
-                transient_to_arg_name_mapping[name] = output_name
+                nsdfg_output_name = unique_var_name()
+                transient_to_arg_name_mapping[nsdfg_output_name] = output_name
                 descriptor = closure_sdfg.arrays[output_name]
                 closure_sdfg.add_scalar(
-                    name,
+                    nsdfg_output_name,
                     dtype=descriptor.dtype,
                     transient=True,
                 )
             else:
-                name = output_name
+                nsdfg_output_name = output_name
 
             output_memlets[output_name] = create_memlet_at(
-                name, tuple(idx for idx in map_domain.keys())
+                nsdfg_output_name, tuple(idx for idx in map_domain.keys())
             )
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
@@ -359,7 +363,8 @@ class ItirToSDFG(eve.NodeVisitor):
         node: itir.StencilClosure,
         array_table: dict[str, dace.data.Array],
         closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...],
-    ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str], int]:
+        output_name: str,
+    ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], int]:
         # extract scan arguments
         scan_forward_arg, scan_carry_init = get_scan_args(node.stencil)
         # select the scan dimension based on program argument for column axis
@@ -492,7 +497,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # create temporary array to not alias the output array
         assert len(lambda_outputs) == 1
-        output_names = [unique_var_name()]
+        output_names = [output_name]
         # connect lambda output to access node
         for lambda_connector, data_name in zip(lambda_outputs, output_names):
             scan_sdfg.add_array(
@@ -519,7 +524,7 @@ class ItirToSDFG(eve.NodeVisitor):
             memlet=dace.Memlet(data=f"{output_names[0]}", subset=f"i_{scan_dim}", other_subset="0"),
         )
 
-        return scan_sdfg, map_domain, output_names, scan_dim_index
+        return scan_sdfg, map_domain, scan_dim_index
 
     def _visit_parallel_stencil_closure(
         self,
