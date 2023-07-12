@@ -28,14 +28,14 @@ def get_source_from_location(location: SourceLocation) -> str:
     if not source_lines:
         raise FileNotFoundError()
     start_line = location.line
-    end_line = location.end_line + 1 if location.end_line else start_line + 1
+    end_line = location.end_line + 1 if location.end_line is not None else start_line + 1
     relevant_lines = source_lines[(start_line - 1) : (end_line - 1)]
     return "\n".join(relevant_lines)
 
 
 def format_location(loc: SourceLocation, caret: bool = False) -> str:
     filename = loc.filename or "<unknown>"
-    lineno = loc.line or "<unknown>"
+    lineno = loc.line
     loc_str = f'File "{filename}", line {lineno}'
 
     if caret and loc.column is not None:
@@ -50,7 +50,7 @@ def format_location(loc: SourceLocation, caret: bool = False) -> str:
         if caret_str:
             snippet_str = f"{snippet_str}{caret_str}"
         return f"{loc_str}\n{textwrap.indent(snippet_str, '  ')}"
-    except Exception:
+    except (FileNotFoundError, IndexError):
         return loc_str
 
 
