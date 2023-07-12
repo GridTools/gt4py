@@ -66,7 +66,7 @@ def set_developer_mode(enabled: bool = False) -> None:
     _developer_mode = enabled
 
 
-def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb):
+def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb) -> None:
     """
     Format `CompilationError`s in a neat way.
 
