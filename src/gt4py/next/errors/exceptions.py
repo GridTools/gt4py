@@ -47,7 +47,7 @@ class CompilerError(Exception):
 class UnsupportedPythonFeatureError(CompilerError):
     feature: str
 
-    def __init__(self, location: Optional[SourceLocation], feature: str):
+    def __init__(self, location: Optional[SourceLocation], feature: str) -> None:
         super().__init__(location, f"unsupported Python syntax: '{feature}'")
         self.feature = feature
 
@@ -55,7 +55,7 @@ class UnsupportedPythonFeatureError(CompilerError):
 class UndefinedSymbolError(CompilerError):
     sym_name: str
 
-    def __init__(self, location: Optional[SourceLocation], name: str):
+    def __init__(self, location: Optional[SourceLocation], name: str) -> None:
         super().__init__(location, f"name '{name}' is not defined")
         self.sym_name = name
 
@@ -63,20 +63,20 @@ class UndefinedSymbolError(CompilerError):
 class MissingAttributeError(CompilerError):
     attr_name: str
 
-    def __init__(self, location: Optional[SourceLocation], attr_name: str):
+    def __init__(self, location: Optional[SourceLocation], attr_name: str) -> None:
         super().__init__(location, f"object does not have attribute '{attr_name}'")
         self.attr_name = attr_name
 
 
 class CompilerTypeError(CompilerError):
-    def __init__(self, location: Optional[SourceLocation], message: str):
+    def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         super().__init__(location, message)
 
 
 class MissingParameterAnnotationError(CompilerTypeError):
     param_name: str
 
-    def __init__(self, location: Optional[SourceLocation], param_name: str):
+    def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
         super().__init__(location, f"parameter '{param_name}' is missing type annotations")
         self.param_name = param_name
 
@@ -85,7 +85,7 @@ class InvalidParameterAnnotationError(CompilerTypeError):
     param_name: str
     annotated_type: Any
 
-    def __init__(self, location: Optional[SourceLocation], param_name: str, type_: Any):
+    def __init__(self, location: Optional[SourceLocation], param_name: str, type_: Any) -> None:
         super().__init__(
             location, f"parameter '{param_name}' has invalid type annotation '{type_}'"
         )
@@ -97,7 +97,9 @@ class ArgumentCountError(CompilerTypeError):
     num_excected: int
     num_provided: int
 
-    def __init__(self, location: Optional[SourceLocation], num_expected: int, num_provided: int):
+    def __init__(
+        self, location: Optional[SourceLocation], num_expected: int, num_provided: int
+    ) -> None:
         super().__init__(
             location, f"expected {num_expected} arguments but {num_provided} were provided"
         )
@@ -108,6 +110,6 @@ class ArgumentCountError(CompilerTypeError):
 class KeywordArgumentError(CompilerTypeError):
     provided_names: str
 
-    def __init__(self, location: Optional[SourceLocation], provided_names: str):
+    def __init__(self, location: Optional[SourceLocation], provided_names: str) -> None:
         super().__init__(location, f"unexpected keyword argument(s) '{provided_names}' provided")
         self.provided_names = provided_names
