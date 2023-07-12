@@ -23,7 +23,7 @@ from . import formatting
 class CompilerError(Exception):
     location: Optional[SourceLocation]
 
-    def __init__(self, location: Optional[SourceLocation], message: str):
+    def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         self.location = location
         super().__init__(message)
 
