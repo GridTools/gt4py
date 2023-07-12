@@ -305,7 +305,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        state_type = list(new_def_type.pos_or_kw_args.values())[0]
+        carry_type = list(new_def_type.pos_or_kw_args.values())[0]
         if new_init.type != new_def_type.returns:
             raise FieldOperatorTypeDeductionError.from_foast_node(
                 node,
