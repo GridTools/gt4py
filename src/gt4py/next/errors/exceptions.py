@@ -94,17 +94,17 @@ class InvalidParameterAnnotationError(CompilerTypeError):
 
 
 class ArgumentCountError(CompilerTypeError):
-    num_excected: int
-    num_provided: int
+    expected_count: int
+    provided_count: int
 
     def __init__(
-        self, location: Optional[SourceLocation], num_expected: int, num_provided: int
+        self, location: Optional[SourceLocation], expected_count: int, provided_count: int
     ) -> None:
         super().__init__(
-            location, f"expected {num_expected} arguments but {num_provided} were provided"
+            location, f"expected {expected_count} arguments but {provided_count} were provided"
         )
-        self.num_expected = num_expected
-        self.num_provided = num_provided
+        self.num_expected = expected_count
+        self.provided_count = provided_count
 
 
 class KeywordArgumentError(CompilerTypeError):
