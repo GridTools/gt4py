@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import textwrap
 from typing import Any, Optional
 
@@ -31,7 +33,7 @@ class CompilerError(Exception):
     def message(self) -> str:
         return self.args[0]
 
-    def with_location(self, location: Optional[SourceLocation]) -> "CompilerError":
+    def with_location(self, location: Optional[SourceLocation]) -> CompilerError:
         self.location = location
         return self
 
