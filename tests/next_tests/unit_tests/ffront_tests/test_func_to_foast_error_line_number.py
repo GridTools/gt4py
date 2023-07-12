@@ -18,7 +18,7 @@ import traceback
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.errors import *
+from gt4py.next.errors import CompilerError
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
 

@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from gt4py.next import Field, field_operator, float64, index_field, np_as_located_field
-from gt4py.next.errors import *
+from gt4py.next.errors import CompilerError
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.feature_tests import cases

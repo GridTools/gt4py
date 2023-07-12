@@ -42,7 +42,11 @@ import pytest
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import astype, broadcast, float32, float64, int32, int64, where
-from gt4py.next.errors import *
+from gt4py.next.errors import (
+    CompilerError,
+    MissingParameterAnnotationError,
+    UnsupportedPythonFeatureError,
+)
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser

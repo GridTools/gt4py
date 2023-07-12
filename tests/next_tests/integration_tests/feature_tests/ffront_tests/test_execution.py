@@ -31,7 +31,7 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
-from gt4py.next.errors import *
+from gt4py.next.errors import CompilerError
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn_cpu
 
