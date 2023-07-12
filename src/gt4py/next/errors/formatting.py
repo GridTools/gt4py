@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import pathlib
+import linecache
 import textwrap
 import traceback
 import types
@@ -24,9 +24,9 @@ from gt4py.eve import SourceLocation
 def get_source_from_location(location: SourceLocation) -> str:
     if not location.filename:
         raise FileNotFoundError()
-    source_file = pathlib.Path(location.filename)
-    source_code = source_file.read_text()
-    source_lines = source_code.splitlines(False)
+    source_lines = linecache.getlines(location.filename)
+    if not source_lines:
+        raise FileNotFoundError()
     start_line = location.line
     end_line = location.end_line + 1 if location.end_line else start_line + 1
     relevant_lines = source_lines[(start_line - 1) : (end_line - 1)]
@@ -48,7 +48,7 @@ def format_location(loc: SourceLocation, caret: bool = False) -> str:
     try:
         snippet_str = get_source_from_location(loc)
         if caret_str:
-            snippet_str = f"{snippet_str}\n{caret_str}"
+            snippet_str = f"{snippet_str}{caret_str}"
         return f"{loc_str}\n{textwrap.indent(snippet_str, '  ')}"
     except Exception:
         return loc_str
