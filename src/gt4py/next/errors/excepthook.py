@@ -60,7 +60,7 @@ def _guess_developer_mode() -> bool:
 _developer_mode = _guess_developer_mode()
 
 
-def set_developer_mode(enabled: bool = False):
+def set_developer_mode(enabled: bool = False) -> None:
     """In developer mode, information useful for gt4py developers is also shown."""
     global _developer_mode
     _developer_mode = enabled
