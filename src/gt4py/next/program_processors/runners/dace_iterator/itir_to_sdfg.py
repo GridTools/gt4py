@@ -19,7 +19,7 @@ import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
-from gt4py.next.iterator.ir import FunCall, Literal, SymRef
+from gt4py.next.iterator.ir import Expr, FunCall, Literal, SymRef
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import (
@@ -39,6 +39,24 @@ from .utility import (
     map_nested_sdfg_symbols,
     unique_var_name,
 )
+
+
+def get_scan_args(stencil: Expr) -> tuple[Literal, Literal]:
+    stencil_fobj = cast(FunCall, stencil)
+    return cast(Literal, stencil_fobj.args[1]), cast(Literal, stencil_fobj.args[2])
+
+
+def get_scan_dim(
+    column_axis: Dimension,
+    storages: dict[str, ts.TypeSpec],
+    output: SymRef,
+) -> tuple[str, int, ts.ScalarType]:
+    output_type = cast(ts.FieldType, storages[output.id])
+    return (
+        column_axis.value,
+        output_type.dims.index(column_axis),
+        output_type.dtype,
+    )
 
 
 class ItirToSDFG(eve.NodeVisitor):
@@ -95,7 +113,7 @@ class ItirToSDFG(eve.NodeVisitor):
         for closure in node.closures:
             assert isinstance(closure.output, itir.SymRef)
 
-            # arguments with scalar type are passed as symbols
+            # filter out arguments with scalar type, because they are passed as symbols
             input_names = [
                 str(inp.id)
                 for inp in closure.inputs
@@ -226,9 +244,12 @@ class ItirToSDFG(eve.NodeVisitor):
         output_memlets = {}
         # scan operator should always be the first function call in a closure
         if self._is_scan(node.stencil):
-            nsdfg, map_domain, nsdfg_out_connectors, scan_dim_index = self.visit_ScanStencilClosure(
-                node, closure_sdfg.arrays, closure_domain
-            )
+            (
+                nsdfg,
+                map_domain,
+                nsdfg_out_connectors,
+                scan_dim_index,
+            ) = self._visit_scan_stencil_closure(node, closure_sdfg.arrays, closure_domain)
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
@@ -255,7 +276,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     ),
                 )
         else:
-            nsdfg, map_domain, nsdfg_out_connectors = self.visit_ParallelStencilClosure(
+            nsdfg, map_domain, nsdfg_out_connectors = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
             )
 
@@ -327,30 +348,22 @@ class ItirToSDFG(eve.NodeVisitor):
 
         return closure_sdfg
 
-    def visit_ScanStencilClosure(
+    def _visit_scan_stencil_closure(
         self,
         node: itir.StencilClosure,
         array_table: dict[str, dace.data.Array],
         closure_domain: tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str], int]:
         # extract scan arguments
-        def get_scan_args() -> tuple[Literal, Literal]:
-            stencil_fobj = cast(FunCall, node.stencil)
-            return cast(Literal, stencil_fobj.args[1]), cast(Literal, stencil_fobj.args[2])
-
+        scan_forward_arg, scan_carry_init = get_scan_args(node.stencil)
         # select the scan dimension based on program argument for column axis
-        def get_scan_dim() -> tuple[str, int, ts.ScalarType]:
-            assert isinstance(node.output, SymRef)
-            field_type = cast(ts.FieldType, self.storages[node.output.id])
-            assert isinstance(self.column_axis, Dimension)
-            return (
-                self.column_axis.value,
-                field_type.dims.index(self.column_axis),
-                field_type.dtype,
-            )
-
-        scan_forward_arg, scan_carry_init = get_scan_args()
-        scan_dim, scan_dim_index, scan_dtype = get_scan_dim()
+        assert self.column_axis
+        assert isinstance(node.output, SymRef)
+        scan_dim, scan_dim_index, scan_dtype = get_scan_dim(
+            self.column_axis,
+            self.storages,
+            node.output,
+        )
 
         assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
@@ -502,7 +515,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         return scan_sdfg, map_domain, output_names, scan_dim_index
 
-    def visit_ParallelStencilClosure(
+    def _visit_parallel_stencil_closure(
         self,
         node: itir.StencilClosure,
         array_table: dict[str, dace.data.Array],

@@ -593,9 +593,9 @@ def closure_to_tasklet_sdfg(
     context = Context(body, state, symbol_map)
 
     args = [itir.SymRef(id=name) for _, name, _ in inputs]
-    call = itir.FunCall(fun=node.stencil, args=args)
+    funobj = itir.FunCall(fun=node.stencil, args=args)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
-    outputs = translator.visit(call)
+    outputs = translator.visit(funobj)
     for output in outputs:
         context.body.arrays[output.value.data].transient = False
     return context, outputs
@@ -614,9 +614,10 @@ def lambda_to_tasklet_sdfg(
 
     def get_lambda() -> Lambda:
         stencil_fobj = cast(FunCall, node.stencil)
-        return cast(Lambda, stencil_fobj.args[0])
+        assert isinstance(stencil_fobj.args[0], Lambda)
+        return stencil_fobj.args[0]
 
-    call = itir.Lambda(expr=get_lambda().expr, params=get_lambda().params)
+    funobj = itir.Lambda(expr=get_lambda().expr, params=get_lambda().params)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
 
     # add lambda parameters to symbol map
@@ -624,7 +625,7 @@ def lambda_to_tasklet_sdfg(
         pnode = state.add_access(p.id)
         symbol_map[p.id] = ValueExpr(value=pnode.data, dtype=dace.float64)
 
-    context, inputs, outputs = translator.visit(call, args={})
+    context, inputs, outputs = translator.visit(funobj, args={})
 
     for output in outputs:
         context.body.arrays[output.value.data].transient = True
