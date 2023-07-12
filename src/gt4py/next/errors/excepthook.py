@@ -20,7 +20,7 @@ import importlib_metadata
 from . import exceptions, formatting
 
 
-def _get_developer_mode_python() -> bool:
+def _get_developer_mode_python_env() -> bool:
     """Guess if the Python environment is used to develop gt4py."""
     # Import gt4py and use its __name__ because hard-coding "gt4py" would fail
     # silently if the module's name changes for whatever reason.
@@ -38,7 +38,7 @@ def _get_developer_mode_python() -> bool:
     return True
 
 
-def _get_developer_mode_os() -> Optional[bool]:
+def _get_developer_mode_envvar() -> Optional[bool]:
     """Detect if the user set developer mode in environment variables."""
     env_var_name = "GT4PY_DEVELOPER_MODE"
     if env_var_name in os.environ:
@@ -51,10 +51,10 @@ def _get_developer_mode_os() -> Optional[bool]:
 
 def _guess_developer_mode() -> bool:
     """Guess if gt4py is run by its developers or by third party users."""
-    env = _get_developer_mode_os()
+    env = _get_developer_mode_envvar()
     if env is not None:
         return env
-    return _get_developer_mode_python()
+    return _get_developer_mode_python_env()
 
 
 _developer_mode = _guess_developer_mode()
