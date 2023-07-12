@@ -33,12 +33,18 @@ def get_source_from_location(location: SourceLocation) -> str:
     return "\n".join(relevant_lines)
 
 
-def format_location(loc: SourceLocation, caret: bool = False) -> str:
+def format_location(loc: SourceLocation, show_caret: bool = False) -> str:
+    """
+    Format the source file location.
+
+    Args:
+        show_caret (bool): Indicate the position within the source line by placing carets underneath.
+    """
     filename = loc.filename or "<unknown>"
     lineno = loc.line
     loc_str = f'File "{filename}", line {lineno}'
 
-    if caret and loc.column is not None:
+    if show_caret and loc.column is not None:
         offset = loc.column - 1
         width = loc.end_column - loc.column if loc.end_column is not None else 1
         caret_str = "".join([" "] * offset + ["^"] * width)
@@ -55,7 +61,7 @@ def format_location(loc: SourceLocation, caret: bool = False) -> str:
 
 
 def _format_cause(cause: BaseException) -> list[str]:
-    """Print the cause of an exception plus the bridging message to STDERR."""
+    """Format the cause of an exception plus the bridging message to the current exception."""
     bridging_message = "The above exception was the direct cause of the following exception:"
     cause_strs = [*traceback.format_exception(cause), "\n", f"{bridging_message}\n\n"]
     return cause_strs
@@ -85,7 +91,7 @@ def format_compilation_error(
     if tb is not None:
         bits = [*bits, *_format_traceback(tb)]
     if location is not None:
-        loc_str = format_location(location, caret=True)
+        loc_str = format_location(location, show_caret=True)
         loc_str_all = f"Source location:\n{textwrap.indent(loc_str, '  ')}\n"
         bits = [*bits, loc_str_all]
     msg_str = f"{type_.__module__}.{type_.__name__}: {message}"

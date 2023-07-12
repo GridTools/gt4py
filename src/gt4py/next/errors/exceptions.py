@@ -39,7 +39,7 @@ class CompilerError(Exception):
 
     def __str__(self) -> str:
         if self.location:
-            loc_str = formatting.format_location(self.location, caret=True)
+            loc_str = formatting.format_location(self.location, show_caret=True)
             return f"{self.message}\n{textwrap.indent(loc_str, '  ')}"
         return self.message
 
