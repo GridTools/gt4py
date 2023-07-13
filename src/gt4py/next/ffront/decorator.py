@@ -290,7 +290,7 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise ValueError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)

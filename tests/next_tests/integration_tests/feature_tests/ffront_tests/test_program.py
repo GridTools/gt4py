@@ -223,7 +223,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
     inp = gtx.np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(TypeError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
@@ -293,6 +293,6 @@ def test_input_kwargs(fieldview_backend):
     assert np.allclose(expected, out)
 
     with pytest.raises(
-        ValueError, match="Invalid argument types in call to `program_input_kwargs`!"
+        TypeError, match="Invalid argument types in call to `program_input_kwargs`!"
     ):
         program_input_kwargs(input_2, input_3, a=input_1, out=out, offset_provider={})
