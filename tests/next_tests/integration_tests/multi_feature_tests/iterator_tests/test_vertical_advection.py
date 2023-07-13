@@ -115,8 +115,8 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 
 
 @pytest.fixture
-def tridiag_test(tridiag_reference, program_processor, lift_mode):
-    program_processor, validate = program_processor
+def tridiag_test(tridiag_reference, program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
     if (
         program_processor == run_gtfn
         or program_processor == run_gtfn_imperative
