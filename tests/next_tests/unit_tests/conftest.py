@@ -22,7 +22,12 @@ import gt4py.next as gtx
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
-from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip, dace_iterator
+from gt4py.next.program_processors.runners import (
+    dace_iterator,
+    double_roundtrip,
+    gtfn_cpu,
+    roundtrip,
+)
 
 
 @pytest.fixture(
