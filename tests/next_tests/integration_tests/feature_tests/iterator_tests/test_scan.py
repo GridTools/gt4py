@@ -18,7 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, scan, shift
 from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.runners import dace_iterator
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
@@ -26,7 +26,7 @@ from next_tests.unit_tests.conftest import lift_mode, program_processor, run_pro
 
 def test_scan_in_stencil(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == dace_iterator.run_dace_iterator:
+    if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: scan")
 
     isize = 1

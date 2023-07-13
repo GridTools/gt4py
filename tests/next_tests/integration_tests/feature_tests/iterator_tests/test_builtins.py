@@ -52,7 +52,7 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners import dace_iterator
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -248,7 +248,7 @@ def _can_deref_lifted(inp):
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
-    if program_processor == dace_iterator.run_dace_iterator:
+    if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: can_deref")
 
     Node = CartesianAxis("Node")
@@ -333,7 +333,7 @@ def test_can_deref(program_processor, stencil):
 @pytest.mark.parametrize("as_column", [False, True])
 def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     program_processor, validate = program_processor
-    if program_processor == dace_iterator.run_dace_iterator:
+    if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: cast")
 
     column_axis = IDim if as_column else None
