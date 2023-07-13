@@ -18,9 +18,9 @@ from typing import Callable
 from . import exceptions, formatting
 
 
-def _get_developer_mode_envvar() -> bool:
-    """Detect if the user set developer mode in environment variables."""
-    env_var_name = "GT4PY_DEVELOPER_MODE"
+def _get_verbose_exceptions_envvar() -> bool:
+    """Detect if the user enabled verbose exceptions in the environment variables."""
+    env_var_name = "GT4PY_VERBOSE_EXCEPTIONS"
     if env_var_name in os.environ:
         try:
             return bool(os.environ[env_var_name])
@@ -29,17 +29,17 @@ def _get_developer_mode_envvar() -> bool:
     return False
 
 
-_developer_mode: bool = _get_developer_mode_envvar()
+_verbose_exceptions: bool = _get_verbose_exceptions_envvar()
 
 
-def set_developer_mode(enabled: bool = False) -> None:
-    """In developer mode, information useful for gt4py developers is also shown."""
-    global _developer_mode
-    _developer_mode = enabled
+def set_verbose_exceptions(enabled: bool = False) -> None:
+    """With verbose exceptions, the stack trace and cause of the error is also printed."""
+    global _verbose_exceptions
+    _verbose_exceptions = enabled
 
 
-def _format_uncaught_error(err: exceptions.CompilerError, developer_mode: bool) -> list[str]:
-    if developer_mode:
+def _format_uncaught_error(err: exceptions.CompilerError, verbose_exceptions: bool) -> list[str]:
+    if verbose_exceptions:
         return formatting.format_compilation_error(
             type(err),
             err.message,
@@ -58,7 +58,7 @@ def compilation_error_hook(fallback: Callable, type_: type, value: BaseException
     All other Python exceptions are formatted by the `fallback` hook.
     """
     if isinstance(value, exceptions.CompilerError):
-        exc_strs = _format_uncaught_error(value, _developer_mode)
+        exc_strs = _format_uncaught_error(value, _verbose_exceptions)
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)
