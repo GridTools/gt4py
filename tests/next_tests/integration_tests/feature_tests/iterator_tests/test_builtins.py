@@ -333,6 +333,9 @@ def test_can_deref(program_processor, stencil):
 @pytest.mark.parametrize("as_column", [False, True])
 def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     program_processor, validate = program_processor
+    if program_processor == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: cast")
+
     column_axis = IDim if as_column else None
 
     inp = asfield(*asarray(input_value))[0]
