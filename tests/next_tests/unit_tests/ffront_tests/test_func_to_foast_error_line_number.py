@@ -18,7 +18,7 @@ import traceback
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.errors import CompilerError
+from gt4py.next.errors import DSLError
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
 from gt4py.next.ffront.foast_passes import type_deduction
 
@@ -37,7 +37,7 @@ def test_invalid_syntax_error_empty_return():
         return  # <-- this line triggers the syntax error
 
     with pytest.raises(
-        f2f.CompilerError,
+        f2f.DSLError,
         match=(r".*return.*"),
     ) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
@@ -63,7 +63,7 @@ def test_syntax_error_without_function():
         """,
     )
 
-    with pytest.raises(CompilerError) as exc_info:
+    with pytest.raises(DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply(source_definition, {}, {})
 
     assert exc_info.value.location
@@ -82,7 +82,7 @@ def test_fo_type_deduction_error():
     def field_operator_with_undeclared_symbol():
         return undeclared_symbol  # noqa: F821  # undefined on purpose
 
-    with pytest.raises(CompilerError) as exc_info:
+    with pytest.raises(DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)
 
     exc = exc_info.value

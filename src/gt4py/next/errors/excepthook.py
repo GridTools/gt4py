@@ -38,7 +38,7 @@ def set_verbose_exceptions(enabled: bool = False) -> None:
     _verbose_exceptions = enabled
 
 
-def _format_uncaught_error(err: exceptions.CompilerError, verbose_exceptions: bool) -> list[str]:
+def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
         return formatting.format_compilation_error(
             type(err),
@@ -57,7 +57,7 @@ def compilation_error_hook(fallback: Callable, type_: type, value: BaseException
 
     All other Python exceptions are formatted by the `fallback` hook.
     """
-    if isinstance(value, exceptions.CompilerError):
+    if isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, _verbose_exceptions)
         print("".join(exc_strs), file=sys.stderr)
     else:

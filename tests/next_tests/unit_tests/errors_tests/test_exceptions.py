@@ -18,7 +18,7 @@ import re
 import pytest
 
 from gt4py.eve import SourceLocation
-from gt4py.next.errors import CompilerError
+from gt4py.next.errors import DSLError
 
 
 @pytest.fixture
@@ -41,20 +41,20 @@ def message():
 
 
 def test_message(loc_plain, message):
-    assert CompilerError(loc_plain, message).message == message
+    assert DSLError(loc_plain, message).message == message
 
 
 def test_location(loc_plain, message):
-    assert CompilerError(loc_plain, message).location == loc_plain
+    assert DSLError(loc_plain, message).location == loc_plain
 
 
 def test_with_location(loc_plain, message):
-    assert CompilerError(None, message).with_location(loc_plain).location == loc_plain
+    assert DSLError(None, message).with_location(loc_plain).location == loc_plain
 
 
 def test_str(loc_plain, message):
     pattern = f'{message}\\n  File ".*", line.*'
-    s = str(CompilerError(loc_plain, message))
+    s = str(DSLError(loc_plain, message))
     assert re.match(pattern, s)
 
 
@@ -65,5 +65,5 @@ def test_str_snippet(loc_snippet, message):
         "        # This very line of comment should be shown in the snippet.\\n"
         "                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^"
     )
-    s = str(CompilerError(loc_snippet, message))
+    s = str(DSLError(loc_snippet, message))
     assert re.match(pattern, s)

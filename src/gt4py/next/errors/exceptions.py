@@ -22,7 +22,7 @@ from gt4py.eve import SourceLocation
 from . import formatting
 
 
-class CompilerError(Exception):
+class DSLError(Exception):
     location: Optional[SourceLocation]
 
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
@@ -33,7 +33,7 @@ class CompilerError(Exception):
     def message(self) -> str:
         return self.args[0]
 
-    def with_location(self, location: Optional[SourceLocation]) -> CompilerError:
+    def with_location(self, location: Optional[SourceLocation]) -> DSLError:
         self.location = location
         return self
 
@@ -44,7 +44,7 @@ class CompilerError(Exception):
         return self.message
 
 
-class UnsupportedPythonFeatureError(CompilerError):
+class UnsupportedPythonFeatureError(DSLError):
     feature: str
 
     def __init__(self, location: Optional[SourceLocation], feature: str) -> None:
@@ -52,7 +52,7 @@ class UnsupportedPythonFeatureError(CompilerError):
         self.feature = feature
 
 
-class UndefinedSymbolError(CompilerError):
+class UndefinedSymbolError(DSLError):
     sym_name: str
 
     def __init__(self, location: Optional[SourceLocation], name: str) -> None:
@@ -60,7 +60,7 @@ class UndefinedSymbolError(CompilerError):
         self.sym_name = name
 
 
-class MissingAttributeError(CompilerError):
+class MissingAttributeError(DSLError):
     attr_name: str
 
     def __init__(self, location: Optional[SourceLocation], attr_name: str) -> None:
@@ -68,12 +68,12 @@ class MissingAttributeError(CompilerError):
         self.attr_name = attr_name
 
 
-class CompilerTypeError(CompilerError):
+class TypeError_(DSLError):
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         super().__init__(location, message)
 
 
-class MissingParameterAnnotationError(CompilerTypeError):
+class MissingParameterAnnotationError(TypeError_):
     param_name: str
 
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
@@ -81,7 +81,7 @@ class MissingParameterAnnotationError(CompilerTypeError):
         self.param_name = param_name
 
 
-class InvalidParameterAnnotationError(CompilerTypeError):
+class InvalidParameterAnnotationError(TypeError_):
     param_name: str
     annotated_type: Any
 

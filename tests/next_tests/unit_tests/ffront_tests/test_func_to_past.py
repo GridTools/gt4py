@@ -20,7 +20,7 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import float64
-from gt4py.next.errors import CompilerError
+from gt4py.next.errors import DSLError
 from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.type_system import type_specifications as ts
@@ -113,7 +113,7 @@ def test_undefined_field_program(identity_def):
         identity(in_field, out=out_field)  # noqa: F821  # undefined on purpose
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
         match=(r"Undeclared or untyped symbol `out_field`."),
     ):
         ProgramParser.apply_to_function(undefined_field_program)
@@ -162,7 +162,7 @@ def test_domain_exception_1(identity_def):
         domain_format_1(in_field, out=in_field, domain=(0, 2))
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_1_program)
 
@@ -181,7 +181,7 @@ def test_domain_exception_2(identity_def):
         domain_format_2(in_field, out=in_field, domain={IDim: (0, 1, 2)})
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_2_program)
 
@@ -200,7 +200,7 @@ def test_domain_exception_3(identity_def):
         domain_format_3(in_field, domain={IDim: (0, 2)})
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_3_program)
 
@@ -221,7 +221,7 @@ def test_domain_exception_4(identity_def):
         )
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_4_program)
 
@@ -240,7 +240,7 @@ def test_domain_exception_5(identity_def):
         domain_format_5(in_field, out=in_field, domain={IDim: ("1.0", 9.0)})
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_5_program)
 
@@ -259,7 +259,7 @@ def test_domain_exception_6(identity_def):
         domain_format_6(in_field, out=in_field, domain={})
 
     with pytest.raises(
-        CompilerError,
+        DSLError,
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_6_program)
 

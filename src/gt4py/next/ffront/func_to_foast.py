@@ -20,7 +20,7 @@ from typing import Any, Callable, Iterable, Mapping, Type, cast
 
 import gt4py.eve as eve
 from gt4py.next.errors import (
-    CompilerError,
+    DSLError,
     InvalidParameterAnnotationError,
     MissingParameterAnnotationError,
     UnsupportedPythonFeatureError,
@@ -76,7 +76,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     >>>
     >>> try:                # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
-    ... except CompilerError as err:
+    ... except DSLError as err:
     ...     print(f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})")
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
@@ -108,7 +108,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                raise CompilerError(
+                raise DSLError(
                     foast_node.location,
                     f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                     f", but got `{annotated_return_type}`.",
@@ -170,7 +170,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
-            raise CompilerError(loc, "Function is expected to return a value.")
+            raise DSLError(loc, "Function is expected to return a value.")
 
         return foast.FunctionDefinition(
             id=node.name,
@@ -227,7 +227,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
 
         if not isinstance(target, ast.Name):
-            raise CompilerError(self.get_location(node), "can only assign to names")
+            raise DSLError(self.get_location(node), "can only assign to names")
         new_value = self.visit(node.value)
         constraint_type: Type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
@@ -249,7 +249,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
-            raise CompilerError(self.get_location(node), "can only assign to names")
+            raise DSLError(self.get_location(node), "can only assign to names")
 
         if node.annotation is not None:
             assert isinstance(
@@ -290,9 +290,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         try:
             index = self._match_index(node.slice)
         except ValueError:
-            raise CompilerError(
-                self.get_location(node.slice), "expected an integral index"
-            ) from None
+            raise DSLError(self.get_location(node.slice), "expected an integral index") from None
 
         return foast.Subscript(
             value=self.visit(node.value),
@@ -313,7 +311,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         loc = self.get_location(node)
         if not node.value:
-            raise CompilerError(loc, "must return a value, not None")
+            raise DSLError(loc, "must return a value, not None")
         return foast.Return(value=self.visit(node.value), location=loc)
 
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
@@ -443,7 +441,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def _verify_builtin_type_constructor(self, node: ast.Call):
         if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
-            raise CompilerError(
+            raise DSLError(
                 self.get_location(node),
                 f"{self._func_name(node)}() only takes literal arguments!",
             )
@@ -470,9 +468,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         try:
             type_ = type_translation.from_value(node.value)
         except ValueError:
-            raise CompilerError(
-                loc, f"constants of type {type(node.value)} are not permitted"
-            ) from None
+            raise DSLError(loc, f"constants of type {type(node.value)} are not permitted") from None
 
         return foast.Constant(
             value=node.value,

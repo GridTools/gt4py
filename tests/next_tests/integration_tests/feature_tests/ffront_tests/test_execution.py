@@ -31,7 +31,7 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
-from gt4py.next.errors import CompilerError
+from gt4py.next.errors import DSLError
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn_cpu
 
@@ -823,7 +823,7 @@ def test_where_k_offset(cartesian_case):
 
 
 def test_undefined_symbols(cartesian_case):
-    with pytest.raises(CompilerError, match="Undeclared symbol"):
+    with pytest.raises(DSLError, match="Undeclared symbol"):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
@@ -918,7 +918,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
-        CompilerError,
+        DSLError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
@@ -929,7 +929,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(CompilerError, match=(r"Assignment value must be of type tuple!")):
+    with pytest.raises(DSLError, match=(r"Assignment value must be of type tuple!")):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:

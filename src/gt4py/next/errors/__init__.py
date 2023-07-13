@@ -17,7 +17,7 @@ from . import (  # noqa: module needs to be loaded for pretty printing of uncaug
 )
 from .excepthook import set_verbose_exceptions
 from .exceptions import (
-    CompilerError,
+    DSLError,
     InvalidParameterAnnotationError,
     MissingAttributeError,
     MissingParameterAnnotationError,
@@ -27,7 +27,7 @@ from .exceptions import (
 
 
 __all__ = [
-    "CompilerError",
+    "DSLError",
     "InvalidParameterAnnotationError",
     "MissingAttributeError",
     "MissingParameterAnnotationError",

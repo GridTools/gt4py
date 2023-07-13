@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from gt4py.next.errors import (
-    CompilerError,
+    DSLError,
     InvalidParameterAnnotationError,
     MissingParameterAnnotationError,
 )
@@ -132,7 +132,7 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
-            raise CompilerError(loc, "functions must be referenced by their name in function calls")
+            raise DSLError(loc, "functions must be referenced by their name in function calls")
 
         return past.Call(
             func=new_func,
@@ -168,7 +168,7 @@ class ProgramParser(DialectParser[past.Program]):
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(value=-node.operand.value, type=symbol_type, location=loc)
-        raise CompilerError(loc, "unary operators are only applicable to literals")
+        raise DSLError(loc, "unary operators are only applicable to literals")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)
