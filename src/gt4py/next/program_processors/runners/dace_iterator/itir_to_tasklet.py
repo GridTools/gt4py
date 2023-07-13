@@ -25,6 +25,7 @@ from gt4py.next import Dimension, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda
+from gt4py.next.iterator.type_inference import Val
 from gt4py.next.type_system import type_specifications as ts
 
 from .utility import (
@@ -623,7 +624,11 @@ def lambda_to_tasklet_sdfg(
     # add lambda parameters to symbol map
     for p in get_lambda().params:
         pnode = state.add_access(p.id)
-        symbol_map[p.id] = ValueExpr(value=pnode.data, dtype=dace.float64)
+        pnode_type = node_types[id(p)]
+        assert isinstance(pnode_type, Val)
+        symbol_map[p.id] = ValueExpr(
+            value=pnode.data, dtype=itir_type_as_dace_type(pnode_type.dtype)
+        )
 
     context, inputs, outputs = translator.visit(funobj, args={})
 
