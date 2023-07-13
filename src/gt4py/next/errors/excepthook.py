@@ -45,7 +45,7 @@ def _get_developer_mode_envvar() -> Optional[bool]:
         try:
             return bool(os.environ[env_var_name])
         except TypeError:
-            return False
+            return None
     return None
 
 
