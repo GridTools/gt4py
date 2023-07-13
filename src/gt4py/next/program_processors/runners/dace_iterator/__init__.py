@@ -70,11 +70,17 @@ def get_shape_args(
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> dict[str, Any]:
-    return {
-        str(sym): size / value.itemsize
-        for name, value in args.items()
-        for sym, size in zip(arrays[name].strides, value.strides)
-    }
+    stride_args = {}
+    for name, value in args.items():
+        for sym, stride_size in zip(arrays[name].strides, value.strides):
+            stride, remainder = divmod(stride_size, value.itemsize)
+            if remainder:
+                raise ValueError(
+                    f"Invalid stride for argument {sym}: {stride_size} / {value.itemsize}"
+                )
+            stride_args[str(sym)] = stride
+
+    return stride_args
 
 
 @program_executor
