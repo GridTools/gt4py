@@ -17,6 +17,7 @@ import pytest
 
 from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
+
 pytest.importorskip("atlas4py")
 
 import gt4py.next as gtx
