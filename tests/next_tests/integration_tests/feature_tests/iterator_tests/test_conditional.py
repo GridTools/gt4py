@@ -21,6 +21,7 @@ from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
+from gt4py.next.program_processors.runners import dace_iterator
 
 IDim = CartesianAxis("IDim")
 
@@ -33,6 +34,8 @@ def test_conditional(inp):
 
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
+    if program_processor == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: fails in lowering to sdfg")
 
     shape = [5]
 
