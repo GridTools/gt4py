@@ -37,7 +37,7 @@ def a_field():
 
 
 def out_field():
-    return gtx.np_as_located_field(I)(np.zeros(shape=(_isize,)))
+    return gtx.np_as_located_field(I)(np.zeros(dtype=int, shape=(_isize,)))
 
 
 @fundef
