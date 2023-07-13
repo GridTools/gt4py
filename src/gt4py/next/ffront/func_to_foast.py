@@ -171,7 +171,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
             raise CompilerError(
-                loc, "function is expected to return a value, return statement not found"
+                loc, "Function is expected to return a value."
             )
 
         return foast.FunctionDefinition(
