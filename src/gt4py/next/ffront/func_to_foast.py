@@ -170,9 +170,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
-            raise CompilerError(
-                loc, "Function is expected to return a value."
-            )
+            raise CompilerError(loc, "Function is expected to return a value.")
 
         return foast.FunctionDefinition(
             id=node.name,

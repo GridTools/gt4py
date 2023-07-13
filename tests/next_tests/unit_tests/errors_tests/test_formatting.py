@@ -12,46 +12,63 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import inspect
 import re
+
+import pytest
 
 from gt4py.eve import SourceLocation
 from gt4py.next.errors import CompilerError
 from gt4py.next.errors.formatting import format_compilation_error
 
 
-frameinfo = inspect.getframeinfo(inspect.currentframe())
-loc = SourceLocation("/source/file.py", 5, 2, end_line=5, end_column=9)
-msg = "a message"
-
-module = CompilerError.__module__
-name = CompilerError.__name__
-try:
-    raise Exception()
-except Exception as ex:
-    tb = ex.__traceback__
+@pytest.fixture
+def message():
+    return "a message"
 
 
-def test_format():
-    pattern = f"{module}.{name}: {msg}"
-    s = "\n".join(format_compilation_error(CompilerError, msg, None, None, None))
+@pytest.fixture
+def location():
+    return SourceLocation("/source/file.py", 5, 2, end_line=5, end_column=9)
+
+
+@pytest.fixture
+def tb():
+    try:
+        raise Exception()
+    except Exception as ex:
+        return ex.__traceback__
+
+
+@pytest.fixture
+def type_():
+    return CompilerError
+
+
+@pytest.fixture
+def qualname(type_):
+    return f"{type_.__module__}.{type_.__name__}"
+
+
+def test_format(type_, qualname, message):
+    pattern = f"{qualname}: {message}"
+    s = "\n".join(format_compilation_error(type_, message, None, None, None))
     assert re.match(pattern, s)
 
 
-def test_format_loc():
-    pattern = "Source location.*\\n" '  File "/source.*".*\\n' f"{module}.{name}: {msg}"
-    s = "".join(format_compilation_error(CompilerError, msg, loc, None, None))
+def test_format_loc(type_, qualname, message, location):
+    pattern = "Source location.*\\n" '  File "/source.*".*\\n' f"{qualname}: {message}"
+    s = "".join(format_compilation_error(type_, message, location, None, None))
     assert re.match(pattern, s)
 
 
-def test_format_traceback():
-    pattern = "Traceback.*\\n" '  File ".*".*\\n' ".*\\n" f"{module}.{name}: {msg}"
-    s = "".join(format_compilation_error(CompilerError, msg, None, tb, None))
+def test_format_traceback(type_, qualname, message, tb):
+    pattern = "Traceback.*\\n" '  File ".*".*\\n' ".*\\n" f"{qualname}: {message}"
+    s = "".join(format_compilation_error(type_, message, None, tb, None))
     assert re.match(pattern, s)
 
 
-def test_format_cause():
+def test_format_cause(type_, qualname, message):
     cause = ValueError("asd")
-    pattern = "ValueError: asd\\n\\n" "The above.*\\n\\n" f"{module}.{name}: {msg}"
-    s = "".join(format_compilation_error(CompilerError, msg, None, None, cause))
+    pattern = "ValueError: asd\\n\\n" "The above.*\\n\\n" f"{qualname}: {message}"
+    s = "".join(format_compilation_error(type_, message, None, None, cause))
     assert re.match(pattern, s)

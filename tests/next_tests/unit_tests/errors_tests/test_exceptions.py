@@ -15,42 +15,55 @@
 import inspect
 import re
 
+import pytest
+
 from gt4py.eve import SourceLocation
 from gt4py.next.errors import CompilerError
 
 
-frameinfo = inspect.getframeinfo(inspect.currentframe())
-loc = SourceLocation("/source/file.py", 5, 2, end_line=5, end_column=9)
-loc_snippet = SourceLocation(
-    frameinfo.filename, frameinfo.lineno + 2, 15, end_line=frameinfo.lineno + 2, end_column=29
-)
-msg = "a message"
+@pytest.fixture
+def loc_snippet():
+    frameinfo = inspect.getframeinfo(inspect.currentframe())
+    # This very line of comment should be shown in the snippet.
+    return SourceLocation(
+        frameinfo.filename, frameinfo.lineno + 1, 15, end_line=frameinfo.lineno + 1, end_column=29
+    )
 
 
-def test_message():
-    assert CompilerError(loc, msg).message == msg
+@pytest.fixture
+def loc_plain():
+    return SourceLocation("/source/file.py", 5, 2, end_line=5, end_column=9)
 
 
-def test_location():
-    assert CompilerError(loc, msg).location == loc
+@pytest.fixture
+def message():
+    return "a message"
 
 
-def test_with_location():
-    assert CompilerError(None, msg).with_location(loc).location == loc
+def test_message(loc_plain, message):
+    assert CompilerError(loc_plain, message).message == message
 
 
-def test_str():
-    pattern = f'{msg}\\n  File ".*", line.*'
-    s = str(CompilerError(loc, msg))
+def test_location(loc_plain, message):
+    assert CompilerError(loc_plain, message).location == loc_plain
+
+
+def test_with_location(loc_plain, message):
+    assert CompilerError(None, message).with_location(loc_plain).location == loc_plain
+
+
+def test_str(loc_plain, message):
+    pattern = f'{message}\\n  File ".*", line.*'
+    s = str(CompilerError(loc_plain, message))
     assert re.match(pattern, s)
 
 
-def test_str_snippet():
+def test_str_snippet(loc_snippet, message):
     pattern = (
-        f"{msg}\\n"
+        f"{message}\\n"
         '  File ".*", line.*\\n'
-        "    loc_snippet = SourceLocation.*\\n"
+        "        # This very line of comment should be shown in the snippet.\\n"
         "                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^"
     )
-    s = str(CompilerError(loc_snippet, msg))
+    s = str(CompilerError(loc_snippet, message))
     assert re.match(pattern, s)
