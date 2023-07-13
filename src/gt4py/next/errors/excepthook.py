@@ -49,21 +49,35 @@ def _get_developer_mode_envvar() -> Optional[bool]:
     return None
 
 
-def _guess_developer_mode() -> bool:
-    """Guess if gt4py is run by its developers or by third party users."""
-    env = _get_developer_mode_envvar()
-    if env is not None:
-        return env
-    return _get_developer_mode_python_env()
+def _determine_developer_mode(python_env_enabled: bool, envvar_enabled: Optional[bool]) -> bool:
+    """Determine if gt4py is run by its developers or by third party users."""
+    if envvar_enabled is not None:
+        return envvar_enabled
+    return python_env_enabled
 
 
-_developer_mode = _guess_developer_mode()
+_developer_mode = _determine_developer_mode(_get_developer_mode_python_env(), _get_developer_mode_envvar())
 
 
 def set_developer_mode(enabled: bool = False) -> None:
     """In developer mode, information useful for gt4py developers is also shown."""
     global _developer_mode
     _developer_mode = enabled
+
+
+def _format_uncaught_error(err: exceptions.CompilerError, developer_mode: bool) -> list[str]:
+    if developer_mode:
+        return formatting.format_compilation_error(
+            type(err),
+            err.message,
+            err.location,
+            err.__traceback__,
+            err.__cause__,
+        )
+    else:
+        return formatting.format_compilation_error(
+            type(err), err.message, err.location
+        )
 
 
 def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb) -> None:
@@ -73,18 +87,7 @@ def compilation_error_hook(fallback: Callable, type_: type, value: BaseException
     All other Python exceptions are formatted by the `fallback` hook.
     """
     if isinstance(value, exceptions.CompilerError):
-        if _developer_mode:
-            exc_strs = formatting.format_compilation_error(
-                type(value),
-                value.message,
-                value.location,
-                value.__traceback__,
-                value.__cause__,
-            )
-        else:
-            exc_strs = formatting.format_compilation_error(
-                type(value), value.message, value.location
-            )
+        exc_strs = _format_uncaught_error(value, _developer_mode)
         print("".join(exc_strs), file=sys.stderr)
     else:
         fallback(type_, value, tb)
