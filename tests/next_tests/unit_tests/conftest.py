@@ -80,9 +80,7 @@ def program_processor(request):
 
 @pytest.fixture
 def program_processor_no_dace_exec(program_processor):
-    if (
-        program_processor[0] == dace_iterator.run_dace_iterator
-    ):
+    if program_processor[0] == dace_iterator.run_dace_iterator:
         pytest.xfail("DaCe backend not yet supported.")
     return program_processor
 

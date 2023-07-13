@@ -25,7 +25,12 @@ from gt4py.next.program_processors.formatters.gtfn import (
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import (
+    lift_mode,
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 @fundef
