@@ -91,25 +91,3 @@ class InvalidParameterAnnotationError(CompilerTypeError):
         )
         self.param_name = param_name
         self.annotated_type = type_
-
-
-class ArgumentCountError(CompilerTypeError):
-    expected_count: int
-    provided_count: int
-
-    def __init__(
-        self, location: Optional[SourceLocation], expected_count: int, provided_count: int
-    ) -> None:
-        super().__init__(
-            location, f"expected {expected_count} arguments but {provided_count} were provided"
-        )
-        self.num_expected = expected_count
-        self.provided_count = provided_count
-
-
-class KeywordArgumentError(CompilerTypeError):
-    provided_names: str
-
-    def __init__(self, location: Optional[SourceLocation], provided_names: str) -> None:
-        super().__init__(location, f"unexpected keyword argument(s) '{provided_names}' provided")
-        self.provided_names = provided_names

@@ -17,10 +17,8 @@ from . import (  # noqa: module needs to be loaded for pretty printing of uncaug
 )
 from .excepthook import set_developer_mode
 from .exceptions import (
-    ArgumentCountError,
     CompilerError,
     InvalidParameterAnnotationError,
-    KeywordArgumentError,
     MissingAttributeError,
     MissingParameterAnnotationError,
     UndefinedSymbolError,
@@ -29,10 +27,8 @@ from .exceptions import (
 
 
 __all__ = [
-    "ArgumentCountError",
     "CompilerError",
     "InvalidParameterAnnotationError",
-    "KeywordArgumentError",
     "MissingAttributeError",
     "MissingParameterAnnotationError",
     "UndefinedSymbolError",
