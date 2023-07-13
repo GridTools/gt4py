@@ -59,6 +59,10 @@ def get_scan_dim(
     )
 
 
+def is_scan(node: itir.Node):
+    return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
+
+
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storages: dict[str, ts.TypeSpec]
@@ -171,10 +175,6 @@ class ItirToSDFG(eve.NodeVisitor):
         program_sdfg.validate()
         return program_sdfg
 
-    @staticmethod
-    def _is_scan(node: itir.Node):
-        return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
-
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
@@ -244,7 +244,7 @@ class ItirToSDFG(eve.NodeVisitor):
         output_memlets = {}
         transient_to_arg_name_mapping = {}
         # scan operator should always be the first function call in a closure
-        if self._is_scan(node.stencil):
+        if is_scan(node.stencil):
             if output_name in input_names:
                 # create and write to transient that is then copied back to actual output array to avoid aliasing of
                 # same memory in nested SDFG with different names
@@ -253,14 +253,10 @@ class ItirToSDFG(eve.NodeVisitor):
             else:
                 nsdfg_output_name = output_name
 
-            (
-                nsdfg,
-                map_domain,
-                scan_dim_index,
-            ) = self._visit_scan_stencil_closure(
+            nsdfg, map_domain, scan_dim_index = self._visit_scan_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain, nsdfg_output_name
             )
-            nsdfg_out_connectors = [nsdfg_output_name]
+            results = [nsdfg_output_name]
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
@@ -283,7 +279,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 ),
             )
         else:
-            nsdfg, map_domain, nsdfg_out_connectors = self._visit_parallel_stencil_closure(
+            nsdfg, map_domain, results = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
             )
 
@@ -309,8 +305,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {
-            param: arg_memlet
-            for param, arg_memlet in zip(nsdfg_out_connectors, output_memlets.values())
+            param: arg_memlet for param, arg_memlet in zip(results, output_memlets.values())
         }
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
 
@@ -495,9 +490,8 @@ class ItirToSDFG(eve.NodeVisitor):
                     dst_conn=connector_name,
                 )
 
-        # create temporary array to not alias the output array
-        assert len(lambda_outputs) == 1
         output_names = [output_name]
+        assert len(lambda_outputs) == 1
         # connect lambda output to access node
         for lambda_connector, data_name in zip(lambda_outputs, output_names):
             scan_sdfg.add_array(
