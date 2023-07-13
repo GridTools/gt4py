@@ -189,7 +189,7 @@ def test_binary_mod():
     )
 
 
-def test_bool_and():
+def test_boolean_and_op_unsupported():
     def bool_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a and b
 
@@ -200,7 +200,7 @@ def test_bool_and():
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
 
-def test_bool_or():
+def test_boolean_or_op_unsupported():
     def bool_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a or b
 
@@ -235,7 +235,7 @@ def test_unary_tilde():
     )
 
 
-def test_scalar_cast():
+def test_scalar_cast_disallow_non_literals():
     def cast_scalar_temp():
         tmp = int64(1)
         return int32(tmp)
