@@ -1,18 +1,19 @@
-from gt4py.next.errors import excepthook
-from gt4py.next.errors import exceptions
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from gt4py import eve
-
-
-def test_determine_developer_mode():
-    # Env var overrides python env.
-    assert excepthook._determine_developer_mode(False, False) == False
-    assert excepthook._determine_developer_mode(True, False) == False
-    assert excepthook._determine_developer_mode(False, True) == True
-    assert excepthook._determine_developer_mode(True, True) == True
-
-    # Defaults to python env if no env var specified.
-    assert excepthook._determine_developer_mode(False, None) == False
-    assert excepthook._determine_developer_mode(True, None) == True
+from gt4py.next.errors import excepthook, exceptions
 
 
 def test_format_uncaught_error():

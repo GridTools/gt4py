@@ -13,50 +13,23 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import os
 import sys
-from typing import Callable, Optional
-
-import importlib_metadata
+from typing import Callable
 
 from . import exceptions, formatting
 
 
-def _get_developer_mode_python_env() -> bool:
-    """Guess if the Python environment is used to develop gt4py."""
-    # Import gt4py and use its __name__ because hard-coding "gt4py" would fail
-    # silently if the module's name changes for whatever reason.
-    import gt4py
-
-    package_name = gt4py.__name__
-
-    # Check if any package requires gt4py as a dependency. If not, we are
-    # probably developing gt4py itself rather than something else using gt4py.
-    dists = importlib_metadata.distributions()
-    for dist in dists:
-        for req in dist.requires or []:
-            if req.startswith(package_name):
-                return False
-    return True
-
-
-def _get_developer_mode_envvar() -> Optional[bool]:
+def _get_developer_mode_envvar() -> bool:
     """Detect if the user set developer mode in environment variables."""
     env_var_name = "GT4PY_DEVELOPER_MODE"
     if env_var_name in os.environ:
         try:
             return bool(os.environ[env_var_name])
         except TypeError:
-            return None
-    return None
+            return False
+    return False
 
 
-def _determine_developer_mode(python_env_enabled: bool, envvar_enabled: Optional[bool]) -> bool:
-    """Determine if gt4py is run by its developers or by third party users."""
-    if envvar_enabled is not None:
-        return envvar_enabled
-    return python_env_enabled
-
-
-_developer_mode = _determine_developer_mode(_get_developer_mode_python_env(), _get_developer_mode_envvar())
+_developer_mode: bool = _get_developer_mode_envvar()
 
 
 def set_developer_mode(enabled: bool = False) -> None:
@@ -75,9 +48,7 @@ def _format_uncaught_error(err: exceptions.CompilerError, developer_mode: bool) 
             err.__cause__,
         )
     else:
-        return formatting.format_compilation_error(
-            type(err), err.message, err.location
-        )
+        return formatting.format_compilation_error(type(err), err.message, err.location)
 
 
 def compilation_error_hook(fallback: Callable, type_: type, value: BaseException, tb) -> None:
