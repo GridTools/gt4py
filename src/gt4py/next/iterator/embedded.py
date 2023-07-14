@@ -817,7 +817,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
+            slice_column[self.column_axis] = range(k_pos, min(k_pos + len(column_range), column_range.stop))
 
         assert _is_concrete_position(shifted_pos)
         ordered_indices = get_ordered_indices(
@@ -1204,7 +1204,10 @@ class ScanArgIterator:
     def deref(self) -> Any:
         if not self.can_deref():
             return _UNDEFINED
-        return self.wrapped_iter.deref()[self.k_pos]
+        try:
+            return self.wrapped_iter.deref()[self.k_pos]
+        except IndexError:
+            return _UNDEFINED
 
     def can_deref(self) -> bool:
         return self.wrapped_iter.can_deref()
