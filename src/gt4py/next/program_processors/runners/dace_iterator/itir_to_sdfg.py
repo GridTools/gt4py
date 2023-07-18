@@ -241,7 +241,6 @@ class ItirToSDFG(eve.NodeVisitor):
         ]
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
-        output_memlets = {}
         transient_to_arg_name_mapping = {}
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
@@ -271,8 +270,8 @@ class ItirToSDFG(eve.NodeVisitor):
                     transient=True,
                 )
 
-            output_memlets[output_name] = create_memlet_at(
-                nsdfg_output_name,
+            output_memlet = create_memlet_at(
+                output_name,
                 tuple(
                     f"i_{dim}" if f"i_{dim}" in map_domain else output_subset
                     for dim, _ in closure_domain
@@ -282,31 +281,25 @@ class ItirToSDFG(eve.NodeVisitor):
             nsdfg, map_domain, results = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
             )
+            assert len(results) == 1
 
             output_subset = "0"
 
-            if output_name in input_names:
-                # create and write to transient that is then copied back to actual output array to avoid aliasing of
-                # same memory in nested SDFG with different names
-                nsdfg_output_name = unique_var_name()
-                transient_to_arg_name_mapping[nsdfg_output_name] = output_name
-                descriptor = closure_sdfg.arrays[output_name]
-                closure_sdfg.add_scalar(
-                    nsdfg_output_name,
-                    dtype=descriptor.dtype,
-                    transient=True,
-                )
-            else:
-                nsdfg_output_name = output_name
-
-            output_memlets[output_name] = create_memlet_at(
-                nsdfg_output_name, tuple(idx for idx in map_domain.keys())
+            # create and write to transient that is then copied back to actual output array to avoid aliasing of
+            # same memory in nested SDFG with different names
+            nsdfg_output_name = unique_var_name()
+            transient_to_arg_name_mapping[nsdfg_output_name] = output_name
+            descriptor = closure_sdfg.arrays[output_name]
+            closure_sdfg.add_scalar(
+                nsdfg_output_name,
+                dtype=descriptor.dtype,
+                transient=True,
             )
 
+            output_memlet = create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
+
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
-        output_mapping = {
-            param: arg_memlet for param, arg_memlet in zip(results, output_memlets.values())
-        }
+        output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, [output_memlet])}
         conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
 
         array_mapping = {**input_mapping, **conn_mapping}
@@ -341,6 +334,18 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_state.remove_edge(edge)
             access_nodes[memlet.data].data = transient_to_arg_name_mapping[memlet.data]
 
+        for _, (lb, ub) in closure_domain:
+            for b in lb, ub:
+                if isinstance(b, SymbolExpr):
+                    continue
+                map_entry.add_in_connector(b.value.data)
+                closure_state.add_edge(
+                    b.value,
+                    None,
+                    map_entry,
+                    b.value.data,
+                    create_memlet_at(b.value.data, ("0",)),
+                )
         return closure_sdfg
 
     def _visit_scan_stencil_closure(
