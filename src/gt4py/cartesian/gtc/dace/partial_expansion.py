@@ -28,7 +28,7 @@ from dace.transformation.helpers import nest_sdfg_subgraph
 from gt4py import eve
 from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
-from gt4py.cartesian.gtc.dace.expansion_specification import Map, Skip
+from gt4py.cartesian.gtc.dace.expansion_specification import ExpansionItem, Iteration, Map, Skip
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset, union_inout_memlets
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
@@ -192,6 +192,50 @@ class PartialExpansion(transformation.SubgraphTransformation):
                         return False
         return True
 
+    def _make_new_expansion_specification(
+        self, node: StencilComputation, dims: Sequence[str]
+    ) -> List[ExpansionItem]:
+        current_expansion_specification = list(node.expansion_specification)
+        res_expansion_specification = [
+            Map(
+                iterations=[
+                    Iteration(axis=dcir.Axis(dim), kind="tiling", stride=self.strides[dim])
+                    for dim in dims
+                ]
+            )
+        ]
+        for item_idx, item in enumerate(list(current_expansion_specification)):
+            iterations: List[Iteration]
+            if isinstance(item, Map):
+                iterations = list(item.iterations)
+            else:
+                res_expansion_specification.append(copy.deepcopy(item))
+                continue
+
+            for it_idx, it in reversed(list(enumerate(iterations))):
+                if str(it.axis) in dims and it.kind == "tiling":
+                    del iterations[it_idx]
+
+            if iterations:
+                res_expansion_specification.append(
+                    Map(iterations=[copy.deepcopy(it) for it in iterations])
+                )
+
+        return res_expansion_specification
+
+    def _move_dim_outermost(self, node: StencilComputation, dims: Sequence[str]):
+        node.expansion_specification = self._make_new_expansion_specification(node, dims)
+
+    def _test_dim_outermost(self, node: StencilComputation, dims: Sequence[str]):
+        from gt4py.cartesian.gtc.dace.nodes import make_expansion_order
+
+        new_spec = self._make_new_expansion_specification(node, dims)
+        try:
+            make_expansion_order(node, new_spec)
+        except ValueError:
+            return False
+        return True
+
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
         stencil_computations = list(
             filter(
@@ -234,14 +278,9 @@ class PartialExpansion(transformation.SubgraphTransformation):
         ):
             return False
 
-        # check that current expansion specifications are compatible with partially expanding the outermost map
+        # test if moving the partial expanded dimensions outermost is supported
         for node, _ in stencil_computations:
-            if not isinstance(node.expansion_specification[0], Map) or not all(
-                it.kind == "tiling" for it in node.expansion_specification[0].iterations
-            ):
-                return False
-            outermost_map_axes = {it.axis for it in node.expansion_specification[0].iterations}
-            if any(d not in outermost_map_axes for d in self.strides.keys()):
+            if not self._test_dim_outermost(node, list(self.strides)):
                 return False
 
         if not self._test_compatible_regions(stencil_computations):
@@ -736,6 +775,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         return nsdfg_access_infos
 
     def _set_skips(self, state: dace.SDFGState, node: StencilComputation):
+        self._move_dim_outermost(node, list(self.strides.keys()))
         expansion_specification = list(node.expansion_specification)
         item = expansion_specification[0]
         assert isinstance(item, Map)

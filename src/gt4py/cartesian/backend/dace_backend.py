@@ -84,29 +84,16 @@ def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
 
 def _get_expansion_priority_cpu(node: StencilComputation):
     expansion_priority = []
-    if node.oir_node.loop_order == common.LoopOrder.PARALLEL:
-        expansion_priority.extend(
-            [
-                ["TileK", "K", "Sections", "J", "I", "Stages"],
-                ["TileK", "K", "Sections", "Stages", "I", "J"],
-                #
-                # ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-                # ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-                # ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-                # ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-            ]
-        )
-    else:
-        if node.has_splittable_regions():
-            expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
-        expansion_priority.extend(
-            [
-                ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-                ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-                ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-                ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-            ]
-        )
+    if node.has_splittable_regions():
+        expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
+    expansion_priority.extend(
+        [
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+        ]
+    )
     return expansion_priority
 
 
