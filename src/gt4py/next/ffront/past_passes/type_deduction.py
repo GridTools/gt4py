@@ -243,6 +243,10 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             location=node.location,
         )
 
+    def visit_Dict(self, node: past.Dict, **kwargs) -> past.Dict:
+        assert all(isinstance(key, past.Name) for key in node.keys_)
+        return past.Dict(keys_=node.keys_, values_=self.visit(node.values_), location=node.location)
+
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:

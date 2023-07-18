@@ -323,6 +323,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
         return foast.Name(id=node.id, location=self._make_loc(node))
 
+    def visit_Dict(self, node: ast.Dict) -> foast.Dict:
+        return foast.Dict(
+            keys_=[self.visit(cast(ast.AST, param)) for param in node.keys],
+            values_=[self.visit(param) for param in node.values],
+            location=self._make_loc(node),
+        )
+
     def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
         return foast.UnaryOp(
             op=self.visit(node.op), operand=self.visit(node.operand), location=self._make_loc(node)
