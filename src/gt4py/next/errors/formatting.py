@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Utility functions for formatting py:class:: DSLError and its subclasses."""
+
 import linecache
 import textwrap
 import traceback

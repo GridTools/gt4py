@@ -11,6 +11,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+"""
+Loading this module registers an excepthook that formats py:class:: DSLError.
+
+The excepthook is necessary because the default hook prints DSLErrors in an
+inconvenient way. The previously set excepthook is used to print all other
+errors.
+"""
+
 import os
 import sys
 from typing import Callable

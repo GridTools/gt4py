@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+"""Contains the exception classes and other utilities for error handling."""
+
 from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
     excepthook,
 )
