@@ -26,6 +26,7 @@ from .itir_to_tasklet import (
     Context,
     IteratorExpr,
     PythonTaskletCodegen,
+    SymbolExpr,
     ValueExpr,
     closure_to_tasklet_sdfg,
     lambda_to_tasklet_sdfg,
@@ -207,25 +208,24 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
 
         # Get output domain of the closure
-        program_arg_syms: dict[str, ValueExpr | IteratorExpr] = {}
+        program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
         for name, type_ in self.storages.items():
             if isinstance(type_, ts.ScalarType):
                 if name in input_names:
-                    state = closure_init_state
+                    dtype = as_dace_type(type_)
+                    closure_sdfg.add_symbol(name, dtype)
+                    out_name = unique_var_name()
+                    closure_sdfg.add_scalar(out_name, dtype, transient=True)
+                    out_tasklet = closure_init_state.add_tasklet(
+                        f"get_{name}", {}, {"__result"}, f"__result = {name}"
+                    )
+                    access = closure_init_state.add_access(out_name)
+                    value = ValueExpr(access, dtype)
+                    memlet = create_memlet_at(out_name, ("0",))
+                    closure_init_state.add_edge(out_tasklet, "__result", access, None, memlet)
+                    program_arg_syms[name] = value
                 else:
-                    state = closure_state
-                dtype = as_dace_type(type_)
-                closure_sdfg.add_symbol(name, dtype)
-                out_name = unique_var_name()
-                closure_sdfg.add_scalar(out_name, dtype, transient=True)
-                out_tasklet = state.add_tasklet(
-                    f"get_{name}", {}, {"__result"}, f"__result = {name}"
-                )
-                access = state.add_access(out_name)
-                value = ValueExpr(access, dtype)
-                memlet = create_memlet_at(out_name, ("0",))
-                state.add_edge(out_tasklet, "__result", access, None, memlet)
-                program_arg_syms[name] = value
+                    program_arg_syms[name] = SymbolExpr(name, as_dace_type(type_))
         domain_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, domain_ctx)
 
@@ -259,7 +259,7 @@ class ItirToSDFG(eve.NodeVisitor):
             results = [nsdfg_output_name]
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
-            output_subset = f"{scan_lb.value.data}:{scan_ub.value.data}"
+            output_subset = f"{scan_lb.value}:{scan_ub.value}"
 
             if nsdfg_output_name != output_name:
                 descriptor = closure_sdfg.arrays[output_name]
@@ -341,16 +341,6 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_state.remove_edge(edge)
             access_nodes[memlet.data].data = transient_to_arg_name_mapping[memlet.data]
 
-        for _, (lb, ub) in closure_domain:
-            map_entry.add_in_connector(lb.value.data)
-            map_entry.add_in_connector(ub.value.data)
-            closure_state.add_edge(
-                lb.value, None, map_entry, lb.value.data, create_memlet_at(lb.value.data, ("0",))
-            )
-            closure_state.add_edge(
-                ub.value, None, map_entry, ub.value.data, create_memlet_at(ub.value.data, ("0",))
-            )
-
         return closure_sdfg
 
     def _visit_scan_stencil_closure(
@@ -379,11 +369,13 @@ class ItirToSDFG(eve.NodeVisitor):
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_domain = {}
         for dim, (lb, ub) in closure_domain:
-            if dim == scan_dim:
-                scan_dim_lb = lb
-                scan_dim_ub = ub
+            lb_str = lb.value.data if isinstance(lb, ValueExpr) else lb.value
+            ub_str = ub.value.data if isinstance(ub, ValueExpr) else ub.value
+            if not dim == scan_dim:
+                map_domain[f"i_{dim}"] = f"{lb_str}:{ub_str}"
             else:
-                map_domain[f"i_{dim}"] = f"{lb.value.data}:{ub.value.data}"
+                scan_lb_str = lb_str
+                scan_ub_str = ub_str
 
         # the scan operator is implemented as an SDFG to be nested in the closure SDFG
         scan_sdfg = dace.SDFG(name="scan")
@@ -399,8 +391,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 lambda_state,
                 end_state,
                 loop_var=f"i_{scan_dim}",
-                initialize_expr=f"{scan_dim_lb.value.data}",
-                condition_expr=f"i_{scan_dim} < {scan_dim_ub.value.data}",
+                initialize_expr=f"{scan_lb_str}",
+                condition_expr=f"i_{scan_dim} < {scan_ub_str}",
                 increment_expr=f"i_{scan_dim} + 1",
             )
         else:
@@ -410,8 +402,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 lambda_state,
                 end_state,
                 loop_var=f"i_{scan_dim}",
-                initialize_expr=f"{scan_dim_ub.value.data} - 1",
-                condition_expr=f"i_{scan_dim} >= {scan_dim_lb.value.data}",
+                initialize_expr=f"{scan_ub_str} - 1",
+                condition_expr=f"i_{scan_dim} >= {scan_lb_str}",
                 increment_expr=f"i_{scan_dim} - 1",
             )
 
@@ -437,10 +429,13 @@ class ItirToSDFG(eve.NodeVisitor):
             self.node_types,
         )
 
+        input_connectors = {
+            inner_name for inner_name, expr in lambda_inputs if inner_name not in scan_sdfg.symbols
+        }
         scan_inner_node = lambda_state.add_nested_sdfg(
             lambda_context.body,
             scan_sdfg,
-            {connector_name for connector_name, _ in lambda_inputs},
+            input_connectors,
             {connector.value.label for connector in lambda_outputs},
         )
 
@@ -472,14 +467,14 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # connect access nodes to lambda inputs
         lambda_input_subset = ", ".join([f"i_{dim}" for dim, _ in closure_domain])
-        for (connector_name, _), data_name in zip(lambda_inputs[1:], input_names):
+        for (inner_name, _), data_name in zip(lambda_inputs[1:], input_names):
             if isinstance(self.storages[data_name], ts.FieldType):
                 lambda_state.add_memlet_path(
                     lambda_state.add_access(data_name),
                     scan_inner_node,
                     memlet=dace.Memlet(data=f"{data_name}", subset=lambda_input_subset),
                     src_conn=None,
-                    dst_conn=connector_name,
+                    dst_conn=inner_name,
                 )
             else:
                 lambda_state.add_memlet_path(
@@ -487,7 +482,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     scan_inner_node,
                     memlet=dace.Memlet(data=f"{data_name}", subset="0"),
                     src_conn=None,
-                    dst_conn=connector_name,
+                    dst_conn=inner_name,
                 )
 
         output_names = [output_name]
@@ -530,9 +525,12 @@ class ItirToSDFG(eve.NodeVisitor):
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
-        map_domain = {
-            f"i_{dim}": f"{lb.value.data}:{ub.value.data}" for dim, (lb, ub) in closure_domain
-        }
+        # find the scan dimension, same as output dimension, and exclude it from the map domain
+        map_domain = {}
+        for dim, (lb, ub) in closure_domain:
+            lb_str = lb.value.data if isinstance(lb, ValueExpr) else lb.value
+            ub_str = ub.value.data if isinstance(ub, ValueExpr) else ub.value
+            map_domain[f"i_{dim}"] = f"{lb_str}:{ub_str}"
 
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
