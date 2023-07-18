@@ -148,9 +148,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
 
-        as_sid = f"gridtools::as_sid<{cpp_interface.render_scalar_type(sid.scalar_type)},\
-                {sid.dimensions.__len__()},\
-                gridtools::sid::unknown_kind>({pybuffer})"
+        as_sid = f"gridtools::as_sid({pybuffer})"
         shifted = f"gridtools::sid::shift_sid_origin({as_sid}, {origin})"
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
