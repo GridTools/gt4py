@@ -29,7 +29,7 @@ from .itir_to_tasklet import (
     SymbolExpr,
     ValueExpr,
     closure_to_tasklet_sdfg,
-    lambda_to_tasklet_sdfg,
+    is_scan,
 )
 from .utility import (
     as_dace_type,
@@ -58,10 +58,6 @@ def get_scan_dim(
         output_type.dims.index(column_axis),
         output_type.dtype,
     )
-
-
-def is_scan(node: itir.Node):
-    return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
 
 class ItirToSDFG(eve.NodeVisitor):
@@ -428,9 +424,12 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
 
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
-        lambda_context, lambda_inputs, lambda_outputs = lambda_to_tasklet_sdfg(
+        lambda_context, lambda_inputs, lambda_outputs = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
+            {},
+            [],
+            [],
             self.node_types,
         )
 
@@ -543,7 +542,7 @@ class ItirToSDFG(eve.NodeVisitor):
         input_arrays = [(array_table[name], name, self.storages[name]) for name in input_names]
         conn_arrays = [(array_table[name], name) for name in conn_names]
 
-        context, results = closure_to_tasklet_sdfg(
+        context, _, results = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             index_domain,

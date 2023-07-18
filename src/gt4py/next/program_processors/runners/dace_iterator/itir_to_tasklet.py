@@ -573,6 +573,33 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return [ValueExpr(result_access, result_type)]
 
 
+def is_scan(node: itir.Node) -> bool:
+    return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
+
+
+def _visit_scan_clusure_callable(
+    node: itir.StencilClosure,
+    tlet_codegen: PythonTaskletCodegen,
+) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
+    stencil = cast(FunCall, node.stencil)
+    assert isinstance(stencil.args[0], Lambda)
+    fun_node = itir.Lambda(expr=stencil.args[0].expr, params=stencil.args[0].params)
+
+    args = list(itertools.chain(tlet_codegen.visit(node.output), *tlet_codegen.visit(node.inputs)))
+    return tlet_codegen.visit(fun_node, args=args)
+
+
+def _visit_closure_callable(
+    node: itir.StencilClosure,
+    tlet_codegen: PythonTaskletCodegen,
+    input_names: Sequence[str],
+) -> Sequence[ValueExpr]:
+    args = [itir.SymRef(id=name) for name in input_names]
+    fun_node = itir.FunCall(fun=node.stencil, args=args)
+
+    return tlet_codegen.visit(fun_node)
+
+
 def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
@@ -580,7 +607,7 @@ def closure_to_tasklet_sdfg(
     inputs: Sequence[tuple[dace.ndarray, str, ts.TypeSpec]],
     connectivities: Sequence[tuple[dace.ndarray, str]],
     node_types: dict[int, next_typing.Type],
-) -> tuple[Context, list[ValueExpr]]:
+) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
     state = body.add_state("tasklet_toplevel_entry")
     symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
@@ -612,35 +639,20 @@ def closure_to_tasklet_sdfg(
         body.add_array(name, shape=shape, strides=stride, dtype=arr.dtype)
 
     context = Context(body, state, symbol_map)
-
-    args = [itir.SymRef(id=name) for _, name, _ in inputs]
-    funobj = itir.FunCall(fun=node.stencil, args=args)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
-    outputs = translator.visit(funobj)
-    for output in outputs:
-        context.body.arrays[output.value.data].transient = False
-    return context, outputs
 
+    if is_scan(node.stencil):
+        context, inner_inputs, inner_outputs = _visit_scan_clusure_callable(node, translator)
+        for output in inner_outputs:
+            context.body.arrays[output.value.data].transient = True
+    else:
+        inner_inputs = []
+        inner_outputs = _visit_closure_callable(
+            node,
+            translator,
+            [name for _, name, _ in inputs],
+        )
+        for output in inner_outputs:
+            context.body.arrays[output.value.data].transient = False
 
-def lambda_to_tasklet_sdfg(
-    node: itir.StencilClosure,
-    offset_provider: dict[str, Any],
-    node_types: dict[int, next_typing.Type],
-) -> tuple[Context, Sequence[tuple[str, ValueExpr]], list[ValueExpr]]:
-    body = dace.SDFG("tasklet_toplevel")
-    state = body.add_state("tasklet_toplevel_entry")
-    symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
-
-    context = Context(body, state, symbol_map)
-
-    stencil = cast(FunCall, node.stencil)
-    assert isinstance(stencil.args[0], Lambda)
-    funobj = itir.Lambda(expr=stencil.args[0].expr, params=stencil.args[0].params)
-
-    translator = PythonTaskletCodegen(offset_provider, context, node_types)
-    args = list(itertools.chain(translator.visit(node.output), *translator.visit(node.inputs)))
-    context, inputs, outputs = translator.visit(funobj, args=args)
-
-    for output in outputs:
-        context.body.arrays[output.value.data].transient = True
-    return context, inputs, outputs
+    return context, inner_inputs, inner_outputs
