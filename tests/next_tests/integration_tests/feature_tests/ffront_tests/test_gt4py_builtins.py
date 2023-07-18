@@ -40,35 +40,28 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_maxover_execution(unstructured_case):
+@pytest.mark.parametrize(
+    "strategy",
+    [cases.UniqueInitializer(1), cases.UniqueInitializer(-100)],
+    ids=["positive_values", "negative_values"],
+)
+def test_maxover_execution_(unstructured_case, strategy):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: reductions")
+    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.xfail("`maxover` broken in gtfn, see #1289.")
 
     @gtx.field_operator
-    def maxover_fieldoperator(inp_field: cases.EField) -> cases.VField:
-        return max_over(inp_field(V2E), axis=V2EDim)
-
-    v2e_table = unstructured_case.offset_provider["V2E"].table
-    cases.verify_with_default_data(
-        unstructured_case,
-        maxover_fieldoperator,
-        ref=lambda edge_f: np.max(edge_f[v2e_table], axis=1),
-    )
-
-
-def test_maxover_execution_negatives(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
-    @gtx.field_operator
-    def maxover_negvals(edge_f: cases.EField) -> cases.VField:
+    def testee(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
         return out
 
+    inp = cases.allocate(unstructured_case, testee, "edge_f", strategy=strategy)()
+    out = cases.allocate(unstructured_case, testee, cases.RETURN)()
+
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    cases.verify_with_default_data(
-        unstructured_case, maxover_negvals, ref=lambda edge_f: np.max(edge_f[v2e_table], axis=1)
-    )
+    ref = np.max(inp[v2e_table], axis=1)
+    cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
 def test_minover_execution(unstructured_case):
