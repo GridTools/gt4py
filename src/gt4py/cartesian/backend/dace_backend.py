@@ -119,15 +119,15 @@ def _set_expansion_orders(sdfg: dace.SDFG):
             expansion_priority = _get_expansion_priority_cpu(node)
         is_set = False
         for exp in expansion_priority:
-            # try:
-            node.expansion_specification = exp
-            is_set = True
-            # except ValueError:
-            #     continue
-            # else:
-            #     break
-        # if not is_set:
-        #     raise ValueError("No expansion compatible")
+            try:
+                node.expansion_specification = exp
+                is_set = True
+            except ValueError:
+                continue
+            else:
+                break
+        if not is_set:
+            raise ValueError("No expansion compatible")
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
