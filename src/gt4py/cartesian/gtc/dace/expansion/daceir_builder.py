@@ -855,7 +855,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
         if node.loop_order != common.LoopOrder.PARALLEL:
             sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
 
-        if k_idx < sections_idx:
+        if k_idx < sections_idx and (
+            len(node.sections) > 1
+            or (
+                not node.sections[0].interval.start == overall_interval.start
+                or not node.sections[0].interval.end == overall_interval.end
+            )
+        ):
             assert len(sections) == len(node.sections)
             sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
             predicated_branches = []
