@@ -89,9 +89,12 @@ def _type_string(type_: ts.TypeSpec) -> str:
     if isinstance(type_, ts.TupleType):
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
+        ndims = len(type_.dims)
         dtype = cpp_interface.render_scalar_type(type_.dtype)
-        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * len(type_.dims))}>"
-        return f"nanobind::ndarray<{dtype}, {shape}>"
+        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * ndims)}>"
+        buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"
+        origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
+        return f"std::pair<{buffer_t}, {origin_t}>"
     elif isinstance(type_, ts.ScalarType):
         return cpp_interface.render_scalar_type(type_)
     else:
@@ -249,6 +252,7 @@ def create_bindings(
         header_files=[
             "nanobind/nanobind.h",
             "nanobind/stl/tuple.h",
+            "nanobind/stl/pair.h",
             "nanobind/ndarray.h",
             "gridtools/storage/adapter/python_sid_adapter.hpp",
             "gridtools/sid/composite.hpp",
