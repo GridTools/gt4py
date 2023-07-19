@@ -90,8 +90,8 @@ def get_gt_pyext_build_opts(
     extra_compile_args["cuda"] = [
         "-std=c++17",
         "-ftemplate-depth={}".format(gt_config.build_settings["cpp_template_depth"]),
-        "-isystem{}".format(gt_include_path),
-        "-isystem{}".format(gt_config.build_settings["boost_include_path"]),
+        "-isystem={}".format(gt_include_path),
+        "-isystem={}".format(gt_config.build_settings["boost_include_path"]),
         "-DBOOST_PP_VARIADICS",
         "-DBOOST_OPTIONAL_CONFIG_USE_OLD_IMPLEMENTATION_OF_OPTIONAL",
         "-DBOOST_OPTIONAL_USE_OLD_DEFINITION_OF_NONE",
@@ -120,7 +120,7 @@ def get_gt_pyext_build_opts(
             "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
         )
         extra_compile_args["cuda"].append(
-            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
+            "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
         )
 
     if add_profile_info:
