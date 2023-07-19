@@ -17,7 +17,7 @@ import re
 import pytest
 
 from gt4py.eve import SourceLocation
-from gt4py.next.errors import DSLError
+from gt4py.next import errors
 from gt4py.next.errors.formatting import format_compilation_error
 
 
@@ -41,7 +41,7 @@ def tb():
 
 @pytest.fixture
 def type_():
-    return DSLError
+    return errors.DSLError
 
 
 @pytest.fixture

@@ -15,7 +15,7 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.errors import DSLError
+from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -148,7 +148,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         # check both types compatible
         for arg in (left, right):
             if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
-                raise DSLError(
+                raise errors.DSLError(
                     arg.location, f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
@@ -161,7 +161,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
             right_type
         ):
-            raise DSLError(
+            raise errors.DSLError(
                 arg.location,
                 f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
             )
@@ -169,7 +169,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         try:
             return type_info.promote(left_type, right_type)
         except ValueError as ex:
-            raise DSLError(
+            raise errors.DSLError(
                 node.location,
                 f"Could not promote `{left_type}` and `{right_type}` to common type"
                 f" in call to `{node.op}`.",
@@ -231,7 +231,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         except ValueError as ex:
-            raise DSLError(node.location, f"Invalid call to `{node.func.id}`.") from ex
+            raise errors.DSLError(node.location, f"Invalid call to `{node.func.id}`.") from ex
 
         return past.Call(
             func=new_func,
@@ -244,6 +244,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise DSLError(node.location, f"Undeclared or untyped symbol `{node.id}`.")
+            raise errors.DSLError(node.location, f"Undeclared or untyped symbol `{node.id}`.")
 
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)

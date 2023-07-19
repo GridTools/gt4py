@@ -20,7 +20,7 @@ from typing import Callable
 
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.extended_typing import Any, Generic, TypeVar
-from gt4py.next.errors import DSLError, UnsupportedPythonFeatureError
+from gt4py.next import errors
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -46,7 +46,7 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
             if err.end_offset is not None
             else None,
         )
-        raise DSLError(loc, err.msg).with_traceback(err.__traceback__)
+        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -99,7 +99,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     def generic_visit(self, node: ast.AST) -> None:
         loc = self.get_location(node)
         feature = f"{type(node).__module__}.{type(node).__qualname__}"
-        raise UnsupportedPythonFeatureError(loc, feature)
+        raise errors.UnsupportedPythonFeatureError(loc, feature)
 
     def get_location(self, node: ast.AST) -> SourceLocation:
         file = self.source_definition.filename

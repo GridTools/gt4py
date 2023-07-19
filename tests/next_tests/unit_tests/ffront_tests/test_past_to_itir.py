@@ -19,7 +19,7 @@ import pytest
 import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.errors import DSLError
+from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
@@ -169,7 +169,7 @@ def test_inout_prohibited(identity_def):
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
-        DSLError,
+        errors.DSLError,
     ) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
