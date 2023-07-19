@@ -17,7 +17,7 @@ import textwrap
 
 import pytest
 
-from gt4py.next import Dimension, DimensionKind, Field, field_operator, int64, scan_operator
+from gt4py.next import Dimension, DimensionKind, Field, field_operator, int32, int64, scan_operator
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_pretty_printer import pretty_format
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -75,15 +75,15 @@ def test_fieldop():
 def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-    @scan_operator(axis=KDim, forward=False, init=1.0)
-    def scan(inp: int64) -> int64:
+    @scan_operator(axis=KDim, forward=False, init=1)
+    def scan(inp: int32) -> int32:
         foo = inp
         return inp
 
     expected = textwrap.dedent(
         f"""
-        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.0)
-        def scan(inp: int64) -> int64:
+        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1)
+        def scan(inp: int32) -> int32:
           {ssa.unique_name("foo", 0)} = inp
           return inp
         """
