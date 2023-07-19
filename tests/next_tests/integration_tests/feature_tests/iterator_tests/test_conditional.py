@@ -35,7 +35,7 @@ def test_conditional(inp):
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: fails in lowering to sdfg")
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5]
 

@@ -49,6 +49,14 @@ _TYPE_MAPPING = {
 }
 
 
+def itir_type_as_dace_type(type_: next_typing.Type):
+    if isinstance(type_, itir_typing.Primitive):
+        return _TYPE_MAPPING[type_.name]
+    if isinstance(type_, itir_typing.BoolType):
+        return dace.bool.dtype
+    raise NotImplementedError()
+
+
 _MATH_BUILTINS_MAPPING = {
     "abs": "abs({})",
     "sin": "math.sin({})",
@@ -124,14 +132,6 @@ class Context:
     symbol_map: dict[str, ValueExpr | IteratorExpr]
 
 
-def itir_type_as_dace_type(type_: next_typing.Type, args_: list[ValueExpr]):
-    if isinstance(type_, itir_typing.Primitive):
-        return _TYPE_MAPPING[type_.name]
-    if isinstance(type_, itir_typing.BoolType):
-        return dace.bool.dtype
-    return args_[0].dtype
-
-
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -140,8 +140,11 @@ def builtin_if(
     expr = "({1} if {0} else {2})".format(*internals)
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)
-    # the if expression is formatted with the return bool value as first argument
-    type_ = itir_type_as_dace_type(node_type.dtype, args[1:])
+    try:
+        type_ = itir_type_as_dace_type(node_type)
+    except NotImplementedError:
+        # the if expression is formatted with the return value as first argument
+        type_ = args[1].dtype
     return transformer.add_expr_tasklet(list(zip(args, internals)), expr, type_, "if")
 
 
@@ -155,8 +158,7 @@ def builtin_cast(
     expr = _MATH_BUILTINS_MAPPING[target_type.id].format(*internals)
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)
-    # the argument is not used to determine the return type
-    type_ = itir_type_as_dace_type(node_type.dtype, [])
+    type_ = itir_type_as_dace_type(node_type.dtype)
     return transformer.add_expr_tasklet(list(zip(args, internals)), expr, type_, "cast")
 
 
@@ -513,7 +515,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         expr = fmt.format(*internals)
         node_type = self.node_types[id(node)]
         assert isinstance(node_type, itir_typing.Val)
-        type_ = itir_type_as_dace_type(node_type.dtype, args)
+        try:
+            type_ = itir_type_as_dace_type(node_type)
+        except NotImplementedError:
+            type_ = args[0].dtype
         return self.add_expr_tasklet(list(zip(args, internals)), expr, type_, "numeric")
 
     def _visit_general_builtin(self, node: itir.FunCall) -> list[ValueExpr]:

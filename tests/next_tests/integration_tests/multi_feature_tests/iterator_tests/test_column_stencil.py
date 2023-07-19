@@ -95,6 +95,13 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
 
     ref = ref_fun(inp)
 
+    if (
+        program_processor == run_dace_iterator
+        and stencil.__name__ == "shift_stencil"
+        and inp.origin
+    ):
+        pytest.xfail("Not supported in DaCe backend: origin")
+
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
         program_processor,
@@ -141,7 +148,7 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: scan")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     run_processor(
@@ -180,7 +187,7 @@ def test_ksum_back_scan(program_processor, lift_mode):
     if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: scan")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
@@ -242,7 +249,8 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
 def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     if (
-        program_processor == run_gtfn
+        program_processor == run_dace_iterator
+        or program_processor == run_gtfn
         or program_processor == run_gtfn_imperative
         or program_processor == gtfn_format_sourcecode
     ):
