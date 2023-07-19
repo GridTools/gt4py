@@ -306,7 +306,11 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_SymRef(self, node: itir.SymRef) -> list[ValueExpr | SymbolExpr] | IteratorExpr:
         if node.id not in self.context.symbol_map:
             acc = self.context.state.add_access(node.id)
-            self.context.symbol_map[node.id] = ValueExpr(value=acc, dtype=dace.float64)
+            node_type = self.node_types[id(node)]
+            assert isinstance(node_type, Val)
+            self.context.symbol_map[node.id] = ValueExpr(
+                value=acc, dtype=itir_type_as_dace_type(node_type.dtype)
+            )
         value = self.context.symbol_map[node.id]
         if isinstance(value, (ValueExpr, SymbolExpr)):
             return [value]
