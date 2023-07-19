@@ -14,13 +14,19 @@
 
 """Utility functions for formatting :class:`DSLError` and its subclasses."""
 
+from __future__ import annotations
+
 import linecache
 import textwrap
 import traceback
 import types
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from gt4py.eve import SourceLocation
+
+
+if TYPE_CHECKING:
+    from . import exceptions
 
 
 def get_source_from_location(location: SourceLocation) -> str:
@@ -80,7 +86,7 @@ def _format_traceback(tb: types.TracebackType) -> list[str]:
 
 
 def format_compilation_error(
-    type_: type[Exception],
+    type_: type[exceptions.DSLError],
     message: str,
     location: Optional[SourceLocation],
     tb: Optional[types.TracebackType] = None,
