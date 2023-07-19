@@ -16,7 +16,7 @@
 The list of exception classes used in the library.
 
 Exception classes that represent errors within an IR go here as a subclass of
-py:class:: DSLError. Exception classes that represent other errors, like
+:class:`DSLError`. Exception classes that represent other errors, like
 the builtin ValueError, go here as well, although you should use Python's
 builtin error classes if you can. Exception classes that are specific to a
 certain submodule and have no use for the entire application may be better off

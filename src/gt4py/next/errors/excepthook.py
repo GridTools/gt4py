@@ -13,11 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """
-Loading this module registers an excepthook that formats py:class:: DSLError.
+Loading this module registers an excepthook that formats :class:`DSLError`.
 
-The excepthook is necessary because the default hook prints DSLErrors in an
-inconvenient way. The previously set excepthook is used to print all other
-errors.
+The excepthook is necessary because the default hook prints :class:`DSLError`s
+in an inconvenient way. The previously set excepthook is used to print all
+other errors.
 """
 
 import os
