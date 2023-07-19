@@ -113,9 +113,6 @@ def test_minover_execution(unstructured_case):
 def test_reduction_execution(unstructured_case):
     """Testing a trivial neighbor sum."""
 
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
@@ -136,7 +133,9 @@ def test_reduction_expression(unstructured_case):
     if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.skip("Has a bug.")
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        # -edge_f(V2E) * tmp_nbh * 2 gets inlined with the neighbor_sum operation in the reduction in itir,
+        # so in addition to the skipped reason, currently itir is a lambda instead of the 'plus' operation
+        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
 
     @gtx.field_operator
     def reduce_expr(edge_f: cases.EField) -> cases.VField:
@@ -158,7 +157,7 @@ def test_reduction_expression(unstructured_case):
 
 def test_reduction_with_common_expression(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
 
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:

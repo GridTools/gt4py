@@ -137,8 +137,11 @@ def _builtin_neighbors_indirect_addressing(
     state: dace.SDFGState = transformer.context.state
 
     offset_literal, data = node_args
+    assert isinstance(offset_literal, itir.OffsetLiteral)
     iterator = transformer.visit(data)
-    table: NeighborTableOffsetProvider = transformer.offset_provider[offset_literal.value]
+    offset_dim = offset_literal.value
+    assert isinstance(offset_dim, str)
+    table: NeighborTableOffsetProvider = transformer.offset_provider[offset_dim]
     assert isinstance(table, NeighborTableOffsetProvider)
 
     shifted_dim = table.origin_axis.value
@@ -147,11 +150,11 @@ def _builtin_neighbors_indirect_addressing(
     sdfg.add_array(result_name, dtype=iterator.dtype, shape=(table.max_neighbors,), transient=True)
     result_access = state.add_access(result_name)
 
-    table_name = connectivity_identifier(offset_literal.value)
+    table_name = connectivity_identifier(offset_dim)
     table_array = sdfg.arrays[table_name]
 
     me, mx = state.add_map(
-        f"{offset_literal.value}_neighbors_map",
+        f"{offset_dim}_neighbors_map",
         ndrange={"neigh_idx": f"0:{table.max_neighbors}"},
     )
     shift_tasklet = state.add_tasklet(
@@ -213,10 +216,15 @@ def _builtin_neighbors_indirect_addressing(
 def builtin_neighbors(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    dimension = node_args[0].value
+    offset_provider = node_args[0]
+    assert isinstance(offset_provider, itir.OffsetLiteral)
+    dimension = offset_provider.value
+    assert isinstance(dimension, str)
     offset = transformer.offset_provider[dimension]
     if isinstance(offset, Dimension):
-        raise NotImplementedError
+        raise NotImplementedError(
+            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
+        )
     else:
         return _builtin_neighbors_indirect_addressing(transformer, node, node_args)
 
@@ -602,17 +610,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert len(args) == 1
         args = args[0]
         assert len(args) == 1
-        op_name, init = node.fun.args
-        if not op_name != "plus":
-            raise NotImplementedError("Only neighbor_sum is supported.")
+        assert isinstance(node.fun, itir.FunCall)
+        op_name = node.fun.args[0]
+        assert isinstance(op_name, itir.SymRef)
+        init = node.fun.args[1]
+
         nreduce = self.context.body.arrays[args[0].value.data].shape[0]
 
         result_name = unique_var_name()
         result_access = self.context.state.add_access(result_name)
         self.context.body.add_scalar(result_name, args[0].dtype, transient=True)
+        op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
         reduce_tasklet = self.context.state.add_tasklet(
             "reduce",
-            code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = __result + __values[__idx]",
+            code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
             inputs={"__values"},
             outputs={"__result"},
         )

@@ -29,7 +29,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_external_local_field(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over non-field expressions")
 
     @gtx.field_operator
     def testee(
@@ -58,7 +58,7 @@ def test_external_local_field_only(unstructured_case):
             "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
         )
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over non-field expressions")
 
     @gtx.field_operator
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:

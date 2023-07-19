@@ -430,7 +430,7 @@ def test_nested_tuple_return(cartesian_case):
 
 def test_nested_reduction(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
 
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
@@ -453,9 +453,6 @@ def test_nested_reduction(unstructured_case):
 
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
     @gtx.field_operator
     def testee(inp: cases.EField) -> cases.EField:
         tmp = inp(V2E)
@@ -476,7 +473,7 @@ def test_nested_reduction_shift_first(unstructured_case):
 
 def test_tuple_return_2(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -497,7 +494,7 @@ def test_tuple_return_2(unstructured_case):
 
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: tuples")
 
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -640,7 +637,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
