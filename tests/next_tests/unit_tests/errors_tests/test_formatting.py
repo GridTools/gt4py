@@ -50,25 +50,36 @@ def qualname(type_):
 
 
 def test_format(type_, qualname, message):
-    pattern = f"{qualname}: {message}"
+    cls_pattern = f"{qualname}: {message}"
     s = "\n".join(format_compilation_error(type_, message, None, None, None))
-    assert re.match(pattern, s)
+    assert re.match(cls_pattern, s)
 
 
 def test_format_loc(type_, qualname, message, location):
-    pattern = "Source location.*\\n" '  File "/source.*".*\\n' f"{qualname}: {message}"
+    loc_pattern = "Source location.*"
+    file_pattern = '  File "/source.*".*'
+    cls_pattern = f"{qualname}: {message}"
+    pattern = "\\n".join([loc_pattern, file_pattern, cls_pattern])
     s = "".join(format_compilation_error(type_, message, location, None, None))
     assert re.match(pattern, s)
 
 
 def test_format_traceback(type_, qualname, message, tb):
-    pattern = "Traceback.*\\n" '  File ".*".*\\n' ".*\\n" f"{qualname}: {message}"
+    tb_pattern = "Traceback.*"
+    file_pattern = '  File ".*".*'
+    line_pattern = ".*"
+    cls_pattern = f"{qualname}: {message}"
+    pattern = "\\n".join([tb_pattern, file_pattern, line_pattern, cls_pattern])
     s = "".join(format_compilation_error(type_, message, None, tb, None))
     assert re.match(pattern, s)
 
 
 def test_format_cause(type_, qualname, message):
     cause = ValueError("asd")
-    pattern = "ValueError: asd\\n\\n" "The above.*\\n\\n" f"{qualname}: {message}"
+    blank_pattern = ""
+    cause_pattern = "ValueError: asd"
+    bridge_pattern = "The above.*"
+    cls_pattern = f"{qualname}: {message}"
+    pattern = "\\n".join([cause_pattern, blank_pattern, bridge_pattern, blank_pattern, cls_pattern])
     s = "".join(format_compilation_error(type_, message, None, None, cause))
     assert re.match(pattern, s)
