@@ -581,7 +581,7 @@ def is_scan(node: itir.Node) -> bool:
     return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
 
-def _visit_scan_clusure_callable(
+def _visit_scan_closure_callable(
     node: itir.StencilClosure,
     tlet_codegen: PythonTaskletCodegen,
 ) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
@@ -646,7 +646,7 @@ def closure_to_tasklet_sdfg(
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
 
     if is_scan(node.stencil):
-        context, inner_inputs, inner_outputs = _visit_scan_clusure_callable(node, translator)
+        context, inner_inputs, inner_outputs = _visit_scan_closure_callable(node, translator)
         for output in inner_outputs:
             context.body.arrays[output.value.data].transient = True
     else:
