@@ -238,16 +238,13 @@ class ItirToSDFG(eve.NodeVisitor):
         conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         transient_to_arg_name_mapping = {}
+        # create and write to transient that is then copied back to actual output array to avoid aliasing of
+        # same memory in nested SDFG with different names
+        nsdfg_output_name = unique_var_name()
+        output_descriptor = closure_sdfg.arrays[output_name]
+        transient_to_arg_name_mapping[nsdfg_output_name] = output_name
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
-            if output_name in input_names:
-                # create and write to transient that is then copied back to actual output array to avoid aliasing of
-                # same memory in nested SDFG with different names
-                nsdfg_output_name = unique_var_name()
-                transient_to_arg_name_mapping[nsdfg_output_name] = output_name
-            else:
-                nsdfg_output_name = output_name
-
             nsdfg, map_domain, scan_dim_index = self._visit_scan_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain, nsdfg_output_name
             )
@@ -256,20 +253,18 @@ class ItirToSDFG(eve.NodeVisitor):
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value}:{scan_ub.value}"
 
-            if nsdfg_output_name != output_name:
-                descriptor = closure_sdfg.arrays[output_name]
-                closure_sdfg.add_array(
-                    nsdfg_output_name,
-                    dtype=descriptor.dtype,
-                    shape=(array_table[output_name].shape[scan_dim_index],),
-                    strides=(array_table[output_name].strides[scan_dim_index],),
-                    transient=True,
-                )
+            closure_sdfg.add_array(
+                nsdfg_output_name,
+                dtype=output_descriptor.dtype,
+                shape=(array_table[output_name].shape[scan_dim_index],),
+                strides=(array_table[output_name].strides[scan_dim_index],),
+                transient=True,
+            )
 
             output_memlet = create_memlet_at(
                 output_name,
                 tuple(
-                    f"i_{dim}" if f"i_{dim}" in map_domain else output_subset
+                    f"i_{dim}" if f"i_{dim}" in map_domain else f"0:{output_descriptor.shape[scan_dim_index]}"
                     for dim, _ in closure_domain
                 ),
             )
@@ -281,14 +276,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
             output_subset = "0"
 
-            # create and write to transient that is then copied back to actual output array to avoid aliasing of
-            # same memory in nested SDFG with different names
-            nsdfg_output_name = unique_var_name()
-            transient_to_arg_name_mapping[nsdfg_output_name] = output_name
-            descriptor = closure_sdfg.arrays[output_name]
             closure_sdfg.add_scalar(
                 nsdfg_output_name,
-                dtype=descriptor.dtype,
+                dtype=output_descriptor.dtype,
                 transient=True,
             )
 
