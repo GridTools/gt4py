@@ -50,8 +50,6 @@ def fencil(size, out, inp):
 
 def test_strided_offset_provider(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [run_gtfn, run_gtfn_imperative]:
-        pytest.xfail("gtx.StridedNeighborOffsetProvider not implemented in bindings.")
 
     LocA_size = 2
     max_neighbors = LocA2LocAB_offset_provider.max_neighbors

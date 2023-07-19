@@ -49,6 +49,8 @@ import numpy.typing as npt
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.otf.binding import interface
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 EMBEDDED = "embedded"
@@ -101,6 +103,23 @@ class NeighborTableOffsetProvider:
     def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
         return self.table[(primary, neighbor_idx)]
 
+    def __gtfn_bindings__(self, name: str):
+        GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
+        param = interface.Parameter(
+            name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
+            type_=ts.FieldType(
+                dims=[self.origin_axis, common.Dimension(name)],
+                dtype=ts.ScalarType(type_translation.get_scalar_kind(self.index_type)),
+            ),
+        )
+        nbtbl = (
+            f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
+            f"generated::{self.origin_axis.value}_t, "
+            f"generated::{name}_t, {self.max_neighbors}"
+            f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
+        )
+        return param, nbtbl, self.table  # TODO table probably goes together with param
+
 
 class StridedNeighborOffsetProvider:
     def __init__(
@@ -118,6 +137,10 @@ class StridedNeighborOffsetProvider:
 
     def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
         return primary * self.max_neighbors + neighbor_idx
+
+    def __gtfn_bindings__(self, _: str):
+        elems = (f"i*{self.max_neighbors}+{n}" for n in range(self.max_neighbors))
+        return None, f"[](auto i){{return std::tuple({','.join(elems)});}}", None
 
 
 # Offsets

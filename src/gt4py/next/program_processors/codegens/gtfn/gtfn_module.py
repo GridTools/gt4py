@@ -17,8 +17,6 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Final, TypeVar
 
-import numpy as np
-
 from gt4py.eve import trees, utils
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
@@ -115,34 +113,11 @@ class GTFNTranslationStep(
 
         for name, connectivity in offset_provider.items():
             if isinstance(connectivity, Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
-                    raise ValueError(
-                        "Neighbor table indices must be of type `np.int32` or `np.int64`."
-                    )
-
-                # parameter
-                parameters.append(
-                    interface.Parameter(
-                        name=GENERATED_CONNECTIVITY_PARAM_PREFIX + name.lower(),
-                        type_=ts.FieldType(
-                            dims=[connectivity.origin_axis, Dimension(name)],
-                            dtype=ts.ScalarType(
-                                type_translation.get_scalar_kind(connectivity.index_type)
-                            ),
-                        ),
-                    )
-                )
-
-                # connectivity argument expression
-                nbtbl = (
-                    f"gridtools::fn::sid_neighbor_table::as_neighbor_table<"
-                    f"generated::{connectivity.origin_axis.value}_t, "
-                    f"generated::{name}_t, {connectivity.max_neighbors}"
-                    f">(std::forward<decltype({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()})>({GENERATED_CONNECTIVITY_PARAM_PREFIX}{name.lower()}))"
-                )
-                arg_exprs.append(
-                    f"gridtools::hymap::keys<generated::{name}_t>::make_values({nbtbl})"
-                )
+                assert hasattr(connectivity, "__gtfn_bindings__")
+                param, arg, _ = connectivity.__gtfn_bindings__(name)
+                if param:
+                    parameters.append(param)
+                arg_exprs.append(f"gridtools::hymap::keys<generated::{name}_t>::make_values({arg})")
             elif isinstance(connectivity, Dimension):
                 pass
             else:
