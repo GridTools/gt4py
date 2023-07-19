@@ -264,7 +264,9 @@ class ItirToSDFG(eve.NodeVisitor):
             output_memlet = create_memlet_at(
                 output_name,
                 tuple(
-                    f"i_{dim}" if f"i_{dim}" in map_domain else f"0:{output_descriptor.shape[scan_dim_index]}"
+                    f"i_{dim}"
+                    if f"i_{dim}" in map_domain
+                    else f"0:{output_descriptor.shape[scan_dim_index]}"
                     for dim, _ in closure_domain
                 ),
             )
