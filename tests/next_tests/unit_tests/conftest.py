@@ -22,12 +22,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
-from gt4py.next.program_processors.runners import (
-    dace_iterator,
-    double_roundtrip,
-    gtfn_cpu,
-    roundtrip,
-)
+from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
 
 @pytest.fixture(
@@ -69,7 +64,6 @@ def get_processor_id(processor):
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
         (gtfn_cpu.run_gtfn_imperative, True),
-        # (dace_iterator.run_dace_iterator, True),
         (gtfn.format_sourcecode, False),
     ],
     ids=lambda p: get_processor_id(p[0]),
