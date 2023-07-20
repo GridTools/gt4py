@@ -59,11 +59,13 @@ def test_str(loc_plain, message):
 
 
 def test_str_snippet(loc_snippet, message):
-    pattern = (
-        f"{message}\\n"
-        '  File ".*", line.*\\n'
-        "        # This very line of comment should be shown in the snippet.\\n"
-        "                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^"
+    pattern = r"\n".join(
+        [
+            f"{message}",
+            '  File ".*", line.*',
+            "        # This very line of comment should be shown in the snippet.",
+            r"                  \^\^\^\^\^\^\^\^\^\^\^\^\^\^",
+        ]
     )
     s = str(errors.DSLError(loc_snippet, message))
     assert re.match(pattern, s)
