@@ -565,6 +565,8 @@ def canonicalize_function_arguments(
     ignore_errors=False,
     use_signature_ordering=False,
 ) -> tuple[list, dict]:
+    if "domain" in func_type.pos_or_kw_args.keys():
+        func_type.pos_or_kw_args.pop("domain")
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
     ckwargs = {**kwargs}
@@ -583,7 +585,7 @@ def canonicalize_function_arguments(
                 )
 
     a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
-    invalid_kw_args = (a - b) | (b - a)
+    invalid_kw_args = (a - b) | (b - a) - {"domain"}
     if invalid_kw_args and (not ignore_errors or use_signature_ordering):
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
@@ -640,10 +642,10 @@ def structural_function_signature_incompatibilities(
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
 
     # check for missing or extra keyword arguments
-    kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys())
+    kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys()) - {"domain"}
     if len(kw_a_m_b) > 0:
         yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} `{'`, `'.join(kw_a_m_b)}`."
-    kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys())
+    kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys()) - {"domain"}
     if len(kw_b_m_a) > 0:
         yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} `{'`, `'.join(kw_b_m_a)}`."
 
