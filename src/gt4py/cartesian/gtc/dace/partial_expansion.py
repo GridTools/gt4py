@@ -28,7 +28,13 @@ from dace.transformation.helpers import nest_sdfg_subgraph
 from gt4py import eve
 from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion.daceir_builder import DaCeIRBuilder
-from gt4py.cartesian.gtc.dace.expansion_specification import ExpansionItem, Iteration, Map, Skip
+from gt4py.cartesian.gtc.dace.expansion_specification import (
+    ExpansionItem,
+    Iteration,
+    Map,
+    Skip,
+    make_expansion_order,
+)
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.utils import make_dace_subset, union_inout_memlets
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_horizontal_block_extents
@@ -196,7 +202,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         self, node: StencilComputation, dims: Sequence[str]
     ) -> List[ExpansionItem]:
         current_expansion_specification = list(node.expansion_specification)
-        res_expansion_specification = [
+        res_expansion_specification: List[ExpansionItem] = [
             Map(
                 iterations=[
                     Iteration(axis=dcir.Axis(dim), kind="tiling", stride=self.strides[dim])
@@ -204,7 +210,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
                 ]
             )
         ]
-        for item_idx, item in enumerate(list(current_expansion_specification)):
+        for item in list(current_expansion_specification):
             iterations: List[Iteration]
             if isinstance(item, Map):
                 iterations = list(item.iterations)
@@ -214,11 +220,17 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
             for it_idx, it in reversed(list(enumerate(iterations))):
                 if str(it.axis) in dims and it.kind == "tiling":
+                    outermost_map_item = res_expansion_specification[0]
+                    assert isinstance(outermost_map_item, Map)
+                    outermost_map_item.schedule = item.schedule
                     del iterations[it_idx]
 
             if iterations:
                 res_expansion_specification.append(
-                    Map(iterations=[copy.deepcopy(it) for it in iterations])
+                    Map(
+                        iterations=[copy.deepcopy(it) for it in iterations],
+                        schedule=dace.ScheduleType.Default,
+                    )
                 )
 
         return res_expansion_specification
@@ -227,8 +239,6 @@ class PartialExpansion(transformation.SubgraphTransformation):
         node.expansion_specification = self._make_new_expansion_specification(node, dims)
 
     def _test_dim_outermost(self, node: StencilComputation, dims: Sequence[str]):
-        from gt4py.cartesian.gtc.dace.nodes import make_expansion_order
-
         new_spec = self._make_new_expansion_specification(node, dims)
         try:
             make_expansion_order(node, new_spec)
@@ -445,11 +455,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
             outer_subsets[edge.data.data] = dace.subsets.union(
                 edge.data.subset, outer_subsets.get(edge.data.data, edge.data.subset)
             )
-        # ensure single-use of input and output subset instances
-        for edge in state.in_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
-        for edge in state.out_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+
+        # This function is also used when just testing the split, but the following code changes the graph
+        # What is it needed for? only leaving it commented for now.
+        # # ensure single-use of input and output subset instances
+        # for edge in state.in_edges(node):
+        #     edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+        # for edge in state.out_edges(node):
+        #     edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
 
         origins: Dict[eve.SymbolRef, SymblicAxisDict] = dict()
         solved_domain = self._solve_domain_subsets(sdfg, node, access_infos, outer_subsets)

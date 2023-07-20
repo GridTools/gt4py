@@ -490,6 +490,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,
+                restrict_intervals={dcir.Axis.K: k_interval},
                 **kwargs,
             )
         # pop stages context (pushed with push_grid_subset)
@@ -512,9 +513,13 @@ class DaCeIRBuilder(eve.NodeTranslator):
             if isinstance(item, (Sections, Stages))
         ]
 
+        items_noskip = [
+            item if not isinstance(item, Skip) else item.item
+            for item in global_ctx.library_node.expansion_specification
+        ]
         k_idx = next(
             idx
-            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            for idx, item in enumerate(items_noskip)
             if (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
             or (isinstance(item, Loop) and item.axis == dcir.Axis.K)
         )
@@ -553,6 +558,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 iteration_ctx=iteration_ctx,
                 global_ctx=global_ctx,
                 symbol_collector=symbol_collector,
+                restrict_intervals={dcir.Axis.K: node.interval},
             )
         if k_idx > sections_idx:
             # pop off iteration_ctx.push_interval from above
@@ -623,6 +629,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         global_ctx,
         iteration_ctx: "DaCeIRBuilder.IterationContext",
         symbol_collector: "DaCeIRBuilder.SymbolCollector",
+        restrict_intervals=None,
         **kwargs,
     ):
         grid_subset = iteration_ctx.grid_subset
@@ -632,6 +639,41 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
 
         ranges = []
+
+        sections_idx = next(
+            idx
+            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            if isinstance(item, Sections)
+        )
+        items_noskip = [
+            item if not isinstance(item, Skip) else item.item
+            for item in global_ctx.library_node.expansion_specification
+        ]
+        k_indices = list(
+            idx
+            for idx, item in enumerate(items_noskip)
+            if (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
+            or (isinstance(item, Loop) and item.axis == dcir.Axis.K)
+        )
+        outermost_k_idx, innermost_k_idx = k_indices[0], k_indices[-1]
+
+        if (
+            outermost_k_idx < sections_idx
+            and innermost_k_idx > sections_idx
+            and any(it.kind == "contiguous" and it.axis == dcir.Axis.K for it in item.iterations)
+        ):
+            # if a k iteration outside of sections, need a subdomain predicate.
+            # however, if contiguous map also outside of sections, predication is done in sections.
+            # ToDO skip this part if only one section and restrict_interval==overall k range.
+            scope_nodes = self.to_subdomain_predicate(
+                [self.to_state(scope_nodes, grid_subset=grid_subset)],
+                [restrict_intervals[dcir.Axis.K]],
+                grid_subset=grid_subset,
+                symbol_collector=symbol_collector,
+            )
+            scope_nodes = self.to_dataflow(
+                scope_nodes, global_ctx=global_ctx, symbol_collector=symbol_collector
+            )
         for iteration in item.iterations:
             axis = iteration.axis
             interval = iteration_ctx.grid_subset.intervals[axis]
@@ -799,6 +841,38 @@ class DaCeIRBuilder(eve.NodeTranslator):
         else:
             raise ValueError("Invalid expansion specification set.")
 
+    def to_subdomain_predicate(
+        self,
+        nodes,
+        intervals: List[oir.Interval],
+        *,
+        grid_subset: dcir.GridSubset,
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
+    ):
+        assert len(intervals) == len(nodes)
+        states = [self.to_state(n, grid_subset=grid_subset) for n in nodes]
+        predicated_branches = []
+        read_memlets, write_memlets, _ = union_inout_memlets(states)
+
+        for interval, state in zip(intervals, states):
+            dcir_interval = dcir.DomainInterval(
+                start=dcir.AxisBound.from_common(dcir.Axis.K, interval.start),
+                end=dcir.AxisBound.from_common(dcir.Axis.K, interval.end),
+            )
+            predicated_branches.append(
+                (dcir.GridSubset(intervals={dcir.Axis.K: dcir_interval}), state)
+            )
+
+            for sym in dcir_interval.free_symbols:
+                symbol_collector.add_symbol(sym, common.DataType.INT32)
+            symbol_collector.add_symbol(dcir.Axis.K.iteration_symbol(), common.DataType.INT32)
+        return dcir.SubdomainPredicate(
+            grid_subset=grid_subset,
+            read_memlets=read_memlets,
+            write_memlets=write_memlets,
+            branches=predicated_branches,
+        )
+
     def visit_VerticalLoop(
         self,
         node: oir.VerticalLoop,
@@ -832,12 +906,16 @@ class DaCeIRBuilder(eve.NodeTranslator):
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)
             if isinstance(item, Sections)
         )
-        k_idx = next(
+        items_noskip = [
+            item if not isinstance(item, Skip) else item.item
+            for item in global_ctx.library_node.expansion_specification
+        ]
+        k_idx = list(
             idx
-            for idx, item in enumerate(global_ctx.library_node.expansion_specification)
+            for idx, item in enumerate(items_noskip)
             if (isinstance(item, Map) and any(it.axis == dcir.Axis.K for it in item.iterations))
             or (isinstance(item, Loop) and item.axis == dcir.Axis.K)
-        )
+        )[-1]
 
         expansion_items = global_ctx.library_node.expansion_specification[:sections_idx]
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
@@ -854,7 +932,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
         if node.loop_order != common.LoopOrder.PARALLEL:
             sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
-
         if k_idx < sections_idx and (
             len(node.sections) > 1
             or (
@@ -862,31 +939,12 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 or not node.sections[0].interval.end == overall_interval.end
             )
         ):
-            assert len(sections) == len(node.sections)
-            sections = [self.to_state(s, grid_subset=iteration_ctx.grid_subset) for s in sections]
-            predicated_branches = []
-            read_memlets, write_memlets, _ = union_inout_memlets(sections)
-
-            for oir_section, dcir_section in zip(node.sections, sections):
-                oir_interval = oir_section.interval
-                dcir_interval = dcir.DomainInterval(
-                    start=dcir.AxisBound.from_common(dcir.Axis.K, oir_interval.start),
-                    end=dcir.AxisBound.from_common(dcir.Axis.K, oir_interval.end),
-                )
-                predicated_branches.append(
-                    (dcir.GridSubset(intervals={dcir.Axis.K: dcir_interval}), dcir_section)
-                )
-
-                for sym in dcir_interval.free_symbols:
-                    symbol_collector.add_symbol(sym, common.DataType.INT32)
-                symbol_collector.add_symbol(dcir.Axis.K.iteration_symbol(), common.DataType.INT32)
-
             computations = [
-                dcir.SubdomainPredicate(
+                self.to_subdomain_predicate(
+                    sections,
+                    [s.interval for s in node.sections],
                     grid_subset=iteration_ctx.grid_subset,
-                    read_memlets=read_memlets,
-                    write_memlets=write_memlets,
-                    branches=predicated_branches,
+                    symbol_collector=symbol_collector,
                 )
             ]
         else:

@@ -119,15 +119,15 @@ def _set_expansion_orders(sdfg: dace.SDFG):
             expansion_priority = _get_expansion_priority_cpu(node)
         is_set = False
         for exp in expansion_priority:
-            # try:
-            node.expansion_specification = exp
-            is_set = True
-            # except ValueError:
-            #     continue
-            # else:
-            #     break
-        # if not is_set:
-        #     raise ValueError("No expansion compatible")
+            try:
+                node.expansion_specification = exp
+                is_set = True
+            except ValueError:
+                continue
+            else:
+                break
+        if not is_set:
+            raise ValueError("No expansion compatible")
 
 
 def _set_tile_sizes(sdfg: dace.SDFG):
@@ -203,6 +203,9 @@ def _post_expand_trafos(sdfg: dace.SDFG):
             repldicts.setdefault(sd.sdfg_id, {})
             repldicts[sd.sdfg_id][name] = f"LOCAL_{sd.sdfg_id}_{name}"
             array.lifetime = dace.AllocationLifetime.Persistent
+    for sd in sdfg.all_sdfgs_recursive():
+        if sd.sdfg_id in repldicts:
+            sd.replace_dict(repldicts[sd.sdfg_id])
 
 
 def _sdfg_add_arrays_and_edges(
@@ -392,7 +395,7 @@ class SDFGManager:
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
 
-        partially_expand(sdfg, "K")
+        partially_expand(sdfg, "IJ")
         sdfg.expand_library_nodes()
         _post_expand_trafos(sdfg)
         return sdfg
