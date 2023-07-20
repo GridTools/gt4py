@@ -50,7 +50,7 @@ _verbose_exceptions: bool = _get_verbose_exceptions_envvar()
 
 
 def set_verbose_exceptions(enabled: bool = False) -> None:
-    """With verbose exceptions, the stack trace and cause of the error is also printed."""
+    """Programmatically set whether to use verbose printing for uncaught errors."""
     global _verbose_exceptions
     _verbose_exceptions = enabled
 
@@ -72,7 +72,9 @@ def compilation_error_hook(fallback: Callable, type_: type, value: BaseException
     """
     Format `CompilationError`s in a neat way.
 
-    All other Python exceptions are formatted by the `fallback` hook.
+    All other Python exceptions are formatted by the `fallback` hook. When
+    verbose exceptions are enabled, the stack trace and cause of the error is
+    also printed.
     """
     if isinstance(value, exceptions.DSLError):
         exc_strs = _format_uncaught_error(value, _verbose_exceptions)
