@@ -203,6 +203,9 @@ def _post_expand_trafos(sdfg: dace.SDFG):
             repldicts.setdefault(sd.sdfg_id, {})
             repldicts[sd.sdfg_id][name] = f"LOCAL_{sd.sdfg_id}_{name}"
             array.lifetime = dace.AllocationLifetime.Persistent
+    for sd in sdfg.all_sdfgs_recursive():
+        if sd.id in repldicts:
+            sd.replace_dict(repldicts[sd.id])
 
 
 def _sdfg_add_arrays_and_edges(
