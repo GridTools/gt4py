@@ -26,7 +26,6 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 
 7. Upload distribution package to PyPI and quickly that test it works properly.
 
-
 <!-- Reference links -->
 
 [conventional-commits]: https://www.conventionalcommits.org/en/v1.0.0/#summary
