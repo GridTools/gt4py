@@ -20,21 +20,8 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
    $ git commit -m 'Releasing 0.{M}.{m}.{p} version.'
    ```
 
-5. Add a new lightweight tag like: `v0.{M}.{m}.{p}`
+5. On the GitHub website go to _Releases_ and _Draft a new release_. Choose `v0.{M}.{m}.{p}` as tag and select a branch (usually `main`). Follow the style of the previous releases for the title (`GT4Py v0.{M}.{m}.{p}`) and description. Then _Publish release_.
 
-   ```bash
-   $ git tag v0.{M}.{m}.{p}
-   ```
+6. Upload distribution package to TestPyPI and quickly test that it works properly.
 
-6. Push the new commit and tag directly to the upstream repo:
-
-   ```bash
-   $ git push upstream
-   $ git push upstream v0.{M}.{m}.{p}
-   ```
-
-7. Go to the GitHub website and verify that the new tag has been successfully created.
-
-8. Upload distribution package to TestPyPI and quickly test that it works properly.
-
-9. Upload distribution package to PyPI and quickly that test it works properly.
+7. Upload distribution package to PyPI and quickly that test it works properly.
