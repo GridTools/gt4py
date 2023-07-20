@@ -4,9 +4,9 @@ This document describes the process of releasing new versions of GT4Py.
 
 Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commit tags in the main GitHub repository. To create a new release you should:
 
-1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the main public branch.
+1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the `main` public branch.
 
-2. Use `bump2version` to update the version number.
+2. Use **bump2version**to update the version number.
 
    ```bash
    $ bump2version minor # or patch
