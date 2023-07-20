@@ -806,8 +806,10 @@ class PartialExpansion(transformation.SubgraphTransformation):
         node.access_infos = {mem.field: mem.access_info for mem in memlets}
 
     def apply(self, sdfg: dace.SDFG):
+        # We build a subgraph that the tile map will surround
         subgraph = self.subgraph_view(sdfg)
         nsdfg_state, nsdfg_node = _nest_sdfg_subgraph(sdfg, subgraph)
+
         stencil_computations: List[Tuple[StencilComputation, dace.SDFGState]] = list(
             filter(
                 lambda n: isinstance(n[0], StencilComputation),
@@ -821,16 +823,23 @@ class PartialExpansion(transformation.SubgraphTransformation):
         )
         domain_dict = parent_symbolic_splits[sdfg.sdfg_id][0]
 
+        # Tag partial expanded dims so they are treated as such
+        # during expansion
         for node, state in stencil_computations:
             self._set_skips(state, node)
+
+        # All schedules are expected to be the same - we grab the first stencil
         first_item = stencil_computations[0][0].expansion_specification[0]
         assert isinstance(first_item, Skip) and isinstance(first_item.item, Map)
         tiling_schedule = first_item.item.schedule
 
+        # Collect all nodes and states access info recursively
+        # and update the tiling of edges inside the nested SDFG
         nsdfg_access_infos = self._update_nested_and_gather_access_info(
             nsdfg_node, parent_symbolic_splits, axes
         )
 
+        # Reconnect the new subgraph SDFG to the top tiling map
         tiling_ranges = {
             axis.tile_symbol(): str(
                 dace.subsets.Range([(0, domain_dict[axis] - 1, self.strides[axis])])
@@ -903,6 +912,9 @@ class PartialExpansion(transformation.SubgraphTransformation):
             )
             nsdfg_state.add_edge(map_exit, "OUT_" + name, edge.dst, edge.dst_conn, memlet=edge.data)
             nsdfg_state.remove_edge(edge)
+
+        # Safeguard: if you have no inputs/outputs still put an empty edge to
+        # conserve topology
         if not nsdfg_state.edges_between(map_entry, nsdfg_node):
             nsdfg_state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
         if not nsdfg_state.edges_between(nsdfg_node, map_exit):
@@ -972,11 +984,15 @@ def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
 
 
 def partially_expand(sdfg: dace.SDFG, dims: Sequence[str]):
+    """Utility function that greedily tries to do can_apply/apply
+    on subgraphs, starting from the leafs upward
+    """
     if len(dims) == 0:
         return
 
     cft = cf.structured_control_flow_tree(sdfg, lambda _: "")
 
+    # Greedily identify subgraphs that can be tiled in dims
     matches = _generate_matches(sdfg, cft, dims=dims)
 
     for sd, nodes in matches:
