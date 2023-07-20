@@ -22,6 +22,7 @@ other errors.
 
 import os
 import sys
+import warnings
 from typing import Callable
 
 from . import exceptions, formatting
@@ -31,10 +32,17 @@ def _get_verbose_exceptions_envvar() -> bool:
     """Detect if the user enabled verbose exceptions in the environment variables."""
     env_var_name = "GT4PY_VERBOSE_EXCEPTIONS"
     if env_var_name in os.environ:
-        try:
-            return bool(os.environ[env_var_name])
-        except TypeError:
+        false_values = ["0", "false", "off"]
+        true_values = ["1", "true", "on"]
+        value = os.environ[env_var_name].lower()
+        if value in false_values:
             return False
+        elif value in true_values:
+            return True
+        else:
+            values = ", ".join([*false_values, *true_values])
+            msg = f"the 'GT4PY_VERBOSE_EXCEPTIONS' environment variable must be one of {values} (case insensitive)"
+            warnings.warn(msg)
     return False
 
 
