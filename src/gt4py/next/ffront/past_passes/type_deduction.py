@@ -259,10 +259,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
             for key in node.keys_
         ]
-        new_values_ = []
-        # for value in node.values_:
-        #     values_elts = [elt(type=ts.ScalarType(kind=ts.ScalarKind.INT64)) for elt in value.elts]
-        #     new_values_.append(past.TupleExpr(elts=values_elts, location=value.location))
         return past.Dict(keys_=new_keys, values_=node.values_, location=node.location)
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
