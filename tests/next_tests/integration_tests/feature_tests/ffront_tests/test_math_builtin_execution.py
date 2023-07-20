@@ -22,11 +22,11 @@ from gt4py.next import np_as_located_field
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.program_processors.runners import dace_iterator
 from gt4py.next.type_system import type_translation
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import *
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
 )
@@ -117,6 +117,8 @@ def make_builtin_field_operator(builtin_name: str):
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inputs):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)

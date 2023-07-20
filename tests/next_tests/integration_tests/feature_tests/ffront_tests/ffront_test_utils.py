@@ -22,7 +22,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -30,7 +30,14 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
+@pytest.fixture(
+    params=[
+        roundtrip.executor,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ]
+)
 def fieldview_backend(request):
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend

@@ -34,8 +34,11 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
         ),
     )
     compiled_program = build_the_program(example_program_source)
-    buf = np.zeros(shape=(6, 5), dtype=np.float32)
-    tup = [np.zeros(shape=(6, 5), dtype=np.float32), np.zeros(shape=(6, 5), dtype=np.float32)]
+    buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
+    tup = [
+        (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
+        (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
+    ]
     sc = np.float32(3.1415926)
     res = compiled_program(buf, tup, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)
@@ -50,8 +53,11 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
         ),
     )
     compiled_program = build_the_program(example_program_source)
-    buf = np.zeros(shape=(6, 5), dtype=np.float32)
-    tup = [np.zeros(shape=(6, 5), dtype=np.float32), np.zeros(shape=(6, 5), dtype=np.float32)]
+    buf = (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0))
+    tup = [
+        (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
+        (np.zeros(shape=(6, 5), dtype=np.float32), (0, 0)),
+    ]
     sc = np.float32(3.1415926)
     res = compiled_program(buf, tup, sc)
     assert math.isclose(res, 6 * 5 * 3.1415926, rel_tol=1e-4)

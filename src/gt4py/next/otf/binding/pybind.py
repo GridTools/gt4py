@@ -89,7 +89,10 @@ def _type_string(type_: ts.TypeSpec) -> str:
     if isinstance(type_, ts.TupleType):
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
-        return "pybind11::buffer"
+        ndims = len(type_.dims)
+        buffer_t = "pybind11::buffer"
+        origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
+        return f"std::pair<{buffer_t}, {origin_t}>"
     elif isinstance(type_, ts.ScalarType):
         return cpp_interface.render_scalar_type(type_)
     else:
@@ -142,17 +145,16 @@ class BindingCodeGenerator(TemplatedGenerator):
         return cpp_interface.render_function_call(call.target, args)
 
     def visit_BufferSID(self, sid: BufferSID, **kwargs):
-        return self.generic_visit(
-            sid, rendered_scalar_type=cpp_interface.render_scalar_type(sid.scalar_type)
-        )
+        pybuffer = f"{sid.source_buffer}.first"
+        dims = [self.visit(dim) for dim in sid.dimensions]
+        origin = f"{sid.source_buffer}.second"
 
-    BufferSID = as_jinja(
-        """gridtools::sid::rename_numbered_dimensions<{{", ".join(dimensions)}}>(
-                gridtools::as_sid<{{rendered_scalar_type}},\
-                                  {{dimensions.__len__()}},\
-                                  gridtools::sid::unknown_kind>({{source_buffer}})
-            )"""
-    )
+        as_sid = f"gridtools::as_sid<{cpp_interface.render_scalar_type(sid.scalar_type)},\
+                {sid.dimensions.__len__()},\
+                gridtools::sid::unknown_kind>({pybuffer})"
+        shifted = f"gridtools::sid::shift_sid_origin({as_sid}, {origin})"
+        renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
+        return renamed
 
     def visit_CompositeSID(self, node: CompositeSID, **kwargs):
         kwargs["composite_ids"] = (

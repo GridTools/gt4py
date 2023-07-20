@@ -19,8 +19,8 @@ import gt4py.next as gtx
 from gt4py.next import errors
 from gt4py.next.program_processors.runners import roundtrip
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (  # noqa: F401 # fixtures
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
     fieldview_backend,
 )

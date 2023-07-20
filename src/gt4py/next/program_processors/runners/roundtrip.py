@@ -129,6 +129,12 @@ def fencil_generator(
     ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
+
+    # format output in debug mode for better debuggability
+    # (e.g. line numbers, overview in the debugger).
+    if debug:
+        program = codegen.format_python_source(program)
+
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
         .if_isinstance(itir.OffsetLiteral)
