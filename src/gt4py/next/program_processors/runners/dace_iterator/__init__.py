@@ -59,7 +59,7 @@ def get_connectivity_args(
 
 def get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> dict[str, Any]:
+) -> Mapping[str, int]:
     return {
         str(sym): size
         for name, value in args.items()
@@ -69,14 +69,14 @@ def get_shape_args(
 
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> dict[str, Any]:
+) -> Mapping[str, int]:
     stride_args = {}
     for name, value in args.items():
         for sym, stride_size in zip(arrays[name].strides, value.strides):
             stride, remainder = divmod(stride_size, value.itemsize)
-            if remainder:
+            if remainder != 0:
                 raise ValueError(
-                    f"Invalid stride for argument {sym}: {stride_size} / {value.itemsize}"
+                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)"
                 )
             stride_args[str(sym)] = stride
 
@@ -91,11 +91,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     program = preprocess_program(program, offset_provider)
     arg_types = [type_translation.from_value(arg) for arg in args]
-    sdfg_genenerator = ItirToSDFG(
-        param_types=arg_types,
-        column_axis=column_axis,
-        offset_provider=offset_provider,
-    )
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
 
     dace_args = get_args(program.params, args)
