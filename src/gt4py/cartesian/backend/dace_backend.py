@@ -395,7 +395,7 @@ class SDFGManager:
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
 
-        partially_expand(sdfg, "K")
+        partially_expand(sdfg, "IJ")
         sdfg.expand_library_nodes()
         _post_expand_trafos(sdfg)
         return sdfg

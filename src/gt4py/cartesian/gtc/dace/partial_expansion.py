@@ -455,11 +455,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
             outer_subsets[edge.data.data] = dace.subsets.union(
                 edge.data.subset, outer_subsets.get(edge.data.data, edge.data.subset)
             )
-        # ensure single-use of input and output subset instances
-        for edge in state.in_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
-        for edge in state.out_edges(node):
-            edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+
+        # This function is also used when just testing the split, but the following code changes the graph
+        # What is it needed for? only leaving it commented for now.
+        # # ensure single-use of input and output subset instances
+        # for edge in state.in_edges(node):
+        #     edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
+        # for edge in state.out_edges(node):
+        #     edge.data.subset = copy.deepcopy(outer_subsets[edge.data.data])
 
         origins: Dict[eve.SymbolRef, SymblicAxisDict] = dict()
         solved_domain = self._solve_domain_subsets(sdfg, node, access_infos, outer_subsets)
