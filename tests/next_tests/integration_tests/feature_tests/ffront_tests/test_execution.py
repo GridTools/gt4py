@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    errors,
     float32,
     float64,
     int32,
@@ -32,7 +33,6 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -914,7 +914,7 @@ def test_where_k_offset(cartesian_case):
 
 
 def test_undefined_symbols(cartesian_case):
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+    with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
@@ -1017,7 +1017,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
@@ -1028,9 +1028,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(
-        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
-    ):
+    with pytest.raises(errors.DSLError, match=(r"Assignment value must be of type tuple!")):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:

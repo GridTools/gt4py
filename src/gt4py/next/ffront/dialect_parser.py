@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from typing import Callable
 
 from gt4py.eve.concepts import SourceLocation
-from gt4py.eve.extended_typing import Any, ClassVar, Generic, Optional, Type, TypeVar
-from gt4py.next import common
+from gt4py.eve.extended_typing import Any, Generic, TypeVar
+from gt4py.next import errors
 from gt4py.next.ffront.ast_passes.fix_missing_locations import FixMissingLocations
 from gt4py.next.ffront.ast_passes.remove_docstrings import RemoveDocstrings
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
@@ -29,67 +29,24 @@ from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 DialectRootT = TypeVar("DialectRootT")
 
 
-class DialectSyntaxError(common.GTSyntaxError):
-    dialect_name: ClassVar[str] = ""
-
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno: int = 0,
-        offset: int = 0,
-        filename: Optional[str] = None,
-        end_lineno: Optional[int] = None,
-        end_offset: Optional[int] = None,
-        text: Optional[str] = None,
-    ):
-        msg = f"Invalid {self.dialect_name} Syntax: {msg}"
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_AST(
-        cls,
-        node: ast.AST,
-        *,
-        msg: str = "",
-        filename: Optional[str] = None,
-        text: Optional[str] = None,
-    ):
-        return cls(
-            msg,
-            lineno=node.lineno,
-            offset=node.col_offset + 1,  # offset is 1-based for syntax errors
-            filename=filename,
-            end_lineno=getattr(node, "end_lineno", None),
-            end_offset=(node.end_col_offset + 1)
-            if hasattr(node, "end_col_offset") and node.end_col_offset is not None
+def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
+    try:
+        return ast.parse(textwrap.dedent(source_definition.source)).body[0]
+    except SyntaxError as err:
+        assert err.lineno
+        assert err.offset
+        loc = SourceLocation(
+            line=err.lineno + source_definition.line_offset,
+            column=err.offset + source_definition.column_offset,
+            filename=source_definition.filename,
+            end_line=err.end_lineno + source_definition.line_offset
+            if err.end_lineno is not None
             else None,
-            text=text,
+            end_column=err.end_offset + source_definition.column_offset
+            if err.end_offset is not None
+            else None,
         )
-
-    @classmethod
-    def from_location(cls, msg="", *, location: SourceLocation):
-        return cls(
-            msg,
-            lineno=location.line,
-            offset=location.column,
-            filename=location.source,
-            end_lineno=location.end_line,
-            end_offset=location.end_column,
-            text=None,
-        )
-
-
-def _ensure_syntax_error_invariants(err: SyntaxError):
-    """Ensure syntax error invariants required to print meaningful error messages."""
-    # If offsets are provided so must line numbers. For example `err.offset` determines
-    # if carets (`^^^^`) are printed below `err.text`. They would be misleading if we
-    # don't know on which line the error occurs.
-    assert err.lineno or not err.offset
-    assert err.end_lineno or not err.end_offset
-    # If the ends are provided so must starts.
-    assert err.lineno or not err.end_lineno
-    assert err.offset or not err.end_offset
+        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -97,7 +54,6 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
     source_definition: SourceDefinition
     closure_vars: dict[str, Any]
     annotations: dict[str, Any]
-    syntax_error_cls: ClassVar[Type[DialectSyntaxError]] = DialectSyntaxError
 
     @classmethod
     def apply(
@@ -106,52 +62,20 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> DialectRootT:
-        source, filename, starting_line = source_definition
-        try:
-            line_offset = starting_line - 1
-            definition_ast: ast.AST
-            definition_ast = ast.parse(textwrap.dedent(source)).body[0]
-            definition_ast = ast.increment_lineno(definition_ast, line_offset)
-            line_offset = 0  # line numbers are correct from now on
+        definition_ast: ast.AST
+        definition_ast = parse_source_definition(source_definition)
 
-            definition_ast = RemoveDocstrings.apply(definition_ast)
-            definition_ast = FixMissingLocations.apply(definition_ast)
-            output_ast = cls._postprocess_dialect_ast(
-                cls(
-                    source_definition=source_definition,
-                    closure_vars=closure_vars,
-                    annotations=annotations,
-                ).visit(cls._preprocess_definition_ast(definition_ast)),
-                closure_vars,
-                annotations,
-            )
-        except SyntaxError as err:
-            _ensure_syntax_error_invariants(err)
-
-            # The ast nodes do not contain information about the path of the
-            #  source file or its contents. We add this information here so
-            #  that raising an error using :func:`DialectSyntaxError.from_AST`
-            #  does not require passing the information on every invocation.
-            if not err.filename:
-                err.filename = filename
-
-            # ensure line numbers are relative to the file (respects `starting_line`)
-            if err.lineno:
-                err.lineno = err.lineno + line_offset
-            if err.end_lineno:
-                err.end_lineno = err.end_lineno + line_offset
-
-            if not err.text:
-                if err.lineno:
-                    source_lineno = err.lineno - starting_line
-                    source_end_lineno = (
-                        (err.end_lineno - starting_line) if err.end_lineno else source_lineno
-                    )
-                    err.text = "\n".join(source.splitlines()[source_lineno : source_end_lineno + 1])
-                else:
-                    err.text = source
-
-            raise err
+        definition_ast = RemoveDocstrings.apply(definition_ast)
+        definition_ast = FixMissingLocations.apply(definition_ast)
+        output_ast = cls._postprocess_dialect_ast(
+            cls(
+                source_definition=source_definition,
+                closure_vars=closure_vars,
+                annotations=annotations,
+            ).visit(cls._preprocess_definition_ast(definition_ast)),
+            closure_vars,
+            annotations,
+        )
 
         return output_ast
 
@@ -173,10 +97,21 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
         return output_ast
 
     def generic_visit(self, node: ast.AST) -> None:
-        raise self.syntax_error_cls.from_AST(
-            node,
-            msg=f"Nodes of type {type(node).__module__}.{type(node).__qualname__} not supported in dialect.",
+        loc = self.get_location(node)
+        feature = f"{type(node).__module__}.{type(node).__qualname__}"
+        raise errors.UnsupportedPythonFeatureError(loc, feature)
+
+    def get_location(self, node: ast.AST) -> SourceLocation:
+        file = self.source_definition.filename
+        line_offset = self.source_definition.line_offset
+        col_offset = self.source_definition.column_offset
+
+        line = node.lineno + line_offset if node.lineno is not None else None
+        end_line = node.end_lineno + line_offset if node.end_lineno is not None else None
+        column = 1 + node.col_offset + col_offset if node.col_offset is not None else None
+        end_column = (
+            1 + node.end_col_offset + col_offset if node.end_col_offset is not None else None
         )
 
-    def _make_loc(self, node: ast.AST) -> SourceLocation:
-        return SourceLocation.from_AST(node, source=self.source_definition.filename)
+        loc = SourceLocation(file, line, column, end_line=end_line, end_column=end_column)
+        return loc

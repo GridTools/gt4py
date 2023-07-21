@@ -18,10 +18,10 @@ import typing
 import numpy as np
 import pytest
 
+from gt4py.next import errors
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import int32, int64
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -240,7 +240,7 @@ def test_call_scan_operator_from_program(cartesian_case):
 
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
     ):
 
@@ -257,7 +257,7 @@ def test_scan_wrong_return_type(cartesian_case):
 
 def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match=(
             r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
         ),
