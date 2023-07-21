@@ -53,8 +53,6 @@ _TYPE_MAPPING = {
 def itir_type_as_dace_type(type_: next_typing.Type):
     if isinstance(type_, itir_typing.Primitive):
         return _TYPE_MAPPING[type_.name]
-    if isinstance(type_, itir_typing.BoolType):
-        return dace.bool.dtype
     raise NotImplementedError()
 
 
