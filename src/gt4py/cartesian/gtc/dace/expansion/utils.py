@@ -35,7 +35,7 @@ def get_dace_debuginfo(node: common.LocNode):
             node.loc.column,
             node.loc.line,
             node.loc.column,
-            node.loc.source,
+            node.loc.filename,
         )
     else:
         return dace.dtypes.DebugInfo(0)

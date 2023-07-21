@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    errors,
     float32,
     float64,
     int32,
@@ -32,7 +33,6 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -260,9 +260,6 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
 
 
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
@@ -530,8 +527,6 @@ def test_tuple_arg(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
     out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
@@ -551,10 +546,12 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if cartesian_case.backend in [
+        dace_iterator.run_dace_iterator,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+    ]:
         pytest.xfail("Transformation passes fail in putting `scan` to the top.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -659,9 +656,6 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def simple_scan_operator(carry: float, a: float) -> float:
         return carry if carry > a else carry + 1.0
@@ -914,7 +908,7 @@ def test_where_k_offset(cartesian_case):
 
 
 def test_undefined_symbols(cartesian_case):
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+    with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
@@ -1017,7 +1011,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
@@ -1028,9 +1022,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(
-        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
-    ):
+    with pytest.raises(errors.DSLError, match=(r"Assignment value must be of type tuple!")):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:

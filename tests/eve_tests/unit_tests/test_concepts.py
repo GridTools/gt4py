@@ -46,49 +46,29 @@ def test_symbol_types():
 
 class TestSourceLocation:
     def test_valid_position(self):
-        eve.concepts.SourceLocation(line=1, column=1, source="source.py")
+        eve.concepts.SourceLocation(line=1, column=1, filename="source.py")
 
     def test_invalid_position(self):
         with pytest.raises(ValueError, match="column"):
-            eve.concepts.SourceLocation(line=1, column=-1, source="source.py")
+            eve.concepts.SourceLocation(line=1, column=-1, filename="source.py")
 
     def test_str(self):
-        loc = eve.concepts.SourceLocation(line=1, column=1, source="dir/source.py")
+        loc = eve.concepts.SourceLocation(line=1, column=1, filename="dir/source.py")
         assert str(loc) == "<dir/source.py:1:1>"
 
-        loc = eve.concepts.SourceLocation(line=1, column=1, source="dir/source.py", end_line=2)
+        loc = eve.concepts.SourceLocation(line=1, column=1, filename="dir/source.py", end_line=2)
         assert str(loc) == "<dir/source.py:1:1 to 2>"
 
         loc = eve.concepts.SourceLocation(
-            line=1, column=1, source="dir/source.py", end_line=2, end_column=2
+            line=1, column=1, filename="dir/source.py", end_line=2, end_column=2
         )
         assert str(loc) == "<dir/source.py:1:1 to 2:2>"
-
-    def test_construction_from_ast(self):
-        import ast
-
-        ast_node = ast.parse("a = b + 1").body[0]
-        loc = eve.concepts.SourceLocation.from_AST(ast_node, "source.py")
-
-        assert loc.line == ast_node.lineno
-        assert loc.column == ast_node.col_offset + 1
-        assert loc.source == "source.py"
-        assert loc.end_line == ast_node.end_lineno
-        assert loc.end_column == ast_node.end_col_offset + 1
-
-        loc = eve.concepts.SourceLocation.from_AST(ast_node)
-
-        assert loc.line == ast_node.lineno
-        assert loc.column == ast_node.col_offset + 1
-        assert loc.source == f"<ast.Assign at 0x{id(ast_node):x}>"
-        assert loc.end_line == ast_node.end_lineno
-        assert loc.end_column == ast_node.end_col_offset + 1
 
 
 class TestSourceLocationGroup:
     def test_valid_locations(self):
-        loc1 = eve.concepts.SourceLocation(line=1, column=1, source="source1.py")
-        loc2 = eve.concepts.SourceLocation(line=2, column=2, source="source2.py")
+        loc1 = eve.concepts.SourceLocation(line=1, column=1, filename="source1.py")
+        loc2 = eve.concepts.SourceLocation(line=2, column=2, filename="source2.py")
         eve.concepts.SourceLocationGroup(loc1)
         eve.concepts.SourceLocationGroup(loc1, loc2)
         eve.concepts.SourceLocationGroup(loc1, loc1, loc2, loc2, context="test context")
@@ -96,13 +76,13 @@ class TestSourceLocationGroup:
     def test_invalid_locations(self):
         with pytest.raises(ValueError):
             eve.concepts.SourceLocationGroup()
-        loc1 = eve.concepts.SourceLocation(line=1, column=1, source="source.py")
+        loc1 = eve.concepts.SourceLocation(line=1, column=1, filename="source.py")
         with pytest.raises(TypeError):
             eve.concepts.SourceLocationGroup(loc1, "loc2")
 
     def test_str(self):
-        loc1 = eve.concepts.SourceLocation(line=1, column=1, source="source1.py")
-        loc2 = eve.concepts.SourceLocation(line=2, column=2, source="source2.py")
+        loc1 = eve.concepts.SourceLocation(line=1, column=1, filename="source1.py")
+        loc2 = eve.concepts.SourceLocation(line=2, column=2, filename="source2.py")
         loc = eve.concepts.SourceLocationGroup(loc1, loc2, context="some context")
         assert str(loc) == "<#some context#[<source1.py:1:1>, <source2.py:2:2>]>"
 

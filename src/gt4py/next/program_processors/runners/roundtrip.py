@@ -21,12 +21,6 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-
-try:
-    import black
-except ImportError:
-    black = None  # type: ignore[assignment]
-
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import common
@@ -136,10 +130,10 @@ def fencil_generator(
 
     program = EmbeddedDSL.apply(ir)
 
-    # format output in debug mode for better debuggability (e.g. line numbers, overview in the
-    # debugger).
-    if black and debug:
-        program = black.format_str(program, mode=black.FileMode())
+    # format output in debug mode for better debuggability
+    # (e.g. line numbers, overview in the debugger).
+    if debug:
+        program = codegen.format_python_source(program)
 
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
