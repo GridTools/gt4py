@@ -146,7 +146,9 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
+        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
+        # this bug disappears after inline_sdfgs pass (part of simplify)
+        pytest.xfail("Not supported in DaCe backend: implicit cast")
     shape = [1, 7]
     inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -185,9 +187,11 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
+        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
+        # this bug disappears after inline_sdfgs pass (part of simplify)
+        pytest.xfail("Not supported in DaCe backend: implicit cast")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
@@ -255,8 +259,6 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
         or program_processor == gtfn_format_sourcecode
     ):
         pytest.xfail("structured dtype input/output currently unsupported")
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
 
     shape = [1, 7]
     inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
@@ -298,11 +300,15 @@ def sum_shifted_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
+        # this bug disappears after inline_sdfgs pass (part of simplify)
+        pytest.xfail("Not supported in DaCe backend: implicit cast")
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
     inp1 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=int))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
     ref = inp0 + inp1[1:]
 
     run_processor(
@@ -342,7 +348,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
     inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=int))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
     ref = inp0 + np.asarray(inp1)[:-1]
 
     run_processor(

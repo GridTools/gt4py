@@ -334,7 +334,9 @@ def test_can_deref(program_processor, stencil):
 def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: cast")
+        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
+        # this bug disappears after inline_sdfgs pass (part of simplify)
+        pytest.xfail("Not supported in DaCe backend: implicit cast")
 
     column_axis = IDim if as_column else None
 

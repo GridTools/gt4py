@@ -27,7 +27,7 @@ from next_tests.unit_tests.conftest import lift_mode, program_processor, run_pro
 def test_scan_in_stencil(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scan")
+        pytest.xfail("Not supported in DaCe backend: shift inside lambda")
 
     isize = 1
     ksize = 3
