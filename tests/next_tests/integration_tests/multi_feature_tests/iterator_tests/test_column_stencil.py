@@ -150,7 +150,7 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
         # this bug disappears after inline_sdfgs pass (part of simplify)
         pytest.xfail("Not supported in DaCe backend: implicit cast")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     run_processor(
