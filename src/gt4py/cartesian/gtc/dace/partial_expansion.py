@@ -19,6 +19,7 @@ import dace
 import dace.codegen.control_flow as cf
 import dace.sdfg.graph
 import dace.symbolic
+import networkx as nx
 import sympy
 from dace.properties import DictProperty, make_properties
 from dace.sdfg.utils import dfs_topological_sort
@@ -133,6 +134,31 @@ def _nest_sdfg_subgraph(sdfg: dace.SDFG, subgraph):
         # nesting.
         new_state = sdfg.add_state_before(subgraph.source_nodes()[0])
         subgraph = dace.sdfg.graph.SubgraphView(sdfg, [new_state, *subgraph.nodes()])
+    if len(subgraph.sink_nodes()) > 1:
+        out_nodes = set(edge.dst for sink in subgraph.sink_nodes() for edge in sdfg.out_edges(sink))
+        assert len(out_nodes) == 1
+        out_node = next(iter(out_nodes))
+        new_state = sdfg.add_state_before(out_node)
+        subgraph = dace.sdfg.graph.SubgraphView(sdfg, [*subgraph.nodes(), new_state])
+
+    if len(subgraph.source_nodes()) != 1:
+        before_nodes = []
+        for node in subgraph.nodes():
+            for edge in sdfg.in_edges(node):
+                if edge.src not in subgraph:
+                    before_nodes.append(edge.src)
+        assert len(before_nodes) == 1
+        new_state = sdfg.add_state_after(before_nodes[0])
+        subgraph = dace.sdfg.graph.SubgraphView(sdfg, [*subgraph.nodes(), new_state])
+    if len(subgraph.sink_nodes()) != 1:
+        after_nodes = []
+        for node in subgraph.nodes():
+            for edge in sdfg.out_edges(node):
+                if edge.dst not in subgraph:
+                    after_nodes.append(edge.dst)
+        assert len(after_nodes) == 1
+        new_state = sdfg.add_state_before(after_nodes[0])
+        subgraph = dace.sdfg.graph.SubgraphView(sdfg, [*subgraph.nodes(), new_state])
 
     for edge in (e for n in subgraph.nodes() for e in subgraph.in_edges(n)):
         for sym in edge.data.assignments.keys():
@@ -257,6 +283,36 @@ class PartialExpansion(transformation.SubgraphTransformation):
         # test if any computations in the graph
         if not subgraph.nodes():
             return False
+
+        # topological tests
+        try:
+            # loops are not implemented (bug in K, complicated extent analysis in IJ)
+            nx.find_cycle(subgraph.graph.nx.subgraph(subgraph.nodes()))
+        except nx.NetworkXNoCycle:
+            pass
+        else:
+            return False
+
+        if any(axis in self.strides for axis in dcir.Axis.dims_horizontal()):
+            # branchings are not implemented in extent analysis
+            start_states = subgraph.source_nodes()
+            if len(start_states) != 1:
+                return False
+            state = start_states[0]
+            observed_states = set()
+            while state in subgraph:
+                observed_states.add(state)
+                edges = sdfg.out_edges(state)
+                if len(edges) > 1:
+                    if any(edge.dst in subgraph for edge in edges):
+                        return False
+                elif len(edges) == 0:
+                    break
+                state = edges[0].dst
+            if (observed_states - set(subgraph.nodes())) or (
+                set(subgraph.nodes()) - observed_states
+            ):
+                return False
 
         if not stencil_computations:
             return False
@@ -955,45 +1011,120 @@ def _test_match(sdfg, states: Set[dace.SDFGState], dims: Sequence[str]):
     return expansion.can_be_applied(sdfg, subgraph)
 
 
+def _get_states(cft: cf.ControlFlow):
+    if isinstance(cft, cf.SingleState):
+        return {cft.state}
+    elif isinstance(cft, cf.GeneralBlock):
+        return {st for child in cft.children for st in _get_states(child)}
+    elif isinstance(cft, cf.IfScope):
+        return {cft.branch_state} | _get_states(cft.body) | _get_states(cft.orelse)
+    elif isinstance(cft, (cf.ForScope, cf.WhileScope)):
+        return {state for cf_child in cft.children for state in _get_states(cf_child)} | {cft.guard}
+    else:
+        raise NotImplementedError
+
+
+def _test_supported_topology(cft):
+    try:
+        _get_states(cft)
+    except NotImplementedError:
+        return False
+    return True
+
+
 def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
     subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
     candidate: Set[dace.SDFGState] = set()
+
+    def commit_and_clear():
+        if candidate:
+            subgraphs.append((sd, set(candidate)))
+        candidate.clear()
+
+    def commit_and_test(cft: cf.ControlFlow):
+        commit_and_clear()
+        if _test_match(sd, states := _get_states(cft), dims):
+            candidate.update(states)
+            return True
+        return False
+
+    def recurse(state: dace.SDFGState):
+        for nsdfg_node in state.nodes():
+            if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
+                nsdfg_cft = cf.structured_control_flow_tree(nsdfg_node.sdfg, lambda _: "")
+                subgraphs.extend(_generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims))
+        commit_and_clear()
+
     # reversed so that extent analysis tends to include stencil sinks
     for child in reversed(cft.children):
-        if isinstance(child, cf.SingleState):
-            if _test_match(sd, {child.state} | candidate, dims):
-                candidate.add(child.state)
+        if _test_supported_topology(child):
+            new_states = _get_states(child)
+            if _test_match(sd, new_states | candidate, dims):
+                candidate.update(new_states)
             else:
-                if candidate:
-                    subgraphs.append((sd, candidate))
-                if _test_match(sd, {child.state}, dims):
-                    candidate = {child.state}
-                else:
-                    candidate = set()
-                    subsubgraphs = []
-                    for nsdfg_node in child.state.nodes():
-                        if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
-                            nsdfg_cft = cf.structured_control_flow_tree(
-                                nsdfg_node.sdfg, lambda _: ""
-                            )
-                            subsubgraphs += _generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims)
-                    subgraphs.extend(subsubgraphs)
+                if not commit_and_test(child):
+                    if isinstance(child, cf.SingleState):
+                        recurse(child.state)
+                    elif isinstance(child, cf.IfScope):
+                        subgraphs.extend(_generate_matches(sd, child.body, dims=dims))
+                        if child.orelse is not None:
+                            subgraphs.extend(_generate_matches(sd, child.orelse, dims=dims))
+                        if not commit_and_test(
+                            cf.SingleState(state=child.branch_state, dispatch_state=lambda _: "")
+                        ):
+                            recurse(child.branch_state)
+                    elif isinstance(child, (cf.ForScope, cf.WhileScope)):
+                        subgraphs.extend(_generate_matches(sd, child.body, dims=dims))
+                    else:
+                        # skip other types of nodes.
+                        pass
         else:
-            if candidate:
-                subgraphs.append((sd, candidate))
-            candidate = set()
-            subsubgraphs = []
-            if isinstance(child, cf.IfScope):
-                subsubgraphs += _generate_matches(sd, child.body, dims)
-                if child.orelse is not None:
-                    subsubgraphs += _generate_matches(sd, child.orelse, dims)
-            elif isinstance(child, cf.ForScope):
-                subsubgraphs += _generate_matches(sd, child.body, dims)
-            if subsubgraphs:
-                subgraphs.extend(subsubgraphs)
-    if candidate:
-        subgraphs.append((sd, candidate))
+            commit_and_clear()
+    commit_and_clear()
     return subgraphs
+
+
+#
+# def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
+#     subgraphs: List[Tuple[dace.SDFG, Set[dace.SDFGState]]] = list()
+#     candidate: Set[dace.SDFGState] = set()
+#     # reversed so that extent analysis tends to include stencil sinks
+#     for child in reversed(cft.children):
+#         if isinstance(child, cf.SingleState, cf.IfScope):
+#             if _test_supported_topology(child) and _test_match(sd, (new_states:=_get_states(child)) | candidate, dims):
+#                 candidate.update(new_states)
+#             else:
+#                 if candidate:
+#                     subgraphs.append((sd, candidate))
+#                 if _test_supported_topology(child) and _test_match(sd, {child.state}, dims):
+#                     candidate = {child.state}
+#                 else:
+#                     if isinstance()
+#                     candidate = set()
+#                     subsubgraphs = []
+#                     for nsdfg_node in child.state.nodes():
+#                         if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
+#                             nsdfg_cft = cf.structured_control_flow_tree(
+#                                 nsdfg_node.sdfg, lambda _: ""
+#                             )
+#                             subsubgraphs += _generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims)
+#                     subgraphs.extend(subsubgraphs)
+#         else:
+#             if candidate:
+#                 subgraphs.append((sd, candidate))
+#             candidate = set()
+#             subsubgraphs = []
+#             if isinstance(child, cf.IfScope):
+#                 subsubgraphs += _generate_matches(sd, child.body, dims)
+#                 if child.orelse is not None:
+#                     subsubgraphs += _generate_matches(sd, child.orelse, dims)
+#             elif isinstance(child, cf.ForScope):
+#                 subsubgraphs += _generate_matches(sd, child.body, dims)
+#             if subsubgraphs:
+#                 subgraphs.extend(subsubgraphs)
+#     if candidate:
+#         subgraphs.append((sd, candidate))
+#     return subgraphs
 
 
 def partially_expand(sdfg: dace.SDFG, dims: Sequence[str]):
@@ -1010,6 +1141,7 @@ def partially_expand(sdfg: dace.SDFG, dims: Sequence[str]):
 
     for sd, nodes in matches:
         parent_sdfg = next(iter(nodes)).parent
+        print(nodes)
         expansion, subgraph = _setup_match(sd, nodes, dims)
         expansion.apply(parent_sdfg)
 
