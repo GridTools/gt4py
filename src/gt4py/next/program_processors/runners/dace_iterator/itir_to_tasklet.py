@@ -53,6 +53,8 @@ _TYPE_MAPPING = {
 def itir_type_as_dace_type(type_: next_typing.Type):
     if isinstance(type_, itir_typing.Primitive):
         return _TYPE_MAPPING[type_.name]
+    if isinstance(type_, itir_typing.BoolType):
+        return dace.bool.dtype
     raise NotImplementedError()
 
 
@@ -148,7 +150,11 @@ def builtin_if(
     expr = "({1} if {0} else {2})".format(*internals)
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)
-    type_ = itir_type_as_dace_type(node_type.dtype)
+    try:
+        type_ = itir_type_as_dace_type(node_type.dtype)
+    except NotImplementedError:
+        # the if expression is formatted with the return value as first argument
+        type_ = args[1].dtype
     return transformer.add_expr_tasklet(expr_args, expr, type_, "if")
 
 
@@ -534,7 +540,11 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         expr = fmt.format(*internals)
         node_type = self.node_types[id(node)]
         assert isinstance(node_type, itir_typing.Val)
-        type_ = itir_type_as_dace_type(node_type.dtype)
+        try:
+            type_ = itir_type_as_dace_type(node_type.dtype)
+        except NotImplementedError:
+            # return value of same type as operands, for example in max(a, b)
+            type_ = args[0].dtype
         return self.add_expr_tasklet(expr_args, expr, type_, "numeric")
 
     def _visit_general_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
