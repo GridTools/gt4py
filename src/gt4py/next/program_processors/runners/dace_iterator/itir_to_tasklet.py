@@ -291,7 +291,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Translate the function's body
         result: ValueExpr | SymbolExpr = self.visit(node.expr)[0]
-        # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
         if isinstance(result, SymbolExpr):
             result = self.add_expr_tasklet([], result.value, result.dtype, "forward")[0]
         self.context.body.arrays[result.value.data].transient = False
