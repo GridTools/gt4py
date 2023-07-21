@@ -290,9 +290,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         # Translate the function's body
-        result: ValueExpr = self.visit(node.expr)[0]
+        result: ValueExpr | SymbolExpr = self.visit(node.expr)[0]
         # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-        result = self.add_expr_tasklet([(result, "result")], "result", result.dtype, "forward")[0]
+        if isinstance(result, ValueExpr):
+            result = self.add_expr_tasklet([(result, "result")], "result", result.dtype, "forward")[
+                0
+            ]
+        else:
+            result = self.add_expr_tasklet([], result.value, result.dtype, "forward")[0]
         self.context.body.arrays[result.value.data].transient = False
         self.context = prev_context
 
@@ -319,7 +324,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_Literal(self, node: itir.Literal) -> list[SymbolExpr]:
         node_type = self.node_types[id(node)]
         assert isinstance(node_type, Val)
-        return [SymbolExpr(node.value, node_type.dtype)]
+        return [SymbolExpr(node.value, itir_type_as_dace_type(node_type.dtype))]
 
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
