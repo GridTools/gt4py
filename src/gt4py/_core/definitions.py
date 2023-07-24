@@ -178,7 +178,7 @@ class DType(Generic[ScalarT]):
     """
 
     scalar_type: type[ScalarT]
-    subshape: tuple[int, ...] = dataclasses.NDArrayObject(default=())
+    subshape: tuple[int, ...] = dataclasses.field(default=())
 
     @functools.cached_property
     def kind(self) -> DTypeKind:
@@ -196,9 +196,7 @@ class DType(Generic[ScalarT]):
 
 @dataclasses.dataclass(frozen=True)
 class IntegerDType(DType[IntegerT]):
-    kind: Final[Literal[DTypeKind.INT]] = dataclasses.NDArrayObject(
-        default=DTypeKind.INT, init=False
-    )
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
@@ -208,22 +206,22 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 @dataclasses.dataclass(frozen=True)
 class UInt8DType(UnsignedIntDType[int8]):
-    scalar_type: Final[type[uint8]] = dataclasses.NDArrayObject(default=uint8, init=False)
+    scalar_type: Final[type[uint8]] = dataclasses.field(default=uint8, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt16DType(UnsignedIntDType[int16]):
-    scalar_type: Final[type[uint16]] = dataclasses.NDArrayObject(default=uint16, init=False)
+    scalar_type: Final[type[uint16]] = dataclasses.field(default=uint16, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt32DType(UnsignedIntDType[int32]):
-    scalar_type: Final[type[uint32]] = dataclasses.NDArrayObject(default=uint32, init=False)
+    scalar_type: Final[type[uint32]] = dataclasses.field(default=uint32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt64DType(UnsignedIntDType[int64]):
-    scalar_type: Final[type[uint64]] = dataclasses.NDArrayObject(default=uint64, init=False)
+    scalar_type: Final[type[uint64]] = dataclasses.field(default=uint64, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -233,39 +231,37 @@ class SignedIntDType(DType[SignedIntT]):
 
 @dataclasses.dataclass(frozen=True)
 class Int8DType(SignedIntDType[int8]):
-    scalar_type: Final[type[int8]] = dataclasses.NDArrayObject(default=int8, init=False)
+    scalar_type: Final[type[int8]] = dataclasses.field(default=int8, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int16DType(SignedIntDType[int16]):
-    scalar_type: Final[type[int16]] = dataclasses.NDArrayObject(default=int16, init=False)
+    scalar_type: Final[type[int16]] = dataclasses.field(default=int16, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int32DType(SignedIntDType[int32]):
-    scalar_type: Final[type[int32]] = dataclasses.NDArrayObject(default=int32, init=False)
+    scalar_type: Final[type[int32]] = dataclasses.field(default=int32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int64DType(SignedIntDType[int64]):
-    scalar_type: Final[type[int64]] = dataclasses.NDArrayObject(default=int64, init=False)
+    scalar_type: Final[type[int64]] = dataclasses.field(default=int64, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class FloatingDType(DType[FloatingT]):
-    kind: Final[Literal[DTypeKind.FLOAT]] = dataclasses.NDArrayObject(
-        default=DTypeKind.FLOAT, init=False
-    )
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
 class Float32DType(FloatingDType[float32]):
-    scalar_type: Final[type[float32]] = dataclasses.NDArrayObject(default=float32, init=False)
+    scalar_type: Final[type[float32]] = dataclasses.field(default=float32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Float64DType(FloatingDType[float64]):
-    scalar_type: Final[type[float64]] = dataclasses.NDArrayObject(default=float64, init=False)
+    scalar_type: Final[type[float64]] = dataclasses.field(default=float64, init=False)
 
 
 SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
