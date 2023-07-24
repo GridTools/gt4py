@@ -178,8 +178,6 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
 
 def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
 
     @gtx.field_operator
     def testee(a: int32) -> cases.VField:
@@ -198,9 +196,6 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
-
     @gtx.field_operator
     def testee_inner(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
@@ -587,9 +582,6 @@ def test_solve_triag(cartesian_case):
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
-
     @gtx.field_operator
     def testee(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
         return a if left < right else b
@@ -917,7 +909,7 @@ def test_undefined_symbols(cartesian_case):
 
 def test_zero_dims_fields(cartesian_case):
     if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
+        pytest.xfail("Not supported in DaCe backend: zero-dimensional fields")
 
     @gtx.field_operator
     def implicit_broadcast_scalar(inp: cases.EmptyField):

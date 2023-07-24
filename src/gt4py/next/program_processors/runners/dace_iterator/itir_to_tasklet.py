@@ -290,9 +290,18 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         # Translate the function's body
-        result: ValueExpr = self.visit(node.expr)[0]
+        result: ValueExpr | SymbolExpr = self.visit(node.expr)[0]
         # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-        result = self.add_expr_tasklet([(result, "result")], "result", result.dtype, "forward")[0]
+        if isinstance(result, ValueExpr):
+            result_name = unique_var_name()
+            self.context.body.add_scalar(result_name, result.dtype, transient=True)
+            result_access = self.context.state.add_access(result_name)
+            self.context.state.add_edge(
+                result.value, None, result_access, None, dace.Memlet(f"{result.value.data}[0]")
+            )
+            result = ValueExpr(value=result_access, dtype=result.dtype)
+        else:
+            result = self.add_expr_tasklet([], result.value, result.dtype, "forward")[0]
         self.context.body.arrays[result.value.data].transient = False
         self.context = prev_context
 
@@ -319,7 +328,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_Literal(self, node: itir.Literal) -> list[SymbolExpr]:
         node_type = self.node_types[id(node)]
         assert isinstance(node_type, Val)
-        return [SymbolExpr(node.value, node_type.dtype)]
+        return [SymbolExpr(node.value, itir_type_as_dace_type(node_type.dtype))]
 
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
@@ -608,7 +617,7 @@ def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
     domain: dict[str, str],
-    inputs: Sequence[tuple[dace.ndarray, str, ts.TypeSpec]],
+    inputs: Sequence[tuple[str, ts.TypeSpec]],
     connectivities: Sequence[tuple[dace.ndarray, str]],
     node_types: dict[int, next_typing.Type],
 ) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
@@ -624,19 +633,26 @@ def closure_to_tasklet_sdfg(
         access = state.add_access(name)
         idx_accesses[dim] = access
         state.add_edge(tasklet, "value", access, None, dace.Memlet(data=name, subset="0"))
-    for _, name, ty in inputs:
-        assert isinstance(ty, ts.FieldType)
-        ndim = len(ty.dims)
-        shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(ndim)]
-        stride = [
-            dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
-        ]
-        dims = [dim.value for dim in ty.dims]
-        dtype = as_dace_type(ty.dtype)
-        body.add_array(name, shape=shape, strides=stride, dtype=dtype)
-        field = state.add_access(name)
-        indices = {dim: idx_accesses[dim] for dim in domain.keys()}
-        symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
+    for name, ty in inputs:
+        if isinstance(ty, ts.FieldType):
+            ndim = len(ty.dims)
+            shape = [
+                dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(ndim)
+            ]
+            stride = [
+                dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
+            ]
+            dims = [dim.value for dim in ty.dims]
+            dtype = as_dace_type(ty.dtype)
+            body.add_array(name, shape=shape, strides=stride, dtype=dtype)
+            field = state.add_access(name)
+            indices = {dim: idx_accesses[dim] for dim in domain.keys()}
+            symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
+        else:
+            assert isinstance(ty, ts.ScalarType)
+            dtype = as_dace_type(ty)
+            body.add_scalar(name, dtype=dtype)
+            symbol_map[name] = ValueExpr(state.add_access(name), dtype)
     for arr, name in connectivities:
         shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=dace.int64) for i in range(2)]
         stride = [dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(2)]
@@ -654,7 +670,7 @@ def closure_to_tasklet_sdfg(
         inner_outputs = _visit_closure_callable(
             node,
             translator,
-            [name for _, name, _ in inputs],
+            [name for name, _ in inputs],
         )
         for output in inner_outputs:
             context.body.arrays[output.value.data].transient = False
