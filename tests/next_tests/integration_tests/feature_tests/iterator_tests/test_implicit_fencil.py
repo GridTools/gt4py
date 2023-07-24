@@ -48,6 +48,8 @@ def copy_stencil(inp):
 
 def test_single_argument(program_processor, dom):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: implicit type cast")
 
     inp = a_field()
     out = out_field()
@@ -59,6 +61,10 @@ def test_single_argument(program_processor, dom):
 
 def test_2_arguments(program_processor, dom):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+        )
 
     @fundef
     def fun(inp0, inp1):
@@ -76,6 +82,8 @@ def test_2_arguments(program_processor, dom):
 
 def test_lambda_domain(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: implicit type cast")
     inp = a_field()
     out = out_field()
 

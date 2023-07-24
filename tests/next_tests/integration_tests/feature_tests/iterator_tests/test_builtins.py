@@ -171,6 +171,10 @@ def arithmetic_and_logical_test_data():
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+        )
 
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
@@ -203,6 +207,10 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+        )
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -333,6 +341,8 @@ def test_can_deref(program_processor, stencil):
 @pytest.mark.parametrize("as_column", [False, True])
 def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: implicit type cast")
 
     column_axis = IDim if as_column else None
 

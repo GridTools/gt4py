@@ -145,6 +145,8 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 )
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: implicit type cast")
     shape = [1, 7]
     inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -182,6 +184,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: implicit type cast")
     shape = [1, 7]
     inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
@@ -292,6 +296,10 @@ def sum_shifted_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+        )
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
