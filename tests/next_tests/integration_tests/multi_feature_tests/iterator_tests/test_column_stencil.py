@@ -145,11 +145,9 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 )
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: implicit type cast")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
 
     run_processor(
         ksum_fencil,
@@ -184,11 +182,9 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: implicit type cast")
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
 
