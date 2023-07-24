@@ -20,8 +20,6 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.common import GTTypeError
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeError
 from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests import cases
@@ -229,7 +227,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
     inp = gtx.np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
-    with pytest.raises(ProgramTypeError) as exc_info:
+    with pytest.raises(TypeError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
@@ -255,7 +253,7 @@ def test_dimensions_domain(cartesian_case):
     out_field = cases.allocate(cartesian_case, empty_domain_program, "out_field")()
 
     with pytest.raises(
-        GTTypeError,
+        ValueError,
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
         empty_domain_program(a, out_field, offset_provider={})

@@ -59,7 +59,7 @@ def get_connectivity_args(
 
 def get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> dict[str, Any]:
+) -> Mapping[str, int]:
     return {
         str(sym): size
         for name, value in args.items()
@@ -69,26 +69,33 @@ def get_shape_args(
 
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
-) -> dict[str, Any]:
-    return {
-        str(sym): size / value.itemsize
-        for name, value in args.items()
-        for sym, size in zip(arrays[name].strides, value.strides)
-    }
+) -> Mapping[str, int]:
+    stride_args = {}
+    for name, value in args.items():
+        for sym, stride_size in zip(arrays[name].strides, value.strides):
+            stride, remainder = divmod(stride_size, value.itemsize)
+            if remainder != 0:
+                raise ValueError(
+                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)"
+                )
+            stride_args[str(sym)] = stride
+
+    return stride_args
 
 
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     program = preprocess_program(program, offset_provider)
     arg_types = [type_translation.from_value(arg) for arg in args]
-    sdfg_genenerator = ItirToSDFG(param_types=arg_types, offset_provider=offset_provider)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
 
     dace_args = get_args(program.params, args)
-    dace_field_args = {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
+    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
