@@ -384,7 +384,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_domain = {}
@@ -418,7 +418,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # add access nodes to SDFG for inputs
-        for name in [*input_names, *conn_names]:
+        for name in [*input_names, *connectivity_names]:
             assert name not in scan_sdfg.arrays
             if isinstance(self.storage_types[name], ts.FieldType):
                 scan_sdfg.add_array(
@@ -432,13 +432,15 @@ class ItirToSDFG(eve.NodeVisitor):
                     name, dtype=as_dace_type(cast(ts.ScalarType, self.storage_types[name]))
                 )
 
+        connectivity_arrays = [(scan_sdfg.arrays[name], name) for name in connectivity_names]
+
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
         lambda_context, lambda_inputs, lambda_outputs = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             {},
             [],
-            [],
+            connectivity_arrays,
             self.node_types,
         )
 
@@ -448,7 +450,7 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_inner_node = lambda_state.add_nested_sdfg(
             lambda_context.body,
             scan_sdfg,
-            input_connectors,
+            set(input_connectors) | set(connectivity_names),
             {connector.value.label for connector in lambda_outputs},
         )
 
@@ -491,6 +493,15 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet=dace.Memlet(data=f"{data_name}", subset=data_subset),
                 src_conn=None,
                 dst_conn=inner_name,
+            )
+
+        for name in connectivity_names:
+            lambda_state.add_memlet_path(
+                lambda_state.add_access(name),
+                scan_inner_node,
+                memlet=dace.Memlet(),
+                src_conn=None,
+                dst_conn=name,
             )
 
         output_names = [output_name]
