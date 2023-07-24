@@ -100,7 +100,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case "pybind11":
                 lib_name = "pybind11::module"
             case "nanobind":
-                lib_name = "nanobind"
+                lib_name = "nanobind-static"
             case "gridtools":
                 lib_name = "GridTools::fn_naive"
             case _:
@@ -109,7 +109,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         cfg = ""
         if dep.name == "nanobind":
             cfg = "\n".join([
-                "nanobind_build_library(nanobind STATIC)",
+                "nanobind_build_library(nanobind-static)",
                 f"nanobind_compile_options({dep.target})",
                 f"nanobind_link_options({dep.target})"
             ])
