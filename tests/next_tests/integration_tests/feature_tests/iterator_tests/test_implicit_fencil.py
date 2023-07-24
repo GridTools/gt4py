@@ -48,10 +48,6 @@ def copy_stencil(inp):
 
 def test_single_argument(program_processor, dom):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
-        # this bug disappears after inline_sdfgs pass (part of simplify)
-        pytest.xfail("Not supported in DaCe backend: implicit cast")
 
     inp = a_field()
     out = out_field()
@@ -63,10 +59,6 @@ def test_single_argument(program_processor, dom):
 
 def test_2_arguments(program_processor, dom):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
-        # this bug disappears after inline_sdfgs pass (part of simplify)
-        pytest.xfail("Not supported in DaCe backend: implicit cast")
 
     @fundef
     def fun(inp0, inp1):
@@ -86,10 +78,6 @@ def test_lambda_domain(program_processor):
     program_processor, validate = program_processor
     inp = a_field()
     out = out_field()
-    if program_processor == run_dace_iterator:
-        # bug in DaCe translation to C-code with implicit cast on nested SDFG boundary
-        # this bug disappears after inline_sdfgs pass (part of simplify)
-        pytest.xfail("Not supported in DaCe backend: implicit cast")
 
     dom = lambda: cartesian_domain(named_range(I, 0, 10))
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})

@@ -93,6 +93,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
+    sdfg.simplify()
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
