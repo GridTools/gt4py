@@ -141,7 +141,9 @@ def map_make_const_list(in_edges):
 def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: map_ builtin, neighbors, reduce, make_const_list")
+        pytest.xfail(
+            "Not supported in DaCe backend: map_ builtin, neighbors, reduce, make_const_list"
+        )
 
     inp = gtx.index_field(Edge)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
