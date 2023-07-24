@@ -208,6 +208,14 @@ class PartialExpansion(transformation.SubgraphTransformation):
 
     @staticmethod
     def _nsdfg_checks(sdfg: dace.SDFG):
+        # topological tests
+        try:
+            # loops are not implemented (bug in K, complicated extent analysis in IJ)
+            nx.find_cycle(sdfg.nx)
+        except nx.NetworkXNoCycle:
+            pass
+        else:
+            return False
         cfg = cf.structured_control_flow_tree(sdfg, lambda _: "")
         if not all(isinstance(c, cf.SingleState) for c in cfg.children):
             return False
@@ -273,7 +281,7 @@ class PartialExpansion(transformation.SubgraphTransformation):
         return True
 
     def can_be_applied(self, sdfg: dace.SDFG, subgraph: dace.sdfg.graph.SubgraphView) -> bool:
-        stencil_computations = list(
+        stencil_computations: List[StencilComputation, dace.SDFGState] = list(
             filter(
                 lambda n: isinstance(n[0], StencilComputation),
                 PartialExpansion.subgraph_all_nodes_recursive_topological(subgraph),
@@ -283,6 +291,11 @@ class PartialExpansion(transformation.SubgraphTransformation):
         # test if any computations in the graph
         if not subgraph.nodes():
             return False
+
+        # test if already expanded
+        for computation, _ in stencil_computations:
+            if any(isinstance(item, Skip) for item in computation.expansion_specification):
+                return False
 
         # topological tests
         try:
