@@ -115,7 +115,7 @@ def map_neighbors(in_edges):
 def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: assert fails")
+        pytest.xfail("Not supported in DaCe backend: map_ builtin, neighbors, reduce")
 
     inp = gtx.index_field(Edge)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
@@ -141,7 +141,7 @@ def map_make_const_list(in_edges):
 def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: assert fails")
+        pytest.xfail("Not supported in DaCe backend: map_ builtin, neighbors, reduce, make_const_list")
 
     inp = gtx.index_field(Edge)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
@@ -217,8 +217,6 @@ def test_sparse_input_field(program_processor_no_dace_exec, lift_mode):
 
 def test_sparse_input_field_v2v(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: assert fails")
 
     non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
     inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
@@ -465,7 +463,7 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
         pytest.xfail("We cannot unroll a reduction on a sparse field only.")
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
     if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: assert fails")
+        pytest.xfail("Not supported in DaCe backend: illegal iterator IR")
 
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
