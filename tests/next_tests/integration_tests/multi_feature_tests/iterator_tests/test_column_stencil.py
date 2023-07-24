@@ -294,7 +294,7 @@ def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
         pytest.xfail(
-            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
         )
 
     k_size = 10

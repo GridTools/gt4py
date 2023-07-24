@@ -173,7 +173,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
         pytest.xfail(
-            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
         )
 
     inps = asfield(*asarray(*inputs))
@@ -209,7 +209,7 @@ def test_math_function_builtins(program_processor, builtin_name, inputs, as_colu
     program_processor, validate = program_processor
     if program_processor == run_dace_iterator:
         pytest.xfail(
-            "Not supported in DaCe backend: type_inference for math builtins missing in ITIR"
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
         )
 
     if builtin_name == "gamma":
