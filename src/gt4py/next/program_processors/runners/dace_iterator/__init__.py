@@ -96,7 +96,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     sdfg.simplify()
 
     dace_args = get_args(program.params, args)
-    dace_field_args = {n: v for n, v in dace_args.items() if hasattr(v, "shape")}
+    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)

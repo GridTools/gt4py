@@ -545,7 +545,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create an SDFG for the tasklet that computes a single item of the output domain.
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
-        input_arrays = [(array_table[name], name, self.storage_types[name]) for name in input_names]
+        input_arrays = [(name, self.storage_types[name]) for name in input_names]
         conn_arrays = [(array_table[name], name) for name in conn_names]
 
         context, _, results = closure_to_tasklet_sdfg(
