@@ -18,16 +18,7 @@ import abc
 import dataclasses
 import enum
 from collections.abc import Sequence
-from typing import (
-    Any,
-    Optional,
-    Protocol,
-    TypeAlias,
-    TypeVar,
-    Union,
-    final,
-    runtime_checkable,
-)
+from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, final, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -67,7 +58,7 @@ class Dimension:
 DomainLike = Union[Sequence[Dimension], Dimension, str]
 
 
-class Field(Protocol[ScalarT]):
+class Field(Protocol[DimsT, ScalarT]):
     @property
     def domain(self) -> DimsT:
         ...

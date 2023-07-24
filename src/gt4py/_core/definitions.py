@@ -19,6 +19,7 @@ import enum
 import functools
 import numbers
 from typing import (
+    TYPE_CHECKING,
     Any,
     Final,
     Generic,
@@ -28,7 +29,6 @@ from typing import (
     TypeGuard,
     TypeVar,
     Union,
-    TYPE_CHECKING,
     cast,
     overload,
 )
@@ -36,14 +36,21 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+
 if TYPE_CHECKING:
-    import cupy as cp
+    try:
+        import cupy as cp
 
-    CuPyNDArray = cp.ndarray
+        CuPyNDArray = cp.ndarray
+    except ImportError:
+        CuPyNDArray = npt.NDArray  # TODO improve pattern
 
-    import jax.numpy as jnp
+    try:
+        import jax.numpy as jnp
 
-    JaxNDArray = jnp.ndarray
+        JaxNDArray = jnp.ndarray
+    except ImportError:
+        JaxNDArray = npt.NDArray  # TODO improve pattern
 
 # Scalar types supported by GT4Py
 bool_ = np.bool_
@@ -190,13 +197,13 @@ class DType(Generic[ScalarT]):
 
     @property
     def dtype(self) -> np.dtype:
-        """NumPy dtype corresponding to this DType."""
+        """NumPy dtype corresponding to this DType."""  # noqa: D403
         return np.dtype(self.scalar_type)
 
 
 @dataclasses.dataclass(frozen=True)
 class IntegerDType(DType[IntegerT]):
-    pass
+    kind: Final[Literal[DTypeKind.INT]] = dataclasses.field(default=DTypeKind.INT, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -205,22 +212,22 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt8DType(UnsignedIntDType[int8]):
+class UInt8DType(UnsignedIntDType[uint8]):
     scalar_type: Final[type[uint8]] = dataclasses.field(default=uint8, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt16DType(UnsignedIntDType[int16]):
+class UInt16DType(UnsignedIntDType[uint16]):
     scalar_type: Final[type[uint16]] = dataclasses.field(default=uint16, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt32DType(UnsignedIntDType[int32]):
+class UInt32DType(UnsignedIntDType[uint32]):
     scalar_type: Final[type[uint32]] = dataclasses.field(default=uint32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
-class UInt64DType(UnsignedIntDType[int64]):
+class UInt64DType(UnsignedIntDType[uint64]):
     scalar_type: Final[type[uint64]] = dataclasses.field(default=uint64, init=False)
 
 
@@ -251,7 +258,7 @@ class Int64DType(SignedIntDType[int64]):
 
 @dataclasses.dataclass(frozen=True)
 class FloatingDType(DType[FloatingT]):
-    pass
+    kind: Final[Literal[DTypeKind.FLOAT]] = dataclasses.field(default=DTypeKind.FLOAT, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -266,7 +273,10 @@ class Float64DType(FloatingDType[float64]):
 
 SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
 
-NDArrayObject = Union[npt.NDArray, CuPyNDArray, JaxNDArray, "NDArrayObjectProto"]
+if TYPE_CHECKING:
+    NDArrayObject = Union[npt.NDArray, CuPyNDArray, JaxNDArray, "NDArrayObjectProto"]
+else:
+    NDArrayObject = Union[npt.NDArray, "NDArrayObjectProto"]
 
 
 class NDArrayObjectProto(Protocol):
