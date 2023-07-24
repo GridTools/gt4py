@@ -190,8 +190,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
         raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
-nanobind_sid_conv =\
-"""
+nanobind_sid_conv = """\
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 #include <gridtools/sid/synthetic.hpp>
@@ -216,7 +215,7 @@ namespace gridtools {
             array<size_t, ndim> strides;
             std::copy_n(ndarray.shape_ptr(), ndim, shape.begin());
             std::copy_n(ndarray.stride_ptr(), ndim, strides.begin());
-    
+
             return sid::synthetic()
                 .template set<property::origin>(sid::host_device::simple_ptr_holder<T *>{ptr})
                 .template set<property::strides>(strides)
@@ -229,6 +228,7 @@ namespace gridtools {
     using nanobind_sid_adapter_impl_::as_sid;
 }
 """
+
 
 def create_bindings(
     program_source: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],

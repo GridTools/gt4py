@@ -18,7 +18,6 @@ import dataclasses
 import enum
 import pathlib
 import subprocess
-import sys
 from typing import Optional
 
 from gt4py.next.otf import languages, stages
