@@ -14,32 +14,35 @@
 
 from __future__ import annotations
 
+import abc
+import dataclasses
 import enum
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import (
     Any,
-    Generic,
     Optional,
     Protocol,
-    SupportsFloat,
-    SupportsInt,
     TypeAlias,
     TypeVar,
+    Union,
+    final,
     runtime_checkable,
 )
 
 import numpy as np
 import numpy.typing as npt
 
+from gt4py._core import definitions as gt4py_defs
 from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
-DT = TypeVar("DT", bound="Scalar")
 
-Scalar: TypeAlias = SupportsInt | SupportsFloat | np.int32 | np.int64 | np.float32 | np.float64
+DType = gt4py_defs.DType
+Scalar: TypeAlias = gt4py_defs.Scalar
+ScalarT = gt4py_defs.ScalarT
+NDArrayObject = gt4py_defs.NDArrayObject
 
 
 @enum.unique
@@ -52,7 +55,7 @@ class DimensionKind(StrEnum):
         return f"{type(self).__name__}.{self.name}"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
     kind: DimensionKind = DimensionKind.HORIZONTAL
@@ -61,21 +64,119 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-class DType:
-    ...
+DomainLike = Union[Sequence[Dimension], Dimension, str]
 
 
-class Field(Generic[DimsT, DT]):
-    ...
+class Field(Protocol[ScalarT]):
+    @property
+    def domain(self) -> DimsT:
+        ...
+
+    @property
+    def dtype(self) -> DType[ScalarT]:
+        ...
+
+    @property
+    def value_type(self) -> ScalarT:
+        ...
+
+    @property
+    def ndarray(self) -> NDArrayObject:
+        ...
+
+    @final
+    def __setattr__(self, key, value) -> None:
+        raise TypeError("Immutable type")
+
+    @final
+    def __setitem__(self, key, value) -> None:
+        raise TypeError("Immutable type")
+
+    def __str__(self) -> str:
+        codomain = (
+            f"{self.value_type!s}"
+            if isinstance(self.value_type, Dimension)
+            else self.value_type.__name__
+        )
+        return f"⟨{self.domain!s} → {codomain}⟩"
+
+    @abc.abstractmethod
+    def remap(self, index_field: Field) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def restrict(self, item: "DomainLike") -> Field:
+        ...
+
+    # Operators
+    @abc.abstractmethod
+    def __call__(self, index_field: Field) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __getitem__(self, item: "DomainLike") -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __abs__(self) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __neg__(self) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __add__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __radd__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __sub__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __rsub__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __mul__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __rmul__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __floordiv__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __rfloordiv__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __truediv__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __rtruediv__(self, other: Field | ScalarT) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __pow__(self, other: Field | ScalarT) -> Field:
+        ...
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GTInfo:
     definition: Any
     ir: Any
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Backend:
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
