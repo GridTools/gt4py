@@ -254,7 +254,6 @@ def create_bindings(
             "nanobind/stl/tuple.h",
             "nanobind/stl/pair.h",
             "nanobind/ndarray.h",
-            "gridtools/storage/adapter/python_sid_adapter.hpp",
             "gridtools/sid/composite.hpp",
             "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
