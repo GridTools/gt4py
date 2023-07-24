@@ -18,6 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
@@ -77,7 +78,7 @@ def naive_lap(inp):
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
+    if program_processor in [run_dace_iterator, run_gtfn, run_gtfn_imperative]:
         pytest.xfail("TODO: this test does not validate")
 
     shape = [5, 7, 9]

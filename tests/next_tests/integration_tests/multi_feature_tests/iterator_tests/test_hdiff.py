@@ -24,7 +24,12 @@ from next_tests.integration_tests.cases import IDim, JDim
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
 )
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import (
+    lift_mode,
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 I = offset("I")
@@ -71,8 +76,8 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-def test_hdiff(hdiff_reference, program_processor, lift_mode):
-    program_processor, validate = program_processor
+def test_hdiff(hdiff_reference, program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
     if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
         from gt4py.next.iterator import transforms
 

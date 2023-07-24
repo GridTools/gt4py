@@ -18,6 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -33,6 +34,8 @@ def test_conditional(inp):
 
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5]
 
