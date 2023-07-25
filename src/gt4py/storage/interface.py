@@ -49,7 +49,7 @@ class GTOriginInterface(Protocol):
 
 
 
-def _error_on_invalid_backend(backend):
+def _error_on_invalid_preset(backend):
     if backend not in layout.REGISTRY:
         raise RuntimeError(f"Storage preset '{backend}' is not registered.")
 
@@ -95,7 +95,7 @@ def empty(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
-    _error_on_invalid_backend(backend)
+    _error_on_invalid_preset(backend)
     storage_info = layout.from_name(backend)
     assert storage_info is not None
     if storage_info["device"] == "gpu":
@@ -109,13 +109,13 @@ def empty(
         aligned_index, shape, dtype, dimensions
     )
 
-    _error_on_invalid_backend(backend)
+    _error_on_invalid_preset(backend)
 
     alignment = storage_info["alignment"]
     layout_map = storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
-    dtype = definitions.DType.from_np_dtype(dtype)
+    dtype = definitions.dtype(dtype)
     buffer = allocators.allocate(shape, dtype, layout_map, device=device, byte_alignment=alignment, aligned_index=aligned_index)
     #_, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
     return buffer.ndarray
