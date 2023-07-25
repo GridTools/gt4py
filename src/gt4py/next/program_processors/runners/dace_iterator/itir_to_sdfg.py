@@ -444,14 +444,28 @@ class ItirToSDFG(eve.NodeVisitor):
             self.node_types,
         )
 
-        input_connectors = {
-            inner_name for inner_name, expr in lambda_inputs if inner_name not in scan_sdfg.symbols
-        }
+        connectivity_access_nodes = [lambda_state.add_access(name) for name in connectivity_names]
+
+        # Map symbols by matching outer and inner strides, shapes, while defaulting to same symbol
+        symbol_mapping = {sym: sym for sym in lambda_context.body.free_symbols}
+        for inner_name, access_node in zip(connectivity_names, connectivity_access_nodes):
+            outer_data = scan_sdfg.arrays[access_node.data]
+            inner_data = lambda_context.body.arrays[inner_name]
+            for o_sh, i_sh in zip(outer_data.shape, inner_data.shape):
+                if str(i_sh) in lambda_context.body.free_symbols:
+                    symbol_mapping[str(i_sh)] = o_sh
+            for o_sh, i_sh in zip(outer_data.strides, inner_data.strides):
+                if str(i_sh) in lambda_context.body.free_symbols:
+                    symbol_mapping[str(i_sh)] = o_sh
+
+        lambda_input_names = [inner_name for inner_name, _ in lambda_inputs]
+
         scan_inner_node = lambda_state.add_nested_sdfg(
             lambda_context.body,
-            scan_sdfg,
-            set(input_connectors) | set(connectivity_names),
-            {connector.value.label for connector in lambda_outputs},
+            parent=scan_sdfg,
+            inputs=set(lambda_input_names) | set(connectivity_names),
+            outputs={connector.value.label for connector in lambda_outputs},
+            symbol_mapping=symbol_mapping,
         )
 
         # the carry value of the scan operator exists in the scope of the scan sdfg
@@ -495,11 +509,11 @@ class ItirToSDFG(eve.NodeVisitor):
                 dst_conn=inner_name,
             )
 
-        for name in connectivity_names:
+        for name, access_node in zip(connectivity_names, connectivity_access_nodes):
             lambda_state.add_memlet_path(
-                lambda_state.add_access(name),
+                access_node,
                 scan_inner_node,
-                memlet=dace.Memlet(),
+                memlet=dace.Memlet(data=access_node.data),
                 src_conn=None,
                 dst_conn=name,
             )
