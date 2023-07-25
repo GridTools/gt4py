@@ -14,9 +14,10 @@
 
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
-from typing import Any, Callable, Generic, Optional, ParamSpec, TypeAlias, TypeVar
+import typing
+from typing import Any, Callable, Generic, Optional, ParamSpec, TypeAlias, TypeVar, Sequence
 import inspect
-
+import enum
 from numpy import float32, float64, int32, int64
 
 from gt4py.next.common import Dimension, DimensionKind, Field
@@ -82,30 +83,68 @@ _reduction_like = lambda: BuiltInFunction(
 )
 
 
+# def _filter_params(
+#     params: Sequence[inspect.Parameter], kind: enum.IntEnum
+# ) -> list[inspect.Parameter]:
+#     return [param.annotation for param in params.values() if param.kind == kind]
+
+
 def builtin_function(fun: Callable):
-    signature = inspect.signature(my_function)
+    signature = inspect.signature(fun)
     params = signature.parameters
+
     return BuiltInFunction(
         ts.FunctionType(
-            pos_only_args=pos_only_args,
-            pos_or_kw_args=pos_or_kw_args,
-            kw_only_args=kw_only_args,
+            pos_only_args=[
+                param.annotation
+                for param in params.values()
+                if param.kind == inspect.Parameter.POSITIONAL_ONLY
+            ],
+            pos_or_kw_args={
+                k: v.annotation
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            },
+            kw_only_args={
+                k: v.annotation
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.KEYWORD_ONLY
+            },
             returns=signature.return_annotation,
         )
     )
 
 
+@builtin_function
 def neighbor_sum(
-    fun: ts.DeferredType(constraint=ts.FieldType),
+    field: ts.DeferredType(constraint=ts.FieldType),
     /,
     axis: ts.DeferredType(constraint=ts.DimensionType),
 ) -> ts.DeferredType(constraint=ts.FieldType):
     ...
 
 
-neighbor_sum = _reduction_like()
-max_over = _reduction_like()
-min_over = _reduction_like()
+@builtin_function
+def max_over(
+    field: ts.DeferredType(constraint=ts.FieldType),
+    /,
+    axis: ts.DeferredType(constraint=ts.DimensionType),
+) -> ts.DeferredType(constraint=ts.FieldType):
+    ...
+
+
+@builtin_function
+def min_over(
+    field: ts.DeferredType(constraint=ts.FieldType),
+    /,
+    axis: ts.DeferredType(constraint=ts.DimensionType),
+) -> ts.DeferredType(constraint=ts.FieldType):
+    ...
+
+
+# neighbor_sum = _reduction_like()
+# max_over = _reduction_like()
+# min_over = _reduction_like()
 
 broadcast = BuiltInFunction(
     ts.FunctionType(
