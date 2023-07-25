@@ -325,7 +325,6 @@ class ItirToSDFG(eve.NodeVisitor):
             inputs=array_mapping,
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
-            schedule=dace.ScheduleType.Sequential,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):
