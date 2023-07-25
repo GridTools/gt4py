@@ -18,6 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import CartesianAxis, fundef
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -58,6 +59,10 @@ def test_single_argument(program_processor, dom):
 
 def test_2_arguments(program_processor, dom):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
+        )
 
     @fundef
     def fun(inp0, inp1):

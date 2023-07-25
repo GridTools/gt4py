@@ -805,8 +805,6 @@ def closure_to_tasklet_sdfg(
 
     if is_scan(node.stencil):
         context, inner_inputs, inner_outputs = _visit_scan_closure_callable(node, translator)
-        for output in inner_outputs:
-            context.body.arrays[output.value.data].transient = True
     else:
         inner_inputs = []
         inner_outputs = _visit_closure_callable(
@@ -814,7 +812,7 @@ def closure_to_tasklet_sdfg(
             translator,
             [name for name, _ in inputs],
         )
-        for output in inner_outputs:
-            context.body.arrays[output.value.data].transient = False
+    for output in inner_outputs:
+        context.body.arrays[output.value.data].transient = False
 
     return context, inner_inputs, inner_outputs
