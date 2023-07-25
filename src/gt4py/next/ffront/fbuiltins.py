@@ -14,7 +14,7 @@
 
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import Any, Callable, Generic, Optional, ParamSpec, TypeAlias, TypeVar
 
 from numpy import float32, float64, int32, int64
 
@@ -37,18 +37,40 @@ IndexType: TypeAlias = int32
 TYPE_ALIAS_NAMES = ["IndexType"]
 
 
-@dataclass
-class BuiltInFunction:
+Value: TypeAlias = Any  # definitions.ScalarT, Field
+P = ParamSpec("P")
+R = TypeVar("R", Value, tuple[Value, ...])
+
+
+@dataclass(frozen=True)
+class BuiltInFunction(Generic[R, P]):
     __gt_type: ts.FunctionType
+    # `function` can be used to provide a default implementation for all `Field` implementations,
+    # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
+    function: Optional[Callable[P, R]] = None
 
-    def __call__(self, *args, **kwargs):
-        """Act as an empty place holder for the built in function."""
+    def __call__(self, *args: Value, **options: Any) -> Value | tuple[Value, ...]:
+        impl = self.dispatch(*args)
+        return impl(*args, **options)
 
-    def __gt_type__(self):
+    def dispatch(self, *args: Value) -> Callable[P, R]:
+        arg_types = tuple(type(arg) for arg in args)
+        for atype in arg_types:
+            if (dispatcher := getattr(atype, "__gt_op_func__", None)) is not None and (
+                op_func := dispatcher(self)
+            ) is not NotImplemented:
+                return op_func
+        else:
+            return self.function
+
+    def __gt_type__(self) -> ts.FunctionType:
         return self.__gt_type
 
+    def __hash__(self) -> int:
+        return hash(id(self))  # TODO fix
 
-_reduction_like = BuiltInFunction(
+
+_reduction_like = lambda: BuiltInFunction(
     ts.FunctionType(
         pos_only_args=[ts.DeferredType(constraint=ts.FieldType)],
         pos_or_kw_args={"axis": ts.DeferredType(constraint=ts.DimensionType)},
@@ -57,9 +79,9 @@ _reduction_like = BuiltInFunction(
     )
 )
 
-neighbor_sum = _reduction_like
-max_over = _reduction_like
-min_over = _reduction_like
+neighbor_sum = _reduction_like()
+max_over = _reduction_like()
+min_over = _reduction_like()
 
 broadcast = BuiltInFunction(
     ts.FunctionType(
@@ -98,7 +120,7 @@ astype = BuiltInFunction(
     )
 )
 
-_unary_math_builtin = BuiltInFunction(
+_unary_math_builtin = lambda: BuiltInFunction(
     ts.FunctionType(
         pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
         pos_or_kw_args={},
@@ -108,31 +130,31 @@ _unary_math_builtin = BuiltInFunction(
 )
 
 # unary math builtins (number) -> number
-abs = _unary_math_builtin  # noqa: A001
+abs = _unary_math_builtin()  # noqa: A001
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
 
 # unary math builtins (float) -> float
-sin = _unary_math_builtin
-cos = _unary_math_builtin
-tan = _unary_math_builtin
-arcsin = _unary_math_builtin
-arccos = _unary_math_builtin
-arctan = _unary_math_builtin
-sinh = _unary_math_builtin
-cosh = _unary_math_builtin
-tanh = _unary_math_builtin
-arcsinh = _unary_math_builtin
-arccosh = _unary_math_builtin
-arctanh = _unary_math_builtin
-sqrt = _unary_math_builtin
-exp = _unary_math_builtin
-log = _unary_math_builtin
-gamma = _unary_math_builtin
-cbrt = _unary_math_builtin
-floor = _unary_math_builtin
-ceil = _unary_math_builtin
-trunc = _unary_math_builtin
+sin = _unary_math_builtin()
+cos = _unary_math_builtin()
+tan = _unary_math_builtin()
+arcsin = _unary_math_builtin()
+arccos = _unary_math_builtin()
+arctan = _unary_math_builtin()
+sinh = _unary_math_builtin()
+cosh = _unary_math_builtin()
+tanh = _unary_math_builtin()
+arcsinh = _unary_math_builtin()
+arccosh = _unary_math_builtin()
+arctanh = _unary_math_builtin()
+sqrt = _unary_math_builtin()
+exp = _unary_math_builtin()
+log = _unary_math_builtin()
+gamma = _unary_math_builtin()
+cbrt = _unary_math_builtin()
+floor = _unary_math_builtin()
+ceil = _unary_math_builtin()
+trunc = _unary_math_builtin()
 
 UNARY_MATH_FP_BUILTIN_NAMES = [
     "sin",
@@ -158,7 +180,7 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 ]
 
 # unary math predicates (float) -> bool
-_unary_math_predicate_builtin = BuiltInFunction(
+_unary_math_predicate_builtin = lambda: BuiltInFunction(
     ts.FunctionType(
         pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
         pos_or_kw_args={},
@@ -167,14 +189,14 @@ _unary_math_predicate_builtin = BuiltInFunction(
     )
 )
 
-isfinite = _unary_math_predicate_builtin
-isinf = _unary_math_predicate_builtin
-isnan = _unary_math_predicate_builtin
+isfinite = _unary_math_predicate_builtin()
+isinf = _unary_math_predicate_builtin()
+isnan = _unary_math_predicate_builtin()
 
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 # binary math builtins (number, number) -> number
-_binary_math_builtin = BuiltInFunction(
+_binary_math_builtin = lambda: BuiltInFunction(
     ts.FunctionType(
         pos_only_args=[
             ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
@@ -186,10 +208,10 @@ _binary_math_builtin = BuiltInFunction(
     )
 )
 
-minimum = _binary_math_builtin
-maximum = _binary_math_builtin
-fmod = _binary_math_builtin
-power = _binary_math_builtin
+minimum = _binary_math_builtin()
+maximum = _binary_math_builtin()
+fmod = _binary_math_builtin()
+power = _binary_math_builtin()
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
@@ -225,6 +247,7 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 class FieldOffset(runtime.Offset):
     source: Dimension
     target: tuple[Dimension] | tuple[Dimension, Dimension]
+    connectivity: Optional[Any] = None  # TODO
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:
@@ -232,3 +255,7 @@ class FieldOffset(runtime.Offset):
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
+
+    def __getitem__(self, index):
+        return lambda i: i  # TODO
+        # return FieldOffset(self.source, self.target, index)

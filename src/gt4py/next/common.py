@@ -17,8 +17,21 @@ from __future__ import annotations
 import abc
 import dataclasses
 import enum
+import functools
+import math
 from collections.abc import Sequence
-from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, final, runtime_checkable
+from typing import (
+    Any,
+    Iterator,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    Union,
+    final,
+    runtime_checkable,
+    Literal,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -34,6 +47,8 @@ DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
 ScalarT = gt4py_defs.ScalarT
 NDArrayObject = gt4py_defs.NDArrayObject
+Integer: TypeAlias = Union[int, Literal[math.inf, -math.inf]]
+IntegerPair: TypeAlias = tuple[Integer, Integer]
 
 
 @enum.unique
@@ -56,6 +71,71 @@ class Dimension:
 
 
 DomainLike = Union[Sequence[Dimension], Dimension, str]
+
+
+# class SetProto(Protocol):
+#     def empty_set(self) -> UnitRange:
+#         ...
+
+#     def universe(self) -> UnitRange:
+#         ...
+
+
+# class IntegerSet: # TODO use collection protocols
+#     """A set containing integers."""
+
+#     def empty_set(self) -> UnitRange:
+#         return UnitRange(0, 0)
+
+#     def universe(self) -> UnitRange:
+#         return UnitRange(-math.inf, math.inf)
+
+
+class UnitRange:  # TODO use collection protocols: Set, Sequence
+    """Range from `start` to `stop` with step size one."""
+
+    start: Integer
+    stop: Integer
+
+    def __init__(self, start: Integer, stop: Integer) -> None:
+        assert stop >= start
+        self.start = start
+        self.stop = stop
+
+        # canonicalize
+        if self.empty:
+            self.start = 0
+            self.stop = 0
+
+    @property
+    def size(self) -> Integer:
+        """Return the number of elements."""
+        assert self.start <= self.stop
+        return self.stop - self.start
+
+    @property
+    def empty(self) -> bool:
+        """Return if the range is empty"""
+        return self.start >= self.stop
+
+    @property
+    def bounds(self) -> UnitRange:
+        """Smallest range containing all elements. In this case itself."""
+        return self
+
+    def __iter__(self) -> Iterator:
+        """Return an iterator over all elements of the set."""
+        return range(self.start, self.stop).__iter__()
+
+    def as_tuple(self) -> IntegerPair:
+        """Return the start and stop elements of the set as a tuple."""
+        return self.start, self.stop
+
+    def __str__(self) -> str:
+        return f"UnitRange({self.start}, {self.stop})"
+
+
+DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 
 
 class Field(Protocol[DimsT, ScalarT]):
@@ -159,6 +239,17 @@ class Field(Protocol[DimsT, ScalarT]):
     @abc.abstractmethod
     def __pow__(self, other: Field | ScalarT) -> Field:
         ...
+
+
+@functools.singledispatch
+def field(
+    definition: Any,
+    /,
+    *,
+    domain: Optional[DomainT] = None,
+    value_type: Optional[type] = None,
+) -> Field:
+    raise NotImplementedError
 
 
 @dataclasses.dataclass(frozen=True)

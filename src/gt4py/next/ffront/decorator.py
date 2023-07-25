@@ -236,6 +236,10 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        if self.backend is None:
+            self.definition(*args, **kwargs)
+            return
+
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
@@ -552,23 +556,35 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(
         self,
         *args,
-        out,
-        offset_provider: dict[str, Dimension],
+        # out,
+        # offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-        # TODO(tehrengruber): check all offset providers are given
-        # deduce argument types
-        arg_types = []
-        for arg in args:
-            arg_types.append(type_translation.from_value(arg))
-        kwarg_types = {}
-        for name, arg in kwargs.items():
-            kwarg_types[name] = type_translation.from_value(arg)
+        if "out" in kwargs:
+            out = kwargs.pop("out")
+            if "offset_provider" in kwargs:
+                # field_operator as program mode
+                offset_provider = kwargs.pop("offset_provider")
+                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+                # TODO(tehrengruber): check all offset providers are given
+                # deduce argument types
+                arg_types = []
+                for arg in args:
+                    arg_types.append(type_translation.from_value(arg))
+                kwarg_types = {}
+                for name, arg in kwargs.items():
+                    kwarg_types[name] = type_translation.from_value(arg)
 
-        return self.as_program(arg_types, kwarg_types)(
-            *args, out, offset_provider=offset_provider, **kwargs
-        )
+                return self.as_program(arg_types, kwarg_types)(
+                    *args, out, offset_provider=offset_provider, **kwargs
+                )
+            else:
+                # field_operator called from program
+                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
+                return
+        else:
+            # field_operator called from other field_operator
+            return self.definition(*args, **kwargs)
 
 
 @typing.overload
