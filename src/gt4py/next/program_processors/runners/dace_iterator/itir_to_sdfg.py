@@ -514,7 +514,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 scan_inner_node,
                 memlet=memlet,
                 src_conn=None,
-                dst_conn=name,
+                dst_conn=inner_name,
                 propagate=True,
             )
 
