@@ -15,12 +15,24 @@
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
 import typing
-from typing import Any, Callable, Generic, Optional, ParamSpec, TypeAlias, TypeVar, Sequence
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+    Union,
+    Sequence,
+    Tuple,
+)
 import inspect
 import enum
 from numpy import float32, float64, int32, int64
+import functools
 
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py.next.common import Dimension, DimensionKind, Field, ScalarT
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -44,13 +56,37 @@ P = ParamSpec("P")
 R = TypeVar("R", Value, tuple[Value, ...])
 
 
-@dataclass(frozen=True)
+def _type_conversion_helper(t: type):
+    if t is Field:
+        return ts.FieldType
+    elif t is Dimension:
+        return ts.DimensionType
+    elif t is ScalarT:
+        return ts.ScalarType
+    elif t is Tuple:
+        return ts.TupleType
+    elif hasattr(t, "__origin__") and t.__origin__ is Union:
+        return tuple(_type_conversion_helper(e) for e in t.__args__)
+    else:
+        assert False, t
+
+
+def _type_conversion(t):
+    return ts.DeferredType(constraint=_type_conversion_helper(t))
+
+
+@dataclass  # (frozen=True)
 class BuiltInFunction(Generic[R, P]):
     # name: str
     __gt_type: ts.FunctionType
     # `function` can be used to provide a default implementation for all `Field` implementations,
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
-    function: Optional[Callable[P, R]] = None
+    function: Callable[P, R] = None  # TODO remove None
+
+    def __post_init__(self):
+        functools.update_wrapper(
+            self, self.function
+        )  # TODO figure out keeping function annotations in autocomplete
 
     def __call__(self, *args: Value, **options: Any) -> Value | tuple[Value, ...]:
         impl = self.dispatch(*args)
@@ -67,7 +103,29 @@ class BuiltInFunction(Generic[R, P]):
             return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
-        return self.__gt_type
+        if self.__gt_type is not None:
+            return self.__gt_type  # TODO remove
+        signature = inspect.signature(self.function)
+        params = signature.parameters
+
+        return ts.FunctionType(
+            pos_only_args=[
+                _type_conversion(param.annotation)
+                for param in params.values()
+                if param.kind == inspect.Parameter.POSITIONAL_ONLY
+            ],
+            pos_or_kw_args={
+                k: _type_conversion(v.annotation)
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            },
+            kw_only_args={
+                k: _type_conversion(v.annotation)
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.KEYWORD_ONLY
+            },
+            returns=_type_conversion(signature.return_annotation),
+        )
 
     def __hash__(self) -> int:
         return hash(id(self))  # TODO fix
@@ -89,87 +147,51 @@ _reduction_like = lambda: BuiltInFunction(
 #     return [param.annotation for param in params.values() if param.kind == kind]
 
 
-def builtin_function(fun: Callable):
-    signature = inspect.signature(fun)
-    params = signature.parameters
-
-    return BuiltInFunction(
-        ts.FunctionType(
-            pos_only_args=[
-                param.annotation
-                for param in params.values()
-                if param.kind == inspect.Parameter.POSITIONAL_ONLY
-            ],
-            pos_or_kw_args={
-                k: v.annotation
-                for k, v in params.items()
-                if v.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-            },
-            kw_only_args={
-                k: v.annotation
-                for k, v in params.items()
-                if v.kind == inspect.Parameter.KEYWORD_ONLY
-            },
-            returns=signature.return_annotation,
-        )
-    )
+def builtin_function(fun: Callable[P, R]) -> BuiltInFunction[R, P]:
+    return BuiltInFunction(None, fun)  # TODO remove None
 
 
 @builtin_function
 def neighbor_sum(
-    field: ts.DeferredType(constraint=ts.FieldType),
+    field: Field,
     /,
-    axis: ts.DeferredType(constraint=ts.DimensionType),
-) -> ts.DeferredType(constraint=ts.FieldType):
+    axis: Dimension,
+) -> Field:
     ...
 
 
 @builtin_function
 def max_over(
-    field: ts.DeferredType(constraint=ts.FieldType),
+    field: Field,
     /,
-    axis: ts.DeferredType(constraint=ts.DimensionType),
-) -> ts.DeferredType(constraint=ts.FieldType):
+    axis: Dimension,
+) -> Field:
     ...
 
 
 @builtin_function
 def min_over(
-    field: ts.DeferredType(constraint=ts.FieldType),
+    field: Field,
     /,
-    axis: ts.DeferredType(constraint=ts.DimensionType),
-) -> ts.DeferredType(constraint=ts.FieldType):
+    axis: Dimension,
+) -> Field:
     ...
 
 
-# neighbor_sum = _reduction_like()
-# max_over = _reduction_like()
-# min_over = _reduction_like()
+@builtin_function
+def broadcast(_: Field | ScalarT, __: Tuple, /) -> Field:
+    ...
 
-broadcast = BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType)),
-            ts.DeferredType(constraint=ts.TupleType),
-        ],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
 
-where = BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[
-            ts.DeferredType(constraint=ts.FieldType),
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
-        ],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=(ts.FieldType, ts.TupleType)),
-    )
-)
+@builtin_function
+def where(
+    _: Field,
+    __: Field | ScalarT | Tuple,
+    ___: Field | ScalarT | Tuple,
+    /,
+) -> Field | Tuple:
+    ...
+
 
 astype = BuiltInFunction(
     ts.FunctionType(
