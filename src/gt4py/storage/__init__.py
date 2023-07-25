@@ -34,7 +34,8 @@ __all__ = [
     "from_array",
     "full",
     "ones",
-    "zeros" "from_name",
+    "zeros",
+    "from_name",
     "register",
 ]
 

@@ -164,40 +164,6 @@ def strides_from_padded_shape(padded_size, order_idx, itemsize):
     return list(strides)
 
 
-def allocate(aligned_index, shape, layout_map, dtype, alignment_bytes, allocate_f):
-    dtype = np.dtype(dtype)
-    if not (alignment_bytes % dtype.itemsize) == 0:
-        raise ValueError("Alignment must be a multiple of byte-width of dtype.")
-    itemsize = dtype.itemsize
-    items_per_alignment = int(alignment_bytes / itemsize)
-
-    order_idx = idx_from_order([i for i in layout_map if i is not None])
-    padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
-
-    strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
-    if len(order_idx) > 0:
-        halo_offset = (
-            int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
-            - aligned_index[order_idx[-1]]
-        )
-    else:
-        halo_offset = 0
-
-    padded_size = int(np.prod(padded_shape))
-    buffer_size = padded_size + items_per_alignment - 1
-    array, raw_buffer = allocate_f(buffer_size, dtype=dtype)
-
-    allocation_mismatch = int((array.ctypes.data % alignment_bytes) / itemsize)
-
-    alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
-
-    field = np.reshape(array[alignment_offset : alignment_offset + padded_size], padded_shape)
-    if field.ndim > 0:
-        field.strides = strides
-        field = field[tuple(slice(0, s, None) for s in shape)]
-    return raw_buffer, field
-
-
 def allocate_gpu(
     shape: Sequence[int],
     layout_map: Iterable[Optional[int]],

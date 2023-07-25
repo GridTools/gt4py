@@ -100,10 +100,10 @@ def empty(
     assert storage_info is not None
     if storage_info["device"] == "gpu":
         device = definitions.Device(definitions.DeviceType.GPU, 0)
-        allocate_f = storage_utils.allocate_gpu
+        # allocate_f = storage_utils.allocate_gpu
     else:
         device = definitions.Device(definitions.DeviceType.CPU, 0)
-        allocate_f = storage_utils.allocate_cpu
+        # allocate_f = storage_utils.allocate_cpu
 
     aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
         aligned_index, shape, dtype, dimensions

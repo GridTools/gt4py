@@ -59,9 +59,7 @@ LayoutMap = NewType("LayoutMap", Tuple[int, ...])
 
 
 def is_valid_shape(value: tuple[int, ...]) -> TypeGuard[Shape]:
-    return isinstance(value, tuple) and all(
-        isinstance(v, int) and v > 0 for v in value
-    )
+    return isinstance(value, tuple) and all(isinstance(v, int) and v > 0 for v in value)
 
 
 def is_valid_layout_map(value: tuple[int, ...]) -> TypeGuard[LayoutMap]:
@@ -115,17 +113,29 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
         return len(self.shape)
 
     def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
-        return self.ndarray.__array__(dtype=dtype)
+        try:
+            return self.ndarray.__array__(dtype=dtype)
+        except (AttributeError, TypeError):
+            raise TypeError("Cannot export tensor buffer as NumPy array.")
 
     @property
     def __cuda_array_interface__(self) -> xtyping.CUDAArrayInterfaceTypedDict:
-        return self.ndarray.__cuda_array_interface__
+        try:
+            return self.ndarray.__cuda_array_interface__
+        except (AttributeError, TypeError):
+            raise TypeError("Cannot export tensor buffer to CUDA array interface.")
 
     def __dlpack__(self) -> xtyping.PyCapsule:
-        return self.ndarray.__dlpack__()
+        try:
+            return self.ndarray.__dlpack__()
+        except (AttributeError, TypeError):
+            raise TypeError("Cannot export tensor buffer to DLPack.")
 
     def __dlpack_device__(self) -> xtyping.DLDevice:
-        return self.ndarray.__dlpack_device__()
+        try:
+            return self.ndarray.__dlpack_device__()
+        except (AttributeError, TypeError):
+            raise TypeError("Cannot extract DLPack device from tensor buffer.")
 
 
 class BufferAllocator(Protocol[_NDBufferT]):
@@ -255,15 +265,11 @@ class BaseNDArrayBufferAllocator(BufferAllocator[_NDBufferT]):
         pass
 
 
-class _NumPyLibLikeModule(Protocol):
-    stride_tricks: Any
-
-
 class _NumPyLikeModule(Protocol):
     def empty(self, shape: Shape, dtype: np.dtype) -> np.ndarray:
         ...
 
-    lib: _NumPyLibLikeModule
+    lib: Any
 
 
 @dataclasses.dataclass(frozen=True)
