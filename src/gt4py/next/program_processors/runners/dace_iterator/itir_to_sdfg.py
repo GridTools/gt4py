@@ -154,45 +154,48 @@ class ItirToSDFG(eve.NodeVisitor):
             # Create a new state for the closure.
             last_state = program_sdfg.add_state_after(last_state)
 
-            # Add access nodes for the program parameters to the closure's state in the program.
-            input_accesses = [last_state.add_access(name) for name in input_names]
-            connectivity_accesses = [last_state.add_access(name) for name in connectivity_names]
-            output_accesses = [last_state.add_access(name) for name in output_names]
+            # Create memlets to transfer the program parameters
+            input_memlets = [
+                create_memlet_full(name, program_sdfg.arrays[name]) for name in input_names
+            ]
+            connectivity_memlets = [
+                create_memlet_full(name, program_sdfg.arrays[name]) for name in connectivity_names
+            ]
+            output_memlets = [
+                create_memlet_full(name, program_sdfg.arrays[name]) for name in output_names
+            ]
 
-            # Map symbols by matching outer and inner strides, shapes, while defaulting to same symbol
-            symbol_mapping = {sym: sym for sym in closure_sdfg.free_symbols}
-            for inner_name, access_node in zip(
-                input_names + output_names, input_accesses + output_accesses
-            ):
-                outer_data = program_sdfg.arrays[access_node.data]
-                inner_data = closure_sdfg.arrays[inner_name]
-                for o_sh, i_sh in zip(outer_data.shape, inner_data.shape):
-                    if str(i_sh) in closure_sdfg.free_symbols:
-                        symbol_mapping[str(i_sh)] = o_sh
-                for o_sh, i_sh in zip(outer_data.strides, inner_data.strides):
-                    if str(i_sh) in closure_sdfg.free_symbols:
-                        symbol_mapping[str(i_sh)] = o_sh
+            input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
+            connectivity_mapping = {
+                param: arg for param, arg in zip(connectivity_names, connectivity_memlets)
+            }
+            output_mapping = {
+                param: arg_memlet for param, arg_memlet in zip(output_names, output_memlets)
+            }
+
+            array_mapping = {**input_mapping, **connectivity_mapping}
+            symbol_mapping = map_nested_sdfg_symbols(program_sdfg, closure_sdfg, array_mapping)
 
             # Insert the closure's SDFG as a nested SDFG of the program.
             nsdfg_node = last_state.add_nested_sdfg(
                 sdfg=closure_sdfg,
-                parent=None,
+                parent=program_sdfg,
                 inputs=set(input_names) | set(connectivity_names),
                 outputs=set(output_names),
                 symbol_mapping=symbol_mapping,
             )
 
-            # Connect the access nodes to the nested SDFG's inputs via edges.
-            for inner_name, access_node in zip(input_names, input_accesses):
-                memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
+            # Add access nodes for the program parameters and connect them to the nested SDFG's inputs via edges.
+            for inner_name, memlet in input_mapping.items():
+                access_node = last_state.add_access(inner_name)
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, memlet)
 
-            for inner_name, access_node in zip(connectivity_names, connectivity_accesses):
-                memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
+            for inner_name, memlet in connectivity_mapping.items():
+                access_node = last_state.add_access(inner_name)
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, memlet)
 
-            for inner_name, access_node in zip(output_names, output_accesses):
-                memlet = create_memlet_full(access_node.data, program_sdfg.arrays[access_node.data])
+            for inner_name, memlet in output_mapping.items():
+                access_node = last_state.add_access(inner_name)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
         program_sdfg.validate()
         return program_sdfg
@@ -325,7 +328,6 @@ class ItirToSDFG(eve.NodeVisitor):
             inputs=array_mapping,
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
-            schedule=dace.ScheduleType.Sequential,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):
@@ -384,7 +386,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_domain = {}
@@ -418,7 +420,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # add access nodes to SDFG for inputs
-        for name in [*input_names, *conn_names]:
+        for name in [*input_names, *connectivity_names]:
             assert name not in scan_sdfg.arrays
             if isinstance(self.storage_types[name], ts.FieldType):
                 scan_sdfg.add_array(
@@ -432,24 +434,36 @@ class ItirToSDFG(eve.NodeVisitor):
                     name, dtype=as_dace_type(cast(ts.ScalarType, self.storage_types[name]))
                 )
 
+        connectivity_arrays = [(scan_sdfg.arrays[name], name) for name in connectivity_names]
+
         # implement the lambda closure as a nested SDFG that computes a single item of the map domain
         lambda_context, lambda_inputs, lambda_outputs = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             {},
             [],
-            [],
+            connectivity_arrays,
             self.node_types,
         )
 
-        input_connectors = {
-            inner_name for inner_name, expr in lambda_inputs if inner_name not in scan_sdfg.symbols
+        connectivity_memlets = [
+            create_memlet_full(name, scan_sdfg.arrays[name]) for name in connectivity_names
+        ]
+        connectivity_mapping = {
+            param: arg for param, arg in zip(connectivity_names, connectivity_memlets)
         }
+
+        lambda_input_names = [inner_name for inner_name, _ in lambda_inputs]
+        symbol_mapping = map_nested_sdfg_symbols(
+            scan_sdfg, lambda_context.body, connectivity_mapping
+        )
+
         scan_inner_node = lambda_state.add_nested_sdfg(
             lambda_context.body,
-            scan_sdfg,
-            input_connectors,
-            {connector.value.label for connector in lambda_outputs},
+            parent=scan_sdfg,
+            inputs=set(lambda_input_names) | set(connectivity_names),
+            outputs={connector.value.label for connector in lambda_outputs},
+            symbol_mapping=symbol_mapping,
         )
 
         # the carry value of the scan operator exists in the scope of the scan sdfg
@@ -491,6 +505,17 @@ class ItirToSDFG(eve.NodeVisitor):
                 memlet=dace.Memlet(data=f"{data_name}", subset=data_subset),
                 src_conn=None,
                 dst_conn=inner_name,
+            )
+
+        for inner_name, memlet in connectivity_mapping.items():
+            access_node = lambda_state.add_access(inner_name)
+            lambda_state.add_memlet_path(
+                access_node,
+                scan_inner_node,
+                memlet=memlet,
+                src_conn=None,
+                dst_conn=inner_name,
+                propagate=True,
             )
 
         output_names = [output_name]
