@@ -17,19 +17,33 @@ from __future__ import annotations
 import dataclasses
 import enum
 import functools
-import math
-import types
-from collections.abc import Iterable
+import numbers
+from typing import (
+    Any,
+    Final,
+    Generic,
+    Literal,
+    Protocol,
+    TypeAlias,
+    TypeGuard,
+    TypeVar,
+    Union,
+    TYPE_CHECKING,
+    cast,
+    overload,
+)
 
 import numpy as np
 import numpy.typing as npt
 
-from gt4py.eve.extended_typing import (
-    Final,
-    Literal,
-    Mapping,
-)
-from gt4py._core import scalars
+if TYPE_CHECKING:
+    import cupy as cp
+
+    CuPyNDArray = cp.ndarray
+
+    import jax.numpy as jnp
+
+    JaxNDArray = jnp.ndarray
 
 
 class DeviceType(enum.Enum):
@@ -68,105 +82,359 @@ class Device:
         return iter((self.device_type, self.device_id))
 
 
-class DTypeCode(enum.Enum):
+# Scalar types supported by GT4Py
+bool_ = np.bool_
+
+int8 = np.int8
+int16 = np.int16
+int32 = np.int32
+int64 = np.int64
+
+uint8 = np.uint8
+uint16 = np.uint16
+uint32 = np.uint32
+uint64 = np.uint64
+
+float32 = np.float32
+float64 = np.float64
+
+BoolScalar: TypeAlias = Union[bool_, bool]
+BoolT = TypeVar("BoolT", bool_, bool)
+BOOL_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
+
+IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
+IntT = TypeVar("IntT", int8, int16, int32, int64, int)
+INT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
+
+UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
+UnsignedIntT = TypeVar("UnsignedIntT", uint8, uint16, uint32, uint64)
+UINT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
+
+IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
+IntegralT = TypeVar("IntegralT", IntScalar, UnsignedIntScalar)
+INTEGRAL_TYPES: Final[tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
+
+FloatingScalar: TypeAlias = Union[float32, float64, float]
+FloatingT = TypeVar("FloatingT", float32, float64, float)
+FLOAT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
+
+#: Type alias for all scalar types supported by GT4Py
+Scalar: TypeAlias = Union[BoolScalar, IntegralScalar, FloatingScalar]
+ScalarT = TypeVar("ScalarT", BoolScalar, IntegralScalar, FloatingScalar)
+SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INTEGRAL_TYPES, *FLOAT_TYPES)
+
+
+class BooleanIntegral(numbers.Integral):
+    """Abstract base class for boolean integral types."""
+
+    ...
+
+
+class UnsignedIntegral(numbers.Integral):
+    """Abstract base class for unsigned integral types."""
+
+    ...
+
+
+def is_boolean_integral_type(integral_type: type) -> TypeGuard[type[BooleanIntegral]]:
+    return issubclass(integral_type, BOOL_TYPES)
+
+
+def is_unsigned_integral_type(integral_type: type) -> TypeGuard[type[UnsignedIntegral]]:
+    return issubclass(integral_type, UINT_TYPES)
+
+
+class DTypeKind(enum.Enum):
     """
     Kind of a specific data type.
 
-    Character codes match the value for the corresponding kind in NumPy `dtype.kind`.
+    Character codes match the type code for the corresponding kind in the
+    array interface protocol (https://numpy.org/doc/stable/reference/arrays.interface.html).
     """
 
+    BOOL = "b"
     INT = "i"
     UINT = "u"
     FLOAT = "f"
     OPAQUE_POINTER = "V"
     COMPLEX = "c"
 
-    def dlpack_type_code(self) -> int:
-        """
-        DLPAck type code.
 
-        Actual values taken from DLPack reference implementation at:
-            https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
-        """
-        return _DTYPECODE_TO_DLPACK_CODE[self.value]
+@overload
+def dtype_kind(sc_type: type[BoolScalar]) -> Literal[DTypeKind.BOOL]:  # type: ignore[misc]
+    ...
 
 
-_DTYPECODE_TO_DLPACK_CODE: Final[
-    Mapping[DTypeCode, Literal[0, 1, 2, 3, 5]]
-] = types.MappingProxyType(
-    {
-        DTypeCode.INT: 0,
-        DTypeCode.UINT: 1,
-        DTypeCode.FLOAT: 2,
-        DTypeCode.OPAQUE_POINTER: 3,
-        DTypeCode.COMPLEX: 5,  # In DLPack bfloat16 is defined as BFLOAT = 4
-    }
-)
+@overload
+def dtype_kind(sc_type: type[Union[int8, int16, int32, int64, int]]) -> Literal[DTypeKind.INT]:
+    ...
 
 
-class DType(enum.Enum):
-    """
-    Descriptor of data type for field elements.
+@overload
+def dtype_kind(sc_type: type[UnsignedIntScalar]) -> Literal[DTypeKind.UINT]:
+    ...
 
-    This definition is based on DLPack and Array API standards. The data
-    type is described by a name and a triple, `DTypeCode`, `bits`, and
-    `lanes`, which should be interpreted as packed `lanes` repetitions
-    of elements from `type_code` data-category of width `bits`.
 
-    The Array API standard only requires DTypes to be comparable with `__eq__`.
+@overload
+def dtype_kind(sc_type: type[FloatingScalar]) -> Literal[DTypeKind.FLOAT]:
+    ...
 
-    Additionally, instances of this class can also be used as valid NumPy
-    `dtype`s definitions due to the `.dtype` attribute.
 
-    Note:
-        This DType definition is implemented in a non-extensible way on purpose
-        to avoid the complexity of dealing with user-defined data types.
-    """
+@overload
+def dtype_kind(sc_type: type[Scalar]) -> DTypeKind:
+    ...
 
-    bool_ = scalars.bool_
-    int8 = scalars.int8
-    int16 = scalars.int16
-    int32 = scalars.int32
-    int64 = scalars.int64
-    uint8 = scalars.uint8
-    uint16 = scalars.uint16
-    uint32 = scalars.uint32
-    uint64 = scalars.uint64
-    float32 = scalars.float32
-    float64 = scalars.float64
 
-    # Definition properties
-    @functools.cached_property
-    def type_code(self) -> DTypeCode:
-        return DTypeCode(self.dtype.kind)
+def dtype_kind(sc_type: type[Scalar]) -> DTypeKind:
+    """Return the data type kind of the given scalar type."""
+    if issubclass(sc_type, numbers.Integral):
+        if is_boolean_integral_type(sc_type):
+            return DTypeKind.BOOL
+        elif is_unsigned_integral_type(sc_type):
+            return DTypeKind.UINT
+        else:
+            return DTypeKind.INT
+    if issubclass(sc_type, numbers.Real):
+        return DTypeKind.FLOAT
+    if issubclass(sc_type, numbers.Complex):
+        return DTypeKind.COMPLEX
 
-    @functools.cached_property
-    def bits(self) -> int:
-        assert self.dtype.itemsize % self.lanes == 0
-        return 8 * (self.dtype.itemsize // self.lanes)
+    raise TypeError("Unknown scalar type kind")
 
-    @functools.cached_property
-    def lanes(self) -> int:
-        shape = self.dtype.shape or (1,)
-        return math.prod(shape)
 
-    # Convenience functions
-    @functools.cached_property
-    def scalar_type(self) -> type:
-        return self.value
 
-    @functools.cached_property
-    def byte_size(self) -> int:
-        return self.dtype.itemsize
+# class DType(enum.Enum):
+#     """
+#     Descriptor of data type for field elements.
 
-    # NumPy compatibility functions
-    @functools.cached_property
-    def dtype(self) -> np.dtype:
-        return np.dtype(self.value)
+#     This definition is based on DLPack and Array API standards. The data
+#     type is described by a name and a triple, `DTypeCode`, `bits`, and
+#     `lanes`, which should be interpreted as packed `lanes` repetitions
+#     of elements from `type_code` data-category of width `bits`.
 
-    @classmethod
-    def from_np_dtype(cls, np_dtype: npt.DTypeLike) -> DType:
-        return cls(np.dtype(np_dtype).type)
+#     The Array API standard only requires DTypes to be comparable with `__eq__`.
+
+#     Additionally, instances of this class can also be used as valid NumPy
+#     `dtype`s definitions due to the `.dtype` attribute.
+
+#     Note:
+#         This DType definition is implemented in a non-extensible way on purpose
+#         to avoid the complexity of dealing with user-defined data types.
+#     """
+
+#     bool_ = scalars.bool_
+#     int8 = scalars.int8
+#     int16 = scalars.int16
+#     int32 = scalars.int32
+#     int64 = scalars.int64
+#     uint8 = scalars.uint8
+#     uint16 = scalars.uint16
+#     uint32 = scalars.uint32
+#     uint64 = scalars.uint64
+#     float32 = scalars.float32
+#     float64 = scalars.float64
+
+#     @classmethod
+#     def _missing_(cls, value: DTypeLike) -> DType:
+#         canonical_type = np.dtype(value).type
+#         if canonical_type != value:
+#             for member in cls:
+#                 if member.value == canonical_type:
+#                     return member
+#         return None
+
+#     # Definition properties
+#     @functools.cached_property
+#     def type_code(self) -> DTypeCode:
+#         return DTypeCode(self.dtype.kind)
+
+#     @functools.cached_property
+#     def bits(self) -> int:
+#         assert self.dtype.itemsize % self.lanes == 0
+#         return 8 * (self.dtype.itemsize // self.lanes)
+
+#     @functools.cached_property
+#     def lanes(self) -> int:
+#         shape = self.dtype.shape or (1,)
+#         return math.prod(shape)
+
+#     # Convenience functions
+#     @functools.cached_property
+#     def scalar_type(self) -> type:
+#         return self.value
+
+#     @functools.cached_property
+#     def byte_size(self) -> int:
+#         return self.dtype.itemsize
+
+#     # NumPy compatibility functions
+#     @functools.cached_property
+#     def dtype(self) -> np.dtype:
+#         return np.dtype(self.value)
+
+#     @classmethod
+#     def from_np_dtype(cls, np_dtype: npt.DTypeLike) -> DType:
+#         return cls(np.dtype(np_dtype).type)
 
 
 # DTypeLike = Union[DType, npt.DTypeLike]
+
+
+@dataclasses.dataclass(frozen=True)
+class DType(Generic[ScalarT]):
+    """
+    Descriptor of data type for NDArrayObject elements.
+
+    This definition is based on DLPack and Array API standards. The Array API
+    standard only requires DTypes to be comparable with `__eq__`.
+
+    Additionally, instances of this class can also be used as valid NumPy
+    `dtype`s definitions due to the `.dtype` attribute.
+    """
+
+    scalar_type: type[ScalarT]
+    subshape: tuple[int, ...] = dataclasses.field(default=())
+
+    @functools.cached_property
+    def kind(self) -> DTypeKind:
+        return dtype_kind(self.scalar_type)
+
+    @property
+    def subndim(self) -> int:
+        return len(self.subshape)
+
+    @property
+    def dtype(self) -> np.dtype:
+        """NumPy dtype corresponding to this DType."""
+        return np.dtype(self.scalar_type)
+
+
+@dataclasses.dataclass(frozen=True)
+class IntegerDType(DType[IntegralT]):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class UnsignedIntDType(DType[UnsignedIntT]):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class UInt8DType(UnsignedIntDType[int8]):
+    scalar_type: Final[type[uint8]] = dataclasses.field(default=uint8, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class UInt16DType(UnsignedIntDType[int16]):
+    scalar_type: Final[type[uint16]] = dataclasses.field(default=uint16, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class UInt32DType(UnsignedIntDType[int32]):
+    scalar_type: Final[type[uint32]] = dataclasses.field(default=uint32, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class UInt64DType(UnsignedIntDType[int64]):
+    scalar_type: Final[type[uint64]] = dataclasses.field(default=uint64, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class SignedIntDType(DType[IntT]):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class Int8DType(SignedIntDType[int8]):
+    scalar_type: Final[type[int8]] = dataclasses.field(default=int8, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class Int16DType(SignedIntDType[int16]):
+    scalar_type: Final[type[int16]] = dataclasses.field(default=int16, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class Int32DType(SignedIntDType[int32]):
+    scalar_type: Final[type[int32]] = dataclasses.field(default=int32, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class Int64DType(SignedIntDType[int64]):
+    scalar_type: Final[type[int64]] = dataclasses.field(default=int64, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class FloatingDType(DType[FloatingT]):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
+class Float32DType(FloatingDType[float32]):
+    scalar_type: Final[type[float32]] = dataclasses.field(default=float32, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class Float64DType(FloatingDType[float64]):
+    scalar_type: Final[type[float64]] = dataclasses.field(default=float64, init=False)
+
+
+SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
+
+NDArrayObject = Union[npt.NDArray, CuPyNDArray, JaxNDArray, "NDArrayObjectProto"]
+
+
+class NDArrayObjectProto(Protocol):
+    @property
+    def ndim(self) -> int:
+        ...
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        ...
+
+    @property
+    def dtype(self) -> Any:
+        ...
+
+    def __getitem__(self, item: SliceLike) -> NDArrayObject:
+        ...
+
+    def __abs__(self) -> NDArrayObject:
+        ...
+
+    def __neg__(self) -> NDArrayObject:
+        ...
+
+    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
