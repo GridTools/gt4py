@@ -98,7 +98,7 @@ def _type_string(type_: ts.TypeSpec) -> str:
     elif isinstance(type_, ts.ScalarType):
         return cpp_interface.render_scalar_type(type_)
     else:
-        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+        raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
 class BindingCodeGenerator(TemplatedGenerator):
