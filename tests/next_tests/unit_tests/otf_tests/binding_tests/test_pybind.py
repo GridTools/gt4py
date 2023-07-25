@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.otf.binding import pybind
+from gt4py.next.otf.binding import nanobind
 
 from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
     program_source_example,
@@ -20,5 +20,5 @@ from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conft
 
 
 def test_bindings(program_source_example):
-    module = pybind.create_bindings(program_source_example)
+    module = nanobind.create_bindings(program_source_example)
     assert module.library_deps[0].name == "nanobind"
