@@ -15,6 +15,7 @@
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
 from typing import Any, Callable, Generic, Optional, ParamSpec, TypeAlias, TypeVar
+import inspect
 
 from numpy import float32, float64, int32, int64
 
@@ -44,6 +45,7 @@ R = TypeVar("R", Value, tuple[Value, ...])
 
 @dataclass(frozen=True)
 class BuiltInFunction(Generic[R, P]):
+    # name: str
     __gt_type: ts.FunctionType
     # `function` can be used to provide a default implementation for all `Field` implementations,
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
@@ -78,6 +80,28 @@ _reduction_like = lambda: BuiltInFunction(
         returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
+
+
+def builtin_function(fun: Callable):
+    signature = inspect.signature(my_function)
+    params = signature.parameters
+    return BuiltInFunction(
+        ts.FunctionType(
+            pos_only_args=pos_only_args,
+            pos_or_kw_args=pos_or_kw_args,
+            kw_only_args=kw_only_args,
+            returns=signature.return_annotation,
+        )
+    )
+
+
+def neighbor_sum(
+    fun: ts.DeferredType(constraint=ts.FieldType),
+    /,
+    axis: ts.DeferredType(constraint=ts.DimensionType),
+) -> ts.DeferredType(constraint=ts.FieldType):
+    ...
+
 
 neighbor_sum = _reduction_like()
 max_over = _reduction_like()

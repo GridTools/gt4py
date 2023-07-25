@@ -73,66 +73,31 @@ class Dimension:
 DomainLike = Union[Sequence[Dimension], Dimension, str]
 
 
-# class SetProto(Protocol):
-#     def empty_set(self) -> UnitRange:
-#         ...
-
-#     def universe(self) -> UnitRange:
-#         ...
-
-
-# class IntegerSet: # TODO use collection protocols
-#     """A set containing integers."""
-
-#     def empty_set(self) -> UnitRange:
-#         return UnitRange(0, 0)
-
-#     def universe(self) -> UnitRange:
-#         return UnitRange(-math.inf, math.inf)
-
-
-class UnitRange:  # TODO use collection protocols: Set, Sequence
+class UnitRange(Sequence):
     """Range from `start` to `stop` with step size one."""
 
-    start: Integer
-    stop: Integer
-
-    def __init__(self, start: Integer, stop: Integer) -> None:
-        assert stop >= start
+    def __init__(self, start: int, stop: int) -> None:
         self.start = start
         self.stop = stop
 
-        # canonicalize
-        if self.empty:
-            self.start = 0
-            self.stop = 0
+    def __len__(self) -> int:
+        return max(0, self.stop - self.start)
 
-    @property
-    def size(self) -> Integer:
-        """Return the number of elements."""
-        assert self.start <= self.stop
-        return self.stop - self.start
-
-    @property
-    def empty(self) -> bool:
-        """Return if the range is empty"""
-        return self.start >= self.stop
-
-    @property
-    def bounds(self) -> UnitRange:
-        """Smallest range containing all elements. In this case itself."""
-        return self
-
-    def __iter__(self) -> Iterator:
-        """Return an iterator over all elements of the set."""
-        return range(self.start, self.stop).__iter__()
-
-    def as_tuple(self) -> IntegerPair:
-        """Return the start and stop elements of the set as a tuple."""
-        return self.start, self.stop
-
-    def __str__(self) -> str:
+    def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
+
+    def __getitem__(self, index: int | slice) -> int | list[int]:
+        if isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            return [self[i] for i in range(start, stop, step)]
+
+        if index < 0:
+            index += len(self)
+
+        if 0 <= index < len(self):
+            return self.start + index
+        else:
+            raise IndexError("UnitRange index out of range")
 
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
