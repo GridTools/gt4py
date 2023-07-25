@@ -23,6 +23,7 @@ from collections.abc import Sequence
 from typing import (
     Any,
     Iterator,
+    Literal,
     Optional,
     Protocol,
     TypeAlias,
@@ -30,7 +31,6 @@ from typing import (
     Union,
     final,
     runtime_checkable,
-    Literal,
 )
 
 import numpy as np
@@ -246,10 +246,16 @@ def field(
     definition: Any,
     /,
     *,
-    domain: Optional[DomainT] = None,
+    domain: Optional[Any] = None,  # TODO provide domain_like_to_domain
     value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
+
+
+# DomainLike:
+# - tuple[tuple[Dimension,UnitRange], ...]
+# - dict[Dimension, UnitRange]
+# - Sequence[Dimension]
 
 
 @dataclasses.dataclass(frozen=True)
