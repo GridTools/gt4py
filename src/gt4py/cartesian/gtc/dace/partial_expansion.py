@@ -1065,7 +1065,8 @@ def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
         for nsdfg_node in state.nodes():
             if isinstance(nsdfg_node, dace.nodes.NestedSDFG):
                 nsdfg_cft = cf.structured_control_flow_tree(nsdfg_node.sdfg, lambda _: "")
-                subgraphs.extend(_generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims))
+                submatches = _generate_matches(nsdfg_node.sdfg, nsdfg_cft, dims)
+                subgraphs.extend(submatches)
         commit_and_clear()
 
     # reversed so that extent analysis tends to include stencil sinks
@@ -1082,10 +1083,6 @@ def _generate_matches(sd, cft: cf.ControlFlow, dims: Sequence[str]):
                         subgraphs.extend(_generate_matches(sd, child.body, dims=dims))
                         if child.orelse is not None:
                             subgraphs.extend(_generate_matches(sd, child.orelse, dims=dims))
-                        if not commit_and_test(
-                            cf.SingleState(state=child.branch_state, dispatch_state=lambda _: "")
-                        ):
-                            recurse(child.branch_state)
                     elif isinstance(child, (cf.ForScope, cf.WhileScope)):
                         subgraphs.extend(_generate_matches(sd, child.body, dims=dims))
                     else:
