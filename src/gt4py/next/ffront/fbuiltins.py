@@ -219,7 +219,9 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 def _make_binary_math_builtin(name):
     def impl(
-        lhs: Field | gt4py_defs.ScalarT, rhs: Field | gt4py_defs.ScalarT, /
+        lhs: Field | gt4py_defs.ScalarT,
+        rhs: Field | gt4py_defs.ScalarT,
+        /,
     ) -> Field | gt4py_defs.ScalarT:
         raise NotImplementedError()
 

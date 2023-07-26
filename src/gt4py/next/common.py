@@ -19,7 +19,17 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set
-from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, final, runtime_checkable
+from typing import (
+    Any,
+    Optional,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    Union,
+    final,
+    overload,
+    runtime_checkable,
+)
 
 import numpy as np
 import numpy.typing as npt
@@ -71,6 +81,14 @@ class UnitRange(Sequence, Set):
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
 
+    @overload
+    def __getitem__(self, index: int) -> int:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[int]:
+        ...
+
     def __getitem__(self, index: int | slice) -> int | list[int]:
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -114,6 +132,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         raise TypeError("Immutable type")
 
     def __str__(self) -> str:
+        assert hasattr(self.value_type, "__name__")
         codomain = (
             f"{self.value_type!s}"
             if isinstance(self.value_type, Dimension)
