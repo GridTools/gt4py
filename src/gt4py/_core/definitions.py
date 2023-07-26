@@ -37,21 +37,6 @@ import numpy as np
 import numpy.typing as npt
 
 
-if TYPE_CHECKING:
-    try:
-        import cupy as cp
-
-        CuPyNDArray = cp.ndarray
-    except ImportError:
-        CuPyNDArray = npt.NDArray  # TODO improve pattern
-
-    try:
-        import jax.numpy as jnp
-
-        JaxNDArray = jnp.ndarray
-    except ImportError:
-        JaxNDArray = npt.NDArray  # TODO improve pattern
-
 # Scalar types supported by GT4Py
 bool_ = np.bool_
 
@@ -69,28 +54,28 @@ float32 = np.float32
 float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
-BoolT = TypeVar("BoolT", bool_, bool)
+BoolT = TypeVar("BoolT", bound=Union[bool_, bool])
 BOOL_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
 
 SignedIntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
-SignedIntT = TypeVar("SignedIntT", int8, int16, int32, int64, int)
+SignedIntT = TypeVar("SignedIntT", bound=Union[int8, int16, int32, int64, int])
 SINT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], SignedIntScalar.__args__)  # type: ignore[attr-defined]
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
-UnsignedIntT = TypeVar("UnsignedIntT", uint8, uint16, uint32, uint64)
+UnsignedIntT = TypeVar("UnsignedIntT", bound=Union[uint8, uint16, uint32, uint64])
 UINT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
 
 IntegerScalar: TypeAlias = Union[SignedIntScalar, UnsignedIntScalar]
-IntegerT = TypeVar("IntegerT", SignedIntScalar, UnsignedIntScalar)
+IntegerT = TypeVar("IntegerT", bound=Union[SignedIntScalar, UnsignedIntScalar])
 INT_TYPES: Final[tuple[type, ...]] = (*SINT_TYPES, *UINT_TYPES)
 
 FloatingScalar: TypeAlias = Union[float32, float64, float]
-FloatingT = TypeVar("FloatingT", float32, float64, float)
+FloatingT = TypeVar("FloatingT", bound=Union[float32, float64, float])
 FLOAT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
 
 #: Type alias for all scalar types supported by GT4Py
 Scalar: TypeAlias = Union[BoolScalar, IntegerScalar, FloatingScalar]
-ScalarT = TypeVar("ScalarT", BoolScalar, IntegerScalar, FloatingScalar)
+ScalarT = TypeVar("ScalarT", bound=Union[BoolScalar, IntegerScalar, FloatingScalar])
 SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INT_TYPES, *FLOAT_TYPES)
 
 
@@ -273,10 +258,7 @@ class Float64DType(FloatingDType[float64]):
 
 SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
 
-if TYPE_CHECKING:
-    NDArrayObject = Union[npt.NDArray, CuPyNDArray, JaxNDArray, "NDArrayObjectProto"]
-else:
-    NDArrayObject = Union[npt.NDArray, "NDArrayObjectProto"]
+NDArrayObject = Union[npt.NDArray, "NDArrayObjectProto"]
 
 
 class NDArrayObjectProto(Protocol):
@@ -304,31 +286,31 @@ class NDArrayObjectProto(Protocol):
     def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # maybe https://github.com/python/mypy/issues/11595
         ...
 
     def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # maybe https://github.com/python/mypy/issues/11595
         ...
 
     def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # maybe https://github.com/python/mypy/issues/11595
         ...
 
     def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # maybe https://github.com/python/mypy/issues/11595
         ...
 
     def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # maybe https://github.com/python/mypy/issues/11595
         ...
 
     def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:

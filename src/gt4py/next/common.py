@@ -123,11 +123,9 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
     def ndarray(self) -> NDArrayObject:
         ...
 
-    @final
     def __setattr__(self, key, value) -> None:
         raise TypeError("Immutable type")
 
-    @final
     def __setitem__(self, key, value) -> None:
         raise TypeError("Immutable type")
 
