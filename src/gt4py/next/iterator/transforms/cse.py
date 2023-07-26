@@ -11,9 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 import dataclasses
 import functools
+import math
 import operator
 import typing
 
@@ -74,10 +74,19 @@ def _is_collectable_expr(node: ir.Node) -> bool:
 @dataclasses.dataclass
 class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
     @dataclasses.dataclass
+    class SubexpressionData:
+        #: A list of node ids with equal hash and a set of collected child subexpression ids
+        subexprs: list[tuple[int, set[int]]] = dataclasses.field(default_factory=list)
+        #: Maximum depth of a subexpression in the tree. Used to sort collected subexpressions
+        #:  such that deeper nodes can be processed (in other passed building upon this pass)
+        #:  earlier.
+        max_depth: int | float = -math.inf
+
+    @dataclasses.dataclass
     class State:
-        #: A dictionary mapping a node to a list of node ids which are equal. Additionally, for
-        #: each (actual) node we store a set of all ids of collected child subexpressions.
-        subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = dataclasses.field(
+        #: A dictionary mapping a node to a list of node ids with equal hash and some additional
+        #: information. See `SubexpressionData` for more information.
+        subexprs: dict[ir.Node, "CollectSubexpressions.SubexpressionData"] = dataclasses.field(
             default_factory=dict
         )
         # TODO(tehrengruber): Revisit if this makes sense or if we can just recompute the collected
@@ -92,24 +101,29 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             for node in nodes:
                 subexpr_data = self.subexprs.pop(node, None)
                 if subexpr_data:
-                    node_ids, _ = zip(*subexpr_data)
+                    node_ids, _ = zip(*subexpr_data.subexprs)
                     node_ids_to_remove |= set(node_ids)
             for subexpr_data in self.subexprs.values():
-                for _, collected_child_node_ids in subexpr_data:
+                for _, collected_child_node_ids in subexpr_data.subexprs:
                     collected_child_node_ids -= node_ids_to_remove
 
     @classmethod
     def apply(cls, node: ir.Node) -> dict[ir.Node, list[tuple[int, set[int]]]]:
         state = cls.State()
         obj = cls()
-        obj.visit(node, state=state)
-        # return subexpression in pre-order of the tree, i.e. the nodes closer to the root come
-        # first, and skip the root node itself
-        return {k: v for k, v in reversed(state.subexprs.items()) if k is not node}
+        obj.visit(node, state=state, depth=-1)
+        # Return subexpression such that the nodes closer to the root come first and skip the root
+        # node itself.
+        subexprs_sorted: list[tuple[ir.Node, "CollectSubexpressions.SubexpressionData"]] = sorted(
+            state.subexprs.items(), key=lambda el: el[1].max_depth
+        )
+        return {k: v.subexprs for k, v in subexprs_sorted if k is not node}
 
     def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
+        depth = kwargs.pop("depth")
+
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
-            return super().visit(node, **kwargs)
+            return super().visit(node, depth=depth + 1, **kwargs)
 
         parent_state = kwargs.pop("state")
         collected_child_node_ids: set[int] = set()
@@ -123,7 +137,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             # collect subexpressions for all arguments to the `if_`
             arg_states = [self.State() for _ in node.args]
             for arg, state in zip(node.args, arg_states):
-                self.visit(arg, state=state, **kwargs)
+                self.visit(arg, depth=depth + 1, state=state, **kwargs)
 
             # for each subexpression find in how many of the three arguments they occur
             subexpr_count: dict[ir.Node, int] = {}
@@ -138,10 +152,12 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
                 arg_state.remove_subexprs(arg_state.subexprs.keys() - eligible_subexprs)
 
             # merge the states of the three arguments
-            subexprs: dict[ir.Node, list[tuple[int, set[int]]]] = {}
+            subexprs: dict[ir.Node, CollectSubexpressions.SubexpressionData] = {}
             for state in arg_states:
                 for subexpr, data in state.subexprs.items():
-                    subexprs.setdefault(subexpr, []).extend(data)
+                    merged_data = subexprs.setdefault(subexpr, self.SubexpressionData())
+                    merged_data.subexprs.extend(data.subexprs)
+                    merged_data.max_depth = max(merged_data.max_depth, data.max_depth)
             collected_child_node_ids = functools.reduce(
                 operator.or_, (state.collected_child_node_ids for state in arg_states)
             )
@@ -150,10 +166,13 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             )
             # propagate collected subexpressions to parent
             for subexpr, data in subexprs.items():
-                parent_state.subexprs.setdefault(subexpr, []).extend(data)
+                parent_data = parent_state.subexprs.setdefault(subexpr, self.SubexpressionData())
+                parent_data.subexprs.extend(data.subexprs)
+                parent_data.max_depth = max(merged_data.max_depth, data.max_depth)
         else:
             super().visit(
                 node,
+                depth=depth + 1,
                 state=self.State(parent_state.subexprs, collected_child_node_ids, used_symbol_ids),
                 **kwargs,
             )
@@ -165,7 +184,9 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         # if no symbols are used that are defined in the root node, i.e. the node given to `apply`,
         # we collect the subexpression
         if not used_symbol_ids and _is_collectable_expr(node):
-            parent_state.subexprs.setdefault(node, []).append((id(node), collected_child_node_ids))
+            parent_data = parent_state.subexprs.setdefault(node, self.SubexpressionData())
+            parent_data.subexprs.append((id(node), collected_child_node_ids))
+            parent_data.max_depth = max(parent_data.max_depth, depth)
 
             # propagate to parent that we have collected its child
             parent_state.collected_child_node_ids.add(id(node))
@@ -189,7 +210,7 @@ def extract_subexpression(
     predicate: typing.Callable[[ir.Expr, int], bool],
     uid_generator: UIDGenerator,
     once_only: bool = False,
-    pre_order: bool = True,
+    deepest_expr_first: bool = False,
 ) -> tuple[ir.Expr, typing.Union[dict[ir.Sym, ir.Expr], None], bool]:
     """
     Given an expression extract all subexprs and return a new expr with the subexprs replaced.
@@ -206,11 +227,14 @@ def extract_subexpression(
           Takes a subexpression and the number of occurences of the subexpression in the root node
           as arguments.
         uid_generator: The uid generator used to generate new symbol names.
-        once_only: If set extraction is stopped after the first expression that is extracted
-        pre_order: Extract in pre- or post-order of the root node.
+        once_only: If set extraction is stopped after the first expression that is extracted.
+        deepest_expr_first: Extract subexpressions that are lower in the tree first. Otherwise,
+          expressions closer to the root are extracted first. Requires `once_only == True`.
 
 
     Examples:
+        Default case for `(x+y) + ((x+y)+z)`:
+
         >>> import gt4py.next.iterator.ir_makers as im
         >>> from gt4py.eve.utils import UIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
@@ -222,7 +246,47 @@ def extract_subexpression(
         >>> for sym, subexpr in extracted_subexprs.items():
         ...    print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
+
+        The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
+        closer to the root are eliminated first:
+
+        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
+        >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
+        ...     UIDGenerator(prefix="_subexpr"), once_only=True, deepest_expr_first=False)
+        >>> print(new_expr)
+        _subexpr_1 + _subexpr_1
+        >>> for sym, subexpr in extracted_subexprs.items():
+        ...    print(f"`{sym}`: `{subexpr}`")
+        `_subexpr_1`: `x + y + (x + y)`
+
+        Otherwise nodes deeper in the tree are extracted first:
+
+        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
+        >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
+        ...     UIDGenerator(prefix="_subexpr"), once_only=True, deepest_expr_first=True)
+        >>> print(new_expr)
+        _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
+        >>> for sym, subexpr in extracted_subexprs.items():
+        ...    print(f"`{sym}`: `{subexpr}`")
+        `_subexpr_1`: `x + y`
     """
+    if deepest_expr_first and not once_only:
+        # TODO(tehrengruber): Revisit. We could fix this, but is this case even needed?
+        # If we traverse the deepest nodes first, but don't stop after the first extraction the new
+        # expression is not meaningful in the current implementation. Just disallow this case for
+        # now. E.g.:
+        # Input expression:
+        #   `((x + y) + (x + y)) + ((x + y) + (x + y))`
+        # New expression:
+        #   `_subexpr_2 + _subexpr_2`
+        # Extracted subexpression:
+        #  `_subexpr_1`: `x + y`  (This subexpression is not used anywhere)
+        #  `_subexpr_2`: `x + y + (x + y)`
+        raise NotImplementedError(
+            "Results of the current implementation not meaningful for "
+            "`deepest_expr_first == True` and `once_only == True`."
+        )
+
     ignored_children = False
     extracted = dict[ir.Sym, ir.Expr]()
 
@@ -232,7 +296,9 @@ def extract_subexpression(
     # collect multiple occurrences and map them to fresh symbols
     expr_map = dict[int, ir.SymRef]()
     ignored_ids = set()
-    for expr, subexpr_entry in subexprs.items() if pre_order else reversed(subexprs.items()):
+    for expr, subexpr_entry in (
+        subexprs.items() if not deepest_expr_first else reversed(subexprs.items())
+    ):
         # just to make mypy happy when calling the predicate. Every subnode and hence subexpression
         # is an expr anyway.
         assert isinstance(expr, ir.Expr)
