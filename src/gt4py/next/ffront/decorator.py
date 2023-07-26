@@ -236,7 +236,9 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        if self.backend is None:
+        if (
+            self.backend is None and DEFAULT_BACKEND is None
+        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
             self.definition(*args, **kwargs)
             return
 

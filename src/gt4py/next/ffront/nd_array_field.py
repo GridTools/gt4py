@@ -17,24 +17,12 @@ from __future__ import annotations
 import abc
 import dataclasses
 import functools
-import math
 import typing
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Final,
-    Generic,
-    NamedTuple,
-    Optional,
-    TypeVar,
-    final,
-)
+from collections.abc import Callable
+from typing import ClassVar, Final, Optional, Any, ParamSpec, TypeVar
 
 import numpy as np
 from numpy import typing as npt
-from typing_extensions import TypeVarTuple, Unpack
 
 from gt4py.next import common
 
@@ -94,6 +82,11 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
 
     _builtin_binary_op.__name__ = builtin_name
     return _builtin_binary_op
+
+
+Value = Any  # TODO
+P = ParamSpec("P")
+R = TypeVar("R", Value, tuple[Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -160,19 +153,15 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
 
         return cls(domain, array, value_type)
 
-    def remap(
-        self: _BaseNdArrayField, connectivity: definitions.ConnectivityField
-    ) -> definitions.Field:
+    def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self: _BaseNdArrayField, domain: "DomainLike") -> _BaseNdArrayField:
+    def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    # __call__ = remap
-    __call__ = None
+    __call__ = None  # TODO: remap
 
-    # __getitem__ = restrict
-    __getitem__ = None
+    __getitem__ = None  # TODO: restrict
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
 
@@ -220,11 +209,6 @@ _BaseNdArrayField.register_gt_op_func(
     fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")
 )
 
-# # Domain-related
-# _BaseNdArrayField.register_gt_op_func(fbuiltins.remap, _BaseNdArrayField.remap)
-# _BaseNdArrayField.register_gt_op_func(fbuiltins.restrict, _BaseNdArrayField.restrict)
-
-
 # -- Concrete array implementations --
 # NumPy
 _nd_array_implementations = [np]
@@ -236,8 +220,6 @@ class NumPyArrayField(_BaseNdArrayField):
 
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
-# common.field.register(memoryview, NumPyArrayField.from_array)
-# common.field.register(Iterable, NumPyArrayField.from_array)
 
 
 # CuPy
@@ -248,7 +230,7 @@ if cp:
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[definitions.NDArrayObject] = cp
 
-    definitions.field.register(cp.ndarray, CuPyArrayField.from_array)
+    common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
 # JAX
 if jnp:

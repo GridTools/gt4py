@@ -12,17 +12,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.ffront import fbuiltins
-from gt4py.next.ffront import nd_array_field
-from gt4py.next import common
-from typing import Iterable
 import itertools
+import math
+from typing import Iterable
+
+import numpy as np
+import pytest
+
+from gt4py.next import common
+from gt4py.next.ffront import fbuiltins, nd_array_field
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
-
-import pytest
-import math
-import numpy as np
 
 
 @pytest.fixture(params=nd_array_field._nd_array_implementations)

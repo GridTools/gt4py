@@ -13,20 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-import functools
 import inspect
 from builtins import bool, float, int, tuple
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    ParamSpec,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, Generic, Optional, ParamSpec, Tuple, TypeAlias, TypeVar, Union
 
 from numpy import float32, float64, int32, int64
 
@@ -138,7 +127,7 @@ def neighbor_sum(
     /,
     axis: Dimension,
 ) -> Field:
-    ...
+    raise NotImplementedError()
 
 
 @builtin_function
@@ -147,7 +136,7 @@ def max_over(
     /,
     axis: Dimension,
 ) -> Field:
-    ...
+    raise NotImplementedError()
 
 
 @builtin_function
@@ -156,12 +145,12 @@ def min_over(
     /,
     axis: Dimension,
 ) -> Field:
-    ...
+    raise NotImplementedError()
 
 
 @builtin_function
 def broadcast(field: Field | ScalarT, dims: Tuple, /) -> Field:
-    ...
+    raise NotImplementedError()
 
 
 @builtin_function
@@ -171,12 +160,12 @@ def where(
     false_field: Field | ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
-    ...
+    raise NotImplementedError()
 
 
 @builtin_function
 def astype(field: Field, type_: type, /) -> Field:
-    ...
+    raise NotImplementedError()
 
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
@@ -210,7 +199,7 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 def _make_unary_math_builtin(name):
     def impl(value: Field | ScalarT, /) -> Field | ScalarT:
-        ...
+        raise NotImplementedError()
 
     impl.__name__ = name
     globals()[name] = builtin_function(impl)
@@ -229,7 +218,7 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 def _make_binary_math_builtin(name):
     def impl(lhs: Field | ScalarT, rhs: Field | ScalarT, /) -> Field | ScalarT:
-        ...
+        raise NotImplementedError()
 
     impl.__name__ = name
     globals()[name] = builtin_function(impl)
@@ -278,7 +267,3 @@ class FieldOffset(runtime.Offset):
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
-
-    def __getitem__(self, index):
-        return lambda i: i  # TODO
-        # return FieldOffset(self.source, self.target, index)

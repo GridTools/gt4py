@@ -18,12 +18,9 @@ import abc
 import dataclasses
 import enum
 import functools
-import math
 from collections.abc import Sequence, Set
 from typing import (
     Any,
-    Iterator,
-    Literal,
     Optional,
     Protocol,
     TypeAlias,
