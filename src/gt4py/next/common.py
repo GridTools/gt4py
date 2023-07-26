@@ -19,7 +19,7 @@ import dataclasses
 import enum
 import functools
 import math
-from collections.abc import Sequence
+from collections.abc import Sequence, Set
 from typing import (
     Any,
     Iterator,
@@ -47,8 +47,6 @@ DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
 ScalarT = gt4py_defs.ScalarT
 NDArrayObject = gt4py_defs.NDArrayObject
-Integer: TypeAlias = Union[int, Literal[math.inf, -math.inf]]
-IntegerPair: TypeAlias = tuple[Integer, Integer]
 
 
 @enum.unique
@@ -73,12 +71,12 @@ class Dimension:
 DomainLike = Union[Sequence[Dimension], Dimension, str]
 
 
-class UnitRange(Sequence):
+@dataclasses.dataclass(frozen=True)
+class UnitRange(Sequence, Set):
     """Range from `start` to `stop` with step size one."""
 
-    def __init__(self, start: int, stop: int) -> None:
-        self.start = start
-        self.stop = stop
+    start: int
+    stop: int
 
     def __len__(self) -> int:
         return max(0, self.stop - self.start)
