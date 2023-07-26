@@ -19,7 +19,8 @@ from typing import Any, Callable, Generic, Optional, ParamSpec, Tuple, TypeAlias
 
 from numpy import float32, float64, int32, int64
 
-from gt4py.next.common import Dimension, DimensionKind, Field, ScalarT
+from gt4py._core import definitions as gt4py_defs
+from gt4py.next.common import Dimension, DimensionKind, Field
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -48,7 +49,7 @@ def _type_conversion_helper(t: type):
         return ts.FieldType
     elif t is Dimension:
         return ts.DimensionType
-    elif t is ScalarT:
+    elif t is gt4py_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
         return (
@@ -57,7 +58,7 @@ def _type_conversion_helper(t: type):
     elif t is Tuple:
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        return tuple(_type_conversion_helper(e) for e in t.__args__)
+        return tuple(_type_conversion_helper(e) for e in t.__args__)  # type: ignore[attr-defined]
     else:
         raise AssertionError("Illegal type encountered.")
 
@@ -149,15 +150,15 @@ def min_over(
 
 
 @builtin_function
-def broadcast(field: Field | ScalarT, dims: Tuple, /) -> Field:
+def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple, /) -> Field:
     raise NotImplementedError()
 
 
 @builtin_function
 def where(
     mask: Field,
-    true_field: Field | ScalarT | Tuple,
-    false_field: Field | ScalarT | Tuple,
+    true_field: Field | gt4py_defs.ScalarT | Tuple,
+    false_field: Field | gt4py_defs.ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
     raise NotImplementedError()
@@ -198,7 +199,7 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name):
-    def impl(value: Field | ScalarT, /) -> Field | ScalarT:
+    def impl(value: Field | gt4py_defs.ScalarT, /) -> Field | gt4py_defs.ScalarT:
         raise NotImplementedError()
 
     impl.__name__ = name
@@ -217,7 +218,9 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
 def _make_binary_math_builtin(name):
-    def impl(lhs: Field | ScalarT, rhs: Field | ScalarT, /) -> Field | ScalarT:
+    def impl(
+        lhs: Field | gt4py_defs.ScalarT, rhs: Field | gt4py_defs.ScalarT, /
+    ) -> Field | gt4py_defs.ScalarT:
         raise NotImplementedError()
 
     impl.__name__ = name

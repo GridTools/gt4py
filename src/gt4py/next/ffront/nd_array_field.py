@@ -19,7 +19,8 @@ import dataclasses
 import functools
 import typing
 from collections.abc import Callable
-from typing import ClassVar, Final, Optional, Any, ParamSpec, TypeVar
+from types import ModuleType
+from typing import Any, ClassVar, Optional, ParamSpec, TypeVar
 
 import numpy as np
 from numpy import typing as npt
@@ -30,17 +31,17 @@ from gt4py.next import common
 try:
     import cupy as cp
 except ImportError:
-    cp: Final = None
+    cp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 try:
     from jax import numpy as jnp
 except ImportError:
-    jnp: Final = None
+    jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DomainT
+from gt4py.next.common import DimsT, DomainT
 from gt4py.next.ffront import fbuiltins
 
 
@@ -53,7 +54,7 @@ class NonProtocolABC(metaclass=NonProtocolABCMeta):
 
 
 def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_unary_op(a: _BaseNdArrayField) -> definitions.Field:
+    def _builtin_unary_op(a: _BaseNdArrayField) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
         new_data = op(a.ndarray)
@@ -65,10 +66,10 @@ def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name
 
 
 def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_binary_op(a: _BaseNdArrayField, b: definitions.Field) -> definitions.Field:
+    def _builtin_binary_op(a: _BaseNdArrayField, b: common.Field) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
-        if hasattr(b, "__gt_op_func__"):  # isinstance(b, definitions.Field):
+        if hasattr(b, "__gt_op_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 raise NotImplementedError(
                     f"support for different domain not implemented: {a.domain}, {b.domain}"
@@ -90,24 +91,24 @@ R = TypeVar("R", Value, tuple[Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
+class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
     _domain: DomainT
     _ndarray: definitions.NDArrayObject
     _value_type: ScalarT
 
     _ops_mapping: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
-    array_ns: ClassVar[definitions.NDArrayObject]
+    array_ns: ClassVar[Any]  # TODO what's the better type?
 
     @classmethod
-    def __gt_op_func__(cls, op: definitions.IntrinsicOp[R, P]) -> Callable[P, R]:
+    def __gt_op_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
         return cls._ops_mapping.get(op, NotImplemented)
 
     @classmethod
     def register_gt_op_func(
-        cls, op: definitions.IntrinsicOp[R, P], op_func: Optional[Callable[P, R]] = None
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
     ) -> Callable[P, R]:
         assert op not in cls._ops_mapping
-        if op_func is None:
+        if op_func is None:  # TODO use-case for None?
             return functools.partial(cls.register_gt_op_func, op)
         return cls._ops_mapping.setdefault(op, op_func)
 
@@ -129,7 +130,7 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
         data: npt.ArrayLike,
         /,
         *,
-        domain: Optional[DomainT] = None,
+        domain: DomainT,
         value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
@@ -137,7 +138,7 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
         if value_type is not None:
             dtype = xp.dtype(value_type)
         array = xp.asarray(data, dtype=dtype)
-        if value_type is not None and isinstance(value_type, definitions.DimensionType):
+        if value_type is not None and isinstance(value_type, common.DimsT):
             if not (
                 xp.min(array) >= value_type.extent.start and xp.max(array) < value_type.extent.stop
             ):
@@ -151,7 +152,8 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
         assert len(domain) == array.ndim
         assert all(len(nr[1]) == s for nr, s in zip(domain, array.shape))
 
-        return cls(domain, array, value_type)
+        assert value_type is not None  # for mypy
+        return cls(domain, array, value_type)  # type: ignore[arg-type] # TODO figure out concrete type of value_type
 
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
@@ -159,9 +161,9 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
     def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    __call__ = None  # TODO: remap
+    __call__ = None  # type: ignore[assignment]  # TODO: remap
 
-    __getitem__ = None  # TODO: restrict
+    __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
 
@@ -184,8 +186,8 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[common.DimsT, ScalarT]):
 
 # -- Specialized implementations for intrinsic operations on array fields --
 
-_BaseNdArrayField.register_gt_op_func(fbuiltins.abs, _BaseNdArrayField.__abs__)
-_BaseNdArrayField.register_gt_op_func(fbuiltins.power, _BaseNdArrayField.__pow__)
+_BaseNdArrayField.register_gt_op_func(fbuiltins.abs, _BaseNdArrayField.__abs__)  # type: ignore[attr-defined]
+_BaseNdArrayField.register_gt_op_func(fbuiltins.power, _BaseNdArrayField.__pow__)  # type: ignore[attr-defined]
 # TODO gamma
 
 for name in (
@@ -200,13 +202,13 @@ for name in (
     )
 
 _BaseNdArrayField.register_gt_op_func(
-    fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")
+    fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_gt_op_func(
-    fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")
+    fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_gt_op_func(
-    fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")
+    fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
 )
 
 # -- Concrete array implementations --

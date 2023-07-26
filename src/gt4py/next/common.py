@@ -19,16 +19,7 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set
-from typing import (
-    Any,
-    Optional,
-    Protocol,
-    TypeAlias,
-    TypeVar,
-    Union,
-    final,
-    runtime_checkable,
-)
+from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, final, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
@@ -42,7 +33,6 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
 
 DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
-ScalarT = gt4py_defs.ScalarT
 NDArrayObject = gt4py_defs.NDArrayObject
 
 
@@ -98,17 +88,17 @@ class UnitRange(Sequence, Set):
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 
 
-class Field(Protocol[DimsT, ScalarT]):
+class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
     @property
-    def domain(self) -> DimsT:
+    def domain(self) -> DomainT:
         ...
 
     @property
-    def dtype(self) -> DType[ScalarT]:
+    def dtype(self) -> DType[gt4py_defs.ScalarT]:
         ...
 
     @property
-    def value_type(self) -> ScalarT:
+    def value_type(self) -> gt4py_defs.ScalarT:
         ...
 
     @property
@@ -157,47 +147,47 @@ class Field(Protocol[DimsT, ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | ScalarT) -> Field:
+    def __add__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | ScalarT) -> Field:
+    def __radd__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | ScalarT) -> Field:
+    def __sub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | ScalarT) -> Field:
+    def __rsub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | ScalarT) -> Field:
+    def __mul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | ScalarT) -> Field:
+    def __rmul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | ScalarT) -> Field:
+    def __floordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | ScalarT) -> Field:
+    def __rfloordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | ScalarT) -> Field:
+    def __truediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | ScalarT) -> Field:
+    def __rtruediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | ScalarT) -> Field:
+    def __pow__(self, other: Field | gt4py_defs.ScalarT) -> Field:
         ...
 
 
