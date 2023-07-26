@@ -13,8 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from builtins import bool, float, int, tuple
-from dataclasses import dataclass
-import typing
+import dataclasses
 from typing import (
     Any,
     Callable,
@@ -75,10 +74,11 @@ def _type_conversion(t):
     return ts.DeferredType(constraint=_type_conversion_helper(t))
 
 
-@dataclass  # (frozen=True)
+@dataclasses.dataclass  # (frozen=True)
 class BuiltInFunction(Generic[R, P]):
     # name: str
     __gt_type: ts.FunctionType
+    name: str = dataclasses.field(init=False)
     # `function` can be used to provide a default implementation for all `Field` implementations,
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
     function: Callable[P, R] = None  # TODO remove None
@@ -87,6 +87,8 @@ class BuiltInFunction(Generic[R, P]):
         functools.update_wrapper(
             self, self.function
         )  # TODO figure out keeping function annotations in autocomplete
+        if self.function is not None:  # TODO remove condition
+            object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
 
     def __call__(self, *args: Value, **options: Any) -> Value | tuple[Value, ...]:
         impl = self.dispatch(*args)
@@ -103,8 +105,9 @@ class BuiltInFunction(Generic[R, P]):
             return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
-        if self.__gt_type is not None:
-            return self.__gt_type  # TODO remove
+        if self.__gt_type is not None:  # TODO remove this branch once all builtins are refactored
+            return self.__gt_type
+
         signature = inspect.signature(self.function)
         params = signature.parameters
 
@@ -328,7 +331,7 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 #  match. Revisit if we want to continue subclassing here. If we split
 #  them also check whether Dimension should continue to be the shared or define
 #  guidelines for decision.
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
     source: Dimension
     target: tuple[Dimension] | tuple[Dimension, Dimension]
