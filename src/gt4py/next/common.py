@@ -209,16 +209,10 @@ def field(
     definition: Any,
     /,
     *,
-    domain: Optional[Any] = None,  # TODO provide domain_like_to_domain
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
     value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
-
-
-# DomainLike:
-# - tuple[tuple[Dimension,UnitRange], ...]
-# - dict[Dimension, UnitRange]
-# - Sequence[Dimension]
 
 
 @dataclasses.dataclass(frozen=True)

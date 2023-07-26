@@ -556,14 +556,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(
         self,
         *args,
-        # out,
-        # offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
+        # TODO(havogt): Don't select mode based on existence of kwargs,
+        # because now we cannot provide nice error messages. E.g. set context var
+        # if we are reaching this from a program call.
         if "out" in kwargs:
             out = kwargs.pop("out")
             if "offset_provider" in kwargs:
-                # field_operator as program mode
+                # "out" and "offset_provider" -> field_operator as program
                 offset_provider = kwargs.pop("offset_provider")
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
@@ -579,11 +580,11 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
             else:
-                # field_operator called from program
+                # "out" -> field_operator called from program in embedded execution
                 out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
                 return
         else:
-            # field_operator called from other field_operator
+            # field_operator called from other field_operator in embedded execution
             return self.definition(*args, **kwargs)
 
 
