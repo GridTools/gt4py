@@ -12,25 +12,27 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from builtins import bool, float, int, tuple
 import dataclasses
+import enum
+import functools
+import inspect
+from builtins import bool, float, int, tuple
 from typing import (
     Any,
     Callable,
     Generic,
     Optional,
     ParamSpec,
+    Sequence,
+    Tuple,
     TypeAlias,
     TypeVar,
     Union,
-    Sequence,
-    Tuple,
 )
-import inspect
-import enum
-from numpy import float32, float64, int32, int64
-import functools
 
+from numpy import float32, float64, int32, int64
+
+from gt4py._core import definitions
 from gt4py.next.common import Dimension, DimensionKind, Field, ScalarT
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
@@ -62,6 +64,10 @@ def _type_conversion_helper(t: type):
         return ts.DimensionType
     elif t is ScalarT:
         return ts.ScalarType
+    elif t is type:
+        return (
+            ts.FunctionType
+        )  # our type of type is currently represented by the type constructor function
     elif t is Tuple:
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
@@ -131,23 +137,7 @@ class BuiltInFunction(Generic[R, P]):
         )
 
     def __hash__(self) -> int:
-        return hash(id(self))  # TODO fix
-
-
-_reduction_like = lambda: BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[ts.DeferredType(constraint=ts.FieldType)],
-        pos_or_kw_args={"axis": ts.DeferredType(constraint=ts.DimensionType)},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
-
-
-# def _filter_params(
-#     params: Sequence[inspect.Parameter], kind: enum.IntEnum
-# ) -> list[inspect.Parameter]:
-#     return [param.annotation for param in params.values() if param.kind == kind]
+        return hash(id(self))  # TODO remove once __gt_type is gone
 
 
 def builtin_function(fun: Callable[P, R]) -> BuiltInFunction[R, P]:
@@ -182,67 +172,26 @@ def min_over(
 
 
 @builtin_function
-def broadcast(_: Field | ScalarT, __: Tuple, /) -> Field:
+def broadcast(field: Field | ScalarT, dims: Tuple, /) -> Field:
     ...
 
 
 @builtin_function
 def where(
-    _: Field,
-    __: Field | ScalarT | Tuple,
-    ___: Field | ScalarT | Tuple,
+    mask: Field,
+    true_field: Field | ScalarT | Tuple,
+    false_field: Field | ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
     ...
 
 
-astype = BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[
-            ts.DeferredType(constraint=ts.FieldType),
-            ts.DeferredType(constraint=ts.FunctionType),
-        ],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
+@builtin_function
+def astype(field: Field, type_: type, /) -> Field:
+    ...
 
-_unary_math_builtin = lambda: BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
-
-# unary math builtins (number) -> number
-abs = _unary_math_builtin()  # noqa: A001
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
-
-# unary math builtins (float) -> float
-sin = _unary_math_builtin()
-cos = _unary_math_builtin()
-tan = _unary_math_builtin()
-arcsin = _unary_math_builtin()
-arccos = _unary_math_builtin()
-arctan = _unary_math_builtin()
-sinh = _unary_math_builtin()
-cosh = _unary_math_builtin()
-tanh = _unary_math_builtin()
-arcsinh = _unary_math_builtin()
-arccosh = _unary_math_builtin()
-arctanh = _unary_math_builtin()
-sqrt = _unary_math_builtin()
-exp = _unary_math_builtin()
-log = _unary_math_builtin()
-gamma = _unary_math_builtin()
-cbrt = _unary_math_builtin()
-floor = _unary_math_builtin()
-ceil = _unary_math_builtin()
-trunc = _unary_math_builtin()
 
 UNARY_MATH_FP_BUILTIN_NAMES = [
     "sin",
@@ -267,41 +216,41 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "trunc",
 ]
 
-# unary math predicates (float) -> bool
-_unary_math_predicate_builtin = lambda: BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
-
-isfinite = _unary_math_predicate_builtin()
-isinf = _unary_math_predicate_builtin()
-isnan = _unary_math_predicate_builtin()
 
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
-# binary math builtins (number, number) -> number
-_binary_math_builtin = lambda: BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[
-            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-        ],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
 
-minimum = _binary_math_builtin()
-maximum = _binary_math_builtin()
-fmod = _binary_math_builtin()
-power = _binary_math_builtin()
+def _make_unary_math_builtin(name):
+    @builtin_function
+    def impl(value: Field | ScalarT, /) -> Field | ScalarT:
+        ...
+
+    impl.__name__ = name
+    globals()[name] = impl
+
+
+for f in (
+    UNARY_MATH_NUMBER_BUILTIN_NAMES
+    + UNARY_MATH_FP_BUILTIN_NAMES
+    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+):
+    _make_unary_math_builtin(f)
+
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
+
+
+def _make_binary_math_builtin(name):
+    @builtin_function
+    def impl(lhs: Field | ScalarT, rhs: Field | ScalarT, /) -> Field | ScalarT:
+        ...
+
+    impl.__name__ = name
+    globals()[name] = impl
+
+
+for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
+    _make_binary_math_builtin(f)
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
