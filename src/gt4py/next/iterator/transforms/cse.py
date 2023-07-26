@@ -251,15 +251,20 @@ def extract_subexpression(
         closer to the root are eliminated first:
 
         >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
-        >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
-        ...     UIDGenerator(prefix="_subexpr"), once_only=True, deepest_expr_first=False)
+        >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(expr, predicate,
+        ...     UIDGenerator(prefix="_subexpr"), deepest_expr_first=False)
         >>> print(new_expr)
         _subexpr_1 + _subexpr_1
         >>> for sym, subexpr in extracted_subexprs.items():
         ...    print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y + (x + y)`
 
-        Otherwise nodes deeper in the tree are extracted first:
+        Since `(x+y)` is a child of one of the expressions it is ignored:
+
+        >>> print(ignored_children)
+        True
+
+        Setting `deepest_expr_first` will extract nodes deeper in the tree first:
 
         >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
@@ -269,6 +274,8 @@ def extract_subexpression(
         >>> for sym, subexpr in extracted_subexprs.items():
         ...    print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
+
+        Note that this requires `once_only` to be set right now.
     """
     if deepest_expr_first and not once_only:
         # TODO(tehrengruber): Revisit. We could fix this, but is this case even needed?
