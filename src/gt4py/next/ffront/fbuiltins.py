@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-import enum
 import functools
 import inspect
 from builtins import bool, float, int, tuple
@@ -23,7 +22,6 @@ from typing import (
     Generic,
     Optional,
     ParamSpec,
-    Sequence,
     Tuple,
     TypeAlias,
     TypeVar,
@@ -32,7 +30,6 @@ from typing import (
 
 from numpy import float32, float64, int32, int64
 
-from gt4py._core import definitions
 from gt4py.next.common import Dimension, DimensionKind, Field, ScalarT
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
@@ -73,28 +70,25 @@ def _type_conversion_helper(t: type):
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
         return tuple(_type_conversion_helper(e) for e in t.__args__)
     else:
-        assert False, t
+        raise AssertionError("Illegal type encountered.")
 
 
 def _type_conversion(t):
     return ts.DeferredType(constraint=_type_conversion_helper(t))
 
 
-@dataclasses.dataclass  # (frozen=True)
+@dataclasses.dataclass(frozen=True)
 class BuiltInFunction(Generic[R, P]):
-    # name: str
-    __gt_type: ts.FunctionType
     name: str = dataclasses.field(init=False)
     # `function` can be used to provide a default implementation for all `Field` implementations,
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
-    function: Callable[P, R] = None  # TODO remove None
+    function: Callable[P, R]
 
     def __post_init__(self):
-        functools.update_wrapper(
-            self, self.function
-        )  # TODO figure out keeping function annotations in autocomplete
-        if self.function is not None:  # TODO remove condition
-            object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+        # functools.update_wrapper(
+        #     self, self.function
+        # )  # TODO figure out keeping function annotations in autocomplete
+        object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
 
     def __call__(self, *args: Value, **options: Any) -> Value | tuple[Value, ...]:
         impl = self.dispatch(*args)
@@ -111,9 +105,6 @@ class BuiltInFunction(Generic[R, P]):
             return self.function
 
     def __gt_type__(self) -> ts.FunctionType:
-        if self.__gt_type is not None:  # TODO remove this branch once all builtins are refactored
-            return self.__gt_type
-
         signature = inspect.signature(self.function)
         params = signature.parameters
 
@@ -136,12 +127,9 @@ class BuiltInFunction(Generic[R, P]):
             returns=_type_conversion(signature.return_annotation),
         )
 
-    def __hash__(self) -> int:
-        return hash(id(self))  # TODO remove once __gt_type is gone
-
 
 def builtin_function(fun: Callable[P, R]) -> BuiltInFunction[R, P]:
-    return BuiltInFunction(None, fun)  # TODO remove None
+    return BuiltInFunction(fun)
 
 
 @builtin_function
@@ -221,12 +209,11 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name):
-    @builtin_function
     def impl(value: Field | ScalarT, /) -> Field | ScalarT:
         ...
 
     impl.__name__ = name
-    globals()[name] = impl
+    globals()[name] = builtin_function(impl)
 
 
 for f in (
@@ -241,12 +228,11 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
 def _make_binary_math_builtin(name):
-    @builtin_function
     def impl(lhs: Field | ScalarT, rhs: Field | ScalarT, /) -> Field | ScalarT:
         ...
 
     impl.__name__ = name
-    globals()[name] = impl
+    globals()[name] = builtin_function(impl)
 
 
 for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
