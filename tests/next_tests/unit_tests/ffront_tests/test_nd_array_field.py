@@ -15,6 +15,8 @@
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.ffront import nd_array_field
 from gt4py.next import common
+from typing import Iterable
+import itertools
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -28,8 +30,29 @@ def nd_array_implementation(request):
     yield request.param
 
 
+@pytest.fixture(
+    ids=["plus", "minus", "multiply", "div", "truediv"],
+    params=[
+        lambda a, b: a + b,
+        lambda a, b: a - b,
+        lambda a, b: a * b,
+        lambda a, b: a / b,
+        lambda a, b: a // b,
+    ],
+)
+def binary_op(request):
+    yield request.param
+
+
+def _make_field(lst: Iterable, nd_array_implementation):
+    return common.field(
+        nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32),
+        domain=((common.Dimension("foo"), common.UnitRange(0, len(lst))),),
+    )
+
+
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins_execution(builtin_name: str, inputs, nd_array_implementation):
+def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementation):
     if builtin_name == "gamma":
         # numpy has no gamma function
         pytest.xfail("TODO: implement gamma")
@@ -39,15 +62,48 @@ def test_math_function_builtins_execution(builtin_name: str, inputs, nd_array_im
 
     expected = ref_impl(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
 
-    inputs = [
-        common.field(
-            nd_array_implementation.asarray(inp, dtype=nd_array_implementation.float32),
-            domain=((common.Dimension("foo"), common.UnitRange(0, len(inp))),),
-        )
-        for inp in inputs
-    ]
+    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
 
     builtin = getattr(fbuiltins, builtin_name)
-    result = builtin(*inputs)
+    result = builtin(*field_inputs)
 
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_binary_ops(binary_op, nd_array_implementation):
+    inp_a = [-1.0, 4.2, 42]
+    inp_b = [2.0, 3.0, -3.0]
+    inputs = [inp_a, inp_b]
+
+    expected = binary_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+
+    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
+
+    result = binary_op(*field_inputs)
+
+    assert np.allclose(result.ndarray, expected)
+
+
+@pytest.fixture(
+    params=itertools.product(
+        nd_array_field._nd_array_implementations, nd_array_field._nd_array_implementations
+    ),
+    ids=lambda param: f"{param[0].__name__}-{param[1].__name__}",
+)
+def product_nd_array_implementation(request):
+    yield request.param
+
+
+def test_mixed_fields(product_nd_array_implementation):
+    first_impl, second_impl = product_nd_array_implementation
+
+    inp_a = [-1.0, 4.2, 42]
+    inp_b = [2.0, 3.0, -3.0]
+
+    expected = np.asarray(inp_a) + np.asarray(inp_b)
+
+    field_inp_a = _make_field(inp_a, first_impl)
+    field_inp_b = _make_field(inp_b, second_impl)
+
+    result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
