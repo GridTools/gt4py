@@ -34,6 +34,7 @@ from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.integration_tests.cases import IDim
@@ -64,6 +65,8 @@ def test_simple_indirection(program_processor):
         or program_processor == gtfn_format_sourcecode
     ):
         pytest.xfail("fails in lowering to gtfn_ir")
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: fails in lowering to sdfg")
 
     shape = [8]
     inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.asarray(range(shape[0] + 2)))
@@ -95,6 +98,8 @@ def direct_indirection(inp, cond):
 
 def test_direct_offset_for_indirection(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: shift offsets not literals")
 
     shape = [4]
     inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0])))
