@@ -31,6 +31,20 @@ class CountSymbolRefs(eve.NodeVisitor):
         *,
         ignore_builtins: bool = True,
     ) -> dict[str, int]:
+        """
+        Count references to given or all symbols in scope.
+
+        Examples:
+            >>> import gt4py.next.iterator.ir_makers as im
+            >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
+            >>> CountSymbolRefs.apply(expr)
+            {'x': 2, 'y': 2, 'z': 1}
+
+            If only some symbols are of interests the search can be restricted:
+
+            >>> CountSymbolRefs.apply(expr, symbol_names=["x", "z"])
+            {'x': 2, 'z': 1}
+        """
         if ignore_builtins:
             inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}
         else:
@@ -46,8 +60,8 @@ class CountSymbolRefs(eve.NodeVisitor):
     def visit_SymRef(self, node: itir.SymRef, *, inactive_refs: set[str]):
         if node.id not in inactive_refs:
             if node.id not in self.ref_counts:
-                self.ref_counts[node.id] = 0
-            self.ref_counts[node.id] += 1
+                self.ref_counts[str(node.id)] = 0
+            self.ref_counts[str(node.id)] += 1
 
     def visit_Lambda(self, node: itir.Lambda, *, inactive_refs: set[str]):
         inactive_refs = inactive_refs | {param.id for param in node.params}
