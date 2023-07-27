@@ -80,7 +80,6 @@ def test_untyped_arg():
         _ = FieldOperatorParser.apply_to_function(untyped)
 
 
-@pytest.mark.xfail(msg="TODO: fix before merge")
 def test_mistyped_arg():
     """Field operator parameters must be type annotated."""
 
