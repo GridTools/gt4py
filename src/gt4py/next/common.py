@@ -39,7 +39,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"])
+DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
