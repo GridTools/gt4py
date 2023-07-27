@@ -103,12 +103,9 @@ def empty(
     storage_info = layout.from_name(backend)
     assert storage_info is not None
     if storage_info["device"] == "gpu":
-        # TODO: use CUDA or ROCM depending on GT4PY_USE_HIP config setting
-        device = core_defs.Device(core_defs.DeviceType.CUDA, 0)  
-        # allocate_f = storage_utils.allocate_gpu
+        allocate_f = storage_utils.allocate_gpu
     else:
-        device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-        # allocate_f = storage_utils.allocate_cpu
+        allocate_f = storage_utils.allocate_cpu
 
     aligned_index, shape, dtype, dimensions = storage_utils.normalize_storage_spec(
         aligned_index, shape, dtype, dimensions
@@ -120,17 +117,9 @@ def empty(
     layout_map = storage_info["layout_map"](dimensions)
 
     dtype = np.dtype(dtype)
-    dtype = core_defs.dtype(dtype)
-    buffer = allocators.allocate(
-        shape,
-        dtype,
-        layout_map,
-        device=device,
-        byte_alignment=alignment,
-        aligned_index=aligned_index,
-    )
-    # _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
-    return buffer.ndarray
+    _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
+
+    return res
 
 
 def ones(

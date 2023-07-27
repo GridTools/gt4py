@@ -29,7 +29,8 @@ except ImportError:
 
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py._core import definitions as core_defs
-from . import layout
+from gt4py.storage import allocators
+from gt4py.storage.cartesian import layout
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
@@ -198,6 +199,46 @@ def get_origin(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[T
     return tuple(int(o) for o in origin)
 
 
+def allocate_cpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple[np.ndarray, np.ndarray]:
+    device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+    buffer = allocators.allocate(
+        shape,
+        core_defs.dtype(dtype),
+        layout_map=tuple(layout_map),
+        device=device,
+        byte_alignment=alignment_bytes,
+        aligned_index=aligned_index,
+    )
+    return buffer.buffer, buffer.ndarray
+
+
+def allocate_gpu(
+    shape: Sequence[int],
+    layout_map: Iterable[Optional[int]],
+    dtype: DTypeLike,
+    alignment_bytes: int,
+    aligned_index: Optional[Sequence[int]],
+) -> Tuple["cp.ndarray", "cp.ndarray"]:
+    # TODO: use CUDA or ROCM depending on GT4PY_USE_HIP config setting
+    device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
+    buffer = allocators.allocate(
+        shape,
+        core_defs.dtype(dtype),
+        layout_map=tuple(layout_map),
+        device=device,
+        byte_alignment=alignment_bytes,
+        aligned_index=aligned_index,
+    )
+    return buffer.buffer, buffer.ndarray
+
+
+# TODO: check if this function is actually used somewhere and remove it if not
 if dace is not None:
 
     def dace_descriptor(
@@ -272,95 +313,3 @@ if dace is not None:
             total_size=total_size,
             start_offset=start_offset,
         )
-
-
-# def allocate_gpu(
-#     shape: Sequence[int],
-#     layout_map: Iterable[Optional[int]],
-#     dtype: DTypeLike,
-#     alignment_bytes: int,
-#     aligned_index: Optional[Sequence[int]],
-# ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-#     dtype = np.dtype(dtype)
-#     assert (
-#         alignment_bytes % dtype.itemsize
-#     ) == 0, "Alignment must be a multiple of byte-width of dtype."
-#     itemsize = dtype.itemsize
-#     items_per_alignment = int(alignment_bytes / itemsize)
-
-#     order_idx = idx_from_order([i for i in layout_map if i is not None])
-#     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
-
-#     if aligned_index is None:
-#         aligned_index = [0] * len(shape)
-
-#     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
-#     if len(order_idx) > 0:
-#         halo_offset = (
-#             int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
-#             - aligned_index[order_idx[-1]]
-#         )
-#     else:
-#         halo_offset = 0
-
-#     padded_size = int(np.prod(padded_shape))
-#     buffer_size = padded_size + items_per_alignment - 1
-
-#     device_raw_buffer = cp.empty((buffer_size,), dtype=dtype)
-
-#     allocation_mismatch = int((device_raw_buffer.data.ptr % alignment_bytes) / itemsize)
-#     alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
-
-#     device_field = as_strided(
-#         device_raw_buffer[alignment_offset : alignment_offset + padded_size],
-#         shape=padded_shape,
-#         strides=strides,
-#     )
-#     if device_field.ndim > 0:
-#         device_field = device_field[tuple(slice(0, s, None) for s in shape)]
-
-#     return device_raw_buffer, device_field
-
-
-# def allocate_cpu(
-#     shape: Sequence[int],
-#     layout_map: Iterable[Optional[int]],
-#     dtype: DTypeLike,
-#     alignment_bytes: int,
-#     aligned_index: Optional[Sequence[int]],
-# ) -> Tuple[np.ndarray, np.ndarray]:
-#     dtype = np.dtype(dtype)
-#     assert (
-#         alignment_bytes % dtype.itemsize
-#     ) == 0, "Alignment must be a multiple of byte-width of dtype."
-#     itemsize = dtype.itemsize
-#     items_per_alignment = int(alignment_bytes / itemsize)
-
-#     order_idx = idx_from_order([i for i in layout_map if i is not None])
-#     padded_shape = compute_padded_shape(shape, items_per_alignment, order_idx)
-
-#     if aligned_index is None:
-#         aligned_index = [0] * len(shape)
-
-#     strides = strides_from_padded_shape(padded_shape, order_idx, itemsize)
-#     if len(order_idx) > 0:
-#         halo_offset = (
-#             int(math.ceil(aligned_index[order_idx[-1]] / items_per_alignment)) * items_per_alignment
-#             - aligned_index[order_idx[-1]]
-#         )
-#     else:
-#         halo_offset = 0
-
-#     padded_size = int(np.prod(padded_shape))
-#     buffer_size = padded_size + items_per_alignment - 1
-#     raw_buffer = np.empty(buffer_size, dtype=dtype)
-
-#     allocation_mismatch = int((raw_buffer.ctypes.data % alignment_bytes) / itemsize)
-
-#     alignment_offset = (halo_offset - allocation_mismatch) % items_per_alignment
-
-#     field = np.reshape(raw_buffer[alignment_offset : alignment_offset + padded_size], padded_shape)
-#     if field.ndim > 0:
-#         field.strides = strides
-#         field = field[tuple(slice(0, s, None) for s in shape)]
-#     return raw_buffer, field

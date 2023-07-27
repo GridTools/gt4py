@@ -14,9 +14,11 @@
 
 from __future__ import annotations
 
+import collections.abc
 import dataclasses
 import enum
 import functools
+import math
 import numbers
 
 import numpy as np
@@ -29,7 +31,9 @@ from gt4py.eve.extended_typing import (
     Iterator,
     Literal,
     Protocol,
+    Sequence,
     Tuple,
+    Type,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -104,12 +108,22 @@ class UnsignedIntegral(numbers.Integral):
     ...
 
 
-def is_boolean_integral_type(integral_type: type) -> TypeGuard[type[BooleanIntegral]]:
+def is_boolean_integral_type(integral_type: type) -> TypeGuard[Type[BooleanIntegral]]:
     return issubclass(integral_type, BOOL_TYPES)
 
 
-def is_unsigned_integral_type(integral_type: type) -> TypeGuard[type[UnsignedIntegral]]:
+def is_unsigned_integral_type(integral_type: type) -> TypeGuard[Type[UnsignedIntegral]]:
     return issubclass(integral_type, UINT_TYPES)
+
+
+#: Tuple of positive integers encoding a tensor shape.
+TensorShape: TypeAlias = Sequence[UnsignedIntegral]
+
+
+def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:
+    return isinstance(value, collections.abc.Sequence) and all(
+        isinstance(v, int) and v > 0 for v in value
+    )
 
 
 # -- Data type descriptors --
@@ -130,31 +144,31 @@ class DTypeKind(enum.Enum):
 
 
 @overload
-def dtype_kind(sc_type: type[BoolT]) -> Literal[DTypeKind.BOOL]:  # type: ignore[misc]
+def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[IntT]) -> Literal[DTypeKind.INT]:
+def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
+def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[FloatingT]) -> Literal[DTypeKind.FLOAT]:
+def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
+def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
     ...
 
 
-def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
+def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
     """Return the data type kind of the given scalar type."""
     if issubclass(sc_type, numbers.Integral):
         if is_boolean_integral_type(sc_type):
@@ -176,23 +190,29 @@ class DType(Generic[ScalarT]):
     """
     Descriptor of data type for Field elements.
 
-    This definition is based on DLPack and Array API standards. The Array API
-    standard only requires DTypes to be comparable with `__eq__`.
+    This definition is based on DLPack and Array API standards. The data type
+    should be interpreted as packed `lanes` repetitions of elements from
+    `kind` data-category of `bit_width` width.
+
+    The Array API standard only requires DTypes to be comparable with `__eq__`.
 
     Additionally, instances of this class can also be used as valid NumPy
     `dtype`s definitions due to the `.dtype` attribute.
     """
 
-    #     This definition is based on DLPack and Array API standards. The data
-    #     type is described by a name and a triple, `DTypeCode`, `bits`, and
-    #     `lanes`, which should be interpreted as packed `lanes` repetitions
-    #     of elements from `type_code` data-category of width `bits`.
-    #     Note:
-    #         This DType definition is implemented in a non-extensible way on purpose
-    #         to avoid the complexity of dealing with user-defined data types.
+    scalar_type: Type[ScalarT]
+    tensor_shape: TensorShape
 
-    scalar_type: type[ScalarT]
-    subshape: tuple[int, ...] = dataclasses.field(default=())
+    def __init__(
+        self, scalar_type: Type[ScalarT], tensor_shape: Sequence[IntegralScalar] = ()
+    ) -> None:
+        if not isinstance(scalar_type, type):
+            raise TypeError(f"Invalid scalar type '{scalar_type}'")
+        if not is_valid_tensor_shape(tensor_shape):
+            raise TypeError(f"Invalid tensor shape '{tensor_shape}'")
+
+        object.__setattr__(self, "scalar_type", scalar_type)
+        object.__setattr__(self, "tensor_shape", tensor_shape)
 
     @functools.cached_property
     def kind(self) -> DTypeKind:
@@ -201,26 +221,23 @@ class DType(Generic[ScalarT]):
     @functools.cached_property
     def dtype(self) -> np.dtype:
         """NumPy dtype corresponding to this DType."""
-        return np.dtype(self.scalar_type)
+        return np.dtype(f"{self.tensor_shape}{np.dtype(self.scalar_type).name}")
+
+    @functools.cached_property
+    def byte_size(self) -> int:
+        return np.dtype(self.scalar_type).itemsize * self.lanes
 
     @property
-    def byte_size(self) -> int:
-        return self.dtype.itemsize
+    def bit_width(self) -> int:
+        return 8 * np.dtype(self.scalar_type).itemsize
+
+    @property
+    def lanes(self) -> int:
+        return math.prod(self.tensor_shape or (1,))
 
     @property
     def subndim(self) -> int:
-        return len(self.subshape)
-
-
-#     @functools.cached_property
-#     def bits(self) -> int:
-#         assert self.dtype.itemsize % self.lanes == 0
-#         return 8 * (self.dtype.itemsize // self.lanes)
-
-#     @functools.cached_property
-#     def lanes(self) -> int:
-#         shape = self.dtype.shape or (1,)
-#         return math.prod(shape)
+        return len(self.tensor_shape)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -235,22 +252,22 @@ class UnsignedIntDType(DType[UnsignedIntT]):
 
 @dataclasses.dataclass(frozen=True)
 class UInt8DType(UnsignedIntDType[uint8]):
-    scalar_type: Final[type[uint8]] = dataclasses.field(default=uint8, init=False)
+    scalar_type: Final[Type[uint8]] = dataclasses.field(default=uint8, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt16DType(UnsignedIntDType[uint16]):
-    scalar_type: Final[type[uint16]] = dataclasses.field(default=uint16, init=False)
+    scalar_type: Final[Type[uint16]] = dataclasses.field(default=uint16, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt32DType(UnsignedIntDType[uint32]):
-    scalar_type: Final[type[uint32]] = dataclasses.field(default=uint32, init=False)
+    scalar_type: Final[Type[uint32]] = dataclasses.field(default=uint32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class UInt64DType(UnsignedIntDType[uint64]):
-    scalar_type: Final[type[uint64]] = dataclasses.field(default=uint64, init=False)
+    scalar_type: Final[Type[uint64]] = dataclasses.field(default=uint64, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -260,22 +277,22 @@ class SignedIntDType(DType[IntT]):
 
 @dataclasses.dataclass(frozen=True)
 class Int8DType(SignedIntDType[int8]):
-    scalar_type: Final[type[int8]] = dataclasses.field(default=int8, init=False)
+    scalar_type: Final[Type[int8]] = dataclasses.field(default=int8, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int16DType(SignedIntDType[int16]):
-    scalar_type: Final[type[int16]] = dataclasses.field(default=int16, init=False)
+    scalar_type: Final[Type[int16]] = dataclasses.field(default=int16, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int32DType(SignedIntDType[int32]):
-    scalar_type: Final[type[int32]] = dataclasses.field(default=int32, init=False)
+    scalar_type: Final[Type[int32]] = dataclasses.field(default=int32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Int64DType(SignedIntDType[int64]):
-    scalar_type: Final[type[int64]] = dataclasses.field(default=int64, init=False)
+    scalar_type: Final[Type[int64]] = dataclasses.field(default=int64, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -285,12 +302,12 @@ class FloatingDType(DType[FloatingT]):
 
 @dataclasses.dataclass(frozen=True)
 class Float32DType(FloatingDType[float32]):
-    scalar_type: Final[type[float32]] = dataclasses.field(default=float32, init=False)
+    scalar_type: Final[Type[float32]] = dataclasses.field(default=float32, init=False)
 
 
 @dataclasses.dataclass(frozen=True)
 class Float64DType(FloatingDType[float64]):
-    scalar_type: Final[type[float64]] = dataclasses.field(default=float64, init=False)
+    scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
 
 
 DTypeLike = Union[DType, npt.DTypeLike]

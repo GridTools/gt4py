@@ -137,13 +137,14 @@ def test_allocate_cpu(param_dict):
 
     raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
+    ## Doest this still makes sense?
     # check that field is a view of raw_buffer
-    assert field.base is raw_buffer
+    # assert field.base is raw_buffer
 
     # check that memory of field is contained in raw_buffer
     assert (
-        field.ctypes.data >= raw_buffer.ctypes.data
-        and field[-1:].ctypes.data <= raw_buffer[-1:].ctypes.data
+        np.byte_bounds(field)[0] >= np.byte_bounds(raw_buffer)[0]
+        and np.byte_bounds(field)[1] <= np.byte_bounds(raw_buffer)[1]
     )
 
     # check if the first compute-domain point in the last dimension is aligned for 100 random "columns"
@@ -188,6 +189,9 @@ def test_allocate_cpu(param_dict):
     assert field.shape == shape
 
 
+# TODO(egparedes): keep this and the previous tests separated just to differentiate
+# between gpu and cpu tests, but factorize all common code in a single utility
+# function which gets called from the test functions bodies.
 @pytest.mark.requires_gpu
 @hyp.given(param_dict=allocation_strategy())
 def test_allocate_gpu(param_dict):

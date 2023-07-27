@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import abc
+import collections.abc
 import dataclasses
 import functools
 import math
@@ -49,22 +50,17 @@ _NDBufferT = TypeVar(
     "_NDBufferT", xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
 )
 
-#: Tuple of positive integers encoding a tensor shape.
-BufferShape: TypeAlias = Tuple[core_defs.UnsignedIntegral, ...]
-
 
 #: Tuple of positive integers encoding a permutation of the dimensions.
-BufferLayoutMap = NewType("BufferLayoutMap", Tuple[core_defs.UnsignedIntegral, ...])
+BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.UnsignedIntegral])
 
 
-def is_valid_shape(value: tuple[core_defs.IntegralScalar, ...]) -> TypeGuard[BufferShape]:
-    return isinstance(value, tuple) and all(isinstance(v, int) and v > 0 for v in value)
-
-
-def is_valid_layout_map(value: tuple[core_defs.IntegralScalar, ...]) -> TypeGuard[BufferLayoutMap]:
+def is_valid_layout_map(value: Sequence[core_defs.IntegralScalar]) -> TypeGuard[BufferLayoutMap]:
     dims = list(range(len(value)))
     return (
-        isinstance(value, tuple) and len(value) == len(set(value)) and all(i in dims for i in value)
+        isinstance(value, collections.abc.Sequence)
+        and len(value) == len(set(value))
+        and all(i in dims for i in value)
     )
 
 
@@ -99,7 +95,7 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
     memory_address: int
     device: core_defs.Device
     dtype: core_defs.DType[_ScalarT]
-    shape: BufferShape
+    shape: core_defs.TensorShape
     strides: Tuple[int, ...]
     layout_map: BufferLayoutMap
     byte_offset: int
@@ -151,7 +147,7 @@ class BufferAllocator(Protocol[_NDBufferT]):
 
     def allocate(
         self,
-        shape: Sequence[int],
+        shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
         layout_map: Sequence[int],
         device: core_defs.Device,
@@ -180,14 +176,14 @@ class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
 
     def allocate(
         self,
-        shape: Sequence[int],
+        shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
         layout_map: Sequence[int],
         device: core_defs.Device,
         byte_alignment: Optional[int] = None,
         aligned_index: Sequence[int] = None,
     ) -> TensorBuffer[_NDBufferT, _ScalarT]:
-        if not is_valid_shape(shape):
+        if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
         ndim = len(shape)
         if len(layout_map) != ndim or not is_valid_layout_map(layout_map):
@@ -337,7 +333,7 @@ if cp:
 
 
 def allocate(
-    shape: Sequence[int],
+    shape: Sequence[core_defs.IntegralScalar],
     dtype: core_defs.DType[_ScalarT],
     layout_map: BufferLayoutMap,
     *,
