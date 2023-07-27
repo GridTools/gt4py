@@ -17,7 +17,7 @@ from typing import Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next.common import Dimension
 from gt4py.next.type_system import type_info
 
 
@@ -51,7 +51,7 @@ def promote_zero_dims(
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
                 else:
-                    raise GTTypeError(f"{arg_el} is not compatible with {param_el}.")
+                    raise ValueError(f"{arg_el} is not compatible with {param_el}.")
             return arg_el
 
         return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
@@ -217,7 +217,7 @@ def function_signature_incompatibilities_scanop(
     ]
     try:
         type_info.promote_dims(*arg_dims)
-    except GTTypeError as e:
+    except ValueError as e:
         yield e.args[0]
 
     assert len(scan_pass_type.pos_only_args) == 0

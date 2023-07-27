@@ -106,7 +106,7 @@ class _BaseTestGenerator(codegen.TemplatedGenerator):
         return f"ONE INTKIND({node.value})"
 
     def visit_SourceLocation(self, node, **kwargs):
-        return f"SourceLocation<line:{node.line}, column:{node.column}, source: {node.source}>"
+        return f"SourceLocation<line:{node.line}, column:{node.column}, source: {node.filename}>"
 
     LocationNode = codegen.FormatTemplate("LocationNode {{{loc}}}")
 
