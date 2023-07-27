@@ -39,9 +39,8 @@ IndexType: TypeAlias = int32
 TYPE_ALIAS_NAMES = ["IndexType"]
 
 
-Value: TypeAlias = Any  # definitions.ScalarT, Field
 P = ParamSpec("P")
-R = TypeVar("R", Value, tuple[Value, ...])
+R = TypeVar("R")
 
 
 def _type_conversion_helper(t: type):
@@ -80,11 +79,11 @@ class BuiltInFunction(Generic[R, P]):
         # )  # TODO figure out keeping function annotations in autocomplete
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
 
-    def __call__(self, *args: Value, **options: Any) -> Value | tuple[Value, ...]:
+    def __call__(self, *args: Any, **options: Any) -> R:
         impl = self.dispatch(*args)
         return impl(*args, **options)
 
-    def dispatch(self, *args: Value) -> Callable[P, R]:
+    def dispatch(self, *args: Any) -> Callable[P, R]:
         arg_types = tuple(type(arg) for arg in args)
         for atype in arg_types:
             if (dispatcher := getattr(atype, "__gt_op_func__", None)) is not None and (

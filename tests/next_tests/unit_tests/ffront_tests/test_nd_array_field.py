@@ -14,7 +14,7 @@
 
 import itertools
 import math
-from typing import Iterable
+from typing import Callable, Iterable
 
 import numpy as np
 import pytest
@@ -106,4 +106,23 @@ def test_mixed_fields(product_nd_array_implementation):
     field_inp_b = _make_field(inp_b, second_impl)
 
     result = field_inp_a + field_inp_b
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_non_dispatched_function():
+    @fbuiltins.builtin_function
+    def fma(a: common.Field, b: common.Field, c: common.Field, /) -> common.Field:
+        return a * b + c
+
+    inp_a = [-1.0, 4.2, 42]
+    inp_b = [2.0, 3.0, -3.0]
+    inp_c = [-2.0, -3.0, 3.0]
+
+    expected = np.asarray(inp_a) * np.asarray(inp_b) + np.asarray(inp_c)
+
+    field_inp_a = _make_field(inp_a, np)
+    field_inp_b = _make_field(inp_b, np)
+    field_inp_c = _make_field(inp_c, np)
+
+    result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)

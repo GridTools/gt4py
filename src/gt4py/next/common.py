@@ -19,17 +19,7 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set
-from typing import (
-    Any,
-    Optional,
-    Protocol,
-    TypeAlias,
-    TypeVar,
-    Union,
-    final,
-    overload,
-    runtime_checkable,
-)
+from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, overload, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt

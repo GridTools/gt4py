@@ -97,7 +97,7 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
     _value_type: ScalarT
 
     _ops_mapping: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
-    array_ns: ClassVar[Any]  # TODO what's the better type?
+    array_ns: ClassVar[ModuleType]
 
     @classmethod
     def __gt_op_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
@@ -138,13 +138,8 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
         if value_type is not None:
             dtype = xp.dtype(value_type)
         array = xp.asarray(data, dtype=dtype)
-        if value_type is not None and isinstance(value_type, common.DimsT):
-            if not (
-                xp.min(array) >= value_type.extent.start and xp.max(array) < value_type.extent.stop
-            ):
-                raise ValueError(f"Impossible to interpret data to {value_type}")
-        else:
-            value_type = array.dtype.type
+
+        value_type = array.dtype.type  # TODO add support for Dimensions as value_type
 
         assert issubclass(array.dtype.type, definitions.Scalar)
 
@@ -218,7 +213,7 @@ _nd_array_implementations = [np]
 
 @dataclasses.dataclass(frozen=True)
 class NumPyArrayField(_BaseNdArrayField):
-    array_ns: ClassVar[definitions.NDArrayObject] = np
+    array_ns: ClassVar[ModuleType] = np
 
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
@@ -230,7 +225,7 @@ if cp:
 
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
-        array_ns: ClassVar[definitions.NDArrayObject] = cp
+        array_ns: ClassVar[ModuleType] = cp
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -240,6 +235,6 @@ if jnp:
 
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
-        array_ns: ClassVar[definitions.NDArrayObject] = jnp
+        array_ns: ClassVar[ModuleType] = jnp
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)

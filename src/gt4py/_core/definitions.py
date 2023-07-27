@@ -19,7 +19,6 @@ import enum
 import functools
 import numbers
 from typing import (
-    TYPE_CHECKING,
     Any,
     Final,
     Generic,
