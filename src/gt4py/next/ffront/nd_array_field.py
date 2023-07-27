@@ -14,13 +14,10 @@
 
 from __future__ import annotations
 
-import abc
 import dataclasses
-import functools
-import typing
 from collections.abc import Callable
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeVar, overload
+from typing import Any, ClassVar, Optional, ParamSpec, TypeVar
 
 import numpy as np
 from numpy import typing as npt
@@ -88,35 +85,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     _ndarray: definitions.NDArrayObject
     _value_type: type[ScalarT]
 
-    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
     array_ns: ClassVar[ModuleType]
-
-    @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
-    ) -> functools.partial[Callable[P, R]]:
-        ...
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
-    ) -> Callable[P, R]:
-        ...
-
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
-    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
-        return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
     def domain(self) -> DomainT:
