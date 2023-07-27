@@ -45,7 +45,6 @@ except ImportError:
 
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
-CUDAArrayInterface
 
 
 def _idx_from_order(order):
