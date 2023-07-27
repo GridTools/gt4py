@@ -67,7 +67,6 @@ def from_type_hint(
 ) -> ts.TypeSpec:
     recursive_make_symbol = functools.partial(from_type_hint, globalns=globalns, localns=localns)
     extra_args = ()
-    print(type_hint)
 
     # ForwardRef
     if isinstance(type_hint, str):
@@ -93,7 +92,6 @@ def from_type_hint(
         else type_hint
     )
     args = typing.get_args(type_hint)
-    print(canonical_type)
 
     match canonical_type:
         case type() as t if issubclass(t, (bool, int, float, np.generic, str)):
