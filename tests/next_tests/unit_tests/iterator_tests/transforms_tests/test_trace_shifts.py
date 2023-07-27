@@ -159,7 +159,7 @@ def test_shifted_literal():
 
 def test_tuple_get():
     testee = ir.StencilClosure(
-        # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
+        # λ(x, y) → ·{x, y}[1]
         stencil=im.lambda_("x", "y")(im.deref(im.tuple_get(1, im.make_tuple("x", "y")))),
         inputs=[ir.SymRef(id="inp1"), ir.SymRef(id="inp2")],
         output=ir.SymRef(id="out"),
