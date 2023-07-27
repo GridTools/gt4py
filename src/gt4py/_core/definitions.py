@@ -115,31 +115,31 @@ class DTypeKind(enum.Enum):
 
 
 @overload
-def dtype_kind(sc_type: type[BoolScalar]) -> Literal[DTypeKind.BOOL]:  # type: ignore[misc]
+def dtype_kind(sc_type: type[BoolT]) -> Literal[DTypeKind.BOOL]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[Union[int8, int16, int32, int64, int]]) -> Literal[DTypeKind.INT]:
+def dtype_kind(sc_type: type[SignedIntT]) -> Literal[DTypeKind.INT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[UnsignedIntScalar]) -> Literal[DTypeKind.UINT]:
+def dtype_kind(sc_type: type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[FloatingScalar]) -> Literal[DTypeKind.FLOAT]:
+def dtype_kind(sc_type: type[FloatingT]) -> Literal[DTypeKind.FLOAT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: type[Scalar]) -> DTypeKind:
+def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
     ...
 
 
-def dtype_kind(sc_type: type[Scalar]) -> DTypeKind:
+def dtype_kind(sc_type: type[ScalarT]) -> DTypeKind:
     """Return the data type kind of the given scalar type."""
     if issubclass(sc_type, numbers.Integral):
         if is_boolean_integral_type(sc_type):

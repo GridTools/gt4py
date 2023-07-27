@@ -59,11 +59,17 @@ DomainLike = Union[Sequence[Dimension], Dimension, str]
 
 
 @dataclasses.dataclass(frozen=True)
-class UnitRange(Sequence, Set):
+class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
     stop: int
+
+    def __post_init__(self):
+        if self.stop <= self.start:
+            # make UnitRange(0,0) the single empty UnitRange
+            object.__setattr__(self, "start", 0)
+            object.__setattr__(self, "stop", 0)
 
     def __len__(self) -> int:
         return max(0, self.stop - self.start)
@@ -76,21 +82,25 @@ class UnitRange(Sequence, Set):
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> list[int]:
+    def __getitem__(self, index: slice) -> UnitRange:
         ...
 
-    def __getitem__(self, index: int | slice) -> int | list[int]:
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
-            return [self[i] for i in range(start, stop, step)]
-
-        if index < 0:
-            index += len(self)
-
-        if 0 <= index < len(self):
-            return self.start + index
+            if step != 1:
+                raise ValueError("UnitRange: step required to be `1`.")
+            new_start = self.start + (start or 0)
+            new_stop = (self.start if stop > 0 else self.stop) + stop
+            return UnitRange(new_start, new_stop)
         else:
-            raise IndexError("UnitRange index out of range")
+            if index < 0:
+                index += len(self)
+
+            if 0 <= index < len(self):
+                return self.start + index
+            else:
+                raise IndexError("UnitRange index out of range")
 
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
@@ -106,7 +116,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @property
-    def value_type(self) -> gt4py_defs.ScalarT:
+    def value_type(self) -> type[gt4py_defs.ScalarT]:
         ...
 
     @property
@@ -120,12 +130,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         raise TypeError("Immutable type")
 
     def __str__(self) -> str:
-        assert hasattr(self.value_type, "__name__")
-        codomain = (
-            f"{self.value_type!s}"
-            if isinstance(self.value_type, Dimension)
-            else self.value_type.__name__
-        )
+        codomain = self.value_type.__name__
         return f"⟨{self.domain!s} → {codomain}⟩"
 
     @abc.abstractmethod

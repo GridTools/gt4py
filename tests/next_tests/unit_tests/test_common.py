@@ -17,6 +17,13 @@ import pytest
 from gt4py.next.common import UnitRange
 
 
+def test_empty_range():
+    expected = UnitRange(0, 0)
+
+    assert UnitRange(1, 1) == expected
+    assert UnitRange(1, -1) == expected
+
+
 @pytest.fixture
 def rng():
     return UnitRange(-5, 5)
@@ -45,10 +52,14 @@ def test_unit_range_iter(rng):
 def test_unit_range_get_item(rng):
     assert rng[-1] == 4
     assert rng[0] == -5
-    assert rng[0:4] == [-5, -4, -3, -2]
-    assert rng[-4:] == [1, 2, 3, 4]
+    assert rng[0:4] == UnitRange(-5, -1)
+    assert rng[-4:] == UnitRange(1, 5)
 
 
 def test_unit_range_index_error(rng):
     with pytest.raises(IndexError):
         rng[10]
+
+def test_unit_range_slice_error(rng):
+    with pytest.raises(ValueError):
+        rng[1:2:5]

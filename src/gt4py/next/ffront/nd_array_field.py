@@ -20,7 +20,7 @@ import functools
 import typing
 from collections.abc import Callable
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeVar
+from typing import Any, ClassVar, Optional, ParamSpec, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
@@ -76,7 +76,7 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
                 )
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
-            assert isinstance(b, definitions.Scalar)
+            assert isinstance(b, definitions.SCALAR_TYPES)
             new_data = op(a.ndarray, b)
 
         return a.__class__.from_array(new_data, domain=a.domain)
@@ -94,7 +94,7 @@ R = TypeVar("R", Value, tuple[Value, ...])
 class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
     _domain: DomainT
     _ndarray: definitions.NDArrayObject
-    _value_type: ScalarT
+    _value_type: type[ScalarT]
 
     _ops_mapping: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
     array_ns: ClassVar[ModuleType]
@@ -103,13 +103,27 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
     def __gt_op_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
         return cls._ops_mapping.get(op, NotImplemented)
 
+    @overload
+    @classmethod
+    def register_gt_op_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
+    ) -> functools.partial[Callable[P, R]]:
+        ...
+
+    @overload
+    @classmethod
+    def register_gt_op_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
+    ) -> Callable[P, R]:
+        ...
+
     @classmethod
     def register_gt_op_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
-    ) -> Callable[P, R]:
+    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
         assert op not in cls._ops_mapping
-        if op_func is None:  # TODO use-case for None?
-            return functools.partial(cls.register_gt_op_func, op)
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_gt_op_func, op)  # type: ignore[arg-type]
         return cls._ops_mapping.setdefault(op, op_func)
 
     @property
@@ -121,7 +135,7 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
         return self._ndarray
 
     @property
-    def value_type(self) -> definitions.ScalarT:
+    def value_type(self) -> type[definitions.ScalarT]:
         return self._value_type
 
     @classmethod
@@ -141,14 +155,14 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
 
         value_type = array.dtype.type  # TODO add support for Dimensions as value_type
 
-        assert issubclass(array.dtype.type, definitions.Scalar)
+        assert issubclass(array.dtype.type, definitions.SCALAR_TYPES)
 
         assert all(isinstance(d, common.Dimension) for d, r in domain), domain
         assert len(domain) == array.ndim
         assert all(len(nr[1]) == s for nr, s in zip(domain, array.shape))
 
         assert value_type is not None  # for mypy
-        return cls(domain, array, value_type)  # type: ignore[arg-type] # TODO figure out concrete type of value_type
+        return cls(domain, array, value_type)
 
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
