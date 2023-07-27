@@ -40,7 +40,9 @@ TYPED_IR_NODES: typing.Final = (
 
 
 class UnsatisfiableConstraintsError(Exception):
-    def __init__(self, unsatisfiable_constraints):
+    unsatisfiable_constraints: list[tuple[Type, Type]]
+
+    def __init__(self, unsatisfiable_constraints: list[tuple[Type, Type]]):
         self.unsatisfiable_constraints = unsatisfiable_constraints
         msg = "Type inference failed: Can not satisfy constraints:"
         for lhs, rhs in unsatisfiable_constraints:

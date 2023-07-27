@@ -270,7 +270,7 @@ class _Unifier:
 
         unboxed_dtypes = [dtype.value for dtype in self._dtypes]
 
-        return (unboxed_dtypes, unsatisfiable_constraints)
+        return unboxed_dtypes, unsatisfiable_constraints
 
     def _rename(self, x: Type, y: Type) -> None:
         """Type renaming/replacement."""
