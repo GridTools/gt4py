@@ -219,7 +219,7 @@ namespace gridtools {
             return sid::synthetic()
                 .template set<property::origin>(sid::host_device::simple_ptr_holder<T *>{ptr})
                 .template set<property::strides>(strides)
-                .template set<property::strides_kind, kind<ndim, void>>()
+                .template set<property::strides_kind, sid::unknown_kind>()
                 .template set<property::lower_bounds>(array<integral_constant<size_t, 0>, ndim>())
                 .template set<property::upper_bounds>(shape);
         }
