@@ -157,6 +157,21 @@ def test_shifted_literal():
     assert actual == expected
 
 
+def test_tuple_get():
+    testee = ir.StencilClosure(
+        # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
+        stencil=im.lambda_("x", "y")(im.deref(im.tuple_get(1, im.make_tuple("x", "y")))),
+        inputs=[ir.SymRef(id="inp1"), ir.SymRef(id="inp2")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp1": [], "inp2": [()]}  # never derefed  # once derefed
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
 def test_tuple_get_on_closure_input():
     testee = ir.StencilClosure(
         # λ(x) → (·⟪Iₒ, 1ₒ⟫(x))[0]
@@ -166,6 +181,88 @@ def test_tuple_get_on_closure_input():
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
+def test_if_of_iterators():
+    testee = ir.StencilClosure(
+        # λ(cond, x) → ·⟪Iₒ, 1ₒ⟫(if ·cond then ⟪Iₒ, 2ₒ⟫(x) else ⟪Iₒ, 3ₒ⟫(x))
+        stencil=im.lambda_("cond", "x")(
+            im.deref(
+                im.shift("I", 1)(
+                    im.if_(im.deref("cond"), im.shift("I", 2)("x"), im.shift("I", 3)("x"))
+                )
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {
+        "cond": [()],
+        "inp": [
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=2),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=3),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+        ],
+    }
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
+def test_if_of_tuples_of_iterators():
+    testee = ir.StencilClosure(
+        # λ(cond, x) →
+        #   ·⟪Iₒ, 1ₒ⟫((if ·cond then {⟪Iₒ, 2ₒ⟫(x), ⟪Iₒ, 3ₒ⟫(x)} else {⟪Iₒ, 4ₒ⟫(x), ⟪Iₒ, 5ₒ⟫(x)})[0])
+        stencil=im.lambda_("cond", "x")(
+            im.deref(
+                im.shift("I", 1)(
+                    im.tuple_get(
+                        0,
+                        im.if_(
+                            im.deref("cond"),
+                            im.make_tuple(im.shift("I", 2)("x"), im.shift("I", 3)("x")),
+                            im.make_tuple(im.shift("I", 4)("x"), im.shift("I", 5)("x")),
+                        ),
+                    )
+                )
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {
+        "cond": [()],
+        "inp": [
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=2),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=4),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+        ],
+    }
 
     actual = dict()
     TraceShifts().visit(testee, shifts=actual)
