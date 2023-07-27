@@ -60,6 +60,7 @@ def test_unit_range_index_error(rng):
     with pytest.raises(IndexError):
         rng[10]
 
+
 def test_unit_range_slice_error(rng):
     with pytest.raises(ValueError):
         rng[1:2:5]

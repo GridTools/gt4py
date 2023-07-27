@@ -92,30 +92,30 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     array_ns: ClassVar[ModuleType]
 
     @classmethod
-    def __gt_builtin_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
-        return cls._builtin_func_map.get(op, NotImplemented)
+    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
+        return cls._builtin_func_map.get(func, NotImplemented)
 
     @overload
     @classmethod
-    def register_gt_op_func(
+    def register_builtin_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
     ) -> functools.partial[Callable[P, R]]:
         ...
 
     @overload
     @classmethod
-    def register_gt_op_func(
+    def register_builtin_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
     ) -> Callable[P, R]:
         ...
 
     @classmethod
-    def register_gt_op_func(
+    def register_builtin_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
     ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_gt_op_func, op)  # type: ignore[arg-type]
+            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
         return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
@@ -187,8 +187,8 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
 # -- Specialized implementations for intrinsic operations on array fields --
 
-_BaseNdArrayField.register_gt_op_func(fbuiltins.abs, _BaseNdArrayField.__abs__)  # type: ignore[attr-defined]
-_BaseNdArrayField.register_gt_op_func(fbuiltins.power, _BaseNdArrayField.__pow__)  # type: ignore[attr-defined]
+_BaseNdArrayField.register_builtin_func(fbuiltins.abs, _BaseNdArrayField.__abs__)  # type: ignore[attr-defined]
+_BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow__)  # type: ignore[attr-defined]
 # TODO gamma
 
 for name in (
@@ -198,17 +198,17 @@ for name in (
 ):
     if name in ["abs", "power", "gamma"]:
         continue
-    _BaseNdArrayField.register_gt_op_func(
+    _BaseNdArrayField.register_builtin_func(
         getattr(fbuiltins, name), _make_unary_array_field_intrinsic_func(name, name)
     )
 
-_BaseNdArrayField.register_gt_op_func(
+_BaseNdArrayField.register_builtin_func(
     fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
 )
-_BaseNdArrayField.register_gt_op_func(
+_BaseNdArrayField.register_builtin_func(
     fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
 )
-_BaseNdArrayField.register_gt_op_func(
+_BaseNdArrayField.register_builtin_func(
     fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
 )
 

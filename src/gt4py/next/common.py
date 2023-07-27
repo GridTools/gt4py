@@ -24,8 +24,8 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as gt4py_defs
-from gt4py.eve.type_definitions import StrEnum
 from gt4py.eve.extended_typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     ClassVar,
@@ -35,16 +35,13 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeVar,
     Union,
-    overload,
     extended_runtime_checkable,
     final,
-    TYPE_CHECKING,
+    overload,
+    runtime_checkable,
 )
+from gt4py.eve.type_definitions import StrEnum
 
-
-full_runtime_checkable = extended_runtime_checkable(
-    extended_runtime_checkable=True, subclass_check_with_data_members=True
-)
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
@@ -132,13 +129,13 @@ if TYPE_CHECKING:
     R = TypeVar("R", Value, tuple[Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
+        def __call__(self, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
             ...
 
 
 @extended_runtime_checkable
 class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
-    __gt_builtin_func__: ClassVar[Optional[GTBuiltInFuncDispatcher]]
+    __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
     def domain(self) -> DomainT:
@@ -231,6 +228,39 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
 
 
 class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
+    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]]
+
+    def __init_subclass__(cls) -> None:
+        super().__init_subclass__()
+        cls._builtin_func_map = {}
+
+    @classmethod
+    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
+        return cls._builtin_func_map.get(func, NotImplemented)
+
+    @overload
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
+    ) -> functools.partial[Callable[P, R]]:
+        ...
+
+    @overload
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
+    ) -> Callable[P, R]:
+        ...
+
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
+    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
+        return cls._builtin_func_map.setdefault(op, op_func)
+
     @final
     def __setattr__(self, key, value) -> None:
         raise TypeError("Immutable type")
@@ -267,7 +297,7 @@ class Backend:
         return ir
 
 
-@full_runtime_checkable
+@runtime_checkable
 class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
@@ -281,7 +311,7 @@ class Connectivity(Protocol):
         """Return neighbor index."""
 
 
-@full_runtime_checkable
+@runtime_checkable
 class NeighborTable(Connectivity, Protocol):
     table: npt.NDArray
 
