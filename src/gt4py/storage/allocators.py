@@ -134,10 +134,6 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
             raise TypeError("Cannot extract DLPack device from tensor buffer.")
 
 
-#: Registry of allocators for each device type.
-device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
-
-
 class BufferAllocator(Protocol[_NDBufferT]):
     """Protocol for buffer allocators."""
 
@@ -171,7 +167,7 @@ class BufferAllocator(Protocol[_NDBufferT]):
 
 
 @dataclasses.dataclass(frozen=True, init=False)
-class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
+class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
     """Base class for buffer allocators using NumPy-like modules."""
 
     def allocate(
@@ -215,7 +211,8 @@ class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
             accumulator = strides[dims_layout[i]] = accumulator * padded_shape[dims_layout[i + 1]]
 
         # Allocate total size
-        buffer, memory_address = self._raw_alloc(total_length, device)
+        buffer = self.raw_alloc(total_length, device)
+        memory_address = self.array_ns.byte_bounds(buffer)[0]
 
         # Compute final byte offset to align the requested buffer index
         aligned_index = tuple(aligned_index or ([0] * len(shape)))
@@ -231,7 +228,7 @@ class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
         )
 
         # Create shaped view from buffer
-        ndarray = self._tensorize(
+        ndarray = self.tensorize(
             buffer, dtype, shape, padded_shape, item_size, strides, byte_offset
         )
 
@@ -249,17 +246,22 @@ class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
             ndarray=ndarray,
         )
 
+    @property
     @abc.abstractmethod
-    def _raw_alloc(self, length: int, device: core_defs.Device) -> tuple[_NDBufferT, int]:
+    def array_ns(self) -> _NumPyLikeNamespace[_NDBufferT]:
         pass
 
     @abc.abstractmethod
-    def _tensorize(
+    def raw_alloc(self, length: int, device: core_defs.Device) -> _NDBufferT:
+        pass
+
+    @abc.abstractmethod
+    def tensorize(
         self,
         buffer: _NDBufferT,
         dtype: core_defs.DType[_ScalarT],
-        shape: BufferShape,
-        allocated_shape: BufferShape,
+        shape: core_defs.TensorShape,
+        allocated_shape: core_defs.TensorShape,
         item_size: int,
         strides: Sequence[int],
         byte_offset: int,
@@ -269,7 +271,7 @@ class _BaseNDArrayBufferAllocator(Generic[_NDBufferT]):
 
 if TYPE_CHECKING:
 
-    class _NumPyLikeModule(Protocol[_NDBufferT]):
+    class _NumPyLikeNamespace(Protocol[_NDBufferT]):
         class _NumPyLibModule(Protocol):
             class _NumPyLibStridesModule(Protocol):
                 def as_strided(ndarray: _NDBufferT, **kwargs: Any) -> _NDBufferT:
@@ -279,7 +281,7 @@ if TYPE_CHECKING:
 
         lib: _NumPyLibModule
 
-        def empty(self, shape: BufferShape, dtype: np.dtype) -> np.ndarray:
+        def empty(self, shape: core_defs.TensorShape, dtype: np.dtype) -> np.ndarray:
             ...
 
         def byte_bounds(self, ndarray: _NDBufferT) -> tuple[int, int]:
@@ -289,28 +291,31 @@ if TYPE_CHECKING:
 @dataclasses.dataclass(frozen=True)
 class NumPyLikeArrayBufferAllocator(_BaseNDArrayBufferAllocator[_NDBufferT]):
     device_type: core_defs.DeviceType
-    xp: _NumPyLikeModule[_NDBufferT]
+    array_ns_ref: _NumPyLikeNamespace[_NDBufferT]
 
-    def _raw_alloc(self, length: int, device: core_defs.Device) -> tuple[_NDBufferT, int]:
+    @property
+    def array_ns(self) -> _NumPyLikeNamespace[_NDBufferT]:
+        return self.array_ns_ref
+
+    def raw_alloc(self, length: int, device: core_defs.Device) -> _NDBufferT:
         if device.device_type != core_defs.DeviceType.CPU or device.device_id != 0:
             raise ValueError(f"Unsupported device {device} for memory allocation")
 
-        buffer = self.xp.empty(shape=(length,), dtype=np.uint8)
-        return buffer, self.xp.byte_bounds(buffer)[0]
+        return self.array_ns.empty(shape=(length,), dtype=np.uint8)
 
-    def _tensorize(
+    def tensorize(
         self,
         buffer: _NDBufferT,
         dtype: core_defs.DType[_ScalarT],
-        shape: BufferShape,
-        allocated_shape: BufferShape,
+        shape: core_defs.TensorShape,
+        allocated_shape: core_defs.TensorShape,
         item_size: int,
         strides: Sequence[int],
         byte_offset: int,
     ) -> _NDBufferT:
         aligned_buffer = buffer[byte_offset : byte_offset + math.prod(allocated_shape) * item_size]
         flat_ndarray = aligned_buffer.view(dtype=np.dtype(dtype))
-        tensor_view = self.xp.lib.stride_tricks.as_strided(
+        tensor_view = self.array_ns.lib.stride_tricks.as_strided(
             flat_ndarray, shape=allocated_shape, strides=strides
         )
         if len(shape) and shape != allocated_shape:
@@ -320,15 +325,18 @@ class NumPyLikeArrayBufferAllocator(_BaseNDArrayBufferAllocator[_NDBufferT]):
         return tensor_view
 
 
+#: Registry of allocators for each device type.
+device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
+
 device_allocators[core_defs.DeviceType.CPU] = NumPyLikeArrayBufferAllocator(
     device_type=core_defs.DeviceType.CPU,
-    xp=np,
+    array_ns_ref=np,
 )
 
 if cp:
     device_allocators[core_defs.DeviceType.CUDA] = NumPyLikeArrayBufferAllocator(
         device_type=core_defs.DeviceType.CPU,
-        xp=cp,
+        array_ns_ref=cp,
     )
 
 
