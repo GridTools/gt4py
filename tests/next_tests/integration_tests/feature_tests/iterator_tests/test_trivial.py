@@ -21,16 +21,13 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
+from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")
 J = offset("J")
 K = offset("K")
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 
 
 @fundef
@@ -50,9 +47,6 @@ def baz(baz_inp):
 
 def test_trivial(program_processor, lift_mode):
     program_processor, validate = program_processor
-
-    if program_processor == run_gtfn:
-        pytest.xfail("origin not yet supported in gtfn")
 
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7, 9))
@@ -82,9 +76,6 @@ def stencil_shifted_arg_to_lift(inp):
 
 def test_shifted_arg_to_lift(program_processor, lift_mode):
     program_processor, validate = program_processor
-
-    if program_processor == run_gtfn:
-        pytest.xfail("origin not yet supported in gtfn")
 
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")

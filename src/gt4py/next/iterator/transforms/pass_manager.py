@@ -49,6 +49,19 @@ def _inline_lifts(ir, lift_mode):
     return ir
 
 
+def _inline_into_scan(ir, *, max_iter=10):
+    for _ in range(10):
+        # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
+        inlined = InlineIntoScan().visit(ir)
+        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift=True)
+        if inlined == ir:
+            break
+        ir = inlined
+    else:
+        raise RuntimeError(f"Inlining into scan did not converge with {max_iter} iterations.")
+    return ir
+
+
 def apply_common_transforms(
     ir: ir.Node,
     *,
@@ -56,7 +69,6 @@ def apply_common_transforms(
     offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
-    force_inline_lift=False,
     unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
@@ -101,15 +113,7 @@ def apply_common_transforms(
 
     ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
     if lift_mode == LiftMode.FORCE_INLINE:
-        for _ in range(10):
-            # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
-            inlined = InlineIntoScan().visit(ir)
-            inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift=True)
-            if inlined == ir:
-                break
-            ir = inlined
-        else:
-            raise RuntimeError("Inlining into scan did not converge.")
+        ir = _inline_into_scan(ir)
 
     ir = NormalizeShifts().visit(ir)
 
@@ -132,6 +136,10 @@ def apply_common_transforms(
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
         ir = InlineLifts().visit(ir)
+        # If after creating temporaries, the scan is not at the top, we inline.
+        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
+        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
+        ir = _inline_into_scan(ir)
 
     ir = EtaReduction().visit(ir)
     ir = ScanEtaReduction().visit(ir)

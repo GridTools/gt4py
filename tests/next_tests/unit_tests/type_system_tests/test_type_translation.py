@@ -100,11 +100,12 @@ def test_invalid_scalar_kind():
                 typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             ts.FunctionType(
-                args=[
+                pos_only_args=[
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                     ts.ScalarType(kind=ts.ScalarKind.INT64),
                 ],
-                kwargs={},
+                pos_or_kw_args={},
+                kw_only_args={},
                 returns=ts.ScalarType(kind=ts.ScalarKind.INT64),
             ),
         ),

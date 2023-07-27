@@ -201,7 +201,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                 temporary_extraction_predicate,
                 uid_gen_tmps,
                 once_only=True,
-                pre_order=False,
+                deepest_expr_first=True,
             )
 
             if extracted_lifts:

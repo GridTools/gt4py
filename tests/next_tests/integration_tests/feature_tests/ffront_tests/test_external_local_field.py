@@ -17,16 +17,10 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import int32, neighbor_sum
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
-    V2E,
-    Edge,
-    V2EDim,
-    Vertex,
-    unstructured_case,
-)
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
     reduction_setup,
@@ -34,6 +28,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 def test_external_local_field(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
+
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
@@ -64,6 +61,8 @@ def test_external_local_field_only(unstructured_case):
         pytest.skip(
             "Reductions over only a non-shifted field with local dimension is not supported in gtfn."
         )
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
 
     @gtx.field_operator
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:

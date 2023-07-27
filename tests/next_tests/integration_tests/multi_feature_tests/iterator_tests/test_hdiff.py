@@ -20,6 +20,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn_cpu
 
+from next_tests.integration_tests.cases import IDim, JDim
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
 )
@@ -28,9 +29,6 @@ from next_tests.unit_tests.conftest import lift_mode, program_processor, run_pro
 
 I = offset("I")
 J = offset("J")
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
 
 
 @fundef
@@ -80,7 +78,11 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
     ]:
-        pytest.xfail("origin not yet supported in gtfn")
+        # TODO(tehrengruber): check if still true
+        from gt4py.next.iterator import transforms
+
+        if lift_mode != transforms.LiftMode.FORCE_INLINE:
+            pytest.xfail("there is an issue with temporaries that crashes the application")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])

@@ -24,6 +24,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 )
 from gt4py.next.program_processors.runners import gtfn_cpu
 
+from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
@@ -83,11 +84,6 @@ def tridiag_reference():
     matrices[:, :, i[:-1], i[1:]] = c[:, :, :-1]
     x = np.linalg.solve(matrices, d)
     return a, b, c, d, x
-
-
-IDim = gtx.Dimension("IDim")
-JDim = gtx.Dimension("JDim")
-KDim = gtx.Dimension("KDim")
 
 
 @fendef

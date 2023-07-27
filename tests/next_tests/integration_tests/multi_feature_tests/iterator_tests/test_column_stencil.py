@@ -21,17 +21,14 @@ from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from gt4py.next.program_processors.runners import gtfn_cpu
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")
 K = offset("K")
-
-KDim = gtx.Dimension("KDim")
-IDim = gtx.Dimension("IDim")
 
 
 @fundef
@@ -56,32 +53,22 @@ def shift_stencil(inp):
 
 @pytest.fixture(
     params=[
-        # (stencil, reference_function, inp_fun (None=default), (skip_backend_fun, msg))
-        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None, None),
-        (if_scalar_cond, lambda inp: np.asarray(inp), None, None),
-        (if_scalar_return, lambda inp: np.ones_like(inp), None, None),
+        # (stencil, reference_function, inp_fun (None=default)
+        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None),
+        (if_scalar_cond, lambda inp: np.asarray(inp), None),
+        (if_scalar_return, lambda inp: np.ones_like(inp), None),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 1:],
             lambda shape: gtx.np_as_located_field(IDim, KDim)(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
             ),
-            None,
         ),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 2:],
             lambda shape: gtx.np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
-            ),
-            (
-                lambda backend: backend
-                in [
-                    gtfn_cpu.run_gtfn,
-                    gtfn_cpu.run_gtfn_imperative,
-                    gtfn_cpu.run_gtfn_with_temporaries,
-                ],
-                "origin not supported in gtfn",
             ),
         ),
     ],
@@ -93,11 +80,7 @@ def basic_stencils(request):
 
 def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     program_processor, validate = program_processor
-    stencil, ref_fun, inp_fun, skip_backend = basic_stencils
-    if skip_backend is not None:
-        skip_backend_fun, msg = skip_backend
-        if skip_backend_fun(program_processor):
-            pytest.xfail(msg)
+    stencil, ref_fun, inp_fun = basic_stencils
 
     shape = [5, 7]
     inp = (
@@ -330,12 +313,6 @@ def sum_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("origin not supported in gtfn")
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
