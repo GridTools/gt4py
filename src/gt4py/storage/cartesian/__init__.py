@@ -12,31 +12,4 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# flake8: noqa: F401
-
-"""GridTools storages utilities."""
-
-from . import cartesian
-from .cartesian import layout
-from .cartesian.interface import empty, from_array, full, ones, zeros  # noqa: F401
-from .cartesian.layout import from_name, register
-
-
-__all__ = [
-    "cartesian",
-    "layout",
-    "empty",
-    "from_array",
-    "full",
-    "ones",
-    "zeros",
-    "from_name",
-    "register",
-]
-
-try:
-    from .cartesian.utils import dace_descriptor  # noqa: F401
-
-    __all__ += ["dace_descriptor"]
-except ImportError:
-    pass
+from __future__ import annotations

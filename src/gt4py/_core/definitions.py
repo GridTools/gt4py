@@ -18,13 +18,18 @@ import dataclasses
 import enum
 import functools
 import numbers
-from typing import (
+
+import numpy as np
+import numpy.typing as npt
+
+from gt4py.eve.extended_typing import (
     Any,
     Final,
     Generic,
     Iterator,
     Literal,
     Protocol,
+    Tuple,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -34,8 +39,6 @@ from typing import (
     overload,
 )
 
-import numpy as np
-import numpy.typing as npt
 
 if TYPE_CHECKING:
     import cupy as cp
@@ -45,44 +48,6 @@ if TYPE_CHECKING:
     import jax.numpy as jnp
 
     JaxNDArray = jnp.ndarray
-
-
-# -- Device representation --
-class DeviceType(enum.Enum):
-    """The type of the device where a memory buffer is allocated.
-
-    Enum values taken from DLPack reference implementation at:
-    https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
-    """
-
-    CPU = 1
-    CUDA = 2
-    CPU_PINNED = 3
-    OPENCL = 4
-    VULKAN = 7
-    METAL = 8
-    VPI = 9
-    ROCM = 10
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class Device:
-    """
-    Representation of a computing device.
-
-    This definition is based on the DLPack device definition. A device is
-    described by a pair of `DeviceType` and `device_id`. The `device_id`
-    is an integer that is interpreted differently depending on the
-    `DeviceType`. For example, for `DeviceType.CPU` it could be the CPU
-    core number, for `DeviceType.CUDA` it could be the CUDA device number, etc.
-    """
-
-    device_type: DeviceType
-    device_id: int
-
-    def __iter__(self) -> Iterator[DeviceType | int]:
-        yield self.device_type
-        yield self.device_id
 
 
 # -- Scalar types supported by GT4Py --
@@ -102,7 +67,7 @@ float32 = np.float32
 float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
-BoolT = TypeVar("BoolT", bool_, bool)
+BoolT = TypeVar("BoolT", bound=Union[bool_, bool])
 BOOL_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
@@ -334,6 +299,53 @@ DTypeLike = Union[DType, npt.DTypeLike]
 def dtype(dtype_like: DTypeLike) -> DType:
     """Return the DType corresponding to the given dtype-like object."""
     return dtype_like if isinstance(dtype_like, DType) else DType(np.dtype(dtype_like).type)
+
+
+# -- Custom protocols  --
+class GTDimsInterface(Protocol):
+    __gt_dims__: Tuple[str, ...]
+
+
+class GTOriginInterface(Protocol):
+    __gt_origin__: Tuple[int, ...]
+
+
+# -- Device representation --
+class DeviceType(enum.Enum):
+    """The type of the device where a memory buffer is allocated.
+
+    Enum values taken from DLPack reference implementation at:
+    https://github.com/dmlc/dlpack/blob/main/include/dlpack/dlpack.h
+    """
+
+    CPU = 1
+    CUDA = 2
+    CPU_PINNED = 3
+    OPENCL = 4
+    VULKAN = 7
+    METAL = 8
+    VPI = 9
+    ROCM = 10
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Device:
+    """
+    Representation of a computing device.
+
+    This definition is based on the DLPack device definition. A device is
+    described by a pair of `DeviceType` and `device_id`. The `device_id`
+    is an integer that is interpreted differently depending on the
+    `DeviceType`. For example, for `DeviceType.CPU` it could be the CPU
+    core number, for `DeviceType.CUDA` it could be the CUDA device number, etc.
+    """
+
+    device_type: DeviceType
+    device_id: int
+
+    def __iter__(self) -> Iterator[DeviceType | int]:
+        yield self.device_type
+        yield self.device_id
 
 
 # -- NDArrays and slices --

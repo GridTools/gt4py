@@ -28,7 +28,7 @@ except ImportError:
 import gt4py
 import gt4py.cartesian.backend as gt_backend
 from gt4py.cartesian import gtscript
-from gt4py.storage.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
+from gt4py.storage.cartesian.utils import allocate_cpu, allocate_gpu, normalize_storage_spec
 
 
 CPU_LAYOUTS = [

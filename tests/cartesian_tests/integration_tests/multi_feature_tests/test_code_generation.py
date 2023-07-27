@@ -30,7 +30,7 @@ from gt4py.cartesian.gtscript import (
     interval,
     region,
 )
-from gt4py.storage import utils as storage_utils
+from gt4py.storage.cartesian import utils as storage_utils
 
 from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (

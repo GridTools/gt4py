@@ -275,14 +275,14 @@ class CUDAArrayInterface(Protocol):
 
 
 PyCapsule = NewType("PyCapsule", object)
-DLDevice = Tuple[int, int]
+DLPackDevice = Tuple[int, int]
 
 
 class DLPackBuffer(Protocol):
     def __dlpack__(self, stream: Optional[int] = None) -> PyCapsule:
         ...
 
-    def __dlpack_device__(self) -> DLDevice:
+    def __dlpack_device__(self) -> DLPackDevice:
         ...
 
 
