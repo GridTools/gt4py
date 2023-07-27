@@ -19,14 +19,32 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set
-from typing import Any, Optional, Protocol, TypeAlias, TypeVar, Union, overload, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as gt4py_defs
 from gt4py.eve.type_definitions import StrEnum
+from gt4py.eve.extended_typing import (
+    Any,
+    Callable,
+    ClassVar,
+    Optional,
+    ParamSpec,
+    Protocol,
+    TypeAlias,
+    TypeVar,
+    Union,
+    overload,
+    extended_runtime_checkable,
+    final,
+    TYPE_CHECKING,
+)
 
+
+full_runtime_checkable = extended_runtime_checkable(
+    extended_runtime_checkable=True, subclass_check_with_data_members=True
+)
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
@@ -106,7 +124,22 @@ class UnitRange(Sequence[int], Set[int]):
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 
 
+if TYPE_CHECKING:
+    import gt4py.next.ffront.fbuiltins as fbuiltins
+
+    Value = Any  # TODO
+    P = ParamSpec("P")
+    R = TypeVar("R", Value, tuple[Value, ...])
+
+    class GTBuiltInFuncDispatcher(Protocol):
+        def __call__(op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
+            ...
+
+
+@extended_runtime_checkable
 class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
+    __gt_builtin_func__: ClassVar[Optional[GTBuiltInFuncDispatcher]]
+
     @property
     def domain(self) -> DomainT:
         ...
@@ -122,12 +155,6 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
     @property
     def ndarray(self) -> NDArrayObject:
         ...
-
-    def __setattr__(self, key, value) -> None:
-        raise TypeError("Immutable type")
-
-    def __setitem__(self, key, value) -> None:
-        raise TypeError("Immutable type")
 
     def __str__(self) -> str:
         codomain = self.value_type.__name__
@@ -203,6 +230,16 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
 
+class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
+    @final
+    def __setattr__(self, key, value) -> None:
+        raise TypeError("Immutable type")
+
+    @final
+    def __setitem__(self, key, value) -> None:
+        raise TypeError("Immutable type")
+
+
 @functools.singledispatch
 def field(
     definition: Any,
@@ -230,7 +267,7 @@ class Backend:
         return ir
 
 
-@runtime_checkable
+@full_runtime_checkable
 class Connectivity(Protocol):
     max_neighbors: int
     has_skip_values: bool
@@ -244,7 +281,7 @@ class Connectivity(Protocol):
         """Return neighbor index."""
 
 
-@runtime_checkable
+@full_runtime_checkable
 class NeighborTable(Connectivity, Protocol):
     table: npt.NDArray
 

@@ -45,14 +45,6 @@ from gt4py.next.common import DimsT, DomainT
 from gt4py.next.ffront import fbuiltins
 
 
-class NonProtocolABCMeta(typing._ProtocolMeta):
-    __instancecheck__ = abc.ABCMeta.__instancecheck__
-
-
-class NonProtocolABC(metaclass=NonProtocolABCMeta):
-    pass
-
-
 def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
     def _builtin_unary_op(a: _BaseNdArrayField) -> common.Field:
         xp = a.__class__.array_ns
@@ -69,7 +61,7 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
     def _builtin_binary_op(a: _BaseNdArrayField, b: common.Field) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
-        if hasattr(b, "__gt_op_func__"):  # isinstance(b, common.Field):
+        if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 raise NotImplementedError(
                     f"support for different domain not implemented: {a.domain}, {b.domain}"
@@ -91,17 +83,17 @@ R = TypeVar("R", Value, tuple[Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
+class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     _domain: DomainT
     _ndarray: definitions.NDArrayObject
     _value_type: type[ScalarT]
 
-    _ops_mapping: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
+    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
     array_ns: ClassVar[ModuleType]
 
     @classmethod
-    def __gt_op_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
-        return cls._ops_mapping.get(op, NotImplemented)
+    def __gt_builtin_func__(cls, op: fbuiltins.BuiltInFunction[R, P]) -> Callable[P, R]:
+        return cls._builtin_func_map.get(op, NotImplemented)
 
     @overload
     @classmethod
@@ -121,10 +113,10 @@ class _BaseNdArrayField(NonProtocolABC, common.Field[DimsT, ScalarT]):
     def register_gt_op_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
     ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
-        assert op not in cls._ops_mapping
+        assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
             return functools.partial(cls.register_gt_op_func, op)  # type: ignore[arg-type]
-        return cls._ops_mapping.setdefault(op, op_func)
+        return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
     def domain(self) -> DomainT:

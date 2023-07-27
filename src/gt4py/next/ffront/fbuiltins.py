@@ -88,7 +88,7 @@ class BuiltInFunction(Generic[R, P]):
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
             # TODO: define a strategy that converts or prevents conversion
-            if (dispatcher := getattr(atype, "__gt_op_func__", None)) is not None and (
+            if (dispatcher := getattr(atype, "__gt_builtin_func__", None)) is not None and (
                 op_func := dispatcher(self)
             ) is not NotImplemented:
                 return op_func
