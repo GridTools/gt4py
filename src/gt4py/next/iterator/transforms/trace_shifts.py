@@ -55,7 +55,7 @@ class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
 
     def shift(self, offsets):
-        return CombinedTracer(tuple(_shift(it) for it in self.its))
+        return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
         derefed_its = [it.deref() for it in self.its]
@@ -85,6 +85,7 @@ def _can_deref(x):
 
 def _shift(*offsets):
     def apply(arg):
+        assert isinstance(arg, IteratorTracer)
         return arg.shift(offsets)
 
     return apply
@@ -223,7 +224,9 @@ class TraceShifts(NodeTranslator):
 
     def visit_Lambda(self, node: ir.Lambda, *, ctx: dict[str, Any]) -> Callable:
         def fun(*args):
-            return self.visit(node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args)})
+            return self.visit(
+                node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
+            )
 
         return fun
 
