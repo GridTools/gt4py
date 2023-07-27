@@ -19,6 +19,23 @@ from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
 from gt4py.next.iterator.runtime import CartesianAxis
 
 
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    expected_error = (
+        "Type inference failed: Can not satisfy constraints:\n"
+        "  Primitive(name='int32') ≡ Primitive(name='float32')"
+    )
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) == expected_error
+
+
 def test_sym_ref():
     testee = ir.SymRef(id="x")
     expected = ti.TypeVar(idx=0)
@@ -118,6 +135,14 @@ def test_plus():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(T₀¹, T₀¹) → T₀¹"
+
+
+def test_power():
+    testee = im.call("power")(im.literal_from_value(1.0), im.literal_from_value(2))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float64"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "float64⁰"
 
 
 def test_eq():
