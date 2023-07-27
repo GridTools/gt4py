@@ -15,23 +15,20 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")
 K = offset("K")
-
-KDim = Dimension("KDim")
-IDim = Dimension("IDim")
 
 
 @fundef
@@ -56,27 +53,22 @@ def shift_stencil(inp):
 
 @pytest.fixture(
     params=[
-        # (stencil, reference_function, inp_fun (None=default), (skip_backend_fun, msg))
-        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None, None),
-        (if_scalar_cond, lambda inp: np.asarray(inp), None, None),
-        (if_scalar_return, lambda inp: np.ones_like(inp), None, None),
+        # (stencil, reference_function, inp_fun (None=default)
+        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None),
+        (if_scalar_cond, lambda inp: np.asarray(inp), None),
+        (if_scalar_return, lambda inp: np.ones_like(inp), None),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 1:],
-            lambda shape: np_as_located_field(IDim, KDim)(
+            lambda shape: gtx.np_as_located_field(IDim, KDim)(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
             ),
-            None,
         ),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 2:],
-            lambda shape: np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
+            lambda shape: gtx.np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
-            ),
-            (
-                lambda backend: backend == run_gtfn or backend == run_gtfn_imperative,
-                "origin not supported in gtfn",
             ),
         ),
     ],
@@ -88,19 +80,15 @@ def basic_stencils(request):
 
 def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     program_processor, validate = program_processor
-    stencil, ref_fun, inp_fun, skip_backend = basic_stencils
-    if skip_backend is not None:
-        skip_backend_fun, msg = skip_backend
-        if skip_backend_fun(program_processor):
-            pytest.xfail(msg)
+    stencil, ref_fun, inp_fun = basic_stencils
 
     shape = [5, 7]
     inp = (
-        np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
+        gtx.np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
         if inp_fun is None
         else inp_fun(shape)
     )
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = ref_fun(inp)
 
@@ -148,8 +136,8 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     run_processor(
         ksum_fencil,
@@ -185,8 +173,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
 
@@ -253,9 +241,9 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     ):
         pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
-    inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
-    inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=reference.dtype))
+    inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
+    inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=reference.dtype))
 
     run_processor(
         kdoublesum_fencil,
@@ -294,9 +282,9 @@ def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
 
     k_size = 10
-    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
-    out = np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
+    inp1 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
     ref = inp0 + inp1[1:]
 
     run_processor(
@@ -330,13 +318,11 @@ def sum_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [run_gtfn, run_gtfn_imperative]:
-        pytest.xfail("origin not supported in gtfn")
 
     k_size = 10
-    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
-    out = np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
+    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
     ref = inp0 + np.asarray(inp1)[:-1]
 
     run_processor(

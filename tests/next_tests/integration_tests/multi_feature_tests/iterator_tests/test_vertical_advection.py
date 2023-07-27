@@ -15,9 +15,8 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors.formatters.gtfn import (
@@ -25,6 +24,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
@@ -86,11 +86,6 @@ def tridiag_reference():
     return a, b, c, d, x
 
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim")
-
-
 @fendef
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     closure(
@@ -130,7 +125,7 @@ def tridiag_test(tridiag_reference, program_processor, lift_mode):
         pytest.xfail("gtfn does only support lifted scans when using temporaries")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
-    as_3d_field = np_as_located_field(IDim, JDim, KDim)
+    as_3d_field = gtx.np_as_located_field(IDim, JDim, KDim)
     a_s = as_3d_field(a)
     b_s = as_3d_field(b)
     c_s = as_3d_field(c)

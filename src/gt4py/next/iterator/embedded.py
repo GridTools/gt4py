@@ -48,7 +48,7 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.iterator import builtins, runtime, utils
+from gt4py.next.iterator import builtins, runtime
 
 
 EMBEDDED = "embedded"
@@ -143,6 +143,13 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, np.integer))
 
 
+def _tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
+
+
 @runtime_checkable
 class ItIterator(Protocol):
     """
@@ -174,6 +181,10 @@ class LocatedField(Protocol):
     @abc.abstractmethod
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple([0] * len(self.axes))
 
 
 class MutableLocatedField(LocatedField, Protocol):
@@ -880,19 +891,21 @@ class LocatedFieldImpl(MutableLocatedField):
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: Callable[[], npt.NDArray],
+        origin: Optional[dict[common.Dimension, int]] = None,
     ):
         self.getter = getter
         self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
+        self.origin = origin
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = utils.tupelize(indices)
+        indices = _tupelize(indices)
         return self.getter(indices)
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
@@ -903,6 +916,14 @@ class LocatedFieldImpl(MutableLocatedField):
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        if not self.origin:
+            return tuple([0] * len(self.axes))
+        return cast(
+            tuple[int], get_ordered_indices(self.axes, {k.value: v for k, v in self.origin.items()})
+        )
 
     @property
     def shape(self):
@@ -1008,7 +1029,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = utils.tupelize(indices)
+            indices = _tupelize(indices)
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
@@ -1020,6 +1041,7 @@ def np_as_located_field(
             dtype=a.dtype,
             setter=setter,
             array=a.__array__,
+            origin=origin,
         )
 
     return _maker
@@ -1178,7 +1200,6 @@ class ColumnDescriptor:
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1189,7 +1210,7 @@ class ScanArgIterator:
         return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+        return ScanArgIterator(self.wrapped_iter.shift(*offsets), self.k_pos)
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:

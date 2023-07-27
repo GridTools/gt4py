@@ -27,9 +27,8 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import (
@@ -37,6 +36,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 )
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
@@ -53,9 +53,6 @@ def conditional_indirection(inp, cond):
     return deref(compute_shift(cond)(inp))
 
 
-IDim = Dimension("IDim")
-
-
 def test_simple_indirection(program_processor):
     program_processor, validate = program_processor
 
@@ -69,10 +66,10 @@ def test_simple_indirection(program_processor):
         pytest.xfail("fails in lowering to gtfn_ir")
 
     shape = [8]
-    inp = np_as_located_field(IDim, origin={IDim: 1})(np.asarray(range(shape[0] + 2)))
+    inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.asarray(range(shape[0] + 2)))
     rng = np.random.default_rng()
-    cond = np_as_located_field(IDim)(rng.normal(size=shape))
-    out = np_as_located_field(IDim)(np.zeros(shape))
+    cond = gtx.np_as_located_field(IDim)(rng.normal(size=shape))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
@@ -100,9 +97,9 @@ def test_direct_offset_for_indirection(program_processor):
     program_processor, validate = program_processor
 
     shape = [4]
-    inp = np_as_located_field(IDim)(np.asarray(range(shape[0])))
-    cond = np_as_located_field(IDim)(np.asarray([2, 1, -1, -2], dtype=np.int32))
-    out = np_as_located_field(IDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0])))
+    cond = gtx.np_as_located_field(IDim)(np.asarray([2, 1, -1, -2], dtype=np.int32))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
 
     ref = np.zeros(shape)
     for i in range(shape[0]):

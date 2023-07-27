@@ -14,9 +14,8 @@
 
 import numpy as np
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.runtime import CartesianAxis
 
 
@@ -37,19 +36,19 @@ def test_bool_literal():
 
 
 def test_int_literal():
-    testee = ir.Literal(value="3", type="int")
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    testee = ir.Literal(value="3", type="int32")
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "int⁰"
+    assert ti.pformat(inferred) == "int32⁰"
 
 
 def test_float_literal():
-    testee = ir.Literal(value="3.0", type="float")
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.TypeVar(idx=0))
+    testee = ir.Literal(value="3.0", type="float64")
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float64"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "float⁰"
+    assert ti.pformat(inferred) == "float64⁰"
 
 
 def test_deref():
@@ -94,11 +93,11 @@ def test_lambda():
 
 def test_typed_lambda():
     testee = ir.Lambda(
-        params=[ir.Sym(id="x", kind="Iterator", dtype=("float", False))], expr=ir.SymRef(id="x")
+        params=[ir.Sym(id="x", kind="Iterator", dtype=("float64", False))], expr=ir.SymRef(id="x")
     )
     expected_val = ti.Val(
         kind=ti.Iterator(),
-        dtype=ti.Primitive(name="float"),
+        dtype=ti.Primitive(name="float64"),
         size=ti.TypeVar(idx=0),
         current_loc=ti.TypeVar(idx=1),
         defined_loc=ti.TypeVar(idx=2),
@@ -109,7 +108,7 @@ def test_typed_lambda():
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₁, T₂, float⁰]) → It[T₁, T₂, float⁰]"
+    assert ti.pformat(inferred) == "(It[T₁, T₂, float64⁰]) → It[T₁, T₂, float64⁰]"
 
 
 def test_plus():
@@ -136,11 +135,19 @@ def test_eq():
 def test_if():
     testee = ir.SymRef(id="if_")
     c = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
-    t = ti.Val(kind=ti.TypeVar(idx=1), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=0))
+    t = ti.TypeVar(idx=1)
     expected = ti.FunctionType(args=ti.Tuple.from_elems(c, t, t), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(bool⁰, ItOrVal₁[T₂⁰], ItOrVal₁[T₂⁰]) → ItOrVal₁[T₂⁰]"
+    assert ti.pformat(inferred) == "(bool⁰, T₁, T₁) → T₁"
+
+
+def test_if_call():
+    testee = im.if_("cond", im.literal("1", "int32"), im.literal("1", "int32"))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "int32⁰"
 
 
 def test_not():
@@ -168,12 +175,13 @@ def test_and():
 
 def test_cast():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="cast_"), args=[ir.Literal(value="1.", type="float"), ir.SymRef(id="int")]
+        fun=ir.SymRef(id="cast_"),
+        args=[ir.Literal(value="1.", type="float64"), ir.SymRef(id="int64")],
     )
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int64"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "int⁰"
+    assert ti.pformat(inferred) == "int64⁰"
 
 
 def test_lift():
@@ -288,40 +296,40 @@ def test_make_tuple():
         fun=ir.SymRef(id="make_tuple"),
         args=[
             ir.Literal(value="True", type="bool"),
-            ir.Literal(value="42.0", type="float"),
+            ir.Literal(value="42.0", type="float64"),
             ir.SymRef(id="x"),
         ],
     )
     expected = ti.Val(
         kind=ti.Value(),
         dtype=ti.Tuple.from_elems(
-            ti.Primitive(name="bool"), ti.Primitive(name="float"), ti.TypeVar(idx=0)
+            ti.Primitive(name="bool"), ti.Primitive(name="float64"), ti.TypeVar(idx=0)
         ),
         size=ti.TypeVar(idx=1),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(bool, float, T₀)¹"
+    assert ti.pformat(inferred) == "(bool, float64, T₀)¹"
 
 
 def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
         args=[
-            ir.Literal(value="1", type="int"),
+            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
             ir.FunCall(
                 fun=ir.SymRef(id="make_tuple"),
                 args=[
                     ir.Literal(value="True", type="bool"),
-                    ir.Literal(value="42.0", type="float"),
+                    ir.Literal(value="42.0", type="float64"),
                 ],
             ),
         ],
     )
-    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float"), size=ti.TypeVar(idx=0))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float64"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "float⁰"
+    assert ti.pformat(inferred) == "float64⁰"
 
 
 def test_tuple_get_in_lambda():
@@ -329,7 +337,7 @@ def test_tuple_get_in_lambda():
         params=[ir.Sym(id="x")],
         expr=ir.FunCall(
             fun=ir.SymRef(id="tuple_get"),
-            args=[ir.Literal(value="1", type="int"), ir.SymRef(id="x")],
+            args=[ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
         ),
     )
     expected = ti.FunctionType(
@@ -388,14 +396,14 @@ def test_reduce():
                                 ),
                             ],
                         ),
-                        ir.SymRef(id="int"),
+                        ir.SymRef(id="int64"),
                     ],
                 ),
             ],
         ),
     )
     testee = ir.FunCall(
-        fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int")]
+        fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int64")]
     )
     expected = ti.FunctionType(
         args=ti.ValListTuple(
@@ -405,11 +413,11 @@ def test_reduce():
             has_skip_values=ti.TypeVar(idx=2),
             size=ti.TypeVar(idx=3),
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.TypeVar(idx=3)),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int64"), size=ti.TypeVar(idx=3)),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(L[float64, T₁, T₂]³, L[T₀, T₁, T₂]³) → int³"
+    assert ti.pformat(inferred) == "(L[float64, T₁, T₂]³, L[T₀, T₁, T₂]³) → int64³"
 
 
 def test_scan():
@@ -431,30 +439,30 @@ def test_scan():
     )
     testee = ir.FunCall(
         fun=ir.SymRef(id="scan"),
-        args=[scan_f, ir.Literal(value="True", type="bool"), ir.Literal(value="0", type="int")],
+        args=[scan_f, ir.Literal(value="True", type="bool"), ir.Literal(value="0", type="int64")],
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.Primitive(name="int"),
+                dtype=ti.Primitive(name="int64"),
                 size=ti.Column(),
                 current_loc=ti.TypeVar(idx=0),
                 defined_loc=ti.TypeVar(idx=0),
             ),
             ti.Val(
                 kind=ti.Iterator(),
-                dtype=ti.Primitive(name="int"),
+                dtype=ti.Primitive(name="int64"),
                 size=ti.Column(),
                 current_loc=ti.TypeVar(idx=0),
                 defined_loc=ti.TypeVar(idx=0),
             ),
         ),
-        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Column()),
+        ret=ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int64"), size=ti.Column()),
     )
     inferred = ti.infer(testee)
     assert inferred == expected
-    assert ti.pformat(inferred) == "(It[T₀, T₀, intᶜ], It[T₀, T₀, intᶜ]) → intᶜ"
+    assert ti.pformat(inferred) == "(It[T₀, T₀, int64ᶜ], It[T₀, T₀, int64ᶜ]) → int64ᶜ"
 
 
 def test_shift():
@@ -561,8 +569,8 @@ def test_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         )
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -598,11 +606,11 @@ def test_partial_shift_with_unstructured_offset_provider():
         ),
     )
     offset_provider = {
-        "V2E": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Vertex"), Dimension("Edge"), 1
+        "V2E": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Vertex"), gtx.Dimension("Edge"), 1
         ),
-        "E2C": NeighborTableOffsetProvider(
-            np.empty((0, 1), dtype=np.int64), Dimension("Edge"), Dimension("Cell"), 1
+        "E2C": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 1), dtype=np.int64), gtx.Dimension("Edge"), gtx.Dimension("Cell"), 1
         ),
     }
     inferred = ti.infer(testee, offset_provider=offset_provider)
@@ -647,7 +655,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="IDim"),
-                ir.Literal(value="0", type="int"),
+                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="i"),
             ],
         ),
@@ -655,7 +663,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="JDim"),
-                ir.Literal(value="0", type="int"),
+                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="j"),
             ],
         ),
@@ -663,7 +671,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="KDim"),
-                ir.Literal(value="0", type="int"),
+                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="k"),
             ],
         ),
@@ -733,9 +741,9 @@ def test_fencil_definition():
         name="f",
         fundefs=ti.EmptyTuple(),
         params=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=0),
@@ -770,7 +778,7 @@ def test_fencil_definition():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f(intˢ, intˢ, intˢ, It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₃, T₂ᶜ], It[ANYWHERE, T₃, T₂ᶜ])}"
+        == "{f(int32ˢ, int32ˢ, int32ˢ, It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₁, T₀ᶜ], It[ANYWHERE, T₃, T₂ᶜ], It[ANYWHERE, T₃, T₂ᶜ])}"
     )
 
 
@@ -789,8 +797,8 @@ def test_fencil_definition_same_closure_input():
                 domain=im.call("unstructured_domain")(
                     im.call("named_range")(
                         ir.AxisLiteral(value="Edge"),
-                        ir.Literal(value="0", type="int"),
-                        ir.Literal(value="10", type="int"),
+                        ir.Literal(value="0", type="int32"),
+                        ir.Literal(value="10", type="int32"),
                     )
                 ),
                 stencil=im.ref("f1"),
@@ -801,8 +809,8 @@ def test_fencil_definition_same_closure_input():
                 domain=im.call("unstructured_domain")(
                     im.call("named_range")(
                         ir.AxisLiteral(value="Vertex"),
-                        ir.Literal(value="0", type="int"),
-                        ir.Literal(value="10", type="int"),
+                        ir.Literal(value="0", type="int32"),
+                        ir.Literal(value="10", type="int32"),
                     )
                 ),
                 stencil=im.ref("f2"),
@@ -813,11 +821,15 @@ def test_fencil_definition_same_closure_input():
     )
 
     offset_provider = {
-        "E2V": NeighborTableOffsetProvider(
-            np.empty((0, 2), dtype=np.int64), Dimension("Edge"), Dimension("Vertex"), 2, False
+        "E2V": gtx.NeighborTableOffsetProvider(
+            np.empty((0, 2), dtype=np.int64),
+            gtx.Dimension("Edge"),
+            gtx.Dimension("Vertex"),
+            2,
+            False,
         )
     }
-    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider)
+    inferred_all: dict[int, ti.Type] = ti.infer_all(testee, offset_provider=offset_provider)
 
     # validate locations of fencil params
     fencil_param_types = [inferred_all[id(testee.params[i])] for i in range(3)]
@@ -914,9 +926,9 @@ def test_fencil_definition_with_function_definitions():
             ),
         ),
         params=ti.Tuple.from_elems(
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
-            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
+            ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.Scalar()),
             ti.Val(
                 kind=ti.Iterator(),
                 dtype=ti.TypeVar(idx=4),
@@ -965,8 +977,15 @@ def test_fencil_definition_with_function_definitions():
     assert inferred == expected
     assert (
         ti.pformat(inferred)
-        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(intˢ, intˢ, intˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
+        == "{f :: (T₀) → T₀, g :: (It[T₃, T₃, T₁²]) → T₁², foo(int32ˢ, int32ˢ, int32ˢ, It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₅, T₄ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₇, T₆ᶜ], It[ANYWHERE, T₉, T₈ᶜ], It[ANYWHERE, T₉, T₈ᶜ])}"
     )
+
+
+def test_save_types_to_annex():
+    testee = im.lambda_("a")(im.plus("a", im.literal("1", "float32")))
+    ti.infer(testee, save_to_annex=True)
+    param_type = testee.params[0].annex.type
+    assert isinstance(param_type, ti.Val) and param_type.dtype.name == "float32"
 
 
 def test_pformat():

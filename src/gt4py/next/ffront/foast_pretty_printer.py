@@ -151,7 +151,11 @@ class _PrettyPrinter(TemplatedGenerator):
         false_expr = self._parenthesize(node.false_expr, node, Group.RIGHT)
         return f"{true_expr} if {cond} else {false_expr}"
 
-    Call = as_fmt("{func}({', '.join(args)})")  # TODO: kwargs
+    def visit_Call(self, node: foast.Call, **kwargs):
+        args = self.visit(node.args, **kwargs)
+        for k, v in node.kwargs.items():
+            args.append(f"{self.visit(k, **kwargs)}={self.visit(v, **kwargs)}")
+        return f"{node.func}({', '.join(args)})"
 
     Assign = as_fmt("{target} = {value}")
 
@@ -225,15 +229,14 @@ def pretty_format(node: foast.LocatedNode) -> str:
     """
     Pretty print (to string) an `foast.LocatedNode`.
 
-    >>> from gt4py.next.common import Field, Dimension
-    >>> from gt4py.next.ffront.decorator import field_operator
+    >>> from gt4py.next import Field, Dimension, field_operator, float64
     >>> IDim = Dimension("IDim")
     >>> @field_operator
-    ... def field_op(a: Field[[IDim], int]) -> Field[[IDim], int]:
-    ...     return a+1
+    ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    ...     return a + 1.0
     >>> print(pretty_format(field_op.foast_node))
     @field_operator
-    def field_op(a: Field[[IDim], int64]) -> Field[[IDim], int64]:
-      return a + 1
+    def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+      return a + 1.0
     """
     return _PrettyPrinter().apply(node)
