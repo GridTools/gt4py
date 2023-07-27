@@ -19,6 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
@@ -81,6 +82,7 @@ def test_anton_toy(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: this test does not validate")
 

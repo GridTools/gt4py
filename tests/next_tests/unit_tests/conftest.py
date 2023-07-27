@@ -23,7 +23,12 @@ from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
-from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import (
+    dace_iterator,
+    double_roundtrip,
+    gtfn_cpu,
+    roundtrip,
+)
 
 
 @pytest.fixture(
@@ -74,11 +79,19 @@ def get_processor_id(processor):
         (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn_cpu.run_gtfn_with_temporaries, True),
         (gtfn.format_sourcecode, False),
+        (dace_iterator.run_dace_iterator, True),
     ],
     ids=lambda p: get_processor_id(p[0]),
 )
 def program_processor(request):
     return request.param
+
+
+@pytest.fixture
+def program_processor_no_dace_exec(program_processor):
+    if program_processor[0] == dace_iterator.run_dace_iterator:
+        pytest.xfail("DaCe backend not yet supported.")
+    return program_processor
 
 
 @pytest.fixture

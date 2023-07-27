@@ -139,6 +139,26 @@ Temporarily it may be allowed to split unit tests for a module into multiple `te
 
 Temporarily, tests for testing utilities can be placed next to the module containing them, with the name `test_util_<module>.py`. This should be taken as a hint that the tested utils should be moved into the library.
 
+#### Integration Tests Utils
+
+Integrations tests come with their own utilities, found in `cases.py`, for better test automation and simplification:
+
+- Predefined field type annotations, e.g. `IJKField = Field[[IDim, JDim, KDim], np.int64]`.
+- Test fixtures: `cartesian_case` for structured, e.g. `IDim` x `JDim`; `unstructured_case`, e.g. `EdgeDim`.
+- Parameter allocations for objects, derived directly from the decorator's function definition:
+  ```
+     input_param = cases.allocate(case_fixture, decorator_name, "input_label")()
+  ```
+- Data initialization/modification classes, such as `ConstInitializer()`, to be used as `allocate(...).strategy()` parameters
+- Decorator verification functions:
+  - `cases.verify()`: used when input and output field generation cannot be automated. For example the case when the `extend()` method needs to be used for an offset or sparse fields are part of the input dataset.
+  - `cases.verify_with_default_data()`: used when input and output fields generation can be automated.
+- Backends are set automatically with default switched off. If backend specification is needed, this can be extracted as a cases' attribute.
+
+In case new features are needed, check if an existing utility can be extended before implementing a whole new one. The name of new utilities should reflect their purpose and follow the naming conventions of existing tools. If the new utility is a completely stand-alone component, create a new file in the bottom-most directory enclosing all usages of the utility; otherwise, place it in the appropriate file containing utilities with similar functionalities.
+
+Note: The name `cases` for the new test module was chosen based on the idea that details like backend, grid size, etc. should be summarized in a parametrizable “test case”, of which there are two types: cartesian and unstructured.
+
 TODO: add missing test conventions.
 
 <!--

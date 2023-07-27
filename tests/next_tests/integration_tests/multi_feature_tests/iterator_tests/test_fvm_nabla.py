@@ -15,6 +15,8 @@
 import numpy as np
 import pytest
 
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
+
 
 pytest.importorskip("atlas4py")
 
@@ -139,6 +141,7 @@ def test_compute_zavgS(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
@@ -203,6 +206,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
@@ -247,6 +251,7 @@ def test_nabla(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     if lift_mode != LiftMode.FORCE_INLINE:
@@ -312,6 +317,7 @@ def test_nabla2(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
@@ -401,6 +407,7 @@ def test_nabla_sign(program_processor, lift_mode):
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
+        run_dace_iterator,
     ]:
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
