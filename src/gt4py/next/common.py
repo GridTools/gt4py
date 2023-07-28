@@ -19,6 +19,7 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -37,7 +38,6 @@ from gt4py.eve.extended_typing import (
     Union,
     extended_runtime_checkable,
     final,
-    overload,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
@@ -230,12 +230,12 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
 class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
     """
     Abstract base class for implementations of the :class:`Field` protocol.
-    
-    This class provides a basic implementation of the __:meth:`gt_builtin_func__` 
+
+    This class provides a basic implementation of the __:meth:`gt_builtin_func__`
     dispatching using a dictionary to store the implementation functions.
     It additionally supports the registration of new built-in functions.
     """
-    
+
     _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]]
 
     def __init_subclass__(cls) -> None:
@@ -260,8 +260,7 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
     ) -> Callable[P, R]:
         ...
 
-    # TODO: discuss if this registration mechanism should be added as part of the
-    # Field protocol or keep it as an optional extra feature for some implementations.
+    # If we have a use-case for a field without registry, remove the registry from this ABC.
     @classmethod
     def register_builtin_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
