@@ -228,6 +228,14 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
 
 
 class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
+    """
+    Abstract base class for implementations of the :class:`Field` protocol.
+    
+    This class provides a basic implementation of the __:meth:`gt_builtin_func__` 
+    dispatching using a dictionary to store the implementation functions.
+    It additionally supports the registration of new built-in functions.
+    """
+    
     _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]]
 
     def __init_subclass__(cls) -> None:
@@ -252,6 +260,8 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
     ) -> Callable[P, R]:
         ...
 
+    # TODO: discuss if this registration mechanism should be added as part of the
+    # Field protocol or keep it as an optional extra feature for some implementations.
     @classmethod
     def register_builtin_func(
         cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
