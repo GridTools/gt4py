@@ -228,47 +228,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
 
 
 class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
-    """
-    Abstract base class for implementations of the :class:`Field` protocol.
-
-    This class provides a basic implementation of the __:meth:`gt_builtin_func__`
-    dispatching using a dictionary to store the implementation functions.
-    It additionally supports the registration of new built-in functions.
-    """
-
-    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]]
-
-    def __init_subclass__(cls) -> None:
-        super().__init_subclass__()
-        cls._builtin_func_map = {}
-
-    @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
-    ) -> functools.partial[Callable[P, R]]:
-        ...
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
-    ) -> Callable[P, R]:
-        ...
-
-    # If we have a use-case for a field without registry, remove the registry from this ABC.
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
-    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
-        return cls._builtin_func_map.setdefault(op, op_func)
+    """Abstract base class for implementations of the :class:`Field` protocol."""
 
     @final
     def __setattr__(self, key, value) -> None:

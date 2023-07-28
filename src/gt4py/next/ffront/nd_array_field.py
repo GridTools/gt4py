@@ -15,9 +15,10 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 from collections.abc import Callable
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeVar
+from typing import Any, ClassVar, Optional, ParamSpec, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
@@ -81,11 +82,49 @@ R = TypeVar("R", Value, tuple[Value, ...])
 
 @dataclasses.dataclass(frozen=True)
 class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
+    """
+    Shared field implementation for NumPy-like fields.
+
+    Builtin function implementations are registered in a dictionary.
+    Note: Currently, all concrete NdArray-implementations share
+    the same implementation, dispatching is handled inside of the registered
+    function via its namespace.
+    """
+
     _domain: DomainT
     _ndarray: definitions.NDArrayObject
     _value_type: type[ScalarT]
 
     array_ns: ClassVar[ModuleType]
+
+    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
+
+    @classmethod
+    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
+        return cls._builtin_func_map.get(func, NotImplemented)
+
+    @overload
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
+    ) -> functools.partial[Callable[P, R]]:
+        ...
+
+    @overload
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
+    ) -> Callable[P, R]:
+        ...
+
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
+    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
+        return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
     def domain(self) -> DomainT:
