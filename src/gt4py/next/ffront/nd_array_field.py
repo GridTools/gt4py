@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeVar, overload
+from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
@@ -75,9 +75,9 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
     return _builtin_binary_op
 
 
-Value = Any  # TODO
-P = ParamSpec("P")
-R = TypeVar("R", Value, tuple[Value, ...])
+_Value: TypeAlias = common.Field | ScalarT
+_P = ParamSpec("_P")
+_R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -100,27 +100,27 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
 
     @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
+    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
 
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: None
-    ) -> functools.partial[Callable[P, R]]:
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+    ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Callable[P, R]
-    ) -> Callable[P, R]:
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+    ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[R, P], op_func: Optional[Callable[P, R]] = None
-    ) -> Callable[P, R] | functools.partial[Callable[P, R]]:
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
             return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]

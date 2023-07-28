@@ -124,12 +124,12 @@ DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 if TYPE_CHECKING:
     import gt4py.next.ffront.fbuiltins as fbuiltins
 
-    Value = Any  # TODO
-    P = ParamSpec("P")
-    R = TypeVar("R", Value, tuple[Value, ...])
+    _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[R, P], /) -> Callable[P, R]:
+        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
             ...
 
 
