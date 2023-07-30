@@ -46,8 +46,32 @@ except ImportError:
 
 
 _ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
+
+
+class _NDArrayLike(Protocol):
+    def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
+        ...
+    def __getitem__(self, item: core_defs.SliceLike) -> np.ndarray:
+        ...
+
+
+class _NDArrayLikeArrayInterface(xtyping.ArrayInterface, _NDArrayLike):
+    ...
+
+
+class _NDArrayLikeCUDAArrayInterface(xtyping.CUDAArrayInterface, _NDArrayLike):
+    ...
+
+
+class _NDArrayLikeDLPackBuffer(xtyping.DLPackBuffer, _NDArrayLike):
+    ...
+
+
 _NDBufferT = TypeVar(
-    "_NDBufferT", xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    "_NDBufferT",
+    _NDArrayLikeArrayInterface,
+    _NDArrayLikeCUDAArrayInterface,
+    _NDArrayLikeDLPackBuffer,
 )
 
 
@@ -109,29 +133,26 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
         return len(self.shape)
 
     def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
-        try:
-            return self.ndarray.__array__(dtype=dtype)
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__array__"):
             raise TypeError("Cannot export tensor buffer as NumPy array.")
+        return self.ndarray.__array__(dtype=dtype)
 
     @property
     def __cuda_array_interface__(self) -> xtyping.CUDAArrayInterfaceTypedDict:
-        try:
-            return self.ndarray.__cuda_array_interface__
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__cuda_array_interface__"):
             raise TypeError("Cannot export tensor buffer to CUDA array interface.")
+        return self.ndarray.__cuda_array_interface__
+
 
     def __dlpack__(self) -> xtyping.PyCapsule:
-        try:
-            return self.ndarray.__dlpack__()
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__dlpack__"):
             raise TypeError("Cannot export tensor buffer to DLPack.")
+        return self.ndarray.__dlpack__()
 
     def __dlpack_device__(self) -> xtyping.DLPackDevice:
-        try:
-            return self.ndarray.__dlpack_device__()
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__dlpack_device__"):
             raise TypeError("Cannot extract DLPack device from tensor buffer.")
+        return self.ndarray.__dlpack_device__()
 
 
 class BufferAllocator(Protocol[_NDBufferT]):
@@ -278,7 +299,7 @@ if TYPE_CHECKING:
     class _NumPyLikeNamespace(Protocol[_NDBufferT]):
         class _NumPyLibModule(Protocol):
             class _NumPyLibStridesModule(Protocol):
-                def as_strided(ndarray: _NDBufferT, **kwargs: Any) -> _NDBufferT:
+                def as_strided(self, ndarray: _NDBufferT, **kwargs: Any) -> _NDBufferT:
                     ...
 
             stride_tricks: _NumPyLibStridesModule
