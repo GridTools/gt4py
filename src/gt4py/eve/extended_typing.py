@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import abc as _abc
 import array as _array
-import ctypes as _ctypes
 import collections.abc as _collections_abc
+import ctypes as _ctypes
 import dataclasses as _dataclasses
 import enum as _enum
 import functools as _functools

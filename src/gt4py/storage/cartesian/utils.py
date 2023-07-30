@@ -22,15 +22,17 @@ from typing import Any, Dict, Iterable, Literal, Optional, Sequence, Tuple, Unio
 import numpy as np
 import numpy.typing as npt
 
+
 try:
     import dace
 except ImportError:
     dace = None
 
-from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 from gt4py.storage.cartesian import layout
+
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike

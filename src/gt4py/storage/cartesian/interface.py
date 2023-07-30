@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import numbers
-from typing import Any, Optional, Protocol, Sequence, Union, Tuple
+from typing import Any, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -37,9 +37,6 @@ if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
 else:
     ArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
     DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
-
-from gt4py._core import definitions as core_defs
-from .. import allocators
 
 
 # Protocols
@@ -325,10 +322,9 @@ def from_array(
             If illegal or inconsistent arguments are specified.
     """
     is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
-    asarray = storage_utils.as_cupy if is_cupy_array else storage_utils.as_numpy
-    shape = asarray(data).shape
+    shape = storage_utils.asarray(data).shape
     if dtype is None:
-        dtype = asarray(data).dtype
+        dtype = storage_utils.asarray(data).dtype
     dtype = np.dtype(dtype)
     if dtype.shape:
         if dtype.shape and not shape[-dtype.ndim :] == dtype.shape:
@@ -342,9 +338,6 @@ def from_array(
         dimensions=dimensions,
     )
 
-    if cp is not None and isinstance(storage, cp.ndarray):
-        storage[...] = storage_utils.as_cupy(data)
-    else:
-        storage[...] = storage_utils.as_numpy(data)
+    storage_utils.asarray(data)
 
     return storage
