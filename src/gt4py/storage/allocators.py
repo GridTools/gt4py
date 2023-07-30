@@ -55,7 +55,7 @@ _NDBufferT = TypeVar(
 BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.UnsignedIntegral])
 
 
-def is_valid_layout_map(value: Sequence[core_defs.IntegralScalar]) -> TypeGuard[BufferLayoutMap]:
+def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:
     dims = list(range(len(value)))
     return (
         isinstance(value, collections.abc.Sequence)
@@ -145,10 +145,10 @@ class BufferAllocator(Protocol[_NDBufferT]):
         self,
         shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
-        layout_map: Sequence[int],
+        layout_map: BufferLayoutMap,
         device: core_defs.Device,
-        byte_alignment: Optional[int] = None,
-        aligned_index: Sequence[int] = None,
+        byte_alignment: int,
+        aligned_index: Optional[Sequence[int]] = None,
     ) -> TensorBuffer[_NDBufferT, _ScalarT]:
         """
         Allocate a TensorBuffer with the given shape, layout and alignment settings.
@@ -174,10 +174,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
         self,
         shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
-        layout_map: Sequence[int],
+        layout_map: BufferLayoutMap,
         device: core_defs.Device,
-        byte_alignment: Optional[int] = None,
-        aligned_index: Sequence[int] = None,
+        byte_alignment: int,
+        aligned_index: Optional[Sequence[int]] = None,
     ) -> TensorBuffer[_NDBufferT, _ScalarT]:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
@@ -195,20 +195,24 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
 
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
-        padded_shape: Sequence[int] = list(shape)
-        padded_shape[dims_layout[-1]] = (
+        padded_shape_lst = list(shape)
+        padded_shape_lst[dims_layout[-1]] = (
             math.ceil(shape[dims_layout[-1]] / items_per_aligned_block) * items_per_aligned_block
         )
-        padded_shape = tuple(padded_shape)
+        padded_shape = tuple(padded_shape_lst)
+        assert core_defs.is_valid_tensor_shape(padded_shape)
         total_length = item_size * functools.reduce(operator.mul, padded_shape) + (
             byte_alignment - 1
         )  # the worst case for misalignment is `byte_alignment - 1`
 
         # Compute strides
-        strides = [item_size] * len(shape)
+        strides_lst = [item_size] * len(shape)
         accumulator = item_size
         for i in range(len(shape) - 2, -1, -1):
-            accumulator = strides[dims_layout[i]] = accumulator * padded_shape[dims_layout[i + 1]]
+            accumulator = strides_lst[dims_layout[i]] = (
+                accumulator * padded_shape[dims_layout[i + 1]]
+            )
+        strides = tuple(strides_lst)
 
         # Allocate total size
         buffer = self.raw_alloc(total_length, device)
@@ -345,15 +349,18 @@ def allocate(
     dtype: core_defs.DType[_ScalarT],
     layout_map: BufferLayoutMap,
     *,
-    byte_alignment: Optional[int] = None,
-    aligned_index: Sequence[int] = None,
-    device: core_defs.Device = None,
-    allocator: BufferAllocator = None,
+    byte_alignment: int,
+    aligned_index: Optional[Sequence[int]] = None,
+    device: Optional[core_defs.Device] = None,
+    allocator: Optional[BufferAllocator] = None,
 ) -> TensorBuffer:
     """Allocate a TensorBuffer with the given settings on the given device."""
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
-    device = device or allocator.device_type
+    if device is None:
+        assert allocator is not None  # for mypy
+        device = core_defs.Device(allocator.device_type, 0)
+    assert device is not None  # for mypy
     allocator = allocator or device_allocators[device.device_type]
     if device.device_type != allocator.device_type:
         raise ValueError(f"Device {device} and allocator {allocator} are incompatible")

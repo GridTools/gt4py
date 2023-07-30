@@ -21,7 +21,7 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 
@@ -65,7 +65,7 @@ class ArgsInfo:
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: str
+    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
 ) -> Dict[str, Optional[ArgsInfo]]:
     array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():

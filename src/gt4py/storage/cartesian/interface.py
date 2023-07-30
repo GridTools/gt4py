@@ -19,7 +19,8 @@ from typing import Any, Optional, Protocol, Sequence, Tuple, Union
 
 import numpy as np
 
-from . import layout, utils as storage_utils
+from gt4py.storage import allocators
+from gt4py.storage.cartesian import layout, utils as storage_utils
 
 
 try:
@@ -112,6 +113,7 @@ def empty(
 
     alignment = storage_info["alignment"]
     layout_map = storage_info["layout_map"](dimensions)
+    assert allocators.is_valid_layout_map(layout_map)
 
     dtype = np.dtype(dtype)
     _, res = allocate_f(shape, layout_map, dtype, alignment * dtype.itemsize, aligned_index)
