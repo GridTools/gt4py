@@ -137,7 +137,7 @@ def test_allocate_cpu(param_dict):
 
     raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
-    ## Doest this still makes sense?
+    # Does this still makes sense?
     # check that field is a view of raw_buffer
     # assert field.base is raw_buffer
 

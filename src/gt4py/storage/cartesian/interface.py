@@ -321,7 +321,6 @@ def from_array(
         ValueError
             If illegal or inconsistent arguments are specified.
     """
-    is_cupy_array = cp is not None and isinstance(data, cp.ndarray)
     shape = storage_utils.asarray(data).shape
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype

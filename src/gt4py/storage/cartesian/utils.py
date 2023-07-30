@@ -17,7 +17,7 @@ from __future__ import annotations
 import collections.abc
 import math
 import numbers
-from typing import Any, Dict, Iterable, Literal, Optional, Sequence, Tuple, Union, cast, overload
+from typing import Any, Iterable, Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
@@ -41,7 +41,6 @@ else:
 
 try:
     import cupy as cp
-    from cupy.lib.stride_tricks import as_strided
 except ImportError:
     cp = None
 
