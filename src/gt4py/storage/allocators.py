@@ -327,7 +327,9 @@ class NumPyLikeArrayBufferAllocator(_BaseNDArrayBufferAllocator[_NDBufferT]):
         if device.device_type != core_defs.DeviceType.CPU and device.device_id != 0:
             raise ValueError(f"Unsupported device {device} for memory allocation")
 
-        return self.array_ns.empty(shape=(length,), dtype=np.uint8)
+        shape = (length,)
+        assert core_defs.is_valid_tensor_shape(shape)  # for mypy
+        return self.array_ns.empty(shape=shape, dtype=np.dtype(np.uint8))
 
     def tensorize(
         self,
