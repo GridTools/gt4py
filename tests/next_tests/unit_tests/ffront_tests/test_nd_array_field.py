@@ -96,7 +96,9 @@ def product_nd_array_implementation(request):
 
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
-    if first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy":
+    if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
+        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+    ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
     inp_a = [-1.0, 4.2, 42]
