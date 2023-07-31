@@ -69,8 +69,8 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
-        assert all(t is ts.TypeSpec for t in types)
-        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))
+        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
     else:
         raise AssertionError("Illegal type encountered.")
 
