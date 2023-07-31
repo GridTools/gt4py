@@ -47,11 +47,11 @@ from gt4py.eve.extended_typing import (
 if TYPE_CHECKING:
     import cupy as cp
 
-    CuPyNDArray = cp.ndarray
+    CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
 
-    JaxNDArray = jnp.ndarray
+    JaxNDArray: TypeAlias = jnp.ndarray
 
 
 # -- Scalar types supported by GT4Py --

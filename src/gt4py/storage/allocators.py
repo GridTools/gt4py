@@ -36,6 +36,7 @@ from gt4py.eve.extended_typing import (
     Tuple,
     TypeGuard,
     TypeVar,
+    cast,
 )
 
 
@@ -51,6 +52,7 @@ _ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
 class _NDArrayLike(Protocol):
     def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
         ...
+
     def __getitem__(self, item: core_defs.SliceLike) -> np.ndarray:
         ...
 
@@ -142,7 +144,6 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
         if not hasattr(self.ndarray, "__cuda_array_interface__"):
             raise TypeError("Cannot export tensor buffer to CUDA array interface.")
         return self.ndarray.__cuda_array_interface__
-
 
     def __dlpack__(self) -> xtyping.PyCapsule:
         if not hasattr(self.ndarray, "__dlpack__"):
@@ -355,7 +356,7 @@ device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
 
 device_allocators[core_defs.DeviceType.CPU] = NumPyLikeArrayBufferAllocator(
     device_type=core_defs.DeviceType.CPU,
-    array_ns_ref=np,
+    array_ns_ref=cast(_NumPyLikeNamespace, np),
 )
 
 if cp:
