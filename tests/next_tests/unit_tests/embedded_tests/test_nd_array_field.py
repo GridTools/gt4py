@@ -20,7 +20,8 @@ import numpy as np
 import pytest
 
 from gt4py.next import common
-from gt4py.next.ffront import fbuiltins, nd_array_field
+from gt4py.next.embedded import nd_array_field
+from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 

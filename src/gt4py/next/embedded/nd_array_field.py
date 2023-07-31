@@ -95,7 +95,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     _ndarray: definitions.NDArrayObject
     _value_type: type[ScalarT]
 
-    array_ns: ClassVar[ModuleType]
+    array_ns: ClassVar[
+        ModuleType
+    ]  # TODO(havogt) after storage PR is merged, update to the NDArrayNamespace protocol
 
     _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
 

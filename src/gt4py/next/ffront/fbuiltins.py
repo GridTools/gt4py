@@ -15,7 +15,18 @@
 import dataclasses
 import inspect
 from builtins import bool, float, int, tuple
-from typing import Any, Callable, Generic, Optional, ParamSpec, Tuple, TypeAlias, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    ParamSpec,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from numpy import float32, float64, int32, int64
 
@@ -43,7 +54,7 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
-def _type_conversion_helper(t: type):
+def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSpec], ...]:
     if t is Field:
         return ts.FieldType
     elif t is Dimension:
@@ -57,12 +68,14 @@ def _type_conversion_helper(t: type):
     elif t is Tuple:
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        return tuple(_type_conversion_helper(e) for e in t.__args__)  # type: ignore[attr-defined]
+        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
+        assert all(t is ts.TypeSpec for t in types)
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))
     else:
         raise AssertionError("Illegal type encountered.")
 
 
-def _type_conversion(t):
+def _type_conversion(t: type) -> ts.DeferredType:
     return ts.DeferredType(constraint=_type_conversion_helper(t))
 
 
