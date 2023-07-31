@@ -39,8 +39,8 @@ IndexType: TypeAlias = int32
 TYPE_ALIAS_NAMES = ["IndexType"]
 
 
-P = ParamSpec("P")
-R = TypeVar("R")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
 def _type_conversion_helper(t: type):
@@ -67,23 +67,20 @@ def _type_conversion(t):
 
 
 @dataclasses.dataclass(frozen=True)
-class BuiltInFunction(Generic[R, P]):
+class BuiltInFunction(Generic[_R, _P]):
     name: str = dataclasses.field(init=False)
     # `function` can be used to provide a default implementation for all `Field` implementations,
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
-    function: Callable[P, R]
+    function: Callable[_P, _R]
 
     def __post_init__(self):
-        # functools.update_wrapper(
-        #     self, self.function
-        # )  # TODO figure out keeping function annotations in autocomplete
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
 
-    def __call__(self, *args: Any, **options: Any) -> R:
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         impl = self.dispatch(*args)
-        return impl(*args, **options)
+        return impl(*args, **kwargs)
 
-    def dispatch(self, *args: Any) -> Callable[P, R]:
+    def dispatch(self, *args: Any) -> Callable[_P, _R]:
         arg_types = tuple(type(arg) for arg in args)
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
@@ -119,7 +116,7 @@ class BuiltInFunction(Generic[R, P]):
         )
 
 
-def builtin_function(fun: Callable[P, R]) -> BuiltInFunction[R, P]:
+def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
     return BuiltInFunction(fun)
 
 
