@@ -212,7 +212,7 @@ class StencilObject(abc.ABC):
         raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
     def __eq__(self, other) -> bool:
-        return type(self) == type(other)
+        return type(self) is type(other)
 
     def __str__(self) -> str:
         result = """
@@ -485,7 +485,7 @@ class StencilObject(abc.ABC):
             if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                elif type(parameter := param_args[name]) != parameter_info.dtype:
+                elif type(parameter := param_args[name]) is not parameter_info.dtype:
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
