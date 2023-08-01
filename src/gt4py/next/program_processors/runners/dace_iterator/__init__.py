@@ -109,6 +109,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     if run_on_gpu:
         import cupy as cp
 
+        sdfg._name = f"{sdfg.name}_gpu"
         for _, _, array in sdfg.arrays_recursive():
             if not array.transient:
                 array.storage = dace.dtypes.StorageType.GPU_Global
