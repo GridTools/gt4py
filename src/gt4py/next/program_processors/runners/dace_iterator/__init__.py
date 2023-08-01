@@ -85,6 +85,7 @@ def get_stride_args(
 
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_on_gpu = kwargs.get("run_on_gpu", False)
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
@@ -105,6 +106,13 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
+    if run_on_gpu:
+        import cupy as cp
+
+        for _, _, array in sdfg.arrays_recursive():
+            if not array.transient:
+                array.storage = dace.dtypes.StorageType.GPU_Global
+
     all_args = {
         **dace_args,
         **dace_conn_args,
@@ -114,7 +122,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_conn_stirdes,
     }
     expected_args = {
-        key: value
+        key: value if np.isscalar(value) or not run_on_gpu else cp.array(value)
         for key, value in all_args.items()
         if key in sdfg.signature_arglist(with_types=False)
     }
@@ -124,3 +132,13 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**expected_args)
+
+    if run_on_gpu:
+        for k, v in expected_args.items():
+            if k in dace_args and not cp.isscalar(v):
+                np.copyto(dace_args[k], v.get())
+
+
+@program_executor
+def run_dace_iterator_on_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(program, *args, **kwargs, run_on_gpu=True)
