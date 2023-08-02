@@ -42,7 +42,6 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
-
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
@@ -117,9 +116,18 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
+    def __and__(self, other: UnitRange) -> UnitRange:
+        start = max(self.start, other.start)
+        stop = min(self.stop, other.stop)
+
+        # Handle the case where there is no overlap
+        if stop <= start:
+            return UnitRange(0, 0)
+
+        return UnitRange(start, stop)
+
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
-
 
 if TYPE_CHECKING:
     import gt4py.next.ffront.fbuiltins as fbuiltins
@@ -127,6 +135,7 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
+
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -241,11 +250,11 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-    definition: Any,
-    /,
-    *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
-    value_type: Optional[type] = None,
+        definition: Any,
+        /,
+        *,
+        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
+        value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -275,7 +284,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
+            self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 

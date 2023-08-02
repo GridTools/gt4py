@@ -64,3 +64,17 @@ def test_unit_range_index_error(rng):
 def test_unit_range_slice_error(rng):
     with pytest.raises(ValueError):
         rng[1:2:5]
+
+
+@pytest.mark.parametrize("rng1, rng2, expected", [
+    (UnitRange(0, 5), UnitRange(10, 15), UnitRange(0, 0)),
+    (UnitRange(0, 5), UnitRange(5, 10), UnitRange(5, 5)),
+    (UnitRange(0, 5), UnitRange(3, 7), UnitRange(3, 5)),
+    (UnitRange(0, 5), UnitRange(1, 6), UnitRange(1, 5)),
+    (UnitRange(0, 5), UnitRange(-5, 5), UnitRange(0, 5)),
+    (UnitRange(0, 0), UnitRange(0, 5), UnitRange(0, 0)),
+    (UnitRange(0, 0), UnitRange(0, 0), UnitRange(0, 0)),
+])
+def test_intersection(rng1, rng2, expected):
+    result = rng1 & rng2
+    assert result == expected
