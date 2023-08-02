@@ -151,7 +151,9 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @property
-    def ndarray(self) -> NDArrayObject: # TODO discuss: should every Field be convertible to ndarray?
+    def ndarray(
+        self,
+    ) -> NDArrayObject:  # TODO discuss: should every Field be convertible to ndarray?
         ...
 
     def __str__(self) -> str:
@@ -357,7 +359,7 @@ class NeighborTable(Connectivity, Protocol):
 class CartesianConnectivity(ConnectivityField[[Dimension("bar")], Dimension("foo")]):
     offset: int = 0
 
-    def remap(self, *args, **kwargs):
+    def remap(self, conn):
         raise NotImplementedError()
 
     def inverse_image():
