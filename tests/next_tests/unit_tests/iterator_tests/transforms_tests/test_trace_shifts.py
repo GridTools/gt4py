@@ -187,6 +187,30 @@ def test_tuple_get_on_closure_input():
     assert actual == expected
 
 
+def test_if_tuple_branch_broadcasting():
+    testee = ir.StencilClosure(
+        # λ(cond, inp) → (if ·cond then ·inp else {1, 2})[1]
+        stencil=im.lambda_("cond", "inp")(
+            im.tuple_get(
+                1,
+                im.if_(
+                    im.deref("cond"),
+                    im.deref("inp"),
+                    im.make_tuple(im.literal_from_value(1), im.literal_from_value(2)),
+                ),
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"cond": [()], "inp": [()]}
+
+    actual = dict()
+    TraceShifts().visit(testee, shifts=actual)
+    assert actual == expected
+
+
 def test_if_of_iterators():
     testee = ir.StencilClosure(
         # λ(cond, x) → ·⟪Iₒ, 1ₒ⟫(if ·cond then ⟪Iₒ, 2ₒ⟫(x) else ⟪Iₒ, 3ₒ⟫(x))

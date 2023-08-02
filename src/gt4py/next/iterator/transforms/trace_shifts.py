@@ -153,10 +153,13 @@ def _primitive_constituents(
 def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
     assert cond is Sentinel.VALUE
     if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
-        # broadcast branches to tuple of same length
+        # Broadcast branches to tuple of same length. This is required for cases like:
+        #  `if_(cond, deref(iterator_of_tuples), make_tuple(...))`.
         if not isinstance(true_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in false_branch)
             true_branch = (true_branch,) * len(false_branch)
         if not isinstance(false_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in true_branch)
             false_branch = (false_branch,) * len(true_branch)
 
         result = []
