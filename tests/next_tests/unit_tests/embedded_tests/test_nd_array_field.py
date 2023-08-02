@@ -15,6 +15,7 @@
 import itertools
 import math
 from typing import Callable, Iterable
+import dataclasses
 
 import numpy as np
 import pytest
@@ -45,10 +46,12 @@ def binary_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation):
+def _make_field(lst: Iterable, nd_array_implementation, *, domain=None):
+    if domain is None:
+        domain = ((common.Dimension("foo"), common.UnitRange(0, len(lst))),)
     return common.field(
         nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32),
-        domain=((common.Dimension("foo"), common.UnitRange(0, len(lst))),),
+        domain=domain,
     )
 
 
@@ -131,3 +134,41 @@ def test_non_dispatched_function():
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)
+
+
+@dataclasses.dataclass(frozen=True)
+class DummyCartesianConnectivity(
+    common.ConnectivityField[[common.Dimension("bar")], common.Dimension("foo")]
+):
+    offset: int = 0
+
+    def remap(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
+        # TODO think about a default implementation via __getitem__
+        return common.UnitRange(r.start - self.offset, r.stop - self.offset)
+        # return r - self.offset # TODO implement UnitRange.__add__
+
+    def restrict(self, index) -> common.DimensionIndex:
+        return index + self.offset
+
+    __getitem__ = restrict
+
+    __call__ = remap
+
+
+def test_default_remap_implementation():
+    """
+    Checks that remap works via __getitem__ of a ConnectivityField.
+    Any reasonable implementation should bypass for performance.
+    """
+
+    inp = _make_field([0, 1, 2, 3], np)
+
+    result = inp.remap(DummyCartesianConnectivity(1))
+
+    expected = _make_field([0, 1, 2, 3], np, domain=((inp.domain[0][0], common.UnitRange(-1, 3)),))
+
+    assert result.domain == expected.domain
+    assert np.allclose(result.ndarray, expected.ndarray)

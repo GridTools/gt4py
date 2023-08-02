@@ -166,8 +166,58 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         assert value_type is not None  # for mypy
         return cls(domain, array, value_type)
 
+    def _dim_index(self, dim: Dimension):
+        for i, v in enumerate(self.domain):
+            d, _ = v
+            if d == dim:
+                return i
+        return None
+
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
-        raise NotImplementedError()
+        assert issubclass(connectivity.value_type, common.DimensionIndex)
+
+        # restrict index field
+        # dim_idx = self.domain.tag_index(connectivity.value_type.tag)
+        dim_idx = self._dim_index(connectivity.value_type.dim)  # TODO move to `Domain`
+        if dim_idx is None:
+            raise ValueError(f"Incompatible index field.")
+        current_range: common.UnitRange = self.domain[dim_idx][1]
+
+        new_range = connectivity.inverse_image(current_range)
+        print(new_range)
+
+        restricted_domain = tuple(
+            (d, (r if d != connectivity.value_type.dim else new_range)) for d, r in self.domain
+        )
+        # restricted_connectivity = (
+        #     connectivity.restrict(restricted_domain)
+        #     if restricted_domain != connectivity.domain
+        #     else connectivity
+        # )
+
+        # # perform contramap
+        xp = self.array_ns
+        new_domain = restricted_domain  # TODO
+        new_shape = tuple(len(r) for _, r in new_domain)
+        # print(new_shape)
+        new_idx_array = np.empty(new_shape, dtype=int)
+        # todo slices
+        # print(new_domain[dim_idx])
+        for i in new_domain[dim_idx][1]:
+            new_idx_array[i - new_domain[dim_idx][1].start] = connectivity[i]
+        # new_idx_array = new_idx_array -
+
+        new_buffer = self.ndarray[new_idx_array]
+        return self.__class__.from_array(new_buffer, domain=new_domain, value_type=self.value_type)
+
+        # dim_idx = self.domain.tag_index(restricted_connectivity.value_type.tag)
+        # new_domain = self._domain.replace_at(dim_idx, restricted_connectivity.domain)
+        # new_idx_array = (
+        #     xp.asarray(restricted_connectivity.ndarray) - self.domain[dim_idx].extent.start
+        # )
+        # new_data = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+
+        # return self.__class__.from_array(new_data, domain=new_domain, value_type=self.value_type)
 
     def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
         raise NotImplementedError()

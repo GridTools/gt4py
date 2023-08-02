@@ -18,8 +18,8 @@ import abc
 import dataclasses
 import enum
 import functools
-from collections.abc import Sequence, Set
-from typing import overload
+from collections.abc import Sequence, Set, Iterable
+from typing import overload, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     ClassVar,
     Optional,
     ParamSpec,
+    Generic,
     Protocol,
     TypeAlias,
     TypeVar,
@@ -239,6 +240,73 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
         raise TypeError("Immutable type")
 
 
+@dataclasses.dataclass(frozen=True, order=True, slots=True)
+class DimensionIndex(Generic[DimT]):
+    value: int
+    dim: Dimension
+
+    def __init_subclass__(cls) -> None:
+        cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
+
+
+class ConnectivityField(Generic[DimsT, DimT], FieldABC[DimsT, DimensionIndex[DimT]]):
+    def __init_subclass__(cls) -> None:
+        dim_t = get_args(cls.__orig_bases__[0])[1]
+
+        class _ConcreteDimensionIndex(DimensionIndex[dim_t]):
+            ...
+
+        cls.value_type = _ConcreteDimensionIndex
+
+    @abc.abstractmethod
+    def __hash__(self) -> int:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def inverse_image(self, connectivity: ConnectivityField, image_dim: Dimension) -> DomainT:
+        raise NotImplementedError()
+
+    # Operators
+    def __abs__(self) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __neg__(self) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __add__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __radd__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __sub__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __rsub__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __mul__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __rmul__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __truediv__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __rtruediv__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __floordiv__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __rfloordiv__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __pow__(self, other: Field | ScalarT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+
 @functools.singledispatch
 def field(
     definition: Any,
@@ -283,6 +351,24 @@ class Connectivity(Protocol):
 @runtime_checkable
 class NeighborTable(Connectivity, Protocol):
     table: npt.NDArray
+
+
+@dataclasses.dataclass(frozen=True)
+class CartesianConnectivity(ConnectivityField[[Dimension("bar")], Dimension("foo")]):
+    offset: int = 0
+
+    def remap(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def inverse_image():
+        raise NotImplementedError()
+
+    def restrict(self, index) -> DimensionIndex:
+        return index + self.offset
+
+    __getitem__ = restrict
+
+    __call__ = remap
 
 
 @enum.unique

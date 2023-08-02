@@ -275,7 +275,6 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 class FieldOffset(runtime.Offset):
     source: Dimension
     target: tuple[Dimension] | tuple[Dimension, Dimension]
-    connectivity: Optional[Any] = None  # TODO
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:
@@ -283,3 +282,8 @@ class FieldOffset(runtime.Offset):
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
+
+    def __getitem__(self, offset: int):
+        """Serves as a connectivity factory."""
+        # TODO this is a temporary solution
+        
