@@ -47,6 +47,7 @@ jupytext==1.14
 lark==1.1.2
 mako==1.1
 mypy==1.0
+nanobind==1.4.0
 ninja==1.10
 numpy==1.21.2
 packaging==20.0

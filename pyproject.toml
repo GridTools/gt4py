@@ -39,6 +39,7 @@ dependencies = [
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
+  'nanobind>=1.4.0 ',
   'ninja>=1.10',
   'numpy>=1.21.2',
   'packaging>=20.0',
