@@ -151,7 +151,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @property
-    def ndarray(self) -> NDArrayObject:
+    def ndarray(self) -> NDArrayObject: # TODO discuss: should every Field be convertible to ndarray?
         ...
 
     def __str__(self) -> str:

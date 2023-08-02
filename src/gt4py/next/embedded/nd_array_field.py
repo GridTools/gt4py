@@ -173,22 +173,30 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
                 return i
         return None
 
+    def _compute_idx_array(self, r: UnitRange, connectivity) -> definitions.NDArrayObject:
+        if hasattr(connectivity, "ndarray") and connectivity.ndarray is not None:
+            ...  # TODO
+        else:
+            new_idx_array = np.empty(len(r), dtype=int)
+            for i in r:
+                new_idx_array[i - r.start] = connectivity[i]
+            return new_idx_array
+
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         assert issubclass(connectivity.value_type, common.DimensionIndex)
 
         # restrict index field
         # dim_idx = self.domain.tag_index(connectivity.value_type.tag)
-        dim_idx = self._dim_index(connectivity.value_type.dim)  # TODO move to `Domain`
+        dim = connectivity.value_type.dim
+        dim_idx = self._dim_index(dim)  # TODO move to `Domain`
         if dim_idx is None:
             raise ValueError(f"Incompatible index field.")
         current_range: common.UnitRange = self.domain[dim_idx][1]
 
         new_range = connectivity.inverse_image(current_range)
-        print(new_range)
+        # print(new_range)
 
-        restricted_domain = tuple(
-            (d, (r if d != connectivity.value_type.dim else new_range)) for d, r in self.domain
-        )
+        restricted_domain = tuple((d, (r if d != dim else new_range)) for d, r in self.domain)
         # restricted_connectivity = (
         #     connectivity.restrict(restricted_domain)
         #     if restricted_domain != connectivity.domain
@@ -199,15 +207,11 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         xp = self.array_ns
         new_domain = restricted_domain  # TODO
         new_shape = tuple(len(r) for _, r in new_domain)
-        # print(new_shape)
-        new_idx_array = np.empty(new_shape, dtype=int)
-        # todo slices
-        # print(new_domain[dim_idx])
-        for i in new_domain[dim_idx][1]:
-            new_idx_array[i - new_domain[dim_idx][1].start] = connectivity[i]
-        # new_idx_array = new_idx_array -
 
-        new_buffer = self.ndarray[new_idx_array]
+        new_idx_array = self._compute_idx_array(new_range, connectivity)
+
+        new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+        # print(new_buffer)
         return self.__class__.from_array(new_buffer, domain=new_domain, value_type=self.value_type)
 
         # dim_idx = self.domain.tag_index(restricted_connectivity.value_type.tag)

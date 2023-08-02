@@ -47,10 +47,13 @@ def binary_op(request):
 
 
 def _make_field(lst: Iterable, nd_array_implementation, *, domain=None):
+    buffer = nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32)
     if domain is None:
-        domain = ((common.Dimension("foo"), common.UnitRange(0, len(lst))),)
+        domain = tuple(
+            (common.Dimension(f"D{i}"), common.UnitRange(0, s)) for i, s in enumerate(buffer.shape)
+        )
     return common.field(
-        nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32),
+        buffer,
         domain=domain,
     )
 
@@ -138,7 +141,7 @@ def test_non_dispatched_function():
 
 @dataclasses.dataclass(frozen=True)
 class DummyCartesianConnectivity(
-    common.ConnectivityField[[common.Dimension("bar")], common.Dimension("foo")]
+    common.ConnectivityField[[common.Dimension("D0")], common.Dimension("D0")]
 ):
     offset: int = 0
 
@@ -163,12 +166,19 @@ def test_default_remap_implementation():
     Checks that remap works via __getitem__ of a ConnectivityField.
     Any reasonable implementation should bypass for performance.
     """
-
-    inp = _make_field([0, 1, 2, 3], np)
+    inp_lst = [[0, 1], [2, 3]]
+    inp = _make_field(inp_lst, np)
 
     result = inp.remap(DummyCartesianConnectivity(1))
 
-    expected = _make_field([0, 1, 2, 3], np, domain=((inp.domain[0][0], common.UnitRange(-1, 3)),))
+    expected = _make_field(
+        inp_lst,
+        np,
+        domain=(
+            (inp.domain[0][0], common.UnitRange(-1, 1)),
+            (inp.domain[1][0], common.UnitRange(0, 2)),
+        ),
+    )
 
     assert result.domain == expected.domain
     assert np.allclose(result.ndarray, expected.ndarray)
