@@ -30,7 +30,7 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 def convert_arg(arg: Any):
     if isinstance(arg, LocatedField):
-        sorted_dims = sorted(enumerate(arg.axes), key=lambda v: v[1].value)
+        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
         ndim = len(sorted_dims)
         dim_indices = [dim[0] for dim in sorted_dims]
         return np.moveaxis(np.asarray(arg), range(ndim), dim_indices)
@@ -93,6 +93,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
+    sdfg.simplify()
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
