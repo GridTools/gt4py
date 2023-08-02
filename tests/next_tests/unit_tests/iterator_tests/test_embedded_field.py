@@ -28,7 +28,7 @@ def test_located_field_1d():
 
     foo[0] = 42
 
-    assert foo.axes[0] == "foo"
+    assert foo.__gt_dims__[0] == "foo"
     assert foo[0] == 42
 
 
@@ -37,7 +37,7 @@ def test_located_field_2d():
 
     foo[0, 0] = 42
 
-    assert foo.axes[0] == "foo"
+    assert foo.__gt_dims__[0] == "foo"
     assert foo[0, 0] == 42
     assert foo.dtype == np.float64
 
@@ -74,7 +74,6 @@ def test_tuple_of_tuple_of_field():
         (make_located_field(), make_located_field()),
         (make_located_field(), make_located_field()),
     )
-    print(embedded._get_axeses(tup))
     testee = embedded.TupleOfFields(tup)
     assert isinstance(testee, embedded.TupleField)
 
