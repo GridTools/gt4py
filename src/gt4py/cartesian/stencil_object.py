@@ -485,7 +485,7 @@ class StencilObject(abc.ABC):
             if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                elif type(parameter := param_args[name]) is not parameter_info.dtype.type:
+                elif np.dtype(type(parameter := param_args[name])) != parameter_info.dtype:
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
