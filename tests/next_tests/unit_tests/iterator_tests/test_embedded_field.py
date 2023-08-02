@@ -49,12 +49,6 @@ def test_tuple_field_concept():
     field_of_tuples = make_located_field(dtype="f8,f8")
     assert embedded.can_be_tuple_field(field_of_tuples)
 
-    # TODO think about if that makes sense
-    # field_with_unnamed_dimensions = gtx.np_as_located_field("foo", unnamed_as_tuple=True)(
-    #     np.zeros((1, 2))
-    # )
-    # assert embedded.is_tuple_field(field_with_unnamed_dimensions)
-
 
 def test_field_of_tuple():
     field_of_tuples = make_located_field(dtype="f8,f8")
