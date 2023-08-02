@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+from collections import defaultdict
 from typing import Iterable, Optional, Sequence
 
 import gt4py.eve as eve
@@ -21,7 +22,7 @@ from gt4py.next.iterator import ir as itir
 
 @dataclasses.dataclass
 class CountSymbolRefs(eve.NodeVisitor):
-    ref_counts: dict[str, int] = dataclasses.field(default_factory=dict)
+    ref_counts: dict[str, int] = dataclasses.field(default_factory=lambda: defaultdict(int))
 
     @classmethod
     def apply(
@@ -55,12 +56,10 @@ class CountSymbolRefs(eve.NodeVisitor):
 
         if symbol_names:
             return {k: obj.ref_counts.get(k, 0) for k in symbol_names}
-        return obj.ref_counts
+        return dict(obj.ref_counts)
 
     def visit_SymRef(self, node: itir.SymRef, *, inactive_refs: set[str]):
         if node.id not in inactive_refs:
-            if node.id not in self.ref_counts:
-                self.ref_counts[str(node.id)] = 0
             self.ref_counts[str(node.id)] += 1
 
     def visit_Lambda(self, node: itir.Lambda, *, inactive_refs: set[str]):
