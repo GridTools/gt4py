@@ -133,6 +133,10 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         return self._domain
 
     @property
+    def __gt_dims__(self) -> DimsT:
+        return tuple(d[0] for d in self._domain)
+
+    @property
     def ndarray(self) -> definitions.NDArrayObject:
         return self._ndarray
 
@@ -170,11 +174,18 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         raise NotImplementedError()
 
     def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
-        raise NotImplementedError()
+        # TODO proper implementation
+        assert all(r[0] == 0 for _, r in self._domain)
+        return self.ndarray[domain]
+
+    field_getitem = restrict
+
+    def field_setitem(self, domain, value):
+        self.ndarray[domain] = value
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
-    __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
+    __getitem__ = restrict
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
 

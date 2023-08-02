@@ -161,7 +161,7 @@ def from_type_hint(
 def from_value(value: Any) -> ts.TypeSpec:
     # TODO(tehrengruber): use protocol from gt4py.next.common when available
     #  instead of importing from the embedded implementation
-    from gt4py.next.iterator.embedded import LocatedField
+    # from gt4py.next.iterator.embedded import LocatedField
 
     """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
@@ -185,9 +185,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         return candidate_type
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
-    elif isinstance(value, LocatedField):
+    elif isinstance(value, common.Field):
         dims = list(value.__gt_dims__)
-        dtype = from_type_hint(value.dtype.type)
+        dtype = from_type_hint(value.value_type)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
     elif isinstance(value, tuple):
         # Since the elements of the tuple might be one of the special cases

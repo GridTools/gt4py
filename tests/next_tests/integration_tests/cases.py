@@ -75,7 +75,7 @@ E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
-FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
+FieldValue: TypeAlias = gtx.Field  # | embedded.LocatedFieldImpl
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
 ReferenceValue: TypeAlias = (

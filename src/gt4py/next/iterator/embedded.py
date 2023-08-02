@@ -168,32 +168,32 @@ class ItIterator(Protocol):
         ...
 
 
-@runtime_checkable
-class LocatedField(Protocol):
-    """A field with named dimensions providing read access."""
+# @runtime_checkable
+# class LocatedField(Protocol):
+#     """A field with named dimensions providing read access."""
 
-    @property
-    @abc.abstractmethod
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        ...
+#     @property
+#     @abc.abstractmethod
+#     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+#         ...
 
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        ...
+#     # TODO(havogt): define generic Protocol to provide a concrete return type
+#     @abc.abstractmethod
+#     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+#         ...
 
-    @property
-    def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_dims__))
+#     @property
+#     def __gt_origin__(self) -> tuple[int, ...]:
+#         return tuple([0] * len(self.__gt_dims__))
 
 
-class MutableLocatedField(LocatedField, Protocol):
-    """A LocatedField with write access."""
+# class MutableLocatedField(LocatedField, Protocol):
+#     """A LocatedField with write access."""
 
-    # TODO(havogt): define generic Protocol to provide a concrete return type
-    @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
-        ...
+#     # TODO(havogt): define generic Protocol to provide a concrete return type
+#     @abc.abstractmethod
+#     def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
+#         ...
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
@@ -463,7 +463,7 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -480,7 +480,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif isinstance(val, LocatedField):
+    elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -682,8 +682,8 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 
 def _get_axes(
-    field_or_tuple: LocatedField | tuple,
-) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: common.Field | tuple,
+) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of Field
     return (
         _get_axes(field_or_tuple[0])
         if isinstance(field_or_tuple, tuple)
@@ -702,7 +702,7 @@ def _single_vertical_idx(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[tuple | common.Field, ...],  # arbitrary nesting of tuples of Field
     indices: FieldIndices,
     *,
     column_axis: Tag,
@@ -712,7 +712,7 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
+    field_or_tuple: tuple[tuple | Field, ...],  # arbitrary nesting of tuples of Field
     indices: FieldIndices,
     *,
     column_axis: Literal[None] = None,
@@ -721,19 +721,19 @@ def _make_tuple(
 
 
 @overload
-def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+def _make_tuple(field_or_tuple: common.Field, indices: FieldIndices, *, column_axis: Tag) -> Column:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None] = None
+    field_or_tuple: common.Field, indices: FieldIndices, *, column_axis: Literal[None] = None
 ) -> npt.DTypeLike:
     ...
 
 
 def _make_tuple(
-    field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
+    field_or_tuple: common.Field | tuple[tuple | common.Field, ...],
     indices: FieldIndices,
     *,
     column_axis: Optional[Tag] = None,
@@ -781,7 +781,7 @@ def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> O
 
 @dataclasses.dataclass(frozen=True)
 class MDIterator:
-    field: LocatedField
+    field: common.Field
     pos: MaybePosition
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
@@ -843,7 +843,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) ->
 
 
 def make_in_iterator(
-    inp: LocatedField,
+    inp: common.Field,
     pos: Position,
     *,
     column_axis: Optional[Tag],
@@ -878,61 +878,61 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-class LocatedFieldImpl(MutableLocatedField):
-    """A Field with named dimensions/axes."""
+# class LocatedFieldImpl(MutableLocatedField):
+#     """A Field with named dimensions/axes."""
 
-    @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return self._axes
+#     @property
+#     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+#         return self._axes
 
-    def __init__(
-        self,
-        getter: Callable[[FieldIndexOrIndices], Any],
-        axes: tuple[common.Dimension, ...],
-        dtype,
-        *,
-        setter: Callable[[FieldIndexOrIndices, Any], None],
-        array: Callable[[], npt.NDArray],
-        origin: Optional[dict[common.Dimension, int]] = None,
-    ):
-        self.getter = getter
-        self._axes = axes
-        self.setter = setter
-        self.array = array
-        self.dtype = dtype
-        self.origin = origin
+#     def __init__(
+#         self,
+#         getter: Callable[[FieldIndexOrIndices], Any],
+#         axes: tuple[common.Dimension, ...],
+#         dtype,
+#         *,
+#         setter: Callable[[FieldIndexOrIndices, Any], None],
+#         array: Callable[[], npt.NDArray],
+#         origin: Optional[dict[common.Dimension, int]] = None,
+#     ):
+#         self.getter = getter
+#         self._axes = axes
+#         self.setter = setter
+#         self.array = array
+#         self.dtype = dtype
+#         self.origin = origin
 
-    def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
-        return self.array()[indices]
+#     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
+#         return self.array()[indices]
 
-    # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = _tupelize(indices)
-        return self.getter(indices)
+#     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
+#     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+#         indices = _tupelize(indices)
+#         return self.getter(indices)
 
-    def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
-        self.array()[indices] = value
+#     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
+#         self.array()[indices] = value
 
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
-        self.setter(indices, value)
+#     def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
+#         self.setter(indices, value)
 
-    def __array__(self) -> np.ndarray:
-        return self.array()
+#     def __array__(self) -> np.ndarray:
+#         return self.array()
 
-    @property
-    def __gt_origin__(self) -> tuple[int, ...]:
-        if not self.origin:
-            return tuple([0] * len(self.__gt_dims__))
-        return cast(
-            tuple[int],
-            get_ordered_indices(self.__gt_dims__, {k.value: v for k, v in self.origin.items()}),
-        )
+#     @property
+#     def __gt_origin__(self) -> tuple[int, ...]:
+#         if not self.origin:
+#             return tuple([0] * len(self.__gt_dims__))
+#         return cast(
+#             tuple[int],
+#             get_ordered_indices(self.__gt_dims__, {k.value: v for k, v in self.origin.items()}),
+#         )
 
-    @property
-    def shape(self):
-        if self.array is None:
-            raise TypeError("`shape` not supported for this field")
-        return self.array().shape
+#     @property
+#     def shape(self):
+#         if self.array is None:
+#             raise TypeError("`shape` not supported for this field")
+#         return self.array().shape
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
@@ -1021,36 +1021,50 @@ def _shift_field_indices(
 
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
-) -> Callable[[np.ndarray], LocatedFieldImpl]:
-    def _maker(a: np.ndarray) -> LocatedFieldImpl:
+) -> Callable[[np.ndarray], common.Field]:
+    origin = origin or {}
+
+    def _maker(a) -> common.Field:
         if a.ndim != len(axes):
-            raise TypeError("ndarray.ndim incompatible with number of given axes")
+            raise TypeError("ndarray.ndim incompatible with number of given dimensions")
+        domain = []
+        for d, s in zip(axes, a.shape):
+            offset = origin.get(d, 0)
+            domain.append((d, common.UnitRange(offset, s + offset)))
 
-        if origin is not None:
-            offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
-        else:
-            offsets = None
-
-        def setter(indices, value):
-            indices = _tupelize(indices)
-            a[_shift_field_indices(indices, offsets) if offsets else indices] = value
-
-        def getter(indices):
-            return a[_shift_field_indices(indices, offsets) if offsets else indices]
-
-        return LocatedFieldImpl(
-            getter,
-            axes,
-            dtype=a.dtype,
-            setter=setter,
-            array=a.__array__,
-            origin=origin,
-        )
+        res = common.field(a, domain=tuple(domain))
+        return res
 
     return _maker
+    # def _maker(a: np.ndarray) -> LocatedFieldImpl:
+    #     if a.ndim != len(axes):
+    #         raise TypeError("ndarray.ndim incompatible with number of given axes")
+
+    #     if origin is not None:
+    #         offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
+    #     else:
+    #         offsets = None
+
+    #     def setter(indices, value):
+    #         indices = _tupelize(indices)
+    #         a[_shift_field_indices(indices, offsets) if offsets else indices] = value
+
+    #     def getter(indices):
+    #         return a[_shift_field_indices(indices, offsets) if offsets else indices]
+
+    #     return LocatedFieldImpl(
+    #         getter,
+    #         axes,
+    #         dtype=a.dtype,
+    #         setter=setter,
+    #         array=a.__array__,
+    #         origin=origin,
+    #     )
+
+    # return _maker
 
 
-class IndexField(LocatedField):
+class IndexField(common.FieldABC):
     def __init__(self, axis: common.Dimension, dtype: npt.DTypeLike) -> None:
         self.axis = axis
         self.dtype = np.dtype(dtype)
@@ -1067,11 +1081,11 @@ class IndexField(LocatedField):
         return (self.axis,)
 
 
-def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
+def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> common.Field:
     return IndexField(axis, dtype)
 
 
-class ConstantField(LocatedField):
+class ConstantField(common.FieldABC):
     def __init__(self, value: Any, dtype: npt.DTypeLike):
         self.value = value
         self.dtype = np.dtype(dtype).type
@@ -1084,7 +1098,7 @@ class ConstantField(LocatedField):
         return ()
 
 
-def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> LocatedField:
+def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> common.Field:
     if dtype is None:
         dtype = infer_dtype_like_type(value)
     return ConstantField(value, dtype)
@@ -1224,12 +1238,13 @@ def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
 
 
 def is_located_field(field: Any) -> bool:
-    return isinstance(field, LocatedField)  # TODO(havogt): avoid isinstance on Protocol
+    print(f"{field=}")
+    return isinstance(field, common.Field)  # TODO(havogt): avoid isinstance on Protocol
 
 
 def has_uniform_tuple_element(field) -> bool:
-    return field.dtype.fields is not None and all(
-        next(iter(field.dtype.fields))[0] == f[0] for f in iter(field.dtype.fields)
+    return field.value_type.fields is not None and all(
+        next(iter(field.value_type.fields))[0] == f[0] for f in iter(field.value_type.fields)
     )
 
 
@@ -1240,6 +1255,7 @@ def is_tuple_of_field(field) -> bool:
 
 
 def is_field_of_tuple(field) -> bool:
+    print(f"{is_located_field(field)=}")
     return is_located_field(field) and has_uniform_tuple_element(field)
 
 
@@ -1363,8 +1379,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     def closure(
         domain_: Domain,
         sten: Callable[..., Any],
-        out: MutableLocatedField,
-        ins: list[LocatedField],
+        out,  #: MutableLocatedField,
+        ins: list[common.Field],
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
@@ -1380,7 +1396,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        out = as_tuple_field(out) if can_be_tuple_field(out) else out
+        # out = as_tuple_field(out) if can_be_tuple_field(out) else out
 
         def _closure_runner():
             # Set context variables before executing the closure
