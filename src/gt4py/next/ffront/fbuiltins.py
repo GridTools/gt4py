@@ -31,6 +31,7 @@ from typing import (
 from numpy import float32, float64, int32, int64
 
 from gt4py._core import definitions as gt4py_defs
+from gt4py.next import common
 from gt4py.next.common import Dimension, DimensionKind, Field
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
@@ -286,4 +287,7 @@ class FieldOffset(runtime.Offset):
     def __getitem__(self, offset: int):
         """Serves as a connectivity factory."""
         # TODO this is a temporary solution
-        
+        if isinstance(conn:=common.offset_provider[self.value], common.Dimension):
+            return common.CartesianConnectivity(conn, offset)
+        else:
+            raise NotImplementedError()

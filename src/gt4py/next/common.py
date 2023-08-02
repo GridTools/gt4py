@@ -51,6 +51,8 @@ DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
 NDArrayObject = gt4py_defs.NDArrayObject
 
+offset_provider: Optional[dict[str, Dimension]] = None  # TODO find a good place
+
 
 @enum.unique
 class DimensionKind(StrEnum):
@@ -243,22 +245,21 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 
 @dataclasses.dataclass(frozen=True, order=True, slots=True)
-class DimensionIndex(Generic[DimT]):
+class DimensionIndex:  # (Generic[DimT]):
     value: int
-    dim: Dimension
+    # dim: Dimension
 
-    def __init_subclass__(cls) -> None:
-        cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
+    # def __init_subclass__(cls) -> None:
+    #     cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
 
 
-class ConnectivityField(Generic[DimsT, DimT], FieldABC[DimsT, DimensionIndex[DimT]]):
-    def __init_subclass__(cls) -> None:
-        dim_t = get_args(cls.__orig_bases__[0])[1]
+@dataclasses.dataclass(frozen=True, slots=True)
+class ConnectivityField(FieldABC[DimsT, DimT]):
+    _value_type: DimT
 
-        class _ConcreteDimensionIndex(DimensionIndex[dim_t]):
-            ...
-
-        cls.value_type = _ConcreteDimensionIndex
+    @property
+    def value_type(self) -> DimT:
+        return self._value_type
 
     @abc.abstractmethod
     def __hash__(self) -> int:
@@ -362,10 +363,11 @@ class CartesianConnectivity(ConnectivityField[[Dimension("bar")], Dimension("foo
     def remap(self, conn):
         raise NotImplementedError()
 
-    def inverse_image():
-        raise NotImplementedError()
+    def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
+        return UnitRange(r.start - self.offset, r.stop - self.offset)
+        # return r - self.offset # TODO implement UnitRange.__add__
 
-    def restrict(self, index) -> DimensionIndex:
+    def restrict(self, index) -> common.DimensionIndex:
         return index + self.offset
 
     __getitem__ = restrict

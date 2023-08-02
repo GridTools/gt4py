@@ -140,9 +140,7 @@ def test_non_dispatched_function():
 
 
 @dataclasses.dataclass(frozen=True)
-class DummyCartesianConnectivity(
-    common.ConnectivityField[[common.Dimension("D0")], common.Dimension("D0")]
-):
+class DummyCartesianConnectivity(common.ConnectivityField[common.DimsT, common.DimT]):
     offset: int = 0
 
     def remap(self, *args, **kwargs):
@@ -169,7 +167,7 @@ def test_default_remap_implementation():
     inp_lst = [[0, 1], [2, 3]]
     inp = _make_field(inp_lst, np)
 
-    result = inp.remap(DummyCartesianConnectivity(1))
+    result = inp.remap(DummyCartesianConnectivity(common.Dimension("D0"), 1))
 
     expected = _make_field(
         inp_lst,

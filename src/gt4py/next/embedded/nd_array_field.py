@@ -183,11 +183,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
             return new_idx_array
 
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
-        assert issubclass(connectivity.value_type, common.DimensionIndex)
-
         # restrict index field
         # dim_idx = self.domain.tag_index(connectivity.value_type.tag)
-        dim = connectivity.value_type.dim
+        dim = connectivity.value_type
         dim_idx = self._dim_index(dim)  # TODO move to `Domain`
         if dim_idx is None:
             raise ValueError(f"Incompatible index field.")
@@ -197,6 +195,13 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         # print(new_range)
 
         restricted_domain = tuple((d, (r if d != dim else new_range)) for d, r in self.domain)
+
+        if isinstance(connectivity, common.CartesianConnectivity):
+            # shortcut for CartesianConnectivity: they don't change the array, only the domain
+            return self.__class__.from_array(
+                self._ndarray, domain=restricted_domain, value_type=self._value_type
+            )
+
         # restricted_connectivity = (
         #     connectivity.restrict(restricted_domain)
         #     if restricted_domain != connectivity.domain
@@ -209,6 +214,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         new_shape = tuple(len(r) for _, r in new_domain)
 
         new_idx_array = self._compute_idx_array(new_range, connectivity)
+        new_idx_array -= current_range.start
 
         new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
         # print(new_buffer)
@@ -226,7 +232,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    __call__ = None  # type: ignore[assignment]  # TODO: remap
+    __call__ = remap  # type: ignore[assignment]  # TODO: remap
 
     __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
 
