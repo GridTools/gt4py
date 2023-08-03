@@ -12,10 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import itertools
 import math
 from typing import Callable, Iterable
-import dataclasses
 
 import numpy as np
 import pytest
@@ -147,7 +147,6 @@ class DummyCartesianConnectivity(common.ConnectivityField[common.DimsT, common.D
         raise NotImplementedError()
 
     def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
-        # TODO think about a default implementation via __getitem__
         return common.UnitRange(r.start - self.offset, r.stop - self.offset)
         # return r - self.offset # TODO implement UnitRange.__add__
 

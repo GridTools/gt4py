@@ -49,7 +49,8 @@ __all__ = [
     "Dimension",
     "DimensionKind",
     "Field",
-    "field" "GridType",
+    "field",
+    "GridType",
     # from iterator
     "NeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",

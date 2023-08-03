@@ -143,7 +143,8 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @classmethod
     def from_array(
         cls,
-        data: npt.ArrayLike,
+        data: npt.ArrayLike
+        | definitions.NDArrayObject,  # TODO why is NDArrayObject no npt.ArrayLike?
         /,
         *,
         domain: DomainT,
@@ -166,16 +167,16 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         assert value_type is not None  # for mypy
         return cls(domain, array, value_type)
 
-    def _dim_index(self, dim: Dimension):
+    def _dim_index(self, dim: common.Dimension):
         for i, v in enumerate(self.domain):
             d, _ = v
             if d == dim:
                 return i
         return None
 
-    def _compute_idx_array(self, r: UnitRange, connectivity) -> definitions.NDArrayObject:
+    def _compute_idx_array(self, r: common.UnitRange, connectivity) -> definitions.NDArrayObject:
         if hasattr(connectivity, "ndarray") and connectivity.ndarray is not None:
-            ...  # TODO
+            return NotImplemented  # TODO
         else:
             new_idx_array = np.empty(len(r), dtype=int)
             for i in r:
@@ -188,7 +189,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         dim = connectivity.value_type
         dim_idx = self._dim_index(dim)  # TODO move to `Domain`
         if dim_idx is None:
-            raise ValueError(f"Incompatible index field.")
+            raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
         current_range: common.UnitRange = self.domain[dim_idx][1]
 
         new_range = connectivity.inverse_image(current_range)
@@ -211,7 +212,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         # # perform contramap
         xp = self.array_ns
         new_domain = restricted_domain  # TODO
-        new_shape = tuple(len(r) for _, r in new_domain)
 
         new_idx_array = self._compute_idx_array(new_range, connectivity)
         new_idx_array -= current_range.start

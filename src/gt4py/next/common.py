@@ -18,8 +18,8 @@ import abc
 import dataclasses
 import enum
 import functools
-from collections.abc import Sequence, Set, Iterable
-from typing import overload, get_args
+from collections.abc import Sequence, Set, Hashable
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -30,9 +30,9 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
+    Never,
     Optional,
     ParamSpec,
-    Generic,
     Protocol,
     TypeAlias,
     TypeVar,
@@ -50,6 +50,7 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
 NDArrayObject = gt4py_defs.NDArrayObject
+ValueT = TypeVar("ValueT", bound=Union[gt4py_defs.Scalar, "Dimension"])
 
 offset_provider: Optional[dict[str, Dimension]] = None  # TODO find a good place
 
@@ -137,7 +138,7 @@ if TYPE_CHECKING:
 
 
 @extended_runtime_checkable
-class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
+class Field(Protocol[DimsT, ValueT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -145,11 +146,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @property
-    def dtype(self) -> DType[gt4py_defs.ScalarT]:
-        ...
-
-    @property
-    def value_type(self) -> type[gt4py_defs.ScalarT]:
+    def value_type(self) -> type[ValueT]:
         ...
 
     @property
@@ -167,7 +164,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: "DomainLike") -> Field | ValueT:
         ...
 
     # Operators
@@ -176,7 +173,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: "DomainLike") -> Field:
+    def __getitem__(self, item: "DomainLike") -> Field | ValueT:
         ...
 
     @abc.abstractmethod
@@ -188,51 +185,51 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __add__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __radd__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __sub__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rsub__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __mul__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rmul__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __floordiv__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rfloordiv__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __truediv__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rtruediv__(self, other: Field | ValueT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __pow__(self, other: Field | ValueT) -> Field:
         ...
 
 
-class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
+class FieldABC(Field[DimsT, ValueT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
 
     @final
@@ -254,19 +251,17 @@ class DimensionIndex:  # (Generic[DimT]):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class ConnectivityField(FieldABC[DimsT, DimT]):
+class ConnectivityField(FieldABC[DimsT, DimT], Hashable):
     _value_type: DimT
 
     @property
-    def value_type(self) -> DimT:
+    def value_type(
+        self,
+    ) -> DimT:  # TODO should be type[DimT], however then Dimension should be a metaclass
         return self._value_type
 
     @abc.abstractmethod
-    def __hash__(self) -> int:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def inverse_image(self, connectivity: ConnectivityField, image_dim: Dimension) -> DomainT:
+    def inverse_image(self, image_dim: UnitRange) -> UnitRange:
         raise NotImplementedError()
 
     # Operators
@@ -276,37 +271,37 @@ class ConnectivityField(FieldABC[DimsT, DimT]):
     def __neg__(self) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __add__(self, other: Field | ScalarT) -> Never:
+    def __add__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __radd__(self, other: Field | ScalarT) -> Never:
+    def __radd__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __sub__(self, other: Field | ScalarT) -> Never:
+    def __sub__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rsub__(self, other: Field | ScalarT) -> Never:
+    def __rsub__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __mul__(self, other: Field | ScalarT) -> Never:
+    def __mul__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rmul__(self, other: Field | ScalarT) -> Never:
+    def __rmul__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __truediv__(self, other: Field | ScalarT) -> Never:
+    def __truediv__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rtruediv__(self, other: Field | ScalarT) -> Never:
+    def __rtruediv__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __floordiv__(self, other: Field | ScalarT) -> Never:
+    def __floordiv__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rfloordiv__(self, other: Field | ScalarT) -> Never:
+    def __rfloordiv__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __pow__(self, other: Field | ScalarT) -> Never:
+    def __pow__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
 
@@ -356,18 +351,27 @@ class NeighborTable(Connectivity, Protocol):
     table: npt.NDArray
 
 
-@dataclasses.dataclass(frozen=True)
-class CartesianConnectivity(ConnectivityField[[Dimension("bar")], Dimension("foo")]):
+@dataclasses.dataclass(frozen=True, eq=True)
+class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     offset: int = 0
+
+    def __gt_builtin_func__(self, _: fbuiltins.BuiltInFunction) -> Never:
+        raise NotImplementedError()
+
+    ndarray = None
+
+    @property
+    def domain(self) -> DomainT:
+        return ((self._value_type, UnitRange(None, None)),)
 
     def remap(self, conn):
         raise NotImplementedError()
 
-    def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
-        return UnitRange(r.start - self.offset, r.stop - self.offset)
+    def inverse_image(self, image_dim_range: UnitRange) -> UnitRange:
+        return UnitRange(image_dim_range.start - self.offset, image_dim_range.stop - self.offset)
         # return r - self.offset # TODO implement UnitRange.__add__
 
-    def restrict(self, index) -> common.DimensionIndex:
+    def restrict(self, index) -> DimensionIndex:
         return index + self.offset
 
     __getitem__ = restrict

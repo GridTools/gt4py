@@ -15,18 +15,7 @@
 import dataclasses
 import inspect
 from builtins import bool, float, int, tuple
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    ParamSpec,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 from numpy import float32, float64, int32, int64
 
@@ -285,9 +274,11 @@ class FieldOffset(runtime.Offset):
         return ts.OffsetType(source=self.source, target=self.target)
 
     def __getitem__(self, offset: int):
-        """Serves as a connectivity factory."""
+        """Serve as a connectivity factory."""
         # TODO this is a temporary solution
-        if isinstance(conn:=common.offset_provider[self.value], common.Dimension):
+        assert isinstance(self.value, str)
+        assert common.offset_provider is not None
+        if isinstance(conn := common.offset_provider[self.value], common.Dimension):
             return common.CartesianConnectivity(conn, offset)
         else:
             raise NotImplementedError()
