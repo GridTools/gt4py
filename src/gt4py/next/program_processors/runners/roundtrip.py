@@ -165,7 +165,7 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
+        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")

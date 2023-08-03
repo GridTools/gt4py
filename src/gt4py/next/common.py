@@ -64,7 +64,11 @@ class DimensionKind(StrEnum):
 @dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
-    kind: DimensionKind = DimensionKind.HORIZONTAL
+    kind: DimensionKind = dataclasses.field(
+        default=DimensionKind.HORIZONTAL,
+        hash=False,
+        compare=False,  # TODO(havogt): include kind in hash and comparison, disabled because for itir dimension is just the tag
+    )
 
     def __str__(self):
         return f'Dimension(value="{self.value}", kind={self.kind})'

@@ -32,7 +32,6 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
-from gt4py.next.iterator.runtime import CartesianAxis
 
 
 TRACING = "tracing"
@@ -153,7 +152,7 @@ def make_node(o):
         return OffsetLiteral(value=o.value)
     if isinstance(o, common.Scalar):
         return im.literal_from_value(o)
-    if isinstance(o, CartesianAxis):
+    if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return tuple(make_node(arg) for arg in o)
