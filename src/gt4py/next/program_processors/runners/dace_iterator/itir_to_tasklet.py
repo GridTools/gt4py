@@ -205,13 +205,20 @@ def builtin_neighbors(
         "__idx",
         dace.Memlet(data=idx_name, subset="0"),
     )
+    # select full shape only in the neighbor-axis dimension
+    field_subset = [
+        f"0:{sdfg.arrays[iterator.field.data].shape[idx]}"
+        if dim == table.neighbor_axis.value
+        else f"i_{dim}"
+        for idx, dim in enumerate(iterator.dimensions)
+    ]
     state.add_memlet_path(
         iterator.field,
         me,
         data_access_tasklet,
         memlet=dace.Memlet(
             data=iterator.field.data,
-            subset=",".join(f"0:{s}" for s in sdfg.arrays[iterator.field.data].shape),
+            subset=",".join(field_subset),
         ),
         dst_conn="__field",
     )
