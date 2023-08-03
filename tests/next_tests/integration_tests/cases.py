@@ -148,7 +148,7 @@ class ZeroInitializer(ConstInitializer):
 
 
 class IndexInitializer(DataInitializer):
-    """Initialize with the index of the coordinate point."""
+    """Initialize a 1d field with the index of the coordinate point."""
 
     @property
     def scalar_value(self) -> ScalarValue:
