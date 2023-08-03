@@ -18,8 +18,8 @@ import abc
 import dataclasses
 import enum
 import functools
-from collections.abc import Sequence, Set
-from typing import overload
+from collections.abc import Sequence, Set, Collection
+from typing import overload, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -128,6 +128,128 @@ class UnitRange(Sequence[int], Set[int]):
 
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
+
+
+def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
+    """
+    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+
+    The resulting list of dimensions contains all dimensions of the arguments
+    in the order they originally appear. If no unique order exists or a
+    contradicting order is found an exception is raised.
+
+    A modified version (ensuring uniqueness of the order) of
+    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
+    is used to topologically sort the arguments.
+
+    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+    True
+    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+    """
+    # build a graph with the vertices being dimensions and edges representing
+    #  the order between two dimensions. The graph is encoded as a dictionary
+    #  mapping dimensions to their predecessors, i.e. a dictionary containing
+    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
+    #  (contrary to successors) we also use this directionality here.
+    graph: dict[Dimension, set[Dimension]] = {}
+    for dims in dims_list:
+        if len(dims) == 0:
+            continue
+        # create a vertex for each dimension
+        for dim in dims:
+            graph.setdefault(dim, set())
+        # add edges
+        predecessor = dims[0]
+        for dim in dims[1:]:
+            graph[dim].add(predecessor)
+            predecessor = dim
+
+    # modified version of Kahn's algorithm
+    topologically_sorted_list: list[Dimension] = []
+
+    # compute in-degree for each vertex
+    in_degree = {v: 0 for v in graph.keys()}
+    for v1 in graph:
+        for v2 in graph[v1]:
+            in_degree[v2] += 1
+
+    # process vertices with in-degree == 0
+    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
+    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
+        if len(zero_in_degree_vertex_list) != 1:
+            raise ValueError(
+                f"Dimensions can not be promoted. Could not determine "
+                f"order of the following dimensions: "
+                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
+            )
+        v = zero_in_degree_vertex_list[0]
+        del in_degree[v]
+        topologically_sorted_list.insert(0, v)
+        # update in-degree
+        for predecessor in graph[v]:
+            in_degree[predecessor] -= 1
+
+    if len(in_degree.items()) > 0:
+        raise ValueError(
+            f"Dimensions can not be promoted. The following dimensions "
+            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
+        )
+
+    return topologically_sorted_list
+
+
+class Domain(Collection):
+    dims: Tuple[Dimension]
+    ranges: Tuple[UnitRange]
+
+    def __init__(self, dims: Tuple[Dimension, ...], ranges: Tuple[UnitRange, ...]):
+        self.dims = dims
+        self.ranges = ranges
+
+    def __len__(self) -> int:
+        return len(self.ranges)
+
+    def __iter__(self):
+        return iter(zip(self.dims, self.ranges))
+
+    def __contains__(self, item: Union[int, UnitRange]) -> bool:
+        if isinstance(item, int):
+            return any(item in range_ for range_ in self.ranges)
+        elif isinstance(item, UnitRange):
+            return any(item.start >= range_.start and item.stop <= range_.stop for range_ in self.ranges)
+        return False
+
+    def __and__(self, other: Domain) -> Domain:
+        broadcast_dims = tuple(promote_dims(self.dims, other.dims))
+        broadcasted_ranges_self = self.broadcast_ranges(broadcast_dims)
+        broadcasted_ranges_other = other.broadcast_ranges(broadcast_dims)
+
+        intersected_ranges = []
+        for range1, range2 in zip(broadcasted_ranges_self, broadcasted_ranges_other):
+            intersected_range = range1 & range2
+            intersected_ranges.append(intersected_range)
+
+        return Domain(broadcast_dims, tuple(intersected_ranges))
+
+    def broadcast_ranges(self, broadcast_dims: Tuple[Dimension, ...]) -> Tuple[UnitRange, ...]:
+        if len(self.dims) == len(broadcast_dims):
+            return self.ranges
+
+        # Broadcast dimensions with infinite sizes for missing ranges
+        broadcasted_ranges = list(self.ranges)
+        for i in range(len(broadcast_dims) - len(self.dims)):
+            broadcasted_ranges.append(UnitRange(0, float('inf')))
+
+        return tuple(broadcasted_ranges)
+
 
 if TYPE_CHECKING:
     import gt4py.next.ffront.fbuiltins as fbuiltins

@@ -17,7 +17,7 @@ from typing import Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension
+from gt4py.next.common import Dimension, promote_dims
 from gt4py.next.type_system import type_info
 
 
@@ -216,7 +216,7 @@ def function_signature_incompatibilities_scanop(
         for el in type_info.primitive_constituents(arg)
     ]
     try:
-        type_info.promote_dims(*arg_dims)
+        promote_dims(*arg_dims)
     except ValueError as e:
         yield e.args[0]
 
@@ -279,7 +279,7 @@ def return_type_scanop(
     with_kwargs: dict[str, ts.TypeSpec],
 ):
     carry_dtype = callable_type.definition.returns
-    promoted_dims = type_info.promote_dims(
+    promoted_dims = promote_dims(
         *(
             type_info.extract_dims(el)
             for arg in with_args + list(with_kwargs.values())
