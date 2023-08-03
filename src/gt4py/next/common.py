@@ -248,7 +248,7 @@ class Domain(Collection):
         # Broadcast dimensions with infinite sizes for missing ranges
         broadcasted_ranges = list(self.ranges)
         for i in range(len(broadcast_dims) - len(self.dims)):
-            broadcasted_ranges.append(UnitRange(0, float("inf")))
+            broadcasted_ranges.append(UnitRange(float("-inf"), float("inf")))
 
         return tuple(broadcasted_ranges)
 
