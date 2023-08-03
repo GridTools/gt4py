@@ -19,8 +19,8 @@ import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence, Set
-from typing import overload, AbstractSet
+from collections.abc import Sequence
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -58,7 +58,7 @@ class Infinity:
 
     @staticmethod
     def negative() -> int:
-        return -sys.maxsize - 1
+        return -sys.maxsize
 
 
 @enum.unique
@@ -97,6 +97,8 @@ class UnitRange(Sequence[int]):
             object.__setattr__(self, "stop", 0)
 
     def __len__(self) -> int:
+        if Infinity.positive() in (abs(self.start), abs(self.stop)):
+            raise ValueError("Cannot get length of infinite range.")
         return max(0, self.stop - self.start)
 
     def __repr__(self) -> str:
@@ -110,7 +112,7 @@ class UnitRange(Sequence[int]):
     def __getitem__(self, index: slice) -> UnitRange:
         ...
 
-    def __getitem__(self, index: int | slice) -> int | float | UnitRange:
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             if step != 1:

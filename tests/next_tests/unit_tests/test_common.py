@@ -11,10 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import sys
 
 import pytest
 
-from gt4py.next.common import UnitRange, Dimension, Domain, DimensionKind
+from gt4py.next.common import UnitRange, Dimension, Domain, DimensionKind, Infinity
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
@@ -124,6 +125,17 @@ def test_domain_not_contains_element(domain):
     assert 100 not in domain
     assert -5 not in domain
     assert 16 not in domain
+
+
+def test_positive_infinity_range():
+    pos_inf_range = UnitRange(Infinity.positive(), Infinity.positive())
+    assert len(pos_inf_range) == 0
+
+
+def test_mixed_infinity_range():
+    mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
+    with pytest.raises(ValueError):
+        len(mixed_inf_range)
 
 
 def test_domain_iter_method(domain):
