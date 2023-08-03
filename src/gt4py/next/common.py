@@ -224,7 +224,9 @@ class Domain(Collection):
         if isinstance(item, int):
             return any(item in range_ for range_ in self.ranges)
         elif isinstance(item, UnitRange):
-            return any(item.start >= range_.start and item.stop <= range_.stop for range_ in self.ranges)
+            return any(
+                item.start >= range_.start and item.stop <= range_.stop for range_ in self.ranges
+            )
         return False
 
     def __and__(self, other: Domain) -> Domain:
@@ -246,7 +248,7 @@ class Domain(Collection):
         # Broadcast dimensions with infinite sizes for missing ranges
         broadcasted_ranges = list(self.ranges)
         for i in range(len(broadcast_dims) - len(self.dims)):
-            broadcasted_ranges.append(UnitRange(0, float('inf')))
+            broadcasted_ranges.append(UnitRange(0, float("inf")))
 
         return tuple(broadcasted_ranges)
 
@@ -257,7 +259,6 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
-
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -372,11 +373,11 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-        definition: Any,
-        /,
-        *,
-        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
-        value_type: Optional[type] = None,
+    definition: Any,
+    /,
+    *,
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
+    value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -406,7 +407,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-            self, cur_index: int | np.integer, neigh_index: int | np.integer
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
