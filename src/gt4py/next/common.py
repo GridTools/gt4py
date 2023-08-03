@@ -14,9 +14,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 from collections.abc import Sequence
-from dataclasses import dataclass
 from typing import (
     Any,
     Generic,
@@ -52,10 +52,14 @@ class DimensionKind(StrEnum):
         return f"{type(self).__name__}.{self.name}"
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Dimension:
     value: str
-    kind: DimensionKind = DimensionKind.HORIZONTAL
+    kind: DimensionKind = dataclasses.field(
+        default=DimensionKind.HORIZONTAL,
+        hash=False,
+        compare=False,  # TODO(havogt): include kind in hash and comparison, disabled because for itir dimension is just the tag
+    )
 
     def __str__(self):
         return f'Dimension(value="{self.value}", kind={self.kind})'
@@ -69,13 +73,13 @@ class Field(Generic[DimsT, DT]):
     ...
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class GTInfo:
     definition: Any
     ir: Any
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Backend:
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)

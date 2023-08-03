@@ -17,7 +17,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from gt4py.next.iterator.runtime import closure, fendef, fundef
 from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import (
@@ -27,9 +27,9 @@ from next_tests.unit_tests.conftest import (
 )
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
 # `return a` -> a: field

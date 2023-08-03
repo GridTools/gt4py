@@ -17,13 +17,13 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, fundef
+from gt4py.next.iterator.runtime import fundef
 from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-I = CartesianAxis("I")
+I = gtx.Dimension("I")
 
 _isize = 10
 

@@ -21,7 +21,6 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -542,7 +541,7 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
-                if isinstance(axis, CartesianAxis):
+                if isinstance(axis, gtx.Dimension):
                     continue  # Cartesian shifts don’t change the location type
                 elif isinstance(
                     axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)

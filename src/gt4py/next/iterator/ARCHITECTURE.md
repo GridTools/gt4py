@@ -23,10 +23,9 @@ Embedded execution is implemented in the file `embedded.py`.
 
 Sketch:
 
-- fields are np arrays with named axes; names are instances of `CartesianAxis`
+- fields are np arrays with named axes; names are instances of `Dimension`
 - in `closure()`, the stencil is executed for each point in the domain, the fields are wrapped in an iterator pointing to the current point of execution.
-- `shift()` is lazy (to allow lift implementation), offsets are accumulated in the iterator and only executed when `deref()` is called.
-- as described in the design, offsets are abstract; on fencil execution the `offset_provider` keyword argument needs to be specified, which is a dict of `str` to either `CartesianAxis` or `NeighborTableOffsetProvider`
+- as described in the design, offsets are abstract; on fencil execution the `offset_provider` keyword argument needs to be specified, which is a dict of `str` to either `Dimension` or `Connectivity`
 - if `column_axis` keyword argument is specified on fencil execution (or in the fencil decorator), all operations will be done column wise in the give axis; `column_axis` needs to be specified if `scan` is used
 
 ## Tracing
