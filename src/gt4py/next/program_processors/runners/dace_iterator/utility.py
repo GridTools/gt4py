@@ -59,8 +59,8 @@ def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
 
 def map_nested_sdfg_symbols(
     parent_sdfg: dace.SDFG, nested_sdfg: dace.SDFG, array_mapping: dict[str, dace.Memlet]
-) -> dict[str, Any]:
-    symbol_mapping: dict[str, Any] = {}
+) -> dict[str, str]:
+    symbol_mapping: dict[str, str] = {}
     for param, arg in array_mapping.items():
         arg_array = parent_sdfg.arrays[arg.data]
         param_array = nested_sdfg.arrays[param]

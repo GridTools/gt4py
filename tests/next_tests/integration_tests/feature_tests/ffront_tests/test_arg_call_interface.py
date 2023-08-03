@@ -18,9 +18,10 @@ import typing
 import numpy as np
 import pytest
 
+from gt4py.next import errors
 from gt4py.next.common import Field
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import int64
+from gt4py.next.ffront.fbuiltins import int32, int64
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -167,10 +168,12 @@ def test_call_field_operator_from_program(cartesian_case):
 
 
 def test_call_scan_operator_from_field_operator(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("Calling scan from field operator not fully supported in gtfn.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
+    if cartesian_case.backend in [
+        dace_iterator.run_dace_iterator,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+    ]:
+        pytest.xfail("Calling scan from field operator not fully supported.")
 
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
@@ -196,9 +199,6 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
 
 
 def test_call_scan_operator_from_program(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
-
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y
@@ -235,3 +235,39 @@ def test_call_scan_operator_from_program(cartesian_case):
         ref=(ref, ref, ref, ref),
         comparison=lambda out, ref: all(map(np.allclose, zip(out, ref))),
     )
+
+
+def test_scan_wrong_return_type(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan(
+            state: int32,
+        ) -> float:
+            return 1.0
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+def test_scan_wrong_state_type(cartesian_case):
+    with pytest.raises(
+        errors.DSLError,
+        match=(
+            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+        ),
+    ):
+
+        @scan_operator(axis=KDim, forward=True, init=0)
+        def testee_scan(
+            state: float,
+        ) -> int32:
+            return 1
+
+        @program
+        def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
+            testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))

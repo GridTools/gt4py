@@ -18,6 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor

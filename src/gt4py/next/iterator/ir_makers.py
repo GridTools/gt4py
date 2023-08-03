@@ -354,7 +354,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
         args = [
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`
-        return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)  # type: ignore[operator] # `op` is not `str`
+        return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
 

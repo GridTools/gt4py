@@ -18,8 +18,7 @@ from functools import reduce
 import numpy as np
 import pytest
 
-from gt4py.next import Field, field_operator, float64, index_field, np_as_located_field
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
+from gt4py.next import Field, errors, field_operator, float64, index_field, np_as_located_field
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -401,7 +400,7 @@ def test_if_without_else(cartesian_case, condition1, condition2):
 
 
 def test_if_non_scalar_condition():
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Condition for `if` must be scalar."):
+    with pytest.raises(errors.DSLError, match="Condition for `if` must be scalar."):
 
         @field_operator
         def if_non_scalar_condition(
@@ -414,9 +413,7 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-    with pytest.raises(
-        FieldOperatorTypeDeductionError, match="Condition for `if` must be of boolean type."
-    ):
+    with pytest.raises(errors.DSLError, match="Condition for `if` must be of boolean type."):
 
         @field_operator
         def if_non_boolean_condition(
@@ -431,7 +428,7 @@ def test_if_non_boolean_condition():
 
 def test_if_inconsistent_types():
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match="Inconsistent types between two branches for variable",
     ):
 

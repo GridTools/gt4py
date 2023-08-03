@@ -172,9 +172,6 @@ def test_conditional_nested_tuple(cartesian_case):
 
 
 def test_broadcast_simple(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
-
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
         return broadcast(inp, (IDim, JDim))
@@ -185,8 +182,6 @@ def test_broadcast_simple(cartesian_case):
 
 
 def test_broadcast_scalar(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
     size = cartesian_case.default_sizes[IDim]
 
     @gtx.field_operator
@@ -197,9 +192,6 @@ def test_broadcast_scalar(cartesian_case):
 
 
 def test_broadcast_two_fields(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
-
     @gtx.field_operator
     def broadcast_two_fields(inp1: cases.IField, inp2: gtx.Field[[JDim], int32]) -> cases.IJField:
         a = broadcast(inp1, (IDim, JDim))
@@ -212,9 +204,6 @@ def test_broadcast_two_fields(cartesian_case):
 
 
 def test_broadcast_shifted(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: broadcast")
-
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
         bcasted = broadcast(inp, (IDim, JDim))
