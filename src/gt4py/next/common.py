@@ -130,11 +130,6 @@ class UnitRange(Sequence[int]):
     def __and__(self, other: UnitRange) -> UnitRange:
         start = max(self.start, other.start)
         stop = min(self.stop, other.stop)
-
-        # Handle the case where there is no overlap
-        if stop <= start:
-            return UnitRange(0, 0)
-
         return UnitRange(start, stop)
 
 
@@ -182,8 +177,8 @@ class Domain(Sequence):
 
     def __and__(self, other: "Domain") -> "Domain":
         broadcast_dims = promote_dims(self.dims, other.dims)
-        broadcasted_ranges_self = self.broadcast_ranges(broadcast_dims)
-        broadcasted_ranges_other = other.broadcast_ranges(broadcast_dims)
+        broadcasted_ranges_self = broadcast_ranges(broadcast_dims, self.dims, self.ranges)
+        broadcasted_ranges_other = broadcast_ranges(broadcast_dims, other.dims, other.ranges)
 
         intersected_ranges = []
         for range1, range2 in zip(broadcasted_ranges_self, broadcasted_ranges_other):
@@ -192,16 +187,19 @@ class Domain(Sequence):
 
         return Domain(broadcast_dims, intersected_ranges)
 
-    def broadcast_ranges(self, broadcast_dims: list[Dimension]) -> list[UnitRange]:
-        if len(self.dims) == len(broadcast_dims):
-            return self.ranges
 
-        # Broadcast dimensions with infinite sizes for missing ranges
-        broadcasted_ranges = list(self.ranges)
-        for i in range(len(broadcast_dims) - len(self.dims)):
-            broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
+def broadcast_ranges(
+    broadcast_dims: list[Dimension], dims: list[Dimension], ranges: list[UnitRange]
+) -> list[UnitRange]:
+    if len(dims) == len(broadcast_dims):
+        return ranges
 
-        return broadcasted_ranges
+    # Broadcast dimensions with infinite sizes for missing ranges
+    broadcasted_ranges = list(ranges)
+    for i in range(len(broadcast_dims) - len(dims)):
+        broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
+
+    return broadcasted_ranges
 
 
 if TYPE_CHECKING:
@@ -210,7 +208,6 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
-
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -325,11 +322,11 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-        definition: Any,
-        /,
-        *,
-        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
-        value_type: Optional[type] = None,
+    definition: Any,
+    /,
+    *,
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
+    value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -359,7 +356,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-            self, cur_index: int | np.integer, neigh_index: int | np.integer
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
