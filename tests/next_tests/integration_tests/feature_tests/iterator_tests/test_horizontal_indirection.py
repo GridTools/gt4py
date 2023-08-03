@@ -62,6 +62,7 @@ def test_simple_indirection(program_processor):
         run_gtfn,
         run_gtfn_imperative,
         gtfn_format_sourcecode,
+        run_dace_iterator,
     ]:
         pytest.xfail(
             "We only support applied shifts in type_inference."

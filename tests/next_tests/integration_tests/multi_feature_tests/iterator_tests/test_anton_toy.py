@@ -83,6 +83,8 @@ def test_anton_toy(program_processor, lift_mode):
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:
             pytest.xfail("TODO: issue with temporaries that crashes the application")
+    if program_processor == run_dace_iterator:
+        pytest.xfail("TODO: not supported in DaCe backend")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
