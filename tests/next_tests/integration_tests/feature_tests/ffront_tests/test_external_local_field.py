@@ -29,7 +29,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 def test_external_local_field(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over non-field expressions")
 
     @gtx.field_operator
     def testee(

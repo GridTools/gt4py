@@ -137,6 +137,102 @@ class Context:
     symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
 
 
+def builtin_neighbors(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    offset_literal, data = node_args
+    assert isinstance(offset_literal, itir.OffsetLiteral)
+    offset_dim = offset_literal.value
+    assert isinstance(offset_dim, str)
+    iterator = transformer.visit(data)
+    table: NeighborTableOffsetProvider = transformer.offset_provider[offset_dim]
+    assert isinstance(table, NeighborTableOffsetProvider)
+
+    offset = transformer.offset_provider[offset_dim]
+    if isinstance(offset, Dimension):
+        raise NotImplementedError(
+            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
+        )
+
+    sdfg: dace.SDFG = transformer.context.body
+    state: dace.SDFGState = transformer.context.state
+
+    shifted_dim = table.origin_axis.value
+
+    result_name = unique_var_name()
+    sdfg.add_array(result_name, dtype=iterator.dtype, shape=(table.max_neighbors,), transient=True)
+    result_access = state.add_access(result_name)
+
+    table_name = connectivity_identifier(offset_dim)
+    table_array = sdfg.arrays[table_name]
+
+    me, mx = state.add_map(
+        f"{offset_dim}_neighbors_map",
+        ndrange={"neigh_idx": f"0:{table.max_neighbors}"},
+    )
+    shift_tasklet = state.add_tasklet(
+        "shift",
+        code="__result = __table[__idx, neigh_idx]",
+        inputs={"__table", "__idx"},
+        outputs={"__result"},
+    )
+    data_access_tasklet = state.add_tasklet(
+        "data_access",
+        code="__result = __field[__idx]",
+        inputs={"__field", "__idx"},
+        outputs={"__result"},
+    )
+    idx_name = unique_var_name()
+    sdfg.add_scalar(idx_name, dace.int64, transient=True)
+    state.add_memlet_path(
+        state.add_access(table_name),
+        me,
+        shift_tasklet,
+        memlet=dace.Memlet(data=table_name, subset=",".join(f"0:{s}" for s in table_array.shape)),
+        dst_conn="__table",
+    )
+    state.add_memlet_path(
+        iterator.indices[shifted_dim],
+        me,
+        shift_tasklet,
+        memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0"),
+        dst_conn="__idx",
+    )
+    state.add_edge(
+        shift_tasklet,
+        "__result",
+        data_access_tasklet,
+        "__idx",
+        dace.Memlet(data=idx_name, subset="0"),
+    )
+    # select full shape only in the neighbor-axis dimension
+    field_subset = [
+        f"0:{sdfg.arrays[iterator.field.data].shape[idx]}"
+        if dim == table.neighbor_axis.value
+        else f"i_{dim}"
+        for idx, dim in enumerate(iterator.dimensions)
+    ]
+    state.add_memlet_path(
+        iterator.field,
+        me,
+        data_access_tasklet,
+        memlet=dace.Memlet(
+            data=iterator.field.data,
+            subset=",".join(field_subset),
+        ),
+        dst_conn="__field",
+    )
+    state.add_memlet_path(
+        data_access_tasklet,
+        mx,
+        result_access,
+        memlet=dace.Memlet(data=result_name, subset="neigh_idx"),
+        src_conn="__result",
+    )
+
+    return [ValueExpr(result_access, iterator.dtype)]
+
+
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -194,6 +290,7 @@ _GENERAL_BUILTIN_MAPPING: dict[
     "tuple_get": builtin_tuple_get,
     "if_": builtin_if,
     "cast_": builtin_cast,
+    "neighbors": builtin_neighbors,
 }
 
 
@@ -333,34 +430,33 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def visit_FunCall(self, node: itir.FunCall) -> list[ValueExpr] | IteratorExpr:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
-        elif (
-            isinstance(node.fun, itir.FunCall)
-            and isinstance(node.fun.fun, itir.SymRef)
-            and node.fun.fun.id == "shift"
-        ):
-            offset = node.fun.args[0]
-            assert isinstance(offset, itir.OffsetLiteral)
-            offset_name = offset.value
-            assert isinstance(offset_name, str)
-            if offset_name not in self.offset_provider:
-                raise ValueError(f"offset provider for `{offset_name}` is missing")
-            offset_provider = self.offset_provider[offset_name]
-            if isinstance(offset_provider, Dimension):
-                return self._visit_direct_addressing(node)
-            else:
-                return self._visit_indirect_addressing(node)
-        elif isinstance(node.fun, itir.SymRef):
+        if isinstance(node.fun, itir.FunCall) and isinstance(node.fun.fun, itir.SymRef):
+            if node.fun.fun.id == "shift":
+                offset = node.fun.args[0]
+                assert isinstance(offset, itir.OffsetLiteral)
+                offset_name = offset.value
+                assert isinstance(offset_name, str)
+                if offset_name not in self.offset_provider:
+                    raise ValueError(f"offset provider for `{offset_name}` is missing")
+                offset_provider = self.offset_provider[offset_name]
+                if isinstance(offset_provider, Dimension):
+                    return self._visit_direct_addressing(node)
+                else:
+                    return self._visit_indirect_addressing(node)
+            elif node.fun.fun.id == "reduce":
+                return self._visit_reduce(node)
+
+        if isinstance(node.fun, itir.SymRef):
             if str(node.fun.id) in _MATH_BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)
             elif str(node.fun.id) in _GENERAL_BUILTIN_MAPPING:
                 return self._visit_general_builtin(node)
             else:
                 raise NotImplementedError()
-        else:
-            return self._visit_call(node)
+        return self._visit_call(node)
 
     def _visit_call(self, node: itir.FunCall):
-        args = [self.visit(arg) for arg in node.args]
+        args = self.visit(node.args)
         args = [arg if isinstance(arg, Sequence) else [arg] for arg in args]
         args = list(itertools.chain(*args))
 
@@ -527,6 +623,49 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         shifted_index[target_dim] = shifted_value
 
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
+
+    def _visit_reduce(self, node: itir.FunCall):
+        assert (
+            isinstance(node.args[0], itir.FunCall)
+            and isinstance(node.args[0].fun, itir.SymRef)
+            and node.args[0].fun.id == "neighbors"
+        )
+        args = self.visit(node.args)
+        assert len(args) == 1
+        args = args[0]
+        assert len(args) == 1
+        assert isinstance(node.fun, itir.FunCall)
+        op_name = node.fun.args[0]
+        assert isinstance(op_name, itir.SymRef)
+        init = node.fun.args[1]
+
+        nreduce = self.context.body.arrays[args[0].value.data].shape[0]
+
+        result_name = unique_var_name()
+        result_access = self.context.state.add_access(result_name)
+        self.context.body.add_scalar(result_name, args[0].dtype, transient=True)
+        op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
+        reduce_tasklet = self.context.state.add_tasklet(
+            "reduce",
+            code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
+            inputs={"__values"},
+            outputs={"__result"},
+        )
+        self.context.state.add_edge(
+            args[0].value,
+            None,
+            reduce_tasklet,
+            "__values",
+            dace.Memlet(data=args[0].value.data, subset=f"0:{nreduce}"),
+        )
+        self.context.state.add_edge(
+            reduce_tasklet,
+            "__result",
+            result_access,
+            None,
+            dace.Memlet(data=result_name, subset="0"),
+        )
+        return [ValueExpr(result_access, args[0].dtype)]
 
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
