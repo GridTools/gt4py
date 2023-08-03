@@ -173,7 +173,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
+    def restrict(
+        self: _BaseNdArrayField, domain: common.DomainT | common.DomainSlice | common.Position
+    ) -> _BaseNdArrayField | ValueT:
         # TODO proper implementation
         assert all(r[0] == 0 for _, r in self._domain)
         return self.ndarray[domain]

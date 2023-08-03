@@ -119,6 +119,8 @@ class UnitRange(Sequence[int], Set[int]):
 
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
+DomainSlice: TypeAlias = tuple[tuple[Dimension, slice], ...]
+Position: TypeAlias = tuple[tuple[Dimension, int], ...]
 
 
 if TYPE_CHECKING:
