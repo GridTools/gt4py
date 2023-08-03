@@ -137,19 +137,25 @@ class Context:
     symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
 
 
-def _builtin_neighbors_indirect_addressing(
+def builtin_neighbors(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    sdfg: dace.SDFG = transformer.context.body
-    state: dace.SDFGState = transformer.context.state
-
     offset_literal, data = node_args
     assert isinstance(offset_literal, itir.OffsetLiteral)
-    iterator = transformer.visit(data)
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
+    iterator = transformer.visit(data)
     table: NeighborTableOffsetProvider = transformer.offset_provider[offset_dim]
     assert isinstance(table, NeighborTableOffsetProvider)
+
+    offset = transformer.offset_provider[offset_dim]
+    if isinstance(offset, Dimension):
+        raise NotImplementedError(
+            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
+        )
+
+    sdfg: dace.SDFG = transformer.context.body
+    state: dace.SDFGState = transformer.context.state
 
     shifted_dim = table.origin_axis.value
 
@@ -218,22 +224,6 @@ def _builtin_neighbors_indirect_addressing(
     )
 
     return [ValueExpr(result_access, iterator.dtype)]
-
-
-def builtin_neighbors(
-    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
-) -> list[ValueExpr]:
-    offset_provider = node_args[0]
-    assert isinstance(offset_provider, itir.OffsetLiteral)
-    dimension = offset_provider.value
-    assert isinstance(dimension, str)
-    offset = transformer.offset_provider[dimension]
-    if isinstance(offset, Dimension):
-        raise NotImplementedError(
-            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
-        )
-    else:
-        return _builtin_neighbors_indirect_addressing(transformer, node, node_args)
 
 
 def builtin_if(
