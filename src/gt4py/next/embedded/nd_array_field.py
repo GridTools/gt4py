@@ -137,6 +137,10 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         return tuple(d[0] for d in self._domain)
 
     @property
+    def __gt_origin__(self) -> tuple[int]:
+        return tuple(-r.start for _, r in self._domain)
+
+    @property
     def ndarray(self) -> definitions.NDArrayObject:
         return self._ndarray
 
@@ -161,7 +165,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         value_type = array.dtype.type  # TODO add support for Dimensions as value_type
 
-        assert issubclass(array.dtype.type, definitions.SCALAR_TYPES)
+        # assert issubclass(array.dtype.type, definitions.SCALAR_TYPES)
 
         assert all(isinstance(d, common.Dimension) for d, r in domain), domain
         assert len(domain) == array.ndim
@@ -176,14 +180,19 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def restrict(
         self: _BaseNdArrayField, domain: common.DomainT | common.DomainSlice | common.Position
     ) -> _BaseNdArrayField | ValueT:
+        print(domain)
+        # assert all(r[0] == 0 for _, r in self._domain)
+        _slice = tuple(domain[dim] - r.start for dim, r in self._domain)
+        print(_slice)
+        return self.ndarray[_slice]
         # TODO proper implementation
-        assert all(r[0] == 0 for _, r in self._domain)
-        return self.ndarray[domain]
+        # return self.ndarray[domain]
 
     field_getitem = restrict
 
     def field_setitem(self, domain, value):
-        self.ndarray[domain] = value
+        _slice = tuple(domain[dim] - r.start for dim, r in self._domain)
+        self.ndarray[_slice] = value
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 

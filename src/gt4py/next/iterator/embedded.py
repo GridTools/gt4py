@@ -168,32 +168,32 @@ class ItIterator(Protocol):
         ...
 
 
-# @runtime_checkable
-# class LocatedField(Protocol):
-#     """A field with named dimensions providing read access."""
+@runtime_checkable
+class LocatedField(Protocol):
+    """A field with named dimensions providing read access."""
 
-#     @property
-#     @abc.abstractmethod
-#     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-#         ...
+    @property
+    @abc.abstractmethod
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+        ...
 
-#     # TODO(havogt): define generic Protocol to provide a concrete return type
-#     @abc.abstractmethod
-#     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-#         ...
+    # TODO(havogt): define generic Protocol to provide a concrete return type
+    @abc.abstractmethod
+    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+        ...
 
-#     @property
-#     def __gt_origin__(self) -> tuple[int, ...]:
-#         return tuple([0] * len(self.__gt_dims__))
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple([0] * len(self.__gt_dims__))
 
 
-# class MutableLocatedField(LocatedField, Protocol):
-#     """A LocatedField with write access."""
+class MutableLocatedField(LocatedField, Protocol):
+    """A LocatedField with write access."""
 
-#     # TODO(havogt): define generic Protocol to provide a concrete return type
-#     @abc.abstractmethod
-#     def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
-#         ...
+    # TODO(havogt): define generic Protocol to provide a concrete return type
+    @abc.abstractmethod
+    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
+        ...
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
@@ -848,6 +848,8 @@ def make_in_iterator(
     *,
     column_axis: Optional[common.Dimension],
 ) -> ItIterator:
+    if isinstance(inp, common.Field):
+        inp = NDArrayLocatedFieldWrapper(inp)
     axes = _get_axes(inp)
     sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
@@ -878,60 +880,42 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-# class LocatedFieldImpl(MutableLocatedField):
-#     """A Field with named dimensions/axes."""
+@dataclasses.dataclass(frozen=True)
+class NDArrayLocatedFieldWrapper(MutableLocatedField):
+    """A temporary helper until we sorted out all Field conventions between frontend and iterator.embedded."""
 
-#     @property
-#     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-#         return self._axes
+    _ndarrayfield: gtx.Field
 
-#     def __init__(
-#         self,
-#         getter: Callable[[FieldIndexOrIndices], Any],
-#         axes: tuple[common.Dimension, ...],
-#         dtype,
-#         *,
-#         setter: Callable[[FieldIndexOrIndices, Any], None],
-#         array: Callable[[], npt.NDArray],
-#         origin: Optional[dict[common.Dimension, int]] = None,
-#     ):
-#         self.getter = getter
-#         self._axes = axes
-#         self.setter = setter
-#         self.array = array
-#         self.dtype = dtype
-#         self.origin = origin
+    @property
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+        return self._ndarrayfield.__gt_dims__
 
-#     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
-#         return self.array()[indices]
+    # def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
+    #     return self._ndarrayfield.ndarray[indices]
 
-# # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
-# def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-#     return self.getter(get_ordered_indices(self._axes, named_indices))
+    # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
 
-#     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
-#         self.array()[indices] = value
+    def _translate_named_indices(self, named_indices: NamedFieldIndices):
+        return {
+            k: common.UnitRange(v.start, v.stop) if isinstance(v, range) else v
+            for k, v in named_indices.items()
+        }
 
-# def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-#     self.setter(get_ordered_indices(self._axes, named_indices), value)
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        return self._ndarrayfield[self._translate_named_indices(named_indices)]
 
-#     def __array__(self) -> np.ndarray:
-#         return self.array()
+    # def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
+    #     self._ndarrayfield.ndarray[indices] = value
 
-# @property
-# def __gt_origin__(self) -> tuple[int, ...]:
-#     if not self.origin:
-#         return tuple([0] * len(self.__gt_dims__))
-#     return cast(
-#         tuple[int],
-#         get_ordered_indices(self.__gt_dims__, {k: v for k, v in self.origin.items()}),
-#     )
+    def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
+        return self._ndarrayfield.field_setitem(self._translate_named_indices(named_indices), value)
 
-#     @property
-#     def shape(self):
-#         if self.array is None:
-#             raise TypeError("`shape` not supported for this field")
-#         return self.array().shape
+    def __array__(self) -> np.ndarray:
+        return self._ndarrayfield.ndarray
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return self._ndarrayfield.__gt_origin__
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
@@ -1026,38 +1010,12 @@ def np_as_located_field(
         domain = []
         for d, s in zip(axes, a.shape):
             offset = origin.get(d, 0)
-            domain.append((d, common.UnitRange(offset, s + offset)))
+            domain.append((d, common.UnitRange(-offset, s - offset)))
 
         res = common.field(a, domain=tuple(domain))
         return res
 
     return _maker
-    # def _maker(a: np.ndarray) -> LocatedFieldImpl:
-    #     if a.ndim != len(axes):
-    #         raise TypeError("ndarray.ndim incompatible with number of given axes")
-
-    #     if origin is not None:
-    #         offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
-    #     else:
-    #         offsets = None
-
-    #     def setter(indices, value):
-    #         indices = _tupelize(indices)
-    #         a[_shift_field_indices(indices, offsets) if offsets else indices] = value
-
-    #     def getter(indices):
-    #         return a[_shift_field_indices(indices, offsets) if offsets else indices]
-
-    #     return LocatedFieldImpl(
-    #         getter,
-    #         axes,
-    #         dtype=a.dtype,
-    #         setter=setter,
-    #         array=a.__array__,
-    #         origin=origin,
-    #     )
-
-    # return _maker
 
 
 class IndexField(common.FieldABC):

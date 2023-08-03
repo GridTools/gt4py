@@ -121,6 +121,12 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
+    def __add__(self, offset: int) -> UnitRange:
+        return UnitRange(self.start + offset, self.stop + offset)
+
+    def __sub__(self, offset: int) -> UnitRange:
+        return self.__add__(-offset)
+
 
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 DomainSlice: TypeAlias = tuple[tuple[Dimension, slice], ...]
