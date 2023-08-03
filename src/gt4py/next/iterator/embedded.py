@@ -138,6 +138,8 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
+NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
+
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, np.integer))
@@ -179,7 +181,7 @@ class LocatedField(Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, indices: NamedFieldIndices) -> Any:
         ...
 
     @property
@@ -192,7 +194,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
         ...
 
 
@@ -692,18 +694,18 @@ def _get_axes(
 
 
 def _single_vertical_idx(
-    indices: FieldIndices, column_axis_idx: int, column_index: IntIndex
-) -> tuple[FieldIndex, ...]:
-    transformed = tuple(
-        index if i != column_axis_idx else column_index for i, index in enumerate(indices)
-    )
+    indices: NamedFieldIndices, column_axis: Tag, column_index: IntIndex
+) -> NamedFieldIndices:
+    transformed = {
+        axis: (index if axis != column_axis else column_index) for axis, index in indices.items()
+    }
     return transformed
 
 
 @overload
 def _make_tuple(
     field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
 ) -> tuple[tuple | Column, ...]:
@@ -713,7 +715,7 @@ def _make_tuple(
 @overload
 def _make_tuple(
     field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
 ) -> tuple[tuple | npt.DTypeLike, ...]:  # arbitrary nesting
@@ -721,20 +723,25 @@ def _make_tuple(
 
 
 @overload
-def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+def _make_tuple(
+    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
+) -> Column:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None] = None
+    field_or_tuple: LocatedField,
+    named_indices: NamedFieldIndices,
+    *,
+    column_axis: Literal[None] = None,
 ) -> npt.DTypeLike:
     ...
 
 
 def _make_tuple(
     field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Optional[Tag] = None,
 ) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
@@ -743,11 +750,8 @@ def _make_tuple(
         if column_axis is not None:
             assert column_range
             # construct a Column of tuples
-            column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
-            if column_axis_idx is None:
-                column_axis_idx = -1  # field doesn't have the column index, e.g. ContantField
             first = tuple(
-                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, column_range.start))
+                _make_tuple(f, _single_vertical_idx(named_indices, column_axis, column_range.start))
                 for f in field_or_tuple
             )
             col = Column(
@@ -756,14 +760,14 @@ def _make_tuple(
             col[0] = first
             for i in column_range[1:]:
                 col[i] = tuple(
-                    _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, i))
+                    _make_tuple(f, _single_vertical_idx(named_indices, column_axis, i))
                     for f in field_or_tuple
                 )
             return col
         else:
-            return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+            return tuple(_make_tuple(f, named_indices) for f in field_or_tuple)
     else:
-        data = field_or_tuple.field_getitem(indices)
+        data = field_or_tuple.field_getitem(named_indices)
         if column_axis is not None:
             # wraps a vertical slice of an input field into a `Column`
             assert column_range is not None
@@ -822,13 +826,10 @@ class MDIterator:
             slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
 
         assert _is_concrete_position(shifted_pos)
-        ordered_indices = get_ordered_indices(
-            axes,
-            {**shifted_pos, **slice_column},
-        )
+        position = {**shifted_pos, **slice_column}
         return _make_tuple(
             self.field,
-            ordered_indices,
+            position,
             column_axis=self.column_axis,
         )
 
@@ -906,15 +907,16 @@ class LocatedFieldImpl(MutableLocatedField):
         return self.array()[indices]
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = _tupelize(indices)
-        return self.getter(indices)
+    def field_getitem(self, named_indices: Mapping[Tag, FieldIndex | SparsePositionEntry]) -> Any:
+        return self.getter(get_ordered_indices(self._axes, named_indices))
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
         self.array()[indices] = value
 
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
-        self.setter(indices, value)
+    def field_setitem(
+        self, named_indices: Mapping[Tag, FieldIndex | SparsePositionEntry], value: Any
+    ):
+        self.setter(get_ordered_indices(self._axes, named_indices), value)
 
     def __array__(self) -> np.ndarray:
         return self.array()
@@ -949,9 +951,7 @@ def _is_sparse_position_entry(
     return isinstance(pos, list)
 
 
-def get_ordered_indices(
-    axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
-) -> tuple[FieldIndex, ...]:
+def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
     sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
@@ -1055,7 +1055,8 @@ class IndexField(LocatedField):
         self.axis = axis
         self.dtype = np.dtype(dtype)
 
-    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        index = get_ordered_indices(self.__gt_dims__, named_indices)
         if isinstance(index, int):
             return self.dtype.type(index)
         else:
@@ -1076,7 +1077,7 @@ class ConstantField(LocatedField):
         self.value = value
         self.dtype = np.dtype(dtype).type
 
-    def field_getitem(self, _: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, _: NamedFieldIndices) -> Any:
         return self.dtype(self.value)
 
     @property
@@ -1295,7 +1296,8 @@ class TupleOfFields(TupleField):
         axeses = _get_axeses(data)
         self.__gt_dims__ = axeses[0]
 
-    def field_getitem(self, indices):
+    def field_getitem(self, named_indices: NamedFieldIndices):
+        indices = get_ordered_indices(self.__gt_dims__, named_indices)
         return _build_tuple_result(self.data, indices)
 
     def field_setitem(self, indices, value):
@@ -1401,15 +1403,13 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
                 if column is None:
                     assert _is_concrete_position(pos)
-                    ordered_indices = get_ordered_indices(_get_axes(out), pos)
-                    out.field_setitem(ordered_indices, res)
+                    out.field_setitem(pos, res)
                 else:
                     col_pos = pos.copy()
                     for k in column.col_range:
                         col_pos[column.axis] = k
                         assert _is_concrete_position(col_pos)
-                        ordered_indices = get_ordered_indices(_get_axes(out), col_pos)
-                        out.field_setitem(ordered_indices, res[k])
+                        out.field_setitem(col_pos, res[k])
 
         ctx = cvars.copy_context()
         ctx.run(_closure_runner)
