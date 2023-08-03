@@ -36,6 +36,7 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.common import promote_dims
 
 
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
@@ -498,10 +499,10 @@ def test_dimension_promotion(
     expected_error_msg: Optional[str],
 ):
     if expected_result:
-        assert type_info.promote_dims(*dim_list) == expected_result
+        assert promote_dims(*dim_list) == expected_result
     else:
         with pytest.raises(Exception) as exc_info:
-            type_info.promote_dims(*dim_list)
+            promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
 

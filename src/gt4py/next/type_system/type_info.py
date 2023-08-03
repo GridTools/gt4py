@@ -614,7 +614,7 @@ def function_signature_incompatibilities_func(  # noqa: C901
             if i < len(func_type.pos_only_args):
                 arg_repr = f"{i}-th argument"
             else:
-                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i-len(func_type.pos_only_args)]}`"
+                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}`"
             yield f"Expected {arg_repr} to be of type `{a_arg}`, but got `{b_arg}`."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):

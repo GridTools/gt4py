@@ -139,7 +139,7 @@ def test_domain_and_operation_different_dimensions(domain):
 
     assert len(result_domain) == 3
     assert all(isinstance(r, UnitRange) for r in result_domain.ranges)
-    assert result_domain.dims == (IDim, JDim, KDim)
+    assert result_domain.dims == [IDim, JDim, KDim]
 
     assert result_domain.ranges[0] == UnitRange(2, 10)  # Intersection of domain.range1 and domain2.range1
     assert result_domain.ranges[1] == UnitRange(7, 15)  # Intersection of domain.range2 and domain2.range2
@@ -154,3 +154,32 @@ def test_domain_and_operation_different_dimensions_reversed(domain):
     with pytest.raises(ValueError,
                        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim."):
         domain & domain2
+
+
+@pytest.mark.parametrize("index, expected", [
+    (0, (IDim, UnitRange(0, 10))),
+    (1, (JDim, UnitRange(5, 15))),
+    (2, (KDim, UnitRange(20, 30))),
+])
+def test_getitem_integer_index(domain, index, expected):
+    result = domain[index]
+    assert result == expected
+
+
+@pytest.mark.parametrize("slice_obj, expected", [
+    (slice(0, 2), [(IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15))]),
+    (slice(1, None), [(JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30))]),
+])
+def test_getitem_slice(domain, slice_obj, expected):
+    result = domain[slice_obj]
+    assert len(result) == len(expected)
+    assert all(res == exp for res, exp in zip(result, expected))
+
+
+@pytest.mark.parametrize("negative_index, expected", [
+    (-1, (KDim, UnitRange(20, 30))),
+    (-2, (JDim, UnitRange(5, 15))),
+])
+def test_getitem_negative_index(domain, negative_index, expected):
+    result = domain[negative_index]
+    assert result == expected
