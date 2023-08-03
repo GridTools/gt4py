@@ -18,12 +18,12 @@ import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
+from gt4py.next import common
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
-from gt4py.next import common
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables

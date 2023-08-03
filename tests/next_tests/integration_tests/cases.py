@@ -147,6 +147,35 @@ class ZeroInitializer(ConstInitializer):
         self.value = 0
 
 
+class IndexInitializer(DataInitializer):
+    """Initialize a 1d field with the index of the coordinate point."""
+
+    @property
+    def scalar_value(self) -> ScalarValue:
+        raise AttributeError("`scalar_value` not supported in `IndexInitializer`.")
+
+    def field(
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[gtx.Dimension, int],
+        dtype: np.typing.DTypeLike,
+    ) -> FieldValue:
+        if len(sizes) > 1:
+            raise ValueError(
+                f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
+            )
+        n_data = list(sizes.values())[0]
+        return gtx.np_as_located_field(*sizes.keys())(np.arange(0, n_data, dtype=dtype))
+
+    def from_case(
+        self: Self,
+        case: Case,
+        fieldview_prog: decorator.FieldOperator | decorator.Program,
+        arg_name: str,
+    ) -> Self:
+        return self
+
+
 @dataclasses.dataclass
 class UniqueInitializer(DataInitializer):
     """

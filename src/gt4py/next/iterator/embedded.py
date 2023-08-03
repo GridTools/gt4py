@@ -1279,7 +1279,7 @@ def _get_axeses(field):
         return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
     else:
         assert is_located_field(field)
-        return (_get_axes(field),)
+        return (field.__gt_dims__,)
 
 
 def _build_tuple_result(field, indices):
