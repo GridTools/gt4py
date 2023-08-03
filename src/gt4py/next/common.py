@@ -19,7 +19,7 @@ import dataclasses
 import enum
 import functools
 from collections.abc import Sequence, Set, Collection
-from typing import overload, Tuple
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -207,10 +207,10 @@ def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
 
 
 class Domain(Collection):
-    dims: Tuple[Dimension]
-    ranges: Tuple[UnitRange]
+    dims: tuple[Dimension]
+    ranges: tuple[UnitRange]
 
-    def __init__(self, dims: Tuple[Dimension, ...], ranges: Tuple[UnitRange, ...]):
+    def __init__(self, dims: tuple[Dimension, ...], ranges: tuple[UnitRange, ...]):
         self.dims = dims
         self.ranges = ranges
 
@@ -220,7 +220,7 @@ class Domain(Collection):
     def __iter__(self):
         return iter(zip(self.dims, self.ranges))
 
-    def __contains__(self, item: Union[int, UnitRange]) -> bool:
+    def __contains__(self, item: int | UnitRange) -> bool:
         if isinstance(item, int):
             return any(item in range_ for range_ in self.ranges)
         elif isinstance(item, UnitRange):
@@ -241,7 +241,7 @@ class Domain(Collection):
 
         return Domain(broadcast_dims, tuple(intersected_ranges))
 
-    def broadcast_ranges(self, broadcast_dims: Tuple[Dimension, ...]) -> Tuple[UnitRange, ...]:
+    def broadcast_ranges(self, broadcast_dims: tuple[Dimension, ...]) -> tuple[UnitRange, ...]:
         if len(self.dims) == len(broadcast_dims):
             return self.ranges
 
