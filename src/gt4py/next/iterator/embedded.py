@@ -538,10 +538,8 @@ def execute_shift(
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseTag):
-        # hack: relies on
-        # (a) Dimensions with same name are equal
-        # (b) sparse dimensions have the same name as the offset applying to them
-        sparse_dim = common.Dimension(tag)
+        # hack: sparse dimensions have the same name as the offset applying to them
+        sparse_dim = common.Dimension(tag, kind=common.DimensionKind.LOCAL)
         current_entry = pos[sparse_dim]
         assert isinstance(current_entry, list)
         new_entry = list(current_entry)
