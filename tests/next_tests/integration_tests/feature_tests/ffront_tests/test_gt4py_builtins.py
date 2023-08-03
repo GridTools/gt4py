@@ -80,7 +80,6 @@ def test_minover_execution(unstructured_case):
 
 
 def test_reduction_execution(unstructured_case):
-
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
