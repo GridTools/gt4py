@@ -339,6 +339,6 @@ def from_array(
         dimensions=dimensions,
     )
 
-    storage_utils.asarray(data)
+    storage[...] = storage_utils.asarray(data)
 
     return storage
