@@ -342,6 +342,6 @@ def from_array(
     if cp is not None and isinstance(storage, cp.ndarray):
         storage[...] = cp.asarray(data)
     else:
-        storage[...] = np.asarray(data) 
+        storage[...] = np.asarray(data)
 
     return storage
