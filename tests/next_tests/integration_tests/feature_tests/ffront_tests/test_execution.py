@@ -422,7 +422,7 @@ def test_nested_tuple_return(cartesian_case):
 
 def test_nested_reduction(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
 
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
@@ -445,9 +445,6 @@ def test_nested_reduction(unstructured_case):
 
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
     @gtx.field_operator
     def testee(inp: cases.EField) -> cases.EField:
         tmp = inp(V2E)
@@ -468,7 +465,7 @@ def test_nested_reduction_shift_first(unstructured_case):
 
 def test_tuple_return_2(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -489,7 +486,7 @@ def test_tuple_return_2(unstructured_case):
 
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: tuples")
 
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -541,12 +538,10 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [
-        dace_iterator.run_dace_iterator,
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-    ]:
-        pytest.xfail("Transformation passes fail in putting `scan` to the top.")
+    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+        pytest.xfail("Nested `scan`s requires creating temporaries.")
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -629,7 +624,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
@@ -890,34 +885,21 @@ def test_domain_tuple(cartesian_case):
 
 
 def test_where_k_offset(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("IndexFields are not supported yet.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: index fields")
-
     @gtx.field_operator
     def fieldop_where_k_offset(
-        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+        inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, a(Koff[-1]), 2)
+        return where(k_index > 0, inp(Koff[-1]), 2)
 
-    cases.verify_with_default_data(
-        cartesian_case,
-        fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
-    )
+    inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
+    k_index = cases.allocate(
+        cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
+    )()
+    out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    @gtx.field_operator
-    def fieldop_where_k_offset(
-        a: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
-    ) -> cases.IKField:
-        return where(k_index > 0, a(Koff[-1]), 2)
+    ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
 
-    cases.verify_with_default_data(
-        cartesian_case,
-        fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
-    )
+    cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):

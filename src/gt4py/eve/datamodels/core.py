@@ -1002,11 +1002,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 
         def _type_converter(value: Any) -> _T:
             try:
-                return (
-                    value
-                    if isinstance(value, type_annotation)  # type: ignore[arg-type]
-                    else type_annotation(value)  # type: ignore
-                )
+                return value if isinstance(value, type_annotation) else type_annotation(value)
             except Exception as error:
                 raise TypeError(
                     f"Error during coertion of given value '{value}' for field '{name}'."
