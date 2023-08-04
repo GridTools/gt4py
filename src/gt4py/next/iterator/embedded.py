@@ -1040,7 +1040,7 @@ def np_as_located_field(
             axes,
             dtype=a.dtype,
             setter=setter,
-            array=a.__array__,
+            array=lambda: a,
             origin=origin,
         )
 

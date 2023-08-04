@@ -241,7 +241,7 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if program_source.language is not languages.Cpp:
+    if program_source.language not in [languages.Cpp, languages.Cuda]:
         raise ValueError(
             f"Can only create bindings for C++ program sources, received {program_source.language}."
         )
@@ -261,7 +261,6 @@ def create_bindings(
             "gridtools/common/tuple_util.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
-            "gridtools/fn/backend/naive.hpp",
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,

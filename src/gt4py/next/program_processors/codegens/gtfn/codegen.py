@@ -220,6 +220,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
+            block_sizes=self._block_sizes(node.offset_definitions),
             **kwargs,
         )
 
@@ -244,6 +245,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
+    
+    ${block_sizes}
 
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
@@ -256,6 +259,18 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     }
     """
     )
+
+    def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
+        block_dims = []
+        block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
+        for i, tag in enumerate(offset_definitions):
+            if tag.alias is None:
+                block_dims.append(
+                    f"gridtools::meta::list<{tag.name.id}_t, "
+                    f"gridtools::integral_constant<int, {block_sizes[i]}>>"
+                )
+        sizes_str = ",\n".join(block_dims)
+        return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
 
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:
