@@ -138,7 +138,11 @@ class UnitRange(Sequence[int]):
 DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
 
 
-@dataclasses.dataclass(frozen=True)
+from dataclasses import dataclass
+from collections.abc import Sequence
+
+
+@dataclass(frozen=True)
 class Domain(Sequence):
     dims: list[Dimension]
     ranges: list[UnitRange]
@@ -166,6 +170,10 @@ class Domain(Sequence):
     def __getitem__(self, index: slice) -> "Domain":
         ...
 
+    @overload
+    def __getitem__(self, index: Dimension) -> tuple[Dimension, UnitRange] | "Domain":
+        ...
+
     def __getitem__(self, index):
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
@@ -174,6 +182,19 @@ class Domain(Sequence):
             dims_slice = self.dims[start:stop:step]
             ranges_slice = self.ranges[start:stop:step]
             return Domain(dims_slice, ranges_slice)
+        elif isinstance(index, Dimension):
+            dim_range_subset = [
+                (dim, range_) for dim, range_ in zip(self.dims, self.ranges) if dim == index
+            ]
+            if len(dim_range_subset) > 1:
+                return Domain(
+                    [dim_range[0] for dim_range in dim_range_subset],
+                    [dim_range[1] for dim_range in dim_range_subset],
+                )
+            elif len(dim_range_subset) == 1:
+                return dim_range_subset[0]
+            else:
+                raise KeyError(f"No Dimension of type {index} is present in the Domain.")
         else:
             raise TypeError("Invalid index or key type")
 

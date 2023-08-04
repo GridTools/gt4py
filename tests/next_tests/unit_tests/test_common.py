@@ -18,6 +18,7 @@ import pytest
 from gt4py.next.common import UnitRange, Dimension, Domain, DimensionKind, Infinity
 
 IDim = Dimension("IDim")
+ECDim = Dimension("ECDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
@@ -186,6 +187,33 @@ def test_getitem_slice(domain, slice_obj, expected):
     result = domain[slice_obj]
     assert len(result) == len(expected)
     assert all(res == exp for res, exp in zip(result, expected))
+
+
+import pytest
+
+
+# Assume you have already defined the Domain class and IDim, JDim, KDim classes.
+
+@pytest.fixture
+def domain_repeat_dims():
+    dims = [IDim, JDim, KDim, IDim]
+    ranges = [UnitRange(0, 10), UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3)]
+    return Domain(dims, ranges)
+
+
+@pytest.mark.parametrize("index, expected_result", [
+    (IDim, (Domain(dims=[IDim, IDim], ranges=[UnitRange(0, 10), UnitRange(0, 3)]))),
+    (JDim, (JDim, UnitRange(0, 5))),
+    (KDim, (KDim, UnitRange(0, 8))),
+])
+def test_get_item_by_dimension(domain_repeat_dims, index, expected_result):
+    result = domain_repeat_dims[index]
+    assert result == expected_result
+
+
+def test_get_item_by_dimension_missing(domain):
+    with pytest.raises(KeyError, match=r"No Dimension of type .* is present in the Domain."):
+        domain[ECDim]
 
 
 @pytest.mark.parametrize("negative_index, expected", [
