@@ -364,7 +364,7 @@ device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
 
 device_allocators[core_defs.DeviceType.CPU] = NumPyLikeArrayBufferAllocator(
     device_type=core_defs.DeviceType.CPU,
-    array_ns_ref=cast(_NumPyLikeNamespace, np),
+    array_ns_ref=cast(_NumPyLikeNamespace, np) if TYPE_CHECKING else np,
 )
 
 if cp:
