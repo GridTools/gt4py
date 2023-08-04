@@ -121,13 +121,16 @@ def is_unsigned_integral_type(integral_type: type) -> TypeGuard[Type[UnsignedInt
     return issubclass(integral_type, UINT_TYPES)
 
 
-#: Tuple of positive integers encoding a tensor shape.
-TensorShape: TypeAlias = Sequence[UnsignedIntegral]
+TensorShape: TypeAlias = Sequence[
+    int
+]  # TODO(egparedes) figure out if UnsignedIntegral can be made to work
 
 
-def is_valid_tensor_shape(value: Sequence[IntegralScalar]) -> TypeGuard[TensorShape]:
+def is_valid_tensor_shape(
+    value: Sequence[IntegralScalar],
+) -> TypeGuard[TensorShape]:
     return isinstance(value, collections.abc.Sequence) and all(
-        isinstance(v, int) and v > 0 for v in value
+        isinstance(v, numbers.Integral) and v > 0 for v in value
     )
 
 
@@ -432,5 +435,5 @@ class NDArrayObjectProto(Protocol):
 
 NDArrayObject = Union[npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto]
 NDArrayObjectT = TypeVar(
-    "NDArrayObjectT", npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto
+    "NDArrayObjectT", npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto, covariant=True
 )

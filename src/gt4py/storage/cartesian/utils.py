@@ -205,7 +205,7 @@ def allocate_cpu(
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
-) -> Tuple[np.ndarray, np.ndarray]:
+) -> Tuple[allocators._NDBuffer, np.ndarray]:
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
     buffer = allocators.allocate(
         shape,
