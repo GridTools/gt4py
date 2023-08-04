@@ -339,6 +339,9 @@ def from_array(
         dimensions=dimensions,
     )
 
-    storage[...] = storage_utils.asarray(data)
+    if cp is not None and isinstance(storage, cp.ndarray):
+        storage[...] = cp.asarray(data)
+    else:
+        storage[...] = np.asarray(data) 
 
     return storage
