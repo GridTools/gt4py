@@ -26,6 +26,7 @@ import numpy as np
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
+    TYPE_CHECKING,
     Any,
     Generic,
     NewType,
@@ -33,11 +34,11 @@ from gt4py.eve.extended_typing import (
     Protocol,
     Sequence,
     Tuple,
-    TypeAlias,
     TypeGuard,
     TypeVar,
-    TYPE_CHECKING,
+    cast,
 )
+
 
 try:
     import cupy as cp
@@ -46,8 +47,33 @@ except ImportError:
 
 
 _ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
+
+
+class _NDArrayLike(Protocol):
+    def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
+        ...
+
+    def __getitem__(self, item: core_defs.SliceLike) -> np.ndarray:
+        ...
+
+
+class _NDArrayLikeArrayInterface(xtyping.ArrayInterface, _NDArrayLike):
+    ...
+
+
+class _NDArrayLikeCUDAArrayInterface(xtyping.CUDAArrayInterface, _NDArrayLike):
+    ...
+
+
+class _NDArrayLikeDLPackBuffer(xtyping.DLPackBuffer, _NDArrayLike):
+    ...
+
+
 _NDBufferT = TypeVar(
-    "_NDBufferT", xtyping.ArrayInterface, xtyping.CUDAArrayInterface, xtyping.DLPackBuffer
+    "_NDBufferT",
+    _NDArrayLikeArrayInterface,
+    _NDArrayLikeCUDAArrayInterface,
+    _NDArrayLikeDLPackBuffer,
 )
 
 
@@ -55,7 +81,7 @@ _NDBufferT = TypeVar(
 BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.UnsignedIntegral])
 
 
-def is_valid_layout_map(value: Sequence[core_defs.IntegralScalar]) -> TypeGuard[BufferLayoutMap]:
+def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:
     dims = list(range(len(value)))
     return (
         isinstance(value, collections.abc.Sequence)
@@ -64,7 +90,7 @@ def is_valid_layout_map(value: Sequence[core_defs.IntegralScalar]) -> TypeGuard[
     )
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True)
 class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
     """
     N-dimensional (tensor-like) memory buffer.
@@ -109,29 +135,25 @@ class TensorBuffer(Generic[_NDBufferT, _ScalarT]):
         return len(self.shape)
 
     def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
-        try:
-            return self.ndarray.__array__(dtype=dtype)
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__array__"):
             raise TypeError("Cannot export tensor buffer as NumPy array.")
+        return self.ndarray.__array__(dtype=dtype)
 
     @property
     def __cuda_array_interface__(self) -> xtyping.CUDAArrayInterfaceTypedDict:
-        try:
-            return self.ndarray.__cuda_array_interface__
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__cuda_array_interface__"):
             raise TypeError("Cannot export tensor buffer to CUDA array interface.")
+        return self.ndarray.__cuda_array_interface__
 
     def __dlpack__(self) -> xtyping.PyCapsule:
-        try:
-            return self.ndarray.__dlpack__()
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__dlpack__"):
             raise TypeError("Cannot export tensor buffer to DLPack.")
+        return self.ndarray.__dlpack__()
 
     def __dlpack_device__(self) -> xtyping.DLPackDevice:
-        try:
-            return self.ndarray.__dlpack_device__()
-        except (AttributeError, TypeError):
+        if not hasattr(self.ndarray, "__dlpack_device__"):
             raise TypeError("Cannot extract DLPack device from tensor buffer.")
+        return self.ndarray.__dlpack_device__()
 
 
 class BufferAllocator(Protocol[_NDBufferT]):
@@ -145,10 +167,10 @@ class BufferAllocator(Protocol[_NDBufferT]):
         self,
         shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
-        layout_map: Sequence[int],
+        layout_map: BufferLayoutMap,
         device: core_defs.Device,
-        byte_alignment: Optional[int] = None,
-        aligned_index: Sequence[int] = None,
+        byte_alignment: int,
+        aligned_index: Optional[Sequence[int]] = None,
     ) -> TensorBuffer[_NDBufferT, _ScalarT]:
         """
         Allocate a TensorBuffer with the given shape, layout and alignment settings.
@@ -174,10 +196,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
         self,
         shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
-        layout_map: Sequence[int],
+        layout_map: BufferLayoutMap,
         device: core_defs.Device,
-        byte_alignment: Optional[int] = None,
-        aligned_index: Sequence[int] = None,
+        byte_alignment: int,
+        aligned_index: Optional[Sequence[int]] = None,
     ) -> TensorBuffer[_NDBufferT, _ScalarT]:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
@@ -195,20 +217,24 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
 
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
-        padded_shape: Sequence[int] = list(shape)
-        padded_shape[dims_layout[-1]] = (
+        padded_shape_lst = list(shape)
+        padded_shape_lst[dims_layout[-1]] = (
             math.ceil(shape[dims_layout[-1]] / items_per_aligned_block) * items_per_aligned_block
         )
-        padded_shape = tuple(shape)
+        padded_shape = tuple(padded_shape_lst)
+        assert core_defs.is_valid_tensor_shape(padded_shape)
         total_length = item_size * functools.reduce(operator.mul, padded_shape) + (
             byte_alignment - 1
-        )
+        )  # the worst case for misalignment is `byte_alignment - 1`
 
         # Compute strides
-        strides = [item_size] * len(shape)
+        strides_lst = [item_size] * len(shape)
         accumulator = item_size
         for i in range(len(shape) - 2, -1, -1):
-            accumulator = strides[dims_layout[i]] = accumulator * padded_shape[dims_layout[i + 1]]
+            accumulator = strides_lst[dims_layout[i]] = (
+                accumulator * padded_shape[dims_layout[i + 1]]
+            )
+        strides = tuple(strides_lst)
 
         # Allocate total size
         buffer = self.raw_alloc(total_length, device)
@@ -222,10 +248,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[_NDBufferT]):
             - aligned_index[dims_layout[-1]]
         ) * item_size
 
-        allocation_mismatch = (memory_address % byte_alignment) // item_size
-        byte_offset = item_size * (
-            (aligned_index_offset - allocation_mismatch) % items_per_aligned_block
-        )
+        allocation_mismatch_offset = (
+            byte_alignment - memory_address % byte_alignment
+        ) % byte_alignment
+        byte_offset = (aligned_index_offset + allocation_mismatch_offset) % byte_alignment
 
         # Create shaped view from buffer
         ndarray = self.tensorize(
@@ -274,7 +300,7 @@ if TYPE_CHECKING:
     class _NumPyLikeNamespace(Protocol[_NDBufferT]):
         class _NumPyLibModule(Protocol):
             class _NumPyLibStridesModule(Protocol):
-                def as_strided(ndarray: _NDBufferT, **kwargs: Any) -> _NDBufferT:
+                def as_strided(self, ndarray: _NDBufferT, **kwargs: Any) -> _NDBufferT:
                     ...
 
             stride_tricks: _NumPyLibStridesModule
@@ -298,10 +324,12 @@ class NumPyLikeArrayBufferAllocator(_BaseNDArrayBufferAllocator[_NDBufferT]):
         return self.array_ns_ref
 
     def raw_alloc(self, length: int, device: core_defs.Device) -> _NDBufferT:
-        if device.device_type != core_defs.DeviceType.CPU or device.device_id != 0:
+        if device.device_type != core_defs.DeviceType.CPU and device.device_id != 0:
             raise ValueError(f"Unsupported device {device} for memory allocation")
 
-        return self.array_ns.empty(shape=(length,), dtype=np.uint8)
+        shape = (length,)
+        assert core_defs.is_valid_tensor_shape(shape)  # for mypy
+        return self.array_ns.empty(shape=shape, dtype=np.dtype(np.uint8))
 
     def tensorize(
         self,
@@ -330,12 +358,12 @@ device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
 
 device_allocators[core_defs.DeviceType.CPU] = NumPyLikeArrayBufferAllocator(
     device_type=core_defs.DeviceType.CPU,
-    array_ns_ref=np,
+    array_ns_ref=cast(_NumPyLikeNamespace, np),
 )
 
 if cp:
     device_allocators[core_defs.DeviceType.CUDA] = NumPyLikeArrayBufferAllocator(
-        device_type=core_defs.DeviceType.CPU,
+        device_type=core_defs.DeviceType.CUDA,
         array_ns_ref=cp,
     )
 
@@ -345,16 +373,18 @@ def allocate(
     dtype: core_defs.DType[_ScalarT],
     layout_map: BufferLayoutMap,
     *,
-    byte_alignment: Optional[int] = None,
-    aligned_index: Sequence[int] = None,
-    device: core_defs.Device = None,
-    allocator: BufferAllocator = None,
+    byte_alignment: int,
+    aligned_index: Optional[Sequence[int]] = None,
+    device: Optional[core_defs.Device] = None,
+    allocator: Optional[BufferAllocator] = None,
 ) -> TensorBuffer:
     """Allocate a TensorBuffer with the given settings on the given device."""
-
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
-    device = device or allocator.device_type
+    if device is None:
+        assert allocator is not None  # for mypy
+        device = core_defs.Device(allocator.device_type, 0)
+    assert device is not None  # for mypy
     allocator = allocator or device_allocators[device.device_type]
     if device.device_type != allocator.device_type:
         raise ValueError(f"Device {device} and allocator {allocator} are incompatible")

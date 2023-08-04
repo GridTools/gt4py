@@ -20,11 +20,13 @@ import enum
 import functools
 import math
 import numbers
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve.extended_typing import (
+    TYPE_CHECKING,
     Any,
     Final,
     Generic,
@@ -38,20 +40,18 @@ from gt4py.eve.extended_typing import (
     TypeGuard,
     TypeVar,
     Union,
-    TYPE_CHECKING,
     cast,
-    overload,
 )
 
 
 if TYPE_CHECKING:
     import cupy as cp
 
-    CuPyNDArray = cp.ndarray
+    CuPyNDArray: TypeAlias = cp.ndarray
 
     import jax.numpy as jnp
 
-    JaxNDArray = jnp.ndarray
+    JaxNDArray: TypeAlias = jnp.ndarray
 
 
 # -- Scalar types supported by GT4Py --
@@ -72,23 +72,28 @@ float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
 BoolT = TypeVar("BoolT", bound=Union[bool_, bool])
-BOOL_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
+BOOL_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
+
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
 IntT = TypeVar("IntT", bound=Union[int8, int16, int32, int64, int])
-INT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
+INT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
+
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=Union[uint8, uint16, uint32, uint64])
-UINT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
+UINT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
+
 
 IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
 IntegralT = TypeVar("IntegralT", bound=Union[IntScalar, UnsignedIntScalar])
-INTEGRAL_TYPES: Final[tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
+INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
+
 
 FloatingScalar: TypeAlias = Union[float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=Union[float32, float64, float])
-FLOAT_TYPES: Final[tuple[type, ...]] = cast(tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
+FLOAT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
+
 
 #: Type alias for all scalar types supported by GT4Py
 Scalar: TypeAlias = Union[BoolScalar, IntegralScalar, FloatingScalar]
@@ -220,7 +225,7 @@ class DType(Generic[ScalarT]):
 
     @functools.cached_property
     def dtype(self) -> np.dtype:
-        """NumPy dtype corresponding to this DType."""
+        """The NumPy dtype corresponding to this DType."""
         return np.dtype(f"{self.tensor_shape}{np.dtype(self.scalar_type).name}")
 
     @functools.cached_property
@@ -345,7 +350,7 @@ class DeviceType(enum.Enum):
     ROCM = 10
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(frozen=True)
 class Device:
     """
     Representation of a computing device.
@@ -366,7 +371,7 @@ class Device:
 
 
 # -- NDArrays and slices --
-SliceLike = Union[int, tuple[int, ...], None, slice, "NDArrayObject"]
+SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
 
 
 class NDArrayObjectProto(Protocol):

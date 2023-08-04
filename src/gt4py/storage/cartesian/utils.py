@@ -17,20 +17,22 @@ from __future__ import annotations
 import collections.abc
 import math
 import numbers
-from typing import Any, Dict, Iterable, Literal, Optional, Sequence, Tuple, Union, cast, overload
+from typing import Any, Literal, Optional, Sequence, Tuple, Union, cast
 
 import numpy as np
 import numpy.typing as npt
+
 
 try:
     import dace
 except ImportError:
     dace = None
 
-from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
 from gt4py.storage.cartesian import layout
+
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
     from numpy.typing import DTypeLike
@@ -39,7 +41,6 @@ else:
 
 try:
     import cupy as cp
-    from cupy.lib.stride_tricks import as_strided
 except ImportError:
     cp = None
 
@@ -200,7 +201,7 @@ def get_origin(obj: Union[core_defs.GTDimsInterface, npt.NDArray]) -> Optional[T
 
 def allocate_cpu(
     shape: Sequence[int],
-    layout_map: Iterable[Optional[int]],
+    layout_map: allocators.BufferLayoutMap,
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
@@ -209,7 +210,7 @@ def allocate_cpu(
     buffer = allocators.allocate(
         shape,
         core_defs.dtype(dtype),
-        layout_map=tuple(layout_map),
+        layout_map=layout_map,
         device=device,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
@@ -219,7 +220,7 @@ def allocate_cpu(
 
 def allocate_gpu(
     shape: Sequence[int],
-    layout_map: Iterable[Optional[int]],
+    layout_map: allocators.BufferLayoutMap,
     dtype: DTypeLike,
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
@@ -229,7 +230,7 @@ def allocate_gpu(
     buffer = allocators.allocate(
         shape,
         core_defs.dtype(dtype),
-        layout_map=tuple(layout_map),
+        layout_map=layout_map,
         device=device,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
