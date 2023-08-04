@@ -46,8 +46,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
     if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("`maxover` broken in gtfn, see #1289.")
 
@@ -65,9 +63,6 @@ def test_maxover_execution_(unstructured_case, strategy):
 
 
 def test_minover_execution(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
@@ -120,9 +115,6 @@ def test_reduction_expression_in_call(unstructured_case):
 
 
 def test_reduction_with_common_expression(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
-
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)

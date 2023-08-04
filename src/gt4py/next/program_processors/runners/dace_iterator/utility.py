@@ -81,6 +81,75 @@ def map_nested_sdfg_symbols(
     return symbol_mapping
 
 
+def add_mapped_nested_sdfg(
+    state: dace.SDFGState,
+    map_ranges: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
+    inputs: dict[str, dace.Memlet],
+    outputs: dict[str, dace.Memlet],
+    sdfg: dace.SDFG,
+    symbol_mapping: dict[str, Any] | None = None,
+    schedule: Any = dace.dtypes.ScheduleType.Default,
+    unroll_map: bool = False,
+    location: Any = None,
+    debuginfo: Any = None,
+    input_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+    output_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+) -> tuple[dace.nodes.NestedSDFG, dace.nodes.MapEntry, dace.nodes.MapExit]:
+    if not symbol_mapping:
+        symbol_mapping = {sym: sym for sym in sdfg.free_symbols}
+
+    nsdfg_node = state.add_nested_sdfg(
+        sdfg,
+        None,
+        set(inputs.keys()),
+        set(outputs.keys()),
+        symbol_mapping,
+        name=sdfg.name,
+        schedule=schedule,
+        location=location,
+        debuginfo=debuginfo,
+    )
+
+    map_entry, map_exit = state.add_map(
+        f"{sdfg.name}_map", map_ranges, schedule, unroll_map, debuginfo
+    )
+
+    if input_nodes is None:
+        input_nodes = {
+            memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()
+        }
+    if output_nodes is None:
+        output_nodes = {
+            memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
+        }
+    if not inputs:
+        state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
+    for name, memlet in inputs.items():
+        state.add_memlet_path(
+            input_nodes[memlet.data],
+            map_entry,
+            nsdfg_node,
+            memlet=memlet,
+            src_conn=None,
+            dst_conn=name,
+            propagate=True,
+        )
+    if not outputs:
+        state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
+    for name, memlet in outputs.items():
+        state.add_memlet_path(
+            nsdfg_node,
+            map_exit,
+            output_nodes[memlet.data],
+            memlet=memlet,
+            src_conn=name,
+            dst_conn=None,
+            propagate=True,
+        )
+
+    return nsdfg_node, map_entry, map_exit
+
+
 _unique_id = 0
 
 

@@ -29,6 +29,7 @@ from gt4py.next.iterator.type_inference import Val
 from gt4py.next.type_system import type_specifications as ts
 
 from .utility import (
+    add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
     create_memlet_at,
@@ -625,47 +626,123 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
 
     def _visit_reduce(self, node: itir.FunCall):
-        assert (
-            isinstance(node.args[0], itir.FunCall)
-            and isinstance(node.args[0].fun, itir.SymRef)
-            and node.args[0].fun.id == "neighbors"
-        )
-        args = self.visit(node.args)
-        assert len(args) == 1
-        args = args[0]
-        assert len(args) == 1
-        assert isinstance(node.fun, itir.FunCall)
-        op_name = node.fun.args[0]
-        assert isinstance(op_name, itir.SymRef)
-        init = node.fun.args[1]
-
-        nreduce = self.context.body.arrays[args[0].value.data].shape[0]
-
         result_name = unique_var_name()
         result_access = self.context.state.add_access(result_name)
-        self.context.body.add_scalar(result_name, args[0].dtype, transient=True)
-        op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
-        reduce_tasklet = self.context.state.add_tasklet(
-            "reduce",
-            code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
-            inputs={"__values"},
-            outputs={"__result"},
-        )
-        self.context.state.add_edge(
-            args[0].value,
-            None,
-            reduce_tasklet,
-            "__values",
-            dace.Memlet(data=args[0].value.data, subset=f"0:{nreduce}"),
-        )
-        self.context.state.add_edge(
-            reduce_tasklet,
-            "__result",
-            result_access,
-            None,
-            dace.Memlet(data=result_name, subset="0"),
-        )
-        return [ValueExpr(result_access, args[0].dtype)]
+
+        if len(node.args) == 1:
+            assert (
+                isinstance(node.args[0], itir.FunCall)
+                and isinstance(node.args[0].fun, itir.SymRef)
+                and node.args[0].fun.id == "neighbors"
+            )
+            args = self.visit(node.args)
+            assert len(args) == 1
+            args = args[0]
+            assert len(args) == 1
+            neighbors_expr = args[0]
+            result_dtype = neighbors_expr.dtype
+            assert isinstance(node.fun, itir.FunCall)
+            op_name = node.fun.args[0]
+            assert isinstance(op_name, itir.SymRef)
+            init = node.fun.args[1]
+
+            nreduce = self.context.body.arrays[neighbors_expr.value.data].shape[0]
+
+            self.context.body.add_scalar(result_name, result_dtype, transient=True)
+            op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
+            reduce_tasklet = self.context.state.add_tasklet(
+                "reduce",
+                code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
+                inputs={"__values"},
+                outputs={"__result"},
+            )
+            self.context.state.add_edge(
+                args[0].value,
+                None,
+                reduce_tasklet,
+                "__values",
+                dace.Memlet(data=neighbors_expr.value.data, subset=f"0:{nreduce}"),
+            )
+            self.context.state.add_edge(
+                reduce_tasklet,
+                "__result",
+                result_access,
+                None,
+                dace.Memlet(data=result_name, subset="0"),
+            )
+        else:
+            assert isinstance(node.fun, itir.FunCall)
+            assert isinstance(node.fun.args[0], itir.Lambda)
+            fun_node = node.fun.args[0]
+
+            args = list(itertools.chain(*self.visit(node.args)))
+            assert len(node.args) == len(args)
+            # filter neighbor expressions
+            neighbors_expr = [
+                expr
+                for arg, expr in zip(node.args, args)
+                if isinstance(arg, itir.FunCall)
+                and isinstance(arg.fun, itir.SymRef)
+                and arg.fun.id == "neighbors"
+            ]
+            # check that all neighbors expression have the same range
+            assert (
+                len(
+                    set(
+                        [self.context.body.arrays[expr.value.data].shape for expr in neighbors_expr]
+                    )
+                )
+                == 1
+            )
+            result_dtype = neighbors_expr[0].dtype
+
+            self.context.body.add_scalar(result_name, result_dtype, transient=True)
+
+            assert isinstance(fun_node.expr, itir.FunCall)
+            lambda_node = itir.Lambda(expr=fun_node.expr.args[1], params=fun_node.params[1:])
+            lambda_context, inner_inputs, inner_outputs = self.visit(lambda_node, args=args)
+
+            nreduce = self.context.body.arrays[neighbors_expr[0].value.data].shape[0]
+            nreduce_domain = {"__idx": f"0:{nreduce}"}
+
+            input_memlets = [
+                create_memlet_at(expr.value.data, ("__idx",))
+                if isinstance(arg, itir.FunCall)
+                and isinstance(arg.fun, itir.SymRef)
+                and arg.fun.id == "neighbors"
+                else create_memlet_full(expr.value.data, self.context.body.arrays[expr.value.data])
+                for arg, expr in zip(node.args, args)
+            ]
+
+            # this is a lambda function for reduction of neighbors, so neighbor tables are not needed inside
+            neighbor_tables = filter_neighbor_tables(self.offset_provider)
+            for conn, _ in neighbor_tables:
+                var = connectivity_identifier(conn)
+                lambda_context.body.remove_data(var)
+
+            op_name = fun_node.expr.fun
+            assert isinstance(op_name, itir.SymRef)
+            wcr_str = "lambda x, y: " + _MATH_BUILTINS_MAPPING[str(op_name)].format("x", "y")
+            output_memlet = dace.Memlet(data=result_name, subset="0", wcr=wcr_str)
+
+            input_mapping = {param: arg for (param, _), arg in zip(inner_inputs, input_memlets)}
+            output_mapping = {inner_outputs[0].value.data: output_memlet}
+            symbol_mapping = map_nested_sdfg_symbols(
+                self.context.body, lambda_context.body, input_mapping
+            )
+
+            nsdfg_node, map_entry, _ = add_mapped_nested_sdfg(
+                self.context.state,
+                sdfg=lambda_context.body,
+                map_ranges=nreduce_domain,
+                inputs=input_mapping,
+                outputs=output_mapping,
+                symbol_mapping=symbol_mapping,
+                input_nodes={arg.value.data: arg.value for arg in args},
+                output_nodes={result_name: result_access},
+            )
+
+        return [ValueExpr(result_access, result_dtype)]
 
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
