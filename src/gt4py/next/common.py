@@ -20,7 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence
-from typing import overload
+from typing import overload, Set
 import numpy as np
 import numpy.typing as npt
 
@@ -50,14 +50,14 @@ Scalar: TypeAlias = gt4py_defs.Scalar
 NDArrayObject = gt4py_defs.NDArrayObject
 
 
-class Infinity:
-    @staticmethod
-    def positive() -> int:
-        return sys.maxsize
+class Infinity(int):
+    @classmethod
+    def positive(cls) -> "Infinity":
+        return cls(sys.maxsize)
 
-    @staticmethod
-    def negative() -> int:
-        return -sys.maxsize
+    @classmethod
+    def negative(cls) -> "Infinity":
+        return cls(-sys.maxsize)
 
 
 @enum.unique
@@ -85,6 +85,7 @@ DomainLike: TypeAlias = Union[Sequence[Dimension], Dimension, str]
 @dataclasses.dataclass(frozen=True)
 class UnitRange(Sequence[int]):
     """Range from `start` to `stop` with step size one."""
+
     start: int
     stop: int
 
@@ -96,7 +97,7 @@ class UnitRange(Sequence[int]):
 
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
-            raise ValueError("Cannot get length of infinite range.")
+            return Infinity.positive()
         return max(0, self.stop - self.start)
 
     def __repr__(self) -> str:
@@ -138,18 +139,15 @@ NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 
 @dataclasses.dataclass(frozen=True)
 class Domain(Sequence[NamedRange]):
-    dims: list[Dimension]
-    ranges: list[UnitRange]
+    dims: Sequence[Dimension]
+    ranges: Sequence[UnitRange]
 
     def __post_init__(self):
         if len(set(self.dims)) != len(self.dims):
-            raise ValueError(f"Domain dimensions must be unique, not {self.dims}.")
+            raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
 
     def __len__(self) -> int:
         return len(self.ranges)
-
-    def __iter__(self):
-        return iter(zip(self.dims, self.ranges))
 
     @overload
     def __getitem__(self, index: int) -> NamedRange:
@@ -184,24 +182,24 @@ class Domain(Sequence[NamedRange]):
         intersected_ranges = [
             rng1 & rng2
             for rng1, rng2 in zip(
-                self._broadcast(broadcast_dims, self.dims, self.ranges),
-                self._broadcast(broadcast_dims, other.dims, other.ranges),
+                broadcast_ranges(broadcast_dims, self.dims, self.ranges),
+                broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         ]
         return Domain(broadcast_dims, intersected_ranges)
 
-    @staticmethod
-    def _broadcast(
-            broadcast_dims: list[Dimension], dims: list[Dimension], ranges: list[UnitRange]
-    ) -> list[UnitRange]:
-        if len(dims) == len(broadcast_dims):
-            return ranges
 
-        broadcasted_ranges = list(ranges)
-        for i in range(len(broadcast_dims) - len(dims)):
-            broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
+def broadcast_ranges(
+    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+) -> Sequence[UnitRange]:
+    if len(dims) == len(broadcast_dims):
+        return ranges
 
-        return broadcasted_ranges
+    broadcasted_ranges = list(ranges)
+    for i in range(len(broadcast_dims) - len(dims)):
+        broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
+
+    return broadcasted_ranges
 
 
 if TYPE_CHECKING:
@@ -210,7 +208,6 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
-
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -325,11 +322,11 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-        definition: Any,
-        /,
-        *,
-        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-        value_type: Optional[type] = None,
+    definition: Any,
+    /,
+    *,
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+    value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -359,7 +356,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-            self, cur_index: int | np.integer, neigh_index: int | np.integer
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
@@ -375,7 +372,7 @@ class GridType(StrEnum):
     UNSTRUCTURED = "unstructured"
 
 
-def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
+def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.
 

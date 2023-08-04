@@ -11,10 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import Optional, Pattern
 
 import pytest
 
-from gt4py.next.common import UnitRange, Dimension, Domain, DimensionKind, Infinity
+from gt4py.next.common import UnitRange, Dimension, Domain, DimensionKind, Infinity, promote_dims
 
 IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
@@ -82,16 +83,43 @@ def test_unit_range_slice_error(rng):
         rng[1:2:5]
 
 
-@pytest.mark.parametrize("rng1, rng2, expected", [
-    (UnitRange(0, 5), UnitRange(10, 15), UnitRange(0, 0)),
-    (UnitRange(0, 5), UnitRange(5, 10), UnitRange(5, 5)),
-    (UnitRange(0, 5), UnitRange(3, 7), UnitRange(3, 5)),
-    (UnitRange(0, 5), UnitRange(1, 6), UnitRange(1, 5)),
-    (UnitRange(0, 5), UnitRange(-5, 5), UnitRange(0, 5)),
-    (UnitRange(0, 0), UnitRange(0, 5), UnitRange(0, 0)),
-    (UnitRange(0, 0), UnitRange(0, 0), UnitRange(0, 0)),
-])
+@pytest.mark.parametrize(
+    "rng1, rng2, expected",
+    [
+        (UnitRange(0, 5), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(0, 5), UnitRange(5, 10), UnitRange(5, 5)),
+        (UnitRange(0, 5), UnitRange(3, 7), UnitRange(3, 5)),
+        (UnitRange(0, 5), UnitRange(1, 6), UnitRange(1, 5)),
+        (UnitRange(0, 5), UnitRange(-5, 5), UnitRange(0, 5)),
+        (UnitRange(0, 0), UnitRange(0, 5), UnitRange(0, 0)),
+        (UnitRange(0, 0), UnitRange(0, 0), UnitRange(0, 0)),
+    ],
+)
 def test_unit_range_intersection(rng1, rng2, expected):
+    result = rng1 & rng2
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "rng1, rng2, expected",
+    [
+        (UnitRange(20, Infinity.positive()), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(Infinity.negative(), 0), UnitRange(5, 10), UnitRange(0, 0)),
+        (UnitRange(Infinity.negative(), 0), UnitRange(-10, 0), UnitRange(-10, 0)),
+        (UnitRange(0, Infinity.positive()), UnitRange(Infinity.negative(), 5), UnitRange(0, 5)),
+        (
+            UnitRange(Infinity.negative(), 0),
+            UnitRange(Infinity.negative(), 5),
+            UnitRange(Infinity.negative(), 0),
+        ),
+        (
+            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative(), Infinity.positive()),
+        ),
+    ],
+)
+def test_unit_range_infinite_intersection(rng1, rng2, expected):
     result = rng1 & rng2
     assert result == expected
 
@@ -103,8 +131,7 @@ def test_positive_infinity_range():
 
 def test_mixed_infinity_range():
     mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
-    with pytest.raises(ValueError):
-        len(mixed_inf_range)
+    assert len(mixed_inf_range) == Infinity.positive()
 
 
 def test_domain_length(domain):
@@ -131,8 +158,12 @@ def test_domain_intersection_different_dimensions(domain):
     assert all(isinstance(r, UnitRange) for r in result_domain.ranges)
     assert result_domain.dims == [IDim, JDim, KDim]
 
-    assert result_domain.ranges[0] == UnitRange(2, 10)  # Intersection of domain.range1 and domain2.range1
-    assert result_domain.ranges[1] == UnitRange(7, 15)  # Intersection of domain.range2 and domain2.range2
+    assert result_domain.ranges[0] == UnitRange(
+        2, 10
+    )  # Intersection of domain.range1 and domain2.range1
+    assert result_domain.ranges[1] == UnitRange(
+        7, 15
+    )  # Intersection of domain.range2 and domain2.range2
     assert result_domain.ranges[2] == UnitRange(20, 30)  # Broadcasting on missing dimension
 
 
@@ -141,27 +172,35 @@ def test_domain_intersection_reversed_dimensions(domain):
     ranges = (UnitRange(2, 12), UnitRange(7, 17))
     domain2 = Domain(dimensions, ranges)
 
-    with pytest.raises(ValueError,
-                       match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim."):
+    with pytest.raises(
+        ValueError,
+        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
+    ):
         domain & domain2
 
 
-@pytest.mark.parametrize("index, expected", [
-    (0, (IDim, UnitRange(0, 10))),
-    (1, (JDim, UnitRange(5, 15))),
-    (2, (KDim, UnitRange(20, 30))),
-    (-1, (KDim, UnitRange(20, 30))),
-    (-2, (JDim, UnitRange(5, 15))),
-])
+@pytest.mark.parametrize(
+    "index, expected",
+    [
+        (0, (IDim, UnitRange(0, 10))),
+        (1, (JDim, UnitRange(5, 15))),
+        (2, (KDim, UnitRange(20, 30))),
+        (-1, (KDim, UnitRange(20, 30))),
+        (-2, (JDim, UnitRange(5, 15))),
+    ],
+)
 def test_domain_integer_indexing(domain, index, expected):
     result = domain[index]
     assert result == expected
 
 
-@pytest.mark.parametrize("slice_obj, expected", [
-    (slice(0, 2), [(IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15))]),
-    (slice(1, None), [(JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30))]),
-])
+@pytest.mark.parametrize(
+    "slice_obj, expected",
+    [
+        (slice(0, 2), ((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)))),
+        (slice(1, None), ((JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))),
+    ],
+)
 def test_domain_slice_indexing(domain, slice_obj, expected):
     result = domain[slice_obj]
     assert isinstance(result, Domain)
@@ -169,10 +208,13 @@ def test_domain_slice_indexing(domain, slice_obj, expected):
     assert all(res == exp for res, exp in zip(result, expected))
 
 
-@pytest.mark.parametrize("index, expected_result", [
-    (JDim, (JDim, UnitRange(5, 15))),
-    (KDim, (KDim, UnitRange(20, 30))),
-])
+@pytest.mark.parametrize(
+    "index, expected_result",
+    [
+        (JDim, (JDim, UnitRange(5, 15))),
+        (KDim, (KDim, UnitRange(20, 30))),
+    ],
+)
 def test_domain_dimension_indexing(domain, index, expected_result):
     result = domain[index]
     assert result == expected_result
@@ -184,12 +226,59 @@ def test_domain_indexing_dimension_missing(domain):
 
 
 def test_domain_indexing_invalid_type(domain):
-    with pytest.raises(KeyError, match="Invalid index type, must be either int, slice, or Dimension."):
+    with pytest.raises(
+        KeyError, match="Invalid index type, must be either int, slice, or Dimension."
+    ):
         domain["foo"]
 
 
 def test_domain_repeat_dims():
-    dims = [IDim, JDim, IDim]
-    ranges = [UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3)]
-    with pytest.raises(ValueError, match=r"Domain dimensions must be unique, not .*"):
+    dims = (IDim, JDim, IDim)
+    ranges = (UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3))
+    with pytest.raises(NotImplementedError, match=r"Domain dimensions must be unique, not .*"):
         Domain(dims, ranges)
+
+
+def dimension_promotion_cases() -> (
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+):
+    raw_list = [
+        # list of list of dimensions, expected result, expected error message
+        ([["I", "J"], ["I"]], ["I", "J"], None),
+        ([["I", "J"], ["J"]], ["I", "J"], None),
+        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
+        (
+            [["I", "J"], ["J", "I"]],
+            None,
+            r"The following dimensions appear in contradicting order: I, J.",
+        ),
+        (
+            [["I", "K"], ["J", "K"]],
+            None,
+            r"Could not determine order of the following dimensions: I, J",
+        ),
+    ]
+    # transform dimension names into Dimension objects
+    return [
+        (
+            [[Dimension(el) for el in arg] for arg in args],
+            [Dimension(el) for el in result] if result else result,
+            msg,
+        )
+        for args, result, msg in raw_list
+    ]
+
+
+@pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
+def test_dimension_promotion(
+    dim_list: list[list[Dimension]],
+    expected_result: Optional[list[Dimension]],
+    expected_error_msg: Optional[str],
+):
+    if expected_result:
+        assert promote_dims(*dim_list) == expected_result
+    else:
+        with pytest.raises(Exception) as exc_info:
+            promote_dims(*dim_list)
+
+        assert exc_info.match(expected_error_msg)

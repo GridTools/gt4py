@@ -19,7 +19,7 @@ from typing import Any, Callable, Iterator, Type, TypeGuard, cast
 import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next.common import Dimension, DimensionKind, promote_dims
+from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -65,8 +65,8 @@ def primitive_constituents(
     """
     Return the primitive types contained in a composite type.
 
-    >>> from gt4py.next import Dimension
-    >>> I = Dimension(value="I")
+    >>> from gt4py.next import common
+    >>> I = common.Dimension(value="I")
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
@@ -275,7 +275,7 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
     return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
 
-def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
+def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     """
     Try to extract field dimensions if possible.
 
@@ -285,8 +285,8 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
     ---------
     >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
     []
-    >>> I = Dimension(value="I")
-    >>> J = Dimension(value="J")
+    >>> I = common.Dimension(value="I")
+    >>> J = common.Dimension(value="J")
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
@@ -304,14 +304,14 @@ def is_local_field(type_: ts.FieldType) -> bool:
 
     Examples:
     ---------
-    >>> V = Dimension(value="V")
-    >>> V2E = Dimension(value="V2E", kind=DimensionKind.LOCAL)
+    >>> V = common.Dimension(value="V")
+    >>> V2E = common.Dimension(value="V2E", kind=DimensionKind.LOCAL)
     >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     True
     >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     False
     """
-    return any(dim.kind == DimensionKind.LOCAL for dim in type_.dims)
+    return any(dim.kind == common.DimensionKind.LOCAL for dim in type_.dims)
 
 
 def contains_local_field(type_: ts.TypeSpec) -> bool:
@@ -379,10 +379,10 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
 
     The resulting type is defined on all dimensions of the arguments, respecting
     the individual order of the dimensions of each argument (see
-    :func:`promote_dims` for more details).
+    :func:`common.promote_dims` for more details).
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype),
     ...     ts.FieldType(dims=[I, J, K], dtype=dtype),
@@ -406,7 +406,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
-        dims = promote_dims(*(extract_dims(type_) for type_ in types))
+        dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
         dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
 
         return ts.FieldType(dims=dims, dtype=dtype)

@@ -36,7 +36,7 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next.common import promote_dims
+from gt4py.next import common
 
 
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
@@ -460,51 +460,6 @@ def test_unpack_assign():
         dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
-
-
-def dimension_promotion_cases() -> (
-    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
-):
-    raw_list = [
-        # list of list of dimensions, expected result, expected error message
-        ([["I", "J"], ["I"]], ["I", "J"], None),
-        ([["I", "J"], ["J"]], ["I", "J"], None),
-        ([["I", "J"], ["J", "K"]], ["I", "J", "K"], None),
-        (
-            [["I", "J"], ["J", "I"]],
-            None,
-            r"The following dimensions appear in contradicting order: I, J.",
-        ),
-        (
-            [["I", "K"], ["J", "K"]],
-            None,
-            r"Could not determine order of the following dimensions: I, J",
-        ),
-    ]
-    # transform dimension names into Dimension objects
-    return [
-        (
-            [[Dimension(el) for el in arg] for arg in args],
-            [Dimension(el) for el in result] if result else result,
-            msg,
-        )
-        for args, result, msg in raw_list
-    ]
-
-
-@pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
-def test_dimension_promotion(
-    dim_list: list[list[Dimension]],
-    expected_result: Optional[list[Dimension]],
-    expected_error_msg: Optional[str],
-):
-    if expected_result:
-        assert promote_dims(*dim_list) == expected_result
-    else:
-        with pytest.raises(Exception) as exc_info:
-            promote_dims(*dim_list)
-
-        assert exc_info.match(expected_error_msg)
 
 
 def test_assign_tuple():
