@@ -743,7 +743,6 @@ def test_with_bound_args(cartesian_case):
 
     a = cases.allocate(cartesian_case, program_bound_args, "a")()
     scalar = int32(1)
-    bool_val = True
     ref = a.array() + a.array() + 1
     out = cases.allocate(cartesian_case, program_bound_args, "out")()
 

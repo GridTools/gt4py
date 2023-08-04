@@ -361,16 +361,16 @@ class Program:
 
 @dataclasses.dataclass(frozen=True)
 class ProgramWithBoundArgs(Program):
-    past_node: past.Program
-    closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
-    grid_type: Optional[GridType] = None
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
     def _process_args(self, args: tuple, kwargs: dict):
         args = list(args)
         b_args = self.bound_args
+        if (len(args) + len(b_args)) != len(self.past_node.params):
+            raise TypeError(
+                "Total number of arguments and keyword arguments does not match original program definition!"
+            )
+
         for index, param in enumerate(self.past_node.params):
             if param.id in list(b_args.keys()):
                 args.insert(index, b_args[param.id])

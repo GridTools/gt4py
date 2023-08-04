@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.next.iterator import ir_makers as im
-from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 
 
@@ -22,21 +21,4 @@ def test_deref_propagation():
     expected = im.call(im.lambda_("inner_it")(im.deref(im.lift("stencil")("inner_it"))))("outer_it")
 
     actual = PropagateDeref.apply(testee)
-    assert actual == expected
-
-
-def test_constant_folding():
-    testee = im.not_(im.literal_from_value(True))
-    expected = im.literal_from_value(False)
-    actual = ConstantFolding.apply(testee)
-
-    assert actual == expected
-    expected = im.literal_from_value(13)
-    testee = im.plus(
-        im.literal_from_value(4),
-        im.plus(
-            im.literal_from_value(7), im.minus(im.literal_from_value(7), im.literal_from_value(5))
-        ),
-    )
-    actual = ConstantFolding.apply(testee)
     assert actual == expected
