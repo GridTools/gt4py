@@ -48,7 +48,7 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.iterator import builtins, runtime, utils
+from gt4py.next.iterator import builtins, runtime
 
 
 EMBEDDED = "embedded"
@@ -143,6 +143,13 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, np.integer))
 
 
+def _tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
+
+
 @runtime_checkable
 class ItIterator(Protocol):
     """
@@ -167,13 +174,17 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
         ...
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple([0] * len(self.__gt_dims__))
 
 
 class MutableLocatedField(LocatedField, Protocol):
@@ -674,7 +685,9 @@ def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of LocatedField
     return (
-        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
+        _get_axes(field_or_tuple[0])
+        if isinstance(field_or_tuple, tuple)
+        else field_or_tuple.__gt_dims__
     )
 
 
@@ -869,7 +882,7 @@ class LocatedFieldImpl(MutableLocatedField):
     """A Field with named dimensions/axes."""
 
     @property
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._axes
 
     def __init__(
@@ -880,19 +893,21 @@ class LocatedFieldImpl(MutableLocatedField):
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: Callable[[], npt.NDArray],
+        origin: Optional[dict[common.Dimension, int]] = None,
     ):
         self.getter = getter
         self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
+        self.origin = origin
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
     def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = utils.tupelize(indices)
+        indices = _tupelize(indices)
         return self.getter(indices)
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
@@ -903,6 +918,15 @@ class LocatedFieldImpl(MutableLocatedField):
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        if not self.origin:
+            return tuple([0] * len(self.__gt_dims__))
+        return cast(
+            tuple[int],
+            get_ordered_indices(self.__gt_dims__, {k.value: v for k, v in self.origin.items()}),
+        )
 
     @property
     def shape(self):
@@ -1008,7 +1032,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = utils.tupelize(indices)
+            indices = _tupelize(indices)
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
@@ -1020,6 +1044,7 @@ def np_as_located_field(
             dtype=a.dtype,
             setter=setter,
             array=a.__array__,
+            origin=origin,
         )
 
     return _maker
@@ -1038,7 +1063,7 @@ class IndexField(LocatedField):
             return self.dtype.type(index[0])
 
     @property
-    def axes(self) -> tuple[common.Dimension]:
+    def __gt_dims__(self) -> tuple[common.Dimension]:
         return (self.axis,)
 
 
@@ -1055,7 +1080,7 @@ class ConstantField(LocatedField):
         return self.dtype(self.value)
 
     @property
-    def axes(self) -> tuple[()]:
+    def __gt_dims__(self) -> tuple[()]:
         return ()
 
 
@@ -1178,7 +1203,6 @@ class ColumnDescriptor:
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1189,7 +1213,7 @@ class ScanArgIterator:
         return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+        return ScanArgIterator(self.wrapped_iter.shift(*offsets), self.k_pos)
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
@@ -1239,7 +1263,7 @@ def _get_axeses(field):
         return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
     else:
         assert is_located_field(field)
-        return (field.axes,)
+        return (field.__gt_dims__,)
 
 
 def _build_tuple_result(field, indices):
@@ -1269,7 +1293,7 @@ class TupleOfFields(TupleField):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         axeses = _get_axeses(data)
-        self.axes = axeses[0]
+        self.__gt_dims__ = axeses[0]
 
     def field_getitem(self, indices):
         return _build_tuple_result(self.data, indices)
@@ -1377,14 +1401,14 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
                 if column is None:
                     assert _is_concrete_position(pos)
-                    ordered_indices = get_ordered_indices(out.axes, pos)
+                    ordered_indices = get_ordered_indices(_get_axes(out), pos)
                     out.field_setitem(ordered_indices, res)
                 else:
                     col_pos = pos.copy()
                     for k in column.col_range:
                         col_pos[column.axis] = k
                         assert _is_concrete_position(col_pos)
-                        ordered_indices = get_ordered_indices(out.axes, col_pos)
+                        ordered_indices = get_ordered_indices(_get_axes(out), col_pos)
                         out.field_setitem(ordered_indices, res[k])
 
         ctx = cvars.copy_context()

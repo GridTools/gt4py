@@ -55,10 +55,8 @@ def make_tuple_op():
 def copy_program_def(identity_def):
     identity = gtx.field_operator(identity_def)
 
-    def copy_program(
-        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
-    ):
-        identity(in_field, out=out_field)
+    def copy_program(in_field: gtx.Field[[IDim], "float64"], out: gtx.Field[[IDim], "float64"]):
+        identity(in_field, out=out)
 
     return copy_program
 
@@ -70,10 +68,10 @@ def double_copy_program_def(identity_def):
     def double_copy_program(
         in_field: gtx.Field[[IDim], "float64"],
         intermediate_field: gtx.Field[[IDim], "float64"],
-        out_field: gtx.Field[[IDim], "float64"],
+        out: gtx.Field[[IDim], "float64"],
     ):
         identity(in_field, out=intermediate_field)
-        identity(intermediate_field, out=out_field)
+        identity(intermediate_field, out=out)
 
     return double_copy_program
 
@@ -83,9 +81,9 @@ def copy_restrict_program_def(identity_def):
     identity = gtx.field_operator(identity_def)
 
     def copy_restrict_program(
-        in_field: gtx.Field[[IDim], "float64"], out_field: gtx.Field[[IDim], "float64"]
+        in_field: gtx.Field[[IDim], "float64"], out: gtx.Field[[IDim], "float64"]
     ):
-        identity(in_field, out=out_field[1:2])
+        identity(in_field, out=out[1:2])
 
     return copy_restrict_program
 

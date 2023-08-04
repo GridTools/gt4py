@@ -50,7 +50,7 @@ def test_valid_scalar_kind(value, expected):
 
 
 def test_invalid_scalar_kind():
-    with pytest.raises(common.GTTypeError, match="Non-trivial dtypes"):
+    with pytest.raises(ValueError, match="Non-trivial dtypes"):
         type_translation.get_scalar_kind(np.dtype("i4, (2,3)f8, f4"))
 
 
@@ -65,7 +65,7 @@ def test_invalid_scalar_kind():
             typing.Tuple[int, float],
             ts.TupleType(
                 types=[
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                 ]
             ),
@@ -77,7 +77,7 @@ def test_invalid_scalar_kind():
                     ts.ScalarType(kind=ts.ScalarKind.BOOL),
                     ts.TupleType(
                         types=[
-                            ts.ScalarType(kind=ts.ScalarKind.INT),
+                            ts.ScalarType(kind=ts.ScalarKind.INT64),
                             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
                         ]
                     ),
@@ -100,12 +100,13 @@ def test_invalid_scalar_kind():
                 typing.Callable[["float", int], int], xtyping.CallableKwargsInfo(data={})
             ],
             ts.FunctionType(
-                args=[
+                pos_only_args=[
                     ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-                    ts.ScalarType(kind=ts.ScalarKind.INT),
+                    ts.ScalarType(kind=ts.ScalarKind.INT64),
                 ],
-                kwargs={},
-                returns=ts.ScalarType(kind=ts.ScalarKind.INT),
+                pos_or_kw_args={},
+                kw_only_args={},
+                returns=ts.ScalarType(kind=ts.ScalarKind.INT64),
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
@@ -129,42 +130,40 @@ def test_make_symbol_type_from_typing(value, expected):
 
 def test_invalid_symbol_types():
     # Forward references
-    with pytest.raises(type_translation.TypingError, match="undefined forward references"):
+    with pytest.raises(ValueError, match="undefined forward references"):
         type_translation.from_type_hint("foo")
 
     # Tuples
-    with pytest.raises(type_translation.TypingError, match="least one argument"):
+    with pytest.raises(ValueError, match="least one argument"):
         type_translation.from_type_hint(typing.Tuple)
-    with pytest.raises(type_translation.TypingError, match="least one argument"):
+    with pytest.raises(ValueError, match="least one argument"):
         type_translation.from_type_hint(tuple)
 
-    with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
+    with pytest.raises(ValueError, match="Unbound tuples"):
         type_translation.from_type_hint(tuple[int, ...])
-    with pytest.raises(type_translation.TypingError, match="Unbound tuples"):
+    with pytest.raises(ValueError, match="Unbound tuples"):
         type_translation.from_type_hint(typing.Tuple["float", ...])
 
     # Fields
-    with pytest.raises(type_translation.TypingError, match="Field type requires two arguments"):
-        type_translation.from_type_hint(gtx.Field)
-    with pytest.raises(type_translation.TypingError, match="Invalid field dimensions"):
-        type_translation.from_type_hint(gtx.Field[int, int])
-    with pytest.raises(type_translation.TypingError, match="Invalid field dimension"):
-        type_translation.from_type_hint(gtx.Field[[int, int], int])
+    with pytest.raises(ValueError, match="Field type requires two arguments"):
+        type_translation.from_type_hint(common.Field)
+    with pytest.raises(ValueError, match="Invalid field dimensions"):
+        type_translation.from_type_hint(common.Field[int, int])
+    with pytest.raises(ValueError, match="Invalid field dimension"):
+        type_translation.from_type_hint(common.Field[[int, int], int])
 
-    with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(gtx.Field[[IDim], str])
-    with pytest.raises(type_translation.TypingError, match="Field dtype argument"):
-        type_translation.from_type_hint(gtx.Field[[IDim], None])
+    with pytest.raises(ValueError, match="Field dtype argument"):
+        type_translation.from_type_hint(common.Field[[IDim], str])
+    with pytest.raises(ValueError, match="Field dtype argument"):
+        type_translation.from_type_hint(common.Field[[IDim], None])
 
     # Functions
-    with pytest.raises(
-        type_translation.TypingError, match="Not annotated functions are not supported"
-    ):
+    with pytest.raises(ValueError, match="Not annotated functions are not supported"):
         type_translation.from_type_hint(typing.Callable)
 
-    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+    with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[..., float])
-    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+    with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[[int], str])
-    with pytest.raises(type_translation.TypingError, match="Invalid callable annotations"):
+    with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[[int], float])

@@ -14,6 +14,7 @@
 
 from builtins import bool, float, int, tuple
 from dataclasses import dataclass
+from typing import TypeAlias
 
 from numpy import float32, float64, int32, int64
 
@@ -29,6 +30,12 @@ PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
+# Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
+# work.
+IndexType: TypeAlias = int32
+
+TYPE_ALIAS_NAMES = ["IndexType"]
+
 
 @dataclass
 class BuiltInFunction:
@@ -43,8 +50,9 @@ class BuiltInFunction:
 
 _reduction_like = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredType(constraint=ts.FieldType)],
-        kwargs={"axis": ts.DeferredType(constraint=ts.DimensionType)},
+        pos_only_args=[ts.DeferredType(constraint=ts.FieldType)],
+        pos_or_kw_args={"axis": ts.DeferredType(constraint=ts.DimensionType)},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
@@ -55,42 +63,46 @@ min_over = _reduction_like
 
 broadcast = BuiltInFunction(
     ts.FunctionType(
-        args=[
+        pos_only_args=[
             ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType)),
             ts.DeferredType(constraint=ts.TupleType),
         ],
-        kwargs={},
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
 
 where = BuiltInFunction(
     ts.FunctionType(
-        args=[
+        pos_only_args=[
             ts.DeferredType(constraint=ts.FieldType),
             ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
             ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
         ],
-        kwargs={},
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=(ts.FieldType, ts.TupleType)),
     )
 )
 
 astype = BuiltInFunction(
     ts.FunctionType(
-        args=[
+        pos_only_args=[
             ts.DeferredType(constraint=ts.FieldType),
             ts.DeferredType(constraint=ts.FunctionType),
         ],
-        kwargs={},
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=ts.FieldType),
     )
 )
 
 _unary_math_builtin = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        kwargs={},
+        pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
@@ -148,8 +160,9 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 # unary math predicates (float) -> bool
 _unary_math_predicate_builtin = BuiltInFunction(
     ts.FunctionType(
-        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        kwargs={},
+        pos_only_args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
@@ -163,11 +176,12 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 # binary math builtins (number, number) -> number
 _binary_math_builtin = BuiltInFunction(
     ts.FunctionType(
-        args=[
+        pos_only_args=[
             ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
             ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
         ],
-        kwargs={},
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
     )
 )
@@ -200,7 +214,7 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*(set(BUILTIN_NAMES) - {"Dimension", "Field"})]
+__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual

@@ -22,6 +22,8 @@ from typing import Any, Literal, Optional, Sequence, Tuple, Union, cast
 import numpy as np
 import numpy.typing as npt
 
+from gt4py.cartesian import config as gt_config
+
 
 try:
     import dace
@@ -225,8 +227,9 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-    # TODO: use CUDA or ROCM depending on GT4PY_USE_HIP config setting
-    device = core_defs.Device(core_defs.DeviceType.CUDA, 0)
+    device = core_defs.Device(
+        core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
+    )
     buffer = allocators.allocate(
         shape,
         core_defs.dtype(dtype),
@@ -235,6 +238,17 @@ def allocate_gpu(
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
+    if gt_config.GT4PY_USE_HIP:
+        # HIP/ROCm lack support for __cuda_array_interface__
+        buffer.ndarray.__hip_array_interface__ = {
+            "shape": buffer.ndarray.shape,
+            "typestr": buffer.ndarray.dtype.descr[0][1],
+            "descr": buffer.ndarray.dtype.descr,
+            "stream": 1,
+            "version": 3,
+            "strides": buffer.ndarray.strides,
+            "data": (buffer.ndarray.data.ptr, False),
+        }
     return buffer.buffer, buffer.ndarray
 
 

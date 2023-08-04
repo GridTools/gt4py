@@ -30,11 +30,12 @@ class BuiltInFunction:
 
 as_offset = BuiltInFunction(
     ts.FunctionType(
-        args=[
+        pos_only_args=[
             ts.DeferredType(constraint=ts.OffsetType),
             ts.DeferredType(constraint=ts.FieldType),
         ],
-        kwargs={},
+        pos_or_kw_args={},
+        kw_only_args={},
         returns=ts.DeferredType(constraint=ts.OffsetType),
     )
 )

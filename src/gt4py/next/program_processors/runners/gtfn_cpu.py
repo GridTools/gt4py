@@ -32,8 +32,10 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if hasattr(arg, "__array__"):
-        return np.asarray(arg)
+    if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
+        arr = np.asarray(arg)
+        origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
+        return arr, origin
     else:
         return arg
 
@@ -42,9 +44,11 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
+        converted_args = [convert_arg(arg) for arg in args]
+        conn_args = extract_connectivity_args(offset_provider)
         return inp(
-            *[convert_arg(arg) for arg in args],
-            *extract_connectivity_args(offset_provider),
+            *converted_args,
+            *conn_args,
         )
 
     return decorated_program
@@ -52,16 +56,16 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
 
 def extract_connectivity_args(
     offset_provider: dict[str, common.Connectivity | common.Dimension]
-) -> list[npt.NDArray]:
+) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
-    args: list[npt.NDArray] = []
+    args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
     for name, conn in offset_provider.items():
         if isinstance(conn, common.Connectivity):
             if not isinstance(conn, common.NeighborTable):
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append(conn.table)
+            args.append((conn.table, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
         else:

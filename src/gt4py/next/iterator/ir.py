@@ -153,6 +153,7 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "multiplies",
     "divides",
     "mod",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
 BINARY_MATH_COMPARISON_BUILTINS = {
     "eq",
@@ -168,8 +169,10 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-INTEGER_BUILTINS = {"int", "int32", "int64"}
-FLOATING_POINT_BUILTINS = {"float", "float32", "float64"}
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_BUILTINS = {"int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float32", "float64"}
 TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
 
 GRAMMAR_BUILTINS = {
@@ -194,7 +197,6 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
