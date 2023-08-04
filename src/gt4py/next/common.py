@@ -20,7 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence
-from typing import overload, Set
+from typing import overload, Set, AbstractSet
 import numpy as np
 import numpy.typing as npt
 
@@ -83,7 +83,7 @@ DomainLike: TypeAlias = Union[Sequence[Dimension], Dimension, str]
 
 
 @dataclasses.dataclass(frozen=True)
-class UnitRange(Sequence[int]):
+class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
@@ -128,10 +128,13 @@ class UnitRange(Sequence[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: UnitRange) -> UnitRange:
-        start = max(self.start, other.start)
-        stop = min(self.stop, other.stop)
-        return UnitRange(start, stop)
+    def __and__(self, other: AbstractSet[Any]) -> UnitRange:
+        if isinstance(other, UnitRange):
+            start = max(self.start, other.start)
+            stop = min(self.stop, other.stop)
+            return UnitRange(start, stop)
+        else:
+            raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
