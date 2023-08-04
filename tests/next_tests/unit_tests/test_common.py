@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import sys
 
 import pytest
 
@@ -37,7 +36,6 @@ def domain():
 
 def test_empty_range():
     expected = UnitRange(0, 0)
-
     assert UnitRange(1, 1) == expected
     assert UnitRange(1, -1) == expected
 
@@ -98,36 +96,6 @@ def test_unit_range_intersection(rng1, rng2, expected):
     assert result == expected
 
 
-def test_domain_length(domain):
-    assert len(domain) == 3
-
-
-def test_domain_contains_range(domain):
-    assert UnitRange(0, 10) in domain
-    assert UnitRange(5, 15) in domain
-    assert UnitRange(20, 30) in domain
-    assert UnitRange(25, 28) in domain
-
-
-def test_domain_contains_element(domain):
-    assert 0 in domain
-    assert 5 in domain
-    assert 20 in domain
-    assert 9 in domain
-    assert 14 in domain
-
-
-def test_domain_not_contains_range(domain):
-    assert UnitRange(25, 35) not in domain
-    assert UnitRange(10, 16) not in domain
-
-
-def test_domain_not_contains_element(domain):
-    assert 100 not in domain
-    assert -5 not in domain
-    assert 16 not in domain
-
-
 def test_positive_infinity_range():
     pos_inf_range = UnitRange(Infinity.positive(), Infinity.positive())
     assert len(pos_inf_range) == 0
@@ -139,12 +107,16 @@ def test_mixed_infinity_range():
         len(mixed_inf_range)
 
 
-def test_domain_iter_method(domain):
+def test_domain_length(domain):
+    assert len(domain) == 3
+
+
+def test_domain_iteration(domain):
     iterated_values = [val for val in domain]
     assert iterated_values == list(zip(domain.dims, domain.ranges))
 
 
-def test_domain_and_operation_different_dimensions(domain):
+def test_domain_intersection_different_dimensions(domain):
     dimensions = (IDim, JDim)
     ranges = (UnitRange(2, 12), UnitRange(7, 17))
     domain2 = Domain(dimensions, ranges)
@@ -159,7 +131,7 @@ def test_domain_and_operation_different_dimensions(domain):
     assert result_domain.ranges[2] == UnitRange(20, 30)  # Broadcasting on missing dimension
 
 
-def test_domain_and_operation_different_dimensions_reversed(domain):
+def test_domain_intersection_reversed_dimensions(domain):
     dimensions = (JDim, IDim)
     ranges = (UnitRange(2, 12), UnitRange(7, 17))
     domain2 = Domain(dimensions, ranges)
@@ -173,8 +145,10 @@ def test_domain_and_operation_different_dimensions_reversed(domain):
     (0, (IDim, UnitRange(0, 10))),
     (1, (JDim, UnitRange(5, 15))),
     (2, (KDim, UnitRange(20, 30))),
+    (-1, (KDim, UnitRange(20, 30))),
+    (-2, (JDim, UnitRange(5, 15))),
 ])
-def test_getitem_integer_index(domain, index, expected):
+def test_domain_integer_indexing(domain, index, expected):
     result = domain[index]
     assert result == expected
 
@@ -183,43 +157,34 @@ def test_getitem_integer_index(domain, index, expected):
     (slice(0, 2), [(IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15))]),
     (slice(1, None), [(JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30))]),
 ])
-def test_getitem_slice(domain, slice_obj, expected):
+def test_domain_slice_indexing(domain, slice_obj, expected):
     result = domain[slice_obj]
+    assert isinstance(result, Domain)
     assert len(result) == len(expected)
     assert all(res == exp for res, exp in zip(result, expected))
 
 
-import pytest
-
-
-# Assume you have already defined the Domain class and IDim, JDim, KDim classes.
-
-@pytest.fixture
-def domain_repeat_dims():
-    dims = [IDim, JDim, KDim, IDim]
-    ranges = [UnitRange(0, 10), UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3)]
-    return Domain(dims, ranges)
-
-
 @pytest.mark.parametrize("index, expected_result", [
-    (IDim, (Domain(dims=[IDim, IDim], ranges=[UnitRange(0, 10), UnitRange(0, 3)]))),
-    (JDim, (JDim, UnitRange(0, 5))),
-    (KDim, (KDim, UnitRange(0, 8))),
+    (JDim, (JDim, UnitRange(5, 15))),
+    (KDim, (KDim, UnitRange(20, 30))),
 ])
-def test_get_item_by_dimension(domain_repeat_dims, index, expected_result):
-    result = domain_repeat_dims[index]
+def test_domain_dimension_indexing(domain, index, expected_result):
+    result = domain[index]
     assert result == expected_result
 
 
-def test_get_item_by_dimension_missing(domain):
+def test_domain_indexing_dimension_missing(domain):
     with pytest.raises(KeyError, match=r"No Dimension of type .* is present in the Domain."):
         domain[ECDim]
 
 
-@pytest.mark.parametrize("negative_index, expected", [
-    (-1, (KDim, UnitRange(20, 30))),
-    (-2, (JDim, UnitRange(5, 15))),
-])
-def test_getitem_negative_index(domain, negative_index, expected):
-    result = domain[negative_index]
-    assert result == expected
+def test_domain_indexing_invalid_type(domain):
+    with pytest.raises(KeyError, match="Invalid index type, must be either int, slice, or Dimension."):
+        domain["foo"]
+
+
+def test_domain_repeat_dims():
+    dims = [IDim, JDim, IDim]
+    ranges = [UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3)]
+    with pytest.raises(ValueError, match=r"Domain dimensions must be unique, not .*"):
+        Domain(dims, ranges)

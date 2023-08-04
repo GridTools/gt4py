@@ -21,7 +21,6 @@ import functools
 import sys
 from collections.abc import Sequence
 from typing import overload
-
 import numpy as np
 import numpy.typing as npt
 
@@ -80,13 +79,12 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-DomainLike = Union[Sequence[Dimension], Dimension, str]
+DomainLike: TypeAlias = Union[Sequence[Dimension], Dimension, str]
 
 
 @dataclasses.dataclass(frozen=True)
 class UnitRange(Sequence[int]):
     """Range from `start` to `stop` with step size one."""
-
     start: int
     stop: int
 
@@ -135,17 +133,17 @@ class UnitRange(Sequence[int]):
         return UnitRange(start, stop)
 
 
-DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
+NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 
 
-from dataclasses import dataclass
-from collections.abc import Sequence
-
-
-@dataclass(frozen=True)
-class Domain(Sequence):
+@dataclasses.dataclass(frozen=True)
+class Domain(Sequence[NamedRange]):
     dims: list[Dimension]
     ranges: list[UnitRange]
+
+    def __post_init__(self):
+        if len(set(self.dims)) != len(self.dims):
+            raise ValueError(f"Domain dimensions must be unique, not {self.dims}.")
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -153,17 +151,8 @@ class Domain(Sequence):
     def __iter__(self):
         return iter(zip(self.dims, self.ranges))
 
-    def __contains__(self, item: object) -> bool:
-        if isinstance(item, int):
-            return any(item in range_ for range_ in self.ranges)
-        elif isinstance(item, UnitRange):
-            return any(
-                item.start >= range_.start and item.stop <= range_.stop for range_ in self.ranges
-            )
-        return False
-
     @overload
-    def __getitem__(self, index: int) -> tuple[Dimension, UnitRange]:
+    def __getitem__(self, index: int) -> NamedRange:
         ...
 
     @overload
@@ -171,58 +160,48 @@ class Domain(Sequence):
         ...
 
     @overload
-    def __getitem__(self, index: Dimension) -> tuple[Dimension, UnitRange] | "Domain":
+    def __getitem__(self, index: Dimension) -> NamedRange:
         ...
 
     def __getitem__(self, index):
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
-            start, stop, step = index.indices(len(self))
-            dims_slice = self.dims[start:stop:step]
-            ranges_slice = self.ranges[start:stop:step]
+            dims_slice = self.dims[index]
+            ranges_slice = self.ranges[index]
             return Domain(dims_slice, ranges_slice)
         elif isinstance(index, Dimension):
-            dim_range_subset = [
-                (dim, range_) for dim, range_ in zip(self.dims, self.ranges) if dim == index
-            ]
-            if len(dim_range_subset) > 1:
-                return Domain(
-                    [dim_range[0] for dim_range in dim_range_subset],
-                    [dim_range[1] for dim_range in dim_range_subset],
-                )
-            elif len(dim_range_subset) == 1:
-                return dim_range_subset[0]
-            else:
+            try:
+                index_pos = self.dims.index(index)
+                return self.dims[index_pos], self.ranges[index_pos]
+            except ValueError:
                 raise KeyError(f"No Dimension of type {index} is present in the Domain.")
         else:
-            raise TypeError("Invalid index or key type")
+            raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: "Domain") -> "Domain":
         broadcast_dims = promote_dims(self.dims, other.dims)
-        broadcasted_ranges_self = broadcast_ranges(broadcast_dims, self.dims, self.ranges)
-        broadcasted_ranges_other = broadcast_ranges(broadcast_dims, other.dims, other.ranges)
-
-        intersected_ranges = []
-        for range1, range2 in zip(broadcasted_ranges_self, broadcasted_ranges_other):
-            intersected_range = range1 & range2
-            intersected_ranges.append(intersected_range)
-
+        intersected_ranges = [
+            rng1 & rng2
+            for rng1, rng2 in zip(
+                self._broadcast(broadcast_dims, self.dims, self.ranges),
+                self._broadcast(broadcast_dims, other.dims, other.ranges),
+            )
+        ]
         return Domain(broadcast_dims, intersected_ranges)
 
+    @staticmethod
+    def _broadcast(
+            broadcast_dims: list[Dimension], dims: list[Dimension], ranges: list[UnitRange]
+    ) -> list[UnitRange]:
+        if len(dims) == len(broadcast_dims):
+            return ranges
 
-def broadcast_ranges(
-    broadcast_dims: list[Dimension], dims: list[Dimension], ranges: list[UnitRange]
-) -> list[UnitRange]:
-    if len(dims) == len(broadcast_dims):
-        return ranges
+        broadcasted_ranges = list(ranges)
+        for i in range(len(broadcast_dims) - len(dims)):
+            broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
 
-    # Broadcast dimensions with infinite sizes for missing ranges
-    broadcasted_ranges = list(ranges)
-    for i in range(len(broadcast_dims) - len(dims)):
-        broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
-
-    return broadcasted_ranges
+        return broadcasted_ranges
 
 
 if TYPE_CHECKING:
@@ -231,6 +210,7 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
+
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -242,7 +222,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
-    def domain(self) -> DomainT:
+    def domain(self) -> Domain:
         ...
 
     @property
@@ -345,11 +325,11 @@ class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-    definition: Any,
-    /,
-    *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
-    value_type: Optional[type] = None,
+        definition: Any,
+        /,
+        *,
+        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+        value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -379,7 +359,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
+            self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
