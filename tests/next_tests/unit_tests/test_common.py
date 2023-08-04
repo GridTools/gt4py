@@ -116,6 +116,11 @@ def test_domain_iteration(domain):
     assert iterated_values == list(zip(domain.dims, domain.ranges))
 
 
+def test_domain_contains_named_range(domain):
+    assert (IDim, UnitRange(0, 10)) in domain
+    assert (IDim, UnitRange(-5, 5)) not in domain
+
+
 def test_domain_intersection_different_dimensions(domain):
     dimensions = (IDim, JDim)
     ranges = (UnitRange(2, 12), UnitRange(7, 17))
