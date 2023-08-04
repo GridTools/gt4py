@@ -18,6 +18,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
@@ -87,6 +88,10 @@ def apply_common_transforms(
                 opcount_preserving=True,
                 force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
             )
+            inlined = ConstantFolding.apply(inlined)
+            inlined = CollapseTuple.apply(
+                inlined, ignore_tuple_size=unconditionally_collapse_tuples
+            )
             if inlined == ir:
                 break
             ir = inlined
@@ -98,7 +103,6 @@ def apply_common_transforms(
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
         ir = _inline_into_scan(ir)
 
     ir = NormalizeShifts().visit(ir)

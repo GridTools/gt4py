@@ -51,6 +51,7 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -218,6 +219,13 @@ class Program:
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(self, grid_type=grid_type)
 
+    def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
+        for key in kwargs.keys():
+            if all(key != param.id for param in self.past_node.params):
+                TypeError(f"Keyword argument `{key}` not among program inputs")
+
+        return ProgramWithBoundArgs(self.past_node, self.closure_vars, bound_args=kwargs)
+
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
         return _get_closure_vars_recursively(self.closure_vars)
@@ -349,6 +357,44 @@ class Program:
             )
 
         return iter(scanops_per_axis.keys()).__next__()
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramWithBoundArgs(Program):
+    past_node: past.Program
+    closure_vars: dict[str, Any]
+    definition: Optional[types.FunctionType] = None
+    backend: Optional[ppi.ProgramExecutor] = None
+    grid_type: Optional[GridType] = None
+    bound_args: dict[str, typing.Union[float, int, bool]] = None
+
+    def _process_args(self, args: tuple, kwargs: dict):
+        args = list(args)
+        b_args = self.bound_args
+        for index, param in enumerate(self.past_node.params):
+            if param.id in list(b_args.keys()):
+                args.insert(index, b_args[param.id])
+
+        return super(ProgramWithBoundArgs, self)._process_args(tuple(args), kwargs)
+
+    @functools.cached_property
+    def itir(self):
+        new_itir = super(ProgramWithBoundArgs, self).itir
+        for closure_key in self.closure_vars.keys():
+            for key in self.bound_args.keys():
+                index = [
+                    index
+                    for index, closure_input in enumerate(new_itir.closures[0].inputs)
+                    if closure_input.id == key
+                ]
+                new_itir.closures[0].inputs.pop(index[0])
+            new_args = [ref(inp.id) for inp in new_itir.closures[0].inputs]
+            params = [sym(inp.id) for inp in new_itir.closures[0].inputs]
+            for value in self.bound_args.values():
+                new_args.append(promote_to_const_iterator(literal_from_value(value)))
+            expr = itir.FunCall(fun=itir.SymRef(id=itir.SymbolRef(closure_key)), args=new_args)
+            new_itir.closures[0].stencil = itir.Lambda(params=params, expr=expr)
+        return new_itir
 
 
 @typing.overload
