@@ -531,15 +531,16 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         if not isinstance(iterator, IteratorExpr):
             # already a list of ValueExpr
             return iterator
-        sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
-        flat_index = [
-            ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
-        ]
 
-        args: list[ValueExpr] = [ValueExpr(iterator.field, iterator.dtype), *flat_index]
-        internals = [f"{arg.value.data}_v" for arg in args]
-        expr = f"{internals[0]}[{', '.join(internals[1:])}]"
-        return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
+        args = [ValueExpr(iterator.field, iterator.dtype)] + [
+            ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions
+        ]
+        sorted_args = sorted(args, key=lambda x: x.value.data)
+        array_index = [f"{arg.value.data}_v" for arg in args[1:]]
+        expr = f"{args[0].value.data}_v[{', '.join(array_index)}]"
+        return self.add_expr_tasklet(
+            [(arg, f"{arg.value.data}_v") for arg in sorted_args], expr, iterator.dtype, "deref"
+        )
 
     def _split_shift_args(
         self, args: list[itir.Expr]
