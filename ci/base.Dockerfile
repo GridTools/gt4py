@@ -40,6 +40,7 @@ ENV CUDA_HOME /usr/local/cuda
 
 ARG PYVERSION
 
+RUN echo 'retry = 10' > $HOME/.curlrc
 RUN curl https://pyenv.run | bash
 
 ENV PYENV_ROOT /root/.pyenv
