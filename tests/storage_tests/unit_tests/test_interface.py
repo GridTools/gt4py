@@ -137,10 +137,6 @@ def test_allocate_cpu(param_dict):
 
     raw_buffer, field = allocate_cpu(shape, layout_map, dtype, alignment_bytes, aligned_index)
 
-    # Does this still makes sense?
-    # check that field is a view of raw_buffer
-    # assert field.base is raw_buffer
-
     # check that memory of field is contained in raw_buffer
     assert (
         np.byte_bounds(field)[0] >= np.byte_bounds(raw_buffer)[0]

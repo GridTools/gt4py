@@ -339,9 +339,8 @@ def from_array(
         dimensions=dimensions,
     )
 
-    if cp is not None and isinstance(storage, cp.ndarray):
-        storage[...] = cp.asarray(data)
-    else:
-        storage[...] = np.asarray(data)
+    layout_info = layout.from_name(backend)
+    assert layout_info is not None
+    storage[...] = storage_utils.asarray(data, device=layout_info.device) #type: ignore[attr-defined] #mypy confused by layout_info.device
 
     return storage
