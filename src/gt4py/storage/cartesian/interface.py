@@ -341,6 +341,6 @@ def from_array(
 
     layout_info = layout.from_name(backend)
     assert layout_info is not None
-    storage[...] = storage_utils.asarray(data, device=layout_info.device) #type: ignore[attr-defined] #mypy confused by layout_info.device
+    storage[...] = storage_utils.asarray(data, device=layout_info.device)  # type: ignore[attr-defined] #mypy confused by layout_info.device
 
     return storage
