@@ -497,12 +497,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             new_past_name = past.Name(
                 id=key_ls.value,
                 location=location,
-                type=ts.DimensionType(dim=Dimension(value=key_ls.value)),
+                type=type_translation.from_value(key_ls),
             )
             elts_vals = [
-                past.Constant(
-                    value=val, type=ts.ScalarType(kind=ts.ScalarKind.INT64), location=location
-                )
+                past.Constant(value=val, type=type_translation.from_value(val), location=location)
                 for val in vals_tup
             ]
             domain_keys.append(new_past_name)
