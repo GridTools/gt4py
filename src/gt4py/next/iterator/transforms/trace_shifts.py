@@ -27,7 +27,11 @@ class Sentinel(enum.Enum):
 
 
 class IteratorTracer:
-    pass
+    def deref(self):
+        ...
+
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+        ...
 
 
 @dataclass(frozen=True)
@@ -37,7 +41,7 @@ class InputTracer(IteratorTracer):
     offsets: tuple[ir.OffsetLiteral, ...] = ()
     lift_level: int = 0
 
-    def shift(self, offsets):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return InputTracer(
             inp=self.inp,
             register_deref=self.register_deref,
@@ -50,11 +54,13 @@ class InputTracer(IteratorTracer):
         return Sentinel.VALUE
 
 
+# This class is only needed because we currently allow conditionals on iterators. Since this is
+# not supported in the C++ backend it can likely be removed again in the future.
 @dataclass(frozen=True)
 class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
 
-    def shift(self, offsets):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
