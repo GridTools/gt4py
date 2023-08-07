@@ -19,8 +19,8 @@ import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence
-from typing import overload, Set, AbstractSet
+from collections.abc import Sequence, Set
+from typing import overload
 import numpy as np
 import numpy.typing as npt
 
@@ -128,7 +128,7 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: AbstractSet[Any]) -> UnitRange:
+    def __and__(self, other: Set[Any]) -> UnitRange:
         if isinstance(other, UnitRange):
             start = max(self.start, other.start)
             stop = min(self.stop, other.stop)
@@ -185,14 +185,14 @@ class Domain(Sequence[NamedRange]):
         intersected_ranges = [
             rng1 & rng2
             for rng1, rng2 in zip(
-                broadcast_ranges(broadcast_dims, self.dims, self.ranges),
-                broadcast_ranges(broadcast_dims, other.dims, other.ranges),
+                _broadcast_ranges(broadcast_dims, self.dims, self.ranges),
+                _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         ]
         return Domain(broadcast_dims, intersected_ranges)
 
 
-def broadcast_ranges(
+def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> Sequence[UnitRange]:
     if len(dims) == len(broadcast_dims):
