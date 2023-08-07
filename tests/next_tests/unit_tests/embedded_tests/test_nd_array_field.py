@@ -19,12 +19,15 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common
+from gt4py.next import common, Dimension
+from gt4py.next.common import UnitRange
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 @pytest.fixture(params=nd_array_field._nd_array_implementations)
 def nd_array_implementation(request):
@@ -98,7 +101,7 @@ def product_nd_array_implementation(request):
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
     if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+            first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
     ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
@@ -131,3 +134,24 @@ def test_non_dispatched_function():
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)
+
+def test_field_domain_slicing(nd_array_implementation):
+    arr = np.random.rand(*(10, 6))
+
+    domain1 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(20, 26)))
+    domain2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(25, 35), UnitRange(17, 23)))
+
+    f1 = common.field(
+        nd_array_implementation.asarray(arr, dtype=nd_array_implementation.float32),
+        domain=domain1,
+    )
+
+    f2 = common.field(
+        nd_array_implementation.asarray(arr, dtype=nd_array_implementation.float32),
+        domain=domain2,
+    )
+
+    new = f1 + f2
+
+    assert new.ndarray.shape == (5,3)
+    assert np.allclose(new.ndarray, arr[:5, :3] * 2)

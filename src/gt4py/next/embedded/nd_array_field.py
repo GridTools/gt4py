@@ -25,7 +25,6 @@ from numpy import typing as npt
 
 from gt4py.next import common
 
-
 try:
     import cupy as cp
 except ImportError:
@@ -35,7 +34,6 @@ try:
     from jax import numpy as jnp
 except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
-
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
@@ -61,9 +59,11 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         op = getattr(xp, array_builtin_name)
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
-                raise NotImplementedError(
-                    f"support for different domain not implemented: {a.domain}, {b.domain}"
-                )
+                domain_intersection = a.domain & b.domain
+                a_sliced = _slice_with_domain(a.ndarray, domain_intersection)
+                b_sliced = _slice_with_domain(b.ndarray, domain_intersection)
+                new_data = op(a_sliced, b_sliced)
+                return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
             assert isinstance(b, definitions.SCALAR_TYPES)
@@ -234,7 +234,6 @@ class NumPyArrayField(_BaseNdArrayField):
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 
-
 # CuPy
 if cp:
     _nd_array_implementations.append(cp)
@@ -254,3 +253,9 @@ if jnp:
         array_ns: ClassVar[ModuleType] = jnp
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
+
+
+def _slice_with_domain(array: np.ndarray, new_domain: common.Domain) -> np.ndarray:
+    slice_indices = [slice(rg.stop - rg.start) for rg in new_domain.ranges]
+    array = array[tuple(slice_indices)]
+    return array
