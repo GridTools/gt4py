@@ -89,12 +89,11 @@ def apply_common_transforms(
                 force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
             )
             inlined = ConstantFolding.apply(inlined)
-            inlined = CollapseTuple.apply(
-                inlined, ignore_tuple_size=unconditionally_collapse_tuples
-            )
+
             if inlined == ir:
                 break
             ir = inlined
+            ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
         else:
             raise RuntimeError("Inlining lift and lambdas did not converge.")
     else:
