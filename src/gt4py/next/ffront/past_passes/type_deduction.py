@@ -15,7 +15,7 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import errors
+from gt4py.next import Dimension, errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -86,15 +86,15 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
             if not (
-                    _is_integral_scalar(domain_values.elts[0])
-                    or isinstance(domain_values.elts[0], (past.BinOp, past.Name))
+                _is_integral_scalar(domain_values.elts[0])
+                or isinstance(domain_values.elts[0], (past.BinOp, past.Name))
             ):
                 raise ValueError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type}."
                 )
             if not (
-                    _is_integral_scalar(domain_values.elts[1])
-                    or isinstance(domain_values.elts[1], (past.BinOp, past.Name))
+                _is_integral_scalar(domain_values.elts[1])
+                or isinstance(domain_values.elts[1], (past.BinOp, past.Name))
             ):
                 raise ValueError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[1].type}."

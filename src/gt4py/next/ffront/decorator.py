@@ -279,14 +279,14 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        val_kwargs = {**kwargs}
         arg_types = [type_translation.from_value(arg) for arg in args]
         kwarg_types = {}
         for kwarg in kwargs:
-            if kwarg == "domain":
+            if isinstance(kwargs[kwarg], dict):
                 kwarg_types[kwarg] = kwargs[kwarg]
-            else:
-                for k, v in kwargs.items():
-                    kwarg_types[k] = type_translation.from_value(v)
+                val_kwargs.pop(kwarg)
+        kwarg_types = {k: type_translation.from_value(v) for k, v in val_kwargs.items()}
 
         try:
             type_info.accepts_args(
@@ -493,22 +493,20 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def _construct_domain(self, kwarg_types: dict, location: Any) -> past.Dict:
         domain_keys = []
         domain_values = []
-        for key in list(kwarg_types["domain"].keys()):
+        for key_ls, vals_tup in list(kwarg_types["domain"].items()):
             new_past_name = past.Name(
-                id=key.value,
+                id=key_ls.value,
                 location=location,
-                type=ts.DimensionType(dim=Dimension(value=key.value)),
+                type=ts.DimensionType(dim=Dimension(value=key_ls.value)),
             )
+            elts_vals = [
+                past.Constant(
+                    value=val, type=ts.ScalarType(kind=ts.ScalarKind.INT64), location=location
+                )
+                for val in vals_tup
+            ]
             domain_keys.append(new_past_name)
-        for value in list(kwarg_types["domain"].values()):
-            value_0 = past.Constant(
-                value=value[0], type=ts.ScalarType(kind=ts.ScalarKind.INT64), location=location
-            )
-            value_1 = past.Constant(
-                value=value[1], type=ts.ScalarType(kind=ts.ScalarKind.INT64), location=location
-            )
-            new_past_tuple = past.TupleExpr(elts=[value_0, value_1], location=location)
-            domain_values.append(new_past_tuple)
+            domain_values.append(past.TupleExpr(elts=elts_vals, location=location))
         domain_ref = past.Dict(keys_=domain_keys, values_=domain_values, location=location)
         return domain_ref
 
