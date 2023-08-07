@@ -79,7 +79,7 @@ _NDBuffer: TypeAlias = Union[
 
 
 #: Tuple of positive integers encoding a permutation of the dimensions.
-BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.UnsignedIntegral])
+BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.PositiveIntegral])
 
 
 def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:

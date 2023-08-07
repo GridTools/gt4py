@@ -107,8 +107,8 @@ class BooleanIntegral(numbers.Integral):
     ...
 
 
-class UnsignedIntegral(numbers.Integral):
-    """Abstract base class for unsigned integral types."""
+class PositiveIntegral(numbers.Integral):
+    """Abstract base class representing positive integral numbers.."""
 
     ...
 
@@ -117,13 +117,13 @@ def is_boolean_integral_type(integral_type: type) -> TypeGuard[Type[BooleanInteg
     return issubclass(integral_type, BOOL_TYPES)
 
 
-def is_unsigned_integral_type(integral_type: type) -> TypeGuard[Type[UnsignedIntegral]]:
+def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveIntegral]]:
     return issubclass(integral_type, UINT_TYPES)
 
 
 TensorShape: TypeAlias = Sequence[
     int
-]  # TODO(egparedes) figure out if UnsignedIntegral can be made to work
+]  # TODO(egparedes) figure out if PositiveIntegral can be made to work
 
 
 def is_valid_tensor_shape(
@@ -181,7 +181,7 @@ def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
     if issubclass(sc_type, numbers.Integral):
         if is_boolean_integral_type(sc_type):
             return DTypeKind.BOOL
-        elif is_unsigned_integral_type(sc_type):
+        elif is_positive_integral_type(sc_type):
             return DTypeKind.UINT
         else:
             return DTypeKind.INT
