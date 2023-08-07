@@ -82,11 +82,6 @@ class Name(Expr):
     id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
 
 
-class Dict(Expr):
-    keys_: list[Name]
-    values_: list[TupleExpr]
-
-
 class Constant(Expr):
     value: Any  # TODO: be more specific
 
