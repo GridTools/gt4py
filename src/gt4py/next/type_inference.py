@@ -263,6 +263,8 @@ class _Unifier:
                     # Try with swapped LHS and RHS
                     handled = self._handle_constraint(constraint[::-1])
             except TypeError:
+                # custom constraint handler raised an error as constraint is not satisfiable
+                # (contrary to just not handled)
                 handled = False
 
             if not handled:
