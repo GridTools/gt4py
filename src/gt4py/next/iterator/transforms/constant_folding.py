@@ -24,27 +24,26 @@ class ConstantFolding(NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         new_node = self.generic_visit(node)
 
-        if len(new_node.args) > 0:
-            if (
-                isinstance(new_node.fun, ir.SymRef)
-                and new_node.fun.id == "if_"
-                and isinstance(new_node.args[0], ir.Literal)
-            ):  # if_(True, true_branch, false_branch) -> true_branch
-                if new_node.args[0].value == "True":
-                    new_node = new_node.args[1]
-                else:
-                    new_node = new_node.args[2]
+        if (
+            isinstance(new_node.fun, ir.SymRef)
+            and new_node.fun.id == "if_"
+            and isinstance(new_node.args[0], ir.Literal)
+        ):  # if_(True, true_branch, false_branch) -> true_branch
+            if new_node.args[0].value == "True":
+                new_node = new_node.args[1]
+            else:
+                new_node = new_node.args[2]
 
-            if isinstance(new_node, ir.FunCall) and all(
-                isinstance(arg, ir.Literal) for arg in new_node.args
-            ):  # 1 + 1 -> 2
-                assert isinstance(new_node.fun, ir.SymRef)  # for mypy
-                if "make_" not in new_node.fun.id:  # for make_tuple, make_const_list
-                    val_ls = []
-                    for arg in new_node.args:
-                        val_ls.append(getattr(embedded, str(arg.type))(arg.value))  # type: ignore[attr-defined] # arg type already established in if condition
-                    new_node = im.literal_from_value(
-                        (getattr(embedded, str(new_node.fun.id))(*val_ls))
-                    )
+        if (
+            isinstance(new_node, ir.FunCall)
+            and isinstance(new_node.fun, ir.SymRef)
+            and len(new_node.args) > 0  # for zero dims fields
+            and all(isinstance(arg, ir.Literal) for arg in new_node.args)
+        ):  # 1 + 1 -> 2
+            if "make_" not in new_node.fun.id:  # for make_tuple, make_const_list
+                val_ls = []
+                for arg in new_node.args:
+                    val_ls.append(getattr(embedded, str(arg.type))(arg.value))  # type: ignore[attr-defined] # arg type already established in if condition
+                new_node = im.literal_from_value((getattr(embedded, str(new_node.fun.id))(*val_ls)))
 
         return new_node

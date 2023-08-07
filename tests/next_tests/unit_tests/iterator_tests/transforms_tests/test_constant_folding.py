@@ -37,10 +37,10 @@ def test_constant_folding_math_op():
 
 
 def test_constant_folding_if():
-    expected = im.literal_from_value(3)
+    expected = im.call("plus")("a", 2)
     testee = im.if_(
         im.literal_from_value(True),
-        im.plus(im.literal_from_value(1), im.literal_from_value(2)),
+        im.plus(im.ref("a"), im.literal_from_value(2)),
         im.minus(im.literal_from_value(9), im.literal_from_value(5)),
     )
     actual = ConstantFolding.apply(testee)
