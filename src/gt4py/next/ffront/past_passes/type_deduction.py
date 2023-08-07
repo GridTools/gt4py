@@ -15,7 +15,7 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -33,7 +33,7 @@ def _ensure_no_sliced_field(entry: past.Expr):
     For example, if argument is of type past.Subscript, this function will throw an error as both slicing and domain are being applied
     """
     if not isinstance(entry, past.Name) and not isinstance(entry, past.TupleExpr):
-        raise GTTypeError("Either only domain or slicing allowed")
+        raise ValueError("Either only domain or slicing allowed")
     elif isinstance(entry, past.TupleExpr):
         for param in entry.elts:
             _ensure_no_sliced_field(param)
@@ -56,47 +56,47 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
         new_func.type,
         (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
     ):
-        raise GTTypeError(
+        raise ValueError(
             f"Only calls `FieldOperator`s and `ScanOperator`s "
             f"allowed in `Program`, but got `{new_func.type}`."
         )
 
     if "out" not in new_kwargs:
-        raise GTTypeError("Missing required keyword argument(s) `out`.")
+        raise ValueError("Missing required keyword argument(s) `out`.")
     if "domain" in new_kwargs:
         _ensure_no_sliced_field(new_kwargs["out"])
 
         domain_kwarg = new_kwargs["domain"]
         if not isinstance(domain_kwarg, past.Dict):
-            raise GTTypeError(
+            raise ValueError(
                 f"Only Dictionaries allowed in domain, but got `{type(domain_kwarg)}`."
             )
 
         if len(domain_kwarg.values_) == 0 and len(domain_kwarg.keys_) == 0:
-            raise GTTypeError("Empty domain not allowed.")
+            raise ValueError("Empty domain not allowed.")
 
         for dim in domain_kwarg.keys_:
             if not isinstance(dim.type, ts.DimensionType):
-                raise GTTypeError(
+                raise ValueError(
                     f"Only Dimension allowed in domain dictionary keys, but got `{dim}` which is of type `{dim.type}`."
                 )
         for domain_values in domain_kwarg.values_:
             if len(domain_values.elts) != 2:
-                raise GTTypeError(
+                raise ValueError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
             if not (
-                _is_integral_scalar(domain_values.elts[0])
-                or isinstance(domain_values.elts[0], (past.BinOp, past.Name))
+                    _is_integral_scalar(domain_values.elts[0])
+                    or isinstance(domain_values.elts[0], (past.BinOp, past.Name))
             ):
-                raise GTTypeError(
+                raise ValueError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[0].type}."
                 )
             if not (
-                _is_integral_scalar(domain_values.elts[1])
-                or isinstance(domain_values.elts[1], (past.BinOp, past.Name))
+                    _is_integral_scalar(domain_values.elts[1])
+                    or isinstance(domain_values.elts[1], (past.BinOp, past.Name))
             ):
-                raise GTTypeError(
+                raise ValueError(
                     f"Only integer values allowed in domain range, but got {domain_values.elts[1].type}."
                 )
 
@@ -156,8 +156,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         # check both types compatible
         for arg in (left, right):
             if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
-                raise ProgramTypeError.from_past_node(
-                    arg, msg=f"Type {arg.type} can not be used in operator `{node.op}`!"
+                raise errors.DSLError(
+                    arg.location, f"Type {arg.type} can not be used in operator `{node.op}`!"
                 )
 
         left_type = cast(ts.ScalarType, left.type)
@@ -169,17 +169,17 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if node.op == dialect_ast_enums.BinaryOperator.MOD and not type_info.is_integral(
             right_type
         ):
-            raise ProgramTypeError.from_past_node(
-                arg,
-                msg=f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+            raise errors.DSLError(
+                arg.location,
+                f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
             )
 
         try:
             return type_info.promote(left_type, right_type)
-        except GTTypeError as ex:
-            raise ProgramTypeError.from_past_node(
-                node,
-                msg=f"Could not promote `{left_type}` and `{right_type}` to common type"
+        except ValueError as ex:
+            raise errors.DSLError(
+                node.location,
+                f"Could not promote `{left_type}` and `{right_type}` to common type"
                 f" in call to `{node.op}`.",
             ) from ex
 
@@ -221,14 +221,14 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     new_func.type, with_args=arg_types, with_kwargs=kwarg_types
                 )
                 if operator_return_type != new_kwargs["out"].type:
-                    raise GTTypeError(
+                    raise ValueError(
                         f"Expected keyword argument `out` to be of "
                         f"type {operator_return_type}, but got "
                         f"{new_kwargs['out'].type}."
                     )
             elif new_func.id in ["minimum", "maximum"]:
                 if new_args[0].type != new_args[1].type:
-                    raise GTTypeError(
+                    raise ValueError(
                         f"First and second argument in {new_func.id} must be the same type."
                         f"Got `{new_args[0].type}` and `{new_args[1].type}`."
                     )
@@ -238,10 +238,8 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     "Only calls `FieldOperator`s, `ScanOperator`s or minimum and maximum builtins allowed"
                 )
 
-        except GTTypeError as ex:
-            raise ProgramTypeError.from_past_node(
-                node, msg=f"Invalid call to `{node.func.id}`."
-            ) from ex
+        except ValueError as ex:
+            raise errors.DSLError(node.location, f"Invalid call to `{node.func.id}`.") from ex
 
         return past.Call(
             func=new_func,
@@ -264,41 +262,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise ProgramTypeError.from_past_node(
-                node, msg=f"Undeclared or untyped symbol `{node.id}`."
-            )
+            raise errors.DSLError(node.location, f"Undeclared or untyped symbol `{node.id}`.")
 
         return past.Name(id=node.id, type=symtable[node.id].type, location=node.location)
-
-
-class ProgramTypeError(GTTypeError):
-    """Exception for problematic type deductions that originate in user code."""
-
-    def __init__(
-        self,
-        msg="",
-        *,
-        lineno=0,
-        offset=0,
-        filename=None,
-        end_lineno=None,
-        end_offset=None,
-        text=None,
-    ):
-        super().__init__(msg, (filename, lineno, offset, text, end_lineno, end_offset))
-
-    @classmethod
-    def from_past_node(
-        cls,
-        node: past.LocatedNode,
-        *,
-        msg: str = "",
-    ):
-        return cls(
-            msg,
-            lineno=node.location.line,
-            offset=node.location.column,
-            filename=node.location.source,
-            end_lineno=node.location.end_line,
-            end_offset=node.location.end_column,
-        )

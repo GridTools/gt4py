@@ -37,7 +37,7 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
         try:
             dt = np.dtype(dtype)
         except TypeError as err:
-            raise common.GTTypeError(f"Invalid scalar type definition ({dtype})") from err
+            raise ValueError(f"Invalid scalar type definition ({dtype})") from err
 
     if dt.shape == () and dt.fields is None:
         match dt:
@@ -54,9 +54,9 @@ def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
             case np.str_:
                 return ts.ScalarKind.STRING
             case _:
-                raise common.GTTypeError(f"Impossible to map '{dtype}' value to a ScalarKind")
+                raise ValueError(f"Impossible to map '{dtype}' value to a ScalarKind")
     else:
-        raise common.GTTypeError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
+        raise ValueError(f"Non-trivial dtypes like '{dtype}' are not yet supported")
 
 
 def from_type_hint(
@@ -75,7 +75,7 @@ def from_type_hint(
         try:
             type_hint = xtyping.eval_forward_ref(type_hint, globalns=globalns, localns=localns)
         except Exception as error:
-            raise TypingError(
+            raise ValueError(
                 f"Type annotation ({type_hint}) has undefined forward references!"
             ) from error
 
@@ -98,50 +98,50 @@ def from_type_hint(
 
         case builtins.tuple:
             if not args:
-                raise TypingError(f"Tuple annotation ({type_hint}) requires at least one argument!")
+                raise ValueError(f"Tuple annotation ({type_hint}) requires at least one argument!")
             if Ellipsis in args:
-                raise TypingError(f"Unbound tuples ({type_hint}) are not allowed!")
+                raise ValueError(f"Unbound tuples ({type_hint}) are not allowed!")
             return ts.TupleType(types=[recursive_make_symbol(arg) for arg in args])
 
         case common.Field:
             if (n_args := len(args)) != 2:
-                raise TypingError(f"Field type requires two arguments, got {n_args}! ({type_hint})")
+                raise ValueError(f"Field type requires two arguments, got {n_args}! ({type_hint})")
 
             dims: Union[Ellipsis, list[common.Dimension]] = []
             dim_arg, dtype_arg = args
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
-                        raise TypingError(f"Invalid field dimension definition '{d}'")
+                        raise ValueError(f"Invalid field dimension definition '{d}'")
                     dims.append(d)
             elif dim_arg is Ellipsis:
                 dims = dim_arg
             else:
-                raise TypingError(f"Invalid field dimensions '{dim_arg}'")
+                raise ValueError(f"Invalid field dimensions '{dim_arg}'")
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
-            except TypingError as error:
-                raise TypingError(
+            except ValueError as error:
+                raise ValueError(
                     f"Field dtype argument must be a scalar type (got '{dtype_arg}')!"
                 ) from error
             if not isinstance(dtype, ts.ScalarType) or dtype.kind == ts.ScalarKind.STRING:
-                raise TypingError("Field dtype argument must be a scalar type (got '{dtype}')!")
+                raise ValueError("Field dtype argument must be a scalar type (got '{dtype}')!")
             return ts.FieldType(dims=dims, dtype=dtype)
 
         case collections.abc.Callable:
             if not args:
-                raise TypingError("Not annotated functions are not supported!")
+                raise ValueError("Not annotated functions are not supported!")
 
             try:
                 arg_types, return_type = args
                 args = [recursive_make_symbol(arg) for arg in arg_types]
             except Exception as error:
-                raise TypingError(f"Invalid callable annotations in {type_hint}") from error
+                raise ValueError(f"Invalid callable annotations in {type_hint}") from error
 
             kwargs_info = [arg for arg in extra_args if isinstance(arg, xtyping.CallableKwargsInfo)]
             if len(kwargs_info) != 1:
-                raise TypingError(f"Invalid callable annotations in {type_hint}")
+                raise ValueError(f"Invalid callable annotations in {type_hint}")
             kwargs = {
                 arg: recursive_make_symbol(arg_type)
                 for arg, arg_type in kwargs_info[0].data.items()
@@ -155,7 +155,7 @@ def from_type_hint(
                 returns=recursive_make_symbol(return_type),
             )
 
-    raise TypingError(f"'{type_hint}' type is not supported")
+    raise ValueError(f"'{type_hint}' type is not supported")
 
 
 def from_value(value: Any) -> ts.TypeSpec:
@@ -179,7 +179,7 @@ def from_value(value: Any) -> ts.TypeSpec:
                 symbol_type = candidate_type
                 break
         if not symbol_type:
-            raise common.GTTypeError(
+            raise ValueError(
                 f"Value `{value}` is out of range to be representable as `INT32` or `INT64`."
             )
         return candidate_type
@@ -188,7 +188,7 @@ def from_value(value: Any) -> ts.TypeSpec:
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
-        dims = list(value.axes)
+        dims = list(value.__gt_dims__)
         dtype = from_type_hint(value.dtype.type)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
     elif isinstance(value, tuple):
@@ -204,17 +204,4 @@ def from_value(value: Any) -> ts.TypeSpec:
     if isinstance(symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)):
         return symbol_type
     else:
-        raise common.GTTypeError(f"Impossible to map `{value}` value to a Symbol")
-
-
-# TODO(egparedes): Add source location info (maybe subclassing FieldOperatorSyntaxError)
-class TypingError(common.GTTypeError):
-    def __init__(
-        self,
-        msg="",
-        *,
-        info=None,
-    ):
-        msg = f"Invalid type declaration: {msg}"
-        args = tuple([msg, info] if info else [msg])
-        super().__init__(*args)
+        raise ValueError(f"Impossible to map '{value}' value to a Symbol")

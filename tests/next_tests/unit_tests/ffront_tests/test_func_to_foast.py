@@ -41,15 +41,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next import astype, broadcast, float32, float64, int32, int64, where
-from gt4py.next.common import GTTypeError
+from gt4py.next import astype, broadcast, errors, float32, float64, int32, int64, where
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser, FieldOperatorSyntaxError
+from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.iterator import builtins as itb, ir as itir
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.type_system.type_translation import TypingError
 
 
 DEREF = itir.SymRef(id=itb.deref.fun.__name__)
@@ -79,10 +76,7 @@ def test_untyped_arg():
     def untyped(inp):
         return inp
 
-    with pytest.raises(
-        FieldOperatorSyntaxError,
-        match="Untyped parameters not allowed!",
-    ):
+    with pytest.raises(errors.MissingParameterAnnotationError):
         _ = FieldOperatorParser.apply_to_function(untyped)
 
 
@@ -93,7 +87,7 @@ def test_mistyped_arg():
         return inp
 
     with pytest.raises(
-        TypingError,
+        ValueError,
         match="Field type requires two arguments, got 0!",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
@@ -120,8 +114,8 @@ def test_invalid_syntax_no_return():
         tmp = inp  # noqa
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match="Function must return a value, but no return statement was found\.",
+        errors.DSLError,
+        match=".*return.*",
     ):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
@@ -136,7 +130,7 @@ def test_invalid_assign_to_expr():
         tmp[-1] = inp2
         return tmp
 
-    with pytest.raises(FieldOperatorSyntaxError, match=r"Can only assign to names! \(.*\)"):
+    with pytest.raises(errors.DSLError, match=r".*assign.*"):
         _ = FieldOperatorParser.apply_to_function(invalid_assign_to_expr)
 
 
@@ -162,7 +156,7 @@ def test_clashing_annotated_assignment():
         tmp: gtx.Field[[TDim], "int64"] = inp
         return tmp
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match="type inconsistency"):
+    with pytest.raises(errors.DSLError, match="type inconsistency"):
         _ = FieldOperatorParser.apply_to_function(clashing)
 
 
@@ -190,24 +184,24 @@ def test_binary_mod():
     )
 
 
-def test_bool_and():
+def test_boolean_and_op_unsupported():
     def bool_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a and b
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`and`/`or` operator not allowed!"),
+        errors.UnsupportedPythonFeatureError,
+        match=r".*and.*or.*",
     ):
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
 
-def test_bool_or():
+def test_boolean_or_op_unsupported():
     def bool_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a or b
 
     with pytest.raises(
-        FieldOperatorSyntaxError,
-        match=(r"`and`/`or` operator not allowed!"),
+        errors.UnsupportedPythonFeatureError,
+        match=r".*and.*or.*",
     ):
         _ = FieldOperatorParser.apply_to_function(bool_or)
 
@@ -236,12 +230,12 @@ def test_unary_tilde():
     )
 
 
-def test_scalar_cast():
+def test_scalar_cast_disallow_non_literals():
     def cast_scalar_temp():
         tmp = int64(1)
         return int32(tmp)
 
-    with pytest.raises(FieldOperatorSyntaxError, match=(r"only takes literal arguments!")):
+    with pytest.raises(errors.DSLError, match=r".*literal.*"):
         _ = FieldOperatorParser.apply_to_function(cast_scalar_temp)
 
 
@@ -252,7 +246,7 @@ def test_conditional_wrong_mask_type():
         return where(a, a, a)
 
     msg = r"Expected a field with dtype `bool`."
-    with pytest.raises(FieldOperatorTypeDeductionError, match=msg):
+    with pytest.raises(errors.DSLError, match=msg):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
 
 
@@ -265,7 +259,7 @@ def test_conditional_wrong_arg_type():
         return where(mask, a, b)
 
     msg = r"Could not promote scalars of different dtype \(not implemented\)."
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_arg_type)
 
     assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -275,7 +269,7 @@ def test_ternary_with_field_condition():
     def ternary_with_field_condition(cond: gtx.Field[[], bool]):
         return 1 if cond else 2
 
-    with pytest.raises(FieldOperatorTypeDeductionError, match=r"should be .* `bool`"):
+    with pytest.raises(errors.DSLError, match=r"should be .* `bool`"):
         _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
 
 
@@ -294,7 +288,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
-    with pytest.raises(GTTypeError, match=r"Expected `float.*`"):
+    with pytest.raises(errors.DSLError, match=r"Expected `float.*`"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
@@ -376,7 +370,7 @@ def test_wrong_return_type_annotation():
         return a
 
     with pytest.raises(
-        GTTypeError,
+        errors.DSLError,
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
@@ -387,7 +381,7 @@ def test_empty_dims_type():
         return 1.0
 
     with pytest.raises(
-        GTTypeError,
+        errors.DSLError,
         match=r"Annotated return type does not match deduced return type",
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
@@ -401,8 +395,8 @@ def test_zero_dims_ternary():
     ):
         return a if cond == 1 else b
 
-    msg = r"Could not deduce type"
-    with pytest.raises(FieldOperatorTypeDeductionError) as exc_info:
+    msg = r"Incompatible datatypes in operator `==`"
+    with pytest.raises(errors.DSLError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
 
     assert re.search(msg, exc_info.value.args[0]) is not None

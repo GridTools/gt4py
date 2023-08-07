@@ -23,8 +23,6 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, cast
 
-from gt4py.next import common
-
 
 MISSING_FILENAME = "<string>"
 
@@ -36,32 +34,33 @@ def get_closure_vars_from_function(function: Callable) -> dict[str, Any]:
 
 def make_source_definition_from_function(func: Callable) -> SourceDefinition:
     try:
-        filename = str(pathlib.Path(inspect.getabsfile(func)).resolve()) or MISSING_FILENAME
-        source = textwrap.dedent(inspect.getsource(func))
-        starting_line = (
-            inspect.getsourcelines(func)[1] if not filename.endswith(MISSING_FILENAME) else 1
+        filename = str(pathlib.Path(inspect.getabsfile(func)).resolve())
+        if not filename:
+            raise ValueError(
+                "Can not create field operator from a function that is not in a source file!"
+            )
+        source_lines, line_offset = inspect.getsourcelines(func)
+        source_code = textwrap.dedent(inspect.getsource(func))
+        column_offset = min(
+            [len(line) - len(line.lstrip()) for line in source_lines if line.lstrip()], default=0
         )
-    except OSError as err:
-        if filename.endswith(MISSING_FILENAME):
-            message = "Can not create field operator from a function that is not in a source file!"
-        else:
-            message = f"Can not get source code of passed function ({func})"
-        raise ValueError(message) from err
+        return SourceDefinition(source_code, filename, line_offset - 1, column_offset)
 
-    return SourceDefinition(source, filename, starting_line)
+    except OSError as err:
+        raise ValueError(f"Can not get source code of passed function ({func})") from err
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
     try:
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
-        raise common.GTValueError(
+        raise ValueError(
             f"Unexpected error when parsing provided source code (\n{source}\n)"
         ) from err
 
     assert mod_st.get_type() == "module"
     if len(children := mod_st.get_children()) != 1:
-        raise common.GTValueError(
+        raise ValueError(
             f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
         )
 
@@ -107,11 +106,11 @@ class SourceDefinition:
     >>> def foo(a):
     ...     return a
     >>> src_def = SourceDefinition.from_function(foo)
-    >>> print(src_def)
-    SourceDefinition(source='def foo(a):... starting_line=1)
+    >>> print(src_def) # doctest:+ELLIPSIS
+    SourceDefinition(source='def foo(a):...', filename='...', line_offset=0, column_offset=0)
 
     >>> source, filename, starting_line = src_def
-    >>> print(source)
+    >>> print(source) # doctest:+ELLIPSIS
     def foo(a):
         return a
     ...
@@ -119,12 +118,13 @@ class SourceDefinition:
 
     source: str
     filename: str = MISSING_FILENAME
-    starting_line: int = 1
+    line_offset: int = 0
+    column_offset: int = 0
 
     def __iter__(self) -> Iterator:
         yield self.source
         yield self.filename
-        yield self.starting_line
+        yield self.line_offset
 
     from_function = staticmethod(make_source_definition_from_function)
 
