@@ -238,17 +238,6 @@ def allocate_gpu(
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
-    if gt_config.GT4PY_USE_HIP:
-        # HIP/ROCm lack support for __cuda_array_interface__
-        buffer.ndarray.__hip_array_interface__ = {
-            "shape": buffer.ndarray.shape,
-            "typestr": buffer.ndarray.dtype.descr[0][1],
-            "descr": buffer.ndarray.dtype.descr,
-            "stream": 1,
-            "version": 3,
-            "strides": buffer.ndarray.strides,
-            "data": (buffer.ndarray.data.ptr, False),
-        }
     return buffer.buffer, buffer.ndarray
 
 
