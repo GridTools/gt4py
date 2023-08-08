@@ -381,8 +381,8 @@ class ProgramWithBoundArgs(Program):
             )
 
         for index, param in enumerate(self.past_node.params):
-            if param.id in b_args.keys():
-                args.insert(index, b_args[param.id])
+            if param.id in self.bound_args.keys():
+                args.insert(index, self.bound_args[param.id])
 
         return super()._process_args(tuple(args), kwargs)
 
