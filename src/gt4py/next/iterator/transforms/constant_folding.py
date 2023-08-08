@@ -37,7 +37,7 @@ class ConstantFolding(NodeTranslator):
         if (
             isinstance(new_node, ir.FunCall)
             and isinstance(new_node.fun, ir.SymRef)
-            and len(new_node.args) > 0  # for zero dims fields
+            and len(new_node.args) > 0
             and all(isinstance(arg, ir.Literal) for arg in new_node.args)
         ):  # 1 + 1 -> 2
             if "make_" not in new_node.fun.id:  # for make_tuple, make_const_list
