@@ -51,26 +51,6 @@ except ImportError:
 _ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
 
 
-# class _NDArrayLike(Protocol):
-#     def __array__(self, dtype: Optional[np.dtype] = None) -> np.ndarray:
-#         ...
-
-#     def __getitem__(self, item: core_defs.SliceLike) -> np.ndarray:
-#         ...
-
-
-# class _NDArrayLikeArrayInterface(xtyping.ArrayInterface, _NDArrayLike):
-#     ...
-
-
-# class _NDArrayLikeCUDAArrayInterface(xtyping.CUDAArrayInterface, _NDArrayLike):
-#     ...
-
-
-# class _NDArrayLikeDLPackBuffer(xtyping.DLPackBuffer, _NDArrayLike):
-#     ...
-
-
 _NDBuffer: TypeAlias = Union[
     xtyping.ArrayInterface,
     xtyping.CUDAArrayInterface,

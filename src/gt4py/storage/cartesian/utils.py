@@ -22,18 +22,10 @@ from typing import Any, Literal, Optional, Sequence, Tuple, Union, cast
 import numpy as np
 import numpy.typing as npt
 
-from gt4py.cartesian import config as gt_config
-
-
-try:
-    import dace
-except ImportError:
-    dace = None
-
 from gt4py._core import definitions as core_defs
+from gt4py.cartesian import config as gt_config
 from gt4py.eve.extended_typing import ArrayInterface, CUDAArrayInterface
 from gt4py.storage import allocators
-from gt4py.storage.cartesian import layout
 
 
 if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
@@ -239,80 +231,3 @@ def allocate_gpu(
         aligned_index=aligned_index,
     )
     return buffer.buffer, buffer.ndarray
-
-
-# TODO: check if this function is actually used somewhere and remove it if not
-if dace is not None:
-
-    def dace_descriptor(
-        shape: Sequence[int],
-        dtype: DTypeLike = np.float64,
-        *,
-        backend: str,
-        aligned_index: Optional[Sequence[int]] = None,
-        dimensions: Optional[Sequence[str]] = None,
-    ) -> dace.data.Array:
-        """Return a DaCe data descriptor which describes performance-optimal strides and alignment.
-
-        Parameters
-        ----------
-            shape : `Sequence` of `int`
-                The shape of the resulting data descriptor.
-            dtype :  DTypeLike, optional
-                The dtype encoded in the resulting data descriptor.
-
-        Keyword Arguments
-        -----------------
-            backend : `str`
-                The target backend for which the described allocation is optimized.
-            aligned_index: `Sequence` of `int`, optional
-                Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-                domain. If not passed, it is aligned at the data origin.
-            dimensions: `Sequence` of `str`, optional
-                Indicate the semantic meaning of the dimensions in the data descriptor. Only used for determining
-                optimal strides, the information is not stored.
-
-        Returns
-        -------
-            DaCe data descriptor
-                With strides that encode padding and aligned to provide optimal performance for the given `backend` and
-                `aligned_index`
-
-        Raises
-        -------
-            TypeError
-                If arguments of an unexpected type are specified.
-            ValueError
-                If illegal or inconsistent arguments are specified.
-        """
-        aligned_index, shape, dtype, dimensions = normalize_storage_spec(
-            aligned_index, shape, dtype, dimensions
-        )
-        itemsize = dtype.itemsize
-        storage_info = layout.from_name(backend)
-        assert storage_info is not None
-        layout_map = storage_info["layout_map"](dimensions)
-
-        order_idx = _idx_from_order([i for i in layout_map if i is not None])
-        padded_shape = _compute_padded_shape(shape, storage_info["alignment"], order_idx)
-
-        strides = _strides_from_padded_shape(padded_shape, order_idx, itemsize)
-
-        storage = (
-            dace.StorageType.GPU_Global
-            if storage_info["device"] == "gpu"
-            else dace.StorageType.CPU_Heap
-        )
-        start_offset = int(np.array([aligned_index]) @ np.array([strides]).T) // itemsize
-
-        total_size = int(int(np.array([shape]) @ np.array([strides]).T) // itemsize)
-
-        start_offset = start_offset % storage_info["alignment"]
-        return dace.data.Array(
-            shape=shape,
-            strides=[s // itemsize for s in strides],
-            dtype=dace.typeclass(str(dtype)),
-            storage=storage,
-            total_size=total_size,
-            start_offset=start_offset,
-        )

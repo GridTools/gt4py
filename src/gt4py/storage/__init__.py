@@ -33,10 +33,3 @@ __all__ = [
     "from_name",
     "register",
 ]
-
-try:
-    from .cartesian.utils import dace_descriptor  # noqa: F401
-
-    __all__ += ["dace_descriptor"]
-except ImportError:
-    pass
