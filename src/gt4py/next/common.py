@@ -21,10 +21,11 @@ import functools
 import sys
 from collections.abc import Sequence, Set
 from typing import overload
+
 import numpy as np
 import numpy.typing as npt
 
-from gt4py._core import definitions as gt4py_defs
+from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -42,12 +43,9 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
+
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
-
-DType = gt4py_defs.DType
-Scalar: TypeAlias = gt4py_defs.Scalar
-NDArrayObject = gt4py_defs.NDArrayObject
 
 
 class Infinity(int):
@@ -79,7 +77,9 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-DomainLike: TypeAlias = Union[Sequence[Dimension], Dimension, str]
+DomainLike: TypeAlias = Union[
+    Sequence[Dimension], Dimension, str
+]  # TODO(havogt): revisit once embedded implementation is concluded
 
 
 @dataclasses.dataclass(frozen=True)
@@ -199,7 +199,7 @@ def _broadcast_ranges(
         return ranges
 
     broadcasted_ranges = list(ranges)
-    for i in range(len(broadcast_dims) - len(dims)):
+    for _ in range(len(broadcast_dims) - len(dims)):
         broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
 
     return broadcasted_ranges
@@ -208,7 +208,7 @@ def _broadcast_ranges(
 if TYPE_CHECKING:
     import gt4py.next.ffront.fbuiltins as fbuiltins
 
-    _Value: TypeAlias = "Field" | gt4py_defs.ScalarT
+    _Value: TypeAlias = "Field" | core_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
@@ -218,7 +218,7 @@ if TYPE_CHECKING:
 
 
 @extended_runtime_checkable
-class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
+class Field(Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -226,15 +226,15 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @property
-    def dtype(self) -> DType[gt4py_defs.ScalarT]:
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
         ...
 
     @property
-    def value_type(self) -> type[gt4py_defs.ScalarT]:
+    def value_type(self) -> type[core_defs.ScalarT]:
         ...
 
     @property
-    def ndarray(self) -> NDArrayObject:
+    def ndarray(self) -> core_defs.NDArrayObject:
         ...
 
     def __str__(self) -> str:
@@ -267,51 +267,51 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | gt4py_defs.ScalarT) -> Field:
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
 
-class FieldABC(Field[DimsT, gt4py_defs.ScalarT]):
+class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
 
     @final

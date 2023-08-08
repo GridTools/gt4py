@@ -305,7 +305,7 @@ def is_local_field(type_: ts.FieldType) -> bool:
     Examples:
     ---------
     >>> V = common.Dimension(value="V")
-    >>> V2E = common.Dimension(value="V2E", kind=DimensionKind.LOCAL)
+    >>> V2E = common.Dimension(value="V2E", kind=common.DimensionKind.LOCAL)
     >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     True
     >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))

@@ -24,6 +24,7 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
+    common,
     errors,
     float32,
     float64,
@@ -36,7 +37,6 @@ from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.type_system import type_info, type_specifications as ts
-from gt4py.next import common
 
 
 TDim = Dimension("TDim")  # Meaningless dimension, used for tests.

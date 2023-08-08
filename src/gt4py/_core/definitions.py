@@ -78,6 +78,10 @@ ScalarT = TypeVar("ScalarT", bound=Union[BoolScalar, IntegerScalar, FloatingScal
 SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INT_TYPES, *FLOAT_TYPES)
 
 
+def is_scalar_type(t: Any) -> TypeGuard[Scalar]:
+    return isinstance(t, SCALAR_TYPES)
+
+
 class BooleanIntegral(numbers.Integral):
     """Abstract base class for boolean integral types."""
 
