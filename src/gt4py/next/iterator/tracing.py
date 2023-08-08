@@ -16,8 +16,9 @@ import dataclasses
 import inspect
 from typing import List
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
-from gt4py.next import common, iterator
+from gt4py.next import iterator
 from gt4py.next.iterator import builtins, ir_makers as im
 from gt4py.next.iterator.ir import (
     AxisLiteral,
@@ -151,7 +152,7 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
-    if isinstance(o, common.Scalar):
+    if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
     if isinstance(o, CartesianAxis):
         return AxisLiteral(value=o.value)
