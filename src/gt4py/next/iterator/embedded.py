@@ -1280,7 +1280,7 @@ def _tuple_assign(field, value, indices):
             _tuple_assign(f, v, indices)
     else:
         assert is_located_field(field)
-        field[indices] = value
+        field.field_setitem(indices, value)
 
 
 class TupleOfFields(TupleField):
