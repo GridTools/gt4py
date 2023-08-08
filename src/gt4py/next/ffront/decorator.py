@@ -375,7 +375,7 @@ class ProgramWithBoundArgs(Program):
             if param.id in list(b_args.keys()):
                 args.insert(index, b_args[param.id])
 
-        return super(ProgramWithBoundArgs, self)._process_args(tuple(args), kwargs)
+        return super()._process_args(tuple(args), kwargs)
 
     @functools.cached_property
     def itir(self):
