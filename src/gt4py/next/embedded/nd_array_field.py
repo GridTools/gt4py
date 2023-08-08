@@ -39,7 +39,7 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, DomainT
+from gt4py.next.common import DimsT, Domain
 from gt4py.next.ffront import fbuiltins
 
 
@@ -91,7 +91,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     function via its namespace.
     """
 
-    _domain: DomainT
+    _domain: Domain
     _ndarray: definitions.NDArrayObject
     _value_type: type[ScalarT]
 
@@ -129,7 +129,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
-    def domain(self) -> DomainT:
+    def domain(self) -> Domain:
         return self._domain
 
     @property
@@ -154,7 +154,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         data: npt.ArrayLike,
         /,
         *,
-        domain: DomainT,
+        domain: Domain,
         value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns

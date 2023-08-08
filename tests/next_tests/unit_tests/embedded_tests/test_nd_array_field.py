@@ -14,6 +14,7 @@
 
 import itertools
 import math
+import operator
 from typing import Callable, Iterable
 
 import numpy as np
@@ -32,14 +33,7 @@ def nd_array_implementation(request):
 
 
 @pytest.fixture(
-    ids=["plus", "minus", "multiply", "div", "truediv"],
-    params=[
-        lambda a, b: a + b,
-        lambda a, b: a - b,
-        lambda a, b: a * b,
-        lambda a, b: a / b,
-        lambda a, b: a // b,
-    ],
+    params=[operator.add, operator.sub, operator.mul, operator.truediv, operator.floordiv],
 )
 def binary_op(request):
     yield request.param
