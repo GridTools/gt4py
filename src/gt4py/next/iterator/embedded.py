@@ -129,14 +129,14 @@ SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
 PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
 IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
-ConcretePosition: TypeAlias = dict[common.Dimension, PositionEntry]
-IncompletePosition: TypeAlias = dict[common.Dimension, IncompletePositionEntry]
+ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
+IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
 Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
-NamedFieldIndices: TypeAlias = Mapping[common.Dimension, FieldIndex | SparsePositionEntry]
+NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
@@ -538,9 +538,7 @@ def execute_shift(
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseTag):
-        # hack: sparse dimensions have the same name as the offset applying to them
-        sparse_dim = common.Dimension(tag, kind=common.DimensionKind.LOCAL)
-        current_entry = pos[sparse_dim]
+        current_entry = pos[tag]
         assert isinstance(current_entry, list)
         new_entry = list(current_entry)
         assert None in new_entry
@@ -553,23 +551,23 @@ def execute_shift(
                 new_entry[i] = index
                 break
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
-        return cast(IncompletePosition, pos) | {sparse_dim: new_entry}
+        return cast(IncompletePosition, pos) | {tag: new_entry}
 
     assert tag in offset_provider
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
-        if is_int_index(value := new_pos[offset_implementation]):
-            new_pos[offset_implementation] = value + index
+        if is_int_index(value := new_pos[offset_implementation.value]):
+            new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
         return new_pos
     else:
         assert isinstance(offset_implementation, common.Connectivity)
-        assert offset_implementation.origin_axis in pos
+        assert offset_implementation.origin_axis.value in pos
         new_pos = pos.copy()
-        new_pos.pop(offset_implementation.origin_axis)
-        cur_index = pos[offset_implementation.origin_axis]
+        new_pos.pop(offset_implementation.origin_axis.value)
+        cur_index = pos[offset_implementation.origin_axis.value]
         assert is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
@@ -579,7 +577,7 @@ def execute_shift(
         else:
             new_index = offset_implementation.mapped_index(cur_index, index)
             assert new_index is not None
-            new_pos[offset_implementation.neighbor_axis] = int(new_index)
+            new_pos[offset_implementation.neighbor_axis.value] = int(new_index)
 
         return new_pos
 
@@ -694,7 +692,7 @@ def _get_axes(
 
 
 def _single_vertical_idx(
-    indices: NamedFieldIndices, column_axis: common.Dimension, column_index: IntIndex
+    indices: NamedFieldIndices, column_axis: Tag, column_index: IntIndex
 ) -> NamedFieldIndices:
     transformed = {
         axis: (index if axis != column_axis else column_index) for axis, index in indices.items()
@@ -707,7 +705,7 @@ def _make_tuple(
     field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
     named_indices: NamedFieldIndices,
     *,
-    column_axis: common.Dimension,
+    column_axis: Tag,
 ) -> tuple[tuple | Column, ...]:
     ...
 
@@ -724,7 +722,7 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: common.Dimension
+    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
 ) -> Column:
     ...
 
@@ -743,7 +741,7 @@ def _make_tuple(
     field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
     named_indices: NamedFieldIndices,
     *,
-    column_axis: Optional[common.Dimension] = None,
+    column_axis: Optional[Tag] = None,
 ) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
     column_range = column_range_cvar.get()
     if isinstance(field_or_tuple, tuple):
@@ -776,11 +774,9 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(
-    axes: Sequence[common.Dimension | runtime.Offset], axis: common.Dimension
-) -> Optional[int]:
+def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
     for i, a in enumerate(axes):
-        if a == axis:
+        if a.value == axis:
             return i
     return None
 
@@ -789,7 +785,7 @@ def _axis_idx(
 class MDIterator:
     field: LocatedField
     pos: MaybePosition
-    column_axis: Optional[common.Dimension] = dataclasses.field(default=None, kw_only=True)
+    column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
     def shift(self, *offsets: OffsetPart) -> MDIterator:
         complete_offsets = group_offsets(*offsets)
@@ -815,9 +811,9 @@ class MDIterator:
         axes = _get_axes(self.field)
 
         if __debug__:
-            if not all(axis in shifted_pos.keys() for axis in axes if axis is not None):
+            if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
-        slice_column = dict[common.Dimension, range]()
+        slice_column = dict[Tag, range]()
         column_range = column_range_cvar.get()
         if self.column_axis is not None:
             assert column_range is not None
@@ -828,7 +824,7 @@ class MDIterator:
             slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
 
         assert _is_concrete_position(shifted_pos)
-        position: NamedFieldIndices = {**shifted_pos, **slice_column}
+        position = {**shifted_pos, **slice_column}
         return _make_tuple(
             self.field,
             position,
@@ -836,17 +832,19 @@ class MDIterator:
         )
 
 
-def _get_sparse_dimensions(
-    axes: Sequence[common.Dimension],
-) -> list[common.Dimension]:
-    return [axis for axis in axes if axis is not None and axis.kind == common.DimensionKind.LOCAL]
+def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
+    return [
+        axis.value
+        for axis in axes
+        if isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL
+    ]
 
 
 def make_in_iterator(
     inp: LocatedField,
     pos: Position,
     *,
-    column_axis: Optional[common.Dimension],
+    column_axis: Optional[Tag],
 ) -> ItIterator:
     axes = _get_axes(inp)
     sparse_dimensions = _get_sparse_dimensions(axes)
@@ -866,7 +864,7 @@ def make_in_iterator(
     )
     if len(sparse_dimensions) >= 1:
         if len(sparse_dimensions) == 1:
-            return SparseListIterator(it, sparse_dimensions[0].value)
+            return SparseListIterator(it, sparse_dimensions[0])
         else:
             raise NotImplementedError(
                 f"More than one local dimension is currently not supported, got {sparse_dimensions}"
@@ -924,7 +922,7 @@ class LocatedFieldImpl(MutableLocatedField):
             return tuple([0] * len(self.__gt_dims__))
         return cast(
             tuple[int],
-            get_ordered_indices(self.__gt_dims__, {k: v for k, v in self.origin.items()}),
+            get_ordered_indices(self.__gt_dims__, {k.value: v for k, v in self.origin.items()}),
         )
 
     @property
@@ -950,18 +948,19 @@ def _is_sparse_position_entry(
 
 def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
-    sparse_position_tracker: dict[common.Dimension, int] = {}
+    sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
         if _is_tuple_axis(axis):
             res.append(slice(None))
         else:
             assert _is_field_axis(axis)
-            assert axis in pos
-            elem = pos[axis]
+            assert axis.value in pos
+            assert isinstance(axis.value, str)
+            elem = pos[axis.value]
             if _is_sparse_position_entry(elem):
-                sparse_position_tracker.setdefault(axis, 0)
-                res.append(elem[sparse_position_tracker[axis]])
-                sparse_position_tracker[axis] += 1
+                sparse_position_tracker.setdefault(axis.value, 0)
+                res.append(elem[sparse_position_tracker[axis.value]])
+                sparse_position_tracker[axis.value] += 1
             else:
                 assert isinstance(elem, (int, np.integer, slice, range))
                 res.append(elem)
@@ -1023,7 +1022,7 @@ def np_as_located_field(
             raise TypeError("ndarray.ndim incompatible with number of given axes")
 
         if origin is not None:
-            offsets = get_ordered_indices(axes, {k: v for k, v in origin.items()})
+            offsets = get_ordered_indices(axes, {k.value: v for k, v in origin.items()})
         else:
             offsets = None
 
@@ -1296,11 +1295,11 @@ class TupleOfFields(TupleField):
         indices = get_ordered_indices(self.__gt_dims__, named_indices)
         return _build_tuple_result(self.data, indices)
 
-    def field_setitem(self, named_indices: NamedFieldIndices, value):
+    def field_setitem(self, indices, value):
         if not isinstance(value, tuple):
             raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
 
-        _tuple_assign(self.data, value, get_ordered_indices(self.__gt_dims__, named_indices))
+        _tuple_assign(self.data, value, indices)
 
 
 def as_tuple_field(field):
@@ -1339,6 +1338,10 @@ def scan(scan_pass, is_forward: bool, init):
     return impl
 
 
+def _dimension_to_tag(domain: Domain) -> dict[Tag, range]:
+    return {k.value if isinstance(k, common.Dimension) else k: v for k, v in domain.items()}
+
+
 def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
     if isinstance(domain, runtime.CartesianDomain):
         if any(isinstance(o, common.Connectivity) for o in offset_provider.values()):
@@ -1355,22 +1358,22 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
     @runtime.closure.register(EMBEDDED)
     def closure(
-        domain: Domain,
+        domain_: Domain,
         sten: Callable[..., Any],
         out: MutableLocatedField,
         ins: list[LocatedField],
     ) -> None:
-        _validate_domain(domain, kwargs["offset_provider"])
-        domain = domain.copy()
+        _validate_domain(domain_, kwargs["offset_provider"])
+        domain: dict[Tag, range] = _dimension_to_tag(domain_)
         if not (is_located_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
         column_range = None
         column: Optional[ColumnDescriptor] = None
-        if kwargs.get("column_axis") and kwargs["column_axis"] in domain:
+        if kwargs.get("column_axis") and kwargs["column_axis"].value in domain:
             column_axis = kwargs["column_axis"]
-            column = ColumnDescriptor(column_axis, domain[column_axis])
-            del domain[column_axis]
+            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
+            del domain[column_axis.value]
 
             column_range = column.col_range
 
