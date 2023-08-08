@@ -29,9 +29,10 @@ from typing import Generator, Generic, TypeVar
 
 from devtools import debug
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import Dimension, DimensionKind, GridType, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -633,7 +634,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> FieldOperator[foast.ScanOperator]:
     ...
@@ -644,7 +645,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
@@ -655,7 +656,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Scalar = 0.0,
+    init: core_defs.Scalar = 0.0,
     backend=None,
 ) -> (
     FieldOperator[foast.ScanOperator]
