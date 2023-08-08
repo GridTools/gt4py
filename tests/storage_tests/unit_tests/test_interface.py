@@ -381,6 +381,8 @@ def test_cpu_constructor(alloc_fun, backend):
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, np.ndarray)
 
+def test_cpu_constructor_scalar():
+    gt4py.storage.zeros(shape=(), dtype=np.float64, backend="dace:cpu", aligned_index=(), dimensions=[])
 
 @pytest.mark.parametrize(
     "alloc_fun",
