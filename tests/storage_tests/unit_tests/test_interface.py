@@ -365,35 +365,33 @@ def _create_ndarray_for_test_from_array(*, dtype, aligned_index, shape, backend)
     )
 
 
-@pytest.mark.parametrize(
-    "alloc_fun",
-    [
+@pytest.fixture(
+    params=[
         gt4py.storage.empty,
         gt4py.storage.ones,
         gt4py.storage.zeros,
         _create_ndarray_for_test_fill,
         _create_ndarray_for_test_from_array,
-    ],
+    ]
 )
+def alloc_fun(request):
+    return request.param
+
+
 @pytest.mark.parametrize("backend", CPU_LAYOUTS)
 def test_cpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
     assert isinstance(stor, np.ndarray)
 
-def test_cpu_constructor_scalar():
-    gt4py.storage.zeros(shape=(), dtype=np.float64, backend="dace:cpu", aligned_index=(), dimensions=[])
 
-@pytest.mark.parametrize(
-    "alloc_fun",
-    [
-        gt4py.storage.empty,
-        gt4py.storage.ones,
-        gt4py.storage.zeros,
-        _create_ndarray_for_test_fill,
-        _create_ndarray_for_test_from_array,
-    ],
-)
+@pytest.mark.parametrize("backend", CPU_LAYOUTS)
+def test_cpu_constructor_0d(alloc_fun, backend):
+    stor = alloc_fun(shape=(), dtype=np.float64, backend=backend, aligned_index=())
+    assert stor.shape == ()
+    assert isinstance(stor, np.ndarray)
+
+
 @pytest.mark.parametrize(
     "backend",
     GPU_LAYOUTS,
@@ -401,6 +399,13 @@ def test_cpu_constructor_scalar():
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)
+    assert isinstance(stor, cp.ndarray)
+
+
+@pytest.mark.parametrize("backend", GPU_LAYOUTS)
+def test_gpu_constructor_0d(alloc_fun, backend):
+    stor = alloc_fun(shape=(), dtype=np.float64, backend=backend, aligned_index=())
+    assert stor.shape == ()
     assert isinstance(stor, cp.ndarray)
 
 

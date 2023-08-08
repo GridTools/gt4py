@@ -220,9 +220,10 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.NDArrayObjectT]):
         # Compute the padding required in the contiguous dimension to get aligned blocks
         dims_layout = [layout_map.index(i) for i in range(len(shape))]
         padded_shape_lst = list(shape)
-        if len(dims_layout) > 0:
+        if ndim > 0:
             padded_shape_lst[dims_layout[-1]] = (
-                math.ceil(shape[dims_layout[-1]] / items_per_aligned_block) * items_per_aligned_block
+                math.ceil(shape[dims_layout[-1]] / items_per_aligned_block)
+                * items_per_aligned_block
             )
         padded_shape = tuple(padded_shape_lst)
         assert core_defs.is_valid_tensor_shape(padded_shape)
@@ -246,10 +247,15 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.NDArrayObjectT]):
         # Compute final byte offset to align the requested buffer index
         aligned_index = tuple(aligned_index or ([0] * len(shape)))
         aligned_index_offset = (
+            (
                 items_per_aligned_block
                 * (int(math.ceil(aligned_index[dims_layout[-1]] / items_per_aligned_block)))
                 - aligned_index[dims_layout[-1]]
-            ) * item_size if len(dims_layout) > 0 else 0
+            )
+            * item_size
+            if ndim > 0
+            else 0
+        )
 
         allocation_mismatch_offset = (
             byte_alignment - memory_address % byte_alignment
