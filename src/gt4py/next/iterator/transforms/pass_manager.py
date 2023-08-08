@@ -80,26 +80,32 @@ def apply_common_transforms(
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
-    if lift_mode != LiftMode.FORCE_TEMPORARIES:
-        for _ in range(10):
-            inlined = _inline_lifts(ir, lift_mode)
-            inlined = InlineLambdas.apply(
-                inlined,
-                opcount_preserving=True,
-                force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
-            )
-            inlined = ConstantFolding.apply(inlined)
 
-            if inlined == ir:
-                break
-            ir = inlined
-            ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
-        else:
-            raise RuntimeError("Inlining lift and lambdas did not converge.")
-    else:
-        ir = InlineLambdas.apply(
-            ir, opcount_preserving=True, force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE)
+    for _ in range(10):
+        inlined = ir
+
+        if lift_mode != LiftMode.FORCE_TEMPORARIES:
+            inlined = _inline_lifts(inlined, lift_mode)
+
+        inlined = InlineLambdas.apply(
+            inlined,
+            opcount_preserving=True,
+            force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
         )
+        inlined = ConstantFolding.apply(inlined)
+        inlined = CollapseTuple.apply(inlined)
+
+        if inlined == ir:
+            break
+        ir = inlined
+    else:
+        raise RuntimeError("Inlining lift and lambdas did not converge.")
+
+    # Since `CollapseTuple` relies on the type inference which does not support returning tuples
+    # larger than the number of closure outputs as given by the unconditional collapse, we can
+    # only run the unconditional version here instead of in the loop above.
+    if unconditionally_collapse_tuples:
+        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = _inline_into_scan(ir)
