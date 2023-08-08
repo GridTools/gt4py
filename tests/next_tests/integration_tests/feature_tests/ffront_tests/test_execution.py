@@ -87,7 +87,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=np.asarray(a)[1:])
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
@@ -98,7 +98,7 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: a[unstructured_case.offset_provider["E2V"].table[:, 0]],
+        ref=lambda a: np.asarray(a)[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
 
