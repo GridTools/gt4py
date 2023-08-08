@@ -149,6 +149,11 @@ class Domain(Sequence[NamedRange]):
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
 
+        if len(self.dims) != len(self.ranges):
+            raise ValueError(
+                f"Number of provided dimensions ({len(self.dims)}) does not match number of provided ranges ({len(self.ranges)})."
+            )
+
     def __len__(self) -> int:
         return len(self.ranges)
 

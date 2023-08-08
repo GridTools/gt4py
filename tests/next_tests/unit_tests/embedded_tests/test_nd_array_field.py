@@ -144,15 +144,15 @@ def test_non_dispatched_function():
                              (
                                      np.random.rand(10, 6),
                                      common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
-                                     common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
+                                     common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
                                      (5, 3),
                                      (slice(0, 5), slice(3, 6))
                              ),
                              (
                                      np.random.rand(10, 6, 4),
-                                     common.Domain(dims=(Dimension('IDim'), Dimension('JDim'), Dimension('KDim')),
+                                     common.Domain(dims=(IDim, JDim, KDim),
                                                    ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6))),
-                                     common.Domain(dims=(IDim,),
+                                     common.Domain(dims=(IDim, JDim, KDim),
                                                    ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4))),
                                      (5, 3, 2),
                                      (slice(0, 5), slice(3, 6), slice(0, 2))
@@ -166,8 +166,8 @@ def test_slice_with_domain(nd_array_implementation, arr, domain, target_domain, 
 
 def test_field_intersection_binary_op(nd_array_implementation):
     arr = np.random.rand(10, 10)
-    d1 = common.Domain((IDim,), (UnitRange(-10, 0), UnitRange(-1, 9)))
-    d2 = common.Domain((IDim,), (UnitRange(-5, 5), UnitRange(7, 18)))
+    d1 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(-10, 0), UnitRange(-1, 9)))
+    d2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(-5, 5), UnitRange(7, 17)))
     f1, f2 = common.field(arr, domain=d1), common.field(arr, domain=d2)
     intersection = d1 & d2
     new = _slice_with_domain(f1, intersection) + _slice_with_domain(f2, intersection)
