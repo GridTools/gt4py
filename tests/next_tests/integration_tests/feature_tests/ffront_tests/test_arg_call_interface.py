@@ -271,3 +271,48 @@ def test_scan_wrong_state_type(cartesian_case):
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+def test_bound_args_wrong_kwargs(cartesian_case):
+    @field_operator
+    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
+        if bool_val:
+            scalar = 0
+        return a + a + scalar
+
+    @program
+    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
+        fieldop_bound_args(a, scalar, bool_val, out=out)
+
+    a = cases.allocate(cartesian_case, program_bound_args, "a")()
+    out = cases.allocate(cartesian_case, program_bound_args, "out")()
+    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True, tille=False)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        prog_bounds(a, out, offset_provider={})
+    assert (
+        "{'tille'} set as keyword argument(s) but not part of original program definition"
+        in str(excinfo.value)
+    )
+
+
+def test_bound_args_wrong_args(cartesian_case):
+    @field_operator
+    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
+        if bool_val:
+            scalar = 0
+        return a + a + scalar
+
+    @program
+    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
+        fieldop_bound_args(a, scalar, bool_val, out=out)
+
+    a = cases.allocate(cartesian_case, program_bound_args, "a")()
+    out = cases.allocate(cartesian_case, program_bound_args, "out")()
+    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1))
+
+    with pytest.raises(RuntimeError) as excinfo:
+        prog_bounds(a, out, offset_provider={})
+    assert "1 parameter(s) missing in new program call compared to original signature" in str(
+        excinfo.value
+    )

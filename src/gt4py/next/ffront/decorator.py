@@ -365,35 +365,47 @@ class ProgramWithBoundArgs(Program):
 
     def _process_args(self, args: tuple, kwargs: dict):
         args = list(args)
-        b_args = self.bound_args
-        if (len(args) + len(b_args)) != len(self.past_node.params):
-            raise TypeError(
-                "Total number of arguments and keyword arguments does not match original program definition!"
+        b_args = list(self.bound_args.keys()) + args
+        param_ids = [param.id for param in self.past_node.params]
+
+        extra_args = len(param_ids) - len(b_args)
+        if extra_args > 0:
+            raise RuntimeError(
+                f"{extra_args} parameter(s) missing in new program call compared to original signature"
+            )
+
+        extra_kwargs = set(self.bound_args.keys()) - set(param_ids)
+        if extra_kwargs:
+            raise RuntimeError(
+                f"{extra_kwargs} set as keyword argument(s) but not part of original program definition"
             )
 
         for index, param in enumerate(self.past_node.params):
-            if param.id in list(b_args.keys()):
+            if param.id in b_args.keys():
                 args.insert(index, b_args[param.id])
 
         return super()._process_args(tuple(args), kwargs)
 
     @functools.cached_property
     def itir(self):
-        new_itir = super(ProgramWithBoundArgs, self).itir
-        for closure_key in self.closure_vars.keys():
+        new_itir = super().itir
+        for new_clos_i, new_clos in enumerate(new_itir.closures):
             for key in self.bound_args.keys():
                 index = next(
                     index
-                    for index, closure_input in enumerate(new_itir.closures[0].inputs)
+                    for index, closure_input in enumerate(new_clos.inputs)
                     if closure_input.id == key
                 )
-                new_itir.closures[0].inputs.pop(index[0])
-            new_args = [ref(inp.id) for inp in new_itir.closures[0].inputs]
-            params = [sym(inp.id) for inp in new_itir.closures[0].inputs]
+                new_clos.inputs.pop(index)
+            new_args = [ref(inp.id) for inp in new_clos.inputs]
+            params = [sym(inp.id) for inp in new_clos.inputs]
             for value in self.bound_args.values():
                 new_args.append(promote_to_const_iterator(literal_from_value(value)))
-            expr = itir.FunCall(fun=itir.SymRef(id=itir.SymbolRef(closure_key)), args=new_args)
-            new_itir.closures[0].stencil = itir.Lambda(params=params, expr=expr)
+            expr = itir.FunCall(
+                fun=itir.SymRef(id=itir.SymbolRef(list(self.closure_vars)[new_clos_i])),
+                args=new_args,
+            )
+            new_clos.stencil = itir.Lambda(params=params, expr=expr)
         return new_itir
 
 
