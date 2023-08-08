@@ -840,14 +840,22 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
     ]
 
 
+def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tuple:
+    if isinstance(field, tuple):
+        return tuple(_wrap_field(f) for f in field)
+    elif isinstance(field, common.Field):
+        return NDArrayLocatedFieldWrapper(field)
+    else:
+        return field
+
+
 def make_in_iterator(
     inp: common.Field,
     pos: Position,
     *,
     column_axis: Optional[Tag],
 ) -> ItIterator:
-    if isinstance(inp, common.Field):
-        inp = NDArrayLocatedFieldWrapper(inp)
+    inp = _wrap_field(inp)
     axes = _get_axes(inp)
     sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
@@ -878,6 +886,13 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
+def _dim_of_tag_in_dims(tag: Tag, dims: Sequence[common.Dimension]) -> Optional[int]:
+    for d in dims:
+        if tag == d.value:
+            return d
+    return None
+
+
 @dataclasses.dataclass(frozen=True)
 class NDArrayLocatedFieldWrapper(MutableLocatedField):
     """A temporary helper until we sorted out all Field conventions between frontend and iterator.embedded."""
@@ -893,7 +908,16 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
 
+    def _promote_tags_to_dims(self, named_indices: NamedFieldIndices):
+        return {
+            _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__): v
+            for k, v in named_indices.items()
+            if _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__)
+        }
+
     def _translate_named_indices(self, named_indices: NamedFieldIndices):
+        named_indices = self._promote_tags_to_dims(named_indices)
+        print(f"{named_indices=}")
         return {
             k: common.UnitRange(v.start, v.stop) if isinstance(v, range) else v
             for k, v in named_indices.items()
@@ -1197,8 +1221,9 @@ def is_located_field(field: Any) -> bool:
 
 
 def has_uniform_tuple_element(field) -> bool:
-    return field.value_type.fields is not None and all(
-        next(iter(field.value_type.fields))[0] == f[0] for f in iter(field.value_type.fields)
+    dtype = np.dtype(field.value_type)
+    return dtype.fields is not None and all(
+        next(iter(dtype.fields))[0] == f[0] for f in iter(dtype.fields)
     )
 
 
@@ -1254,7 +1279,7 @@ def _tuple_assign(field, value, indices):
             _tuple_assign(f, v, indices)
     else:
         assert is_located_field(field)
-        field[indices] = value
+        field.field_setitem(indices, value)
 
 
 class TupleOfFields(TupleField):
@@ -1351,7 +1376,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        # out = as_tuple_field(out) if can_be_tuple_field(out) else out
+        out = as_tuple_field(out) if can_be_tuple_field(out) else out
+        out = NDArrayLocatedFieldWrapper(out)
 
         def _closure_runner():
             # Set context variables before executing the closure

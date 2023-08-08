@@ -17,6 +17,7 @@ import inspect
 from typing import List
 
 from gt4py._core import definitions as core_defs
+from gt4py.next import common
 from gt4py.eve import Node
 from gt4py.next import iterator
 from gt4py.next.iterator import builtins, ir_makers as im

@@ -144,6 +144,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def ndarray(self) -> definitions.NDArrayObject:
         return self._ndarray
 
+    def __array__(self) -> np.ndarray:
+        return np.asarray(self._ndarray)
+
     @property
     def value_type(self) -> type[definitions.ScalarT]:
         return self._value_type
@@ -179,14 +182,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     def restrict(
         self: _BaseNdArrayField, domain: common.DomainT | common.DomainSlice | common.Position
-    ) -> _BaseNdArrayField | ValueT:
-        print(domain)
-        # assert all(r[0] == 0 for _, r in self._domain)
+    ) -> _BaseNdArrayField | _Value:
         _slice = tuple(domain[dim] - r.start for dim, r in self._domain)
-        print(_slice)
         return self.ndarray[_slice]
-        # TODO proper implementation
-        # return self.ndarray[domain]
 
     field_getitem = restrict
 
