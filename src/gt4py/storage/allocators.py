@@ -268,8 +268,8 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.NDArrayObjectT]):
                 "descr": ndarray.dtype.descr,  # type: ignore[union-attr]
                 "stream": 1,
                 "version": 3,
-                "strides": ndarray.strides,  # type: ignore[union-attr]
-                "data": (ndarray.data.ptr, False),  # type: ignore[union-attr]
+                "strides": ndarray.strides,  # type: ignore[union-attr, attr-defined]
+                "data": (ndarray.data.ptr, False),  # type: ignore[union-attr, attr-defined]
             }
 
         return TensorBuffer(
