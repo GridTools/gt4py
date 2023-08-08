@@ -363,4 +363,4 @@ def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     )
 
     if validate:
-        assert out[0] == expected_value
+        assert out.ndarray[0] == expected_value

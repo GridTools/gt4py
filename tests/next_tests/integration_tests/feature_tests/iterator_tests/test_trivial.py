@@ -168,4 +168,4 @@ def test_vertical_shift_unstructured(program_processor):
     )
 
     if validate:
-        assert np.allclose(inp_s[:, 1:], np.asarray(out_s)[:, :-1])
+        assert np.allclose(np.asarray(inp_s)[:, 1:], np.asarray(out_s)[:, :-1])
