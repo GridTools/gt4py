@@ -382,11 +382,11 @@ class ProgramWithBoundArgs(Program):
         new_itir = super(ProgramWithBoundArgs, self).itir
         for closure_key in self.closure_vars.keys():
             for key in self.bound_args.keys():
-                index = [
+                index = next(
                     index
                     for index, closure_input in enumerate(new_itir.closures[0].inputs)
                     if closure_input.id == key
-                ]
+                )
                 new_itir.closures[0].inputs.pop(index[0])
             new_args = [ref(inp.id) for inp in new_itir.closures[0].inputs]
             params = [sym(inp.id) for inp in new_itir.closures[0].inputs]
