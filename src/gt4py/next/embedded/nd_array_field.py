@@ -25,7 +25,6 @@ from numpy import typing as npt
 
 from gt4py.next import common
 
-
 try:
     import cupy as cp
 except ImportError:
@@ -35,7 +34,6 @@ try:
     from jax import numpy as jnp
 except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
-
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
@@ -61,9 +59,11 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         op = getattr(xp, array_builtin_name)
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
-                raise NotImplementedError(
-                    f"support for different domain not implemented: {a.domain}, {b.domain}"
-                )
+                domain_intersection = a.domain & b.domain
+                a_sliced = _slice_with_domain(a.ndarray, domain_intersection)
+                b_sliced = _slice_with_domain(b.ndarray, domain_intersection)
+                new_data = op(a_sliced, b_sliced)
+                return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
             assert isinstance(b, definitions.SCALAR_TYPES)
@@ -108,20 +108,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
     ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
     ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
@@ -142,12 +142,12 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @classmethod
     def from_array(
-        cls,
-        data: npt.ArrayLike,
-        /,
-        *,
-        domain: Domain,
-        value_type: Optional[type] = None,
+            cls,
+            data: npt.ArrayLike,
+            /,
+            *,
+            domain: Domain,
+            value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
         dtype = None
@@ -202,9 +202,9 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow
 # TODO gamma
 
 for name in (
-    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+        fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+        + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+        + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -234,14 +234,15 @@ class NumPyArrayField(_BaseNdArrayField):
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 
-
 # CuPy
 if cp:
     _nd_array_implementations.append(cp)
 
+
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
+
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -249,8 +250,16 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
+
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
+
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
+
+
+def _slice_with_domain(array: np.ndarray, new_domain: common.Domain) -> np.ndarray:
+    slice_indices = [slice(rg.stop - rg.start) for rg in new_domain.ranges]
+    array = array[tuple(slice_indices)]
+    return array
