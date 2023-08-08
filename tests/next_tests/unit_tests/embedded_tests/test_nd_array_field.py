@@ -34,11 +34,11 @@ def nd_array_implementation(request):
 @pytest.fixture(
     ids=["plus", "minus", "multiply", "div", "truediv"],
     params=[
-        lambda a, b: a + b,
-        lambda a, b: a - b,
-        lambda a, b: a * b,
-        lambda a, b: a / b,
-        lambda a, b: a // b,
+        operator.add,
+        operator.minus,
+        operator.mul,
+        operator.truediv,
+        operator.floordiv
     ],
 )
 def binary_op(request):
