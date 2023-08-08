@@ -14,6 +14,7 @@
 
 import sys
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef
 from gt4py.next.iterator.tracing import trace
