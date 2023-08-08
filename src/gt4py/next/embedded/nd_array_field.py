@@ -108,20 +108,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
     ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
     ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
@@ -142,12 +142,12 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @classmethod
     def from_array(
-            cls,
-            data: npt.ArrayLike,
-            /,
-            *,
-            domain: Domain,
-            value_type: Optional[type] = None,
+        cls,
+        data: npt.ArrayLike,
+        /,
+        *,
+        domain: Domain,
+        value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
         dtype = None
@@ -202,9 +202,9 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow
 # TODO gamma
 
 for name in (
-        fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -238,11 +238,9 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
-
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -250,16 +248,32 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
-
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _slice_with_domain(array: np.ndarray, new_domain: common.Domain) -> np.ndarray:
-    slice_indices = [slice(rg.stop - rg.start) for rg in new_domain.ranges]
+def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.ndarray:
+    """
+    Slice a field's underlying ndarray based on a new domain, generating a new ndarray.
+
+    Args:
+        field (Field): The Field object containing the original ndarray and domain.
+        new_domain (Domain): The new domain specifying the ranges for slicing.
+
+    Returns:
+        np.ndarray: A new ndarray obtained by slicing the original ndarray of the Field
+                    based on the new_domain's ranges.
+    """
+    old_domain = field.domain
+    array = field.ndarray
+
+    slice_indices = [
+        slice(new_rg.start - old_rg.start, new_rg.stop - old_rg.start)
+        for old_rg, new_rg in zip(old_domain.ranges, new_domain.ranges)
+    ]
+
     array = array[tuple(slice_indices)]
     return array

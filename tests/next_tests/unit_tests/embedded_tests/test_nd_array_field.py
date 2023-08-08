@@ -23,12 +23,15 @@ import pytest
 from gt4py.next import common, Dimension
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.embedded.nd_array_field import _slice_with_domain
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
+KDim = Dimension("KDim")
+
 
 @pytest.fixture(params=nd_array_field._nd_array_implementations)
 def nd_array_implementation(request):
@@ -130,23 +133,32 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-def test_field_domain_slicing(nd_array_implementation):
-    arr = np.random.rand(*(10, 6))
-
-    domain1 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(20, 26)))
-    domain2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(25, 35), UnitRange(17, 23)))
-
-    f1 = common.field(
-        nd_array_implementation.asarray(arr, dtype=nd_array_implementation.float32),
-        domain=domain1,
-    )
-
-    f2 = common.field(
-        nd_array_implementation.asarray(arr, dtype=nd_array_implementation.float32),
-        domain=domain2,
-    )
-
-    new = f1 + f2
-
-    assert new.ndarray.shape == (5, 3)
-    assert np.allclose(new.ndarray, arr[:5, :3] * 2)
+@pytest.mark.parametrize("arr,domain,target_domain,expected_shape,expected_slices",
+                         [(
+                                 np.random.rand(10,),
+                                 common.Domain(dims=(IDim,), ranges=[UnitRange(30, 40)]),
+                                 common.Domain(dims=(IDim,), ranges=[UnitRange(30, 35)]),
+                                 (5,),
+                                 (slice(0, 5),)
+                         ),
+                         (
+                                 np.random.rand(10, 6),
+                                 common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
+                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
+                                 (5, 3),
+                                 (slice(0, 5), slice(3, 6))
+                         ),
+                         (
+                                 np.random.rand(10, 6, 4),
+                                 common.Domain(dims=(Dimension('IDim'), Dimension('JDim'), Dimension('KDim')),
+                                               ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6))),
+                                 common.Domain(dims=(IDim,),
+                                               ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4))),
+                                 (5, 3, 2),
+                                 (slice(0, 5), slice(3, 6), slice(0, 2))
+                         ),])
+def test_slice_with_domain(nd_array_implementation, arr, domain, target_domain, expected_shape, expected_slices):
+    f = common.field(arr, domain=domain)
+    f_slice = _slice_with_domain(f, target_domain)
+    assert f_slice.shape == expected_shape
+    assert np.allclose(f_slice, arr[expected_slices])
