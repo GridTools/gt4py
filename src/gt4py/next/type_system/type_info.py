@@ -19,7 +19,7 @@ from typing import Any, Callable, Iterator, Type, TypeGuard, cast
 import numpy as np
 
 from gt4py.eve.utils import XIterable, xiter
-from gt4py.next.common import Dimension, DimensionKind
+from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -65,8 +65,8 @@ def primitive_constituents(
     """
     Return the primitive types contained in a composite type.
 
-    >>> from gt4py.next import Dimension
-    >>> I = Dimension(value="I")
+    >>> from gt4py.next import common
+    >>> I = common.Dimension(value="I")
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> field_type = ts.FieldType(dims=[I], dtype=int_type)
 
@@ -275,7 +275,7 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
     return isinstance(type_, ts.TupleType) and is_type_or_tuple_of_type(type_, expected_type)
 
 
-def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
+def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
     """
     Try to extract field dimensions if possible.
 
@@ -285,8 +285,8 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[Dimension]:
     ---------
     >>> extract_dims(ts.ScalarType(kind=ts.ScalarKind.INT64, shape=[3, 4]))
     []
-    >>> I = Dimension(value="I")
-    >>> J = Dimension(value="J")
+    >>> I = common.Dimension(value="I")
+    >>> J = common.Dimension(value="J")
     >>> extract_dims(ts.FieldType(dims=[I, J], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     [Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)]
     """
@@ -304,14 +304,14 @@ def is_local_field(type_: ts.FieldType) -> bool:
 
     Examples:
     ---------
-    >>> V = Dimension(value="V")
-    >>> V2E = Dimension(value="V2E", kind=DimensionKind.LOCAL)
+    >>> V = common.Dimension(value="V")
+    >>> V2E = common.Dimension(value="V2E", kind=DimensionKind.LOCAL)
     >>> is_local_field(ts.FieldType(dims=[V, V2E], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     True
     >>> is_local_field(ts.FieldType(dims=[V], dtype=ts.ScalarType(kind=ts.ScalarKind.INT64)))
     False
     """
-    return any(dim.kind == DimensionKind.LOCAL for dim in type_.dims)
+    return any(dim.kind == common.DimensionKind.LOCAL for dim in type_.dims)
 
 
 def contains_local_field(type_: ts.TypeSpec) -> bool:
@@ -379,10 +379,10 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
 
     The resulting type is defined on all dimensions of the arguments, respecting
     the individual order of the dimensions of each argument (see
-    :func:`promote_dims` for more details).
+    :func:`common.promote_dims` for more details).
 
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promoted: ts.FieldType = promote(
     ...     ts.FieldType(dims=[I, J], dtype=dtype),
     ...     ts.FieldType(dims=[I, J, K], dtype=dtype),
@@ -406,87 +406,11 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
             raise NotImplementedError("Shape promotion not implemented.")
         return types[0]
     elif all(isinstance(type_, (ts.ScalarType, ts.FieldType)) for type_ in types):
-        dims = promote_dims(*(extract_dims(type_) for type_ in types))
+        dims = common.promote_dims(*(extract_dims(type_) for type_ in types))
         dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
 
         return ts.FieldType(dims=dims, dtype=dtype)
     raise TypeError("Expected a FieldType or ScalarType.")
-
-
-def promote_dims(*dims_list: list[Dimension]) -> list[Dimension]:
-    """
-    Find a unique ordering of multiple (individually ordered) lists of dimensions.
-
-    The resulting list of dimensions contains all dimensions of the arguments
-    in the order they originally appear. If no unique order exists or a
-    contradicting order is found an exception is raised.
-
-    A modified version (ensuring uniqueness of the order) of
-    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
-    is used to topologically sort the arguments.
-
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
-    True
-    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
-    """
-    # build a graph with the vertices being dimensions and edges representing
-    #  the order between two dimensions. The graph is encoded as a dictionary
-    #  mapping dimensions to their predecessors, i.e. a dictionary containing
-    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
-    #  (contrary to successors) we also use this directionality here.
-    graph: dict[Dimension, set[Dimension]] = {}
-    for dims in dims_list:
-        if len(dims) == 0:
-            continue
-        # create a vertex for each dimension
-        for dim in dims:
-            graph.setdefault(dim, set())
-        # add edges
-        predecessor = dims[0]
-        for dim in dims[1:]:
-            graph[dim].add(predecessor)
-            predecessor = dim
-
-    # modified version of Kahn's algorithm
-    topologically_sorted_list: list[Dimension] = []
-
-    # compute in-degree for each vertex
-    in_degree = {v: 0 for v in graph.keys()}
-    for v1 in graph:
-        for v2 in graph[v1]:
-            in_degree[v2] += 1
-
-    # process vertices with in-degree == 0
-    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
-    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
-        if len(zero_in_degree_vertex_list) != 1:
-            raise ValueError(
-                f"Dimensions can not be promoted. Could not determine "
-                f"order of the following dimensions: "
-                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
-            )
-        v = zero_in_degree_vertex_list[0]
-        del in_degree[v]
-        topologically_sorted_list.insert(0, v)
-        # update in-degree
-        for predecessor in graph[v]:
-            in_degree[predecessor] -= 1
-
-    if len(in_degree.items()) > 0:
-        raise ValueError(
-            f"Dimensions can not be promoted. The following dimensions "
-            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
-        )
-
-    return topologically_sorted_list
 
 
 @functools.singledispatch
@@ -690,7 +614,7 @@ def function_signature_incompatibilities_func(  # noqa: C901
             if i < len(func_type.pos_only_args):
                 arg_repr = f"{i}-th argument"
             else:
-                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i-len(func_type.pos_only_args)]}`"
+                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}`"
             yield f"Expected {arg_repr} to be of type `{a_arg}`, but got `{b_arg}`."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):

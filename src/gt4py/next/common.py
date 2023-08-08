@@ -18,9 +18,9 @@ import abc
 import dataclasses
 import enum
 import functools
+import sys
 from collections.abc import Sequence, Set
 from typing import overload
-
 import numpy as np
 import numpy.typing as npt
 
@@ -42,13 +42,22 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
-
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 DType = gt4py_defs.DType
 Scalar: TypeAlias = gt4py_defs.Scalar
 NDArrayObject = gt4py_defs.NDArrayObject
+
+
+class Infinity(int):
+    @classmethod
+    def positive(cls) -> "Infinity":
+        return cls(sys.maxsize)
+
+    @classmethod
+    def negative(cls) -> "Infinity":
+        return cls(-sys.maxsize)
 
 
 @enum.unique
@@ -70,7 +79,7 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-DomainLike = Union[Sequence[Dimension], Dimension, str]
+DomainLike: TypeAlias = Union[Sequence[Dimension], Dimension, str]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -87,6 +96,8 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "stop", 0)
 
     def __len__(self) -> int:
+        if Infinity.positive() in (abs(self.start), abs(self.stop)):
+            return Infinity.positive()
         return max(0, self.stop - self.start)
 
     def __repr__(self) -> str:
@@ -117,8 +128,81 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
+    def __and__(self, other: Set[Any]) -> UnitRange:
+        if isinstance(other, UnitRange):
+            start = max(self.start, other.start)
+            stop = min(self.stop, other.stop)
+            return UnitRange(start, stop)
+        else:
+            raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
-DomainT: TypeAlias = tuple[tuple[Dimension, UnitRange], ...]
+
+NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+
+
+@dataclasses.dataclass(frozen=True)
+class Domain(Sequence[NamedRange]):
+    dims: Sequence[Dimension]
+    ranges: Sequence[UnitRange]
+
+    def __post_init__(self):
+        if len(set(self.dims)) != len(self.dims):
+            raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
+
+    def __len__(self) -> int:
+        return len(self.ranges)
+
+    @overload
+    def __getitem__(self, index: int) -> NamedRange:
+        ...
+
+    @overload
+    def __getitem__(self, index: slice) -> "Domain":
+        ...
+
+    @overload
+    def __getitem__(self, index: Dimension) -> NamedRange:
+        ...
+
+    def __getitem__(self, index):
+        if isinstance(index, int):
+            return self.dims[index], self.ranges[index]
+        elif isinstance(index, slice):
+            dims_slice = self.dims[index]
+            ranges_slice = self.ranges[index]
+            return Domain(dims_slice, ranges_slice)
+        elif isinstance(index, Dimension):
+            try:
+                index_pos = self.dims.index(index)
+                return self.dims[index_pos], self.ranges[index_pos]
+            except ValueError:
+                raise KeyError(f"No Dimension of type {index} is present in the Domain.")
+        else:
+            raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
+
+    def __and__(self, other: "Domain") -> "Domain":
+        broadcast_dims = promote_dims(self.dims, other.dims)
+        intersected_ranges = [
+            rng1 & rng2
+            for rng1, rng2 in zip(
+                _broadcast_ranges(broadcast_dims, self.dims, self.ranges),
+                _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
+            )
+        ]
+        return Domain(broadcast_dims, intersected_ranges)
+
+
+def _broadcast_ranges(
+    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+) -> Sequence[UnitRange]:
+    if len(dims) == len(broadcast_dims):
+        return ranges
+
+    broadcasted_ranges = list(ranges)
+    for i in range(len(broadcast_dims) - len(dims)):
+        broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
+
+    return broadcasted_ranges
 
 
 if TYPE_CHECKING:
@@ -138,7 +222,7 @@ class Field(Protocol[DimsT, gt4py_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
-    def domain(self) -> DomainT:
+    def domain(self) -> Domain:
         ...
 
     @property
@@ -244,7 +328,7 @@ def field(
     definition: Any,
     /,
     *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to DomainT conversion
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
     value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
@@ -289,3 +373,79 @@ class NeighborTable(Connectivity, Protocol):
 class GridType(StrEnum):
     CARTESIAN = "cartesian"
     UNSTRUCTURED = "unstructured"
+
+
+def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
+    """
+    Find a unique ordering of multiple (individually ordered) lists of dimensions.
+
+    The resulting list of dimensions contains all dimensions of the arguments
+    in the order they originally appear. If no unique order exists or a
+    contradicting order is found an exception is raised.
+
+    A modified version (ensuring uniqueness of the order) of
+    `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
+    is used to topologically sort the arguments.
+    >>> from gt4py.next.common import Dimension
+    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+    True
+    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
+    Traceback (most recent call last):
+     ...
+    ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+    """
+    # build a graph with the vertices being dimensions and edges representing
+    #  the order between two dimensions. The graph is encoded as a dictionary
+    #  mapping dimensions to their predecessors, i.e. a dictionary containing
+    #  adjacency lists. Since graphlib.TopologicalSorter uses predecessors
+    #  (contrary to successors) we also use this directionality here.
+    graph: dict[Dimension, set[Dimension]] = {}
+    for dims in dims_list:
+        if len(dims) == 0:
+            continue
+        # create a vertex for each dimension
+        for dim in dims:
+            graph.setdefault(dim, set())
+        # add edges
+        predecessor = dims[0]
+        for dim in dims[1:]:
+            graph[dim].add(predecessor)
+            predecessor = dim
+
+    # modified version of Kahn's algorithm
+    topologically_sorted_list: list[Dimension] = []
+
+    # compute in-degree for each vertex
+    in_degree = {v: 0 for v in graph.keys()}
+    for v1 in graph:
+        for v2 in graph[v1]:
+            in_degree[v2] += 1
+
+    # process vertices with in-degree == 0
+    # TODO(tehrengruber): avoid recomputation of zero_in_degree_vertex_list
+    while zero_in_degree_vertex_list := [v for v, d in in_degree.items() if d == 0]:
+        if len(zero_in_degree_vertex_list) != 1:
+            raise ValueError(
+                f"Dimensions can not be promoted. Could not determine "
+                f"order of the following dimensions: "
+                f"{', '.join((dim.value for dim in zero_in_degree_vertex_list))}."
+            )
+        v = zero_in_degree_vertex_list[0]
+        del in_degree[v]
+        topologically_sorted_list.insert(0, v)
+        # update in-degree
+        for predecessor in graph[v]:
+            in_degree[predecessor] -= 1
+
+    if len(in_degree.items()) > 0:
+        raise ValueError(
+            f"Dimensions can not be promoted. The following dimensions "
+            f"appear in contradicting order: {', '.join((dim.value for dim in in_degree.keys()))}."
+        )
+
+    return topologically_sorted_list
