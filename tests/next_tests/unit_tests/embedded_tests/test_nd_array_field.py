@@ -135,30 +135,42 @@ def test_non_dispatched_function():
 
 @pytest.mark.parametrize("arr,domain,target_domain,expected_shape,expected_slices",
                          [(
-                                 np.random.rand(10,),
-                                 common.Domain(dims=(IDim,), ranges=[UnitRange(30, 40)]),
-                                 common.Domain(dims=(IDim,), ranges=[UnitRange(30, 35)]),
+                                 np.random.rand(10, ),
+                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 40),)),
+                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35),)),
                                  (5,),
                                  (slice(0, 5),)
                          ),
-                         (
-                                 np.random.rand(10, 6),
-                                 common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
-                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
-                                 (5, 3),
-                                 (slice(0, 5), slice(3, 6))
-                         ),
-                         (
-                                 np.random.rand(10, 6, 4),
-                                 common.Domain(dims=(Dimension('IDim'), Dimension('JDim'), Dimension('KDim')),
-                                               ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6))),
-                                 common.Domain(dims=(IDim,),
-                                               ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4))),
-                                 (5, 3, 2),
-                                 (slice(0, 5), slice(3, 6), slice(0, 2))
-                         ),])
+                             (
+                                     np.random.rand(10, 6),
+                                     common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
+                                     common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
+                                     (5, 3),
+                                     (slice(0, 5), slice(3, 6))
+                             ),
+                             (
+                                     np.random.rand(10, 6, 4),
+                                     common.Domain(dims=(Dimension('IDim'), Dimension('JDim'), Dimension('KDim')),
+                                                   ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6))),
+                                     common.Domain(dims=(IDim,),
+                                                   ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4))),
+                                     (5, 3, 2),
+                                     (slice(0, 5), slice(3, 6), slice(0, 2))
+                             ), ])
 def test_slice_with_domain(nd_array_implementation, arr, domain, target_domain, expected_shape, expected_slices):
     f = common.field(arr, domain=domain)
     f_slice = _slice_with_domain(f, target_domain)
     assert f_slice.shape == expected_shape
     assert np.allclose(f_slice, arr[expected_slices])
+
+
+def test_field_intersection_binary_op(nd_array_implementation):
+    arr = np.random.rand(10, 10)
+    d1 = common.Domain((IDim,), (UnitRange(-10, 0), UnitRange(-1, 9)))
+    d2 = common.Domain((IDim,), (UnitRange(-5, 5), UnitRange(7, 18)))
+    f1, f2 = common.field(arr, domain=d1), common.field(arr, domain=d2)
+    intersection = d1 & d2
+    new = _slice_with_domain(f1, intersection) + _slice_with_domain(f2, intersection)
+
+    assert new.shape == (5, 2)
+    assert np.allclose(new, arr[5:, 8:] + arr[:5, :2])
