@@ -142,8 +142,8 @@ NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 
 @dataclasses.dataclass(frozen=True)
 class Domain(Sequence[NamedRange]):
-    dims: Sequence[Dimension]
-    ranges: Sequence[UnitRange]
+    dims: tuple[Dimension, ...]
+    ranges: tuple[UnitRange, ...]
 
     def __post_init__(self):
         if len(set(self.dims)) != len(self.dims):
@@ -164,7 +164,7 @@ class Domain(Sequence[NamedRange]):
     def __getitem__(self, index: Dimension) -> NamedRange:
         ...
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -181,28 +181,24 @@ class Domain(Sequence[NamedRange]):
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: "Domain") -> "Domain":
-        broadcast_dims = promote_dims(self.dims, other.dims)
-        intersected_ranges = [
+        broadcast_dims = tuple(promote_dims(self.dims, other.dims))
+        intersected_ranges = tuple(
             rng1 & rng2
             for rng1, rng2 in zip(
                 _broadcast_ranges(broadcast_dims, self.dims, self.ranges),
                 _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
-        ]
+        )
         return Domain(broadcast_dims, intersected_ranges)
 
 
 def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
-) -> Sequence[UnitRange]:
-    if len(dims) == len(broadcast_dims):
-        return ranges
-
-    broadcasted_ranges = list(ranges)
-    for _ in range(len(broadcast_dims) - len(dims)):
-        broadcasted_ranges.append(UnitRange(Infinity.negative(), Infinity.positive()))
-
-    return broadcasted_ranges
+) -> tuple[UnitRange, ...]:
+    return tuple(
+        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
+        for d in broadcast_dims
+    )
 
 
 if TYPE_CHECKING:
