@@ -186,7 +186,7 @@ def from_value(value: Any) -> ts.TypeSpec:
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):
-        dims = list(value.axes)
+        dims = list(value.__gt_dims__)
         dtype = from_type_hint(value.dtype.type)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)
     elif isinstance(value, tuple):
