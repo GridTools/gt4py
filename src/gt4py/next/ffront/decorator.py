@@ -368,15 +368,21 @@ class ProgramWithBoundArgs(Program):
         b_args = list(self.bound_args.keys()) + args
         param_ids = [param.id for param in self.past_node.params]
 
-        extra_args = len(param_ids) - len(b_args)
+        for name in self.bound_args.keys():
+            if name in kwargs:
+                # TODO(tehrengruber): use error with source location
+                raise RuntimeError(f"Parameter `{name}` already set as a bound argument.")
+
+        inp_args_len = len(b_args) - len(kwargs)
+        extra_args = len(param_ids) - inp_args_len
         if extra_args > 0:
             raise RuntimeError(
                 f"{extra_args} parameter(s) missing in new program call compared to original signature"
             )
 
-        if len(b_args) != len(self.past_node.params):
+        if inp_args_len != len(self.past_node.params):
             raise RuntimeError(
-                "Total number of arguments and keyword arguments does not match original program definition!"
+                f"Total number of arguments and keyword arguments ({inp_args_len}) does not match original program definition ({len(self.past_node.params)})!"
             )
 
         for index, param in enumerate(self.past_node.params):

@@ -329,6 +329,26 @@ def test_bound_args_wrong_input_args(cartesian_case):
     with pytest.raises(RuntimeError) as excinfo:
         prog_bounds(a, int32(7), out, offset_provider={})
     assert (
-        "Total number of arguments and keyword arguments does not match original program definition!"
+        "Total number of arguments and keyword arguments (5) does not match original program definition (4)!"
         in str(excinfo.value)
     )
+
+
+def test_bound_args_repeated_bound_args(cartesian_case):
+    @field_operator
+    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
+        if bool_val:
+            scalar = 0
+        return a + a + scalar
+
+    @program
+    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
+        fieldop_bound_args(a, scalar, bool_val, out=out)
+
+    a = cases.allocate(cartesian_case, program_bound_args, "a")()
+    out = cases.allocate(cartesian_case, program_bound_args, "out")()
+    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        prog_bounds(a, out, scalar=int32(7), offset_provider={})
+    assert "Parameter `scalar` already set as a bound argument." in str(excinfo.value)
