@@ -101,6 +101,10 @@ ScalarT = TypeVar("ScalarT", bound=Union[BoolScalar, IntegralScalar, FloatingSca
 SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INTEGRAL_TYPES, *FLOAT_TYPES)
 
 
+def is_scalar_type(t: Any) -> TypeGuard[Scalar]:
+    return isinstance(t, SCALAR_TYPES)
+
+
 class BooleanIntegral(numbers.Integral):
     """Abstract base class for boolean integral types."""
 
@@ -390,46 +394,46 @@ class NDArrayObjectProto(Protocol):
     def dtype(self) -> Any:
         ...
 
-    def __getitem__(self, item: SliceLike) -> NDArrayObjectProto:
+    def __getitem__(self, item: SliceLike) -> NDArrayObject:
         ...
 
-    def __abs__(self) -> NDArrayObjectProto:
+    def __abs__(self) -> NDArrayObject:
         ...
 
-    def __neg__(self) -> NDArrayObjectProto:
+    def __neg__(self) -> NDArrayObject:
         ...
 
-    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObjectProto:
+    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
 

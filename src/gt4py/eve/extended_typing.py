@@ -301,6 +301,10 @@ class NonProtocolABCMeta(_typing._ProtocolMeta):
     __subclasshook__ = None  # type: ignore[assignment]
 
 
+class NonProtocolABC(metaclass=NonProtocolABCMeta):
+    pass
+
+
 _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
 
 
