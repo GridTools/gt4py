@@ -151,7 +151,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
 
-        as_sid = f"gridtools::as_sid({pybuffer})"
+        as_sid = f"gridtools::nanobind::as_sid({pybuffer})"
         shifted = f"gridtools::sid::shift_sid_origin({as_sid}, {origin})"
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
@@ -190,46 +190,6 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
         raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
-nanobind_sid_conv = """\
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <gridtools/sid/synthetic.hpp>
-#include <gridtools/sid/simple_ptr_holder.hpp>
-#include <gridtools/sid/unknown_kind.hpp>
-#include <gridtools/common/integral_constant.hpp>
-#include <gridtools/common/array.hpp>
-#include <algorithm>
-
-
-namespace gridtools {
-    namespace nanobind_sid_adapter_impl_ {
-        template <size_t, class>
-        struct kind {};
-
-        template <std::size_t UnitStrideDim = std::size_t(-1), class T, std::size_t... Sizes, class... Args>
-        auto as_sid(nanobind::ndarray<T, nanobind::shape<Sizes...>, Args...> ndarray) {
-            using sid::property;
-            const auto ptr = ndarray.data();
-            constexpr auto ndim = sizeof...(Sizes);
-            array<size_t, ndim> shape;
-            array<size_t, ndim> strides;
-            std::copy_n(ndarray.shape_ptr(), ndim, shape.begin());
-            std::copy_n(ndarray.stride_ptr(), ndim, strides.begin());
-
-            return sid::synthetic()
-                .template set<property::origin>(sid::host_device::simple_ptr_holder<T *>{ptr})
-                .template set<property::strides>(strides)
-                .template set<property::strides_kind, sid::unknown_kind>()
-                .template set<property::lower_bounds>(array<integral_constant<size_t, 0>, ndim>())
-                .template set<property::upper_bounds>(shape);
-        }
-    }
-
-    using nanobind_sid_adapter_impl_::as_sid;
-}
-"""
-
-
 def create_bindings(
     program_source: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ) -> stages.BindingSource[languages.Cpp, languages.Python]:
@@ -262,6 +222,7 @@ def create_bindings(
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
             "gridtools/fn/backend/naive.hpp",
+            "gridtools/storage/adapter/nanobind_adapter.hpp",
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
@@ -298,7 +259,7 @@ def create_bindings(
     )
 
     return stages.BindingSource(
-        nanobind_sid_conv + "\n" + src,
+        src,
         (interface.LibraryDependency("nanobind", "1.4.0"),),
     )
 
