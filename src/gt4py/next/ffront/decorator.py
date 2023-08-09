@@ -222,7 +222,7 @@ class Program:
     def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                TypeError(f"Keyword argument `{key}` not among program inputs")
+                raise RuntimeError(f"Keyword argument `{key}` not among program inputs.")
 
         return ProgramWithBoundArgs(self.past_node, self.closure_vars, bound_args=kwargs)
 
@@ -374,10 +374,9 @@ class ProgramWithBoundArgs(Program):
                 f"{extra_args} parameter(s) missing in new program call compared to original signature"
             )
 
-        extra_kwargs = set(self.bound_args.keys()) - set(param_ids)
-        if extra_kwargs:
+        if len(b_args) != len(self.past_node.params):
             raise RuntimeError(
-                f"{extra_kwargs} set as keyword argument(s) but not part of original program definition"
+                "Total number of arguments and keyword arguments does not match original program definition!"
             )
 
         for index, param in enumerate(self.past_node.params):

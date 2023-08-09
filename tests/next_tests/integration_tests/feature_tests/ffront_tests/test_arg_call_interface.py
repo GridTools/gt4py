@@ -284,16 +284,9 @@ def test_bound_args_wrong_kwargs(cartesian_case):
     def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
         fieldop_bound_args(a, scalar, bool_val, out=out)
 
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True, tille=False)
-
     with pytest.raises(RuntimeError) as excinfo:
-        prog_bounds(a, out, offset_provider={})
-    assert (
-        "{'tille'} set as keyword argument(s) but not part of original program definition"
-        in str(excinfo.value)
-    )
+        program_bound_args.with_bound_args(scalar=int32(1), bool_val=True, tille=False)
+    assert "Keyword argument `tille` not among program inputs" in str(excinfo.value)
 
 
 def test_bound_args_wrong_args(cartesian_case):
@@ -315,4 +308,27 @@ def test_bound_args_wrong_args(cartesian_case):
         prog_bounds(a, out, offset_provider={})
     assert "1 parameter(s) missing in new program call compared to original signature" in str(
         excinfo.value
+    )
+
+
+def test_bound_args_wrong_input_args(cartesian_case):
+    @field_operator
+    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
+        if bool_val:
+            scalar = 0
+        return a + a + scalar
+
+    @program
+    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
+        fieldop_bound_args(a, scalar, bool_val, out=out)
+
+    a = cases.allocate(cartesian_case, program_bound_args, "a")()
+    out = cases.allocate(cartesian_case, program_bound_args, "out")()
+    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        prog_bounds(a, int32(7), out, offset_provider={})
+    assert (
+        "Total number of arguments and keyword arguments does not match original program definition!"
+        in str(excinfo.value)
     )
