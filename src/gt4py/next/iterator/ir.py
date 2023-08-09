@@ -147,7 +147,6 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "minimum",
     "maximum",
     "fmod",
-    "power",
     "plus",
     "minus",
     "multiplies",
@@ -167,6 +166,17 @@ BINARY_LOGICAL_BUILTINS = {
     "and_",
     "or_",
     "xor_",
+}
+
+ARITHMETIC_BUILTINS = {
+    *UNARY_MATH_NUMBER_BUILTINS,
+    *UNARY_LOGICAL_BUILTINS,
+    *UNARY_MATH_FP_BUILTINS,
+    *UNARY_MATH_FP_PREDICATE_BUILTINS,
+    *BINARY_MATH_NUMBER_BUILTINS,
+    "power",
+    *BINARY_MATH_COMPARISON_BUILTINS,
+    *BINARY_LOGICAL_BUILTINS,
 }
 
 #: builtin / dtype used to construct integer indices, like domain bounds
@@ -197,13 +207,7 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
-    *UNARY_MATH_NUMBER_BUILTINS,
-    *UNARY_LOGICAL_BUILTINS,
-    *UNARY_MATH_FP_BUILTINS,
-    *UNARY_MATH_FP_PREDICATE_BUILTINS,
-    *BINARY_MATH_NUMBER_BUILTINS,
-    *BINARY_MATH_COMPARISON_BUILTINS,
-    *BINARY_LOGICAL_BUILTINS,
+    *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
 
