@@ -43,36 +43,31 @@ from gt4py.next.common import DimsT, Domain
 from gt4py.next.ffront import fbuiltins
 
 
-def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_unary_op(a: _BaseNdArrayField) -> common.Field:
-        xp = a.__class__.array_ns
+def _make_nary_intrinsic(builtin_name: str, array_builtin_name: str) -> Callable:
+    def _builtin_op(*fields: common.Field) -> common.Field:
+        first = fields[0]
+        assert isinstance(first, _BaseNdArrayField)
+        xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
-        new_data = op(a.ndarray)
 
-        return a.__class__.from_array(new_data, domain=a.domain)
+        others_transformed = []
+        if len(fields) > 1:
+            for other in fields[1:]:
+                if hasattr(other, "__gt_builtin_func__"):  # isinstance(b, common.Field):
+                    if not first.domain == other.domain:
+                        raise NotImplementedError(
+                            f"support for different domain not implemented: {first.domain}, {other.domain}"
+                        )
+                    others_transformed.append(xp.asarray(other.ndarray))
+                else:
+                    assert isinstance(other, definitions.SCALAR_TYPES)
+                    others_transformed.append(other)
 
-    _builtin_unary_op.__name__ = builtin_name
-    return _builtin_unary_op
+        new_data = op(first.ndarray, *others_transformed)
+        return first.__class__.from_array(new_data, domain=first.domain)
 
-
-def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_binary_op(a: _BaseNdArrayField, b: common.Field) -> common.Field:
-        xp = a.__class__.array_ns
-        op = getattr(xp, array_builtin_name)
-        if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
-            if not a.domain == b.domain:
-                raise NotImplementedError(
-                    f"support for different domain not implemented: {a.domain}, {b.domain}"
-                )
-            new_data = op(a.ndarray, xp.asarray(b.ndarray))
-        else:
-            assert isinstance(b, definitions.SCALAR_TYPES)
-            new_data = op(a.ndarray, b)
-
-        return a.__class__.from_array(new_data, domain=a.domain)
-
-    _builtin_binary_op.__name__ = builtin_name
-    return _builtin_binary_op
+    _builtin_op.__name__ = builtin_name
+    return _builtin_op
 
 
 _Value: TypeAlias = common.Field | ScalarT
@@ -176,23 +171,21 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
 
-    __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
+    __abs__ = _make_nary_intrinsic("abs", "abs")
 
-    __neg__ = _make_unary_array_field_intrinsic_func("neg", "negative")
+    __neg__ = _make_nary_intrinsic("neg", "negative")
 
-    __add__ = __radd__ = _make_binary_array_field_intrinsic_func("add", "add")
+    __add__ = __radd__ = _make_nary_intrinsic("add", "add")
 
-    __sub__ = __rsub__ = _make_binary_array_field_intrinsic_func("sub", "subtract")
+    __sub__ = __rsub__ = _make_nary_intrinsic("sub", "subtract")
 
-    __mul__ = __rmul__ = _make_binary_array_field_intrinsic_func("mul", "multiply")
+    __mul__ = __rmul__ = _make_nary_intrinsic("mul", "multiply")
 
-    __truediv__ = __rtruediv__ = _make_binary_array_field_intrinsic_func("div", "divide")
+    __truediv__ = __rtruediv__ = _make_nary_intrinsic("div", "divide")
 
-    __floordiv__ = __rfloordiv__ = _make_binary_array_field_intrinsic_func(
-        "floordiv", "floor_divide"
-    )
+    __floordiv__ = __rfloordiv__ = _make_nary_intrinsic("floordiv", "floor_divide")
 
-    __pow__ = _make_binary_array_field_intrinsic_func("pow", "power")
+    __pow__ = _make_nary_intrinsic("pow", "power")
 
 
 # -- Specialized implementations for intrinsic operations on array fields --
@@ -209,18 +202,19 @@ for name in (
     if name in ["abs", "power", "gamma"]:
         continue
     _BaseNdArrayField.register_builtin_func(
-        getattr(fbuiltins, name), _make_unary_array_field_intrinsic_func(name, name)
+        getattr(fbuiltins, name), _make_nary_intrinsic(name, name)
     )
 
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
+    fbuiltins.minimum, _make_nary_intrinsic("minimum", "minimum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
+    fbuiltins.maximum, _make_nary_intrinsic("maximum", "maximum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
+    fbuiltins.fmod, _make_nary_intrinsic("fmod", "fmod")  # type: ignore[attr-defined]
 )
+_BaseNdArrayField.register_builtin_func(fbuiltins.where, _make_nary_intrinsic("where", "where"))
 
 # -- Concrete array implementations --
 # NumPy

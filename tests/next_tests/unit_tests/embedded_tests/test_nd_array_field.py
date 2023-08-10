@@ -39,9 +39,11 @@ def binary_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation):
+def _make_field(lst: Iterable, nd_array_implementation, *, dtype=None):
+    if not dtype:
+        dtype = nd_array_implementation.float32
     return common.field(
-        nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32),
+        nd_array_implementation.asarray(lst, dtype=dtype),
         domain=((common.Dimension("foo"), common.UnitRange(0, len(lst))),),
     )
 
@@ -63,6 +65,37 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
     result = builtin(*field_inputs)
 
     assert np.allclose(result.ndarray, expected)
+
+
+def test_where_builtin(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true_ = np.asarray([1.0, 2.0], dtype=np.float32)
+    false_ = np.asarray([3.0, 4.0], dtype=np.float32)
+
+    field_inputs = [_make_field(inp, nd_array_implementation) for inp in [cond, true_, false_]]
+    expected = np.where(cond, true_, false_)
+
+    result = fbuiltins.where(*field_inputs)
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_where_builtin(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true0 = np.asarray([1.0, 2.0], dtype=np.float32)
+    false0 = np.asarray([3.0, 4.0], dtype=np.float32)
+    true1 = np.asarray([11.0, 12.0], dtype=np.float32)
+    false1 = np.asarray([13.0, 14.0], dtype=np.float32)
+
+    expected0 = np.where(cond, true0, false0)
+    expected1 = np.where(cond, true1, false1)
+
+    cond_field = _make_field(cond, nd_array_implementation, dtype=bool)
+    field_true = tuple(_make_field(inp, nd_array_implementation) for inp in [true0, true1])
+    field_false = tuple(_make_field(inp, nd_array_implementation) for inp in [false0, false1])
+
+    result = fbuiltins.where(cond_field, field_true, field_false)
+    assert np.allclose(result[0].ndarray, expected0)
+    assert np.allclose(result[1].ndarray, expected1)
 
 
 def test_binary_ops(binary_op, nd_array_implementation):

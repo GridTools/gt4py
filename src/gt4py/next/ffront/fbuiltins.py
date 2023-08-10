@@ -95,6 +95,8 @@ class BuiltInFunction(Generic[_R, _P]):
 
     def dispatch(self, *args: Any) -> Callable[_P, _R]:
         arg_types = tuple(type(arg) for arg in args)
+        if any(t == tuple for t in arg_types):
+            return self.function
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
             # TODO: define a strategy that converts or prevents conversion
@@ -172,6 +174,10 @@ def where(
     false_field: Field | gt4py_defs.ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
+    if isinstance(true_field, tuple) and isinstance(false_field, tuple):
+        if len(true_field) != len(false_field):
+            raise ValueError("Tuple of different size not allowed")
+        return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))
     raise NotImplementedError()
 
 
