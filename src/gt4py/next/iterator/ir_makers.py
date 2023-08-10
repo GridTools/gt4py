@@ -240,16 +240,21 @@ class let:
 
     Examples
     --------
-    >>> let("a", "b")("a")  # doctest: +ELLIPSIS
-    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
+    >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
+    '(λ(a) → a)(b)'
+    >>> str(let("a", 1,
+    ...         "b", 2
+    ... )(plus("a", "b")))
+    '(λ(a, b) → a + b)(1, 2)'
     """
 
-    def __init__(self, var, init_form):
-        self.var = var
-        self.init_form = init_form
+    def __init__(self, *vars_and_values):
+        assert len(vars_and_values) % 2 == 0
+        self.vars = vars_and_values[0::2]
+        self.init_forms = vars_and_values[1::2]
 
     def __call__(self, form):
-        return call(lambda_(self.var)(form))(self.init_form)
+        return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
 def shift(offset, value=None):
