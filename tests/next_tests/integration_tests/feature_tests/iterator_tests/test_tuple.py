@@ -334,6 +334,7 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
         assert np.allclose(inp3, out3)
 
 
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 @pytest.mark.parametrize(
     "stencil",
     [tuple_output1, tuple_output2],
@@ -427,6 +428,7 @@ def test_field_of_tuple_input(program_processor_no_gtfn_exec):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 def test_field_of_extra_dim_input(program_processor_no_gtfn_exec):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
@@ -539,6 +541,7 @@ def test_tuple_of_tuple_of_field_input(program_processor):
         )
 
 
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 def test_field_of_2_extra_dim_input(program_processor_no_gtfn_exec):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:

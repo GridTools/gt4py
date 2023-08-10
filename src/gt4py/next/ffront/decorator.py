@@ -134,7 +134,7 @@ def _field_constituents_shape_and_dims(
         if hasattr(arg, "domain"):
             assert len(arg.domain) == len(dims)
             assert all(rg.start == 0 for _, rg in arg.domain)
-            shape = tuple(rg.stop -rg.start for _, rg in arg.domain)
+            shape = tuple(rg.stop - rg.start for _, rg in arg.domain)
             yield (shape, dims)
         else:
             yield (None, dims)
@@ -687,7 +687,7 @@ def scan_operator(
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
-        >>> out.array()  # doctest: +SKIP
+        >>> out.ndarray  # doctest: +SKIP
         array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
     """
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons

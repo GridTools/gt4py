@@ -46,6 +46,7 @@ from typing import (
 import numpy as np
 import numpy.typing as npt
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.iterator import builtins, runtime
@@ -920,8 +921,12 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         print(f"{named_indices=}")
 
         dimensions = tuple(d for d in named_indices.keys())
-        ranges = tuple(common.UnitRange(v.start, v.stop) if isinstance(v, range) else v
-            for v in named_indices.values())
+        ranges = tuple(
+            common.UnitRange(v.start, v.stop)
+            if isinstance(v, range)
+            else (v[0] if isinstance(v, list) else v)
+            for v in named_indices.values()
+        )
         return common.Domain(dimensions, ranges)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
@@ -1031,56 +1036,228 @@ def np_as_located_field(
     def _maker(a) -> common.Field:
         if a.ndim != len(axes):
             raise TypeError("ndarray.ndim incompatible with number of given dimensions")
-        domain = []
+        ranges = []
         for d, s in zip(axes, a.shape):
             offset = origin.get(d, 0)
-            domain.append((d, common.UnitRange(-offset, s - offset)))
+            ranges.append(common.UnitRange(-offset, s - offset))
 
-        res = common.field(a, domain=tuple(domain))
+        res = common.field(a, domain=common.Domain(tuple(axes), ranges))
         return res
 
     return _maker
 
 
+@dataclasses.dataclass(frozen=True)
 class IndexField(common.FieldABC):
-    def __init__(self, axis: common.Dimension, dtype: npt.DTypeLike) -> None:
-        self.axis = axis
-        self.dtype = np.dtype(dtype)
-
-    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-        index = get_ordered_indices(self.__gt_dims__, named_indices)
-        if isinstance(index, int):
-            return self.dtype.type(index)
-        else:
-            assert isinstance(index, tuple) and len(index) == 1 and isinstance(index[0], int)
-            return self.dtype.type(index[0])
+    _dimension: common.Dimension
+    _value_type: type
 
     @property
     def __gt_dims__(self) -> tuple[common.Dimension]:
-        return (self.axis,)
+        return (self._dimension,)
+
+    @classmethod
+    def __gt_builtin_func__(func: fbuiltins.BuiltInFunction[_R, _P], /) -> None:
+        # not implemented, let's use the implmentation of the other field if we have it
+        return None
+
+    @property
+    def domain(self) -> common.Domain:
+        return common.Domain((_dimension,), (common.UnitRange.infinite()))
+
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return np.dtype(self._value_type)
+
+    @property
+    def value_type(self) -> type[core_defs.ScalarT]:
+        return self._value_type
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+
+    def remap(self, index_field: Field) -> Field:
+        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        raise NotImplementedError()
+
+    def restrict(self, item: "DomainLike") -> Field:
+        if isinstance(item, common.Domain):
+            d, r = item[0]
+            assert d == self._dimension
+            assert isinstance(r, int)
+            return self.value_type(r)
+        # TODO set a domain...
+        raise NotImplementedError()
+
+    __call__ = remap
+    __getitem__ = restrict
+
+    def __abs__(self) -> Field:
+        raise NotImplementedError()
+
+    def __neg__(self) -> Field:
+        raise NotImplementedError()
+
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+
+# class IndexField(common.FieldABC):
+#     def __init__(self, axis: common.Dimension, dtype: npt.DTypeLike) -> None:
+#         self.axis = axis
+#         self.dtype = np.dtype(dtype)
+
+#     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+#         index = get_ordered_indices(self.__gt_dims__, named_indices)
+#         if isinstance(index, int):
+#             return self.dtype.type(index)
+#         else:
+#             assert isinstance(index, tuple) and len(index) == 1 and isinstance(index[0], int)
+#             return self.dtype.type(index[0])
+
+#     @property
+#     def __gt_dims__(self) -> tuple[common.Dimension]:
+#         return (self.axis,)
 
 
 def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> common.Field:
     return IndexField(axis, dtype)
 
 
-class ConstantField(common.FieldABC):
-    def __init__(self, value: Any, dtype: npt.DTypeLike):
-        self.value = value
-        self.dtype = np.dtype(dtype).type
-
-    def field_getitem(self, _: NamedFieldIndices) -> Any:
-        return self.dtype(self.value)
+@dataclasses.dataclass(frozen=True)
+class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
+    _value: core_defs.ScalarT
+    _value_type: type
 
     @property
-    def __gt_dims__(self) -> tuple[()]:
-        return ()
+    def __gt_dims__(self) -> tuple[common.Dimension]:
+        return tuple()
+
+    @classmethod
+    def __gt_builtin_func__(func: fbuiltins.BuiltInFunction[_R, _P], /) -> None:
+        # not implemented, let's use the implmentation of the other field if we have it
+        return None
+
+    @property
+    def domain(self) -> common.Domain:
+        return common.Domain(tuple(), tuple())
+
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return np.dtype(self._value_type)
+
+    @property
+    def value_type(self) -> type[core_defs.ScalarT]:
+        return self._value_type
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+
+    def remap(self, index_field: Field) -> Field:
+        # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
+        raise NotImplementedError()
+
+    def restrict(self, item: "DomainLike") -> Field:
+        if isinstance(item, common.Domain):
+            # d, r = item[0]
+            # assert d == self._dimension
+            # assert isinstance(r, int)
+            return self._value
+        # TODO set a domain...
+        raise NotImplementedError()
+
+    __call__ = remap
+    __getitem__ = restrict
+
+    def __abs__(self) -> Field:
+        raise NotImplementedError()
+
+    def __neg__(self) -> Field:
+        raise NotImplementedError()
+
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise NotImplementedError()
+
+
+# class ConstantField(common.FieldABC):
+#     def __init__(self, value: Any, dtype: npt.DTypeLike):
+#         self.value = value
+#         self.dtype = np.dtype(dtype).type
+
+#     def field_getitem(self, _: NamedFieldIndices) -> Any:
+#         return self.dtype(self.value)
+
+#     @property
+#     def __gt_dims__(self) -> tuple[()]:
+#         return ()
 
 
 def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> common.Field:
     if dtype is None:
         dtype = infer_dtype_like_type(value)
-    return ConstantField(value, dtype)
+    return ConstantField(dtype(value), dtype)
 
 
 @builtins.shift.register(EMBEDDED)

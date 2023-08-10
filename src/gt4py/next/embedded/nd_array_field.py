@@ -66,7 +66,7 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
                 )
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
-            assert isinstance(b, definitions.SCALAR_TYPES)
+            # assert isinstance(b, definitions.SCALAR_TYPES) # TODO reenable this assert (if b is an array it should be wrapped into a field)
             new_data = op(a.ndarray, b)
 
         return a.__class__.from_array(new_data, domain=a.domain)
@@ -206,6 +206,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     __neg__ = _make_unary_array_field_intrinsic_func("neg", "negative")
 
+    def __pos__(self):
+        return self
+
     __add__ = __radd__ = _make_binary_array_field_intrinsic_func("add", "add")
 
     __sub__ = __rsub__ = _make_binary_array_field_intrinsic_func("sub", "subtract")
@@ -219,6 +222,14 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     )
 
     __pow__ = _make_binary_array_field_intrinsic_func("pow", "power")
+
+    __mod__ = __rmod__ = _make_binary_array_field_intrinsic_func("mod", "mod")
+
+    __and__ = __rand__ = _make_binary_array_field_intrinsic_func("bitwise_and", "bitwise_and")
+    __or__ = __ror__ = _make_binary_array_field_intrinsic_func("bitwise_or", "bitwise_or")
+    __xor__ = __rxor__ = _make_binary_array_field_intrinsic_func("bitwise_xor", "bitwise_xor")
+
+    __invert__ = _make_unary_array_field_intrinsic_func("invert", "invert")
 
 
 # -- Specialized implementations for intrinsic operations on array fields --

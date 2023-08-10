@@ -421,8 +421,8 @@ def verify(
     out_comp = out or inout
     out_comp_str = str(out_comp)
     assert out_comp is not None
-    if hasattr(out_comp, "array"):
-        out_comp_str = str(out_comp.array())
+    if hasattr(out_comp, "ndarray"):
+        out_comp_str = str(out_comp.ndarray)
     assert comparison(ref, out_comp), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
@@ -447,12 +447,12 @@ def verify_with_default_data(
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
-            of the fieldview code, after applying ``.array()`` on the fields.
+            of the fieldview code, after applying ``.ndarray`` on the fields.
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
+    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
     verify(
         case,
         fieldop,

@@ -95,6 +95,10 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
+    @classmethod
+    def infinite(cls) -> UnitRange:
+        return cls(Infinity.negative(), Infinity.positive())
+
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
             return Infinity.positive()
@@ -204,8 +208,7 @@ def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
-        for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.infinite() for d in broadcast_dims
     )
 
 
@@ -228,6 +231,10 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     @property
     def domain(self) -> Domain:
         ...
+
+    @property
+    def shape(self) -> tuple[int]:  # TODO discuss this
+        return tuple(len(r) for r in self.domain.ranges)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
