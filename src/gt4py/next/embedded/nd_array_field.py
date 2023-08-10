@@ -282,31 +282,19 @@ def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndi
 
     for new_dim, new_rng in named_indices:
 
-        if len(slice_indices) == len(named_indices):
-            break
+        pos_new = named_indices.dims.index(new_dim)
+
+        if new_dim in old_domain.dims:
+            pos_old = old_domain.dims.index(new_dim)
+
+            if pos_new == pos_old + len(slice_indices):
+                slice_indices.append(
+                    slice(
+                        new_rng.start - old_domain.ranges[pos_old].start,
+                        new_rng.stop - old_domain.ranges[pos_old].start,
+                    )
+                )
         else:
-            pos_new = named_indices.dims.index(new_dim)
-
-            if new_dim in old_domain.dims:
-                pos_old = old_domain.dims.index(new_dim)
-
-                if pos_new == pos_old + len(slice_indices):
-                    slice_indices.append(
-                        slice(
-                            new_rng.start - old_domain.ranges[pos_old].start,
-                            new_rng.stop - old_domain.ranges[pos_old].start,
-                        )
-                    )
-                elif pos_new != pos_old:
-                    slice_indices.insert(pos_new, field.array_ns.newaxis)
-                else:
-                    slice_indices.append(
-                        slice(
-                            new_rng.start - old_domain.ranges[pos_new].start,
-                            new_rng.stop - old_domain.ranges[pos_new].start,
-                        )
-                    )
-            else:
-                slice_indices.insert(pos_new, field.array_ns.newaxis)
+            slice_indices.insert(pos_new, field.array_ns.newaxis)
 
     return tuple(slice_indices)

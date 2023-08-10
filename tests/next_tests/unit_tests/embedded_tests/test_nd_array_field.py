@@ -135,10 +135,10 @@ def test_non_dispatched_function():
 
 def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right():
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    new_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 5)))
+    new_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
     field = common.field(np.ones((10,)), domain=field_domain)
     slices = _get_slices_with_named_indices(field, new_domain)
-    assert slices == (slice(0, 5, None), None)
+    assert slices == (slice(5, 10, None), None)
 
 
 def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left():
