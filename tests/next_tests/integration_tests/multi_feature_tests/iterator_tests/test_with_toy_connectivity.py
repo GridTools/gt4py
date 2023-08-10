@@ -40,7 +40,10 @@ from next_tests.toy_connectivity import (
     V2E,
     V2V,
     Cell,
+    E2VDim,
     Edge,
+    V2EDim,
+    V2VDim,
     Vertex,
     c2e_arr,
     e2v_arr,
@@ -198,7 +201,7 @@ def test_sparse_input_field(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
 
     non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
-    inp = gtx.np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(np.asarray([[1, 2, 3, 4]] * 9))
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.ones([9]) * 10
@@ -221,7 +224,7 @@ def test_sparse_input_field_v2v(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
 
     non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = np.asarray(list(sum(row) for row in v2v_arr))
@@ -250,7 +253,7 @@ def slice_sparse_stencil(sparse):
 
 def test_slice_sparse(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1]
@@ -278,7 +281,7 @@ def slice_twice_sparse_stencil(sparse):
 @pytest.mark.xfail(reason="Field with more than one sparse dimension is not implemented.")
 def test_slice_twice_sparse(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
+    inp = gtx.np_as_located_field(Vertex, V2VDim, V2VDim)(v2v_arr[v2v_arr])
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
@@ -304,7 +307,7 @@ def shift_sliced_sparse_stencil(sparse):
 
 def test_shift_sliced_sparse(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
@@ -331,7 +334,7 @@ def slice_shifted_sparse_stencil(sparse):
 
 def test_slice_shifted_sparse(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
@@ -386,7 +389,7 @@ def sparse_shifted_stencil(inp):
 
 def test_shift_sparse_input_field(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(np.asarray(range(9)))
 
@@ -420,7 +423,7 @@ def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
         )  # observed in `cache.Strategy.PERSISTENT` mode
     inp = gtx.index_field(Vertex)
-    inp_sparse = gtx.np_as_located_field(Edge, E2V)(e2v_arr)
+    inp_sparse = gtx.np_as_located_field(Edge, E2VDim)(e2v_arr)
     out1 = gtx.np_as_located_field(Vertex)(np.zeros([9]))
     out2 = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
@@ -470,7 +473,7 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
-    inp = gtx.np_as_located_field(Vertex, V2V)(v2v_arr)
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = []
