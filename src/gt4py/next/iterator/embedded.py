@@ -918,10 +918,11 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def _translate_named_indices(self, named_indices: NamedFieldIndices):
         named_indices = self._promote_tags_to_dims(named_indices)
         print(f"{named_indices=}")
-        return {
-            k: common.UnitRange(v.start, v.stop) if isinstance(v, range) else v
-            for k, v in named_indices.items()
-        }
+
+        dimensions = tuple(d for d in named_indices.keys())
+        ranges = tuple(common.UnitRange(v.start, v.stop) if isinstance(v, range) else v
+            for v in named_indices.values())
+        return common.Domain(dimensions, ranges)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return self._ndarrayfield[self._translate_named_indices(named_indices)]

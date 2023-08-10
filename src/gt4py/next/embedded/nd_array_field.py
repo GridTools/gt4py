@@ -183,14 +183,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def restrict(
         self: _BaseNdArrayField, domain: common.DomainT | common.DomainSlice | common.Position
     ) -> _BaseNdArrayField | _Value:
-        _slice = tuple(domain[dim] - r.start for dim, r in self._domain)
-        return self.ndarray[_slice]
+        if isinstance(domain, common.Domain):
+            _slice = tuple(domain[dim][1] - r.start for dim, r in self._domain)
+            return self.ndarray[_slice]
+        else:
+            return self.ndarray[domain]
 
     field_getitem = restrict
 
     def field_setitem(self, domain, value):
-        _slice = tuple(domain[dim] - r.start for dim, r in self._domain)
-        self.ndarray[_slice] = value
+        if isinstance(domain, common.Domain):
+            _slice = tuple(domain[dim][1] - r.start for dim, r in self._domain)
+            self.ndarray[_slice] = value
+        else:
+            self.ndarray[domain] = value
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
