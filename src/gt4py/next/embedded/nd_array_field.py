@@ -37,7 +37,7 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, Domain
+from gt4py.next.common import DimsT, Domain, NamedIndicesOrRanges
 from gt4py.next.ffront import fbuiltins
 
 
@@ -255,43 +255,58 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.ndarray:
-    """
-    Slice a field's underlying ndarray based on a new domain, generating a new ndarray.
+def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndicesOrRanges) -> tuple[slice | None, ...]:
+    """Generate slices based on named indices or ranges for a given field.
 
-    Args:
-        field (Field): The Field object containing the original ndarray and domain.
-        new_domain (Domain): The new domain specifying the ranges for slicing.
+        This function generates a tuple of slices, which can be used to extract sub-arrays from a field based on the
+        provided named indices or ranges. The named indices or ranges specify the dimensions and ranges of the sub-arrays
+        to be extracted.
 
-    Returns:
-        np.ndarray: A new ndarray obtained by slicing the original ndarray of the Field
-                    based on the new_domain's ranges.
-    """
+        Args:
+            field (common.Field): The field from which sub-arrays will be extracted.
+            named_indices (NamedIndicesOrRanges): A list of tuples containing dimension names and ranges.
+
+        Returns:
+            tuple[slice | None, ...]: A tuple of slices where each element corresponds to a slice along a specific dimension
+                                      of the field. If a dimension is not present in the named indices or ranges, a None
+                                      element is used to indicate expanding the dimension along that axis.
+
+        Note:
+            - The function handles cases where named indices or ranges are provided for dimensions that do not exist in the
+              field's domain.
+            - Slices are generated according to the specified indices or ranges, and can be used to extract sub-arrays using
+              indexing.
+        """
     old_domain = field.domain
-    array = field.ndarray
-
     slice_indices = []
-    expand_dims = []
 
-    for new_dim, new_rng in new_domain:
-        pos_new = new_domain.dims.index(new_dim)
+    for new_dim, new_rng in named_indices:
 
-        if new_dim in old_domain.dims:
-            pos_old = old_domain.dims.index(new_dim)
+        if len(slice_indices) == len(named_indices):
+            break
+        else:
+            pos_new = named_indices.dims.index(new_dim)
 
-            if pos_new != pos_old:
-                expand_dims.append(pos_old)
-            else:
-                slice_indices.append(
-                    slice(
-                        new_rng.start - old_domain.ranges[pos_new].start,
-                        new_rng.stop - old_domain.ranges[pos_new].start,
+            if new_dim in old_domain.dims:
+                pos_old = old_domain.dims.index(new_dim)
+
+                if pos_new == pos_old + len(slice_indices):
+                    slice_indices.append(
+                        slice(
+                            new_rng.start - old_domain.ranges[pos_old].start,
+                            new_rng.stop - old_domain.ranges[pos_old].start,
+                        )
                     )
-                )
+                elif pos_new != pos_old:
+                    slice_indices.insert(pos_new, field.array_ns.newaxis)
+                else:
+                    slice_indices.append(
+                        slice(
+                            new_rng.start - old_domain.ranges[pos_new].start,
+                            new_rng.stop - old_domain.ranges[pos_new].start,
+                        )
+                    )
+            else:
+                slice_indices.insert(pos_new, field.array_ns.newaxis)
 
-    array = array[tuple(slice_indices)]
-
-    for d in expand_dims:
-        array = np.expand_dims(array, axis=d)
-
-    return array
+    return tuple(slice_indices)

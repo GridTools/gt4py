@@ -206,6 +206,11 @@ def _broadcast_ranges(
     )
 
 
+NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, int]
+NamedIndicesOrRanges = Sequence[NamedRange | NamedIndex, ...]
+
+
 if TYPE_CHECKING:
     import gt4py.next.ffront.fbuiltins as fbuiltins
 
