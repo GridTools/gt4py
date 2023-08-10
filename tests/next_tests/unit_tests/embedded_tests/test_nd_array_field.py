@@ -98,7 +98,7 @@ def product_nd_array_implementation(request):
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
     if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-            first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
     ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
@@ -133,45 +133,98 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-@pytest.mark.parametrize("arr,domain,target_domain,expected_shape,expected_slices",
-                         [(
-                                 np.random.rand(10, ),
-                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 40),)),
-                                 common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35),)),
-                                 (5,),
-                                 (slice(0, 5),)
-                         ),
-                             (
-                                     np.random.rand(10, 6),
-                                     common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
-                                     common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
-                                     (5, 3),
-                                     (slice(0, 5), slice(3, 6))
-                             ),
-                             (
-                                     np.random.rand(10, 6, 4),
-                                     common.Domain(dims=(IDim, JDim, KDim),
-                                                   ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6))),
-                                     common.Domain(dims=(IDim, JDim, KDim),
-                                                   ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4))),
-                                     (5, 3, 2),
-                                     (slice(0, 5), slice(3, 6), slice(0, 2))
-                             ), ])
-def test_slice_with_domain(nd_array_implementation, arr, domain, target_domain, expected_shape, expected_slices):
+@pytest.mark.parametrize(
+    "arr,domain,target_domain,expected_shape,expected_slices",
+    [
+        (
+            np.random.rand(
+                10,
+            ),
+            common.Domain(dims=(IDim,), ranges=(UnitRange(30, 40),)),
+            common.Domain(dims=(IDim,), ranges=(UnitRange(30, 35),)),
+            (5,),
+            (slice(0, 5),),
+        ),
+        (
+            np.random.rand(10, 6),
+            common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 40), UnitRange(17, 23))),
+            common.Domain(dims=(IDim, JDim), ranges=(UnitRange(30, 35), UnitRange(20, 23))),
+            (5, 3),
+            (slice(0, 5), slice(3, 6)),
+        ),
+        (
+            np.random.rand(10, 6, 4),
+            common.Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(30, 40), UnitRange(17, 23), UnitRange(2, 6)),
+            ),
+            common.Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(30, 35), UnitRange(20, 23), UnitRange(2, 4)),
+            ),
+            (5, 3, 2),
+            (slice(0, 5), slice(3, 6), slice(0, 2)),
+        ),
+    ],
+)
+def test_slice_with_domain(
+    nd_array_implementation, arr, domain, target_domain, expected_shape, expected_slices
+):
     f = common.field(arr, domain=domain)
     f_slice = _slice_with_domain(f, target_domain)
     assert f_slice.shape == expected_shape
     assert np.allclose(f_slice, arr[expected_slices])
 
 
-def test_field_intersection_binary_op(nd_array_implementation):
-    arr1 = np.random.rand(10,)
-    arr2 = np.random.rand(3, 10)
-    d1 = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-    d2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 3), UnitRange(8, 18)))
+@pytest.mark.parametrize(
+    "arr1_shape, arr2_shape, d1_dims, d1_ranges, d2_dims, d2_ranges, expected_shape, arr1_slices, arr2_slices",
+    [
+        (
+            (10,),
+            (10, 10),
+            (IDim,),
+            (UnitRange(0, 10),),
+            (IDim, JDim),
+            (UnitRange(0, 10), UnitRange(20, 30)),
+            (10, 10),
+            (slice(None),),
+            (
+                slice(None),
+                slice(None),
+            ),
+        ),
+        (
+            (10,),
+            (5, 10),
+            (JDim,),
+            (UnitRange(0, 10),),
+            (IDim, JDim),
+            (UnitRange(5, 10), UnitRange(0, 10)),
+            (5, 10),
+            (slice(None),),
+            (slice(5), slice(10)),
+        ),
+    ],
+)
+def test_field_intersection_binary_op(
+    nd_array_implementation,
+    arr1_shape,
+    arr2_shape,
+    arr1_slices,
+    arr2_slices,
+    expected_shape,
+    d1_dims,
+    d1_ranges,
+    d2_dims,
+    d2_ranges,
+):
+    arr1 = np.random.rand(*arr1_shape)
+    arr2 = np.random.rand(*arr2_shape)
+    d1 = common.Domain(dims=d1_dims, ranges=d1_ranges)
+    d2 = common.Domain(dims=d2_dims, ranges=d2_ranges)
     f1, f2 = common.field(arr1, domain=d1), common.field(arr2, domain=d2)
     intersection = d1 & d2
     new = _slice_with_domain(f1, intersection) + _slice_with_domain(f2, intersection)
 
-    assert new.shape == (3, 2)
-    assert np.allclose(new, arr1[8:10, ] + arr2[:, :2])
+    assert new.shape == expected_shape
+    assert np.allclose(new, arr1[tuple(arr1_slices)] + arr2[tuple(arr2_slices)])

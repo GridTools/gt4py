@@ -85,7 +85,7 @@ def test_unit_range_slice_error(rng):
 
 def test_unit_range_set_intersection(rng):
     with pytest.raises(
-            NotImplementedError, match="Can only find the intersection between UnitRange instances."
+        NotImplementedError, match="Can only find the intersection between UnitRange instances."
     ):
         rng & {1, 5}
 
@@ -115,14 +115,14 @@ def test_unit_range_intersection(rng1, rng2, expected):
         (UnitRange(Infinity.negative(), 0), UnitRange(-10, 0), UnitRange(-10, 0)),
         (UnitRange(0, Infinity.positive()), UnitRange(Infinity.negative(), 5), UnitRange(0, 5)),
         (
-                UnitRange(Infinity.negative(), 0),
-                UnitRange(Infinity.negative(), 5),
-                UnitRange(Infinity.negative(), 0),
+            UnitRange(Infinity.negative(), 0),
+            UnitRange(Infinity.negative(), 5),
+            UnitRange(Infinity.negative(), 0),
         ),
         (
-                UnitRange(Infinity.negative(), Infinity.positive()),
-                UnitRange(Infinity.negative(), Infinity.positive()),
-                UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative(), Infinity.positive()),
         ),
     ],
 )
@@ -185,8 +185,8 @@ def test_domain_intersection_reversed_dimensions(domain):
     domain2 = Domain(dimensions, ranges)
 
     with pytest.raises(
-            ValueError,
-            match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
+        ValueError,
+        match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
     ):
         domain & domain2
 
@@ -239,7 +239,7 @@ def test_domain_indexing_dimension_missing(domain):
 
 def test_domain_indexing_invalid_type(domain):
     with pytest.raises(
-            KeyError, match="Invalid index type, must be either int, slice, or Dimension."
+        KeyError, match="Invalid index type, must be either int, slice, or Dimension."
     ):
         domain["foo"]
 
@@ -252,14 +252,17 @@ def test_domain_repeat_dims():
 
 
 def test_domain_dims_ranges_length_mismatch():
-    with pytest.raises(ValueError, match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)"):
+    with pytest.raises(
+        ValueError,
+        match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)",
+    ):
         dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
 
 
 def dimension_promotion_cases() -> (
-        list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
+    list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
 ):
     raw_list = [
         # list of list of dimensions, expected result, expected error message
@@ -290,9 +293,9 @@ def dimension_promotion_cases() -> (
 
 @pytest.mark.parametrize("dim_list,expected_result,expected_error_msg", dimension_promotion_cases())
 def test_dimension_promotion(
-        dim_list: list[list[Dimension]],
-        expected_result: Optional[list[Dimension]],
-        expected_error_msg: Optional[str],
+    dim_list: list[list[Dimension]],
+    expected_result: Optional[list[Dimension]],
+    expected_error_msg: Optional[str],
 ):
     if expected_result:
         assert promote_dims(*dim_list) == expected_result
