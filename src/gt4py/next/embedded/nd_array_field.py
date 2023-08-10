@@ -255,7 +255,7 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.ndarray:
+def _slice_with_domain(field: Field, new_domain: Domain) -> np.ndarray:
     """
     Slice a field's underlying ndarray based on a new domain, generating a new ndarray.
 
@@ -270,10 +270,21 @@ def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.nda
     old_domain = field.domain
     array = field.ndarray
 
-    slice_indices = [
-        slice(new_rg.start - old_rg.start, new_rg.stop - old_rg.start)
-        for old_rg, new_rg in zip(old_domain.ranges, new_domain.ranges)
-    ]
+    slice_indices = []
+    expand_dims = []
+
+    for new_dim, new_range in new_domain:
+        old_dim = old_domain.dims[len(slice_indices)]
+
+        if old_dim != new_dim:
+            expand_dims.append(new_domain.dims.index(new_dim))
+        else:
+            slice_indices.append(slice(new_range.start - old_domain.ranges[len(slice_indices)].start,
+                                       new_range.stop - old_domain.ranges[len(slice_indices)].start))
 
     array = array[tuple(slice_indices)]
+
+    for d in expand_dims:
+        array = np.expand_dims(array, axis=d)
+
     return array

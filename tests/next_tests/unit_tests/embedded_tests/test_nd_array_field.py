@@ -165,12 +165,13 @@ def test_slice_with_domain(nd_array_implementation, arr, domain, target_domain, 
 
 
 def test_field_intersection_binary_op(nd_array_implementation):
-    arr = np.random.rand(10, 10)
-    d1 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(-10, 0), UnitRange(-1, 9)))
-    d2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(-5, 5), UnitRange(7, 17)))
-    f1, f2 = common.field(arr, domain=d1), common.field(arr, domain=d2)
+    arr1 = np.random.rand(10,)
+    arr2 = np.random.rand(3, 10)
+    d1 = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
+    d2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 3), UnitRange(8, 18)))
+    f1, f2 = common.field(arr1, domain=d1), common.field(arr2, domain=d2)
     intersection = d1 & d2
     new = _slice_with_domain(f1, intersection) + _slice_with_domain(f2, intersection)
 
-    assert new.shape == (5, 2)
-    assert np.allclose(new, arr[5:, 8:] + arr[:5, :2])
+    assert new.shape == (3, 2)
+    assert np.allclose(new, arr1[8:10, ] + arr2[:, :2])
