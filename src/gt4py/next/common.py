@@ -147,8 +147,6 @@ class UnitRange(Sequence[int], Set[int]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
-DomainSlice: TypeAlias = tuple[tuple[Dimension, slice], ...]
-Position: TypeAlias = tuple[tuple[Dimension, int], ...]
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 
 
