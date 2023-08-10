@@ -180,7 +180,7 @@ class LocatedField(Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, indices: NamedFieldIndices) -> Any:
         ...
 
     @property
@@ -194,7 +194,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
         ...
 
 
