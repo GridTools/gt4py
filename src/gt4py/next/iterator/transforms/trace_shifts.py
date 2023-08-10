@@ -26,12 +26,13 @@ class Sentinel(enum.Enum):
     TYPE = object()
 
 
+# for performance reasons (`isinstance` is slow otherwise) we don't use abc here
 class IteratorTracer:
     def deref(self):
-        ...
+        raise NotImplementedError()
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
-        ...
+        raise NotImplementedError()
 
 
 @dataclass(frozen=True)
