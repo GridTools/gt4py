@@ -14,7 +14,7 @@
 
 from typing import Callable, Union
 
-from gt4py.next import common
+from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -53,7 +53,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     return itir.SymRef(id=ref_or_name)
 
 
-def ensure_expr(literal_or_expr: Union[str, common.Scalar, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -70,9 +70,10 @@ def ensure_expr(literal_or_expr: Union[str, common.Scalar, itir.Expr]) -> itir.E
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
-    elif isinstance(literal_or_expr, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
-        return literal_from_value(literal_or_expr)  # type: ignore[arg-type] # mypy bug #11673
-    return literal_or_expr  # type: ignore[return-value] # mypy bug #11673
+    elif core_defs.is_scalar_type(literal_or_expr):
+        return literal_from_value(literal_or_expr)
+    assert isinstance(literal_or_expr, itir.Expr)
+    return literal_or_expr
 
 
 def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.OffsetLiteral:
@@ -275,7 +276,7 @@ def literal(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
 
 
-def literal_from_value(val: common.Scalar) -> itir.Literal:
+def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     """
     Make a literal node from a value.
 
@@ -288,7 +289,7 @@ def literal_from_value(val: common.Scalar) -> itir.Literal:
     >>> literal_from_value(True)
     Literal(value='True', type='bool')
     """
-    if not isinstance(val, common.Scalar):  # type: ignore[arg-type] # mypy bug #11673
+    if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
 
     # At the time this has been written the iterator module has its own type system that is
