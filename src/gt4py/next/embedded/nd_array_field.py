@@ -255,7 +255,7 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _slice_with_domain(field: Field, new_domain: Domain) -> np.ndarray:
+def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.ndarray:
     """
     Slice a field's underlying ndarray based on a new domain, generating a new ndarray.
 
