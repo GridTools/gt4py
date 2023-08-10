@@ -32,7 +32,7 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if hasattr(arg, "__array__") and hasattr(arg, "axes"):
+    if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
         arr = np.asarray(arg)
         origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
         return arr, origin

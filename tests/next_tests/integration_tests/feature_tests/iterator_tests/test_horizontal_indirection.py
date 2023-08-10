@@ -57,16 +57,16 @@ def conditional_indirection(inp, cond):
 def test_simple_indirection(program_processor):
     program_processor, validate = program_processor
 
-    if program_processor == type_check.check:
-        pytest.xfail("bug in type inference")
-    if (
-        program_processor == run_gtfn
-        or program_processor == run_gtfn_imperative
-        or program_processor == gtfn_format_sourcecode
-    ):
-        pytest.xfail("fails in lowering to gtfn_ir")
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: fails in lowering to sdfg")
+    if program_processor in [
+        type_check.check,
+        run_gtfn,
+        run_gtfn_imperative,
+        gtfn_format_sourcecode,
+        run_dace_iterator,
+    ]:
+        pytest.xfail(
+            "We only support applied shifts in type_inference."
+        )  # TODO fix test or generalize itir?
 
     shape = [8]
     inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.asarray(range(shape[0] + 2)))
