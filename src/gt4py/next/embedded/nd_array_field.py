@@ -198,6 +198,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         else:
             self.ndarray[domain] = value
 
+    def __setitem__(self, index, value):
+        self.ndarray[index] = value
+
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
     __getitem__ = restrict

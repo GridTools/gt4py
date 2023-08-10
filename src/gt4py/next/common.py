@@ -319,6 +319,10 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
+class MutableField(Field[DimsT, core_defs.ScalarT]):
+    @abc.abstractmethod
+    def __setitem__(self, key, value) -> None:
+        ...
 
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
@@ -327,9 +331,6 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
     def __setattr__(self, key, value) -> None:
         raise TypeError("Immutable type")
 
-    @final
-    def __setitem__(self, key, value) -> None:
-        raise TypeError("Immutable type")
 
 
 @functools.singledispatch
