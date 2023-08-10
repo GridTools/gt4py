@@ -187,6 +187,7 @@ class LocatedField(Protocol):
         return tuple([0] * len(self.__gt_dims__))
 
 
+@runtime_checkable
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
@@ -684,11 +685,12 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    return (
-        _get_axes(field_or_tuple[0])
-        if isinstance(field_or_tuple, tuple)
-        else field_or_tuple.__gt_dims__
-    )
+    if isinstance(field_or_tuple, tuple):
+        first = _get_axes(field_or_tuple[0])
+        assert all(first == _get_axes(f) for f in field_or_tuple)
+        return first
+    else:
+        return field_or_tuple.__gt_dims__
 
 
 def _single_vertical_idx(
@@ -1219,8 +1221,12 @@ def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     return impl
 
 
-def is_located_field(field: Any) -> bool:
+def is_located_field(field: Any) -> TypeGuard[LocatedField]:
     return isinstance(field, LocatedField)  # TODO(havogt): avoid isinstance on Protocol
+
+
+def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
+    return isinstance(field, MutableLocatedField)  # TODO(havogt): avoid isinstance on Protocol
 
 
 def has_uniform_tuple_element(field) -> bool:
@@ -1254,33 +1260,25 @@ class TupleField(metaclass=TupleFieldMeta):
     pass
 
 
-def _get_axeses(field):
+def _build_tuple_result(field: tuple | LocatedField, named_indices: NamedFieldIndices) -> Any:
     if isinstance(field, tuple):
-        return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
+        return tuple(_build_tuple_result(f, named_indices) for f in field)
     else:
         assert is_located_field(field)
-        return (field.__gt_dims__,)
+        return field.field_getitem(named_indices)
 
 
-def _build_tuple_result(field, indices):
-    if isinstance(field, tuple):
-        return tuple(_build_tuple_result(f, indices) for f in field)
-    else:
-        assert is_located_field(field)
-        return field[indices]
-
-
-def _tuple_assign(field, value, indices):
+def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices: NamedFieldIndices):
     if isinstance(field, tuple):
         if len(field) != len(value):
             raise RuntimeError(
                 f"Tuple of incompatible size, expected tuple of len={len(field)}, got len={len(value)}"
             )
         for f, v in zip(field, value):
-            _tuple_assign(f, v, indices)
+            _tuple_assign(f, v, named_indices)
     else:
-        assert is_located_field(field)
-        field.field_setitem(indices, value)
+        assert is_mutable_located_field(field)
+        field.field_setitem(named_indices, value)
 
 
 class TupleOfFields(TupleField):
@@ -1288,21 +1286,18 @@ class TupleOfFields(TupleField):
         if not is_tuple_of_field(data):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
-        axeses = _get_axeses(data)
-        self.__gt_dims__ = axeses[0]
+        self.__gt_dims__ = _get_axes(data)
 
-    def field_getitem(self, named_indices: NamedFieldIndices):
-        indices = get_ordered_indices(self.__gt_dims__, named_indices)
-        return _build_tuple_result(self.data, indices)
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        return _build_tuple_result(self.data, named_indices)
 
-    def field_setitem(self, indices, value):
+    def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if not isinstance(value, tuple):
             raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
+        _tuple_assign(self.data, value, named_indices)
 
-        _tuple_assign(self.data, value, indices)
 
-
-def as_tuple_field(field):
+def as_tuple_field(field: tuple | TupleField) -> TupleField:
     assert can_be_tuple_field(field)
 
     if is_tuple_of_field(field):
@@ -1377,7 +1372,13 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        out = as_tuple_field(out) if can_be_tuple_field(out) else out
+        out = (
+            as_tuple_field(  # type:ignore[assignment]
+                out  # type:ignore[arg-type] # TODO(havogt) improve the code around TupleField construction
+            )
+            if can_be_tuple_field(out)
+            else out
+        )
 
         def _closure_runner():
             # Set context variables before executing the closure
