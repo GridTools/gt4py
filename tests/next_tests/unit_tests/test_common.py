@@ -156,23 +156,28 @@ def test_domain_contains_named_range(domain):
     assert (IDim, UnitRange(-5, 5)) not in domain
 
 
-def test_domain_intersection_different_dimensions(domain):
-    dimensions = (IDim, JDim)
-    ranges = (UnitRange(2, 12), UnitRange(7, 17))
-    domain2 = Domain(dimensions, ranges)
-    result_domain = domain & domain2
+@pytest.mark.parametrize(
+    "second_domain, expected",
+    [
+        (
+            Domain((IDim, JDim), (UnitRange(2, 12), UnitRange(7, 17))),
+            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(7, 15), UnitRange(20, 30))),
+        ),
+        (
+            Domain((IDim, KDim), (UnitRange(2, 12), UnitRange(7, 27))),
+            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(5, 15), UnitRange(20, 27))),
+        ),
+        (
+            Domain((JDim, KDim), (UnitRange(2, 12), UnitRange(4, 27))),
+            Domain((IDim, JDim, KDim), (UnitRange(0, 10), UnitRange(5, 12), UnitRange(20, 27))),
+        ),
+    ],
+)
+def test_domain_intersection_different_dimensions(domain, second_domain, expected):
+    result_domain = domain & second_domain
+    print(result_domain)
 
-    assert len(result_domain) == 3
-    assert all(isinstance(r, UnitRange) for r in result_domain.ranges)
-    assert result_domain.dims == [IDim, JDim, KDim]
-
-    assert result_domain.ranges[0] == UnitRange(
-        2, 10
-    )  # Intersection of domain.range1 and domain2.range1
-    assert result_domain.ranges[1] == UnitRange(
-        7, 15
-    )  # Intersection of domain.range2 and domain2.range2
-    assert result_domain.ranges[2] == UnitRange(20, 30)  # Broadcasting on missing dimension
+    assert result_domain == expected
 
 
 def test_domain_intersection_reversed_dimensions(domain):

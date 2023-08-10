@@ -117,8 +117,8 @@ class PositiveIntegral(numbers.Integral):
     ...
 
 
-def is_boolean_integral_type(bool_type: type) -> TypeGuard[type[BooleanIntegral]]:
-    return issubclass(bool_type, BOOL_TYPES)
+def is_boolean_integral_type(integral_type: type) -> TypeGuard[Type[BooleanIntegral]]:
+    return issubclass(integral_type, BOOL_TYPES)
 
 
 def is_positive_integral_type(integral_type: type) -> TypeGuard[Type[PositiveIntegral]]:
@@ -161,12 +161,12 @@ def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]:
 
 
 @overload
-def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
+def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]:
     ...
 
 
 @overload
-def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]:
+def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
     ...
 
 
@@ -319,7 +319,7 @@ class Float32DType(FloatingDType[float32]):
 
 @dataclasses.dataclass(frozen=True)
 class Float64DType(FloatingDType[float64]):
-    scalar_type: Final[type[float64]] = dataclasses.field(default=float64, init=False)
+    scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
 
 
 DTypeLike = Union[DType, npt.DTypeLike]
