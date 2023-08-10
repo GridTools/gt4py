@@ -271,17 +271,20 @@ def _slice_with_domain(field: common.Field, new_domain: common.Domain) -> np.nda
     array = field.ndarray
 
     slice_indices = []
+    idx = 0
     expand_dims = []
 
     for new_dim, new_range in new_domain:
-        old_dim = old_domain.dims[len(slice_indices)]
+
+        old_dim = old_domain.dims[idx]
 
         if old_dim != new_dim:
             expand_dims.append(new_domain.dims.index(new_dim))
-        else:
-            slice_indices.append(slice(new_range.start - old_domain.ranges[len(slice_indices)].start,
-                                       new_range.stop - old_domain.ranges[len(slice_indices)].start))
+            continue
 
+        slice_indices.append(
+            slice(new_range.start - old_domain.ranges[idx].start, new_range.stop - old_domain.ranges[idx].start))
+        idx += 1
     array = array[tuple(slice_indices)]
 
     for d in expand_dims:
