@@ -22,8 +22,8 @@ import pytest
 
 from gt4py.next import Dimension, common
 from gt4py.next.common import UnitRange
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.embedded import nd_array_field
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -230,7 +230,16 @@ def test_field_intersection_binary_operations(op):
 def test_field_get_item_invalid_index():
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
     field = common.field(np.ones((10,)), domain=domain)
-    domain_slice = tuple((IDim, UnitRange(0, 5)),)
-
     with pytest.raises(IndexError, match="Unsupported index type"):
         field[1]
+
+
+def test_field_get_item_domain_slice():
+    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+    field = common.field(np.ones((10,)), domain=domain)
+    domain_slice = ((IDim, UnitRange(0, 5)),)
+    indexed_field = field[domain_slice]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == (5,)
+    assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))

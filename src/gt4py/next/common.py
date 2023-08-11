@@ -43,6 +43,7 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
+
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
@@ -313,6 +314,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
+
 
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
