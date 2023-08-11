@@ -136,10 +136,11 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
-AllowedRange = tuple[UnitRange, int]
+
+DomainRange = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
-NamedIndicesOrRanges = Sequence[NamedRange | NamedIndex, ...]
+DomainSlice = Sequence[NamedRange | NamedIndex]
 
 
 @dataclasses.dataclass(frozen=True)

@@ -17,6 +17,7 @@ import pytest
 
 from gt4py.next.common import Dimension, DimensionKind, Domain, Infinity, UnitRange, promote_dims
 
+
 IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
 JDim = Dimension("JDim")

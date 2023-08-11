@@ -20,13 +20,14 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common, Dimension
+from gt4py.next import Dimension, common
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_named_indices
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
+
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
@@ -98,7 +99,7 @@ def product_nd_array_implementation(request):
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
     if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-            first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
     ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
@@ -133,57 +134,78 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-@pytest.mark.parametrize("named_range", [
-    ((IDim, UnitRange(5, 10)), (JDim, UnitRange(5, 10))),
-    common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
-])
+@pytest.mark.parametrize(
+    "named_range",
+    [
+        ((IDim, UnitRange(5, 10)), (JDim, UnitRange(5, 10))),
+        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10))),
+    ],
+)
 def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right(named_range):
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_named_indices(field_domain, named_range)
+    slices = _get_slices_from_domain_slice(field_domain, named_range)
     assert slices == (slice(5, 10, None), None)
 
 
-@pytest.mark.parametrize("named_range", [
-    ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10))),
-    common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10)))
-])
+@pytest.mark.parametrize(
+    "named_range",
+    [
+        ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10))),
+        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10))),
+    ],
+)
 def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left(named_range):
     field_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_named_indices(field_domain, named_range)
+    slices = _get_slices_from_domain_slice(field_domain, named_range)
     assert slices == (None, slice(0, 10, None))
 
 
-@pytest.mark.parametrize("named_range", [
-    ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
-    common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10)))
-])
+@pytest.mark.parametrize(
+    "named_range",
+    [
+        ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
+        common.Domain(
+            dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10))
+        ),
+    ],
+)
 def test_get_slices_with_named_indices_1d_to_3d(named_range):
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_named_indices(field_domain, named_range)
+    slices = _get_slices_from_domain_slice(field_domain, named_range)
     assert slices == (slice(0, 5, None), None, None)
 
 
-@pytest.mark.parametrize("named_range", [
-    ((IDim, UnitRange(0, 10)),),
-    common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
-])
+@pytest.mark.parametrize(
+    "named_range",
+    [
+        ((IDim, UnitRange(0, 10)),),
+        common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
+    ],
+)
 def test_get_slices_with_named_indices_3d_to_1d(named_range):
-    field_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10)))
-    slices = _get_slices_from_named_indices(field_domain, named_range)
+    field_domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+    )
+    slices = _get_slices_from_domain_slice(field_domain, named_range)
     assert slices == (slice(0, 10, None),)
 
 
 def test_get_slices_with_named_index():
-    field_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10)))
-    named_index = ((IDim,UnitRange(0, 10)), (IDim, 2), (KDim, 3))
-    slices = _get_slices_from_named_indices(field_domain, named_index)
+    field_domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+    )
+    named_index = ((IDim, UnitRange(0, 10)), (IDim, 2), (KDim, 3))
+    slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
+
 def test_get_slices_invalid_type():
-    field_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10)))
-    new_domain = ((IDim,"1"),)
+    field_domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
+    )
+    new_domain = ((IDim, "1"),)
     with pytest.raises(ValueError):
-        _get_slices_from_named_indices(field_domain, new_domain)
+        _get_slices_from_domain_slice(field_domain, new_domain)
 
 
 @pytest.mark.parametrize("op", ["/", "*", "-", "+", "**"])
@@ -197,9 +219,9 @@ def test_field_intersection_binary_operations(op):
     field1 = common.field(arr1, domain=arr1_domain)
     field2 = common.field(arr2, domain=arr2_domain)
 
-    op_result = eval(f'field1 {op} field2')
+    op_result = eval(f"field1 {op} field2")
 
-    expected_result = eval(f'arr1[5:10, None] {op} arr2')
+    expected_result = eval(f"arr1[5:10, None] {op} arr2")
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)

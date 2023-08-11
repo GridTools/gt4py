@@ -25,6 +25,7 @@ from numpy import typing as npt
 
 from gt4py.next import common
 
+
 try:
     import cupy as cp
 except ImportError:
@@ -37,7 +38,7 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, Domain, NamedIndicesOrRanges, AllowedRange
+from gt4py.next.common import DimsT, Domain, DomainRange, DomainSlice
 from gt4py.next.ffront import fbuiltins
 
 
@@ -60,8 +61,8 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
-                a_slices = _get_slices_from_named_indices(a.domain, domain_intersection)
-                b_slices = _get_slices_from_named_indices(b.domain, domain_intersection)
+                a_slices = _get_slices_from_domain_slice(a.domain, domain_intersection)
+                b_slices = _get_slices_from_domain_slice(b.domain, domain_intersection)
                 new_data = op(a.ndarray[a_slices], b.ndarray[b_slices])
                 return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
@@ -255,33 +256,27 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _get_slices_from_named_indices(domain: common.Domain, named_indices: NamedIndicesOrRanges) -> tuple[slice | int | None, ...]:
-    """Generate slices from named indices or ranges for a given Domain.
+def _get_slices_from_domain_slice(
+    domain: common.Domain, domain_slice: DomainSlice
+) -> tuple[slice | int | None, ...]:
+    """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
-        This function generates a tuple of slices, which can be used to extract sub-arrays from a field based on the
-        provided named indices or ranges. The named indices or ranges specify the dimensions and ranges of the sub-arrays
-        to be extracted.
+    This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
+    named ranges or indices specify the dimensions and ranges of the sub-arrays to be extracted.
 
-        Args:
-            field (common.Domain): The Domain from which a subdomain will be extracted.
-            named_indices (NamedIndicesOrRanges): A list of tuples containing dimension names and ranges.
+    Args:
+        domain (common.Domain): The Domain object representing the original field.
+        domain_slice (DomainSlice): A sequence of dimension names and associated ranges.
 
-        Returns:
-            tuple[slice | None, ...]: A tuple of slices where each element corresponds to a slice along a specific dimension
-                                      of the Domain. If a dimension is not present in the named indices or ranges, a None
-                                      element is used to indicate expanding the dimension along that axis.
+    Returns:
+        tuple[slice | int | None, ...]: A tuple of slices representing the sub-array extraction along each dimension
+                                       specified in the Domain. If a dimension is not included in the named indices
+                                       or ranges, a None is used to indicate expansion along that axis.
+    """
+    slice_indices: list[slice | int | None] = []
 
-        Note:
-            - The function handles cases where named indices or ranges are provided for dimensions that do not exist in the
-              field's domain.
-            - Slices are generated according to the specified indices or ranges, and can be used to extract sub-arrays using
-              indexing.
-        """
-    slice_indices = []
-
-    for new_dim, new_rng in named_indices:
-
-        pos_new = next(index for index, (dim, _) in enumerate(named_indices) if dim == new_dim)
+    for new_dim, new_rng in domain_slice:
+        pos_new = next(index for index, (dim, _) in enumerate(domain_slice) if dim == new_dim)
 
         if new_dim in domain.dims:
             pos_old = domain.dims.index(new_dim)
@@ -292,25 +287,25 @@ def _get_slices_from_named_indices(domain: common.Domain, named_indices: NamedIn
     return tuple(slice_indices)
 
 
-def _compute_slice(rng: AllowedRange, domain: common.Domain, pos: int) -> slice | int:
+def _compute_slice(rng: DomainRange, domain: common.Domain, pos: int) -> slice | int:
     """Compute a slice or integer based on the provided range, domain, and position.
 
-        Parameters:
-            rng (AllowedRange): The range to be computed as a slice or integer.
-            domain (common.Domain): The domain containing dimension information.
-            pos (int): The position of the dimension in the domain.
+    Args:
+        rng (DomainRange): The range to be computed as a slice or integer.
+        domain (common.Domain): The domain containing dimension information.
+        pos (int): The position of the dimension in the domain.
 
-        Returns:
-            slice | int: Slice if `new_rng` is a UnitRange, otherwise an integer.
+    Returns:
+        slice | int: Slice if `new_rng` is a UnitRange, otherwise an integer.
 
-        Raises:
-            ValueError: If `new_rng` is not an integer or a UnitRange.
-        """
+    Raises:
+        ValueError: If `new_rng` is not an integer or a UnitRange.
+    """
     if isinstance(rng, common.UnitRange):
         return slice(
-                rng.start - domain.ranges[pos].start,
-                rng.stop - domain.ranges[pos].start,
-            )
+            rng.start - domain.ranges[pos].start,
+            rng.stop - domain.ranges[pos].start,
+        )
     elif isinstance(rng, int):
         return rng
     else:
