@@ -138,6 +138,8 @@ class UnitRange(Sequence[int], Set[int]):
 
 
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, int]
+NamedIndicesOrRanges = Sequence[NamedRange | NamedIndex, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -204,11 +206,6 @@ def _broadcast_ranges(
         ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
         for d in broadcast_dims
     )
-
-
-NamedRange: TypeAlias = tuple[Dimension, UnitRange]
-NamedIndex: TypeAlias = tuple[Dimension, int]
-NamedIndicesOrRanges = Sequence[NamedRange | NamedIndex, ...]
 
 
 if TYPE_CHECKING:

@@ -282,18 +282,16 @@ def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndi
 
     for new_dim, new_rng in named_indices:
 
-        pos_new = named_indices.dims.index(new_dim)
+        pos_new = next(index for index, (dim, _) in enumerate(named_indices) if dim == new_dim)
 
         if new_dim in old_domain.dims:
             pos_old = old_domain.dims.index(new_dim)
-
-            if pos_new == pos_old + len(slice_indices):
-                slice_indices.append(
-                    slice(
-                        new_rng.start - old_domain.ranges[pos_old].start,
-                        new_rng.stop - old_domain.ranges[pos_old].start,
-                    )
+            slice_indices.append(
+                slice(
+                    new_rng.start - old_domain.ranges[pos_old].start,
+                    new_rng.stop - old_domain.ranges[pos_old].start,
                 )
+            )
         else:
             slice_indices.insert(pos_new, field.array_ns.newaxis)
 

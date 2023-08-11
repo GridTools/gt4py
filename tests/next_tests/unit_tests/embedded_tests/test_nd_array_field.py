@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import dataclasses
 import itertools
 import math
 import operator
@@ -133,35 +133,49 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right():
+@dataclasses.dataclass
+class FieldMock:
+    domain: common.Domain
+    array_ns = np
+
+
+@pytest.mark.parametrize("named_range", [
+    ((IDim, UnitRange(5, 10)), (JDim, UnitRange(5, 10))),
+    common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
+])
+def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right(named_range):
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    new_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
-    field = common.field(np.ones((10,)), domain=field_domain)
-    slices = _get_slices_with_named_indices(field, new_domain)
+    slices = _get_slices_with_named_indices(FieldMock(field_domain), named_range)
     assert slices == (slice(5, 10, None), None)
 
 
-def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left():
+@pytest.mark.parametrize("named_range", [
+    ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10))),
+    common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10)))
+])
+def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left(named_range):
     field_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-    new_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10)))
-    field = common.field(np.ones((10,)), domain=field_domain)
-    slices = _get_slices_with_named_indices(field, new_domain)
+    slices = _get_slices_with_named_indices(FieldMock(field_domain), named_range)
     assert slices == (None, slice(0, 10, None))
 
 
-def test_get_slices_with_named_indices_1d_to_3d():
+@pytest.mark.parametrize("named_range", [
+    ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
+    common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10)))
+])
+def test_get_slices_with_named_indices_1d_to_3d(named_range):
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    new_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10)))
-    field = common.field(np.ones((10,)), domain=field_domain)
-    slices = _get_slices_with_named_indices(field, new_domain)
+    slices = _get_slices_with_named_indices(FieldMock(field_domain), named_range)
     assert slices == (slice(0, 5, None), None, None)
 
 
-def test_get_slices_with_named_indices_3d_to_1d():
+@pytest.mark.parametrize("named_range", [
+    ((IDim, UnitRange(0, 10)),),
+    common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
+])
+def test_get_slices_with_named_indices_3d_to_1d(named_range):
     field_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10)))
-    new_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    field = common.field(np.ones((10, 10, 10)), domain=field_domain)
-    slices = _get_slices_with_named_indices(field, new_domain)
+    slices = _get_slices_with_named_indices(FieldMock(field_domain), named_range)
     assert slices == (slice(0, 10, None),)
 
 
