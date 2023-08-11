@@ -26,8 +26,13 @@ class Sentinel(enum.Enum):
     TYPE = object()
 
 
+# for performance reasons (`isinstance` is slow otherwise) we don't use abc here
 class IteratorTracer:
-    pass
+    def deref(self):
+        raise NotImplementedError()
+
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+        raise NotImplementedError()
 
 
 @dataclass(frozen=True)
@@ -37,7 +42,7 @@ class InputTracer(IteratorTracer):
     offsets: tuple[ir.OffsetLiteral, ...] = ()
     lift_level: int = 0
 
-    def shift(self, offsets):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return InputTracer(
             inp=self.inp,
             register_deref=self.register_deref,
@@ -50,11 +55,13 @@ class InputTracer(IteratorTracer):
         return Sentinel.VALUE
 
 
+# This class is only needed because we currently allow conditionals on iterators. Since this is
+# not supported in the C++ backend it can likely be removed again in the future.
 @dataclass(frozen=True)
 class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
 
-    def shift(self, offsets):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
@@ -153,10 +160,13 @@ def _primitive_constituents(
 def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
     assert cond is Sentinel.VALUE
     if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
-        # broadcast branches to tuple of same length
+        # Broadcast branches to tuple of same length. This is required for cases like:
+        #  `if_(cond, deref(iterator_of_tuples), make_tuple(...))`.
         if not isinstance(true_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in false_branch)
             true_branch = (true_branch,) * len(false_branch)
         if not isinstance(false_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in true_branch)
             false_branch = (false_branch,) * len(true_branch)
 
         result = []
