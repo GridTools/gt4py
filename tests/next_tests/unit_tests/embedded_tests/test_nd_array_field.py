@@ -166,7 +166,7 @@ def test_get_slices_with_named_indices_3d_to_1d():
 
 
 @pytest.mark.parametrize("op", ["/", "*", "-", "+", "**"])
-def test_field_binary_operations(op):
+def test_field_intersection_binary_operations(op):
     arr1 = np.ones((10,)) + 1
     arr1_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
 
