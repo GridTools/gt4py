@@ -16,15 +16,15 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
-
 
 try:
     import cupy as cp
@@ -38,7 +38,7 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, Domain, DomainRange, DomainSlice
+from gt4py.next.common import DimsT, Domain, DomainSlice, DomainRange, UnitRange, Dimension
 from gt4py.next.ffront import fbuiltins
 
 
@@ -232,6 +232,64 @@ _nd_array_implementations = [np]
 class NumPyArrayField(_BaseNdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
+    @overload
+    def __getitem__(self, index: DomainSlice) -> common.Field:
+        """
+        Absolute slicing with dimension names.
+        """
+        ...
+
+    @overload
+    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
+        """
+        Relative slicing with ordered dimension access.
+        """
+        ...
+
+    @overload
+    def __getitem__(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
+        ...
+
+    @overload
+    def __getitem__(
+            self, index: Sequence[common.NamedIndex]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+        # Value in case len(i) == len(self.domain)
+        ...
+
+    def __getitem__(
+            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+        if isinstance(index, Sequence):
+            if all(
+                    isinstance(idx, tuple)
+                    and isinstance(idx[0], Dimension)
+                    and isinstance(idx[1], UnitRange)
+                    or isinstance(idx[1], int)
+                    for idx in index
+            ):
+                return self._getitem_domain_slice(index)
+            return self._getitem_named_index_sequence(index)
+        elif isinstance(index, tuple) and all(isinstance(idx, (slice, int)) for idx in index):
+            return self._getitem_relative_slice(index)
+        elif isinstance(index, tuple) and all(isinstance(idx, int) for idx in index):
+            return self._getitem_tuple_int(index)
+        else:
+            raise IndexError("Unsupported index type")
+
+    def _getitem_domain_slice(self, index: DomainSlice) -> common.Field:
+        slices = _get_slices_from_domain_slice(self.domain, index)
+        new = self.ndarray[slices]
+        return self.__class__(new, index)
+
+    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
+        # TODO: implement relative slicing
+        ...
+
+    def _getitem_tuple_int(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
+        # TODO: implement tuple of integers indexing
+        ...
+
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 
@@ -257,7 +315,7 @@ if jnp:
 
 
 def _get_slices_from_domain_slice(
-    domain: common.Domain, domain_slice: DomainSlice
+    domain: Domain, domain_slice: DomainSlice
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -287,7 +345,7 @@ def _get_slices_from_domain_slice(
     return tuple(slice_indices)
 
 
-def _compute_slice(rng: DomainRange, domain: common.Domain, pos: int) -> slice | int:
+def _compute_slice(rng: DomainRange, domain: Domain, pos: int) -> slice | int:
     """Compute a slice or integer based on the provided range, domain, and position.
 
     Args:
@@ -301,7 +359,7 @@ def _compute_slice(rng: DomainRange, domain: common.Domain, pos: int) -> slice |
     Raises:
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
-    if isinstance(rng, common.UnitRange):
+    if isinstance(rng, UnitRange):
         return slice(
             rng.start - domain.ranges[pos].start,
             rng.stop - domain.ranges[pos].start,

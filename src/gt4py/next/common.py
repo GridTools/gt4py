@@ -43,7 +43,6 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
-
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
@@ -137,10 +136,11 @@ class UnitRange(Sequence[int], Set[int]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
-DomainRange = UnitRange | int
+DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
-DomainSlice = Sequence[NamedRange | NamedIndex]
+DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -313,7 +313,6 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
-
 
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
