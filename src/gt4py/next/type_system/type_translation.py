@@ -161,8 +161,6 @@ def from_type_hint(
 def from_value(value: Any) -> ts.TypeSpec:
     # TODO(tehrengruber): use protocol from gt4py.next.common when available
     #  instead of importing from the embedded implementation
-    # from gt4py.next.iterator.embedded import LocatedField
-
     """Make a symbol node from a Python value."""
     # TODO(tehrengruber): What we expect here currently is a GTCallable. Maybe
     #  we should check for the protocol in the future?

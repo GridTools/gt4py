@@ -482,7 +482,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif isinstance(val, common.Field):
+    elif isinstance(val, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -725,7 +725,7 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
+    field_or_tuple: common.Field, named_indices: NamedFieldIndices, *, column_axis: Tag
 ) -> Column:
     ...
 
@@ -846,7 +846,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
 def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tuple:
     if isinstance(field, tuple):
         return tuple(_wrap_field(f) for f in field)
-    elif isinstance(field, common.Field):
+    elif isinstance(field, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
         return NDArrayLocatedFieldWrapper(field)
     else:
         return field
@@ -906,11 +906,6 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._ndarrayfield.__gt_dims__
 
-    # def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
-    #     return self._ndarrayfield.ndarray[indices]
-
-    # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
-
     def _promote_tags_to_dims(self, named_indices: NamedFieldIndices):
         return {
             _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__): v
@@ -933,9 +928,6 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
-
-    # def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
-    #     self._ndarrayfield.ndarray[indices] = value
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         return self._ndarrayfield.field_setitem(self._translate_named_indices(named_indices), value)
@@ -1051,6 +1043,12 @@ def np_as_located_field(
 
 @dataclasses.dataclass(frozen=True)
 class IndexField(common.FieldABC):
+    """
+    Minimal index field implementation.
+
+    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    """
+
     _dimension: common.Dimension
     _value_type: type
 
@@ -1059,13 +1057,13 @@ class IndexField(common.FieldABC):
         return (self._dimension,)
 
     @classmethod
-    def __gt_builtin_func__(func: fbuiltins.BuiltInFunction[_R, _P], /) -> None:
+    def __gt_builtin_func__(func: Callable, /) -> None:
         # not implemented, let's use the implmentation of the other field if we have it
         return None
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((_dimension,), (common.UnitRange.infinite()))
+        return common.Domain((self._dimension,), (common.UnitRange.infinite()))
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -1079,11 +1077,11 @@ class IndexField(common.FieldABC):
     def ndarray(self) -> core_defs.NDArrayObject:
         return AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: Field) -> Field:
+    def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: common.DomainLike) -> common.Field:
         if isinstance(item, common.Domain):
             d, r = item[0]
             assert d == self._dimension
@@ -1095,62 +1093,44 @@ class IndexField(common.FieldABC):
     __call__ = remap
     __getitem__ = restrict
 
-    def __abs__(self) -> Field:
+    def __abs__(self) -> common.Field:
         raise NotImplementedError()
 
-    def __neg__(self) -> Field:
+    def __neg__(self) -> common.Field:
         raise NotImplementedError()
 
-    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __radd__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __sub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rsub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __mul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rmul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __floordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rfloordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __truediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rtruediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
-
-
-# class IndexField(common.FieldABC):
-#     def __init__(self, axis: common.Dimension, dtype: npt.DTypeLike) -> None:
-#         self.axis = axis
-#         self.dtype = np.dtype(dtype)
-
-#     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-#         index = get_ordered_indices(self.__gt_dims__, named_indices)
-#         if isinstance(index, int):
-#             return self.dtype.type(index)
-#         else:
-#             assert isinstance(index, tuple) and len(index) == 1 and isinstance(index[0], int)
-#             return self.dtype.type(index[0])
-
-#     @property
-#     def __gt_dims__(self) -> tuple[common.Dimension]:
-#         return (self.axis,)
 
 
 def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> common.Field:
@@ -1159,6 +1139,12 @@ def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> common.Fi
 
 @dataclasses.dataclass(frozen=True)
 class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
+    """
+    Minimal constant field implementation.
+
+    TODO: Improve implementation (e.g. support slicing) and move out of this module.
+    """
+
     _value: core_defs.ScalarT
     _value_type: type
 
@@ -1167,7 +1153,7 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
         return tuple()
 
     @classmethod
-    def __gt_builtin_func__(func: fbuiltins.BuiltInFunction[_R, _P], /) -> None:
+    def __gt_builtin_func__(func: Callable) -> None:
         # not implemented, let's use the implmentation of the other field if we have it
         return None
 
@@ -1187,15 +1173,12 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
     def ndarray(self) -> core_defs.NDArrayObject:
         return AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: Field) -> Field:
+    def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: common.DomainLike) -> common.Field | core_defs.ScalarT:
         if isinstance(item, common.Domain):
-            # d, r = item[0]
-            # assert d == self._dimension
-            # assert isinstance(r, int)
             return self._value
         # TODO set a domain...
         raise NotImplementedError()
@@ -1203,57 +1186,44 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
     __call__ = remap
     __getitem__ = restrict
 
-    def __abs__(self) -> Field:
+    def __abs__(self) -> common.Field:
         raise NotImplementedError()
 
-    def __neg__(self) -> Field:
+    def __neg__(self) -> common.Field:
         raise NotImplementedError()
 
-    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __radd__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __sub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rsub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __mul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rmul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __floordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rfloordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __truediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __rtruediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
-    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
-
-
-# class ConstantField(common.FieldABC):
-#     def __init__(self, value: Any, dtype: npt.DTypeLike):
-#         self.value = value
-#         self.dtype = np.dtype(dtype).type
-
-#     def field_getitem(self, _: NamedFieldIndices) -> Any:
-#         return self.dtype(self.value)
-
-#     @property
-#     def __gt_dims__(self) -> tuple[()]:
-#         return ()
 
 
 def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> common.Field:
@@ -1396,11 +1366,11 @@ def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
 
 
 def is_located_field(field: Any) -> TypeGuard[common.Field]:
-    return isinstance(field, common.Field) 
+    return isinstance(field, common.Field)  # type: ignore[misc] # we use extended_runtime_checkable which is fine
 
 
 def is_mutable_located_field(field: Any) -> TypeGuard[common.Field]:
-    return isinstance(field, common.Field)  # TODO should be mutable Field
+    return isinstance(field, common.Field)  # type: ignore[misc] # we use extended_runtime_checkable which is fine  # TODO should be mutable Field
 
 
 def has_uniform_tuple_element(field) -> bool:

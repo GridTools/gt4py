@@ -29,7 +29,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 

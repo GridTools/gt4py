@@ -81,9 +81,19 @@ DomainLike: TypeAlias = Union[
     Sequence[Dimension], Dimension, str
 ]  # TODO(havogt): revisit once embedded implementation is concluded
 
+Self = TypeVar("Self", bound="Shiftable", covariant=True)
+
+
+class Shiftable(Protocol[Self]):
+    def __add__(self: Self, other: int) -> Self:
+        ...
+
+    def __sub__(self: Self, other: int) -> Self:
+        ...
+
 
 @dataclasses.dataclass(frozen=True)
-class UnitRange(Sequence[int], Set[int]):
+class UnitRange(Sequence[int], Set[int], Shiftable["UnitRange"]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
@@ -135,8 +145,13 @@ class UnitRange(Sequence[int], Set[int]):
     def __add__(self, offset: int) -> UnitRange:
         return UnitRange(self.start + offset, self.stop + offset)
 
-    def __sub__(self, offset: int) -> UnitRange:
-        return self.__add__(-offset)
+    def __sub__(self, offset: int | Set[Any]) -> UnitRange:
+        if isinstance(offset, int):
+            # Shiftable implementation
+            return self.__add__(-offset)
+        else:
+            # Set implementation
+            raise NotImplementedError()
 
     def __and__(self, other: Set[Any]) -> UnitRange:
         if isinstance(other, UnitRange):
@@ -231,7 +246,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @property
-    def shape(self) -> tuple[int]:  # TODO discuss this
+    def shape(self) -> tuple[int, ...]:  # TODO discuss this
         return tuple(len(r) for r in self.domain.ranges)
 
     @property
@@ -319,10 +334,12 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
+
 class MutableField(Field[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, key, value) -> None:
         ...
+
 
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
@@ -330,7 +347,6 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
     @final
     def __setattr__(self, key, value) -> None:
         raise TypeError("Immutable type")
-
 
 
 @functools.singledispatch

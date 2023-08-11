@@ -168,7 +168,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         value_type = array.dtype.type  # TODO add support for Dimensions as value_type
 
-        # assert issubclass(array.dtype.type, definitions.SCALAR_TYPES)
+        # assert issubclass(array.dtype.type, definitions.SCALAR_TYPES) # TODO(havogt) disallow structured types?
 
         assert all(isinstance(d, common.Dimension) for d, r in domain), domain
         assert len(domain) == array.ndim
