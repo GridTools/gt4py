@@ -37,7 +37,7 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, Domain, NamedIndicesOrRanges
+from gt4py.next.common import DimsT, Domain, NamedIndicesOrRanges, AllowedRange
 from gt4py.next.ffront import fbuiltins
 
 
@@ -255,7 +255,7 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndicesOrRanges) -> tuple[slice | None, ...]:
+def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndicesOrRanges) -> tuple[slice | int | None, ...]:
     """Generate slices based on named indices or ranges for a given field.
 
         This function generates a tuple of slices, which can be used to extract sub-arrays from a field based on the
@@ -286,13 +286,22 @@ def _get_slices_with_named_indices(field: common.Field, named_indices: NamedIndi
 
         if new_dim in old_domain.dims:
             pos_old = old_domain.dims.index(new_dim)
-            slice_indices.append(
-                slice(
-                    new_rng.start - old_domain.ranges[pos_old].start,
-                    new_rng.stop - old_domain.ranges[pos_old].start,
-                )
-            )
+
+            slice_indices.append(_compute_slice(new_rng, old_domain, pos_old))
+
         else:
             slice_indices.insert(pos_new, field.array_ns.newaxis)
 
     return tuple(slice_indices)
+
+
+def _compute_slice(new_rng: AllowedRange, old_domain: common.Domain, pos_old: int) -> slice | int:
+    if isinstance(new_rng, common.UnitRange):
+        return slice(
+                new_rng.start - old_domain.ranges[pos_old].start,
+                new_rng.stop - old_domain.ranges[pos_old].start,
+            )
+    elif isinstance(new_rng, int):
+        return new_rng
+    else:
+        raise ValueError(f"Can only use integer or UnitRange ranges, provided {type(new_rng)}")

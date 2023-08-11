@@ -179,6 +179,13 @@ def test_get_slices_with_named_indices_3d_to_1d(named_range):
     assert slices == (slice(0, 10, None),)
 
 
+def test_get_slices_with_named_index():
+    field_domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10)))
+    new_domain = ((IDim,UnitRange(0, 10)), (IDim, 2), (KDim, 3))
+    slices = _get_slices_with_named_indices(FieldMock(field_domain), new_domain)
+    assert slices == (slice(0, 10, None), 2, 3)
+
+
 @pytest.mark.parametrize("op", ["/", "*", "-", "+", "**"])
 def test_field_intersection_binary_operations(op):
     arr1 = np.ones((10,)) + 1
