@@ -24,6 +24,8 @@ from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
 
+import next_tests
+
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
@@ -37,7 +39,8 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
-    ]
+    ],
+    ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
     backup_backend = decorator.DEFAULT_BACKEND

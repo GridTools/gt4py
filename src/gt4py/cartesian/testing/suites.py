@@ -29,7 +29,7 @@ from gt4py.cartesian import gtscript, utils as gt_utils
 from gt4py.cartesian.definitions import AccessKind, FieldInfo
 from gt4py.cartesian.gtc.definitions import Boundary, CartesianSpace, Index, Shape
 from gt4py.cartesian.stencil_object import StencilObject
-from gt4py.storage import utils as storage_utils
+from gt4py.storage.cartesian import utils as storage_utils
 
 from .input_strategies import (
     SymbolKind,

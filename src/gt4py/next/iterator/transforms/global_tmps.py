@@ -23,7 +23,6 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir, ir_makers as im, type_inference
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -415,7 +414,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 consumed_domain = SymbolicDomain.from_expr(domain)
                 for shift in zip(shift_chain[::2], shift_chain[1::2], strict=True):
                     offset_name, offset = shift[0].value, shift[1]
-                    if isinstance(offset_provider[offset_name], CartesianAxis):
+                    if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
                         assert isinstance(offset, ir.OffsetLiteral)
                         dim = offset_provider[offset_name].value

@@ -51,7 +51,7 @@ from gt4py.next.iterator.builtins import (
     shift,
     xor_,
 )
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
+from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
@@ -70,7 +70,7 @@ def asarray(*lists):
     return res
 
 
-IDim = CartesianAxis("IDim")
+IDim = gtx.Dimension("IDim")
 
 
 def asfield(*arrays):
@@ -259,7 +259,7 @@ def test_can_deref(program_processor, stencil):
     if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: can_deref")
 
-    Node = CartesianAxis("Node")
+    Node = gtx.Dimension("Node")
 
     inp = gtx.np_as_located_field(Node)(np.ones((1,), dtype=np.int32))
     out = gtx.np_as_located_field(Node)(np.asarray([0], dtype=inp.dtype))
@@ -293,7 +293,7 @@ def test_can_deref(program_processor, stencil):
 #     program_processor, validate = program_processor
 
 #     Neighbor = offset("Neighbor")
-#     Node = CartesianAxis("Node")
+#     Node = gtx.Dimension("Node")
 
 #     @fundef
 #     def _can_deref(inp):

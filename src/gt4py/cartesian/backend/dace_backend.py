@@ -25,6 +25,7 @@ from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
+from gt4py.cartesian import config as gt_config
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -543,6 +544,8 @@ class DaCeComputationCodegen:
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            if gt_config.GT4PY_USE_HIP:
+                dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()

@@ -280,7 +280,7 @@ def slice_twice_sparse_stencil(sparse):
 @pytest.mark.xfail(reason="Field with more than one sparse dimension is not implemented.")
 def test_slice_twice_sparse(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    inp = gtx.np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
+    inp = gtx.np_as_located_field(Vertex, V2VDim, V2VDim)(v2v_arr[v2v_arr])
     out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]

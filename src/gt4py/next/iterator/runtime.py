@@ -31,7 +31,7 @@ from gt4py.next.program_processors.processor_interface import (
 )
 
 
-__all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
+__all__ = ["offset", "fundef", "fendef", "closure"]
 
 
 @dataclass(frozen=True)
@@ -41,10 +41,6 @@ class Offset:
 
 def offset(value):
     return Offset(value)
-
-
-# TODO: rename to dimension and remove axis terminology
-CartesianAxis = common.Dimension
 
 
 class CartesianDomain(dict):

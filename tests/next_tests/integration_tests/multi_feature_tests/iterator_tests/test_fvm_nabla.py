@@ -50,6 +50,7 @@ from next_tests.unit_tests.conftest import lift_mode, program_processor, run_pro
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
 
 V2E = offset("V2E")
 E2V = offset("E2V")
@@ -258,7 +259,7 @@ def test_nabla(program_processor, lift_mode):
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
 
-    sign = gtx.np_as_located_field(Vertex, V2E)(setup.sign_field)
+    sign = gtx.np_as_located_field(Vertex, V2EDim)(setup.sign_field)
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
     S_MXX, S_MYY = tuple(map(gtx.np_as_located_field(Edge), setup.S_fields))
     vol = gtx.np_as_located_field(Vertex)(setup.vol_field)
@@ -322,7 +323,7 @@ def test_nabla2(program_processor, lift_mode):
         pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
-    sign = gtx.np_as_located_field(Vertex, V2E)(setup.sign_field)
+    sign = gtx.np_as_located_field(Vertex, V2EDim)(setup.sign_field)
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
     S_M = gtx.np_as_located_field(Edge)(
         np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")

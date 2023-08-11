@@ -16,7 +16,31 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.runtime import CartesianAxis
+
+
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    # TODO(tehrengruber): For whatever reason the ordering in the error message is not
+    #  deterministic. Ignoring for now, as we want to refactor the type inference anyway.
+    expected_error = [
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='int32') ≡ Primitive(name='float32')"
+        ),
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='float32') ≡ Primitive(name='int32')"
+        ),
+    ]
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) in expected_error
 
 
 def test_unsatisfiable_constraints():
@@ -547,7 +571,7 @@ def test_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
@@ -573,7 +597,7 @@ def test_partial_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"

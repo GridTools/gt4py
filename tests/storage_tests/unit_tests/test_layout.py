@@ -14,7 +14,7 @@
 
 import pytest
 
-from gt4py.storage import layout as gt_layout
+from gt4py.storage.cartesian import layout as gt_layout
 
 
 @pytest.mark.parametrize(

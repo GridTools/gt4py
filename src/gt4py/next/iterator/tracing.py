@@ -16,6 +16,7 @@ import dataclasses
 import inspect
 from typing import List
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir_makers as im
@@ -33,7 +34,6 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_system import type_info, type_specifications, type_translation
 
 
@@ -153,9 +153,9 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
-    if isinstance(o, common.Scalar):
+    if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
-    if isinstance(o, CartesianAxis):
+    if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return tuple(make_node(arg) for arg in o)
@@ -259,7 +259,7 @@ def _contains_tuple_dtype_field(arg):
     #  other `np.int32`). We just ignore the error here and postpone fixing this to when
     #  the new storages land (The implementation here works for LocatedFieldImpl).
     return isinstance(arg, LocatedField) and (
-        arg.dtype.fields is not None or any(dim is None for dim in arg.axes)
+        arg.dtype.fields is not None or any(dim is None for dim in arg.__gt_dims__)
     )
 
 

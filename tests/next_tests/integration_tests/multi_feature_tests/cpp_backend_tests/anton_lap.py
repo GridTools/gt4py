@@ -14,8 +14,9 @@
 
 import sys
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fundef, offset
+from gt4py.next.iterator.runtime import closure, fundef, offset
 from gt4py.next.iterator.tracing import trace
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
@@ -44,9 +45,9 @@ def lap(inp):
     return dif2(i)(inp) + dif2(j)(inp)
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 
 def lap_fencil(i_size, j_size, k_size, i_off, j_off, k_off, out, inp):
