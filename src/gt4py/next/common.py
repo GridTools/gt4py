@@ -237,8 +237,12 @@ if TYPE_CHECKING:
             ...
 
 
+class NextGTDimsInferface(Protocol):
+    __gt_dims__: tuple[Dimension, ...]
+
+
 @extended_runtime_checkable
-class Field(Protocol[DimsT, core_defs.ScalarT]):
+class Field(NextGTDimsInferface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property

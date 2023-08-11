@@ -181,7 +181,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         raise NotImplementedError()
 
     def restrict(
-        self: _BaseNdArrayField, domain: common.DomainT | common.DomainSlice | common.Position
+        self: _BaseNdArrayField, domain: common.Domain | common.DomainSlice | common.Position
     ) -> _BaseNdArrayField | _Value:
         if isinstance(domain, common.Domain):
             _slice = tuple(domain[dim][1] - r.start for dim, r in self._domain)
@@ -191,16 +191,14 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     field_getitem = restrict
 
-    def field_setitem(self, domain, value):
+    def __setitem__(self, domain, value):
         if isinstance(domain, common.Domain):
             _slice = tuple(domain[dim][1] - r.start for dim, r in self._domain)
             self.ndarray[_slice] = value
         else:
             self.ndarray[domain] = value
 
-    def __setitem__(self, index, value):
-        self.ndarray[index] = value
-
+    field_setitem = __setitem__  # TODO remove
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
     __getitem__ = restrict

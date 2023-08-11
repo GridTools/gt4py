@@ -465,7 +465,7 @@ def not_eq(first, second):
     return first != second
 
 
-CompositeOfScalarOrField: TypeAlias = Scalar | common.Field | tuple["CompositeOfScalarOrField", ...]
+CompositeOfScalarOrField: TypeAlias = Scalar | LocatedField | tuple["CompositeOfScalarOrField", ...]
 
 
 def is_dtype_like(t: Any) -> TypeGuard[npt.DTypeLike]:
@@ -482,7 +482,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif isinstance(val, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
+    elif is_located_field(val):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -684,7 +684,7 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 
 def _get_axes(
-    field_or_tuple: common.Field | tuple,
+    field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
         first = _get_axes(field_or_tuple[0])
@@ -705,7 +705,7 @@ def _single_vertical_idx(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | common.Field, ...],  # arbitrary nesting of tuples of Field
+    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of Field
     named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
@@ -715,7 +715,7 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: tuple[tuple | common.Field, ...],  # arbitrary nesting of tuples of Field
+    field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of Field
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
@@ -725,14 +725,14 @@ def _make_tuple(
 
 @overload
 def _make_tuple(
-    field_or_tuple: common.Field, named_indices: NamedFieldIndices, *, column_axis: Tag
+    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
 ) -> Column:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: common.Field,
+    field_or_tuple: LocatedField,
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
@@ -741,7 +741,7 @@ def _make_tuple(
 
 
 def _make_tuple(
-    field_or_tuple: common.Field | tuple[tuple | common.Field, ...],
+    field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
     named_indices: NamedFieldIndices,
     *,
     column_axis: Optional[Tag] = None,
@@ -786,7 +786,7 @@ def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
 
 @dataclasses.dataclass(frozen=True)
 class MDIterator:
-    field: common.Field
+    field: LocatedField
     pos: MaybePosition
     column_axis: Optional[Tag] = dataclasses.field(default=None, kw_only=True)
 
@@ -853,12 +853,12 @@ def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tup
 
 
 def make_in_iterator(
-    inp: common.Field,
+    inp_: common.Field,
     pos: Position,
     *,
     column_axis: Optional[Tag],
 ) -> ItIterator:
-    inp = _wrap_field(inp)
+    inp = _wrap_field(inp_)
     axes = _get_axes(inp)
     sparse_dimensions = _get_sparse_dimensions(axes)
     new_pos: Position = pos.copy()
@@ -889,7 +889,7 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-def _dim_of_tag_in_dims(tag: Tag, dims: Sequence[common.Dimension]) -> Optional[int]:
+def _dim_of_tag_in_dims(tag: Tag, dims: Sequence[common.Dimension]) -> Optional[common.Dimension]:
     for d in dims:
         if tag == d.value:
             return d
@@ -906,17 +906,17 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._ndarrayfield.__gt_dims__
 
-    def _promote_tags_to_dims(self, named_indices: NamedFieldIndices):
+    def _promote_tags_to_dims(
+        self, named_indices: NamedFieldIndices
+    ) -> Mapping[common.Dimension, FieldIndex | SparsePositionEntry]:
         return {
-            _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__): v
+            _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__): v  # type: ignore[misc] # `if` guarantees that key is not None
             for k, v in named_indices.items()
             if _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__)
         }
 
-    def _translate_named_indices(self, named_indices: NamedFieldIndices):
-        named_indices = self._promote_tags_to_dims(named_indices)
-        print(f"{named_indices=}")
-
+    def _translate_named_indices(self, _named_indices: NamedFieldIndices):
+        named_indices = self._promote_tags_to_dims(_named_indices)
         dimensions = tuple(d for d in named_indices.keys())
         ranges = tuple(
             common.UnitRange(v.start, v.stop)
@@ -930,7 +930,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-        return self._ndarrayfield.field_setitem(self._translate_named_indices(named_indices), value)
+        # if isinstance(self._ndarrayfield, TupleOfFields):
+        self._ndarrayfield.field_setitem(self._translate_named_indices(named_indices), value)
+        # else:
+        #     self._ndarrayfield[self._translate_named_indices(named_indices)]= value
 
     def __array__(self) -> np.ndarray:
         return self._ndarrayfield.ndarray
@@ -1053,7 +1056,7 @@ class IndexField(common.FieldABC):
     _value_type: type
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return (self._dimension,)
 
     @classmethod
@@ -1063,7 +1066,7 @@ class IndexField(common.FieldABC):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension,), (common.UnitRange.infinite()))
+        return common.Domain((self._dimension,), (common.UnitRange.infinite(),))
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -1149,7 +1152,7 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
     _value_type: type
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return tuple()
 
     @classmethod
@@ -1365,12 +1368,12 @@ def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     return impl
 
 
-def is_located_field(field: Any) -> TypeGuard[common.Field]:
-    return isinstance(field, common.Field)  # type: ignore[misc] # we use extended_runtime_checkable which is fine
+def is_located_field(field: Any) -> TypeGuard[LocatedField]:
+    return isinstance(field, LocatedField)
 
 
-def is_mutable_located_field(field: Any) -> TypeGuard[common.Field]:
-    return isinstance(field, common.Field)  # type: ignore[misc] # we use extended_runtime_checkable which is fine  # TODO should be mutable Field
+def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
+    return isinstance(field, MutableLocatedField)
 
 
 def has_uniform_tuple_element(field) -> bool:
@@ -1382,13 +1385,13 @@ def has_uniform_tuple_element(field) -> bool:
 
 def is_tuple_of_field(field) -> bool:
     return isinstance(field, tuple) and all(
-        is_located_field(f) or is_tuple_of_field(f) for f in field
+        isinstance(f, common.Field) or is_tuple_of_field(f) for f in field
     )
 
 
 def is_field_of_tuple(field) -> bool:
     print(f"{is_located_field(field)=}")
-    return is_located_field(field) and has_uniform_tuple_element(field)
+    return isinstance(field, common.Field) and has_uniform_tuple_element(field)
 
 
 def can_be_tuple_field(field) -> bool:

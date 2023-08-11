@@ -330,9 +330,14 @@ def dtype(dtype_like: DTypeLike) -> DType:
     return dtype_like if isinstance(dtype_like, DType) else DType(np.dtype(dtype_like).type)
 
 
+class StrLike(Protocol):
+    def __str__(self) -> str:
+        ...
+
+
 # -- Custom protocols  --
 class GTDimsInterface(Protocol):
-    __gt_dims__: Tuple[str, ...]
+    __gt_dims__: Tuple[str | StrLike, ...]
 
 
 class GTOriginInterface(Protocol):
