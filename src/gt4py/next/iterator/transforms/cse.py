@@ -119,12 +119,15 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         )
         return {k: v.subexprs for k, v in subexprs_sorted if k is not node}
 
-    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
+    def generic_visit(self, *args, **kwargs):
         depth = kwargs.pop("depth")
+        return super().generic_visit(*args, depth=depth + 1, **kwargs)
 
+    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
-            return super().visit(node, depth=depth + 1, **kwargs)
+            return super().visit(node, **kwargs)
 
+        depth = kwargs["depth"]
         parent_state = kwargs.pop("state")
         collected_child_node_ids: set[int] = set()
         used_symbol_ids: set[int] = set()
@@ -137,7 +140,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
             # collect subexpressions for all arguments to the `if_`
             arg_states = [self.State() for _ in node.args]
             for arg, state in zip(node.args, arg_states):
-                self.visit(arg, depth=depth + 1, state=state, **kwargs)
+                self.visit(arg, state=state, **{**kwargs, "depth": depth + 1})
 
             # remove all subexpressions that are not eligible for collection
             #  (either they occur in the condition or in both branches)
@@ -168,7 +171,6 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         else:
             super().visit(
                 node,
-                depth=depth + 1,
                 state=self.State(parent_state.subexprs, collected_child_node_ids, used_symbol_ids),
                 **kwargs,
             )

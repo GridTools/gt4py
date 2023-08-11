@@ -202,7 +202,7 @@ def test_if_eligible_extraction():
 
 
 def test_extract_subexpression_conversion_to_assignment_stmt_form():
-    # TODO(tehrengruber): Remove. This test is to complicated for the little coverage of
+    # TODO(tehrengruber): Remove. This test is too complicated for the little coverage of
     #  `extract_subexpression` it has. Since the algorithm is useful we just leave it here for now.
     # Test `extract_subexpression` component of CSE pass. We start by an ITIR let expression
     #  and rewrite it into an assignment statement based form (e.g. a string of `var = value`
