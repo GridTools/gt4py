@@ -60,9 +60,9 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
-                a_sliced = _slice_with_domain(a.ndarray, domain_intersection)
-                b_sliced = _slice_with_domain(b.ndarray, domain_intersection)
-                new_data = op(a_sliced, b_sliced)
+                a_slices = _get_slices_with_named_indices(a, domain_intersection)
+                b_slices = _get_slices_with_named_indices(b, domain_intersection)
+                new_data = op(a.ndarray[a_slices], b.ndarray[b_slices])
                 return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:

@@ -163,3 +163,22 @@ def test_get_slices_with_named_indices_3d_to_1d():
     field = common.field(np.ones((10, 10, 10)), domain=field_domain)
     slices = _get_slices_with_named_indices(field, new_domain)
     assert slices == (slice(0, 10, None),)
+
+
+@pytest.mark.parametrize("op", ["/", "*", "-", "+", "**"])
+def test_field_binary_operations(op):
+    arr1 = np.ones((10,)) + 1
+    arr1_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+
+    arr2 = np.ones((5, 5))
+    arr2_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
+
+    field1 = common.field(arr1, domain=arr1_domain)
+    field2 = common.field(arr2, domain=arr2_domain)
+
+    op_result = eval(f'field1 {op} field2')
+
+    expected_result = eval(f'arr1[5:10, None] {op} arr2')
+
+    assert op_result.ndarray.shape == (5, 5)
+    assert np.allclose(op_result.ndarray, expected_result)
