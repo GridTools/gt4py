@@ -1065,7 +1065,7 @@ class IndexField(LocatedField):
         return (self.axis,)
 
 
-def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
+def index_field(axis: common.Dimension, dtype: npt.DTypeLike = np.int32) -> LocatedField:
     return IndexField(axis, dtype)
 
 

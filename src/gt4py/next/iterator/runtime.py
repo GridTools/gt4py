@@ -66,17 +66,24 @@ class FendefDispatcher:
         self,
         *args,
         fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
+        lift_mode=None,
         **kwargs,
     ):
         args, kwargs = self._rewrite_args(args, kwargs)
+
+        # For consistency with `__call__` we also allow these keyword arguments, but ignore them
+        # here, as they are not used for code generation.
+        for ignored_kwarg in ["offset_provider", "lift_mode", "column_axis"]:
+            kwargs.pop(ignored_kwarg, None)
+
         if fendef_codegen is None:
             # TODO(ricoh): refactor so that `tracing` does not import this module
             #   and can be imported top level. Then set `fendef_tracing` as a
             #   proper default value, instead of using `None` as a sentinel.
-            from .tracing import fendef_tracing
+            from gt4py.next.iterator.tracing import trace_fencil_definition
 
-            fendef_codegen = fendef_tracing
-        fencil_definition = fendef_codegen(self.function, *args, **kwargs)
+            fendef_codegen = trace_fencil_definition
+        fencil_definition = fendef_codegen(self.function, args, **kwargs)
         if "debug" in kwargs:
             debug(fencil_definition)
         return fencil_definition

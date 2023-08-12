@@ -14,12 +14,14 @@
 
 import dataclasses
 import inspect
+import typing
 from typing import List
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir_makers as im
+from gt4py.next.iterator.embedded import LocatedField
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -33,6 +35,7 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
+from gt4py.next.type_system import type_info, type_specifications, type_translation
 
 
 TRACING = "tracing"
@@ -248,37 +251,82 @@ def closure(domain, stencil, output, inputs):
     )
 
 
-def _make_param_names(fun, args):
-    """Expand *args parameter with remaining args."""
-    args = [*args]
-    param_names = []
-    for p in inspect.signature(fun).parameters.values():
-        if (
-            p.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
-            or p.kind == inspect.Parameter.POSITIONAL_ONLY
-        ):
-            args.pop(0)
-            param_names.append(p.name)
-        elif p.kind == inspect.Parameter.VAR_POSITIONAL:
-            for i in range(len(args)):
-                param_names.append(f"_var{i}")
+def _contains_tuple_dtype_field(arg):
+    if isinstance(arg, tuple):
+        return any(_contains_tuple_dtype_field(el) for el in arg)
+    # TODO(tehrengruber): The LocatedField protocol does not have a dtype property and the
+    #  various implementations have different behaviour (some return e.g. `np.dtype("int32")`
+    #  other `np.int32`). We just ignore the error here and postpone fixing this to when
+    #  the new storages land (The implementation here works for LocatedFieldImpl).
+    return isinstance(arg, LocatedField) and (
+        arg.dtype.fields is not None or any(dim is None for dim in arg.__gt_dims__)
+    )
+
+
+def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
+    params: list[Sym] = []
+    param_infos = list(inspect.signature(fun).parameters.values())
+
+    for i, arg in enumerate(args):
+        if i < len(param_infos):
+            param_info = param_infos[i]
         else:
-            raise RuntimeError("Illegal parameter kind")
-    return param_names
+            if param_info.kind != inspect.Parameter.VAR_POSITIONAL:
+                # the last parameter info might also be a keyword or variadic keyword argument, but
+                # they are not supported.
+                raise NotImplementedError(
+                    "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                )
+            param_info = param_infos[-1]
+
+        if param_info.kind == inspect.Parameter.VAR_POSITIONAL:
+            param_name = f"_{param_info.name}{i}"
+        elif param_info.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD:
+            param_name = param_info.name
+        else:
+            raise NotImplementedError(
+                "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+            )
+
+        kind, dtype = None, None
+        if use_arg_types:
+            # TODO(tehrengruber): Fields of tuples are not supported yet. Just ignore them for now.
+            if not _contains_tuple_dtype_field(arg):
+                arg_type = type_translation.from_value(arg)
+                # TODO(tehrengruber): Support more types.
+                if isinstance(arg_type, type_specifications.FieldType):
+                    kind = "Iterator"
+                    dtype = (
+                        arg_type.dtype.kind.name.lower(),  # actual dtype
+                        type_info.is_local_field(arg_type),  # is list
+                    )
+
+        params.append(Sym(id=param_name, kind=kind, dtype=dtype))
+    return params
 
 
-def trace(fun, args):
+def trace_fencil_definition(
+    fun: typing.Callable, args: typing.Iterable, *, use_arg_types=True
+) -> FencilDefinition:
+    """
+    Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
+
+    Arguments:
+        fun: The fencil / callable to trace.
+        args: A list of arguments, e.g. fields, scalars or composites thereof. If `use_arg_types`
+            is `False` may also be dummy values.
+
+    Keyword arguments:
+        use_arg_types: Deduce type of the arguments and add them to the fencil parameter nodes
+            (i.e. `itir.Sym`s).
+    """
     with TracerContext() as _:
-        param_names = _make_param_names(fun, args)
-        trace_function_call(fun, args=(_s(p) for p in param_names))
+        params = _make_fencil_params(fun, args, use_arg_types=use_arg_types)
+        trace_function_call(fun, args=(_s(param.id) for param in params))
 
         return FencilDefinition(
             id=fun.__name__,
             function_definitions=TracerContext.fundefs,
-            params=list(Sym(id=param) for param in param_names),
+            params=params,
             closures=TracerContext.closures,
         )
-
-
-def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
-    return trace(fun, args=args)

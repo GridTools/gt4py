@@ -69,10 +69,10 @@ def test_simple_indirection(program_processor):
         )  # TODO fix test or generalize itir?
 
     shape = [8]
-    inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.asarray(range(shape[0] + 2)))
+    inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.arange(0, shape[0] + 2))
     rng = np.random.default_rng()
     cond = gtx.np_as_located_field(IDim)(rng.normal(size=shape))
-    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape, dtype=inp.dtype))
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
@@ -102,9 +102,9 @@ def test_direct_offset_for_indirection(program_processor):
         pytest.xfail("Not supported in DaCe backend: shift offsets not literals")
 
     shape = [4]
-    inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0])))
+    inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0]), dtype=np.float64))
     cond = gtx.np_as_located_field(IDim)(np.asarray([2, 1, -1, -2], dtype=np.int32))
-    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape, dtype=np.float64))
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
