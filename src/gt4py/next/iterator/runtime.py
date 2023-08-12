@@ -18,7 +18,7 @@ import types
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Union
 
-from devtools import debug
+import devtools
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins
@@ -66,7 +66,7 @@ class FendefDispatcher:
         self,
         *args,
         fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
-        lift_mode=None,
+        debug=False,
         **kwargs,
     ):
         args, kwargs = self._rewrite_args(args, kwargs)
@@ -84,8 +84,8 @@ class FendefDispatcher:
 
             fendef_codegen = trace_fencil_definition
         fencil_definition = fendef_codegen(self.function, args, **kwargs)
-        if "debug" in kwargs:
-            debug(fencil_definition)
+        if debug:
+            devtools.debug(fencil_definition)
         return fencil_definition
 
     def __call__(self, *args, backend: Optional[ProgramExecutor] = None, **kwargs):
