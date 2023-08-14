@@ -222,7 +222,7 @@ class Program:
     def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise RuntimeError(f"Keyword argument `{key}` not among program inputs.")
+                raise RuntimeError(f"Keyword argument `{key}` is not a valid program parameter.")
 
         return ProgramWithBoundArgs(self.past_node, self.closure_vars, bound_args=kwargs)
 
