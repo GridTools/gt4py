@@ -18,7 +18,7 @@ from gt4py.next.iterator import embedded, ir, ir_makers as im
 
 class ConstantFolding(NodeTranslator):
     @classmethod
-    def apply(cls, node: ir.Node):
+    def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
