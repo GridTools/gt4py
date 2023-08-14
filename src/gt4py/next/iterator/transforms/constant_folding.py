@@ -29,7 +29,7 @@ class ConstantFolding(NodeTranslator):
             isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id == "if_"
             and isinstance(new_node.args[0], ir.Literal)
-        ):  # if_(True, true_branch, false_branch) -> true_branch
+        ):  # `if_(True, true_branch, false_branch)` -> `true_branch`
             if new_node.args[0].value == "True":
                 new_node = new_node.args[1]
             else:
