@@ -66,7 +66,7 @@ def test_trivial(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out[:, :, 0], out_s.ndarray)
+        assert np.allclose(out[:, :, 0], out_s)
 
 
 @fundef
@@ -101,7 +101,7 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, out_s.ndarray)
+        assert np.allclose(out, out_s)
 
 
 @fendef
@@ -138,7 +138,7 @@ def test_direct_deref(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, out_s.ndarray)
+        assert np.allclose(out, out_s)
 
 
 @fundef
@@ -168,4 +168,4 @@ def test_vertical_shift_unstructured(program_processor):
     )
 
     if validate:
-        assert np.allclose(np.asarray(inp_s)[:, 1:], np.asarray(out_s)[:, :-1])
+        assert np.allclose(inp_s[:, 1:], np.asarray(out_s)[:, :-1])

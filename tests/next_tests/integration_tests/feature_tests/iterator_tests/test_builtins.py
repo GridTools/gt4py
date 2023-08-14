@@ -128,7 +128,7 @@ def fencil(builtin, out, *inps, processor, as_column=False):
     else:
         raise AssertionError("Add overload")
 
-    return run_processor(fenimpl, processor, out.ndarray.shape[0], *inps, out)
+    return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 
 
 def arithmetic_and_logical_test_data():
@@ -363,4 +363,4 @@ def test_cast(program_processor, as_column, input_value, dtype, expected_value):
     )
 
     if validate:
-        assert out.ndarray[0] == expected_value
+        assert out[0] == expected_value

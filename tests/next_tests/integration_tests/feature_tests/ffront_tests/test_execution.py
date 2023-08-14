@@ -87,7 +87,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
 
-    cases.verify(cartesian_case, testee, a, out=out, ref=np.asarray(a)[1:])
+    cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
 
 
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
@@ -98,7 +98,7 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.asarray(a)[unstructured_case.offset_provider["E2V"].table[:, 0]],
+        ref=lambda a: a[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
 
@@ -334,8 +334,8 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: np.asarray(a).astype(int64),
-        comparison=lambda a, b: np.all(np.asarray(a) == np.asarray(b)),
+        ref=lambda a: a.astype(int64),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
@@ -348,8 +348,8 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: np.asarray(a).astype(bool),
-        comparison=lambda a, b: np.all(np.asarray(a) == np.asarray(b)),
+        ref=lambda a: a.astype(bool),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
@@ -362,8 +362,8 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: np.asarray(a).astype(float32),
-        comparison=lambda a, b: np.all(np.asarray(a) == np.asarray(b)),
+        ref=lambda a: a.astype(np.float32),
+        comparison=lambda a, b: np.all(a == b),
     )
 
 
