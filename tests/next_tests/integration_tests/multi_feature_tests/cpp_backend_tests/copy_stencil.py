@@ -14,15 +14,16 @@
 
 import sys
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fundef
-from gt4py.next.iterator.tracing import trace
+from gt4py.next.iterator.runtime import closure, fundef
+from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 
 @fundef
@@ -46,7 +47,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(copy_fencil, [None] * 5)
+    prog = trace_fencil_definition(copy_fencil, [None] * 5, use_arg_types=False)
     generated_code = generate(prog, offset_provider={})
 
     with open(output_file, "w+") as output:

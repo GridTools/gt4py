@@ -16,7 +16,6 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.runtime import CartesianAxis
 
 
 def test_unsatisfiable_constraints():
@@ -547,7 +546,7 @@ def test_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
@@ -573,7 +572,7 @@ def test_partial_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"

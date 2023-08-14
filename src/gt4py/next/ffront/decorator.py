@@ -29,9 +29,10 @@ from typing import Generator, Generic, TypeVar
 
 from devtools import debug
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import Dimension, DimensionKind, GridType, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -249,6 +250,12 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        if (
+            self.backend is None and DEFAULT_BACKEND is None
+        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
+            self.definition(*args, **kwargs)
+            return
+
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
@@ -625,23 +632,36 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(
         self,
         *args,
-        out,
-        offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-        # TODO(tehrengruber): check all offset providers are given
-        # deduce argument types
-        arg_types = []
-        for arg in args:
-            arg_types.append(type_translation.from_value(arg))
-        kwarg_types = {}
-        for name, arg in kwargs.items():
-            kwarg_types[name] = type_translation.from_value(arg)
+        # TODO(havogt): Don't select mode based on existence of kwargs,
+        # because now we cannot provide nice error messages. E.g. set context var
+        # if we are reaching this from a program call.
+        if "out" in kwargs:
+            out = kwargs.pop("out")
+            if "offset_provider" in kwargs:
+                # "out" and "offset_provider" -> field_operator as program
+                offset_provider = kwargs.pop("offset_provider")
+                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+                # TODO(tehrengruber): check all offset providers are given
+                # deduce argument types
+                arg_types = []
+                for arg in args:
+                    arg_types.append(type_translation.from_value(arg))
+                kwarg_types = {}
+                for name, arg in kwargs.items():
+                    kwarg_types[name] = type_translation.from_value(arg)
 
-        return self.as_program(arg_types, kwarg_types)(
-            *args, out, offset_provider=offset_provider, **kwargs
-        )
+                return self.as_program(arg_types, kwarg_types)(
+                    *args, out, offset_provider=offset_provider, **kwargs
+                )
+            else:
+                # "out" -> field_operator called from program in embedded execution
+                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
+                return
+        else:
+            # field_operator called from other field_operator in embedded execution
+            return self.definition(*args, **kwargs)
 
 
 @typing.overload
@@ -687,7 +707,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> FieldOperator[foast.ScanOperator]:
     ...
@@ -698,7 +718,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
@@ -709,7 +729,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Scalar = 0.0,
+    init: core_defs.Scalar = 0.0,
     backend=None,
 ) -> (
     FieldOperator[foast.ScanOperator]

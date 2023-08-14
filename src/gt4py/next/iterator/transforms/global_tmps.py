@@ -20,7 +20,6 @@ from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.popup_tmps import PopupTmps
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
@@ -212,7 +211,7 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
 
 
 def _offset_limits(
-    offsets: Sequence[tuple[ir.OffsetLiteral, ...]], offset_provider: Mapping[str, CartesianAxis]
+    offsets: Sequence[tuple[ir.OffsetLiteral, ...]], offset_provider: Mapping[str, gtx.Dimension]
 ):
     offset_limits = {k: (0, 0) for k in offset_provider.keys()}
     for o in offsets:
@@ -250,12 +249,12 @@ def _named_range_with_offsets(
 
 
 def _extend_cartesian_domain(
-    domain: ir.FunCall, offsets: Sequence[tuple], offset_provider: Mapping[str, CartesianAxis]
+    domain: ir.FunCall, offsets: Sequence[tuple], offset_provider: Mapping[str, gtx.Dimension]
 ):
     if not any(offsets):
         return domain
     assert isinstance(domain, ir.FunCall) and domain.fun == ir.SymRef(id="cartesian_domain")
-    assert all(isinstance(axis, CartesianAxis) for axis in offset_provider.values())
+    assert all(isinstance(axis, gtx.Dimension) for axis in offset_provider.values())
 
     offset_limits = _offset_limits(offsets, offset_provider)
 
@@ -499,7 +498,7 @@ class CreateGlobalTmps(NodeTranslator):
         # Perform an eta-reduction which should put all calls at the highest level of a closure
         res = EtaReduction().visit(res)
         # Perform a naive extent analysis to compute domain sizes of closures and temporaries
-        if all(isinstance(o, CartesianAxis) for o in offset_provider.values()):
+        if all(isinstance(o, gtx.Dimension) for o in offset_provider.values()):
             res = update_cartesian_domains(res, offset_provider)
         else:
             res = update_unstructured_domains(res, offset_provider)

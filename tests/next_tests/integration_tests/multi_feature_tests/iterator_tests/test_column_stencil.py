@@ -298,9 +298,9 @@ def test_different_vertical_sizes(program_processor):
         )
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim)(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=inp0.dtype))
     ref = inp0 + inp1[1:]
 
     run_processor(
@@ -338,9 +338,9 @@ def test_different_vertical_sizes_with_origin(program_processor):
         pytest.xfail("Not supported in DaCe backend: origin")
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
     ref = inp0 + np.asarray(inp1)[:-1]
 
     run_processor(

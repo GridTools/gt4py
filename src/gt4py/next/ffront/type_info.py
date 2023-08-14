@@ -17,7 +17,7 @@ from typing import Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension
+from gt4py.next import common
 from gt4py.next.type_system import type_info
 
 
@@ -156,7 +156,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     --------
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(dims=[Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
     ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     """
@@ -173,7 +173,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # argument type differ. As such we can not extract the dimensions
             # and just return a generic field shown in the error later on.
             # TODO: we want some generic field type here, but our type system does not support it yet.
-            return ts.FieldType(dims=[Dimension("...")], dtype=dtype)
+            return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
     return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
 
@@ -216,7 +216,7 @@ def function_signature_incompatibilities_scanop(
         for el in type_info.primitive_constituents(arg)
     ]
     try:
-        type_info.promote_dims(*arg_dims)
+        common.promote_dims(*arg_dims)
     except ValueError as e:
         yield e.args[0]
 
@@ -279,7 +279,7 @@ def return_type_scanop(
     with_kwargs: dict[str, ts.TypeSpec],
 ):
     carry_dtype = callable_type.definition.returns
-    promoted_dims = type_info.promote_dims(
+    promoted_dims = common.promote_dims(
         *(
             type_info.extract_dims(el)
             for arg in with_args + list(with_kwargs.values())
