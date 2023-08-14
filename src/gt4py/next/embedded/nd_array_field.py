@@ -189,8 +189,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         else:
             return self.ndarray[domain]
 
-    field_getitem = restrict
-
     def __setitem__(self, domain, value):
         if isinstance(domain, common.Domain):
             _slice = tuple(domain[dim][1] - r.start for dim, r in self._domain)
@@ -198,7 +196,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         else:
             self.ndarray[domain] = value
 
-    field_setitem = __setitem__  # TODO remove
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
     __getitem__ = restrict

@@ -930,10 +930,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-        # if isinstance(self._ndarrayfield, TupleOfFields):
-        self._ndarrayfield.field_setitem(self._translate_named_indices(named_indices), value)
-        # else:
-        #     self._ndarrayfield[self._translate_named_indices(named_indices)]= value
+        self._ndarrayfield[self._translate_named_indices(named_indices)] = value
 
     def __array__(self) -> np.ndarray:
         return self._ndarrayfield.ndarray
@@ -1390,7 +1387,6 @@ def is_tuple_of_field(field) -> bool:
 
 
 def is_field_of_tuple(field) -> bool:
-    print(f"{is_located_field(field)=}")
     return isinstance(field, common.Field) and has_uniform_tuple_element(field)
 
 
@@ -1432,8 +1428,6 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 
 class TupleOfFields(TupleField):
     def __init__(self, data):
-        if not is_tuple_of_field(data):
-            raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
         self.__gt_dims__ = _get_axes(data)
 
@@ -1450,7 +1444,7 @@ def as_tuple_field(field: tuple | TupleField) -> TupleField:
     assert can_be_tuple_field(field)
 
     if is_tuple_of_field(field):
-        return TupleOfFields(field)
+        return TupleOfFields(tuple(_wrap_field(f) for f in field))
 
     assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
     return field
@@ -1509,7 +1503,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (is_located_field(out) or can_be_tuple_field(out)):
+        if not (isinstance(out, common.Field) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
         column_range = None
@@ -1526,9 +1520,8 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                 out  # type:ignore[arg-type] # TODO(havogt) improve the code around TupleField construction
             )
             if can_be_tuple_field(out)
-            else out
+            else _wrap_field(out)
         )
-        out = NDArrayLocatedFieldWrapper(out)
 
         def _closure_runner():
             # Set context variables before executing the closure
