@@ -42,9 +42,8 @@ class ConstantFolding(NodeTranslator):
             and all(isinstance(arg, ir.Literal) for arg in new_node.args)
         ):  # `1 + 1` -> `2`
             if new_node.fun.id in ir.ARITHMETIC_BUILTINS:
-                val_ls = []
-                for arg in new_node.args:
-                    val_ls.append(getattr(embedded, str(arg.type))(arg.value))  # type: ignore[attr-defined] # arg type already established in if condition
-                new_node = im.literal_from_value((getattr(embedded, str(new_node.fun.id))(*val_ls)))
+                fun = getattr(embedded, str(new_node.fun.id)
+                arg_values = [getattr(embedded, str(arg.type))(arg.value) for arg in new_node.args]  # type: ignore[attr-defined] # arg type already established in if condition
+                new_node = im.literal_from_value(fun(*arg_values)))
 
         return new_node
