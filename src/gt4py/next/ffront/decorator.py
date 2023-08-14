@@ -371,7 +371,7 @@ class ProgramWithBoundArgs(Program):
         for name in self.bound_args.keys():
             if name in kwargs:
                 # TODO(tehrengruber): use error with source location
-                raise RuntimeError(f"Parameter `{name}` already set as a bound argument.")
+                raise TypeError_(self.past_node.loc, f"Parameter `{name}` already set as a bound argument.")
 
         inp_args_len = len(b_args) - len(kwargs)
         extra_args = len(param_ids) - inp_args_len
