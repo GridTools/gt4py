@@ -46,7 +46,7 @@ I = offset("I")
 
 @fundef
 def compute_shift(cond):
-    return if_(deref(cond) < 0., shift(I, -1), shift(I, 1))
+    return if_(deref(cond) < 0.0, shift(I, -1), shift(I, 1))
 
 
 @fundef
