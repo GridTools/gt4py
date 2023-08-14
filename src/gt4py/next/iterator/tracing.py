@@ -85,13 +85,13 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __call__(self, *args):
-        return FunCall(fun=self, args=[*make_node(args)])
+        return FunCall(fun=self, args=[make_node(arg) for arg in args])
 
 
 def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
-        return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
+        return FunCall(fun=SymRef(id=str(self.id)), args=[make_node(arg) for arg in args])
 
 
 _patch_Expr()
@@ -114,7 +114,7 @@ def _f(fun, *args):
         fun = _s(fun)
 
     args = [trace_function_argument(arg) for arg in args]
-    return FunCall(fun=fun, args=[*make_node(args)])
+    return FunCall(fun=fun, args=[make_node(arg) for arg in args])
 
 
 # shift promotes its arguments to literals, therefore special
@@ -156,9 +156,7 @@ def make_node(o):
     if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
-        return tuple(make_node(arg) for arg in o)
-    if isinstance(o, list):
-        return list(make_node(arg) for arg in o)
+        return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
         return NoneLiteral()
     if hasattr(o, "fun"):
@@ -171,10 +169,7 @@ def trace_function_call(fun, *, args=None):
         args = (_s(param) for param in inspect.signature(fun).parameters.keys())
     body = fun(*list(args))
 
-    if isinstance(body, tuple):
-        return _f("make_tuple", *tuple(make_node(b) for b in body))
-    else:
-        return make_node(body) if body is not None else None
+    return make_node(body) if body is not None else None
 
 
 def lambdadef(fun):
