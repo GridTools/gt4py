@@ -224,7 +224,7 @@ class Program:
             if all(key != param.id for param in self.past_node.params):
                 raise RuntimeError(f"Keyword argument `{key}` is not a valid program parameter.")
 
-        return ProgramWithBoundArgs(self.past_node, self.closure_vars, bound_args=kwargs)
+        return ProgramWithBoundArgs(bound_args=kwargs, **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)})
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
