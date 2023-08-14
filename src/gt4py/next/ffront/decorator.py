@@ -32,6 +32,7 @@ from devtools import debug
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.common import Dimension, DimensionKind, GridType, Scalar
+from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -220,11 +221,15 @@ class Program:
         return dataclasses.replace(self, grid_type=grid_type)
 
     def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
+        """Bind scalar program arguments."""
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
                 raise RuntimeError(f"Keyword argument `{key}` is not a valid program parameter.")
 
-        return ProgramWithBoundArgs(bound_args=kwargs, **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)})
+        return ProgramWithBoundArgs(
+            bound_args=kwargs,
+            **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)},
+        )
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
@@ -371,18 +376,23 @@ class ProgramWithBoundArgs(Program):
         for name in self.bound_args.keys():
             if name in kwargs:
                 # TODO(tehrengruber): use error with source location
-                raise TypeError_(self.past_node.loc, f"Parameter `{name}` already set as a bound argument.")
+                raise TypeError_(
+                    self.past_node.location, f"Parameter `{name}` already set as a bound argument."
+                )
 
         inp_args_len = len(b_args) - len(kwargs)
         extra_args = len(param_ids) - inp_args_len
         if extra_args > 0:
-            raise RuntimeError(
-                f"{extra_args} parameter(s) missing in new program call compared to original signature"
+            raise TypeError_(
+                self.past_node.location,
+                f"{extra_args} parameter(s) missing in new program call compared to original signature",
             )
 
         if inp_args_len != len(self.past_node.params):
-            raise RuntimeError(
-                f"Total number of arguments and keyword arguments ({inp_args_len}) does not match original program definition ({len(self.past_node.params)})!"
+            raise TypeError_(
+                self.past_node.location,
+                f"Total number of arguments and keyword arguments ({inp_args_len}) "
+                f"does not match original program definition ({len(self.past_node.params)})!",
             )
 
         for index, param in enumerate(self.past_node.params):
@@ -394,7 +404,7 @@ class ProgramWithBoundArgs(Program):
     @functools.cached_property
     def itir(self):
         new_itir = super().itir
-        for new_clos_i, new_clos in enumerate(new_itir.closures):
+        for new_clos in new_itir.closures:
             for key in self.bound_args.keys():
                 index = next(
                     index
@@ -407,7 +417,7 @@ class ProgramWithBoundArgs(Program):
             for value in self.bound_args.values():
                 new_args.append(promote_to_const_iterator(literal_from_value(value)))
             expr = itir.FunCall(
-                fun=itir.SymRef(id=itir.SymbolRef(list(self.closure_vars)[new_clos_i])),
+                fun=new_clos.stencil,
                 args=new_args,
             )
             new_clos.stencil = itir.Lambda(params=params, expr=expr)

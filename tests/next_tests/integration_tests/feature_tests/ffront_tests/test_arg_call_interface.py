@@ -20,6 +20,7 @@ import pytest
 
 from gt4py.next import errors
 from gt4py.next.common import Field
+from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import int32, int64
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
@@ -286,7 +287,7 @@ def test_bound_args_wrong_kwargs(cartesian_case):
 
     with pytest.raises(RuntimeError) as excinfo:
         program_bound_args.with_bound_args(scalar=int32(1), bool_val=True, tille=False)
-    assert "Keyword argument `tille` not among program inputs" in str(excinfo.value)
+    assert "Keyword argument `tille` is not a valid program parameter." in str(excinfo.value)
 
 
 def test_bound_args_wrong_args(cartesian_case):
@@ -304,7 +305,7 @@ def test_bound_args_wrong_args(cartesian_case):
     out = cases.allocate(cartesian_case, program_bound_args, "out")()
     prog_bounds = program_bound_args.with_bound_args(scalar=int32(1))
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TypeError_) as excinfo:
         prog_bounds(a, out, offset_provider={})
     assert "1 parameter(s) missing in new program call compared to original signature" in str(
         excinfo.value
@@ -326,7 +327,7 @@ def test_bound_args_wrong_input_args(cartesian_case):
     out = cases.allocate(cartesian_case, program_bound_args, "out")()
     prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TypeError_) as excinfo:
         prog_bounds(a, int32(7), out, offset_provider={})
     assert (
         "Total number of arguments and keyword arguments (5) does not match original program definition (4)!"
@@ -349,6 +350,6 @@ def test_bound_args_repeated_bound_args(cartesian_case):
     out = cases.allocate(cartesian_case, program_bound_args, "out")()
     prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
 
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TypeError_) as excinfo:
         prog_bounds(a, out, scalar=int32(7), offset_provider={})
     assert "Parameter `scalar` already set as a bound argument." in str(excinfo.value)
