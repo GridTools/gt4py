@@ -482,7 +482,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif is_located_field(val):
+    elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
