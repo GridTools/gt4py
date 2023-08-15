@@ -29,6 +29,7 @@ from gt4py.next.ffront.ast_passes import (
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
+from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
@@ -91,6 +92,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         closure_vars: dict[str, Any],
         annotations: dict[str, Any],
     ) -> foast.FunctionDefinition:
+        foast_node, closure_vars = TypeAliasReplacement.apply(foast_node, closure_vars)
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
