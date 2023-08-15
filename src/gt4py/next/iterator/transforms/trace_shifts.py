@@ -272,12 +272,16 @@ class TraceShifts(NodeTranslator):
         def fun(*args):
             new_args = []
             for param, arg in zip(node.params, args, strict=True):
-                self.shift_recorder.register_node(param)
-                new_args.append(
-                    IteratorArgTracer(
-                        arg=param, shift_recorder=ForwardingShiftRecorder(arg, self.shift_recorder)
+                if isinstance(arg, IteratorTracer):
+                    self.shift_recorder.register_node(param)
+                    new_args.append(
+                        IteratorArgTracer(
+                            arg=param,
+                            shift_recorder=ForwardingShiftRecorder(arg, self.shift_recorder),
+                        )
                     )
-                )
+                else:
+                    new_args.append(arg)
 
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, new_args, strict=True)}
