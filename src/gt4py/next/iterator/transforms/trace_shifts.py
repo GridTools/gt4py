@@ -62,18 +62,18 @@ class IteratorTracer:
 @dataclasses.dataclass(frozen=True)
 class IteratorArgTracer(IteratorTracer):
     arg: ir.Expr | ir.Sym
-    register_deref: Callable[[ir.Sym, tuple[ir.OffsetLiteral, ...]], None]
+    shift_recorder: ShiftRecorder | ForwardingShiftRecorder
     offsets: tuple[ir.OffsetLiteral, ...] = ()
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return IteratorArgTracer(
             arg=self.arg,
-            register_deref=self.register_deref,
+            shift_recorder=self.shift_recorder,
             offsets=self.offsets + tuple(offsets),
         )
 
     def deref(self):
-        self.register_deref(self.arg, self.offsets)
+        self.shift_recorder(self.arg, self.offsets)
         return Sentinel.VALUE
 
 
@@ -264,7 +264,7 @@ class TraceShifts(NodeTranslator):
 
             self.shift_recorder.register_node(node)
             result = IteratorArgTracer(
-                arg=node, register_deref=ForwardingShiftRecorder(result, self.shift_recorder)
+                arg=node, shift_recorder=ForwardingShiftRecorder(result, self.shift_recorder)
             )
         return result
 
@@ -274,7 +274,7 @@ class TraceShifts(NodeTranslator):
             for param, arg in zip(node.params, args, strict=True):
                 new_args.append(
                     IteratorArgTracer(
-                        arg=param, register_deref=ForwardingShiftRecorder(arg, self.shift_recorder)
+                        arg=param, shift_recorder=ForwardingShiftRecorder(arg, self.shift_recorder)
                     )
                 )
 
@@ -288,7 +288,7 @@ class TraceShifts(NodeTranslator):
         tracers = []
         for inp in node.inputs:
             self.shift_recorder.register_node(inp)
-            tracers.append(IteratorArgTracer(arg=inp, register_deref=self.shift_recorder))
+            tracers.append(IteratorArgTracer(arg=inp, shift_recorder=self.shift_recorder))
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
