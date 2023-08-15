@@ -31,6 +31,7 @@ from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.storage import field
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
@@ -130,12 +131,17 @@ class ConstInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        backend: ppi.ProgramExecutor,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        return gtx.np_as_located_field(*sizes.keys())(
-            np.full(tuple(sizes.values()), self.value, dtype=dtype)
+        return field.fill(
+            domain=common.Domain(
+                tuple(sizes.keys()), tuple(common.UnitRange(0, s) for s in sizes.values())
+            ),
+            fill_value=self.value,
+            dtype=dtype,
+            storage_info=backend.storage_info,
         )
 
 
@@ -156,7 +162,7 @@ class IndexInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        backend: ppi.ProgramExecutor,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -165,7 +171,9 @@ class IndexInitializer(DataInitializer):
                 f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
             )
         n_data = list(sizes.values())[0]
-        return gtx.np_as_located_field(*sizes.keys())(np.arange(0, n_data, dtype=dtype))
+        return field.from_array(
+            np.arange(0, n_data, dtype=dtype), sizes.keys(), storage_info=backend.storage_info
+        )
 
     def from_case(
         self: Self,
@@ -203,8 +211,10 @@ class UniqueInitializer(DataInitializer):
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return gtx.np_as_located_field(*sizes.keys())(
-            np.arange(start, start + n_data, dtype=dtype).reshape(svals)
+        return field.from_array(
+            np.arange(start, start + n_data, dtype=dtype).reshape(svals),
+            sizes.keys(),
+            storage_info=backend.storage_info,
         )
 
     def from_case(

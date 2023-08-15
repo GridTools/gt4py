@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import numbers
-from typing import Any, Optional, Protocol, Sequence, Tuple, Union
+from typing import Any, Optional, Sequence, Union
 
 import numpy as np
 
