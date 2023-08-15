@@ -46,7 +46,7 @@ def lift_mode(request):
 
 
 class _RemoveITIRSymTypes(eve.NodeTranslator):
-    def visit_Sym(self, node: itir.Sym):
+    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
         return itir.Sym(id=node.id, dtype=None, kind=None)
 
 

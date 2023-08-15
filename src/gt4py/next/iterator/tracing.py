@@ -14,6 +14,7 @@
 
 import dataclasses
 import inspect
+import typing
 from typing import List
 
 from gt4py._core import definitions as core_defs
@@ -87,13 +88,13 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __call__(self, *args):
-        return FunCall(fun=self, args=[*make_node(args)])
+        return FunCall(fun=self, args=[make_node(arg) for arg in args])
 
 
 def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
-        return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
+        return FunCall(fun=SymRef(id=str(self.id)), args=[make_node(arg) for arg in args])
 
 
 _patch_Expr()
@@ -116,7 +117,7 @@ def _f(fun, *args):
         fun = _s(fun)
 
     args = [trace_function_argument(arg) for arg in args]
-    return FunCall(fun=fun, args=[*make_node(args)])
+    return FunCall(fun=fun, args=[make_node(arg) for arg in args])
 
 
 # shift promotes its arguments to literals, therefore special
@@ -158,9 +159,7 @@ def make_node(o):
     if isinstance(o, common.Dimension):
         return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
-        return tuple(make_node(arg) for arg in o)
-    if isinstance(o, list):
-        return list(make_node(arg) for arg in o)
+        return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
         return NoneLiteral()
     if hasattr(o, "fun"):
@@ -173,11 +172,7 @@ def trace_function_call(fun, *, args=None):
         args = (_s(param) for param in inspect.signature(fun).parameters.keys())
     body = fun(*list(args))
 
-    if isinstance(body, tuple):
-        # TODO(tehrengruber): This fails for nested tuples.
-        return _f("make_tuple", *tuple(make_node(b) for b in body))
-    else:
-        return make_node(body) if body is not None else None
+    return make_node(body) if body is not None else None
 
 
 def lambdadef(fun):
@@ -266,22 +261,27 @@ def _contains_tuple_dtype_field(arg):
 def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
     params: list[Sym] = []
     param_infos = list(inspect.signature(fun).parameters.values())
+
     for i, arg in enumerate(args):
         if i < len(param_infos):
             param_info = param_infos[i]
         else:
+            if param_info.kind != inspect.Parameter.VAR_POSITIONAL:
+                # the last parameter info might also be a keyword or variadic keyword argument, but
+                # they are not supported.
+                raise NotImplementedError(
+                    "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                )
             param_info = param_infos[-1]
-            assert param_info.kind == inspect.Parameter.VAR_POSITIONAL
 
         if param_info.kind == inspect.Parameter.VAR_POSITIONAL:
             param_name = f"_{param_info.name}{i}"
-        elif param_info.kind in [
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.VAR_KEYWORD,
-        ]:
+        elif param_info.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD:
             param_name = param_info.name
         else:
-            raise RuntimeError("Illegal parameter kind")
+            raise NotImplementedError(
+                "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+            )
 
         kind, dtype = None, None
         if use_arg_types:
@@ -300,7 +300,21 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
     return params
 
 
-def trace(fun, args, *, use_arg_types=True) -> FencilDefinition:
+def trace_fencil_definition(
+    fun: typing.Callable, args: typing.Iterable, *, use_arg_types=True
+) -> FencilDefinition:
+    """
+    Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
+
+    Arguments:
+        fun: The fencil / callable to trace.
+        args: A list of arguments, e.g. fields, scalars or composites thereof. If `use_arg_types`
+            is `False` may also be dummy values.
+
+    Keyword arguments:
+        use_arg_types: Deduce type of the arguments and add them to the fencil parameter nodes
+            (i.e. `itir.Sym`s).
+    """
     with TracerContext() as _:
         params = _make_fencil_params(fun, args, use_arg_types=use_arg_types)
         trace_function_call(fun, args=(_s(param.id) for param in params))
@@ -311,7 +325,3 @@ def trace(fun, args, *, use_arg_types=True) -> FencilDefinition:
             params=params,
             closures=TracerContext.closures,
         )
-
-
-def fendef_tracing(fun, *args, **kwargs) -> FencilDefinition:
-    return trace(fun, args=args)

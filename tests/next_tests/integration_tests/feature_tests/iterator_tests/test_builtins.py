@@ -319,16 +319,6 @@ def test_can_deref(program_processor, stencil):
 #     if validate:
 #         assert np.allclose(np.asarray(out), 1.0)
 
-# TODO(tehrengruber): fix comment, check test fails if cast is missing
-# There is no straight-forward way to test cast, because when we define the
-# output buffer with the cast-to type an implicit conversion will happen even
-# if no explicit cast was done. To avoid
-# Therefore, we have to set up the test in a way that the explicit cast is required,
-# e.g. by a combination of explicit an implicit cast.
-# Test setup:
-# - Input buffer is setup with the dtype from `input_value`
-# - Output buffer is setup with the type of the `expected_value`
-
 
 @pytest.mark.parametrize(
     "input_value, dtype, np_dtype",
@@ -342,9 +332,6 @@ def test_can_deref(program_processor, stencil):
 @pytest.mark.parametrize("as_column", [False, True])
 def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: implicit type cast")
-
     column_axis = IDim if as_column else None
 
     inp = asfield(np.array([input_value]))[0]
