@@ -34,7 +34,7 @@ def dom():
 
 
 def a_field():
-    return gtx.np_as_located_field(I)(np.asarray(range(_isize)))
+    return gtx.np_as_located_field(I)(np.arange(0, _isize, dtype=np.float64))
 
 
 def out_field():

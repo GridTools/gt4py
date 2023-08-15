@@ -84,14 +84,24 @@ def test_tuple_output(program_processor, stencil):
         assert np.allclose(inp2, out[1])
 
 
-def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec):
+@fundef
+def tuple_of_tuple_output1(inp1, inp2, inp3, inp4):
+    return (deref(inp1), deref(inp2)), (deref(inp3), deref(inp4))
+
+
+@fundef
+def tuple_of_tuple_output2(inp1, inp2, inp3, inp4):
+    return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
+
+
+@pytest.mark.parametrize(
+    "stencil",
+    [tuple_of_tuple_output1, tuple_of_tuple_output2],
+)
+def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec, stencil):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: tuple returns")
-
-    @fundef
-    def stencil(inp1, inp2, inp3, inp4):
-        return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

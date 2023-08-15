@@ -1133,7 +1133,7 @@ class IndexField(common.FieldABC):
         raise NotImplementedError()
 
 
-def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> common.Field:
+def index_field(axis: common.Dimension, dtype: npt.DTypeLike = np.int32) -> common.Field:
     return IndexField(axis, dtype)
 
 
