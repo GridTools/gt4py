@@ -32,11 +32,11 @@ class ShiftRecorder:
         default_factory=dict
     )
 
-    def register_node(self, inp: ir.Expr | ir.Sym):
+    def register_node(self, inp: ir.Expr | ir.Sym) -> None:
         self.recorded_shifts.setdefault(id(inp), set())
 
     def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]) -> None:
-        self.recorded_shifts.setdefault(id(inp), set()).add(offsets)
+        self.recorded_shifts[id(inp)].add(offsets)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -272,6 +272,7 @@ class TraceShifts(NodeTranslator):
         def fun(*args):
             new_args = []
             for param, arg in zip(node.params, args, strict=True):
+                self.shift_recorder.register_node(param)
                 new_args.append(
                     IteratorArgTracer(
                         arg=param, shift_recorder=ForwardingShiftRecorder(arg, self.shift_recorder)
