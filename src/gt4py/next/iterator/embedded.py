@@ -57,13 +57,12 @@ EMBEDDED = "embedded"
 
 # Atoms
 Tag: TypeAlias = str
-IntIndex: TypeAlias = int | np.integer
 
-ArrayIndex: TypeAlias = slice | IntIndex
+ArrayIndex: TypeAlias = slice | common.IntIndex
 ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
 
 FieldIndex: TypeAlias = (
-    range | slice | IntIndex
+    range | slice | common.IntIndex
 )  # A `range` FieldIndex can be negative indicating a relative position with respect to origin, not wrap-around semantics like `slice` TODO(havogt): remove slice here
 FieldIndices: TypeAlias = tuple[FieldIndex, ...]
 FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
@@ -97,7 +96,9 @@ class NeighborTableOffsetProvider:
         self.has_skip_values = has_skip_values
         self.index_type = table.dtype
 
-    def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
+    def mapped_index(
+        self, primary: common.IntIndex, neighbor_idx: common.IntIndex
+    ) -> common.IntIndex:
         return self.table[(primary, neighbor_idx)]
 
 
@@ -115,21 +116,23 @@ class StridedNeighborOffsetProvider:
         self.has_skip_values = has_skip_values
         self.index_type = int
 
-    def mapped_index(self, primary: IntIndex, neighbor_idx: IntIndex) -> IntIndex:
+    def mapped_index(
+        self, primary: common.IntIndex, neighbor_idx: common.IntIndex
+    ) -> common.IntIndex:
         return primary * self.max_neighbors + neighbor_idx
 
 
 # Offsets
-OffsetPart: TypeAlias = Tag | IntIndex
-CompleteOffset: TypeAlias = tuple[Tag, IntIndex]
+OffsetPart: TypeAlias = Tag | common.IntIndex
+CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]
 OffsetProviderElem: TypeAlias = common.Dimension | common.Connectivity
 OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
 
 # Positions
 SparsePositionEntry = list[int]
 IncompleteSparsePositionEntry: TypeAlias = list[Optional[int]]
-PositionEntry: TypeAlias = SparsePositionEntry | IntIndex
-IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | IntIndex
+PositionEntry: TypeAlias = SparsePositionEntry | common.IntIndex
+IncompletePositionEntry: TypeAlias = IncompleteSparsePositionEntry | common.IntIndex
 ConcretePosition: TypeAlias = dict[Tag, PositionEntry]
 IncompletePosition: TypeAlias = dict[Tag, IncompletePositionEntry]
 
@@ -138,10 +141,6 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 MaybePosition: TypeAlias = Optional[Position]
 
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
-
-
-def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, (int, np.integer))
 
 
 def _tupelize(tup):
@@ -536,7 +535,7 @@ def _domain_iterator(domain: dict[Tag, range]) -> Iterable[Position]:
 
 
 def execute_shift(
-    pos: Position, tag: Tag, index: IntIndex, *, offset_provider: OffsetProvider
+    pos: Position, tag: Tag, index: common.IntIndex, *, offset_provider: OffsetProvider
 ) -> MaybePosition:
     assert pos is not None
     if isinstance(tag, SparseTag):
@@ -559,7 +558,7 @@ def execute_shift(
     offset_implementation = offset_provider[tag]
     if isinstance(offset_implementation, common.Dimension):
         new_pos = copy.copy(pos)
-        if is_int_index(value := new_pos[offset_implementation.value]):
+        if common.is_int_index(value := new_pos[offset_implementation.value]):
             new_pos[offset_implementation.value] = value + index
         else:
             raise AssertionError()
@@ -570,7 +569,7 @@ def execute_shift(
         new_pos = pos.copy()
         new_pos.pop(offset_implementation.origin_axis.value)
         cur_index = pos[offset_implementation.origin_axis.value]
-        assert is_int_index(cur_index)
+        assert common.is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
             -1,
@@ -695,7 +694,7 @@ def _get_axes(
 
 
 def _single_vertical_idx(
-    indices: NamedFieldIndices, column_axis: Tag, column_index: IntIndex
+    indices: NamedFieldIndices, column_axis: Tag, column_index: common.IntIndex
 ) -> NamedFieldIndices:
     transformed = {
         axis: (index if axis != column_axis else column_index) for axis, index in indices.items()
@@ -772,7 +771,7 @@ def _make_tuple(
         if column_axis is not None:
             # wraps a vertical slice of an input field into a `Column`
             assert column_range is not None
-            return Column(column_range.start, data)
+            return Column(column_range.start, data.ndarray if hasattr(data, "ndarray") else data)
         else:
             return data
 
@@ -889,13 +888,6 @@ def make_in_iterator(
 builtins.builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
 
 
-def _dim_of_tag_in_dims(tag: Tag, dims: Sequence[common.Dimension]) -> Optional[common.Dimension]:
-    for d in dims:
-        if tag == d.value:
-            return d
-    return None
-
-
 @dataclasses.dataclass(frozen=True)
 class NDArrayLocatedFieldWrapper(MutableLocatedField):
     """A temporary helper until we sorted out all Field conventions between frontend and iterator.embedded."""
@@ -906,17 +898,13 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._ndarrayfield.__gt_dims__
 
-    def _promote_tags_to_dims(
+    def _promote_tags_to_dims_and_sort(
         self, named_indices: NamedFieldIndices
     ) -> Mapping[common.Dimension, FieldIndex | SparsePositionEntry]:
-        return {
-            _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__): v  # type: ignore[misc] # `if` guarantees that key is not None
-            for k, v in named_indices.items()
-            if _dim_of_tag_in_dims(k, self._ndarrayfield.__gt_dims__)
-        }
+        return {d: named_indices[d.value] for d in self._ndarrayfield.__gt_dims__}
 
     def _translate_named_indices(self, _named_indices: NamedFieldIndices):
-        named_indices = self._promote_tags_to_dims(_named_indices)
+        named_indices = self._promote_tags_to_dims_and_sort(_named_indices)
         dimensions = tuple(d for d in named_indices.keys())
         ranges = tuple(
             common.UnitRange(v.start, v.stop)
@@ -981,17 +969,17 @@ def _shift_range(range_or_index: range, offset: int) -> slice:
 
 
 @overload
-def _shift_range(range_or_index: IntIndex, offset: int) -> IntIndex:
+def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex:
     ...
 
 
-def _shift_range(range_or_index: range | IntIndex, offset: int) -> ArrayIndex:
+def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayIndex:
     if isinstance(range_or_index, range):
         # range_or_index describes a range in the field
         assert range_or_index.step == 1
         return slice(range_or_index.start + offset, range_or_index.stop + offset)
     else:
-        assert is_int_index(range_or_index)
+        assert common.is_int_index(range_or_index)
         return range_or_index + offset
 
 
@@ -1001,11 +989,11 @@ def _range2slice(r: range) -> slice:
 
 
 @overload
-def _range2slice(r: IntIndex) -> IntIndex:
+def _range2slice(r: common.IntIndex) -> common.IntIndex:
     ...
 
 
-def _range2slice(r: range | IntIndex) -> slice | IntIndex:
+def _range2slice(r: range | common.IntIndex) -> slice | common.IntIndex:
     if isinstance(r, range):
         assert r.start >= 0 and r.stop >= r.start
         return slice(r.start, r.stop)
@@ -1013,7 +1001,7 @@ def _range2slice(r: range | IntIndex) -> slice | IntIndex:
 
 
 def _shift_field_indices(
-    ranges_or_indices: tuple[range | IntIndex, ...],
+    ranges_or_indices: tuple[range | common.IntIndex, ...],
     offsets: tuple[int, ...],
 ) -> tuple[ArrayIndex, ...]:
     return tuple(

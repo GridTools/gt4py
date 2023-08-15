@@ -21,7 +21,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins, ir_makers as im
-from gt4py.next.iterator.embedded import LocatedField
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -253,9 +252,8 @@ def _contains_tuple_dtype_field(arg):
     #  various implementations have different behaviour (some return e.g. `np.dtype("int32")`
     #  other `np.int32`). We just ignore the error here and postpone fixing this to when
     #  the new storages land (The implementation here works for LocatedFieldImpl).
-    return isinstance(arg, LocatedField) and (
-        arg.dtype.fields is not None or any(dim is None for dim in arg.__gt_dims__)
-    )
+
+    return isinstance(arg, common.Field) and any(dim is None for dim in arg.__gt_dims__)
 
 
 def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:

@@ -20,7 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
-from typing import overload
+from typing import TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -162,11 +162,28 @@ class UnitRange(Sequence[int], Set[int], Shiftable["UnitRange"]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
+IntIndex: TypeAlias = int | np.integer
 DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
-NamedIndex: TypeAlias = tuple[Dimension, int]
+NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
+
+
+def is_int_index(p: Any) -> TypeGuard[IntIndex]:
+    return isinstance(p, (int, np.integer))
+
+
+def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
+
+
+def is_named_index(v: Any) -> TypeGuard[NamedRange]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and is_int_index(v[1])
+
+
+def is_domain_slice(v: Any) -> TypeGuard[DomainSlice]:
+    return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
 
 
 @dataclasses.dataclass(frozen=True)
