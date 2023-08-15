@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
 import itertools
 import math
 import operator
@@ -20,9 +21,11 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.ffront import fbuiltins
+from gt4py.next.storage import field
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
@@ -125,3 +128,20 @@ def test_non_dispatched_function():
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)
+
+
+def test_field_allocator():
+    domain = common.Domain(
+        (common.Dimension("foo"), common.Dimension("bar")),
+        (common.UnitRange(2, 4), common.UnitRange(1, 3)),
+    )
+
+    @dataclasses.dataclass(frozen=True)
+    class LayoutInfo:
+        device: core_defs.Device
+
+    inp = field.ones(
+        domain, dtype=int, layout_info=LayoutInfo(core_defs.Device(core_defs.DeviceType.CPU, 0))
+    )
+
+    assert np.allclose((inp + inp).ndarray, np.ones((2, 2), dtype=int) * 2)

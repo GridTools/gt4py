@@ -40,15 +40,6 @@ else:
     DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
 
 
-# Protocols
-class GTDimsInterface(Protocol):
-    __gt_dims__: Tuple[str, ...]
-
-
-class GTOriginInterface(Protocol):
-    __gt_origin__: Tuple[int, ...]
-
-
 # Helper functions
 def _error_on_invalid_preset(backend):
     if backend not in layout.REGISTRY:
