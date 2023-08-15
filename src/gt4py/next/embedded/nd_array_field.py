@@ -16,13 +16,14 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
 
 
@@ -36,10 +37,9 @@ try:
 except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
-
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import DimsT, Domain
+from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange
 from gt4py.next.ffront import fbuiltins
 
 
@@ -61,9 +61,11 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         op = getattr(xp, array_builtin_name)
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
-                raise NotImplementedError(
-                    f"support for different domain not implemented: {a.domain}, {b.domain}"
-                )
+                domain_intersection = a.domain & b.domain
+                a_slices = _get_slices_from_domain_slice(a.domain, domain_intersection)
+                b_slices = _get_slices_from_domain_slice(b.domain, domain_intersection)
+                new_data = op(a.ndarray[a_slices], b.ndarray[b_slices])
+                return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
             # assert isinstance(b, definitions.SCALAR_TYPES) # TODO reenable this assert (if b is an array it should be wrapped into a field)
@@ -266,9 +268,62 @@ _nd_array_implementations = [np]
 class NumPyArrayField(_BaseNdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
+    @overload
+    def __getitem__(self, index: DomainSlice) -> common.Field:
+        """Absolute slicing with dimension names."""
+        ...
+
+    @overload
+    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
+        """Relative slicing with ordered dimension access."""
+        ...
+
+    @overload
+    def __getitem__(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
+        ...
+
+    @overload
+    def __getitem__(
+        self, index: Sequence[common.NamedIndex]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+        # Value in case len(i) == len(self.domain)
+        ...
+
+    def __getitem__(
+        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+        if isinstance(index, Sequence):
+            if all(
+                isinstance(idx, tuple)
+                and isinstance(idx[0], Dimension)
+                and isinstance(idx[1], UnitRange)
+                or isinstance(idx[1], int)
+                for idx in index
+            ):
+                return self._getitem_domain_slice(index)
+            return self._getitem_named_index_sequence(index)
+        elif isinstance(index, tuple) and all(isinstance(idx, (slice, int)) for idx in index):
+            return self._getitem_relative_slice(index)
+        elif isinstance(index, tuple) and all(isinstance(idx, int) for idx in index):
+            return self._getitem_tuple_int(index)
+        else:
+            raise IndexError("Unsupported index type")
+
+    def _getitem_domain_slice(self, index: DomainSlice) -> common.Field:
+        slices = _get_slices_from_domain_slice(self.domain, index)
+        new = self.ndarray[slices]
+        return common.field(new, domain=index)
+
+    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
+        # TODO: implement relative slicing
+        ...
+
+    def _getitem_tuple_int(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
+        # TODO: implement tuple of integers indexing
+        ...
+
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
-
 
 # CuPy
 if cp:
@@ -289,3 +344,59 @@ if jnp:
         array_ns: ClassVar[ModuleType] = jnp
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
+
+
+def _get_slices_from_domain_slice(
+    domain: Domain, domain_slice: DomainSlice
+) -> tuple[slice | int | None, ...]:
+    """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
+
+    This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
+    named ranges or indices specify the dimensions and ranges of the sub-arrays to be extracted.
+
+    Args:
+        domain (common.Domain): The Domain object representing the original field.
+        domain_slice (DomainSlice): A sequence of dimension names and associated ranges.
+
+    Returns:
+        tuple[slice | int | None, ...]: A tuple of slices representing the sub-array extraction along each dimension
+                                       specified in the Domain. If a dimension is not included in the named indices
+                                       or ranges, a None is used to indicate expansion along that axis.
+    """
+    slice_indices: list[slice | int | None] = []
+
+    for new_dim, new_rng in domain_slice:
+        pos_new = next(index for index, (dim, _) in enumerate(domain_slice) if dim == new_dim)
+
+        if new_dim in domain.dims:
+            pos_old = domain.dims.index(new_dim)
+            slice_indices.append(_compute_slice(new_rng, domain, pos_old))
+        else:
+            slice_indices.insert(pos_new, None)  # None is equal to np.newaxis
+
+    return tuple(slice_indices)
+
+
+def _compute_slice(rng: DomainRange, domain: Domain, pos: int) -> slice | int:
+    """Compute a slice or integer based on the provided range, domain, and position.
+
+    Args:
+        rng (DomainRange): The range to be computed as a slice or integer.
+        domain (common.Domain): The domain containing dimension information.
+        pos (int): The position of the dimension in the domain.
+
+    Returns:
+        slice | int: Slice if `new_rng` is a UnitRange, otherwise an integer.
+
+    Raises:
+        ValueError: If `new_rng` is not an integer or a UnitRange.
+    """
+    if isinstance(rng, UnitRange):
+        return slice(
+            rng.start - domain.ranges[pos].start,
+            rng.stop - domain.ranges[pos].start,
+        )
+    elif isinstance(rng, int):
+        return rng
+    else:
+        raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")

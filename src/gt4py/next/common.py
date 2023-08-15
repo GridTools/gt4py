@@ -162,7 +162,11 @@ class UnitRange(Sequence[int], Set[int], Shiftable["UnitRange"]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
+DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, int]
+DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -173,6 +177,11 @@ class Domain(Sequence[NamedRange]):
     def __post_init__(self):
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
+
+        if len(self.dims) != len(self.ranges):
+            raise ValueError(
+                f"Number of provided dimensions ({len(self.dims)}) does not match number of provided ranges ({len(self.ranges)})."
+            )
 
     def __len__(self) -> int:
         return len(self.ranges)
