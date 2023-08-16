@@ -242,18 +242,17 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         slices = _get_slices_from_domain_slice(self.domain, index)
         new = self.ndarray[slices]
 
+        # handle single value return
+        if len(new.shape) == 0:
+            return new
+
         # construct domain
         if all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index):
             dims, ranges = zip(*index)
             new_domain = common.Domain(dims=dims, ranges=ranges)
         elif all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index):
             new_dims = (self.domain.dims[len(slices) - 1],)
-
-            if len(new.shape) == 0:
-                return new
-            else:
-                new_ranges = (self.domain.ranges[len(slices) - 1],)
-
+            new_ranges = (self.domain.ranges[len(slices) - 1],)
             new_domain = common.Domain(dims=new_dims, ranges=new_ranges)
 
         return common.field(new, domain=new_domain)
