@@ -257,6 +257,17 @@ def test_field_absolute_indexing_named_index():
     assert indexed_field.domain.dims[0] == IDim
 
 
+def test_field_absolute_indexing_named_index_value_return():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
+    field = common.field(np.ones((10, 10), dtype=int), domain=domain)
+
+    named_index = ((IDim, 2), (JDim,4))
+    value = field[named_index]
+
+    assert isinstance(value, np.int64)
+    assert value == 1
+
+
 @pytest.mark.parametrize(
     "index, expected_shape, expected_domain_0, expected_domain_1",
     [

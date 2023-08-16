@@ -250,12 +250,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
             new_dims = (self.domain.dims[len(slices) - 1],)
 
             if len(new.shape) == 0:
-                new_ranges = (
-                    UnitRange(
-                        start=abs(slices[0] - self.domain.ranges[-1].start),
-                        stop=abs(slices[-1] + self.domain.ranges[-1].stop),
-                    ),
-                )
+                return new
             else:
                 new_ranges = (self.domain.ranges[len(slices) - 1],)
 
