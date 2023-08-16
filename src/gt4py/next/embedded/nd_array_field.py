@@ -257,18 +257,21 @@ class NumPyArrayField(_BaseNdArrayField):
     def __getitem__(
         self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        if isinstance(index, Sequence):
-            if all(
-                isinstance(idx, tuple)
-                and isinstance(idx[0], Dimension)
-                and isinstance(idx[1], UnitRange)
-                or isinstance(idx[1], int)
-                for idx in index
-            ):
-                return self._getitem_domain_slice(index)
-            return self._getitem_named_index_sequence(index)
-        elif isinstance(index, tuple) and all(isinstance(idx, (slice, int)) for idx in index):
+
+        if isinstance(index, tuple) and all(isinstance(idx, (slice, int)) for idx in index):
             return self._getitem_relative_slice(index)
+        elif isinstance(index, slice):
+            return self._getitem_relative_slice(index)
+
+        elif all(
+            isinstance(idx, tuple)
+            and isinstance(idx[0], Dimension)
+            and isinstance(idx[1], UnitRange)
+            or isinstance(idx[1], int)
+            for idx in index
+        ):
+            return self._getitem_domain_slice(index)
+
         elif isinstance(index, tuple) and all(isinstance(idx, int) for idx in index):
             return self._getitem_tuple_int(index)
         else:
@@ -280,8 +283,13 @@ class NumPyArrayField(_BaseNdArrayField):
         return common.field(new, domain=index)
 
     def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
-        # TODO: implement relative slicing
-        ...
+        new = self.ndarray[index]
+
+        new_domain = self.domain[slice(0, len(new.shape))]
+
+        # TODO: adapt ranges in domain
+
+        return common.field(new, domain=new_domain)
 
     def _getitem_tuple_int(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
         # TODO: implement tuple of integers indexing

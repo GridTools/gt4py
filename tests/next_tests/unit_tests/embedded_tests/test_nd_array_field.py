@@ -28,7 +28,6 @@ from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
-
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim")
@@ -99,7 +98,7 @@ def product_nd_array_implementation(request):
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
     if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+            first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
     ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
@@ -234,11 +233,27 @@ def test_field_get_item_invalid_index():
         field[1]
 
 
-def test_field_get_item_domain_slice():
+@pytest.mark.parametrize(
+    "domain_slice",
+    [
+        ((IDim, UnitRange(0, 5)),),
+        common.Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+    ]
+)
+def test_field_get_item_domain_slice(domain_slice):
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
     field = common.field(np.ones((10,)), domain=domain)
-    domain_slice = ((IDim, UnitRange(0, 5)),)
     indexed_field = field[domain_slice]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == (5,)
+    assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
+
+
+def test_field_get_item_relative_slice():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    indexed_field = field[5:, 0]
 
     assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == (5,)
