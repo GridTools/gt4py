@@ -75,7 +75,7 @@ def _make_field(lst: Iterable, nd_array_implementation, *, dtype=None):
         dtype = nd_array_implementation.float32
     return common.field(
         nd_array_implementation.asarray(lst, dtype=dtype),
-        domain=((common.Dimension("foo"), common.UnitRange(0, len(lst))),),
+        domain=common.Domain((common.Dimension("foo"),), (common.UnitRange(0, len(lst)),)),
     )
 
 
