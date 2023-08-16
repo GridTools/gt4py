@@ -208,15 +208,14 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @overload
     def __getitem__(
-            self, index: Sequence[common.NamedIndex]
+        self, index: Sequence[common.NamedIndex]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
         # Value in case len(i) == len(self.domain)
         ...
 
     def __getitem__(
-            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-
         if isinstance(index, int):
             index = (index,)
             return self._getitem_relative_slice(index)
@@ -227,11 +226,11 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
             elif isinstance(index, slice):
                 return self._getitem_relative_slice(index)
             elif all(
-                    isinstance(idx, tuple)
-                    and isinstance(idx[0], Dimension)
-                    and isinstance(idx[1], UnitRange)
-                    or isinstance(idx[1], int)
-                    for idx in index
+                isinstance(idx, tuple)
+                and isinstance(idx[0], Dimension)
+                and isinstance(idx[1], UnitRange)
+                or isinstance(idx[1], int)
+                for idx in index
             ):
                 return self._getitem_absolute_slice(index)
         elif isinstance(index, Domain):
@@ -248,13 +247,17 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
             dims, ranges = zip(*index)
             new_domain = common.Domain(dims=dims, ranges=ranges)
         elif all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index):
-
-            new_dims = (self.domain.dims[len(slices) - 1], )
+            new_dims = (self.domain.dims[len(slices) - 1],)
 
             if len(new.shape) == 0:
-                new_ranges = (UnitRange(start=abs(slices[0] - self.domain.ranges[-1].start), stop=abs(slices[-1] + self.domain.ranges[-1].stop)),)
+                new_ranges = (
+                    UnitRange(
+                        start=abs(slices[0] - self.domain.ranges[-1].start),
+                        stop=abs(slices[-1] + self.domain.ranges[-1].stop),
+                    ),
+                )
             else:
-                new_ranges = (self.domain.ranges[len(slices) - 1], )
+                new_ranges = (self.domain.ranges[len(slices) - 1],)
 
             new_domain = common.Domain(dims=new_dims, ranges=new_ranges)
 
@@ -290,12 +293,16 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         if slice_obj.start is None:
             slice_start = 0
         else:
-            slice_start = slice_obj.start if slice_obj.start >= 0 else input_range.stop + slice_obj.start
+            slice_start = (
+                slice_obj.start if slice_obj.start >= 0 else input_range.stop + slice_obj.start
+            )
 
         if slice_obj.stop is None:
             slice_stop = 0
         else:
-            slice_stop = slice_obj.stop if slice_obj.stop >= 0 else input_range.stop + slice_obj.stop
+            slice_stop = (
+                slice_obj.stop if slice_obj.stop >= 0 else input_range.stop + slice_obj.stop
+            )
 
         start = input_range.start + slice_start
         stop = input_range.start + slice_stop
@@ -338,6 +345,7 @@ _nd_array_implementations = [np]
 @dataclasses.dataclass(frozen=True)
 class NumPyArrayField(_BaseNdArrayField):
     array_ns: ClassVar[ModuleType] = np
+
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 

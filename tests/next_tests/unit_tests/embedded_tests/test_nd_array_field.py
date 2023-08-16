@@ -28,6 +28,7 @@ from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
+
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim")
@@ -98,7 +99,7 @@ def product_nd_array_implementation(request):
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
     if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-            first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
+        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
     ):
         pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
 
@@ -231,7 +232,7 @@ def test_field_intersection_binary_operations(op):
     [
         ((IDim, UnitRange(7, 12)),),
         common.Domain(dims=(IDim,), ranges=(UnitRange(7, 12),)),
-    ]
+    ],
 )
 def test_field_absolute_indexing_named_range(domain_slice):
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(5, 15),))
@@ -256,11 +257,19 @@ def test_field_absolute_indexing_named_index():
     assert indexed_field.domain.dims[0] == IDim
 
 
-@pytest.mark.parametrize("index, expected_shape, expected_domain_0, expected_domain_1", [
-    ((slice(None, 5), slice(None, 2)), (5, 2), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 4))),
-    ((slice(None, 5),), (5, 10), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 12))),
-    ((slice(2, 3), slice(5, 7)), (1, 2), (IDim, UnitRange(7, 8)), (JDim, UnitRange(7, 9)))
-])
+@pytest.mark.parametrize(
+    "index, expected_shape, expected_domain_0, expected_domain_1",
+    [
+        (
+            (slice(None, 5), slice(None, 2)),
+            (5, 2),
+            (IDim, UnitRange(5, 10)),
+            (JDim, UnitRange(2, 4)),
+        ),
+        ((slice(None, 5),), (5, 10), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 12))),
+        ((slice(2, 3), slice(5, 7)), (1, 2), (IDim, UnitRange(7, 8)), (JDim, UnitRange(7, 9))),
+    ],
+)
 def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0, expected_domain_1):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common.field(np.ones((10, 10)), domain=domain)
@@ -272,8 +281,10 @@ def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0,
     assert indexed_field.domain[1] == expected_domain_1
 
 
-@pytest.mark.parametrize("index, expected_dim, expected_range",
-                         [(0, IDim, UnitRange(3, 13)), (1, JDim, UnitRange(-5, 5))])
+@pytest.mark.parametrize(
+    "index, expected_dim, expected_range",
+    [(0, IDim, UnitRange(3, 13)), (1, JDim, UnitRange(-5, 5))],
+)
 def test_field_relative_indexing_integer(index, expected_dim, expected_range):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common.field(np.ones((10, 10)), domain=domain)
