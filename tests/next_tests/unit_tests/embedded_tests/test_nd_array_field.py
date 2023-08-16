@@ -226,36 +226,43 @@ def test_field_intersection_binary_operations(op):
     assert np.allclose(op_result.ndarray, expected_result)
 
 
-def test_field_get_item_invalid_index():
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    field = common.field(np.ones((10,)), domain=domain)
-    with pytest.raises(IndexError, match="Unsupported index type"):
-        field[1]
-
-
 @pytest.mark.parametrize(
     "domain_slice",
     [
-        ((IDim, UnitRange(0, 5)),),
-        common.Domain(dims=(IDim,), ranges=(UnitRange(0, 5),))
+        ((IDim, UnitRange(7, 12)),),
+        common.Domain(dims=(IDim,), ranges=(UnitRange(7, 12),)),
     ]
 )
-def test_field_get_item_domain_slice(domain_slice):
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+def test_field_absolute_indexing_named_range(domain_slice):
+    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(5, 15),))
     field = common.field(np.ones((10,)), domain=domain)
     indexed_field = field[domain_slice]
 
     assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == (5,)
-    assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
+    assert isinstance(indexed_field.domain, common.Domain)
+
+
+def test_field_absolute_indexing_named_index():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    named_index = ((IDim, 2),)
+    indexed_field = field[named_index]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == (10,)
+    assert isinstance(indexed_field.domain, common.Domain)
+    assert indexed_field.domain.dims[0] == IDim
 
 
 @pytest.mark.parametrize("index, expected_shape, expected_domain_0, expected_domain_1", [
-    ((slice(None, 5), slice(None, 2)), (5, 2), (IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 2))),
-    ((slice(None, 5),), (5, 10), (IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)))
+    ((slice(None, 5), slice(None, 2)), (5, 2), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 4))),
+    ((slice(None, 5),), (5, 10), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 12))),
+    ((slice(2, 3), slice(5, 7)), (1, 2), (IDim, UnitRange(7, 8)), (JDim, UnitRange(7, 9)))
 ])
-def test_field_get_item_relative_slice_2d(index, expected_shape, expected_domain_0, expected_domain_1):
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0, expected_domain_1):
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common.field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
@@ -265,18 +272,37 @@ def test_field_get_item_relative_slice_2d(index, expected_shape, expected_domain
     assert indexed_field.domain[1] == expected_domain_1
 
 
-def test_field_get_item_relative_slice_subset():
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+@pytest.mark.parametrize("index, expected_dim, expected_range",
+                         [(0, IDim, UnitRange(3, 13)), (1, JDim, UnitRange(-5, 5))])
+def test_field_relative_indexing_integer(index, expected_dim, expected_range):
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common.field(np.ones((10, 10)), domain=domain)
-    indexed_field = field[:5, 0]
+    indexed_field = field[index]
 
     assert isinstance(indexed_field, common.Field)
-    assert indexed_field.ndarray.shape == (5,)
-    assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
+    assert indexed_field.ndarray.shape == (10,)
+    assert len(indexed_field.domain.dims) == 1
+    assert indexed_field.domain[0] == (expected_dim, expected_range)
 
-def test_field_get_item_relative_slice_index_error():
+
+def test_field_relative_indexing_integer_out_of_bounds():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    with pytest.raises(IndexError):
+        field[2]
+
+
+def test_field_relative_indexing_slice_out_of_bounds():
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
     field = common.field(np.ones((10, 10)), domain=domain)
 
     with pytest.raises(IndexError):
-        field[:5, 0, 1]
+        field[:5, :3, :2]
+
+
+def test_field_unsupported_index():
+    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+    field = common.field(np.ones((10,)), domain=domain)
+    with pytest.raises(IndexError, match="Unsupported index type"):
+        field[IDim]

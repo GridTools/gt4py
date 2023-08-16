@@ -196,6 +196,112 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     __pow__ = _make_binary_array_field_intrinsic_func("pow", "power")
 
+    @overload
+    def __getitem__(self, index: DomainSlice) -> common.Field:
+        """Absolute slicing with dimension names."""
+        ...
+
+    @overload
+    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
+        """Relative slicing with ordered dimension access."""
+        ...
+
+    @overload
+    def __getitem__(
+            self, index: Sequence[common.NamedIndex]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+        # Value in case len(i) == len(self.domain)
+        ...
+
+    def __getitem__(
+            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+
+        if isinstance(index, int):
+            index = (index,)
+            return self._getitem_relative_slice(index)
+
+        if isinstance(index, tuple):
+            if all(isinstance(idx, (slice, int)) for idx in index):
+                return self._getitem_relative_slice(index)
+            elif isinstance(index, slice):
+                return self._getitem_relative_slice(index)
+            elif all(
+                    isinstance(idx, tuple)
+                    and isinstance(idx[0], Dimension)
+                    and isinstance(idx[1], UnitRange)
+                    or isinstance(idx[1], int)
+                    for idx in index
+            ):
+                return self._getitem_absolute_slice(index)
+        elif isinstance(index, Domain):
+            return self._getitem_absolute_slice(index)
+
+        raise IndexError(f"Unsupported index type: {index}")
+
+    def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field:
+        slices = _get_slices_from_domain_slice(self.domain, index)
+        new = self.ndarray[slices]
+
+        # construct domain
+        if all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index):
+            dims, ranges = zip(*index)
+            new_domain = common.Domain(dims=dims, ranges=ranges)
+        elif all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index):
+
+            new_dims = (self.domain.dims[len(slices) - 1], )
+
+            if len(new.shape) == 0:
+                new_ranges = (UnitRange(start=abs(slices[0] - self.domain.ranges[-1].start), stop=abs(slices[-1] + self.domain.ranges[-1].stop)),)
+            else:
+                new_ranges = (self.domain.ranges[len(slices) - 1], )
+
+            new_domain = common.Domain(dims=new_dims, ranges=new_ranges)
+
+        return common.field(new, domain=new_domain)
+
+    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
+        new = self.ndarray[index]
+        new_dims = []
+        new_ranges = []
+
+        dim_diff = len(new.shape) - len(index)
+
+        if dim_diff > 0:
+            new_index = tuple([*index, Ellipsis])
+        else:
+            new_index = index
+
+        for i, elem in enumerate(new_index):
+            if isinstance(elem, slice):
+                new_dims.append(self.domain.dims[i])
+                new_ranges.append(self._slice_range(self.domain.ranges[i], elem))
+            elif isinstance(elem, int):
+                new_dims.append(self.domain.dims[elem])
+                new_ranges.append(self.domain.ranges[elem])
+            elif isinstance(elem, type(Ellipsis)):
+                new_dims.append(self.domain.dims[i])
+                new_ranges.append(self.domain.ranges[i])
+
+        new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
+        return common.field(new, domain=new_domain)
+
+    def _slice_range(self, input_range: UnitRange, slice_obj: slice) -> UnitRange:
+        if slice_obj.start is None:
+            slice_start = 0
+        else:
+            slice_start = slice_obj.start if slice_obj.start >= 0 else input_range.stop + slice_obj.start
+
+        if slice_obj.stop is None:
+            slice_stop = 0
+        else:
+            slice_stop = slice_obj.stop if slice_obj.stop >= 0 else input_range.stop + slice_obj.stop
+
+        start = input_range.start + slice_start
+        stop = input_range.start + slice_stop
+
+        return UnitRange(start, stop)
+
 
 # -- Specialized implementations for intrinsic operations on array fields --
 
@@ -232,67 +338,6 @@ _nd_array_implementations = [np]
 @dataclasses.dataclass(frozen=True)
 class NumPyArrayField(_BaseNdArrayField):
     array_ns: ClassVar[ModuleType] = np
-
-    @overload
-    def __getitem__(self, index: DomainSlice) -> common.Field:
-        """Absolute slicing with dimension names."""
-        ...
-
-    @overload
-    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
-        """Relative slicing with ordered dimension access."""
-        ...
-
-    @overload
-    def __getitem__(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
-        ...
-
-    @overload
-    def __getitem__(
-        self, index: Sequence[common.NamedIndex]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        # Value in case len(i) == len(self.domain)
-        ...
-
-    def __getitem__(
-        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-
-        if isinstance(index, tuple) and all(isinstance(idx, (slice, int)) for idx in index):
-            return self._getitem_relative_slice(index)
-        elif isinstance(index, slice):
-            return self._getitem_relative_slice(index)
-
-        elif all(
-            isinstance(idx, tuple)
-            and isinstance(idx[0], Dimension)
-            and isinstance(idx[1], UnitRange)
-            or isinstance(idx[1], int)
-            for idx in index
-        ):
-            return self._getitem_domain_slice(index)
-
-        elif isinstance(index, tuple) and all(isinstance(idx, int) for idx in index):
-            return self._getitem_tuple_int(index)
-        else:
-            raise IndexError("Unsupported index type")
-
-    def _getitem_domain_slice(self, index: DomainSlice) -> common.Field:
-        slices = _get_slices_from_domain_slice(self.domain, index)
-        new = self.ndarray[slices]
-        return common.field(new, domain=index)
-
-    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
-        new = self.ndarray[index]
-        new_dims = self.domain[:len(new.shape)].dims
-        new_ranges = [UnitRange(0, s) for s in new.shape]
-        new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
-        return common.field(new, domain=new_domain)
-
-    def _getitem_tuple_int(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
-        # TODO: implement tuple of integers indexing
-        ...
-
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 
@@ -368,6 +413,6 @@ def _compute_slice(rng: DomainRange, domain: Domain, pos: int) -> slice | int:
             rng.stop - domain.ranges[pos].start,
         )
     elif isinstance(rng, int):
-        return rng
+        return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
