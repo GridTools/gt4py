@@ -250,11 +250,33 @@ def test_field_get_item_domain_slice(domain_slice):
     assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
 
 
-def test_field_get_item_relative_slice():
+@pytest.mark.parametrize("index, expected_shape, expected_domain_0, expected_domain_1", [
+    ((slice(None, 5), slice(None, 2)), (5, 2), (IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 2))),
+    ((slice(None, 5),), (5, 10), (IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)))
+])
+def test_field_get_item_relative_slice_2d(index, expected_shape, expected_domain_0, expected_domain_1):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
     field = common.field(np.ones((10, 10)), domain=domain)
-    indexed_field = field[5:, 0]
+    indexed_field = field[index]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == expected_shape
+    assert indexed_field.domain[0] == expected_domain_0
+    assert indexed_field.domain[1] == expected_domain_1
+
+
+def test_field_get_item_relative_slice_subset():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    indexed_field = field[:5, 0]
 
     assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == (5,)
     assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
+
+def test_field_get_item_relative_slice_index_error():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    with pytest.raises(IndexError):
+        field[:5, 0, 1]

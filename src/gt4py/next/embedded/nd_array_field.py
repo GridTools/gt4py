@@ -284,11 +284,9 @@ class NumPyArrayField(_BaseNdArrayField):
 
     def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
         new = self.ndarray[index]
-
-        new_domain = self.domain[slice(0, len(new.shape))]
-
-        # TODO: adapt ranges in domain
-
+        new_dims = self.domain[:len(new.shape)].dims
+        new_ranges = [UnitRange(0, s) for s in new.shape]
+        new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
         return common.field(new, domain=new_domain)
 
     def _getitem_tuple_int(self, index: tuple[int, ...]) -> core_defs.DType[core_defs.ScalarT]:
