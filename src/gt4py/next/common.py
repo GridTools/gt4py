@@ -81,19 +81,19 @@ DomainLike: TypeAlias = Union[
     Sequence[Dimension], Dimension, str
 ]  # TODO(havogt): revisit once embedded implementation is concluded
 
-Self = TypeVar("Self", bound="Shiftable", covariant=True)
+SelfShiftable = TypeVar("SelfShiftable", bound="Shiftable", covariant=True)
 
 
-class Shiftable(Protocol[Self]):
-    def __add__(self: Self, other: int) -> Self:
+class Shiftable(Protocol):
+    def __add__(self: SelfShiftable, offset: int) -> SelfShiftable:
         ...
 
-    def __sub__(self: Self, other: int) -> Self:
+    def __sub__(self: SelfShiftable, offset: int) -> SelfShiftable:
         ...
 
 
 @dataclasses.dataclass(frozen=True)
-class UnitRange(Sequence[int], Set[int], Shiftable["UnitRange"]):
+class UnitRange(Sequence[int], Set[int], Shiftable):
     """Range from `start` to `stop` with step size one."""
 
     start: int
