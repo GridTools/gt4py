@@ -1172,10 +1172,9 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
         raise NotImplementedError()
 
     def restrict(self, item: common.DomainLike) -> common.Field | core_defs.ScalarT:
-        if isinstance(item, common.Domain):
-            return self._value
         # TODO set a domain...
-        raise NotImplementedError()
+        return self._value
+
 
     __call__ = remap
     __getitem__ = restrict
