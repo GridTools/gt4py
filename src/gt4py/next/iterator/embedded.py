@@ -481,7 +481,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif isinstance(val, common.Field):
+    elif isinstance(val, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -903,16 +903,22 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     ) -> Mapping[common.Dimension, FieldIndex | SparsePositionEntry]:
         return {d: named_indices[d.value] for d in self._ndarrayfield.__gt_dims__}
 
-    def _translate_named_indices(self, _named_indices: NamedFieldIndices):
+    def _translate_named_indices(self, _named_indices: NamedFieldIndices) -> common.DomainSlice:
         named_indices = self._promote_tags_to_dims_and_sort(_named_indices)
-        dimensions = tuple(d for d in named_indices.keys())
-        ranges = tuple(
-            common.UnitRange(v.start, v.stop)
-            if isinstance(v, range)
-            else (v[0] if isinstance(v, list) else v)
-            for v in named_indices.values()
-        )
-        return common.Domain(dimensions, ranges)
+        domain_slice: list[common.NamedRange | common.NamedIndex] = []
+        for d, v in named_indices.items():
+            if isinstance(v, range):
+                domain_slice.append((d, common.UnitRange(v.start, v.stop)))
+            elif isinstance(v, list):
+                assert len(v) == 1  # only 1 sparse dimension is supported
+                assert common.is_int_index(
+                    v[0]
+                )  # derefing a concrete element in a sparse field, not a slice
+                domain_slice.append((d, v[0]))
+            else:
+                assert common.is_int_index(v)
+                domain_slice.append((d, v))
+        return domain_slice
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
@@ -920,7 +926,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         self._ndarrayfield[self._translate_named_indices(named_indices)] = value
 
-    def __array__(self) -> np.ndarray:
+    def __array__(self) -> core_defs.NDArrayObject:
         return self._ndarrayfield.ndarray
 
     @property
@@ -1023,7 +1029,7 @@ def np_as_located_field(
             offset = origin.get(d, 0)
             ranges.append(common.UnitRange(-offset, s - offset))
 
-        res = common.field(a, domain=common.Domain(tuple(axes), ranges))
+        res = common.field(a, domain=common.Domain(tuple(axes), tuple(ranges)))
         return res
 
     return _maker
@@ -1503,13 +1509,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        out = (
-            as_tuple_field(  # type:ignore[assignment]
-                out  # type:ignore[arg-type] # TODO(havogt) improve the code around TupleField construction
-            )
-            if can_be_tuple_field(out)
-            else _wrap_field(out)
-        )
+        out = as_tuple_field(out) if can_be_tuple_field(out) else _wrap_field(out)
 
         def _closure_runner():
             # Set context variables before executing the closure

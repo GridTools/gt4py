@@ -136,7 +136,7 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         return self._domain.dims
 
     @property
-    def __gt_origin__(self) -> tuple[int]:
+    def __gt_origin__(self) -> tuple[int, ...]:
         return tuple(-r.start for _, r in self._domain)
 
     @property

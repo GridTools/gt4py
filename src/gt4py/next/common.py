@@ -264,7 +264,9 @@ if TYPE_CHECKING:
 
 
 class NextGTDimsInferface(Protocol):
-    __gt_dims__: tuple[Dimension, ...]
+    @property
+    def __gt_dims__(self) -> tuple[Dimension, ...]:
+        ...
 
 
 @extended_runtime_checkable
