@@ -465,8 +465,9 @@ def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
 
 
 def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
-    if isinstance(index, Domain):
-        return True
-    elif all(is_named_range(idx) or is_named_index(idx) or isinstance(idx, Domain) for idx in index):
-        return True
+    return all(is_named_range(idx) or is_named_index(idx) for idx in index)
 
+
+def index_tuple_with_indices(target_tuple, indices_to_use):
+    indexed_elements = [target_tuple[i] for i in indices_to_use]
+    return tuple(indexed_elements)

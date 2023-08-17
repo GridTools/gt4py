@@ -39,8 +39,8 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange, is_named_range, \
-    is_named_index, is_domain_slice
+from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange, is_domain_slice, \
+    index_tuple_with_indices
 from gt4py.next.ffront import fbuiltins
 
 
@@ -233,23 +233,46 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         raise IndexError(f"Unsupported index type: {index}")
 
     def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field:
+        all_named_range = all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index)
+        all_named_index = all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index)
         slices = _get_slices_from_domain_slice(self.domain, index)
-        new = self.ndarray[slices]
 
-        # handle single value return
-        if len(new.shape) == 0:
-            return new
+        if all_named_range:
+            new = self.ndarray[slices]
+            # TODO: assign domain dimensions correctly
+            new_domain = common.Domain(dims=tuple(dim for dim, _ in index), ranges=tuple(idx for _, idx in index))
+        elif all_named_index:
+            idx = self._get_new_domain_indices(index)
+            new = self.ndarray[self._create_new_index_tuple(slices, index)]
+            new_domain = self._create_new_domain_with_indices(idx)
 
-        # construct domain
-        if all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index):
-            dims, ranges = zip(*index)
-            new_domain = common.Domain(dims=dims, ranges=ranges)
-        elif all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index):
-            new_dims = (self.domain.dims[len(slices) - 1],)
-            new_ranges = (self.domain.ranges[len(slices) - 1],)
-            new_domain = common.Domain(dims=new_dims, ranges=new_ranges)
+        return new if new.ndim == 0 else common.field(new, domain=new_domain)
 
-        return common.field(new, domain=new_domain)
+    def _get_new_domain_indices(self, index: common.NamedIndex) -> tuple[int]:
+        ndarray_shape = self.ndarray.shape
+        dim_indices_to_exclude = [self.domain.dims.index(dim[0]) for dim in index]
+        new_domain_indices = [i for i in range(len(ndarray_shape)) if i not in dim_indices_to_exclude]
+        return tuple(new_domain_indices)
+
+    def _create_new_index_tuple(self, slices: tuple[int], index: common.NamedIndex) -> tuple[int | slice]:
+        all_dims = self.domain.dims
+        subset_dims = [dim for dim, _ in index]
+        missing_dim_indices = [i for i, dim in enumerate(all_dims) if dim not in subset_dims]
+
+        new_index_list = []
+        slices_index = 0
+        for i in range(len(all_dims)):
+            if i in missing_dim_indices:
+                new_index_list.append(slice(None))
+            else:
+                new_index_list.append(slices[slices_index])
+                slices_index += 1
+        return tuple(new_index_list)
+
+    def _create_new_domain_with_indices(self, indices: tuple[int]) -> common.Domain:
+        new_dims = index_tuple_with_indices(self.domain.dims, indices)
+        new_ranges = index_tuple_with_indices(self.domain.ranges, indices)
+        return common.Domain(dims=new_dims, ranges=new_ranges)
 
     def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
         new = self.ndarray[index]

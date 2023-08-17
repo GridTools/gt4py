@@ -230,13 +230,13 @@ def test_field_intersection_binary_operations(op):
 @pytest.mark.parametrize(
     "domain_slice",
     [
-        ((IDim, UnitRange(7, 12)),),
+        ((IDim, UnitRange(7, 12)), (JDim, UnitRange(8, 10)),),
         common.Domain(dims=(IDim,), ranges=(UnitRange(7, 12),)),
     ],
 )
 def test_field_absolute_indexing_named_range(domain_slice):
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(5, 15),))
-    field = common.field(np.ones((10,)), domain=domain)
+    domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25)))
+    field = common.field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
     assert isinstance(indexed_field, common.Field)
@@ -244,17 +244,22 @@ def test_field_absolute_indexing_named_range(domain_slice):
     assert isinstance(indexed_field.domain, common.Domain)
 
 
-def test_field_absolute_indexing_named_index():
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
-    field = common.field(np.ones((10, 10)), domain=domain)
-
-    named_index = ((IDim, 2),)
+@pytest.mark.parametrize(
+    "named_index,expected_shape",
+    [
+        (((IDim, 8),), (10, 15)),
+        (((JDim, 9),),  (5, 15)),
+        (((KDim, 11),), (5, 10)),
+    ]
+)
+def test_field_absolute_indexing_named_index(named_index, expected_shape):
+    domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25)))
+    field = common.field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[named_index]
 
     assert isinstance(indexed_field, common.Field)
-    assert indexed_field.ndarray.shape == (10,)
+    assert indexed_field.ndarray.shape == expected_shape
     assert isinstance(indexed_field.domain, common.Domain)
-    assert indexed_field.domain.dims[0] == IDim
 
 
 def test_field_absolute_indexing_named_index_value_return():
