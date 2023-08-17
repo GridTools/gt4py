@@ -94,6 +94,11 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
+    @classmethod
+    @property
+    def infinity(cls) -> UnitRange:
+        return cls(Infinity.negative(),Infinity.positive())
+
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
             return Infinity.positive()
@@ -139,7 +144,7 @@ class UnitRange(Sequence[int], Set[int]):
 DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
-DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex ]
 FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
 
 
