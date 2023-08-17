@@ -20,7 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
-from typing import overload
+from typing import overload, TypeGuard
 
 import numpy as np
 import numpy.typing as npt
@@ -42,7 +42,6 @@ from gt4py.eve.extended_typing import (
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
-
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
@@ -202,7 +201,7 @@ class Domain(Sequence[NamedRange]):
 
 
 def _broadcast_ranges(
-    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+        broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
         ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
@@ -216,6 +215,7 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | core_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
+
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -330,11 +330,11 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-    definition: Any,
-    /,
-    *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-    value_type: Optional[type] = None,
+        definition: Any,
+        /,
+        *,
+        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+        value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -364,7 +364,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
+            self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
@@ -454,3 +454,19 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
+
+
+def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
+
+
+def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], int)
+
+
+def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
+    if isinstance(index, Domain):
+        return True
+    elif all(is_named_range(idx) or is_named_index(idx) or isinstance(idx, Domain) for idx in index):
+        return True
+

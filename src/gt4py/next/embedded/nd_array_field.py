@@ -39,7 +39,8 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange
+from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange, is_named_range, \
+    is_named_index, is_domain_slice
 from gt4py.next.ffront import fbuiltins
 
 
@@ -214,27 +215,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         ...
 
     def __getitem__(
-        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        if isinstance(index, int):
-            index = (index,)
-            return self._getitem_relative_slice(index)
 
-        if isinstance(index, tuple):
-            if all(isinstance(idx, (slice, int)) for idx in index):
-                return self._getitem_relative_slice(index)
-            elif isinstance(index, slice):
-                return self._getitem_relative_slice(index)
-            elif all(
-                isinstance(idx, tuple)
-                and isinstance(idx[0], Dimension)
-                and isinstance(idx[1], UnitRange)
-                or isinstance(idx[1], int)
-                for idx in index
-            ):
-                return self._getitem_absolute_slice(index)
-        elif isinstance(index, Domain):
+        if not isinstance(index, tuple):
+            index = (index,)
+
+        if isinstance(index[0], Domain):
+            index = index[0]
+
+        if is_domain_slice(index):
             return self._getitem_absolute_slice(index)
+
+        if all(isinstance(idx, (slice, int)) for idx in index):
+            return self._getitem_relative_slice(index)
 
         raise IndexError(f"Unsupported index type: {index}")
 
