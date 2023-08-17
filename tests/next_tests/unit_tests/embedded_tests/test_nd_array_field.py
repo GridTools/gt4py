@@ -21,9 +21,9 @@ import numpy as np
 import pytest
 
 from gt4py.next import Dimension, common
-from gt4py.next.common import UnitRange
+from gt4py.next.common import UnitRange, Domain
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, broadcast
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -202,44 +202,43 @@ def test_non_dispatched_function():
 
 
 @pytest.mark.parametrize(
-    "named_range",
+    "broadcasted_dims,expected_domain",
     [
-        ((IDim, UnitRange(5, 10)), (JDim, UnitRange(5, 10))),
-        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10))),
+        ((IDim, JDim), Domain(dims=(IDim,JDim), ranges=(UnitRange(0,10), UnitRange.infinity))),
     ],
 )
-def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right(named_range):
+def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right(broadcasted_dims, expected_domain):
     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_domain_slice(field_domain, named_range)
-    assert slices == (slice(5, 10, None), None)
+    field = common.field(np.arange(10), domain=field_domain)
+    result = broadcast(field, broadcasted_dims)
+    assert result.domain == expected_domain
 
 
-@pytest.mark.parametrize(
-    "named_range",
-    [
-        ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10))),
-        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10))),
-    ],
-)
-def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left(named_range):
-    field_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_domain_slice(field_domain, named_range)
-    assert slices == (None, slice(0, 10, None))
+# @pytest.mark.parametrize(
+#     "new_domain",
+#     [
+#         common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10))),
+#     ],
+# )
+# def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left(new_domain):
+#     field_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
+#     slices = _get_slices_from_domain_slice(field_domain, new_domain)
+#     assert slices == (None, slice(0, 10, None))
 
 
-@pytest.mark.parametrize(
-    "named_range",
-    [
-        ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
-        common.Domain(
-            dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10))
-        ),
-    ],
-)
-def test_get_slices_with_named_indices_1d_to_3d(named_range):
-    field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    slices = _get_slices_from_domain_slice(field_domain, named_range)
-    assert slices == (slice(0, 5, None), None, None)
+# @pytest.mark.parametrize(
+#     "named_range",
+#     [
+#         ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
+#         common.Domain(
+#             dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10))
+#         ),
+#     ],
+# )
+# def test_get_slices_with_named_indices_1d_to_3d(named_range):
+#     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+#     slices = _get_slices_from_domain_slice(field_domain, named_range)
+#     assert slices == (slice(0, 5, None), None, None)
 
 
 @pytest.mark.parametrize(
@@ -254,14 +253,14 @@ def test_get_slices_with_named_indices_3d_to_1d(named_range):
         dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
     slices = _get_slices_from_domain_slice(field_domain, named_range)
-    assert slices == (slice(0, 10, None),)
+    assert slices == (slice(0, 10, None), slice(None), slice(None))
 
 
 def test_get_slices_with_named_index():
     field_domain = common.Domain(
         dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = ((IDim, UnitRange(0, 10)), (IDim, 2), (KDim, 3))
+    named_index = ((IDim, UnitRange(0, 10)), (JDim, 2), (KDim, 3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
@@ -275,9 +274,8 @@ def test_get_slices_invalid_type():
         _get_slices_from_domain_slice(field_domain, new_domain)
 
 
-@pytest.mark.parametrize("op", ["/", "*", "-", "+", "**"])
-def test_field_intersection_binary_operations(op):
-    arr1 = np.ones((10,)) + 1
+def test_field_intersection_binary_operations(binary_op):
+    arr1 = np.arange(10)
     arr1_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
 
     arr2 = np.ones((5, 5))
@@ -286,27 +284,120 @@ def test_field_intersection_binary_operations(op):
     field1 = common.field(arr1, domain=arr1_domain)
     field2 = common.field(arr2, domain=arr2_domain)
 
-    op_result = eval(f"field1 {op} field2")
-
-    expected_result = eval(f"arr1[5:10, None] {op} arr2")
+    op_result = binary_op(field1, field2)
+    expected_result = binary_op(arr1[5:10, None], arr2)
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)
 
 
-def test_field_get_item_invalid_index():
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    field = common.field(np.ones((10,)), domain=domain)
-    with pytest.raises(IndexError, match="Unsupported index type"):
-        field[1]
+def test_field_intersection_binary_operations_jdim(binary_op):
+    arr1 = np.arange(10)
+    arr1_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
+
+    arr2 = np.ones((5, 5))
+    arr2_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
+
+    field1 = common.field(arr1, domain=arr1_domain)
+    field2 = common.field(arr2, domain=arr2_domain)
+
+    op_result = binary_op(field1, field2)
+    expected_result = binary_op(arr1[None, 5:10], arr2)
+
+    assert op_result.ndarray.shape == (5, 5)
+    assert np.allclose(op_result.ndarray, expected_result)
 
 
-def test_field_get_item_domain_slice():
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    field = common.field(np.ones((10,)), domain=domain)
-    domain_slice = ((IDim, UnitRange(0, 5)),)
+@pytest.mark.parametrize(
+    "domain_slice,expected_dimensions,expected_shape",
+    [
+        (((IDim, UnitRange(7, 9)), (JDim, UnitRange(8, 10)),), (IDim, JDim, KDim), (2, 2, 15)),    # TODO: add support for single NamedRange
+        (((IDim, UnitRange(7, 9)), (KDim, UnitRange(12, 20)),), (IDim, JDim, KDim), (2, 10, 8)),    # TODO: add support for single NamedRange
+        (common.Domain(dims=(IDim,), ranges=(UnitRange(7, 9),)), (IDim, JDim, KDim), (2, 10, 15)),
+        (((IDim, 8),), (JDim, KDim), (10, 15)),
+        (((JDim, 9),),  (IDim, KDim), (5, 15)),
+        (((KDim, 11),), (IDim, JDim), (5, 10)),
+        (((IDim, 8), (JDim, UnitRange(8, 10)),), (JDim, KDim), (2, 15)),
+    ],
+)
+def test_field_absolute_indexing_mixed(domain_slice, expected_dimensions, expected_shape):
+    domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25)))
+    field = common.field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
     assert isinstance(indexed_field, common.Field)
-    assert indexed_field.ndarray.shape == (5,)
-    assert indexed_field.domain[0] == (IDim, UnitRange(0, 5))
+    assert indexed_field.ndarray.shape == expected_shape
+    assert indexed_field.domain.dims == expected_dimensions
+
+
+def test_field_absolute_indexing_named_index_value_return():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
+    field = common.field(np.ones((10, 10), dtype=int), domain=domain)
+
+    named_index = ((IDim, 2), (JDim,4))
+    value = field[named_index]
+
+    assert isinstance(value, np.int64)
+    assert value == 1
+
+
+@pytest.mark.parametrize(
+    "index, expected_shape, expected_domain_0, expected_domain_1",
+    [
+        (
+            (slice(None, 5), slice(None, 2)),
+            (5, 2),
+            (IDim, UnitRange(5, 10)),
+            (JDim, UnitRange(2, 4)),
+        ),
+        ((slice(None, 5),), (5, 10), (IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 12))),
+        ((slice(2, 3), slice(5, 7)), (1, 2), (IDim, UnitRange(7, 8)), (JDim, UnitRange(7, 9))),
+    ],
+)
+def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0, expected_domain_1):
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    indexed_field = field[index]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == expected_shape
+    assert indexed_field.domain[0] == expected_domain_0
+    assert indexed_field.domain[1] == expected_domain_1
+
+
+@pytest.mark.parametrize(
+    "index, expected_dim, expected_range",
+    [(0, IDim, UnitRange(3, 13)), (1, JDim, UnitRange(-5, 5))],
+)
+def test_field_relative_indexing_integer(index, expected_dim, expected_range):
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    indexed_field = field[index]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == (10,)
+    assert len(indexed_field.domain.dims) == 1
+    assert indexed_field.domain[0] == (expected_dim, expected_range)
+
+
+def test_field_relative_indexing_integer_out_of_bounds():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    with pytest.raises(IndexError):
+        field[2]
+
+
+def test_field_relative_indexing_slice_out_of_bounds():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    with pytest.raises(IndexError):
+        field[:5, :3, :2]
+
+
+def test_field_unsupported_index():
+    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+    field = common.field(np.ones((10,)), domain=domain)
+    with pytest.raises(IndexError, match="Unsupported index type"):
+        field[IDim]

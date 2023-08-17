@@ -43,7 +43,6 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
-
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
@@ -106,7 +105,8 @@ class UnitRange(Sequence[int], Set[int], Shiftable):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def infinite(cls) -> UnitRange:
+    @property
+    def infinity(cls) -> UnitRange:
         return cls(Infinity.negative(), Infinity.positive())
 
     def __len__(self) -> int:
@@ -507,3 +507,20 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
+
+
+def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
+
+
+def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], int)
+
+
+def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
+    return all(is_named_range(idx) or is_named_index(idx) for idx in index)
+
+
+def index_tuple_with_indices(target_tuple, indices_to_use):
+    indexed_elements = [target_tuple[i] for i in indices_to_use]
+    return tuple(indexed_elements)
