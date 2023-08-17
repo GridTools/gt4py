@@ -918,7 +918,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
             else:
                 assert common.is_int_index(v)
                 domain_slice.append((d, v))
-        return domain_slice
+        return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
@@ -1174,7 +1174,6 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
     def restrict(self, item: common.DomainLike) -> common.Field | core_defs.ScalarT:
         # TODO set a domain...
         return self._value
-
 
     __call__ = remap
     __getitem__ = restrict

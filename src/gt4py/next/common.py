@@ -514,11 +514,13 @@ def is_named_range(v: Any) -> TypeGuard[NamedRange]:
 
 
 def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], int)
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and is_int_index(v[1])
 
 
 def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
-    return all(is_named_range(idx) or is_named_index(idx) for idx in index)
+    return isinstance(index, Sequence) and all(
+        is_named_range(idx) or is_named_index(idx) for idx in index
+    )
 
 
 def index_tuple_with_indices(target_tuple, indices_to_use):

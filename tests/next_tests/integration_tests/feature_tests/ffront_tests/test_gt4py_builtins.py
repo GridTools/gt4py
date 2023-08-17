@@ -60,7 +60,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    ref = np.max(inp[v2e_table], axis=1)
+    ref = np.max(inp.ndarray[v2e_table], axis=1)
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
