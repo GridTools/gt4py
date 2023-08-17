@@ -79,7 +79,7 @@ def test_where_builtin(nd_array_implementation):
     assert np.allclose(result.ndarray, expected)
 
 
-def test_where_builtin(nd_array_implementation):
+def test_where_builtin_with_tuple(nd_array_implementation):
     cond = np.asarray([True, False])
     true0 = np.asarray([1.0, 2.0], dtype=np.float32)
     false0 = np.asarray([3.0, 4.0], dtype=np.float32)

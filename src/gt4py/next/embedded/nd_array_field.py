@@ -43,7 +43,7 @@ from gt4py.next.common import DimsT, Domain
 from gt4py.next.ffront import fbuiltins
 
 
-def _make_nary_intrinsic(builtin_name: str, array_builtin_name: str) -> Callable:
+def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable:
     def _builtin_op(*fields: common.Field) -> common.Field:
         first = fields[0]
         assert isinstance(first, _BaseNdArrayField)
@@ -171,24 +171,24 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
 
-    __abs__ = _make_nary_intrinsic("abs", "abs")
+    __abs__ = _make_builtin("abs", "abs")
 
-    __neg__ = _make_nary_intrinsic("neg", "negative")
+    __neg__ = _make_builtin("neg", "negative")
 
-    __add__ = __radd__ = _make_nary_intrinsic("add", "add")
+    __add__ = __radd__ = _make_builtin("add", "add")
 
-    __sub__ = __rsub__ = _make_nary_intrinsic("sub", "subtract")
+    __sub__ = __rsub__ = _make_builtin("sub", "subtract")
 
-    __mul__ = __rmul__ = _make_nary_intrinsic("mul", "multiply")
+    __mul__ = __rmul__ = _make_builtin("mul", "multiply")
 
-    __truediv__ = __rtruediv__ = _make_nary_intrinsic("div", "divide")
+    __truediv__ = __rtruediv__ = _make_builtin("div", "divide")
 
-    __floordiv__ = __rfloordiv__ = _make_nary_intrinsic("floordiv", "floor_divide")
+    __floordiv__ = __rfloordiv__ = _make_builtin("floordiv", "floor_divide")
 
-    __pow__ = _make_nary_intrinsic("pow", "power")
+    __pow__ = _make_builtin("pow", "power")
 
 
-# -- Specialized implementations for intrinsic operations on array fields --
+# -- Specialized implementations for builtin operations on array fields --
 
 _BaseNdArrayField.register_builtin_func(fbuiltins.abs, _BaseNdArrayField.__abs__)  # type: ignore[attr-defined]
 _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow__)  # type: ignore[attr-defined]
@@ -201,20 +201,18 @@ for name in (
 ):
     if name in ["abs", "power", "gamma"]:
         continue
-    _BaseNdArrayField.register_builtin_func(
-        getattr(fbuiltins, name), _make_nary_intrinsic(name, name)
-    )
+    _BaseNdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.minimum, _make_nary_intrinsic("minimum", "minimum")  # type: ignore[attr-defined]
+    fbuiltins.minimum, _make_builtin("minimum", "minimum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.maximum, _make_nary_intrinsic("maximum", "maximum")  # type: ignore[attr-defined]
+    fbuiltins.maximum, _make_builtin("maximum", "maximum")  # type: ignore[attr-defined]
 )
 _BaseNdArrayField.register_builtin_func(
-    fbuiltins.fmod, _make_nary_intrinsic("fmod", "fmod")  # type: ignore[attr-defined]
+    fbuiltins.fmod, _make_builtin("fmod", "fmod")  # type: ignore[attr-defined]
 )
-_BaseNdArrayField.register_builtin_func(fbuiltins.where, _make_nary_intrinsic("where", "where"))
+_BaseNdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 # -- Concrete array implementations --
 # NumPy
