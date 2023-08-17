@@ -346,12 +346,13 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
 
     def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
         new = self.ndarray[index]
+
         if len(new.shape) == 0:
             return new
         new_dims = []
         new_ranges = []
 
-        dim_diff = len(new.shape) - len(index)
+        dim_diff = len(self.domain) - len(index)
 
         if dim_diff > 0:
             new_index = tuple([*index] + [Ellipsis] * dim_diff)
@@ -363,8 +364,9 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
                 new_dims.append(self.domain.dims[i])
                 new_ranges.append(self._slice_range(self.domain.ranges[i], elem))
             elif common.is_int_index(elem):
-                new_dims.append(self.domain.dims[elem])
-                new_ranges.append(self.domain.ranges[elem])
+                ...
+                # new_dims.append(self.domain.dims[elem])
+                # new_ranges.append(self.domain.ranges[elem])
             elif isinstance(elem, type(Ellipsis)):
                 new_dims.append(self.domain.dims[i])
                 new_ranges.append(self.domain.ranges[i])
