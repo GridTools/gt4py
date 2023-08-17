@@ -50,7 +50,7 @@ class CMakeFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp,
+            languages.Cpp | languages.Cuda,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -63,16 +63,21 @@ class CMakeFactory(
         name = source.program_source.entry_point.name
         header_name = f"{name}.{source.program_source.language_settings.header_extension}"
         bindings_name = f"{name}_bindings.{source.program_source.language_settings.file_extension}"
+        cmake_languages = [cmake_lists.Language(name="CXX")]
+        if source.program_source.language is languages.Cuda:
+            cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+        cmake_lists_src = cmake_lists.generate_cmakelists_source(
+                name,
+                source.library_deps,
+                [header_name, bindings_name],
+                languages=cmake_languages,
+            )
         return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_strategy),
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,
-                "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                    name,
-                    source.library_deps,
-                    [header_name, bindings_name],
-                ),
+                "CMakeLists.txt": cmake_lists_src,
             },
             program_name=name,
             generator_name=self.cmake_generator_name,

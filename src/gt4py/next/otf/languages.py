@@ -60,3 +60,7 @@ class Python(LanguageTag):
 class Cpp(LanguageTag):
     settings_class = LanguageWithHeaderFilesSettings
     ...
+
+
+class Cuda(LanguageTag):
+    settings_class = LanguageWithHeaderFilesSettings

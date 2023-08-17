@@ -22,7 +22,7 @@ from gt4py.next import common
 from gt4py.next.otf import languages, recipes, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, nanobind
 from gt4py.next.otf.compilation import cache, compiler
-from gt4py.next.otf.compilation.build_systems import compiledb
+from gt4py.next.otf.compilation.build_systems import compiledb, cmake
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
@@ -33,7 +33,7 @@ def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
     if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
-        arr = np.asarray(arg)
+        arr = arg.__array__()
         origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
         return arr, origin
     else:
@@ -92,7 +92,11 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
 
 
 GTFN_DEFAULT_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
-    cpp_interface.CPP_DEFAULT, enable_itir_transforms=True, use_imperative_backend=False
+    enable_itir_transforms=True, use_imperative_backend=False, hardware_accelerator=gtfn_module.HardwareAccelerator.CPU
+)
+
+GTFN_GPU_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
+    enable_itir_transforms=True, use_imperative_backend=False, hardware_accelerator=gtfn_module.HardwareAccelerator.GPU
 )
 
 GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
@@ -102,6 +106,14 @@ GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
 
 GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
     translation=GTFN_DEFAULT_TRANSLATION_STEP,
+    bindings=nanobind.bind_source,
+    compilation=GTFN_DEFAULT_COMPILE_STEP,
+    decoration=convert_args,
+)
+
+
+GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
+    translation=GTFN_GPU_TRANSLATION_STEP,
     bindings=nanobind.bind_source,
     compilation=GTFN_DEFAULT_COMPILE_STEP,
     decoration=convert_args,
@@ -127,3 +139,7 @@ run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor[
     name="run_gtfn_cached",
     otf_workflow=workflow.CachedStep(step=run_gtfn.otf_workflow, hash_function=compilation_hash),
 )  # todo(ricoh): add API for converting an executor to a cached version of itself and vice versa
+
+run_gtfn_gpu = otf_compile_executor.OTFCompileExecutor[
+    languages.Cuda, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW)

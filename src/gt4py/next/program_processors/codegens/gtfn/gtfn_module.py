@@ -15,7 +15,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Final, TypeVar
+import enum
+from typing import Any, Final, TypeVar, Optional
 
 import numpy as np
 
@@ -39,6 +40,11 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
+class HardwareAccelerator(enum.IntEnum):
+    CPU = enum.auto()
+    GPU = enum.auto()
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
@@ -47,9 +53,21 @@ class GTFNTranslationStep(
     ],
     step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
 ):
-    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
+    language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
+    hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
+
+    @staticmethod
+    def _default_language_settings(hardware_accelerator: HardwareAccelerator) -> languages.LanguageSettings:
+        if hardware_accelerator == HardwareAccelerator.GPU:
+            return languages.LanguageWithHeaderFilesSettings(
+                formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
+                formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
+                file_extension="cu",
+                header_extension="cuh",
+            )
+        return cpp_interface.CPP_DEFAULT
 
     def _process_regular_arguments(
         self,
@@ -174,7 +192,8 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
+        backend_arg = self._get_backend_type()
+        args_expr: list[str] = [backend_arg, *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
         decl_body = (
@@ -188,10 +207,12 @@ class GTFNTranslationStep(
             imperative=self.use_imperative_backend,
             **inp.kwargs,
         )
+        language_settings = self.language_settings if self.language_settings is not None else GTFNTranslationStep._default_language_settings(self.hardware_accelerator)
+        backend_header = "gridtools/fn/backend/gpu.hpp" if self.hardware_accelerator == HardwareAccelerator.GPU else "gridtools/fn/backend/naive.hpp"
         source_code = interface.format_source(
-            self.language_settings,
+            language_settings,
             f"""
-                    #include <gridtools/fn/backend/naive.hpp>
+                    #include <{backend_header}>
                     #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
@@ -199,14 +220,22 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
+        language = languages.Cuda if self.hardware_accelerator == HardwareAccelerator.GPU else languages.Cpp
+        library_name = "gridtools_gpu" if self.hardware_accelerator == HardwareAccelerator.GPU else "gridtools_cpu"
         module = stages.ProgramSource(
             entry_point=function,
-            library_deps=(interface.LibraryDependency("gridtools", "master"),),
+            library_deps=(interface.LibraryDependency(library_name, "master"),),
             source_code=source_code,
-            language=languages.Cpp,
-            language_settings=self.language_settings,
+            language=language,
+            language_settings=language_settings,
         )
         return module
+
+    def _get_backend_type(self):
+        if self.hardware_accelerator == HardwareAccelerator.GPU:
+
+            return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
+        return "gridtools::fn::backend::naive{}"
 
 
 translate_program: Final[
