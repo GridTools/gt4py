@@ -254,32 +254,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         return new if new.ndim == 0 else common.field(new, domain=new_domain)
 
-    def _get_new_domain_indices(self, index: common.NamedIndex) -> tuple[int]:
-        ndarray_shape = self.ndarray.shape
-        dim_indices_to_exclude = [self.domain.dims.index(dim[0]) for dim in index]
-        new_domain_indices = [i for i in range(len(ndarray_shape)) if i not in dim_indices_to_exclude]
-        return tuple(new_domain_indices)
-
-    def _create_new_index_tuple(self, slices: tuple[int], index: common.NamedIndex) -> tuple[int | slice]:
-        all_dims = self.domain.dims
-        subset_dims = [dim for dim, _ in index]
-        missing_dim_indices = [i for i, dim in enumerate(all_dims) if dim not in subset_dims]
-
-        new_index_list = []
-        slices_index = 0
-        for i in range(len(all_dims)):
-            if i in missing_dim_indices:
-                new_index_list.append(slice(None))
-            else:
-                new_index_list.append(slices[slices_index])
-                slices_index += 1
-        return tuple(new_index_list)
-
-    def _create_new_domain_with_indices(self, indices: tuple[int]) -> common.Domain:
-        new_dims = index_tuple_with_indices(self.domain.dims, indices)
-        new_ranges = index_tuple_with_indices(self.domain.ranges, indices)
-        return common.Domain(dims=new_dims, ranges=new_ranges)
-
     def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
         new = self.ndarray[index]
         new_dims = []
