@@ -151,7 +151,7 @@ def test_non_dispatched_function():
         ),
     ],
 )
-def test_get_slices_with_named_indices(broadcasted_dims, expected_domain, field_domain):
+def test_field_broadcast(broadcasted_dims, expected_domain, field_domain):
     field = common.field(np.arange(10), domain=field_domain)
     result = broadcast(field, broadcasted_dims)
     assert result.domain == expected_domain
@@ -266,6 +266,26 @@ def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0,
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain[0] == expected_domain_0
     assert indexed_field.domain[1] == expected_domain_1
+
+
+@pytest.mark.parametrize(
+    "index, expected_shape, expected_domain",
+    [
+        ((1, slice(None), 2), (15,), (JDim, UnitRange(10, 25))),
+        ((slice(None), slice(None), 2), (10, 15), (IDim, UnitRange(5, 15))),
+        ((slice(None),), (10, 15, 10), (IDim, UnitRange(5, 15))),
+        ((slice(None), slice(None), slice(None)), (10, 15, 10), (IDim, UnitRange(5, 15))),
+        ((slice(None)), (10, 15, 10), (IDim, UnitRange(5, 15)))
+    ],
+)
+def test_field_relative_indexing_slice2(index, expected_shape, expected_domain):
+    domain = common.Domain(dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20)))
+    field = common.field(np.ones((10, 15, 10)), domain=domain)
+    indexed_field = field[index]
+
+    assert isinstance(indexed_field, common.Field)
+    assert indexed_field.ndarray.shape == expected_shape
+    assert indexed_field.domain[0] == expected_domain
 
 
 @pytest.mark.parametrize(

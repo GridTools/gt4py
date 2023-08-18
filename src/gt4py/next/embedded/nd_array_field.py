@@ -275,8 +275,10 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         if dim_diff > 0:
             new_index = tuple([*index, Ellipsis])
-        else:
+        elif dim_diff == 0:
             new_index = index
+        else:
+            new_index = [idx for idx, value in enumerate(index) if value == slice(None)]
 
         for i, elem in enumerate(new_index):
             if isinstance(elem, slice):
@@ -286,13 +288,21 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
                 new_dims.append(self.domain.dims[elem])
                 new_ranges.append(self.domain.ranges[elem])
             elif isinstance(elem, type(Ellipsis)):
-                new_dims.append(self.domain.dims[i])
-                new_ranges.append(self.domain.ranges[i])
+                curr_len = len(new_ranges)
+                rest_slice = slice(curr_len, len(new.shape))
+                new_dims.extend(self.domain.dims[rest_slice])
+                new_ranges.extend(self.domain.ranges[rest_slice])
 
         new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
         return common.field(new, domain=new_domain)
 
     def _slice_range(self, input_range: UnitRange, slice_obj: slice) -> UnitRange:
+        # handle slice(None) case
+        if slice_obj == slice(None):
+            start = input_range.start
+            stop = input_range.stop
+            return UnitRange(start, stop)
+
         if slice_obj.start is None:
             slice_start = 0
         else:
