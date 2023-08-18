@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
@@ -352,7 +352,9 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _find_index_of_dim(dim: Dimension, domain_slice: Domain | Sequence[NamedRange | NamedIndex]) -> Optional[int]:
+def _find_index_of_dim(
+    dim: Dimension, domain_slice: Domain | Sequence[NamedRange | NamedIndex | Any]
+) -> Optional[int]:
     for i, (d, _) in enumerate(domain_slice):
         if dim == d:
             return i
@@ -360,7 +362,7 @@ def _find_index_of_dim(dim: Dimension, domain_slice: Domain | Sequence[NamedRang
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
-    domain_slice = []
+    domain_slice: list[slice | None] = []
     new_domain_dims = []
     new_domain_ranges = []
     for dim in new_dimensions:
@@ -371,7 +373,9 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
         else:
             domain_slice.append(np.newaxis)
             new_domain_dims.append(dim)
-            new_domain_ranges.append(UnitRange(common.Infinity.negative(), common.Infinity.positive()))
+            new_domain_ranges.append(
+                UnitRange(common.Infinity.negative(), common.Infinity.positive())
+            )
     return common.field(
         field.ndarray[tuple(domain_slice)],
         domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
@@ -382,7 +386,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
 
 def _get_slices_from_domain_slice(
-    domain: Domain, domain_slice: Domain | Sequence[NamedRange | NamedIndex | None]  # None refers to np.newaxis
+    domain: Domain, domain_slice: Domain | Sequence[NamedRange | NamedIndex | Any]
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -401,9 +405,6 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | int | None] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if domain_slice is None:
-            slice_indices.append(slice(None))
-            continue
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))

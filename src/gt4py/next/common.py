@@ -36,7 +36,6 @@ from gt4py.eve.extended_typing import (
     Protocol,
     TypeAlias,
     TypeVar,
-    Union,
     extended_runtime_checkable,
     final,
     runtime_checkable,

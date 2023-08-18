@@ -371,11 +371,7 @@ def test_field_relative_indexing_slice_out_of_bounds():
         field[:5, :3, :2]
 
 
-@pytest.mark.parametrize(
-    "index", [
-        IDim, "1", (IDim, JDim)
-    ]
-)
+@pytest.mark.parametrize("index", [IDim, "1", (IDim, JDim)])
 def test_field_unsupported_index(index):
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
     field = common.field(np.ones((10,)), domain=domain)
