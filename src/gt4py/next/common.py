@@ -20,7 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
-from typing import overload, TypeGuard
+from typing import TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -43,20 +43,21 @@ from gt4py.eve.extended_typing import (
 )
 from gt4py.eve.type_definitions import StrEnum
 
+
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 
 class Infinity(int):
-    @classmethod
+    @classmethod  # type: ignore[misc] # since Python 3.9
     @property
-    def positive(cls) -> "Infinity":
+    def positive(cls) -> Infinity:
         return cls(sys.maxsize)
 
-    @classmethod
+    @classmethod  # type: ignore[misc] # since Python 3.9
     @property
-    def negative(cls) -> "Infinity":
-        return cls(-sys.maxsize)
+    def negative(cls) -> Infinity:
+        cls(-sys.maxsize)
 
 
 @enum.unique
@@ -78,11 +79,6 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-DomainLike: TypeAlias = Union[
-    Sequence[Dimension], Dimension, str
-]  # TODO(havogt): revisit once embedded implementation is concluded
-
-
 @dataclasses.dataclass(frozen=True)
 class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
@@ -96,7 +92,7 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
-    @classmethod
+    @classmethod  # type: ignore[misc] # since Python 3.9
     @property
     def infinity(cls) -> UnitRange:
         return cls(Infinity.negative, Infinity.positive)
@@ -147,7 +143,7 @@ DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
-FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
+FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...] | slice | int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -208,7 +204,7 @@ class Domain(Sequence[NamedRange]):
 
 
 def _broadcast_ranges(
-        broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
         ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative, Infinity.positive)
@@ -222,7 +218,6 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | core_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
-
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -258,7 +253,9 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(
+        self, item: FieldSlice
+    ) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -267,7 +264,9 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: "DomainLike") -> Field:
+    def __getitem__(
+        self, item: FieldSlice
+    ) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -337,11 +336,11 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-        definition: Any,
-        /,
-        *,
-        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-        value_type: Optional[type] = None,
+    definition: Any,
+    /,
+    *,
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+    value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -371,7 +370,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-            self, cur_index: int | np.integer, neigh_index: int | np.integer
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
@@ -472,7 +471,9 @@ def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
 
 
 def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
-    return isinstance(index, Sequence) and all(is_named_range(idx) or is_named_index(idx) for idx in index)
+    return isinstance(index, Sequence) and all(
+        is_named_range(idx) or is_named_index(idx) for idx in index
+    )
 
 
 def contains_only_one_value(arr):

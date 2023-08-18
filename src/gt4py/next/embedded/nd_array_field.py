@@ -26,6 +26,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 
+
 try:
     import cupy as cp
 except ImportError:
@@ -44,10 +45,11 @@ from gt4py.next.common import (
     Domain,
     DomainRange,
     DomainSlice,
-    UnitRange,
-    is_domain_slice,
+    NamedIndex,
     NamedRange,
-    NamedIndex, contains_only_one_value,
+    UnitRange,
+    contains_only_one_value,
+    is_domain_slice,
 )
 from gt4py.next.ffront import fbuiltins
 
@@ -121,20 +123,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
     ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
     ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
@@ -155,12 +157,12 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @classmethod
     def from_array(
-            cls,
-            data: npt.ArrayLike,
-            /,
-            *,
-            domain: Domain,
-            value_type: Optional[type] = None,
+        cls,
+        data: npt.ArrayLike,
+        /,
+        *,
+        domain: Domain,
+        value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
         dtype = None
@@ -185,12 +187,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self: _BaseNdArrayField, domain) -> _BaseNdArrayField:
-        raise NotImplementedError()
-
     __call__ = None  # type: ignore[assignment]  # TODO: remap
-
-    __getitem__ = None  # type: ignore[assignment]  # TODO: restrict
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
 
@@ -221,7 +218,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         ...
 
     def __getitem__(
-            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.ScalarT:
         if not isinstance(index, tuple) and not is_domain_slice(index):
             index = (index,)
@@ -233,6 +230,8 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
             return self._getitem_relative_slice(index)
 
         raise IndexError(f"Unsupported index type: {index}")
+
+    restrict = __getitem__
 
     def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field | core_defs.ScalarT:
         slices = _get_slices_from_domain_slice(self.domain, index)
@@ -255,7 +254,9 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         return new if new.ndim == 0 else common.field(new, domain=new_domain)
 
-    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field | core_defs.ScalarT:
+    def _getitem_relative_slice(
+        self, index: tuple[slice | int, ...]
+    ) -> common.Field | core_defs.ScalarT:
         new = self.ndarray[index]
         new_dims = []
         new_ranges = []
@@ -297,9 +298,9 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow
 # TODO gamma
 
 for name in (
-        fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -333,11 +334,9 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
-
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -345,11 +344,9 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
-
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
@@ -373,9 +370,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
         else:
             domain_slice.append(np.newaxis)
             new_domain_dims.append(dim)
-            new_domain_ranges.append(
-                UnitRange(common.Infinity.negative, common.Infinity.positive)
-            )
+            new_domain_ranges.append(UnitRange(common.Infinity.negative, common.Infinity.positive))
     return common.field(
         field.ndarray[tuple(domain_slice)],
         domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
@@ -386,7 +381,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
 
 def _get_slices_from_domain_slice(
-        domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
+    domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -404,7 +399,7 @@ def _get_slices_from_domain_slice(
     """
     slice_indices: list[slice | int | None] = []
 
-    for pos_old, (dim, rng) in enumerate(domain):
+    for pos_old, (dim, _) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
@@ -446,9 +441,11 @@ def _slice_range(input_range: UnitRange, slice_obj: slice) -> UnitRange:
     if slice_obj == slice(None):
         return UnitRange(input_range.start, input_range.stop)
 
-    start = (input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop) + (
-                slice_obj.start or 0)
-    stop = (input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop) + (
-                slice_obj.stop or len(input_range))
+    start = (
+        input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop
+    ) + (slice_obj.start or 0)
+    stop = (
+        input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop
+    ) + (slice_obj.stop or len(input_range))
 
     return UnitRange(start, stop)
