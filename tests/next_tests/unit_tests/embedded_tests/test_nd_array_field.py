@@ -135,43 +135,26 @@ def test_non_dispatched_function():
 
 
 @pytest.mark.parametrize(
-    "broadcasted_dims,expected_domain",
+    "broadcasted_dims,expected_domain,field_domain",
     [
-        ((IDim, JDim), Domain(dims=(IDim,JDim), ranges=(UnitRange(0,10), UnitRange.infinity))),
+        (
+            ((IDim, JDim), Domain(dims=(IDim,JDim), ranges=(UnitRange(0,10), UnitRange.infinity)),
+            common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)))
+        ),
+        (
+            ((IDim, JDim), Domain(dims=(IDim,JDim), ranges=(UnitRange.infinity, UnitRange(0,10))),
+            common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),)))
+        ),
+        (
+            ((IDim, JDim, KDim), Domain(dims=(IDim,JDim,KDim), ranges=(UnitRange.infinity, UnitRange(0,10), UnitRange.infinity)),
+            common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),)))
+        ),
     ],
 )
-def test_get_slices_with_named_indices_1d_to_2d_missing_dim_right(broadcasted_dims, expected_domain):
-    field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+def test_get_slices_with_named_indices(broadcasted_dims, expected_domain, field_domain):
     field = common.field(np.arange(10), domain=field_domain)
     result = broadcast(field, broadcasted_dims)
     assert result.domain == expected_domain
-
-
-# @pytest.mark.parametrize(
-#     "new_domain",
-#     [
-#         common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 5), UnitRange(0, 10))),
-#     ],
-# )
-# def test_get_slices_with_named_indices_1d_to_2d_missing_dim_left(new_domain):
-#     field_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-#     slices = _get_slices_from_domain_slice(field_domain, new_domain)
-#     assert slices == (None, slice(0, 10, None))
-
-
-# @pytest.mark.parametrize(
-#     "named_range",
-#     [
-#         ((IDim, UnitRange(0, 5)), (JDim, UnitRange(0, 10)), (KDim, UnitRange(0, 10))),
-#         common.Domain(
-#             dims=(IDim, JDim, KDim), ranges=(UnitRange(0, 5), UnitRange(0, 10), UnitRange(0, 10))
-#         ),
-#     ],
-# )
-# def test_get_slices_with_named_indices_1d_to_3d(named_range):
-#     field_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-#     slices = _get_slices_from_domain_slice(field_domain, named_range)
-#     assert slices == (slice(0, 5, None), None, None)
 
 
 @pytest.mark.parametrize(
@@ -207,9 +190,13 @@ def test_get_slices_invalid_type():
         _get_slices_from_domain_slice(field_domain, new_domain)
 
 
-def test_field_intersection_binary_operations(binary_op):
+@pytest.mark.parametrize("dims,expected_indices", [
+    ((IDim,), (slice(5, 10), None)),
+    ((JDim,), (None, slice(5, 10))),
+])
+def test_field_intersection_binary_operations(binary_op, dims, expected_indices):
     arr1 = np.arange(10)
-    arr1_domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+    arr1_domain = common.Domain(dims=dims, ranges=(UnitRange(0, 10),))
 
     arr2 = np.ones((5, 5))
     arr2_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
@@ -218,24 +205,7 @@ def test_field_intersection_binary_operations(binary_op):
     field2 = common.field(arr2, domain=arr2_domain)
 
     op_result = binary_op(field1, field2)
-    expected_result = binary_op(arr1[5:10, None], arr2)
-
-    assert op_result.ndarray.shape == (5, 5)
-    assert np.allclose(op_result.ndarray, expected_result)
-
-
-def test_field_intersection_binary_operations_jdim(binary_op):
-    arr1 = np.arange(10)
-    arr1_domain = common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-
-    arr2 = np.ones((5, 5))
-    arr2_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
-
-    field1 = common.field(arr1, domain=arr1_domain)
-    field2 = common.field(arr2, domain=arr2_domain)
-
-    op_result = binary_op(field1, field2)
-    expected_result = binary_op(arr1[None, 5:10], arr2)
+    expected_result = binary_op(arr1[expected_indices[0], expected_indices[1]], arr2)
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)
