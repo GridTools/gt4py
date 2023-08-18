@@ -97,7 +97,7 @@ class UnitRange(Sequence[int], Set[int]):
     @classmethod
     @property
     def infinity(cls) -> UnitRange:
-        return cls(Infinity.negative(),Infinity.positive())
+        return cls(Infinity.negative(), Infinity.positive())
 
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
@@ -144,7 +144,7 @@ class UnitRange(Sequence[int], Set[int]):
 DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
-DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex ]
+DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
 
 
@@ -206,7 +206,7 @@ class Domain(Sequence[NamedRange]):
 
 
 def _broadcast_ranges(
-        broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
         ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
@@ -220,7 +220,6 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | core_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
-
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -335,11 +334,11 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-        definition: Any,
-        /,
-        *,
-        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-        value_type: Optional[type] = None,
+    definition: Any,
+    /,
+    *,
+    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+    value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -369,7 +368,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-            self, cur_index: int | np.integer, neigh_index: int | np.integer
+        self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 

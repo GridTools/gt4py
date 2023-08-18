@@ -38,8 +38,18 @@ except ImportError:
 
 from gt4py._core import definitions
 from gt4py._core.definitions import ScalarT
-from gt4py.next.common import Dimension, DimsT, Domain, DomainRange, DomainSlice, UnitRange, is_domain_slice, \
-    index_tuple_with_indices, NamedRange, NamedIndex
+from gt4py.next.common import (
+    Dimension,
+    DimsT,
+    Domain,
+    DomainRange,
+    DomainSlice,
+    UnitRange,
+    is_domain_slice,
+    index_tuple_with_indices,
+    NamedRange,
+    NamedIndex,
+)
 from gt4py.next.ffront import fbuiltins
 
 
@@ -112,20 +122,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
     ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
     ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
@@ -146,12 +156,12 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @classmethod
     def from_array(
-            cls,
-            data: npt.ArrayLike,
-            /,
-            *,
-            domain: Domain,
-            value_type: Optional[type] = None,
+        cls,
+        data: npt.ArrayLike,
+        /,
+        *,
+        domain: Domain,
+        value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
         dtype = None
@@ -165,7 +175,10 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         assert all(isinstance(d, common.Dimension) for d, r in domain), domain
         assert len(domain) == array.ndim
-        assert all(len(nr[1]) == s or (s==1 and nr[1]==UnitRange.infinity) for nr, s in zip(domain, array.shape))
+        assert all(
+            len(nr[1]) == s or (s == 1 and nr[1] == UnitRange.infinity)
+            for nr, s in zip(domain, array.shape)
+        )
 
         assert value_type is not None  # for mypy
         return cls(domain, array, value_type)
@@ -210,15 +223,14 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @overload
     def __getitem__(
-            self, index: Sequence[common.NamedIndex]
+        self, index: Sequence[common.NamedIndex]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
         # Value in case len(i) == len(self.domain)
         ...
 
     def __getitem__(
-            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-
         if not isinstance(index, tuple):
             index = (index,)
 
@@ -308,9 +320,9 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow
 # TODO gamma
 
 for name in (
-        fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-        + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -344,11 +356,9 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
-
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -356,11 +366,9 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
-
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
@@ -371,10 +379,11 @@ def _find_index_of_dim(dim: Dimension, domain_slice: DomainSlice) -> Optional[in
             return i
     return None
 
+
 def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]):
     domain_slice = []
-    new_domain_dims =[]
-    new_domain_ranges=[]
+    new_domain_dims = []
+    new_domain_ranges = []
     for dim in new_dimensions:
         if (pos := _find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
@@ -383,11 +392,17 @@ def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...])
         else:
             domain_slice.append(np.newaxis)
             new_domain_dims.append(dim)
-            new_domain_ranges.append(UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-    return common.field(field.ndarray[tuple(domain_slice)], domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)))
+            new_domain_ranges.append(
+                UnitRange(common.Infinity.negative(), common.Infinity.positive())
+            )
+    return common.field(
+        field.ndarray[tuple(domain_slice)],
+        domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
+    )
+
 
 def _get_slices_from_domain_slice(
-        domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
+    domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
