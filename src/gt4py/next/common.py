@@ -49,10 +49,12 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 class Infinity(int):
     @classmethod
+    @property
     def positive(cls) -> "Infinity":
         return cls(sys.maxsize)
 
     @classmethod
+    @property
     def negative(cls) -> "Infinity":
         return cls(-sys.maxsize)
 
@@ -97,11 +99,11 @@ class UnitRange(Sequence[int], Set[int]):
     @classmethod
     @property
     def infinity(cls) -> UnitRange:
-        return cls(Infinity.negative(), Infinity.positive())
+        return cls(Infinity.negative, Infinity.positive)
 
     def __len__(self) -> int:
-        if Infinity.positive() in (abs(self.start), abs(self.stop)):
-            return Infinity.positive()
+        if Infinity.positive in (abs(self.start), abs(self.stop)):
+            return Infinity.positive
         return max(0, self.stop - self.start)
 
     def __repr__(self) -> str:
@@ -209,7 +211,7 @@ def _broadcast_ranges(
         broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
+        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative, Infinity.positive)
         for d in broadcast_dims
     )
 

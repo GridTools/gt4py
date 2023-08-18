@@ -374,7 +374,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             domain_slice.append(np.newaxis)
             new_domain_dims.append(dim)
             new_domain_ranges.append(
-                UnitRange(common.Infinity.negative(), common.Infinity.positive())
+                UnitRange(common.Infinity.negative, common.Infinity.positive)
             )
     return common.field(
         field.ndarray[tuple(domain_slice)],

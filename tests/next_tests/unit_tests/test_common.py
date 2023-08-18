@@ -111,19 +111,19 @@ def test_unit_range_intersection(rng1, rng2, expected):
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
-        (UnitRange(20, Infinity.positive()), UnitRange(10, 15), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(5, 10), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(-10, 0), UnitRange(-10, 0)),
-        (UnitRange(0, Infinity.positive()), UnitRange(Infinity.negative(), 5), UnitRange(0, 5)),
+        (UnitRange(20, Infinity.positive), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(Infinity.negative, 0), UnitRange(5, 10), UnitRange(0, 0)),
+        (UnitRange(Infinity.negative, 0), UnitRange(-10, 0), UnitRange(-10, 0)),
+        (UnitRange(0, Infinity.positive), UnitRange(Infinity.negative, 5), UnitRange(0, 5)),
         (
-            UnitRange(Infinity.negative(), 0),
-            UnitRange(Infinity.negative(), 5),
-            UnitRange(Infinity.negative(), 0),
+            UnitRange(Infinity.negative, 0),
+            UnitRange(Infinity.negative, 5),
+            UnitRange(Infinity.negative, 0),
         ),
         (
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(Infinity.negative, Infinity.positive),
+            UnitRange(Infinity.negative, Infinity.positive),
+            UnitRange(Infinity.negative, Infinity.positive),
         ),
     ],
 )
@@ -133,13 +133,13 @@ def test_unit_range_infinite_intersection(rng1, rng2, expected):
 
 
 def test_positive_infinity_range():
-    pos_inf_range = UnitRange(Infinity.positive(), Infinity.positive())
+    pos_inf_range = UnitRange(Infinity.positive, Infinity.positive)
     assert len(pos_inf_range) == 0
 
 
 def test_mixed_infinity_range():
-    mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
-    assert len(mixed_inf_range) == Infinity.positive()
+    mixed_inf_range = UnitRange(Infinity.negative, Infinity.positive)
+    assert len(mixed_inf_range) == Infinity.positive
 
 
 def test_domain_length(domain):
