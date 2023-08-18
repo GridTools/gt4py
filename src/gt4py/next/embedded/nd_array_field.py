@@ -71,8 +71,8 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
-                a_broadcasted = broadcast(a, domain_intersection.dims)
-                b_broadcasted = broadcast(b, domain_intersection.dims)
+                a_broadcasted = _broadcast(a, domain_intersection.dims)
+                b_broadcasted = _broadcast(b, domain_intersection.dims)
                 a_slices = _get_slices_from_domain_slice(a_broadcasted.domain, domain_intersection)
                 b_slices = _get_slices_from_domain_slice(b_broadcasted.domain, domain_intersection)
                 new_data = op(a_broadcasted.ndarray[a_slices], b_broadcasted.ndarray[b_slices])
@@ -357,7 +357,7 @@ def _find_index_of_dim(dim: Dimension, domain_slice: DomainSlice) -> Optional[in
     return None
 
 
-def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]):
+def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]):
     domain_slice = []
     new_domain_dims = []
     new_domain_ranges = []
@@ -376,6 +376,9 @@ def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...])
         field.ndarray[tuple(domain_slice)],
         domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
     )
+
+
+_BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
 
 def _get_slices_from_domain_slice(
@@ -437,11 +440,11 @@ def _compute_slice(rng: DomainRange, domain: Domain, pos: int) -> slice | int:
 def _slice_range(input_range: UnitRange, slice_obj: slice) -> UnitRange:
     # handle slice(None) case
     if slice_obj == slice(None):
-        start = input_range.start
-        stop = input_range.stop
-        return UnitRange(start, stop)
+        return UnitRange(input_range.start, input_range.stop)
 
-    start = (input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop) + (slice_obj.start or 0)
-    stop = (input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop) + (slice_obj.stop or len(input_range))
+    start = (input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop) + (
+                slice_obj.start or 0)
+    stop = (input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop) + (
+                slice_obj.stop or len(input_range))
 
     return UnitRange(start, stop)

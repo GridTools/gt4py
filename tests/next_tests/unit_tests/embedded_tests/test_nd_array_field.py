@@ -23,7 +23,7 @@ import pytest
 from gt4py.next import Dimension, common
 from gt4py.next.common import UnitRange, Domain
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, broadcast, _slice_range
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, _slice_range
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -153,7 +153,7 @@ def test_non_dispatched_function():
 )
 def test_field_broadcast(broadcasted_dims, expected_domain, field_domain):
     field = common.field(np.arange(10), domain=field_domain)
-    result = broadcast(field, broadcasted_dims)
+    result = fbuiltins.broadcast(field, broadcasted_dims)
     assert result.domain == expected_domain
 
 
