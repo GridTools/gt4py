@@ -49,15 +49,13 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 
 class Infinity(int):
-    @classmethod  # type: ignore[misc] # since Python 3.9
-    @property
+    @classmethod
     def positive(cls) -> Infinity:
         return cls(sys.maxsize)
 
-    @classmethod  # type: ignore[misc] # since Python 3.9
-    @property
+    @classmethod
     def negative(cls) -> Infinity:
-        cls(-sys.maxsize)
+        return cls(-sys.maxsize)
 
 
 @enum.unique
@@ -95,11 +93,11 @@ class UnitRange(Sequence[int], Set[int]):
     @classmethod  # type: ignore[misc] # since Python 3.9
     @property
     def infinity(cls) -> UnitRange:
-        return cls(Infinity.negative, Infinity.positive)
+        return cls(Infinity.negative(), Infinity.positive())
 
     def __len__(self) -> int:
-        if Infinity.positive in (abs(self.start), abs(self.stop)):
-            return Infinity.positive
+        if Infinity.positive() in (abs(self.start), abs(self.stop)):
+            return Infinity.positive()
         return max(0, self.stop - self.start)
 
     def __repr__(self) -> str:
@@ -207,7 +205,7 @@ def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative, Infinity.positive)
+        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
         for d in broadcast_dims
     )
 
@@ -253,9 +251,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def restrict(
-        self, item: FieldSlice
-    ) -> Field | core_defs.ScalarT:
+    def restrict(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -264,9 +260,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(
-        self, item: FieldSlice
-    ) -> Field | core_defs.ScalarT:
+    def __getitem__(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod

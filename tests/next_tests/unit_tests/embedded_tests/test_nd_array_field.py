@@ -371,11 +371,16 @@ def test_field_relative_indexing_slice_out_of_bounds():
         field[:5, :3, :2]
 
 
-def test_field_unsupported_index():
+@pytest.mark.parametrize(
+    "index", [
+        IDim, "1", (IDim, JDim)
+    ]
+)
+def test_field_unsupported_index(index):
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
     field = common.field(np.ones((10,)), domain=domain)
     with pytest.raises(IndexError, match="Unsupported index type"):
-        field[IDim]
+        field[index]
 
 
 def test_slice_range():
