@@ -23,7 +23,7 @@ import pytest
 from gt4py.next import Dimension, common
 from gt4py.next.common import UnitRange, Domain
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, broadcast
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, broadcast, _slice_range
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
@@ -324,3 +324,12 @@ def test_field_unsupported_index():
     field = common.field(np.ones((10,)), domain=domain)
     with pytest.raises(IndexError, match="Unsupported index type"):
         field[IDim]
+
+
+def test_slice_range():
+    input_range = UnitRange(2, 10)
+    slice_obj = slice(2, -2)
+    expected = UnitRange(4, 8)
+
+    result = _slice_range(input_range, slice_obj)
+    assert result == expected

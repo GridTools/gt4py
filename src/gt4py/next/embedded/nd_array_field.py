@@ -122,20 +122,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
     ) -> functools.partial[Callable[_P, _R]]:
         ...
 
     @overload
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
     ) -> Callable[_P, _R]:
         ...
 
     @classmethod
     def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+            cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
     ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
         assert op not in cls._builtin_func_map
         if op_func is None:  # when used as a decorator
@@ -156,12 +156,12 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @classmethod
     def from_array(
-        cls,
-        data: npt.ArrayLike,
-        /,
-        *,
-        domain: Domain,
-        value_type: Optional[type] = None,
+            cls,
+            data: npt.ArrayLike,
+            /,
+            *,
+            domain: Domain,
+            value_type: Optional[type] = None,
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
         dtype = None
@@ -223,13 +223,13 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     @overload
     def __getitem__(
-        self, index: Sequence[common.NamedIndex]
+            self, index: Sequence[common.NamedIndex]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
         # Value in case len(i) == len(self.domain)
         ...
 
     def __getitem__(
-        self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
+            self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
         if not isinstance(index, tuple):
             index = (index,)
@@ -283,7 +283,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         for i, elem in enumerate(new_index):
             if isinstance(elem, slice):
                 new_dims.append(self.domain.dims[i])
-                new_ranges.append(self._slice_range(self.domain.ranges[i], elem))
+                new_ranges.append(_slice_range(self.domain.ranges[i], elem))
             elif isinstance(elem, int):
                 new_dims.append(self.domain.dims[elem])
                 new_ranges.append(self.domain.ranges[elem])
@@ -296,32 +296,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
         return common.field(new, domain=new_domain)
 
-    def _slice_range(self, input_range: UnitRange, slice_obj: slice) -> UnitRange:
-        # handle slice(None) case
-        if slice_obj == slice(None):
-            start = input_range.start
-            stop = input_range.stop
-            return UnitRange(start, stop)
-
-        if slice_obj.start is None:
-            slice_start = 0
-        else:
-            slice_start = (
-                slice_obj.start if slice_obj.start >= 0 else input_range.stop + slice_obj.start
-            )
-
-        if slice_obj.stop is None:
-            slice_stop = 0
-        else:
-            slice_stop = (
-                slice_obj.stop if slice_obj.stop >= 0 else input_range.stop + slice_obj.stop
-            )
-
-        start = input_range.start + slice_start
-        stop = input_range.start + slice_stop
-
-        return UnitRange(start, stop)
-
 
 # -- Specialized implementations for intrinsic operations on array fields --
 
@@ -330,9 +304,9 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow
 # TODO gamma
 
 for name in (
-    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
-    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
-    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+        fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+        + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+        + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -366,9 +340,11 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
+
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
+
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
@@ -376,9 +352,11 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
+
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
@@ -412,7 +390,7 @@ def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...])
 
 
 def _get_slices_from_domain_slice(
-    domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
+        domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -465,3 +443,16 @@ def _compute_slice(rng: DomainRange, domain: Domain, pos: int) -> slice | int:
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
+
+
+def _slice_range(input_range: UnitRange, slice_obj: slice) -> UnitRange:
+    # handle slice(None) case
+    if slice_obj == slice(None):
+        start = input_range.start
+        stop = input_range.stop
+        return UnitRange(start, stop)
+
+    start = (input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop) + (slice_obj.start or 0)
+    stop = (input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop) + (slice_obj.stop or len(input_range))
+
+    return UnitRange(start, stop)
