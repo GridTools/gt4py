@@ -46,7 +46,6 @@ from gt4py.next.common import (
     DomainSlice,
     UnitRange,
     is_domain_slice,
-    index_tuple_with_indices,
     NamedRange,
     NamedIndex,
 )
@@ -212,30 +211,20 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
     __pow__ = _make_binary_array_field_intrinsic_func("pow", "power")
 
     @overload
-    def __getitem__(self, index: DomainSlice) -> common.Field:
+    def __getitem__(self, index: DomainSlice) -> common.Field | core_defs.ScalarT:
         """Absolute slicing with dimension names."""
         ...
 
     @overload
-    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
+    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field | core_defs.ScalarT:
         """Relative slicing with ordered dimension access."""
-        ...
-
-    @overload
-    def __getitem__(
-            self, index: Sequence[common.NamedIndex]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        # Value in case len(i) == len(self.domain)
         ...
 
     def __getitem__(
             self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
     ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        if not isinstance(index, tuple):
+        if not isinstance(index, tuple) and not is_domain_slice(index):
             index = (index,)
-
-        if isinstance(index[0], Domain):
-            index = index[0]
 
         if is_domain_slice(index):
             return self._getitem_absolute_slice(index)
