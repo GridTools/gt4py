@@ -234,11 +234,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
         raise IndexError(f"Unsupported index type: {index}")
 
     def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field:
-        # all_named_range = all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index)
-        # all_named_index = all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index)
         slices = _get_slices_from_domain_slice(self.domain, index)
-
-        # if all_named_range or all_named_index:
         new_ranges = []
         new_dims = []
         new = self.ndarray[slices]
@@ -255,10 +251,6 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
                 new_dims.append(dim)
 
         new_domain = Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-        # elif :
-        # idx = self._get_new_domain_indices(index)
-        # new = self.ndarray[self._create_new_index_tuple(slices, index)]
-        # new_domain = self._create_new_domain_with_indices(idx)
 
         return new if new.ndim == 0 else common.field(new, domain=new_domain)
 
@@ -406,15 +398,7 @@ def _find_index_of_dim(dim: Dimension, domain_slice: DomainSlice) -> Optional[in
     return None
 
 def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]):
-
-    # assert all(dim in new_domain for dim in domain)
-    # assert len(domain) <= len(new_domain)
-    # domain and new_domain are ordered with `promote_dims`
-
-    # slice or broadcast
-
     domain_slice = []
-
     new_domain_dims =[]
     new_domain_ranges=[]
     for dim in new_dimensions:
@@ -427,29 +411,6 @@ def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...])
             new_domain_dims.append(dim)
             new_domain_ranges.append(UnitRange(common.Infinity.negative(), common.Infinity.positive()))
     return common.field(field.ndarray[tuple(domain_slice)], domain=Domain(tuple(new_domain_dims), tuple(new_domain_ranges)))
-
-# def _get_slices_from_domain(domain, new_domain):
-#     # assert all(dim in new_domain for dim in domain)
-#     # assert len(domain) <= len(new_domain)
-#     # domain and new_domain are ordered with `promote_dims`
-
-#     # slice or broadcast
-
-#     domain_slice = []
-
-#     new_domain_dims =[]
-#     new_domain_ranges=[]
-#     for dim, rng in new_domain:
-#         if (pos := _find_index_of_dim(dim, domain)) is not None:
-#             domain_slice.append((dim, rng))
-#             new_domain_dims.append(dim)
-#             new_domain_ranges.append(domain[pos][1])
-#         else:
-#             domain_slice.append((dim, np.newaxis))
-#             new_domain_dims.append(dim)
-#             new_domain_ranges.append(UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-#     return _get_slices_from_domain_slice(Domain(tuple(new_domain_dims), tuple(new_domain_ranges)), domain_slice)
-
 
 def _get_slices_from_domain_slice(
         domain: Domain, domain_slice: Sequence[tuple[Dimension, NamedRange | NamedIndex | np.newaxis]]
@@ -468,41 +429,14 @@ def _get_slices_from_domain_slice(
                                        specified in the Domain. If a dimension is not included in the named indices
                                        or ranges, a None is used to indicate expansion along that axis.
     """
-    # assert all(dim in domain for dim in domain_slice)
-    # assert len(domain) >= len(domain_slice)
-    # no ordering of domain_slice dimensions
-
     slice_indices: list[slice | int | None] = []
-
-    # all_dims = ... # ordered such that
-
-    # for dim in all_dims:
-    #     if dim in domain_slice and dim in domain:
-    #         slice_indices.append(_compute_slice(index_or_range, domain, pos_old)) # slice dimension in
-    #     elif dim in domain_slice:
-    #         slice_indices.append(None) # np.newaxis
-    #     else:
-    #         slice_indices.append(slice(None)) # ellipsis (take whole dimension)
 
     for pos_old, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
-            # if index_or_range is np.newaxis:
-            #     slice_indices.append(index_or_range)
-            # else:
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))
-
-    # for new_dim, new_rng in domain_slice:
-    #     pos_new = next(index for index, (dim, _) in enumerate(domain_slice) if dim == new_dim)
-
-    #     if new_dim in domain.dims:
-    #         pos_old = domain.dims.index(new_dim)
-    #         slice_indices.append(_compute_slice(new_rng, domain, pos_old))
-    #     else:
-    #         slice_indices.insert(pos_new, None)  # None is equal to np.newaxis
-
     return tuple(slice_indices)
 
 
