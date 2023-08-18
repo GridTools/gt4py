@@ -47,7 +47,7 @@ from gt4py.next.common import (
     UnitRange,
     is_domain_slice,
     NamedRange,
-    NamedIndex,
+    NamedIndex, contains_only_one_value,
 )
 from gt4py.next.ffront import fbuiltins
 
@@ -222,7 +222,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
     def __getitem__(
             self, index: DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
+    ) -> common.Field | core_defs.ScalarT:
         if not isinstance(index, tuple) and not is_domain_slice(index):
             index = (index,)
 
@@ -234,7 +234,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         raise IndexError(f"Unsupported index type: {index}")
 
-    def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field:
+    def _getitem_absolute_slice(self, index: DomainSlice) -> common.Field | core_defs.ScalarT:
         slices = _get_slices_from_domain_slice(self.domain, index)
         new_ranges = []
         new_dims = []
@@ -255,7 +255,7 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
 
         return new if new.ndim == 0 else common.field(new, domain=new_domain)
 
-    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
+    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field | core_defs.ScalarT:
         new = self.ndarray[index]
         new_dims = []
         new_ranges = []
@@ -283,7 +283,11 @@ class _BaseNdArrayField(common.FieldABC[DimsT, ScalarT]):
                 new_ranges.extend(self.domain.ranges[rest_slice])
 
         new_domain = Domain(dims=new_dims, ranges=tuple(new_ranges))
-        return common.field(new, domain=new_domain)
+
+        if contains_only_one_value(new):
+            return new[0]
+        else:
+            return common.field(new, domain=new_domain)
 
 
 # -- Specialized implementations for intrinsic operations on array fields --

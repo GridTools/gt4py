@@ -206,7 +206,7 @@ class Domain(Sequence[NamedRange]):
 
 
 def _broadcast_ranges(
-    broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
+        broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
         ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
@@ -220,6 +220,7 @@ if TYPE_CHECKING:
     _Value: TypeAlias = "Field" | core_defs.ScalarT
     _P = ParamSpec("_P")
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
+
 
     class GTBuiltInFuncDispatcher(Protocol):
         def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
@@ -334,11 +335,11 @@ class FieldABC(Field[DimsT, core_defs.ScalarT]):
 
 @functools.singledispatch
 def field(
-    definition: Any,
-    /,
-    *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-    value_type: Optional[type] = None,
+        definition: Any,
+        /,
+        *,
+        domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+        value_type: Optional[type] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -368,7 +369,7 @@ class Connectivity(Protocol):
     index_type: type[int] | type[np.int32] | type[np.int64]
 
     def mapped_index(
-        self, cur_index: int | np.integer, neigh_index: int | np.integer
+            self, cur_index: int | np.integer, neigh_index: int | np.integer
     ) -> Optional[int | np.integer]:
         """Return neighbor index."""
 
@@ -470,3 +471,8 @@ def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
 
 def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(is_named_range(idx) or is_named_index(idx) for idx in index)
+
+
+def contains_only_one_value(arr):
+    arr_values = arr.flatten()
+    return len(arr_values) == 1

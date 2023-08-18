@@ -269,6 +269,19 @@ def test_field_relative_indexing_slice(index, expected_shape, expected_domain_0,
 
 
 @pytest.mark.parametrize(
+    "index, expected_value",
+    [
+        ((slice(1, 2), 0), 1)
+    ],
+)
+def test_field_relative_indexing_value_return(index, expected_value):
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    indexed_field = field[index]
+
+    assert indexed_field == expected_value
+
+@pytest.mark.parametrize(
     "index, expected_shape, expected_domain",
     [
         ((1, slice(None), 2), (15,), (JDim, UnitRange(10, 25))),
@@ -301,6 +314,9 @@ def test_field_relative_indexing_integer(index, expected_dim, expected_range):
     assert indexed_field.ndarray.shape == (10,)
     assert len(indexed_field.domain.dims) == 1
     assert indexed_field.domain[0] == (expected_dim, expected_range)
+
+
+
 
 
 def test_field_relative_indexing_integer_out_of_bounds():
