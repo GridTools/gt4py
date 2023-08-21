@@ -315,6 +315,12 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
 
+def is_field(
+    v: Any,
+) -> TypeGuard[Field]:  # this function is introduced to localize the `type: ignore``
+    return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
+
+
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
     """Abstract base class for implementations of the :class:`Field` protocol."""
 
@@ -467,8 +473,3 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
-
-
-def contains_only_one_value(arr):
-    arr_values = arr.flatten()
-    return len(arr_values) == 1

@@ -161,7 +161,7 @@ def min_over(
 
 
 @builtin_function
-def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple, /) -> Field:
+def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /) -> Field:
     raise NotImplementedError()
 
 
