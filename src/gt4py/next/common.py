@@ -20,6 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
+from types import EllipsisType
 from typing import TypeGuard, overload
 
 import numpy as np
@@ -140,7 +141,9 @@ DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, int]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
-FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...] | slice | int
+FieldSlice: TypeAlias = (
+    DomainSlice | tuple[slice | int | EllipsisType, ...] | slice | int | EllipsisType
+)
 
 
 @dataclasses.dataclass(frozen=True)

@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import itertools
 from collections.abc import Callable, Sequence
-from types import ModuleType
+from types import EllipsisType, ModuleType
 from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, overload
 
 import numpy as np
@@ -201,7 +202,7 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
             return self._getitem_absolute_slice(index)
 
         assert isinstance(index, tuple)
-        if all(isinstance(idx, (slice, int)) for idx in index):
+        if all(isinstance(idx, (slice, int)) or idx is Ellipsis for idx in index):
             return self._getitem_relative_slice(index)
 
         raise IndexError(f"Unsupported index type: {index}")
@@ -238,33 +239,20 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
             return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
 
     def _getitem_relative_slice(
-        self, index: tuple[slice | int, ...]
+        self, indices: tuple[slice | int | EllipsisType, ...]
     ) -> common.Field | core_defs.ScalarT:
-        new = self.ndarray[index]
+        new = self.ndarray[indices]
         new_dims = []
         new_ranges = []
 
-        dim_diff = len(new.shape) - len(index)
-
-        if dim_diff > 0:
-            new_index = tuple([*index, Ellipsis])
-        elif dim_diff == 0:
-            new_index = index
-        else:
-            new_index = tuple(idx for idx, value in enumerate(index) if value == slice(None))
-
-        for i, elem in enumerate(new_index):
-            if isinstance(elem, slice):
-                new_dims.append(self.domain.dims[i])
-                new_ranges.append(_slice_range(self.domain.ranges[i], elem))
-            elif isinstance(elem, int):
-                new_dims.append(self.domain.dims[elem])
-                new_ranges.append(self.domain.ranges[elem])
-            elif isinstance(elem, type(Ellipsis)):
-                curr_len = len(new_ranges)
-                rest_slice = slice(curr_len, len(new.shape))
-                new_dims.extend(self.domain.dims[rest_slice])
-                new_ranges.extend(self.domain.ranges[rest_slice])
+        for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
+            self.domain, _expand_ellipsis(indices, len(self.domain)), fillvalue=slice(None)
+        ):
+            if isinstance(idx, slice):
+                new_dims.append(dim)
+                new_ranges.append(_slice_range(rng, idx))
+            else:
+                assert isinstance(idx, int)  # not in new_domain
 
         new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
 
@@ -447,3 +435,15 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     ) + (slice_obj.stop or len(input_range))
 
     return common.UnitRange(start, stop)
+
+
+def _expand_ellipsis(
+    indices: tuple[int | slice | EllipsisType, ...], target_size: int
+) -> tuple[int | slice, ...]:
+    expanded_indices: list[int | slice] = []
+    for idx in indices:
+        if idx is Ellipsis:
+            expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))
+        else:
+            expanded_indices.append(idx)
+    return tuple(expanded_indices)
