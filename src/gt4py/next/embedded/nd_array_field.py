@@ -16,15 +16,18 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from collections.abc import Callable
-from types import ModuleType
-from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
+import itertools
+from collections.abc import Callable, Sequence
+from types import EllipsisType, ModuleType
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, overload
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
+from gt4py.next.ffront import fbuiltins
+
 
 try:
     import cupy as cp
@@ -35,8 +38,6 @@ try:
     from jax import numpy as jnp
 except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
-
-from gt4py.next.ffront import fbuiltins
 
 
 def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
@@ -58,8 +59,8 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
-                a_broadcasted = broadcast(a, domain_intersection.dims)
-                b_broadcasted = broadcast(b, domain_intersection.dims)
+                a_broadcasted = _broadcast(a, domain_intersection.dims)
+                b_broadcasted = _broadcast(b, domain_intersection.dims)
                 a_slices = _get_slices_from_domain_slice(a_broadcasted.domain, domain_intersection)
                 b_slices = _get_slices_from_domain_slice(b_broadcasted.domain, domain_intersection)
                 new_data = op(a_broadcasted.ndarray[a_slices], b_broadcasted.ndarray[b_slices])
@@ -158,7 +159,8 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
     @classmethod
     def from_array(
         cls,
-        data: npt.ArrayLike,
+        data: npt.ArrayLike
+        | core_defs.NDArrayObject,  # TODO: NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.Domain,
@@ -177,7 +179,7 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
         assert all(
-            len(r) == s or (s == 1 and r == common.UnitRange.infinity)
+            len(r) == s or (s == 1 and r == common.UnitRange.infinity())
             for r, s in zip(domain.ranges, array.shape)
         )
 
@@ -187,38 +189,30 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    # def restrict(
-    #     self: _BaseNdArrayField, domain_slice: common.Domain | common.DomainSlice | common.Position
-    # ) -> _BaseNdArrayField | _Value:
-    #     if common.is_domain_slice(domain_slice):
-    #         return self._getitem_domain_slice(domain_slice)
-    #     else:
-    #         return self.ndarray[domain_slice]  # TODO should return field
+    def __getitem__(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+        if not isinstance(index, tuple) and not common.is_domain_slice(index):
+            index = cast(common.FieldSlice, (index,))
+
+        if common.is_domain_slice(index):
+            return self._getitem_absolute_slice(index)
+
+        assert isinstance(index, tuple)
+        if all(
+            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
+        ):
+            return self._getitem_relative_slice(index)
+
+        raise IndexError(f"Unsupported index type: {index}")
+
+    restrict = (
+        __getitem__  # type:ignore[assignment] # TODO(havogt) I don't see the problem that mypy has
+    )
 
     def __setitem__(self, domain, value):
         slices = _get_slices_from_domain_slice(self.domain, domain)
         self.ndarray[slices] = value
 
-    # def _getitem_domain_slice(self, index: common.DomainSlice) -> common.Field:
-    #     slices = _get_slices_from_domain_slice(self.domain, index)
-
-    #     dims = []
-    #     ranges = []
-    #     for k, v in index:
-    #         if not common.is_int_index(v):
-    #             dims.append(k)
-    #             ranges.append(v)
-
-    #     new = self.ndarray[slices]
-    #     if len(dims) == 0:
-    #         return new  # scalar
-    #     else:
-    #         new_domain = common.Domain(tuple(dims), tuple(ranges))
-    #         return self.__class__(new_domain, new, self.value_type)
-
     __call__ = None  # type: ignore[assignment]  # TODO: remap
-
-    # __getitem__ = restrict
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
 
@@ -249,48 +243,10 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
 
     __invert__ = _make_unary_array_field_intrinsic_func("invert", "invert")
 
-    @overload
-    def __getitem__(self, index: common.DomainSlice) -> common.Field:
-        """Absolute slicing with dimension names."""
-        ...
-
-    @overload
-    def __getitem__(self, index: tuple[slice | int, ...]) -> common.Field:
-        """Relative slicing with ordered dimension access."""
-        ...
-
-    @overload
-    def __getitem__(
-        self, index: Sequence[common.NamedIndex]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        # Value in case len(i) == len(self.domain)
-        ...
-
-    def __getitem__(
-        self, index: common.DomainSlice | Sequence[common.NamedIndex] | tuple[int, ...]
-    ) -> common.Field | core_defs.DType[core_defs.ScalarT]:
-        if not (isinstance(index, tuple) or common.is_domain_slice(index)):
-            index = (index,)
-
-        # if isinstance(index[0], common.Domain):
-        #     index = index[0]
-
-        if common.is_domain_slice(index):
-            return self._getitem_absolute_slice(index)
-
-        if all(isinstance(idx, slice) or common.is_int_index(idx) for idx in index):
-            return self._getitem_relative_slice(index)
-
-        raise IndexError(f"Unsupported index type: {index}")
-
-    restrict = __getitem__
-
-    def _getitem_absolute_slice(self, index: common.DomainSlice) -> common.Field:
-        # all_named_range = all(isinstance(idx[0], Dimension) and isinstance(idx[1], UnitRange) for idx in index)
-        # all_named_index = all(isinstance(idx[0], Dimension) and isinstance(idx[1], int) for idx in index)
+    def _getitem_absolute_slice(
+        self, index: common.DomainSlice
+    ) -> common.Field | core_defs.ScalarT:
         slices = _get_slices_from_domain_slice(self.domain, index)
-
-        # if all_named_range or all_named_index:
         new_ranges = []
         new_dims = []
         new = self.ndarray[slices]
@@ -307,99 +263,36 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
                 new_dims.append(dim)
 
         new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-        # elif :
-        # idx = self._get_new_domain_indices(index)
-        # new = self.ndarray[self._create_new_index_tuple(slices, index)]
-        # new_domain = self._create_new_domain_with_indices(idx)
 
-        return new if new.ndim == 0 else common.field(new, domain=new_domain)
+        if len(new_domain) == 0:
+            assert core_defs.is_scalar_type(new)
+            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
+        else:
+            return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
 
-    def _get_new_domain_indices(self, index: common.NamedIndex) -> tuple[int]:
-        ndarray_shape = self.ndarray.shape
-        dim_indices_to_exclude = [self.domain.dims.index(dim[0]) for dim in index]
-        new_domain_indices = [
-            i for i in range(len(ndarray_shape)) if i not in dim_indices_to_exclude
-        ]
-        return tuple(new_domain_indices)
-
-    def _create_new_index_tuple(
-        self, slices: tuple[int], index: common.NamedIndex
-    ) -> tuple[int | slice]:
-        all_dims = self.domain.dims
-        subset_dims = [dim for dim, _ in index]
-        missing_dim_indices = [i for i, dim in enumerate(all_dims) if dim not in subset_dims]
-
-        new_index_list = []
-        slices_index = 0
-        for i in range(len(all_dims)):
-            if i in missing_dim_indices:
-                new_index_list.append(slice(None))
-            else:
-                new_index_list.append(slices[slices_index])
-                slices_index += 1
-        return tuple(new_index_list)
-
-    def _create_new_domain_with_indices(self, indices: tuple[int]) -> common.Domain:
-        new_dims = index_tuple_with_indices(self.domain.dims, indices)
-        new_ranges = index_tuple_with_indices(self.domain.ranges, indices)
-        return common.Domain(dims=new_dims, ranges=new_ranges)
-
-    def _getitem_relative_slice(self, index: tuple[slice | int, ...]) -> common.Field:
-        new = self.ndarray[index]
-
-        if len(new.shape) == 0:
-            return new
+    def _getitem_relative_slice(
+        self, indices: tuple[slice | int | EllipsisType, ...]
+    ) -> common.Field | core_defs.ScalarT:
+        new = self.ndarray[indices]
         new_dims = []
         new_ranges = []
 
-        dim_diff = len(self.domain) - len(index)
+        for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
+            self.domain, _expand_ellipsis(indices, len(self.domain)), fillvalue=slice(None)
+        ):
+            if isinstance(idx, slice):
+                new_dims.append(dim)
+                new_ranges.append(_slice_range(rng, idx))
+            else:
+                assert common.is_int_index(idx)  # not in new_domain
 
-        if dim_diff > 0:
-            new_index = tuple([*index] + [Ellipsis] * dim_diff)
+        new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
+
+        if len(new_domain) == 0:
+            assert core_defs.is_scalar_type(new), new
+            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
-            new_index = index
-
-        for i, elem in enumerate(new_index):
-            if isinstance(elem, slice):
-                new_dims.append(self.domain.dims[i])
-                new_ranges.append(self._slice_range(self.domain.ranges[i], elem))
-            elif common.is_int_index(elem):
-                ...
-                # new_dims.append(self.domain.dims[elem])
-                # new_ranges.append(self.domain.ranges[elem])
-            elif isinstance(elem, type(Ellipsis)):
-                new_dims.append(self.domain.dims[i])
-                new_ranges.append(self.domain.ranges[i])
-
-        new_domain = common.Domain(dims=new_dims, ranges=tuple(new_ranges))
-        return common.field(new, domain=new_domain)
-
-    def _slice_range(self, input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
-        start = (input_range.start if (slice_obj.start or 0) >= 0 else input_range.stop) + (
-            slice_obj.start or 0
-        )
-        stop = (
-            input_range.start if (slice_obj.stop or len(input_range)) >= 0 else input_range.stop
-        ) + (slice_obj.stop or len(input_range))
-        return common.UnitRange(start, stop)
-        # if slice_obj.start is None:
-        #     slice_start = 0
-        # else:
-        #     slice_start = (
-        #         slice_obj.start if slice_obj.start >= 0 else input_range.stop + slice_obj.start
-        #     )
-
-        # if slice_obj.stop is None:
-        #     slice_stop = 0
-        # else:
-        #     slice_stop = (
-        #         slice_obj.stop if slice_obj.stop >= 0 else input_range.stop + slice_obj.stop
-        #     )
-
-        # start = input_range.start + slice_start
-        # stop = input_range.start + slice_stop
-
-        # return common.UnitRange(start, stop)
+            return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
 
 
 # -- Specialized implementations for intrinsic operations on array fields --
@@ -462,22 +355,18 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _find_index_of_dim(dim: Dimension, domain_slice: common.DomainSlice) -> Optional[int]:
+def _find_index_of_dim(
+    dim: common.Dimension,
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+) -> Optional[int]:
     for i, (d, _) in enumerate(domain_slice):
         if dim == d:
             return i
     return None
 
 
-def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]):
-    # assert all(dim in new_domain for dim in domain)
-    # assert len(domain) <= len(new_domain)
-    # domain and new_domain are ordered with `promote_dims`
-
-    # slice or broadcast
-
-    domain_slice = []
-
+def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+    domain_slice: list[slice | None] = []
     new_domain_dims = []
     new_domain_ranges = []
     for dim in new_dimensions:
@@ -497,31 +386,20 @@ def broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...])
     )
 
 
-# def _get_slices_from_domain(domain, new_domain):
-#     # assert all(dim in new_domain for dim in domain)
-#     # assert len(domain) <= len(new_domain)
-#     # domain and new_domain are ordered with `promote_dims`
+def _builtins_broadcast(
+    field: common.Field | core_defs.Scalar, new_dimensions: tuple[common.Dimension, ...]
+) -> common.Field:  # separated for typing reasons
+    if common.is_field(field):
+        return _broadcast(field, new_dimensions)
+    raise AssertionError("Scalar case not reachable from `fbuiltins.broadcast`.")
 
-#     # slice or broadcast
 
-#     domain_slice = []
-
-#     new_domain_dims =[]
-#     new_domain_ranges=[]
-#     for dim, rng in new_domain:
-#         if (pos := _find_index_of_dim(dim, domain)) is not None:
-#             domain_slice.append((dim, rng))
-#             new_domain_dims.append(dim)
-#             new_domain_ranges.append(domain[pos][1])
-#         else:
-#             domain_slice.append((dim, np.newaxis))
-#             new_domain_dims.append(dim)
-#             new_domain_ranges.append(UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-#     return _get_slices_from_domain_slice(Domain(tuple(new_domain_dims), tuple(new_domain_ranges)), domain_slice)
+_BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _get_slices_from_domain_slice(
-    domain: common.Domain, domain_slice: common.DomainSlice
+    domain: common.Domain,
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> tuple[slice | int | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -537,41 +415,14 @@ def _get_slices_from_domain_slice(
                                        specified in the Domain. If a dimension is not included in the named indices
                                        or ranges, a None is used to indicate expansion along that axis.
     """
-    # assert all(dim in domain for dim in domain_slice)
-    # assert len(domain) >= len(domain_slice)
-    # no ordering of domain_slice dimensions
-
     slice_indices: list[slice | int | None] = []
 
-    # all_dims = ... # ordered such that
-
-    # for dim in all_dims:
-    #     if dim in domain_slice and dim in domain:
-    #         slice_indices.append(_compute_slice(index_or_range, domain, pos_old)) # slice dimension in
-    #     elif dim in domain_slice:
-    #         slice_indices.append(None) # np.newaxis
-    #     else:
-    #         slice_indices.append(slice(None)) # ellipsis (take whole dimension)
-
-    for pos_old, (dim, rng) in enumerate(domain):
+    for pos_old, (dim, _) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
-            # if index_or_range is np.newaxis:
-            #     slice_indices.append(index_or_range)
-            # else:
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))
-
-    # for new_dim, new_rng in domain_slice:
-    #     pos_new = next(index for index, (dim, _) in enumerate(domain_slice) if dim == new_dim)
-
-    #     if new_dim in domain.dims:
-    #         pos_old = domain.dims.index(new_dim)
-    #         slice_indices.append(_compute_slice(new_rng, domain, pos_old))
-    #     else:
-    #         slice_indices.insert(pos_new, None)  # None is equal to np.newaxis
-
     return tuple(slice_indices)
 
 
@@ -590,7 +441,7 @@ def _compute_slice(rng: common.DomainRange, domain: common.Domain, pos: int) -> 
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.infinity:
+        if domain.ranges[pos] == common.UnitRange.infinity():
             return slice(None)
         else:
             return slice(
@@ -601,3 +452,30 @@ def _compute_slice(rng: common.DomainRange, domain: common.Domain, pos: int) -> 
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
+
+
+def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
+    # handle slice(None) case
+    if slice_obj == slice(None):
+        return common.UnitRange(input_range.start, input_range.stop)
+
+    start = (
+        input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop
+    ) + (slice_obj.start or 0)
+    stop = (
+        input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop
+    ) + (slice_obj.stop or len(input_range))
+
+    return common.UnitRange(start, stop)
+
+
+def _expand_ellipsis(
+    indices: tuple[int | slice | EllipsisType, ...], target_size: int
+) -> tuple[int | slice, ...]:
+    expanded_indices: list[int | slice] = []
+    for idx in indices:
+        if idx is Ellipsis:
+            expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))
+        else:
+            expanded_indices.append(idx)
+    return tuple(expanded_indices)

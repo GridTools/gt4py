@@ -20,6 +20,7 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
+from types import EllipsisType
 from typing import TypeGuard, overload
 
 import numpy as np
@@ -36,12 +37,12 @@ from gt4py.eve.extended_typing import (
     Protocol,
     TypeAlias,
     TypeVar,
-    Union,
     extended_runtime_checkable,
     final,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
+
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
@@ -49,11 +50,11 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 class Infinity(int):
     @classmethod
-    def positive(cls) -> "Infinity":
+    def positive(cls) -> Infinity:
         return cls(sys.maxsize)
 
     @classmethod
-    def negative(cls) -> "Infinity":
+    def negative(cls) -> Infinity:
         return cls(-sys.maxsize)
 
 
@@ -75,10 +76,6 @@ class Dimension:
     def __str__(self):
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
-
-DomainLike: TypeAlias = Union[
-    Sequence[Dimension], Dimension, str
-]  # TODO(havogt): revisit once embedded implementation is concluded
 
 SelfShiftable = TypeVar("SelfShiftable", bound="Shiftable", covariant=True)
 
@@ -105,7 +102,6 @@ class UnitRange(Sequence[int], Set[int], Shiftable):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    @property
     def infinity(cls) -> UnitRange:
         return cls(Infinity.negative(), Infinity.positive())
 
@@ -167,7 +163,9 @@ DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
-FieldSlice: TypeAlias = DomainSlice | tuple[slice | int, ...]
+FieldSlice: TypeAlias = (
+    DomainSlice | tuple[slice | int | EllipsisType, ...] | slice | int | EllipsisType
+)
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
@@ -247,7 +245,7 @@ def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange.infinite() for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.infinity() for d in broadcast_dims
     )
 
 
@@ -302,7 +300,7 @@ class Field(NextGTDimsInferface, Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -311,7 +309,7 @@ class Field(NextGTDimsInferface, Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: "DomainLike") -> Field:
+    def __getitem__(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -365,6 +363,12 @@ class Field(NextGTDimsInferface, Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
+
+
+def is_field(
+    v: Any,
+) -> TypeGuard[Field]:  # this function is introduced to localize the `type: ignore``
+    return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 class MutableField(Field[DimsT, core_defs.ScalarT]):
@@ -507,20 +511,6 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
-
-
-def is_named_range(v: Any) -> TypeGuard[NamedRange]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
-
-
-def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and is_int_index(v[1])
-
-
-def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
-    return isinstance(index, Sequence) and all(
-        is_named_range(idx) or is_named_index(idx) for idx in index
-    )
 
 
 def index_tuple_with_indices(target_tuple, indices_to_use):

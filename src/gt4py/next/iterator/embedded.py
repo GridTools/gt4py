@@ -1076,7 +1076,7 @@ class IndexField(common.FieldABC):
         raise NotImplementedError()
 
     def restrict(self, item: common.DomainLike) -> common.Field:
-        if isinstance(item, common.Domain):
+        if common.is_domain_slice(item) and all(common.is_named_index(e) for e in item):
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
