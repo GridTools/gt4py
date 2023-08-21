@@ -312,7 +312,41 @@ def test_bound_args_wrong_args(cartesian_case):
     )
 
 
-def test_bound_args_wrong_input_args(cartesian_case):
+args_err = [
+    # bound arguments, arguments in call, keyword arguments in call, expected error
+    (
+        ["scalar", "bool_val"],
+        ["a", "scalar", "out"],
+        [],
+        "Total number of arguments and keyword arguments (5) does not match original program definition (4)!",
+    ),
+    (
+        ["scalar", "bool_val"],
+        ["a", "out"],
+        ["scalar"],
+        "Parameter `scalar` already set as a bound argument.",
+    ),
+    (
+        ["scalar"],
+        ["a", "out"],
+        [],
+        "1 parameter(s) missing in new program call compared to original signature",
+    ),
+    (
+        ["scalar", "bool_val", "tille"],
+        None,
+        None,
+        "Keyword argument `tille` is not a valid program parameter.",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "bound_args,positional_call_args,keyword_call_args,expected_error", args_err
+)
+def test_bound_args_wrong_input_args(
+    cartesian_case, bound_args, positional_call_args, keyword_call_args, expected_error
+):
     @field_operator
     def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
         if bool_val:
@@ -323,16 +357,35 @@ def test_bound_args_wrong_input_args(cartesian_case):
     def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
         fieldop_bound_args(a, scalar, bool_val, out=out)
 
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
+    bound_args_vals = {}
+    for bound_arg in bound_args:
+        if bound_arg in [prg_param.id for prg_param in program_bound_args.past_node.params]:
+            bound_args_vals[bound_arg] = cases.allocate(
+                cartesian_case, program_bound_args, bound_arg
+            )()
+        else:
+            bound_args_vals[bound_arg] = 42
 
-    with pytest.raises(TypeError_) as excinfo:
-        prog_bounds(a, int32(7), out, offset_provider={})
-    assert (
-        "Total number of arguments and keyword arguments (5) does not match original program definition (4)!"
-        in str(excinfo.value)
-    )
+    if positional_call_args is not None:
+        args = []
+        for param in positional_call_args:
+            if param in [prg_param.id for prg_param in program_bound_args.past_node.params]:
+                args.append(cases.allocate(cartesian_case, program_bound_args, param)())
+            else:
+                args.append(42)
+
+    if keyword_call_args is not None:
+        kwargs = {}
+        for param in keyword_call_args:
+            if param in [prg_param.id for prg_param in program_bound_args.past_node.params]:
+                kwargs[param] = cases.allocate(cartesian_case, program_bound_args, param)()
+            else:
+                kwargs[param] = 42
+
+    with pytest.raises(Exception) as excinfo:
+        prog_bounds = program_bound_args.with_bound_args(**bound_args_vals)
+        prog_bounds(*args, **kwargs, offset_provider={})
+    assert expected_error in str(excinfo.value)
 
 
 def test_bound_args_repeated_bound_args(cartesian_case):
