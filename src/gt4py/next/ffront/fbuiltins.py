@@ -95,9 +95,6 @@ class BuiltInFunction(Generic[_R, _P]):
 
     def dispatch(self, *args: Any) -> Callable[_P, _R]:
         arg_types = tuple(type(arg) for arg in args)
-        if self.function == where.function and arg_types[1] == tuple and arg_types[2] == tuple:
-            # TODO(havogt): temporary workaround for `where(cond, tuple(...), tuple(...))`
-            return self.function
         for atype in arg_types:
             # current strategy is to select the implementation of the first arg that supports the operation
             # TODO: define a strategy that converts or prevents conversion
@@ -136,6 +133,19 @@ def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
     return BuiltInFunction(fun)
 
 
+class WhereBuiltinFunction(BuiltInFunction[_R, _P]):
+    def dispatch(self, *args: Any) -> Callable[_P, _R]:
+        arg_types = tuple(type(arg) for arg in args)
+        if arg_types[1] == tuple and arg_types[2] == tuple:
+            # TODO(havogt): temporary workaround for `where(cond, tuple(...), tuple(...))`
+            return self.function
+        return super().dispatch(*args)
+
+
+def where_builtin_function(fun: Callable[_P, _R]) -> WhereBuiltinFunction[_R, _P]:
+    return WhereBuiltinFunction(fun)
+
+
 @builtin_function
 def neighbor_sum(
     field: Field,
@@ -168,7 +178,7 @@ def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple, /) -> Field:
     raise NotImplementedError()
 
 
-@builtin_function
+@where_builtin_function
 def where(
     mask: Field,
     true_field: Field | gt4py_defs.ScalarT | Tuple,
