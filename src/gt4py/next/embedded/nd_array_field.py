@@ -164,7 +164,7 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         assert all(isinstance(d, common.Dimension) for d, r in domain), domain
         assert len(domain) == array.ndim
         assert all(
-            len(nr[1]) == s or (s == 1 and nr[1] == common.UnitRange.infinity)
+            len(nr[1]) == s or (s == 1 and nr[1] == common.UnitRange.infinity())
             for nr, s in zip(domain, array.shape)
         )
 
@@ -409,7 +409,7 @@ def _compute_slice(rng: common.DomainRange, domain: common.Domain, pos: int) -> 
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.infinity:
+        if domain.ranges[pos] == common.UnitRange.infinity():
             return slice(None)
         else:
             return slice(

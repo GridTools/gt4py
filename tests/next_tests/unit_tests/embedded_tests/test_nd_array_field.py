@@ -140,14 +140,14 @@ def test_non_dispatched_function():
         (
             (
                 (IDim, JDim),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinity)),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinity())),
                 common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
             )
         ),
         (
             (
                 (IDim, JDim),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinity, UnitRange(0, 10))),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinity(), UnitRange(0, 10))),
                 common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),)),
             )
         ),
@@ -156,7 +156,7 @@ def test_non_dispatched_function():
                 (IDim, JDim, KDim),
                 Domain(
                     dims=(IDim, JDim, KDim),
-                    ranges=(UnitRange.infinity, UnitRange(0, 10), UnitRange.infinity),
+                    ranges=(UnitRange.infinity(), UnitRange(0, 10), UnitRange.infinity()),
                 ),
                 common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),)),
             )

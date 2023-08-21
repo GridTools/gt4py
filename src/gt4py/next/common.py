@@ -90,8 +90,7 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
-    @classmethod  # type: ignore[misc] # since Python 3.9
-    @property
+    @classmethod
     def infinity(cls) -> UnitRange:
         return cls(Infinity.negative(), Infinity.positive())
 
