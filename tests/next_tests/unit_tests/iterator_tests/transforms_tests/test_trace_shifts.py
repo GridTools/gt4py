@@ -320,3 +320,20 @@ def test_if_of_tuples_of_iterators():
 
     actual = TraceShifts.apply(testee)
     assert actual == expected
+
+
+def test_non_derefed_iterator():
+    """
+    Test that even if an iterator is not derefed the resulting dict has an (empty) entry for it.
+    """
+    non_derefed_it = im.shift("I", 1)("x")
+    testee = ir.StencilClosure(
+        # λ(x) → (λ(non_derefed_it) → ·x)(⟪Iₒ, 1ₒ⟫(x))
+        stencil=im.lambda_("x")(im.let("non_derefed_it", non_derefed_it)(im.deref("x"))),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+
+    actual = TraceShifts.apply(testee, inputs_only=False)
+    assert actual[id(non_derefed_it)] == set()
