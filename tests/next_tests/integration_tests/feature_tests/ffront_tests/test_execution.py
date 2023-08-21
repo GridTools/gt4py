@@ -339,7 +339,7 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
+def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
@@ -351,6 +351,17 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
         ref=lambda a: a.astype(bool),
         comparison=lambda a, b: np.all(a == b),
     )
+
+
+@pytest.mark.parametrize("inp", [0.0, 2.0])
+def test_astype_bool_scalar(cartesian_case, inp):  # noqa: F811 # fixtures
+    @gtx.field_operator
+    def testee(inp: float) -> gtx.Field[[IDim], bool]:
+        return broadcast(astype(inp, bool), (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, inp, out=out, ref=bool(inp))
 
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
