@@ -829,15 +829,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 node.location,
                 f"Invalid call to `astype`. First argument must be a field or scalar type, but got {value.type}.",
             )
-        if not isinstance(new_type, foast.Name) or new_type.id not in [
-            kind.name.lower() for kind in ts.ScalarKind
+        if not isinstance(new_type, foast.Name) or new_type.id.upper() not in [
+            kind.name for kind in ts.ScalarKind
         ]:
             raise errors.DSLError(
                 node.location,
                 f"Invalid call to `astype`. Second argument must be a scalar type, but got {new_type}.",
             )
 
-        return_type = with_altered_scalar_kind(value.type, ts.ScalarKind.BOOL)
+        return_type = with_altered_scalar_kind(
+            value.type, getattr(ts.ScalarKind, new_type.id.upper())
+        )
 
         return foast.Call(
             func=node.func,
