@@ -332,11 +332,33 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
 @pytest.mark.parametrize(
     "index, expected_shape, expected_domain",
     [
-        ((1, slice(None), 2), (15,), (JDim, UnitRange(10, 25))),
-        ((slice(None), slice(None), 2), (10, 15), (IDim, UnitRange(5, 15))),
-        ((slice(None),), (10, 15, 10), (IDim, UnitRange(5, 15))),
-        ((slice(None), slice(None), slice(None)), (10, 15, 10), (IDim, UnitRange(5, 15))),
-        ((slice(None)), (10, 15, 10), (IDim, UnitRange(5, 15))),
+        ((1, slice(None), 2), (15,), Domain((JDim,), (UnitRange(10, 25),))),
+        (
+            (slice(None), slice(None), 2),
+            (10, 15),
+            Domain((IDim, JDim), (UnitRange(5, 15), UnitRange(10, 25))),
+        ),
+        (
+            (slice(None),),
+            (10, 15, 10),
+            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+        ),
+        (
+            (slice(None), slice(None), slice(None)),
+            (10, 15, 10),
+            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+        ),
+        (
+            (slice(None)),
+            (10, 15, 10),
+            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+        ),
+        ((0, Ellipsis, 0), (15,), Domain((JDim,), (UnitRange(10, 25),))),
+        (
+            Ellipsis,
+            (10, 15, 10),
+            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+        ),
     ],
 )
 def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
@@ -348,7 +370,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
 
     assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == expected_shape
-    assert indexed_field.domain[0] == expected_domain
+    assert indexed_field.domain == expected_domain
 
 
 @pytest.mark.parametrize(
@@ -361,21 +383,6 @@ def test_relative_indexing_value_return(index, expected_value):
     indexed_field = field[index]
 
     assert indexed_field == expected_value
-
-
-@pytest.mark.parametrize(
-    "index, expected_dim, expected_range",
-    [((slice(None), 0), IDim, UnitRange(3, 13)), (1, JDim, UnitRange(-5, 5))],
-)
-def test_field_relative_indexing_integer(index, expected_dim, expected_range):
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
-    field = common.field(np.ones((10, 10)), domain=domain)
-    indexed_field = field[index]
-
-    assert isinstance(indexed_field, common.Field)
-    assert indexed_field.ndarray.shape == (10,)
-    assert len(indexed_field.domain.dims) == 1
-    assert indexed_field.domain[0] == (expected_dim, expected_range)
 
 
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])
