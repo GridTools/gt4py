@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import errors
 from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests import cases
@@ -227,7 +228,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
     inp = gtx.np_as_located_field(JDim)(np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
