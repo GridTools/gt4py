@@ -183,6 +183,8 @@ def from_value(value: Any) -> ts.TypeSpec:
                 f"Value `{value}` is out of range to be representable as `INT32` or `INT64`."
             )
         return candidate_type
+    elif isinstance(value, dict):
+        return value
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
     elif isinstance(value, LocatedField):

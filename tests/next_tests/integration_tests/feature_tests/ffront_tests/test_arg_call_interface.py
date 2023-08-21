@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from gt4py.next import errors
-from gt4py.next.common import Field
+import gt4py.next as gtx
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import int32, int64
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
@@ -56,7 +56,7 @@ def _generate_arg_permutations(
 
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "c")))
 def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[str], tuple[str]]):
-    @field_operator
+    @gtx.field_operator
     def testee(a: IField, b: IField, c: IField) -> IField:
         return a * 2 * b - c
 
@@ -79,11 +79,11 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
 
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "out")))
 def test_call_program_from_python(cartesian_case, arg_spec):
-    @field_operator
+    @gtx.field_operator
     def foo(a: IField, b: IField) -> IField:
         return a + 2 * b
 
-    @program
+    @gtx.program
     def testee(a: IField, b: IField, out: IField):
         foo(a, b, out=out)
 
@@ -104,11 +104,11 @@ def test_call_program_from_python(cartesian_case, arg_spec):
 
 
 def test_call_field_operator_from_field_operator(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def foo(x: IField, y: IField, z: IField):
         return x + 2 * y + 3 * z
 
-    @field_operator
+    @gtx.field_operator
     def testee(a: IField, b: IField, c: IField) -> IField:
         return foo(a, b, c) + 5 * foo(a, y=b, z=c) + 7 * foo(a, z=c, y=b) + 11 * foo(a, b, z=c)
 
@@ -127,11 +127,11 @@ def test_call_field_operator_from_field_operator(cartesian_case):
 
 
 def test_call_field_operator_from_program(cartesian_case):
-    @field_operator
+    @gtx.field_operator
     def foo(x: IField, y: IField, z: IField) -> IField:
         return x + 2 * y + 3 * z
 
-    @program
+    @gtx.program
     def testee(
         a: IField,
         b: IField,
@@ -175,11 +175,11 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
     ]:
         pytest.xfail("Calling scan from field operator not fully supported.")
 
-    @scan_operator(axis=KDim, forward=True, init=0.0)
+    @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y
 
-    @field_operator
+    @gtx.field_operator
     def testee(a: IJKFloatField, b: IJKFloatField) -> IJKFloatField:
         return (
             testee_scan(a, b)
@@ -199,11 +199,11 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
 
 
 def test_call_scan_operator_from_program(cartesian_case):
-    @scan_operator(axis=KDim, forward=True, init=0.0)
+    @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
         return state + x + 2.0 * y
 
-    @program
+    @gtx.program
     def testee(
         a: IJKFloatField,
         b: IJKFloatField,
@@ -243,13 +243,13 @@ def test_scan_wrong_return_type(cartesian_case):
         match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
     ):
 
-        @scan_operator(axis=KDim, forward=True, init=0)
+        @gtx.scan_operator(axis=KDim, forward=True, init=0)
         def testee_scan(
             state: int32,
         ) -> float:
             return 1.0
 
-        @program
+        @gtx.program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
@@ -262,12 +262,26 @@ def test_scan_wrong_state_type(cartesian_case):
         ),
     ):
 
-        @scan_operator(axis=KDim, forward=True, init=0)
+        @gtx.scan_operator(axis=KDim, forward=True, init=0)
         def testee_scan(
             state: float,
         ) -> int32:
             return 1
 
-        @program
+        @gtx.program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+def test_call_domain_from_field_operator(cartesian_case):
+    @gtx.field_operator(backend=cartesian_case.backend)
+    def fieldop_domain(a: cases.IField) -> cases.IField:
+        return a + a
+
+    a = cases.allocate(cartesian_case, fieldop_domain, "a")()
+    out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
+    fieldop_domain(a, out=out, offset_provider={}, domain={IDim: (1, 9)})
+    ref = a.array()[1:9] * 2
+    return_out = out.array()[1:9]
+
+    assert np.allclose(ref, return_out)

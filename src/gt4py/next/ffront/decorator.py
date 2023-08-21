@@ -286,8 +286,14 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
+        val_kwargs = {**kwargs}
         arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
+        kwarg_types = {}
+        for kwarg in kwargs:
+            if isinstance(kwargs[kwarg], dict):
+                kwarg_types[kwarg] = kwargs[kwarg]
+                val_kwargs.pop(kwarg)
+        kwarg_types = {k: type_translation.from_value(v) for k, v in val_kwargs.items()}
 
         try:
             type_info.accepts_args(
@@ -324,6 +330,8 @@ class Program:
                         " tuple) need to have the same shape and dimensions."
                     )
                 size_args.extend(shape if shape else [None] * len(dims))
+        if "domain" in kwargs.keys():
+            kwargs.pop("domain")
         return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property
@@ -489,6 +497,24 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __gt_closure_vars__(self) -> dict[str, Any]:
         return self.closure_vars
 
+    def _construct_domain(self, kwarg_types: dict, location: Any) -> past.Dict:
+        domain_keys = []
+        domain_values = []
+        for key_ls, vals_tup in list(kwarg_types["domain"].items()):
+            new_past_name = past.Name(
+                id=key_ls.value,
+                location=location,
+                type=type_translation.from_value(key_ls),
+            )
+            elts_vals = [
+                past.Constant(value=val, type=type_translation.from_value(val), location=location)
+                for val in vals_tup
+            ]
+            domain_keys.append(new_past_name)
+            domain_values.append(past.TupleExpr(elts=elts_vals, location=location))
+        domain_ref = past.Dict(keys_=domain_keys, values_=domain_values, location=location)
+        return domain_ref
+
     def as_program(
         self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
@@ -518,6 +544,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
+        domain_sym: past.Symbol = past.DataSymbol(
+            id="domain",
+            type=ts.DeferredType(constraint=ts.DimensionType),
+            namespace=dialect_ast_enums.Namespace.LOCAL,
+            location=loc,
+        )
+        kwargs_dict = {"out": out_ref}
+        if "domain" in kwarg_types.keys():
+            kwargs_dict["domain"] = self._construct_domain(kwarg_types, loc)
 
         if self.foast_node.id in self.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
@@ -534,12 +569,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=params_decl + [out_sym],
+            params=params_decl + [out_sym] + [domain_sym],
             body=[
                 past.Call(
                     func=past.Name(id=self.foast_node.id, location=loc),
                     args=params_ref,
-                    kwargs={"out": out_ref},
+                    kwargs=kwargs_dict,
                     location=loc,
                 )
             ],

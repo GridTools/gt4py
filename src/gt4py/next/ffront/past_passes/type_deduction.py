@@ -15,7 +15,7 @@
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next import errors
+from gt4py.next import Dimension, errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
@@ -85,11 +85,19 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict):
                 raise ValueError(
                     f"Only 2 values allowed in domain range, but got `{len(domain_values.elts)}`."
                 )
-            if not _is_integral_scalar(domain_values.elts[0]) or not _is_integral_scalar(
-                domain_values.elts[1]
+            if not (
+                _is_integral_scalar(domain_values.elts[0])
+                or isinstance(domain_values.elts[0], (past.BinOp, past.Name))
             ):
                 raise ValueError(
-                    f"Only integer values allowed in domain range, but got {domain_values.elts[0].type} and {domain_values.elts[1].type}."
+                    f"Only integer values allowed in domain range, but got {domain_values.elts[0].type}."
+                )
+            if not (
+                _is_integral_scalar(domain_values.elts[1])
+                or isinstance(domain_values.elts[1], (past.BinOp, past.Name))
+            ):
+                raise ValueError(
+                    f"Only integer values allowed in domain range, but got {domain_values.elts[1].type}."
                 )
 
 
@@ -240,6 +248,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             type=return_type,
             location=node.location,
         )
+
+    def visit_Dict(self, node: past.Dict, **kwargs) -> past.Dict:
+        assert all(isinstance(key, past.Name) for key in node.keys_)
+        new_keys = [
+            past.Name(
+                id=key.id, type=ts.DimensionType(dim=Dimension(value=key.id)), location=key.location
+            )
+            for key in node.keys_
+        ]
+        return past.Dict(keys_=new_keys, values_=node.values_, location=node.location)
 
     def visit_Name(self, node: past.Name, **kwargs) -> past.Name:
         symtable = kwargs["symtable"]
