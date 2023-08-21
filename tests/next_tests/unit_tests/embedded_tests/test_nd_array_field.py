@@ -250,7 +250,7 @@ def test_get_slices_invalid_type():
             ),
             (IDim, JDim, KDim),
             (2, 2, 15),
-        ),  # TODO: add support for single NamedRange
+        ),
         (
             (
                 (IDim, UnitRange(7, 9)),
@@ -258,7 +258,7 @@ def test_get_slices_invalid_type():
             ),
             (IDim, JDim, KDim),
             (2, 10, 8),
-        ),  # TODO: add support for single NamedRange
+        ),
         (common.Domain(dims=(IDim,), ranges=(UnitRange(7, 9),)), (IDim, JDim, KDim), (2, 10, 15)),
         (((IDim, 8),), (JDim, KDim), (10, 15)),
         (((JDim, 9),), (IDim, KDim), (5, 15)),
@@ -271,6 +271,7 @@ def test_get_slices_invalid_type():
             (JDim, KDim),
             (2, 15),
         ),
+        # TODO: add support for single NamedRange or NamedIndex (i.e. not in Sequence)
     ],
 )
 def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
