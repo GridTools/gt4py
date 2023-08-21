@@ -160,7 +160,7 @@ def test_unary_arithmetic_ops(unary_arithmetic_op, nd_array_implementation):
         ((JDim,), (None, slice(5, 10))),
     ],
 )
-def test_binary_operations_with_intersection(binary_op, dims, expected_indices):
+def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expected_indices):
     arr1 = np.arange(10)
     arr1_domain = common.Domain(dims=dims, ranges=(UnitRange(0, 10),))
 
@@ -170,8 +170,8 @@ def test_binary_operations_with_intersection(binary_op, dims, expected_indices):
     field1 = common.field(arr1, domain=arr1_domain)
     field2 = common.field(arr2, domain=arr2_domain)
 
-    op_result = binary_op(field1, field2)
-    expected_result = binary_op(arr1[expected_indices[0], expected_indices[1]], arr2)
+    op_result = binary_arithmetic_op(field1, field2)
+    expected_result = binary_arithmetic_op(arr1[expected_indices[0], expected_indices[1]], arr2)
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)
