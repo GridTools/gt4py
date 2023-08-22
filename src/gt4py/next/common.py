@@ -481,12 +481,3 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
-
-
-def is_domain_slice_element(index: Any) -> TypeGuard[NamedRange | NamedIndex]:
-    if isinstance(index, tuple) and len(index) == 2:
-        first, second = index
-        return isinstance(first, Dimension) and (
-            isinstance(second, int) or isinstance(second, UnitRange)
-        )
-    return False

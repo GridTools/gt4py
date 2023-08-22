@@ -198,7 +198,8 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         if (
             not isinstance(index, tuple)
             and not common.is_domain_slice(index)
-            or common.is_domain_slice_element(index)
+            or common.is_named_index(index)
+            or common.is_named_range(index)
         ):
             index = cast(common.FieldSlice, (index,))
 
