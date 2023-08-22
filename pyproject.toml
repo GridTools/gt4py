@@ -321,10 +321,6 @@ module = 'gt4py.next.type_system.type_translation'
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.iterator.transforms.global_tmps'
-
 # -- pytest --
 [tool.pytest]
 
