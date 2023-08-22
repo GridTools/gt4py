@@ -32,7 +32,7 @@ def with_altered_scalar_kind(
     type_spec: ts.TypeSpec, new_scalar_kind: ts.ScalarKind
 ) -> ts.ScalarType | ts.FieldType:
     """
-    Given a scalar or field type return a new field with its scalar kind replaced.
+    Given a scalar or field type return a type with different scalar kind.
 
     Examples:
     ---------
@@ -53,7 +53,7 @@ def with_altered_scalar_kind(
     elif isinstance(type_spec, ts.ScalarType):
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
     else:
-        raise ValueError(f"Expected a field or scalar, but got {type_spec}.")
+        raise ValueError(f"Expected field or scalar type, but got {type_spec}.")
 
 
 def construct_tuple_type(
