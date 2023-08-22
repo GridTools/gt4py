@@ -15,15 +15,16 @@
 import numpy as np
 
 import gt4py.next as gtx
+from gt4py.next.iterator import ir as itir
 
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")
 Cell = gtx.Dimension("Cell")
-V2EDim = gtx.Dimension("V2EDim", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2VDim", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.Dimension("C2EDim", kind=gtx.DimensionKind.LOCAL)
-V2VDim = gtx.Dimension("V2VDim", kind=gtx.DimensionKind.LOCAL)
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+V2VDim = gtx.Dimension("V2V", kind=gtx.DimensionKind.LOCAL)
 
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
@@ -50,7 +51,8 @@ c2e_arr = np.array(
         [6, 16, 0, 15],  # 6
         [7, 17, 1, 16],
         [8, 15, 2, 17],
-    ]
+    ],
+    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
 
 v2v_arr = np.array(
@@ -64,7 +66,8 @@ v2v_arr = np.array(
         [7, 0, 8, 3],
         [8, 1, 6, 4],
         [6, 2, 7, 5],
-    ]
+    ],
+    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
 
 e2v_arr = np.array(
@@ -87,7 +90,8 @@ e2v_arr = np.array(
         [6, 0],
         [7, 1],
         [8, 2],
-    ]
+    ],
+    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )
 
 
@@ -103,5 +107,6 @@ v2e_arr = np.array(
         [6, 12, 8, 15],  # 6
         [7, 13, 6, 16],
         [8, 14, 7, 17],
-    ]
+    ],
+    dtype=np.dtype(itir.INTEGER_INDEX_BUILTIN),
 )

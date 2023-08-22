@@ -12,10 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.next.otf.binding import nanobind
 
-def get_processor_id(processor):
-    if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
-        module_path = processor.__module__.split(".")[-1]
-        name = processor.__name__
-        return f"{module_path}.{name}"
-    return repr(processor)
+from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
+    program_source_example,
+)
+
+
+def test_bindings(program_source_example):
+    module = nanobind.create_bindings(program_source_example)
+    assert module.library_deps[0].name == "nanobind"

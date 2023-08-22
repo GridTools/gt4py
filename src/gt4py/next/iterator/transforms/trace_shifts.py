@@ -11,29 +11,38 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-import types
+import enum
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Final, Union
+from typing import Any, Final, Iterable, Literal
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.collect_shifts import ALL_NEIGHBORS
 
 
-VALUE_TOKEN = types.new_class("VALUE_TOKEN")
-TYPE_TOKEN = types.new_class("TYPE_TOKEN")
+class Sentinel(enum.Enum):
+    VALUE = object()
+    TYPE = object()
+
+
+# for performance reasons (`isinstance` is slow otherwise) we don't use abc here
+class IteratorTracer:
+    def deref(self):
+        raise NotImplementedError()
+
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+        raise NotImplementedError()
 
 
 @dataclass(frozen=True)
-class InputTracer:
+class InputTracer(IteratorTracer):
     inp: str
     register_deref: Callable[[str, tuple[ir.OffsetLiteral, ...]], None]
     offsets: tuple[ir.OffsetLiteral, ...] = ()
     lift_level: int = 0
 
-    def shift(self, offsets):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return InputTracer(
             inp=self.inp,
             register_deref=self.register_deref,
@@ -43,16 +52,33 @@ class InputTracer:
 
     def deref(self):
         self.register_deref(self.inp, self.offsets)
-        return VALUE_TOKEN
+        return Sentinel.VALUE
+
+
+# This class is only needed because we currently allow conditionals on iterators. Since this is
+# not supported in the C++ backend it can likely be removed again in the future.
+@dataclass(frozen=True)
+class CombinedTracer(IteratorTracer):
+    its: tuple[IteratorTracer, ...]
+
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+        return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
+
+    def deref(self):
+        derefed_its = [it.deref() for it in self.its]
+        if not all(it == Sentinel.VALUE for it in derefed_its[1:]):
+            raise AssertionError("The result of a `deref` must be a `Sentinel.VALUE`.")
+        return Sentinel.VALUE
 
 
 def _combine(*values):
     # `OffsetLiteral`s may occur in `list_get` calls
     if not all(
-        val in [VALUE_TOKEN, TYPE_TOKEN] or isinstance(val, ir.OffsetLiteral) for val in values
+        val in [Sentinel.VALUE, Sentinel.TYPE] or isinstance(val, ir.OffsetLiteral)
+        for val in values
     ):
         raise AssertionError("All arguments must be values or types.")
-    return VALUE_TOKEN
+    return Sentinel.VALUE
 
 
 # implementations of builtins
@@ -61,20 +87,21 @@ def _deref(x):
 
 
 def _can_deref(x):
-    return VALUE_TOKEN
+    return Sentinel.VALUE
 
 
 def _shift(*offsets):
     def apply(arg):
+        assert isinstance(arg, IteratorTracer)
         return arg.shift(offsets)
 
     return apply
 
 
 @dataclass(frozen=True)
-class AppliedLift:
+class AppliedLift(IteratorTracer):
     stencil: Callable
-    its: tuple[Union[InputTracer, "AppliedLift"]]
+    its: tuple[IteratorTracer, ...]
 
     def shift(self, offsets):
         return AppliedLift(self.stencil, tuple(_shift(it) for it in self.its))
@@ -85,7 +112,7 @@ class AppliedLift:
 
 def _lift(f):
     def apply(*its):
-        if not all(isinstance(it, (InputTracer, AppliedLift)) for it in its):
+        if not all(isinstance(it, IteratorTracer) for it in its):
             raise AssertionError("All arguments must be iterators.")
         return AppliedLift(f, its)
 
@@ -111,6 +138,65 @@ def _scan(f, forward, init):
     return apply
 
 
+def _primitive_constituents(
+    val: Literal[Sentinel.VALUE] | IteratorTracer | tuple,
+) -> Iterable[Literal[Sentinel.VALUE] | IteratorTracer]:
+    if val is Sentinel.VALUE or isinstance(val, IteratorTracer):
+        yield val
+    elif isinstance(val, tuple):
+        for el in val:
+            if isinstance(el, tuple):
+                yield from _primitive_constituents(el)
+            elif el is Sentinel.VALUE or isinstance(el, IteratorTracer):
+                yield el
+            else:
+                raise AssertionError(
+                    "Expected a `Sentinel.VALUE`, `IteratorTracer` or tuple thereof."
+                )
+    else:
+        raise ValueError()
+
+
+def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
+    assert cond is Sentinel.VALUE
+    if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
+        # Broadcast branches to tuple of same length. This is required for cases like:
+        #  `if_(cond, deref(iterator_of_tuples), make_tuple(...))`.
+        if not isinstance(true_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in false_branch)
+            true_branch = (true_branch,) * len(false_branch)
+        if not isinstance(false_branch, tuple):
+            assert all(el == Sentinel.VALUE for el in true_branch)
+            false_branch = (false_branch,) * len(true_branch)
+
+        result = []
+        for el_true_branch, el_false_branch in zip(true_branch, false_branch):
+            # just reuse `if_` to recursively build up the result
+            result.append(_if(Sentinel.VALUE, el_true_branch, el_false_branch))
+        return tuple(result)
+
+    is_iterator_arg = tuple(
+        isinstance(arg, IteratorTracer) for arg in (cond, true_branch, false_branch)
+    )
+    if is_iterator_arg == (False, True, True):
+        return CombinedTracer((true_branch, false_branch))
+    assert is_iterator_arg == (False, False, False) and all(
+        arg in [Sentinel.VALUE, Sentinel.TYPE] for arg in (cond, true_branch, false_branch)
+    )
+    return Sentinel.VALUE
+
+
+def _make_tuple(*args):
+    return args
+
+
+def _tuple_get(index, tuple_val):
+    if isinstance(tuple_val, tuple):
+        return tuple_val[index]
+    assert tuple_val is Sentinel.VALUE
+    return Sentinel.VALUE
+
+
 _START_CTX: Final = {
     "deref": _deref,
     "can_deref": _can_deref,
@@ -120,28 +206,37 @@ _START_CTX: Final = {
     "reduce": _reduce,
     "neighbors": _neighbors,
     "map_": _map,
+    "if_": _if,
+    "make_tuple": _make_tuple,
 }
 
 
 class TraceShifts(NodeTranslator):
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
-        return VALUE_TOKEN
+        return Sentinel.VALUE
 
     def visit_SymRef(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
         if node.id in ctx:
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
-            return TYPE_TOKEN
+            return Sentinel.TYPE
         return _combine
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
+        if node.fun == ir.SymRef(id="tuple_get"):
+            assert isinstance(node.args[0], ir.Literal)
+            index = int(node.args[0].value)
+            return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
+
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
         return fun(*args)
 
     def visit_Lambda(self, node: ir.Lambda, *, ctx: dict[str, Any]) -> Callable:
         def fun(*args):
-            return self.visit(node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args)})
+            return self.visit(
+                node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
+            )
 
         return fun
 
@@ -157,7 +252,7 @@ class TraceShifts(NodeTranslator):
             tracers.append(InputTracer(inp=inp.id, register_deref=register_deref))
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
-        assert result is VALUE_TOKEN
+        assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
 
     @classmethod
     def apply(cls, node: ir.StencilClosure) -> dict[str, list[tuple[ir.OffsetLiteral, ...]]]:
