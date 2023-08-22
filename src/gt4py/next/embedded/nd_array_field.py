@@ -25,7 +25,8 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import common, Field
+from gt4py.next.common import FieldSlice
 from gt4py.next.ffront import fbuiltins
 
 

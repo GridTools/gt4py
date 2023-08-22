@@ -481,3 +481,101 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
+
+
+def _constant_field_op(method: Callable):
+    @functools.wraps(method)
+    def wrapper(self, other):
+        if isinstance(other, ConstantField):
+            if self.value_type != other.value_type:
+                raise ValueError(f"Value types must be the same for {method.__name__}.")
+            return method(self, other)
+        raise ValueError(f"Incompatible operand types for {method.__name__}. Must be of type ConstantField.")
+    return wrapper
+
+
+@dataclasses.dataclass(frozen=True)
+class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
+    value: core_defs.ScalarT
+
+    def remap(self, index_field: Field) -> Field:
+        raise NotImplementedError()
+
+    def __getitem__(self, index: Any) -> core_defs.ScalarT:
+        return self.value
+
+    @property
+    def domain(self) -> Domain:
+        raise NotImplementedError()  # TODO
+
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return type(self.value)
+
+    @property
+    def value_type(self) -> type[core_defs.ScalarT]:
+        return type(self.value)
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        raise NotImplementedError()  # TODO
+
+    restrict = (
+        __getitem__
+    )
+
+    def __call__(self, *args, **kwargs) -> Field:
+        return self
+
+    def _binary_op_wrapper(self, other: ConstantField, op: Callable):
+        return self.__class__(op(self.value, other.value))
+
+    @_constant_field_op
+    def __add__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x + y)
+
+    @_constant_field_op
+    def __sub__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x - y)
+
+    @_constant_field_op
+    def __mul__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x * y)
+
+    @_constant_field_op
+    def __truediv__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x / y)
+
+    @_constant_field_op
+    def __floordiv__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x // y)
+
+    @_constant_field_op
+    def __rfloordiv__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: y // x)
+
+    @_constant_field_op
+    def __pow__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: x ** y)
+
+    @_constant_field_op
+    def __rtruediv__(self, other: ConstantField):
+        return self._binary_op_wrapper(other, lambda x, y: y / x)
+
+    @_constant_field_op
+    def __radd__(self, other):
+        return self._binary_op_wrapper(other, lambda x, y: y + x)
+
+    @_constant_field_op
+    def __rmul__(self, other):
+        return self._binary_op_wrapper(other, lambda x, y: y * x)
+
+    @_constant_field_op
+    def __rsub__(self, other):
+        return self._binary_op_wrapper(other, lambda x, y: y - x)
+
+    def __abs__(self):
+        return self.__class__(abs(self.value))
+
+    def __neg__(self):
+        return self.__class__(-self.value)
