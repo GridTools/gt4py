@@ -271,7 +271,8 @@ def test_get_slices_invalid_type():
             (JDim, KDim),
             (2, 15),
         ),
-        # TODO: add support for single NamedRange or NamedIndex (i.e. not in Sequence)
+        ((IDim, 1), (JDim, KDim), (10, 15)),
+        ((IDim, UnitRange(5, 7)), (IDim, JDim, KDim), (2, 10, 15)),
     ],
 )
 def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):

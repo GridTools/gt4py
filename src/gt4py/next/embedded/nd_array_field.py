@@ -195,7 +195,11 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
     __pow__ = _make_binary_array_field_intrinsic_func("pow", "power")
 
     def __getitem__(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
-        if not isinstance(index, tuple) and not common.is_domain_slice(index):
+        if (
+            not isinstance(index, tuple)
+            and not common.is_domain_slice(index)
+            or common.is_domain_slice_element(index)
+        ):
             index = cast(common.FieldSlice, (index,))
 
         if common.is_domain_slice(index):
