@@ -32,7 +32,7 @@ def with_altered_scalar_kind(
     type_spec: ts.TypeSpec, new_scalar_kind: ts.ScalarKind
 ) -> ts.ScalarType | ts.FieldType:
     """
-    Replace the scalar data type of scalar or field.
+    Given a scalar or field type return a new field with its scalar kind replaced.
 
     Examples:
     ---------
@@ -824,11 +824,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
         value, new_type = node.args
-        if not isinstance(value.type, (ts.FieldType, ts.ScalarType)):
-            raise errors.DSLError(
-                node.location,
-                f"Invalid call to `astype`. First argument must be a field or scalar type, but got {value.type}.",
-            )
+        assert isinstance(
+            value.type, (ts.FieldType, ts.ScalarType)
+        )  # already checked using generic mechanism
         if not isinstance(new_type, foast.Name) or new_type.id.upper() not in [
             kind.name for kind in ts.ScalarKind
         ]:
