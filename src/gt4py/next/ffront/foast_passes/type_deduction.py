@@ -32,7 +32,7 @@ def with_altered_scalar_kind(
     type_spec: ts.TypeSpec, new_scalar_kind: ts.ScalarKind
 ) -> ts.ScalarType | ts.FieldType:
     """
-    Given a scalar or field type return a type with different scalar kind.
+    Given a scalar or field type, return a type with different scalar kind.
 
     Examples:
     ---------
