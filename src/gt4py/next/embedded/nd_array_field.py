@@ -190,7 +190,12 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __getitem__(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
-        if not isinstance(index, tuple) and not common.is_domain_slice(index):
+        if (
+            not isinstance(index, tuple)
+            and not common.is_domain_slice(index)
+            or common.is_named_index(index)
+            or common.is_named_range(index)
+        ):
             index = cast(common.FieldSlice, (index,))
 
         if common.is_domain_slice(index):

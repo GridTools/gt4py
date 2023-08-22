@@ -164,7 +164,13 @@ NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 FieldSlice: TypeAlias = (
-    DomainSlice | tuple[slice | int | EllipsisType, ...] | slice | int | EllipsisType
+    DomainSlice
+    | tuple[slice | int | EllipsisType, ...]
+    | slice
+    | int
+    | EllipsisType
+    | NamedRange
+    | NamedIndex
 )
 
 
@@ -173,11 +179,18 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
 
 
 def is_named_range(v: Any) -> TypeGuard[NamedRange]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
+    return (
+        isinstance(v, tuple)
+        and len(v) == 2
+        and isinstance(v[0], Dimension)
+        and isinstance(v[1], UnitRange)
+    )
 
 
 def is_named_index(v: Any) -> TypeGuard[NamedRange]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and is_int_index(v[1])
+    return (
+        isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
+    )
 
 
 def is_domain_slice(v: Any) -> TypeGuard[DomainSlice]:
@@ -511,8 +524,3 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
-
-
-def index_tuple_with_indices(target_tuple, indices_to_use):
-    indexed_elements = [target_tuple[i] for i in indices_to_use]
-    return tuple(indexed_elements)
