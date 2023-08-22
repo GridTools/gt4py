@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import itertools
+import re
 import typing
 
 import numpy as np
@@ -22,7 +23,7 @@ from gt4py.next import errors
 from gt4py.next.common import Field
 from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import int32, int64
+from gt4py.next.ffront.fbuiltins import int32, int64, broadcast
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -274,135 +275,44 @@ def test_scan_wrong_state_type(cartesian_case):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
-def test_bound_args_wrong_kwargs(cartesian_case):
+@pytest.fixture
+def bound_args_testee():
     @field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
-        if bool_val:
-            scalar = 0
-        return a + a + scalar
+    def fieldop_bound_args() -> cases.IField:
+        return broadcast(0, (IDim,))
 
     @program
-    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, bool_val, out=out)
+    def program_bound_args(arg1: bool, arg2: bool, out: cases.IField):
+        # for the test itself we don't care what happens here, but empty programs are not supported
+        fieldop_bound_args(out=out)
 
-    with pytest.raises(RuntimeError) as excinfo:
-        program_bound_args.with_bound_args(scalar=int32(1), bool_val=True, tille=False)
-    assert "Keyword argument `tille` is not a valid program parameter." in str(excinfo.value)
-
-
-def test_bound_args_wrong_args(cartesian_case):
-    @field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
-        if bool_val:
-            scalar = 0
-        return a + a + scalar
-
-    @program
-    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, bool_val, out=out)
-
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1))
-
-    with pytest.raises(TypeError_) as excinfo:
-        prog_bounds(a, out, offset_provider={})
-    assert "1 parameter(s) missing in new program call compared to original signature" in str(
-        excinfo.value
-    )
+    return program_bound_args
 
 
-args_err = [
-    # bound arguments, arguments in call, keyword arguments in call, expected error
-    (
-        ["scalar", "bool_val"],
-        ["a", "scalar", "out"],
-        [],
-        "Total number of arguments and keyword arguments (5) does not match original program definition (4)!",
-    ),
-    (
-        ["scalar", "bool_val"],
-        ["a", "out"],
-        ["scalar"],
-        "Parameter `scalar` already set as a bound argument.",
-    ),
-    (
-        ["scalar"],
-        ["a", "out"],
-        [],
-        "1 parameter(s) missing in new program call compared to original signature",
-    ),
-    (
-        ["scalar", "bool_val", "tille"],
-        None,
-        None,
-        "Keyword argument `tille` is not a valid program parameter.",
-    ),
-]
+def test_bind_invalid_arg(cartesian_case, bound_args_testee):
+    with pytest.raises(
+            TypeError,
+            match="Keyword argument `inexistent_arg` is not a valid program parameter."
+    ):
+        bound_args_testee.with_bound_args(inexistent_arg=1)
 
 
-@pytest.mark.parametrize(
-    "bound_args,positional_call_args,keyword_call_args,expected_error", args_err
-)
-def test_bound_args_wrong_input_args(
-    cartesian_case, bound_args, positional_call_args, keyword_call_args, expected_error
-):
-    @field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
-        if bool_val:
-            scalar = 0
-        return a + a + scalar
+def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
+    program_with_bound_arg = bound_args_testee.with_bound_args(arg1=True)
+    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
-    @program
-    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, bool_val, out=out)
+    with pytest.raises(TypeError) as exc_info:
+        program_with_bound_arg(out, offset_provider={})
 
-    bound_args_vals = {}
-    for bound_arg in bound_args:
-        if bound_arg in [prg_param.id for prg_param in program_bound_args.past_node.params]:
-            bound_args_vals[bound_arg] = cases.allocate(
-                cartesian_case, program_bound_args, bound_arg
-            )()
-        else:
-            bound_args_vals[bound_arg] = 42
-
-    if positional_call_args is not None:
-        args = []
-        for param in positional_call_args:
-            if param in [prg_param.id for prg_param in program_bound_args.past_node.params]:
-                args.append(cases.allocate(cartesian_case, program_bound_args, param)())
-            else:
-                args.append(42)
-
-    if keyword_call_args is not None:
-        kwargs = {}
-        for param in keyword_call_args:
-            if param in [prg_param.id for prg_param in program_bound_args.past_node.params]:
-                kwargs[param] = cases.allocate(cartesian_case, program_bound_args, param)()
-            else:
-                kwargs[param] = 42
-
-    with pytest.raises(Exception) as excinfo:
-        prog_bounds = program_bound_args.with_bound_args(**bound_args_vals)
-        prog_bounds(*args, **kwargs, offset_provider={})
-    assert expected_error in str(excinfo.value)
+    assert re.search("Function takes 2 positional arguments, but 1 were given.",
+                     exc_info.value.__cause__.args[0]) is not None
 
 
-def test_bound_args_repeated_bound_args(cartesian_case):
-    @field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, bool_val: bool) -> cases.IField:
-        if bool_val:
-            scalar = 0
-        return a + a + scalar
+def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_testee):
+    program_with_bound_arg = bound_args_testee.with_bound_args(arg2=True)
+    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
-    @program
-    def program_bound_args(a: cases.IField, scalar: int32, bool_val: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, bool_val, out=out)
+    with pytest.raises(TypeError) as exc_info:
+        program_with_bound_arg(True, out, arg2=True, offset_provider={})
 
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-    prog_bounds = program_bound_args.with_bound_args(scalar=int32(1), bool_val=True)
-
-    with pytest.raises(TypeError_) as excinfo:
-        prog_bounds(a, out, scalar=int32(7), offset_provider={})
-    assert "Parameter `scalar` already set as a bound argument." in str(excinfo.value)
+    assert re.search("Parameter `arg2` already set as a bound argument.", exc_info.value.__cause__.args[0]) is not None

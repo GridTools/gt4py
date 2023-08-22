@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import collections
+import copy
 import dataclasses
 import functools
 import types
@@ -225,7 +226,7 @@ class Program:
         """Bind scalar program arguments."""
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise RuntimeError(f"Keyword argument `{key}` is not a valid program parameter.")
+                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -376,32 +377,39 @@ class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
     def _process_args(self, args: tuple, kwargs: dict):
-        args = list(args)
-        b_args = list(self.bound_args.keys()) + args
-        param_ids = [param.id for param in self.past_node.params]
+        type_ = self.past_node.type
+        new_type = ts_ffront.ProgramType(definition=ts.FunctionType(
+            kw_only_args={k: v for k, v in type_.definition.kw_only_args.items() if
+                          k not in self.bound_args.keys()},
+            pos_only_args=type_.definition.pos_only_args,
+            pos_or_kw_args={k: v for k, v in type_.definition.pos_or_kw_args.items()
+                            if k not in self.bound_args.keys()},
+            returns=type_.definition.returns
+        ))
 
-        for name in self.bound_args.keys():
-            if name in kwargs:
-                # TODO(tehrengruber): use error with source location
-                raise TypeError_(
-                    self.past_node.location, f"Parameter `{name}` already set as a bound argument."
-                )
+        arg_types = [type_translation.from_value(arg) for arg in args]
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
-        inp_args_len = len(b_args) - len(kwargs)
-        extra_args = len(param_ids) - inp_args_len
-        if extra_args > 0:
-            raise TypeError_(
-                self.past_node.location,
-                f"{extra_args} parameter(s) missing in new program call compared to original signature",
+        try:
+            # This error is also catched using `accepts_args`, but we do it manually here to give
+            # a better error message.
+            for name in self.bound_args.keys():
+                if name in kwargs:
+                    raise ValueError(
+                        f"Parameter `{name}` already set as a bound argument."
+                    )
+
+            type_info.accepts_args(
+                new_type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
+                raise_exception=True,
             )
+        except ValueError as err:
+            bound_arg_names = ', '.join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            raise TypeError(f"Invalid argument types in call to program `{self.past_node.id}` with bound arguments {bound_arg_names}!") from err
 
-        if inp_args_len != len(self.past_node.params):
-            raise TypeError_(
-                self.past_node.location,
-                f"Total number of arguments and keyword arguments ({inp_args_len}) "
-                f"does not match original program definition ({len(self.past_node.params)})!",
-            )
-
+        args = [*args]
         for index, param in enumerate(self.past_node.params):
             if param.id in self.bound_args.keys():
                 args.insert(index, self.bound_args[param.id])
