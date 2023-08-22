@@ -407,7 +407,8 @@ class ProgramWithBoundArgs(Program):
             )
         except ValueError as err:
             bound_arg_names = ', '.join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
-            raise TypeError(f"Invalid argument types in call to program `{self.past_node.id}` with bound arguments {bound_arg_names}!") from err
+            raise TypeError(f"Invalid argument types in call to program `{self.past_node.id}` with "
+                            f"bound arguments {bound_arg_names}!") from err
 
         args = [*args]
         for index, param in enumerate(self.past_node.params):
