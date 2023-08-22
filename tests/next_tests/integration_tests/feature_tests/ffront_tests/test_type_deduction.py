@@ -767,7 +767,7 @@ def test_astype_dtype():
     parsed = FieldOperatorParser.apply_to_function(simple_astype)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
-        dims=[ADim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
     )
 
 
