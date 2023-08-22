@@ -90,13 +90,15 @@ def _type_string(type_: ts.TypeSpec) -> str:
         return f"std::tuple<{','.join(_type_string(t) for t in type_.types)}>"
     elif isinstance(type_, ts.FieldType):
         ndims = len(type_.dims)
-        buffer_t = "pybind11::buffer"
+        dtype = cpp_interface.render_scalar_type(type_.dtype)
+        shape = f"nanobind::shape<{', '.join(['nanobind::any'] * ndims)}>"
+        buffer_t = f"nanobind::ndarray<{dtype}, {shape}>"
         origin_t = f"std::tuple<{', '.join(['ptrdiff_t'] * ndims)}>"
         return f"std::pair<{buffer_t}, {origin_t}>"
     elif isinstance(type_, ts.ScalarType):
         return cpp_interface.render_scalar_type(type_)
     else:
-        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+        raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
 class BindingCodeGenerator(TemplatedGenerator):
@@ -131,7 +133,7 @@ class BindingCodeGenerator(TemplatedGenerator):
 
     BindingModule = as_jinja(
         """\
-        PYBIND11_MODULE({{name}}, module) {
+        NB_MODULE({{name}}, module) {
             module.doc() = "{{doc}}";
             {{"\n".join(functions)}}
         }\
@@ -149,9 +151,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         dims = [self.visit(dim) for dim in sid.dimensions]
         origin = f"{sid.source_buffer}.second"
 
-        as_sid = f"gridtools::as_sid<{cpp_interface.render_scalar_type(sid.scalar_type)},\
-                {sid.dimensions.__len__()},\
-                gridtools::sid::unknown_kind>({pybuffer})"
+        as_sid = f"gridtools::nanobind::as_sid({pybuffer})"
         shifted = f"gridtools::sid::shift_sid_origin({as_sid}, {origin})"
         renamed = f"gridtools::sid::rename_numbered_dimensions<{', '.join(dims)}>({shifted})"
         return renamed
@@ -187,7 +187,7 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
     elif isinstance(type_, ts.ScalarType):
         return name
     else:
-        raise ValueError(f"Type '{type_}' is not supported in pybind11 interfaces.")
+        raise ValueError(f"Type '{type_}' is not supported in nanobind interfaces.")
 
 
 def create_bindings(
@@ -210,9 +210,10 @@ def create_bindings(
     file_binding = BindingFile(
         callee_header_file=f"{program_source.entry_point.name}.{program_source.language_settings.header_extension}",
         header_files=[
-            "pybind11/pybind11.h",
-            "pybind11/stl.h",
-            "gridtools/storage/adapter/python_sid_adapter.hpp",
+            "nanobind/nanobind.h",
+            "nanobind/stl/tuple.h",
+            "nanobind/stl/pair.h",
+            "nanobind/ndarray.h",
             "gridtools/sid/composite.hpp",
             "gridtools/sid/unknown_kind.hpp",
             "gridtools/sid/rename_dimensions.hpp",
@@ -221,6 +222,7 @@ def create_bindings(
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
             "gridtools/fn/backend/naive.hpp",
+            "gridtools/storage/adapter/nanobind_adapter.hpp",
         ],
         wrapper=WrapperFunction(
             name=wrapper_name,
@@ -258,7 +260,7 @@ def create_bindings(
 
     return stages.BindingSource(
         src,
-        (interface.LibraryDependency("pybind11", "2.9.2"),),
+        (interface.LibraryDependency("nanobind", "1.4.0"),),
     )
 
 
