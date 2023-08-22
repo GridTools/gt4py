@@ -93,6 +93,8 @@ def apply_common_transforms(
             force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
         )
         inlined = ConstantFolding.apply(inlined)
+        # This pass is required to be in the loop such that when an `if_` call with tuple arguments
+        # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(inlined)
 
         if inlined == ir:
