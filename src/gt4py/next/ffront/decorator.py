@@ -378,14 +378,22 @@ class ProgramWithBoundArgs(Program):
 
     def _process_args(self, args: tuple, kwargs: dict):
         type_ = self.past_node.type
-        new_type = ts_ffront.ProgramType(definition=ts.FunctionType(
-            kw_only_args={k: v for k, v in type_.definition.kw_only_args.items() if
-                          k not in self.bound_args.keys()},
-            pos_only_args=type_.definition.pos_only_args,
-            pos_or_kw_args={k: v for k, v in type_.definition.pos_or_kw_args.items()
-                            if k not in self.bound_args.keys()},
-            returns=type_.definition.returns
-        ))
+        new_type = ts_ffront.ProgramType(
+            definition=ts.FunctionType(
+                kw_only_args={
+                    k: v
+                    for k, v in type_.definition.kw_only_args.items()
+                    if k not in self.bound_args.keys()
+                },
+                pos_only_args=type_.definition.pos_only_args,
+                pos_or_kw_args={
+                    k: v
+                    for k, v in type_.definition.pos_or_kw_args.items()
+                    if k not in self.bound_args.keys()
+                },
+                returns=type_.definition.returns,
+            )
+        )
 
         arg_types = [type_translation.from_value(arg) for arg in args]
         kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
@@ -395,9 +403,7 @@ class ProgramWithBoundArgs(Program):
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(
-                        f"Parameter `{name}` already set as a bound argument."
-                    )
+                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -406,9 +412,11 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ', '.join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
-            raise TypeError(f"Invalid argument types in call to program `{self.past_node.id}` with "
-                            f"bound arguments {bound_arg_names}!") from err
+            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            raise TypeError(
+                f"Invalid argument types in call to program `{self.past_node.id}` with "
+                f"bound arguments {bound_arg_names}!"
+            ) from err
 
         full_args = [*args]
         for index, param in enumerate(self.past_node.params):
