@@ -180,7 +180,7 @@ def callable_type_info_cases():
             unary_func_type,
             [float_type],
             {},
-            [r"Expected 0-th argument to be of type `bool`, but got `float64`."],
+            [r"Expected 1st argument to be of type `bool`, but got `float64`."],
             None,
         ),
         (
@@ -274,7 +274,7 @@ def callable_type_info_cases():
             [int_type],
             {"bar": bool_type, "foo": bool_type},
             [
-                r"Expected 0-th argument to be of type `bool`, but got `int64`",
+                r"Expected 1st argument to be of type `bool`, but got `int64`",
                 r"Expected argument `foo` to be of type `int64`, but got `bool`",
                 r"Expected keyword argument `bar` to be of type `float64`, but got `bool`",
             ],
@@ -299,7 +299,7 @@ def callable_type_info_cases():
             [ts.TupleType(types=[float_type, field_type])],
             {},
             [
-                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
             ],
             ts.VoidType(),
         ),
@@ -308,7 +308,7 @@ def callable_type_info_cases():
             [int_type],
             {},
             [
-                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
             ],
             ts.VoidType(),
         ),
@@ -793,7 +793,7 @@ def test_astype_wrong_value_type():
 
     assert (
         re.search(
-            "Expected 0-th argument to be of type",
+            "Expected 1st argument to be of type",
             exc_info.value.__cause__.args[0],
         )
         is not None
