@@ -410,12 +410,12 @@ class ProgramWithBoundArgs(Program):
             raise TypeError(f"Invalid argument types in call to program `{self.past_node.id}` with "
                             f"bound arguments {bound_arg_names}!") from err
 
-        args = [*args]
+        full_args = [*args]
         for index, param in enumerate(self.past_node.params):
             if param.id in self.bound_args.keys():
-                args.insert(index, self.bound_args[param.id])
+                full_args.insert(index, self.bound_args[param.id])
 
-        return super()._process_args(tuple(args), kwargs)
+        return super()._process_args(tuple(full_args), kwargs)
 
     @functools.cached_property
     def itir(self):
