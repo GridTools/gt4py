@@ -231,7 +231,7 @@ class Program:
         ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
         ...     sample_field_operator(condition, out=out)  # noqa: F821
 
-        Create a new program from `sample_program` with the `condition` parameter set to `True`:
+        Create a new program from `program` with the `condition` parameter set to `True`:
 
         >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
 
