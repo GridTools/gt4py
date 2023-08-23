@@ -462,10 +462,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                     )
                     param_domain_ranges[dim] = SymbolicRange(start, stop)
                 assert param not in domains
-                assert isinstance(domain.fun, ir.FunCall) and domain.fun in [
-                    im.ref("unstructured_domain"),
-                    im.ref("cartesian_domain"),
-                ]
+                assert domain.fun in [im.ref("unstructured_domain"), im.ref("cartesian_domain")]
                 domains[param] = SymbolicDomain(domain.fun.id, param_domain_ranges).as_expr()  # type: ignore[attr-defined]  # ensured by assert above
 
     return FencilWithTemporaries(
