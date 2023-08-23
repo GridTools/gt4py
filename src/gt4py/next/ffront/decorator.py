@@ -19,7 +19,6 @@
 from __future__ import annotations
 
 import collections
-import copy
 import dataclasses
 import functools
 import types
@@ -34,7 +33,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
