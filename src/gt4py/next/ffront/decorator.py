@@ -221,7 +221,30 @@ class Program:
         return dataclasses.replace(self, grid_type=grid_type)
 
     def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
-        """Bind scalar program arguments."""
+        """
+        Bind scalar, i.e. non field, program arguments.
+
+        Example (pseudo-code):
+
+        >>> import gt4py.next as gtx
+        >>> @gtx.program  # doctest: +SKIP
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
+        ...     sample_field_operator(condition, out=out)  # noqa: F821
+
+        Create a new program from `sample_program` with the `condition` parameter set to `True`:
+
+        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
+
+        The resulting program is equivalent to
+
+        >>> @gtx.program  # doctest: +SKIP
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
+        ...     sample_field_operator(condition=True, out=out)  # noqa: F821
+
+        and can be executed without passing `condition`.
+
+        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
+        """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
                 raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
