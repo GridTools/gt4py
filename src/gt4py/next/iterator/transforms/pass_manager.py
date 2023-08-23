@@ -53,7 +53,7 @@ def _inline_into_scan(ir, *, max_iter=10):
     for _ in range(10):
         # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
         inlined = InlineIntoScan().visit(ir)
-        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift=True)
+        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift_args=True)
         if inlined == ir:
             break
         ir = inlined
@@ -85,7 +85,7 @@ def apply_common_transforms(
             inlined = InlineLambdas.apply(
                 inlined,
                 opcount_preserving=True,
-                force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
+                force_inline_lift_args=(lift_mode == LiftMode.FORCE_INLINE),
             )
             if inlined == ir:
                 break
@@ -97,8 +97,8 @@ def apply_common_transforms(
             inlined = InlineLambdas.apply(
                 ir,
                 opcount_preserving=True,
-                force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
-                force_inline_trivial_lift=True,
+                force_inline_lift_args=(lift_mode == LiftMode.FORCE_INLINE),
+                force_inline_trivial_lift_args=True,
             )  # needed to inline trivial lifts
             inlined = InlineLifts(
                 flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT

@@ -270,7 +270,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                     new_stencil = im.call("scan")(new_stencil, current_closure.stencil.args[1:])  # type: ignore[attr-defined] # ensure by is_scan
                 # inline such that let statements which are just rebinding temporaries disappear
                 new_stencil = InlineLambdas.apply(
-                    new_stencil, opcount_preserving=True, force_inline_lift=False
+                    new_stencil, opcount_preserving=True, force_inline_lift_args=False
                 )
                 # we're done with the current closure, add it back to the stack for further
                 # extraction.
@@ -422,15 +422,17 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
 
         local_shifts = TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
-            consumed_domains: list[SymbolicDomain] = []
+            consumed_domains: list[SymbolicDomain] = (
+                [SymbolicDomain.from_expr(domains[param])] if param in domains else []
+            )
             for shift_chain in shift_chains:
                 consumed_domain = SymbolicDomain.from_expr(domain)
                 for shift in zip(shift_chain[::2], shift_chain[1::2], strict=True):
                     offset_name, offset = shift[0].value, shift[1].value
-                    assert isinstance(offset_name, str) and isinstance(offset, int)
+                    assert isinstance(offset_name, str)
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        assert isinstance(offset, ir.OffsetLiteral)
+                        assert isinstance(offset, int)
                         dim = offset_provider[offset_name].value
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
                     elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
@@ -461,7 +463,6 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         [consumed_domain.ranges[dim].stop for consumed_domain in consumed_domains],
                     )
                     param_domain_ranges[dim] = SymbolicRange(start, stop)
-                assert param not in domains
                 assert domain.fun in [im.ref("unstructured_domain"), im.ref("cartesian_domain")]
                 domains[param] = SymbolicDomain(domain.fun.id, param_domain_ranges).as_expr()  # type: ignore[attr-defined]  # ensured by assert above
 
