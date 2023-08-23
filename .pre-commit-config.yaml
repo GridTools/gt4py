@@ -104,7 +104,7 @@ repos:
     - flake8-eradicate==1.5.0
     - flake8-mutable==1.2.0
     - flake8-pyproject==1.2.3
-    - pygments==2.15.1
+    - pygments==2.16.1
     ##[[[end]]]
     # - flake8-rst-docstrings  # Disabled for now due to random false positives
     exclude: |
@@ -146,9 +146,9 @@ repos:
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.4.1 =========
+  #========= FROM constraints.txt: v1.5.0 =========
   ##[[[end]]]
-  rev: v1.4.1  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.5.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
@@ -166,22 +166,22 @@ repos:
     - boltons==23.0.0
     - cached-property==1.5.2
     - click==8.1.6
-    - cmake==3.27.0
+    - cmake==3.27.2
     - cytoolz==0.12.2
     - deepdiff==6.3.1
     - devtools==0.11.0
     - frozendict==2.3.8
-    - gridtools-cpp==2.3.0
-    - importlib-resources==6.0.0
+    - gridtools-cpp==2.3.1
+    - importlib-resources==6.0.1
     - jinja2==3.1.2
     - lark==1.1.7
     - mako==1.2.4
-    - nanobind==1.4.0
+    - nanobind==1.5.0
     - ninja==1.11.1
     - numpy==1.24.4
     - packaging==23.1
     - pybind11==2.11.1
-    - setuptools==68.0.0
+    - setuptools==68.1.0
     - tabulate==0.9.0
     - typing-extensions==4.5.0
     - xxhash==3.0.0
