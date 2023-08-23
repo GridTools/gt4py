@@ -313,19 +313,22 @@ def rfloordiv(x, y):
     return operator.floordiv(y, x)
 
 
-@pytest.mark.parametrize("op_func, expected_result", [
-    (operator.add, 10 + 20),
-    (operator.sub, 10 - 20),
-    (operator.mul, 10 * 20),
-    (operator.truediv, 10 / 20),
-    (operator.floordiv, 10 // 20),
-    (rfloordiv, 20 // 10),
-    (operator.pow, 10 ** 20),
-    (lambda x, y: operator.truediv(y, x), 20 / 10),
-    (operator.add, 10 + 20),
-    (operator.mul, 10 * 20),
-    (lambda x, y: operator.sub(y, x), 20 - 10)
-])
+@pytest.mark.parametrize(
+    "op_func, expected_result",
+    [
+        (operator.add, 10 + 20),
+        (operator.sub, 10 - 20),
+        (operator.mul, 10 * 20),
+        (operator.truediv, 10 / 20),
+        (operator.floordiv, 10 // 20),
+        (rfloordiv, 20 // 10),
+        (operator.pow, 10**20),
+        (lambda x, y: operator.truediv(y, x), 20 / 10),
+        (operator.add, 10 + 20),
+        (operator.mul, 10 * 20),
+        (lambda x, y: operator.sub(y, x), 20 - 10),
+    ],
+)
 def test_binary_operations(op_func, expected_result):
     cf1 = common.ConstantField(10)
     cf2 = common.ConstantField(20)
@@ -333,14 +336,14 @@ def test_binary_operations(op_func, expected_result):
     assert result.value == expected_result
 
 
-def test_constant_field_incompatible_value_type():
-    cf1 = common.ConstantField(10.0)
-    cf2 = common.ConstantField(20)
-    with pytest.raises(ValueError):
-        cf1 + cf2
-
-
-def test_constant_field_incompatible_operand():
-    cf1 = common.ConstantField(10.0)
-    with pytest.raises(ValueError):
-        cf1 + 10
+@pytest.mark.parametrize(
+    "cf1,cf2,expected",
+    [
+        (common.ConstantField(10.0), common.ConstantField(20), 30.0),
+        (common.ConstantField(10.0), 10, 20.0),
+    ],
+)
+def test_constant_field_incompatible_value_type(cf1, cf2, expected):
+    res = cf1 + cf2
+    assert res.value == expected
+    assert res.dtype == float

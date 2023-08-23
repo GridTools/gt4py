@@ -486,11 +486,8 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
 def _constant_field_op(method: Callable):
     @functools.wraps(method)
     def wrapper(self, other):
-        if isinstance(other, ConstantField):
-            if self.value_type != other.value_type:
-                raise ValueError(f"Value types must be the same for {method.__name__}.")
-            return method(self, other)
-        raise ValueError(f"Incompatible operand types for {method.__name__}. Must be of type ConstantField.")
+        new = ConstantField(other) if not isinstance(other, ConstantField) else other
+        return method(self, new)
     return wrapper
 
 
@@ -520,9 +517,7 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
     def ndarray(self) -> core_defs.NDArrayObject:
         raise NotImplementedError()  # TODO
 
-    restrict = (
-        __getitem__
-    )
+    restrict = __getitem__
 
     def __call__(self, *args, **kwargs) -> Field:
         return self
@@ -556,7 +551,7 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
 
     @_constant_field_op
     def __pow__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x ** y)
+        return self._binary_op_wrapper(other, lambda x, y: x**y)
 
     @_constant_field_op
     def __rtruediv__(self, other: ConstantField):
