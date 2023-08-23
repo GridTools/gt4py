@@ -41,9 +41,9 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind))
-    >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.BOOL))
-    Field[[I], bool]
+    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
+    Field[[I], float32]
     """
     if isinstance(type_spec, ts.FieldType):
         return ts.FieldType(
