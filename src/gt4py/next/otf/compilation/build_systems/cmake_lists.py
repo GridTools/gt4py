@@ -47,7 +47,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
         """
         cmake_minimum_required(VERSION 3.20.0)
-        
+
         project({{project_name}})
 
         # Languages
@@ -136,7 +136,7 @@ def generate_cmakelists_source(
     project_name: str,
     dependencies: tuple[interface.LibraryDependency, ...],
     source_names: Sequence[str],
-    languages: Sequence[Language] = (Language(name="CXX"),)
+    languages: Sequence[Language] = (Language(name="CXX"),),
 ) -> str:
     """
     Generate CMakeLists file contents.
@@ -149,6 +149,6 @@ def generate_cmakelists_source(
         link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
         source_names=source_names,
         bin_output_suffix=common.python_module_suffix(),
-        languages=languages
+        languages=languages,
     )
     return CMakeListsGenerator.apply(cmakelists_file)

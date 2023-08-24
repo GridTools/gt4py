@@ -215,7 +215,7 @@ def _cc_prototype_program_source(
     build_type: cmake.BuildType,
     cmake_flags: list[str],
     language: type[languages.Cpp | languages.Cuda],
-    language_settings: languages.LanguageWithHeaderFilesSettings
+    language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
@@ -266,7 +266,10 @@ def _cc_create_compiledb(
         source_files={
             **{name: "" for name in [binding_src_name, prog_src_name]},
             "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name, prototype_program_source.library_deps, [binding_src_name, prog_src_name], cmake_languages
+                name,
+                prototype_program_source.library_deps,
+                [binding_src_name, prog_src_name],
+                cmake_languages,
             ),
         },
         program_name=name,

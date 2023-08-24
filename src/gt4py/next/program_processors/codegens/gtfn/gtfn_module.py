@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from typing import Any, Final, TypeVar, Optional
+from typing import Any, Final, Optional, TypeVar
 
 import numpy as np
 
@@ -59,7 +59,9 @@ class GTFNTranslationStep(
     hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
 
     @staticmethod
-    def _default_language_settings(hardware_accelerator: HardwareAccelerator) -> languages.LanguageSettings:
+    def _default_language_settings(
+        hardware_accelerator: HardwareAccelerator,
+    ) -> languages.LanguageSettings:
         if hardware_accelerator == HardwareAccelerator.GPU:
             return languages.LanguageWithHeaderFilesSettings(
                 formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
@@ -207,8 +209,16 @@ class GTFNTranslationStep(
             imperative=self.use_imperative_backend,
             **inp.kwargs,
         )
-        language_settings = self.language_settings if self.language_settings is not None else GTFNTranslationStep._default_language_settings(self.hardware_accelerator)
-        backend_header = "gridtools/fn/backend/gpu.hpp" if self.hardware_accelerator == HardwareAccelerator.GPU else "gridtools/fn/backend/naive.hpp"
+        language_settings = (
+            self.language_settings
+            if self.language_settings is not None
+            else GTFNTranslationStep._default_language_settings(self.hardware_accelerator)
+        )
+        backend_header = (
+            "gridtools/fn/backend/gpu.hpp"
+            if self.hardware_accelerator == HardwareAccelerator.GPU
+            else "gridtools/fn/backend/naive.hpp"
+        )
         source_code = interface.format_source(
             language_settings,
             f"""
@@ -220,8 +230,16 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        language = languages.Cuda if self.hardware_accelerator == HardwareAccelerator.GPU else languages.Cpp
-        library_name = "gridtools_gpu" if self.hardware_accelerator == HardwareAccelerator.GPU else "gridtools_cpu"
+        language = (
+            languages.Cuda
+            if self.hardware_accelerator == HardwareAccelerator.GPU
+            else languages.Cpp
+        )
+        library_name = (
+            "gridtools_gpu"
+            if self.hardware_accelerator == HardwareAccelerator.GPU
+            else "gridtools_cpu"
+        )
         module = stages.ProgramSource(
             entry_point=function,
             library_deps=(interface.LibraryDependency(library_name, "master"),),
@@ -233,7 +251,6 @@ class GTFNTranslationStep(
 
     def _get_backend_type(self):
         if self.hardware_accelerator == HardwareAccelerator.GPU:
-
             return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
         return "gridtools::fn::backend::naive{}"
 
