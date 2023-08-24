@@ -21,10 +21,23 @@ from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, Rename
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
-def inline_lambda(
+def _is_applied_lift(arg: ir.Node) -> bool:
+    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
+    return (
+        isinstance(arg, ir.FunCall)
+        and isinstance(arg.fun, ir.FunCall)
+        and isinstance(arg.fun.fun, ir.SymRef)
+        and arg.fun.fun.id == "lift"
+    )
+
+
+# TODO(tehrengruber): Reduce complexity of the function by removing the different options here
+#  and introduce a generic predicate argument for the `eligible_params` instead.
+def inline_lambda(  # noqa: C901  # see todo above
     node: ir.FunCall,
     opcount_preserving=False,
-    force_inline_lift=False,
+    force_inline_lift_args=False,
+    force_inline_trivial_lift_args=False,
     eligible_params: Optional[list[bool]] = None,
 ):
     assert isinstance(node.fun, ir.Lambda)
@@ -43,14 +56,16 @@ def inline_lambda(
             ):
                 eligible_params[i] = False
 
-    if force_inline_lift:
+    # inline lifts, i.e. `lift(λ(...) → ...)(...)`
+    if force_inline_lift_args:
         for i, arg in enumerate(node.args):
-            if (
-                isinstance(arg, ir.FunCall)
-                and isinstance(arg.fun, ir.FunCall)
-                and isinstance(arg.fun.fun, ir.SymRef)
-                and arg.fun.fun.id == "lift"
-            ):
+            if _is_applied_lift(arg):
+                eligible_params[i] = True
+
+    # inline trivial lifts, i.e. `lift(λ() → 1)()`
+    if force_inline_trivial_lift_args:
+        for i, arg in enumerate(node.args):
+            if _is_applied_lift(arg) and len(arg.args) == 0:  # type: ignore[attr-defined]
                 eligible_params[i] = True
 
     if node.fun.params and not any(eligible_params):
@@ -110,14 +125,24 @@ def inline_lambda(
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
+    PRESERVED_ANNEX_ATTRS = ("type",)
+
     opcount_preserving: bool
 
-    force_inline_lift: bool
+    force_inline_lift_args: bool
+
+    force_inline_trivial_lift_args: bool
 
     @classmethod
-    def apply(cls, node: ir.Node, opcount_preserving=False, force_inline_lift=False):
+    def apply(
+        cls,
+        node: ir.Node,
+        opcount_preserving=False,
+        force_inline_lift_args=False,
+        force_inline_trivial_lift_args=False,
+    ):
         """
-        Inline lambda calls by substituting every arguments by its value.
+        Inline lambda calls by substituting every argument by its value.
 
         Examples:
             `(λ(x) → x)(y)` to `y`
@@ -126,13 +151,20 @@ class InlineLambdas(NodeTranslator):
             `(λ(x) → x+x)(y+y)` stays as is if opcount_preserving
 
         Arguments:
+            node: The function call node to inline into.
             opcount_preserving: Preserve the number of operations, i.e. only
-            inline lambda call if the resulting call has the same number of
-            operations.
+                inline lambda call if the resulting call has the same number of
+                operations.
+            force_inline_lift_args: Inline all arguments that are applied lifts, i.e.
+                `lift(λ(...) → ...)(...)`.
+            force_inline_trivial_lift_args: Inline all arguments that are trivial
+                applied lifts, e.g. `lift(λ() → 1)()`.
+
         """
         return cls(
             opcount_preserving=opcount_preserving,
-            force_inline_lift=force_inline_lift,
+            force_inline_lift_args=force_inline_lift_args,
+            force_inline_trivial_lift_args=force_inline_trivial_lift_args,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -141,7 +173,8 @@ class InlineLambdas(NodeTranslator):
             return inline_lambda(
                 node,
                 opcount_preserving=self.opcount_preserving,
-                force_inline_lift=self.force_inline_lift,
+                force_inline_lift_args=self.force_inline_lift_args,
+                force_inline_trivial_lift_args=self.force_inline_trivial_lift_args,
             )
 
         return node

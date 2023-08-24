@@ -252,6 +252,16 @@ def test_domain_repeat_dims():
         Domain(dims, ranges)
 
 
+def test_domain_dims_ranges_length_mismatch():
+    with pytest.raises(
+        ValueError,
+        match=r"Number of provided dimensions \(\d+\) does not match number of provided ranges \(\d+\)",
+    ):
+        dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+        ranges = [UnitRange(0, 1), UnitRange(0, 1)]
+        Domain(dims=dims, ranges=ranges)
+
+
 def dimension_promotion_cases() -> (
     list[tuple[list[list[Dimension]], list[Dimension] | None, None | Pattern]]
 ):

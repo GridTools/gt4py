@@ -23,6 +23,31 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
 
+def _number_to_ordinal_number(number: int) -> str:
+    """
+    Convert number into ordinal number.
+
+    >>> for i in range(0, 5):
+    ...   print(_number_to_ordinal_number(i))
+    0th
+    1st
+    2nd
+    3rd
+    4th
+    """
+    number_as_string = str(number)
+    if len(number_as_string) > 1 and number_as_string[-2] == "1":
+        return number_as_string + "th"
+    last_digit = number_as_string[-1]
+    if last_digit == "1":
+        return number_as_string + "st"
+    if last_digit == "2":
+        return number_as_string + "nd"
+    if last_digit == "3":
+        return number_as_string + "rd"
+    return number_as_string + "th"
+
+
 def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     """Figure out if the foast type is completely deduced."""
     if isinstance(symbol_type, ts.DeferredType):
@@ -612,7 +637,7 @@ def function_signature_incompatibilities_func(  # noqa: C901
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             if i < len(func_type.pos_only_args):
-                arg_repr = f"{i}-th argument"
+                arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
             else:
                 arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}`"
             yield f"Expected {arg_repr} to be of type `{a_arg}`, but got `{b_arg}`."
@@ -631,11 +656,11 @@ def function_signature_incompatibilities_field(
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     if len(args) != 1:
-        yield f"Function takes 1 argument(s), but {len(args)} were given."
+        yield f"Function takes 1 argument, but {len(args)} were given."
         return
 
     if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected 0-th argument to be of type {ts.OffsetType}, but got {args[0]}."
+        yield f"Expected first argument to be of type {ts.OffsetType}, but got {args[0]}."
         return
 
     if kwargs:

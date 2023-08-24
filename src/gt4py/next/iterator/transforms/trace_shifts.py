@@ -16,9 +16,13 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
+import boltons.typeutils
+
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.collect_shifts import ALL_NEIGHBORS
+
+
+ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
 
 
 class Sentinel(enum.Enum):

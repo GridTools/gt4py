@@ -244,14 +244,7 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
 )
 def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
-    if (
-        program_processor == run_dace_iterator
-        or program_processor == run_gtfn
-        or program_processor == run_gtfn_imperative
-        or program_processor == gtfn_format_sourcecode
-    ):
-        pytest.xfail("structured dtype input/output currently unsupported")
-
+    pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
     inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
@@ -298,9 +291,9 @@ def test_different_vertical_sizes(program_processor):
         )
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim)(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=inp0.dtype))
     ref = inp0 + inp1[1:]
 
     run_processor(
@@ -338,9 +331,9 @@ def test_different_vertical_sizes_with_origin(program_processor):
         pytest.xfail("Not supported in DaCe backend: origin")
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size))
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
     ref = inp0 + np.asarray(inp1)[:-1]
 
     run_processor(

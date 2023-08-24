@@ -65,7 +65,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.FunctionType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple:
+    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
         return ts.TupleType
     elif hasattr(t, "__origin__") and t.__origin__ is Union:
         types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
@@ -161,7 +161,7 @@ def min_over(
 
 
 @builtin_function
-def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple, /) -> Field:
+def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /) -> Field:
     raise NotImplementedError()
 
 
@@ -176,7 +176,7 @@ def where(
 
 
 @builtin_function
-def astype(field: Field, type_: type, /) -> Field:
+def astype(field: Field | gt4py_defs.ScalarT, type_: type, /) -> Field:
     raise NotImplementedError()
 
 

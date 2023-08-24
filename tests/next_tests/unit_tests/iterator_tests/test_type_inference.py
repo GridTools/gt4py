@@ -43,6 +43,31 @@ def test_unsatisfiable_constraints():
         assert str(e) in expected_error
 
 
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    # TODO(tehrengruber): For whatever reason the ordering in the error message is not
+    #  deterministic. Ignoring for now, as we want to refactor the type inference anyway.
+    expected_error = [
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='int32') ≡ Primitive(name='float32')"
+        ),
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='float32') ≡ Primitive(name='int32')"
+        ),
+    ]
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) in expected_error
+
+
 def test_sym_ref():
     testee = ir.SymRef(id="x")
     expected = ti.TypeVar(idx=0)
@@ -724,6 +749,9 @@ def test_stencil_closure():
             dtype=ti.TypeVar(idx=0),
             size=ti.Column(),
             current_loc=ti.ANYWHERE,
+            # TODO: remove comment below
+            # TODO(tehrengruber): the TypeVar here should match the defined_loc of the input, but
+            #  we are currently not enforcing it as it breaks for scalar fencil arguments
             defined_loc=ti.TypeVar(idx=1),
         ),
         inputs=ti.Tuple.from_elems(

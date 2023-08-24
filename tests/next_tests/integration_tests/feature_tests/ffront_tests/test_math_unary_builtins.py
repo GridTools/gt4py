@@ -74,6 +74,7 @@ def test_floordiv(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail(
@@ -91,6 +92,7 @@ def test_mod(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail(

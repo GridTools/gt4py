@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import pytest
 
 import gt4py.next as gtx
+from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
@@ -44,8 +45,15 @@ def lift_mode(request):
     return request.param
 
 
+class _RemoveITIRSymTypes(eve.NodeTranslator):
+    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
+        return itir.Sym(id=node.id, dtype=None, kind=None)
+
+
 @ppi.program_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
+    # remove types from ITIR as they are not supported for the roundtrip
+    root = _RemoveITIRSymTypes().visit(root)
     pretty = pretty_printer.pformat(root)
     parsed = pretty_parser.pparse(pretty)
     assert parsed == root
@@ -63,6 +71,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
         (gtfn_cpu.run_gtfn_imperative, True),
+        (gtfn_cpu.run_gtfn_with_temporaries, True),
         (gtfn.format_sourcecode, False),
         (dace_iterator.run_dace_iterator, True),
     ],
@@ -84,6 +93,7 @@ def program_processor_no_gtfn_exec(program_processor):
     if (
         program_processor[0] == gtfn_cpu.run_gtfn
         or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+        or program_processor[0] == gtfn_cpu.run_gtfn_with_temporaries
     ):
         pytest.xfail("gtfn backend not yet supported.")
     return program_processor

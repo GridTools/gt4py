@@ -15,7 +15,6 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.eve.datamodels import field
 from gt4py.next.iterator import embedded
 
 
