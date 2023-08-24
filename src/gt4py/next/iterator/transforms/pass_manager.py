@@ -99,6 +99,8 @@ def apply_common_transforms(
             inlined,
             opcount_preserving=True,
             force_inline_lift_args=(lift_mode == LiftMode.FORCE_INLINE),
+            # If trivial lifts are not inlined we might create temporaries for constants. In all
+            #  other cases we want it anyway.
             force_inline_trivial_lift_args=True,
         )
         inlined = ConstantFolding.apply(inlined)
