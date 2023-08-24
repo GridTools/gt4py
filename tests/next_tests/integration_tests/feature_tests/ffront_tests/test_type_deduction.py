@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import re
 from typing import Optional, Pattern
 
 import pytest
@@ -180,7 +180,7 @@ def callable_type_info_cases():
             unary_func_type,
             [float_type],
             {},
-            [r"Expected 0-th argument to be of type `bool`, but got `float64`."],
+            [r"Expected 1st argument to be of type `bool`, but got `float64`."],
             None,
         ),
         (
@@ -274,7 +274,7 @@ def callable_type_info_cases():
             [int_type],
             {"bar": bool_type, "foo": bool_type},
             [
-                r"Expected 0-th argument to be of type `bool`, but got `int64`",
+                r"Expected 1st argument to be of type `bool`, but got `int64`",
                 r"Expected argument `foo` to be of type `int64`, but got `bool`",
                 r"Expected keyword argument `bar` to be of type `float64`, but got `bool`",
             ],
@@ -299,7 +299,7 @@ def callable_type_info_cases():
             [ts.TupleType(types=[float_type, field_type])],
             {},
             [
-                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
             ],
             ts.VoidType(),
         ),
@@ -308,7 +308,7 @@ def callable_type_info_cases():
             [int_type],
             {},
             [
-                "Expected 0-th argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
             ],
             ts.VoidType(),
         ),
@@ -761,15 +761,42 @@ def test_where_mixed_dims():
 
 
 def test_astype_dtype():
-    ADim = Dimension("ADim")
-
-    def simple_astype(a: Field[[ADim], float64]):
+    def simple_astype(a: Field[[TDim], float64]):
         return astype(a, bool)
 
     parsed = FieldOperatorParser.apply_to_function(simple_astype)
 
     assert parsed.body.stmts[0].value.type == ts.FieldType(
-        dims=[ADim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    )
+
+
+def test_astype_wrong_dtype():
+    def simple_astype(a: Field[[TDim], float64]):
+        # we just use broadcast here, but anything with type function is fine
+        return astype(a, broadcast)
+
+    with pytest.raises(
+        errors.DSLError,
+        match=r"Invalid call to `astype`. Second argument must be a scalar type, but got.",
+    ):
+        _ = FieldOperatorParser.apply_to_function(simple_astype)
+
+
+def test_astype_wrong_value_type():
+    def simple_astype(a: Field[[TDim], float64]):
+        # we just use a tuple here but anything that is not a field or scalar works
+        return astype((1, 2), bool)
+
+    with pytest.raises(errors.DSLError) as exc_info:
+        _ = FieldOperatorParser.apply_to_function(simple_astype)
+
+    assert (
+        re.search(
+            "Expected 1st argument to be of type",
+            exc_info.value.__cause__.args[0],
+        )
+        is not None
     )
 
 
