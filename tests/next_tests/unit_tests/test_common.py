@@ -347,3 +347,17 @@ def test_constant_field_incompatible_value_type(cf1, cf2, expected):
     res = cf1 + cf2
     assert res.value == expected
     assert res.dtype == float
+
+
+def test_constant_field_getitem_domain():
+    cf = common.ConstantField(10)
+    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+    result = cf[domain]
+    assert isinstance(result.domain, Domain)
+
+
+def test_constant_field_getitem_named_range():
+    cf = common.ConstantField(10)
+    nr = ((IDim, UnitRange(0, 10)),)
+    result = cf[nr]
+    assert isinstance(result.domain, Domain)

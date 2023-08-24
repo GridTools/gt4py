@@ -494,16 +494,33 @@ def _constant_field_op(method: Callable):
 @dataclasses.dataclass(frozen=True)
 class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
     value: core_defs.ScalarT
+    _domain: Optional[Domain] = dataclasses.field(default=None)
+
 
     def remap(self, index_field: Field) -> Field:
         raise NotImplementedError()
 
-    def __getitem__(self, index: Any) -> core_defs.ScalarT:
+    def __getitem__(self, index: Domain | Sequence[NamedRange]) -> "ConstantField" | core_defs.ScalarT:
+
+        if not self._domain:
+            if isinstance(index, Domain):
+                return ConstantField(self.value, index)
+            elif isinstance(index, Sequence) and all(is_named_range(elem) for elem in index):
+                domain = Domain(
+                    dims=tuple(dim for dim, _ in index),
+                    ranges=tuple(range_ for _, range_ in index)
+                )
+                return ConstantField(self.value, domain)
+            else:
+                raise Exception("Can only use Domain or NamedRange to slice ConstantField without domain.")
+
+        # if domain we can use slice, int, EllipsisType, NamedIndex
+
         return self.value
 
     @property
     def domain(self) -> Domain:
-        raise NotImplementedError()  # TODO
+        return self._domain
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -515,7 +532,9 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        raise NotImplementedError()  # TODO
+        if self._domain is None:
+            return None
+        # TODO: return concretised constant field if domain is present
 
     restrict = __getitem__
 
