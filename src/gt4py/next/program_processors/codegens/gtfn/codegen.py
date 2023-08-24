@@ -245,7 +245,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
-    
+
     ${block_sizes}
 
     inline auto ${id} = [](auto... connectivities__){

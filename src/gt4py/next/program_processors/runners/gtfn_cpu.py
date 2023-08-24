@@ -14,15 +14,14 @@
 
 from typing import Any
 
-import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
 from gt4py.next.otf import languages, recipes, stages, workflow
-from gt4py.next.otf.binding import cpp_interface, nanobind
+from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
-from gt4py.next.otf.compilation.build_systems import cmake, compiledb
+from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
