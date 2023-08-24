@@ -281,7 +281,7 @@ class NextGTDimsInferface(Protocol):
 
 
 @extended_runtime_checkable
-class Field(NextGTDimsInferface, Protocol[DimsT, core_defs.ScalarT]):
+class Field(NextGTDimsInferface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property

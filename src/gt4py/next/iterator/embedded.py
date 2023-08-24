@@ -924,7 +924,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return self._ndarrayfield[self._translate_named_indices(named_indices)]
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-        self._ndarrayfield[self._translate_named_indices(named_indices)] = value
+        if isinstance(self._ndarrayfield, common.MutableField):
+            self._ndarrayfield[self._translate_named_indices(named_indices)] = value
+        else:
+            raise RuntimeError("Assigment into a non-mutable Field.")
 
     def __array__(self) -> core_defs.NDArrayObject:
         return self._ndarrayfield.ndarray
@@ -1050,6 +1053,10 @@ class IndexField(common.FieldABC):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return (self._dimension,)
 
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return (0,)
+
     @classmethod
     def __gt_builtin_func__(func: Callable, /) -> None:
         # not implemented, let's use the implmentation of the other field if we have it
@@ -1075,7 +1082,7 @@ class IndexField(common.FieldABC):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.DomainLike) -> common.Field:
+    def restrict(self, item: common.FieldSlice) -> common.Field:
         if common.is_domain_slice(item) and all(common.is_named_index(e) for e in item):
             d, r = item[0]
             assert d == self._dimension
@@ -1146,6 +1153,10 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return tuple()
 
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple()
+
     @classmethod
     def __gt_builtin_func__(func: Callable) -> None:
         # not implemented, let's use the implmentation of the other field if we have it
@@ -1171,7 +1182,7 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.DomainLike) -> common.Field | core_defs.ScalarT:
+    def restrict(self, item: common.FieldSlice) -> common.Field | core_defs.ScalarT:
         # TODO set a domain...
         return self._value
 
@@ -1221,7 +1232,7 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
 def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> common.Field:
     if dtype is None:
         dtype = infer_dtype_like_type(value)
-    return ConstantField(dtype(value), dtype)
+    return ConstantField(dtype.type(value), dtype.type)
 
 
 @builtins.shift.register(EMBEDDED)
