@@ -20,7 +20,8 @@ import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
-from typing import overload
+from types import EllipsisType
+from typing import TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -36,7 +37,6 @@ from gt4py.eve.extended_typing import (
     Protocol,
     TypeAlias,
     TypeVar,
-    Union,
     extended_runtime_checkable,
     final,
     runtime_checkable,
@@ -50,11 +50,11 @@ DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 class Infinity(int):
     @classmethod
-    def positive(cls) -> "Infinity":
+    def positive(cls) -> Infinity:
         return cls(sys.maxsize)
 
     @classmethod
-    def negative(cls) -> "Infinity":
+    def negative(cls) -> Infinity:
         return cls(-sys.maxsize)
 
 
@@ -77,11 +77,6 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-DomainLike: TypeAlias = Union[
-    Sequence[Dimension], Dimension, str
-]  # TODO(havogt): revisit once embedded implementation is concluded
-
-
 @dataclasses.dataclass(frozen=True)
 class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
@@ -94,6 +89,10 @@ class UnitRange(Sequence[int], Set[int]):
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
+
+    @classmethod
+    def infinity(cls) -> UnitRange:
+        return cls(Infinity.negative(), Infinity.positive())
 
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
@@ -137,7 +136,19 @@ class UnitRange(Sequence[int], Set[int]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
+DomainRange: TypeAlias = UnitRange | int
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, int]
+DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+FieldSlice: TypeAlias = (
+    DomainSlice
+    | tuple[slice | int | EllipsisType, ...]
+    | slice
+    | int
+    | EllipsisType
+    | NamedRange
+    | NamedIndex
+)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -148,6 +159,11 @@ class Domain(Sequence[NamedRange]):
     def __post_init__(self):
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
+
+        if len(self.dims) != len(self.ranges):
+            raise ValueError(
+                f"Number of provided dimensions ({len(self.dims)}) does not match number of provided ranges ({len(self.ranges)})."
+            )
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -242,7 +258,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -251,7 +267,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: "DomainLike") -> Field:
+    def __getitem__(self, item: FieldSlice) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -305,6 +321,12 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
+
+
+def is_field(
+    v: Any,
+) -> TypeGuard[Field]:  # this function is introduced to localize the `type: ignore``
+    return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 class FieldABC(Field[DimsT, core_defs.ScalarT]):
@@ -445,3 +467,17 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
+
+
+def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
+
+
+def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
+    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], int)
+
+
+def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
+    return isinstance(index, Sequence) and all(
+        is_named_range(idx) or is_named_index(idx) for idx in index
+    )

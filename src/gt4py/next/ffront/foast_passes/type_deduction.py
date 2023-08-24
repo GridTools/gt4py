@@ -28,31 +28,32 @@ from gt4py.next.ffront.foast_passes.utils import compute_assign_indices
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-def boolified_type(symbol_type: ts.TypeSpec) -> ts.ScalarType | ts.FieldType:
+def with_altered_scalar_kind(
+    type_spec: ts.TypeSpec, new_scalar_kind: ts.ScalarKind
+) -> ts.ScalarType | ts.FieldType:
     """
-    Create a new symbol type from a symbol type, replacing the data type with ``bool``.
+    Given a scalar or field type, return a type with different scalar kind.
 
     Examples:
     ---------
     >>> from gt4py.next import Dimension
     >>> scalar_t = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    >>> print(boolified_type(scalar_t))
+    >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind))
-    >>> print(boolified_type(field_t))
-    Field[[I], bool]
+    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
+    Field[[I], float32]
     """
-    shape = None
-    if type_info.is_concrete(symbol_type):
-        shape = type_info.extract_dtype(symbol_type).shape
-    scalar_bool = ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=shape)
-    type_class = type_info.type_class(symbol_type)
-    if type_class is ts.ScalarType:
-        return scalar_bool
-    elif type_class is ts.FieldType:
-        return ts.FieldType(dtype=scalar_bool, dims=type_info.extract_dims(symbol_type))
-    raise ValueError(f"Can not boolify type {symbol_type}!")
+    if isinstance(type_spec, ts.FieldType):
+        return ts.FieldType(
+            dims=type_spec.dims,
+            dtype=ts.ScalarType(kind=new_scalar_kind, shape=type_spec.dtype.shape),
+        )
+    elif isinstance(type_spec, ts.ScalarType):
+        return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
+    else:
+        raise ValueError(f"Expected field or scalar type, but got {type_spec}.")
 
 
 def construct_tuple_type(
@@ -563,7 +564,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         try:
             # transform operands to have bool dtype and use regular promotion
             #  mechanism to handle dimension promotion
-            return type_info.promote(boolified_type(left.type), boolified_type(right.type))
+            return type_info.promote(
+                with_altered_scalar_kind(left.type, ts.ScalarKind.BOOL),
+                with_altered_scalar_kind(right.type, ts.ScalarKind.BOOL),
+            )
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
@@ -762,7 +766,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             return_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)
         elif func_name in fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES:
-            return_type = boolified_type(cast(ts.FieldType | ts.ScalarType, node.args[0].type))
+            return_type = with_altered_scalar_kind(
+                cast(ts.FieldType | ts.ScalarType, node.args[0].type), ts.ScalarKind.BOOL
+            )
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             try:
                 return_type = type_info.promote(
@@ -817,19 +823,22 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> foast.Call:
-        casted_obj_type = node.args[0].type
-        dtype_obj = node.args[1]
-        assert isinstance(dtype_obj, foast.Name)
-        dtype_obj_type = dtype_obj.type
-        assert isinstance(dtype_obj_type, ts.FunctionType)
-        assert dtype_obj.id in fbuiltins.TYPE_BUILTIN_NAMES
-        assert isinstance(casted_obj_type, ts.FieldType)
-        assert type_info.is_arithmetic(casted_obj_type) or type_info.is_logical(casted_obj_type)
+        value, new_type = node.args
+        assert isinstance(
+            value.type, (ts.FieldType, ts.ScalarType)
+        )  # already checked using generic mechanism
+        if not isinstance(new_type, foast.Name) or new_type.id.upper() not in [
+            kind.name for kind in ts.ScalarKind
+        ]:
+            raise errors.DSLError(
+                node.location,
+                f"Invalid call to `astype`. Second argument must be a scalar type, but got {new_type}.",
+            )
 
-        return_type = ts.FieldType(
-            dims=casted_obj_type.dims,
-            dtype=self.visit(dtype_obj_type).returns,
+        return_type = with_altered_scalar_kind(
+            value.type, getattr(ts.ScalarKind, new_type.id.upper())
         )
+
         return foast.Call(
             func=node.func,
             args=node.args,
