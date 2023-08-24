@@ -133,8 +133,12 @@ def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
     return BuiltInFunction(fun)
 
 
-class WhereBuiltinFunction(BuiltInFunction[_R, _P]):
-    def __call__(self, mask, true_field, false_field) -> Callable[_P, _R]:
+MaskT = TypeVar("MaskT", bound=Field)
+FieldT = TypeVar("FieldT", bound=Union[Field, gt4py_defs.Scalar, Tuple])
+
+
+class WhereBuiltinFunction(BuiltInFunction[_R, [MaskT, FieldT, FieldT]]):
+    def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -142,11 +146,13 @@ class WhereBuiltinFunction(BuiltInFunction[_R, _P]):
                 )
             if len(true_field) != len(false_field):
                 raise ValueError("Tuple of different size not allowed.")
-            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))
+            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 
-def where_builtin_function(fun: Callable[_P, _R]) -> WhereBuiltinFunction[_R, _P]:
+def where_builtin_function(
+    fun: Callable[[MaskT, FieldT, FieldT], _R]
+) -> WhereBuiltinFunction[_R, MaskT, FieldT]:
     return WhereBuiltinFunction(fun)
 
 
