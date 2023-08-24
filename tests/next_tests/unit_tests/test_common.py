@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import operator
 from typing import Optional, Pattern
-
+import numpy as np
 import pytest
 
 from gt4py.next import common
@@ -361,3 +361,11 @@ def test_constant_field_getitem_named_range():
     nr = ((IDim, UnitRange(0, 10)),)
     result = cf[nr]
     assert isinstance(result.domain, Domain)
+
+
+def test_constant_field_array():
+    cf = common.ConstantField(10)
+    nr = ((IDim, UnitRange(0, 5)),(JDim, UnitRange(-3, 13)))
+    result = cf[nr]
+    assert result.ndarray.shape == (5, 16)
+    assert np.all(result.ndarray == 10)

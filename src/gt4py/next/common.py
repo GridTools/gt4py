@@ -501,7 +501,6 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __getitem__(self, index: Domain | Sequence[NamedRange]) -> "ConstantField" | core_defs.ScalarT:
-
         if not self._domain:
             if isinstance(index, Domain):
                 return ConstantField(self.value, index)
@@ -514,7 +513,7 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
             else:
                 raise Exception("Can only use Domain or NamedRange to slice ConstantField without domain.")
 
-        # if domain we can use slice, int, EllipsisType, NamedIndex
+        # TODO: Implement slicing when domain is not None.
 
         return self.value
 
@@ -534,7 +533,9 @@ class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
     def ndarray(self) -> core_defs.NDArrayObject:
         if self._domain is None:
             return None
-        # TODO: return concretised constant field if domain is present
+
+        shape = [len(rng) for _, rng in self.domain]
+        return np.full(tuple(shape), self.value)
 
     restrict = __getitem__
 
