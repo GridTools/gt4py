@@ -43,8 +43,9 @@ from gt4py.eve.extended_typing import (
 from gt4py.eve.type_definitions import StrEnum
 
 
-DimT = TypeVar("DimT", bound="Dimension")
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+DimsT = TypeVar(
+    "DimsT", covariant=True
+)  # bound to `Sequence[Dimension]` if instance of Dimension would be a type
 
 
 class Infinity(int):
@@ -76,19 +77,8 @@ class Dimension:
         return f'Dimension(value="{self.value}", kind={self.kind})'
 
 
-SelfShiftable = TypeVar("SelfShiftable", bound="Shiftable", covariant=True)
-
-
-class Shiftable(Protocol):
-    def __add__(self: SelfShiftable, offset: int) -> SelfShiftable:
-        ...
-
-    def __sub__(self: SelfShiftable, offset: int) -> SelfShiftable:
-        ...
-
-
 @dataclasses.dataclass(frozen=True)
-class UnitRange(Sequence[int], Set[int], Shiftable):
+class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
@@ -137,17 +127,6 @@ class UnitRange(Sequence[int], Set[int], Shiftable):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __add__(self, offset: int) -> UnitRange:
-        return UnitRange(self.start + offset, self.stop + offset)
-
-    def __sub__(self, offset: int | Set[Any]) -> UnitRange:
-        if isinstance(offset, int):
-            # Shiftable implementation
-            return self.__add__(-offset)
-        else:
-            # Set implementation
-            raise NotImplementedError()
-
     def __and__(self, other: Set[Any]) -> UnitRange:
         if isinstance(other, UnitRange):
             start = max(self.start, other.start)
@@ -158,15 +137,15 @@ class UnitRange(Sequence[int], Set[int], Shiftable):
 
 
 IntIndex: TypeAlias = int | np.integer
-DomainRange: TypeAlias = UnitRange | int
+DomainRange: TypeAlias = UnitRange | IntIndex
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 FieldSlice: TypeAlias = (
     DomainSlice
-    | tuple[slice | int | EllipsisType, ...]
+    | tuple[slice | IntIndex | EllipsisType, ...]
     | slice
-    | int
+    | IntIndex
     | EllipsisType
     | NamedRange
     | NamedIndex
@@ -388,6 +367,12 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     @abc.abstractmethod
     def __setitem__(self, index: FieldSlice, value: Field | core_defs.ScalarT) -> None:
         ...
+
+
+def is_mutable_field(
+    v: Any,
+) -> TypeGuard[MutableField]:  # this function is introduced to localize the `type: ignore``
+    return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 @functools.singledispatch

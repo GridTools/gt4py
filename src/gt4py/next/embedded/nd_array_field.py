@@ -134,7 +134,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         return self._domain
 
     @property
-    def __gt_dims__(self) -> common.DimsT:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._domain.dims
 
     @property
@@ -145,8 +145,8 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
-    def __array__(self) -> np.ndarray:
-        return np.asarray(self._ndarray)
+    def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
+        return np.asarray(self._ndarray, dtype)
 
     @property
     def value_type(self) -> type[core_defs.ScalarT]:
@@ -190,13 +190,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __getitem__(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
-        if (
-            not isinstance(index, tuple)
-            and not common.is_domain_slice(index)
-            or common.is_named_index(index)
-            or common.is_named_range(index)
-        ):
-            index = cast(common.FieldSlice, (index,))
+        index = _tuplize_field_slice(index)
 
         if common.is_domain_slice(index):
             return self._getitem_absolute_slice(index)
@@ -214,10 +208,28 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     )
 
     def __setitem__(
-        self, index: common.FieldSlice, value: common.Field | core_defs.ScalarT
+        self,
+        index: common.FieldSlice,
+        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
     ) -> None:
-        slices = _get_slices_from_domain_slice(self.domain, index)
-        self.ndarray[slices] = value
+        index = _tuplize_field_slice(index)
+        if common.is_field(value):
+            # TODO(havogt): in case of `is_field(value)` we should additionally check that `value.domain == self[slice].domain`
+            value = value.ndarray
+
+        if common.is_domain_slice(index):
+            slices = _get_slices_from_domain_slice(self.domain, index)
+            self.ndarray[slices] = value
+            return
+
+        assert isinstance(index, tuple)
+        if all(
+            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
+        ):
+            self.ndarray[index] = value
+            return
+
+        raise IndexError(f"Unsupported index type: {index}")
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
@@ -278,7 +290,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
 
     def _getitem_relative_slice(
-        self, indices: tuple[slice | int | EllipsisType, ...]
+        self, indices: tuple[slice | common.IntIndex | EllipsisType, ...]
     ) -> common.Field | core_defs.ScalarT:
         new = self.ndarray[indices]
         new_dims = []
@@ -362,6 +374,17 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
+def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
+    if (
+        not isinstance(v, tuple)
+        and not common.is_domain_slice(v)
+        or common.is_named_index(v)
+        or common.is_named_range(v)
+    ):
+        return cast(common.FieldSlice, (v,))
+    return v
+
+
 def _find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
@@ -422,7 +445,7 @@ def _get_slices_from_domain_slice(
                                        specified in the Domain. If a dimension is not included in the named indices
                                        or ranges, a None is used to indicate expansion along that axis.
     """
-    slice_indices: list[slice | int | None] = []
+    slice_indices: list[slice | common.IntIndex | None] = []
 
     for pos_old, (dim, _) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
@@ -433,7 +456,9 @@ def _get_slices_from_domain_slice(
     return tuple(slice_indices)
 
 
-def _compute_slice(rng: common.DomainRange, domain: common.Domain, pos: int) -> slice | int:
+def _compute_slice(
+    rng: common.DomainRange, domain: common.Domain, pos: int
+) -> slice | common.IntIndex:
     """Compute a slice or integer based on the provided range, domain, and position.
 
     Args:
@@ -477,9 +502,9 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
 
 
 def _expand_ellipsis(
-    indices: tuple[int | slice | EllipsisType, ...], target_size: int
-) -> tuple[int | slice, ...]:
-    expanded_indices: list[int | slice] = []
+    indices: tuple[common.IntIndex | slice | EllipsisType, ...], target_size: int
+) -> tuple[common.IntIndex | slice, ...]:
+    expanded_indices: list[common.IntIndex | slice] = []
     for idx in indices:
         if idx is Ellipsis:
             expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))

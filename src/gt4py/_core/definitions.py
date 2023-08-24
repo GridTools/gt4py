@@ -337,11 +337,15 @@ class StrLike(Protocol):
 
 # -- Custom protocols  --
 class GTDimsInterface(Protocol):
-    __gt_dims__: Tuple[str | StrLike, ...]
+    @property
+    def __gt_dims__(self) -> Tuple[str | StrLike, ...]:
+        ...
 
 
 class GTOriginInterface(Protocol):
-    __gt_origin__: Tuple[int, ...]
+    @property
+    def __gt_origin__(self) -> Tuple[int, ...]:
+        ...
 
 
 # -- Device representation --
@@ -400,6 +404,9 @@ class NDArrayObjectProto(Protocol):
         ...
 
     def __getitem__(self, item: SliceLike) -> NDArrayObject:
+        ...
+
+    def __setitem__(self, item: SliceLike, value: Any) -> None:
         ...
 
     def __abs__(self) -> NDArrayObject:
