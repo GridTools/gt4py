@@ -134,12 +134,16 @@ def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
 
 
 class WhereBuiltinFunction(BuiltInFunction[_R, _P]):
-    def dispatch(self, *args: Any) -> Callable[_P, _R]:
-        arg_types = tuple(type(arg) for arg in args)
-        if arg_types[1] == tuple and arg_types[2] == tuple:
-            # TODO(havogt): temporary workaround for `where(cond, tuple(...), tuple(...))`
-            return self.function
-        return super().dispatch(*args)
+    def __call__(self, mask, true_field, false_field) -> Callable[_P, _R]:
+        if isinstance(true_field, tuple) or isinstance(false_field, tuple):
+            if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
+                raise ValueError(
+                    f"Either both or none can be tuple in {true_field=} and {false_field=}."
+                )
+            if len(true_field) != len(false_field):
+                raise ValueError("Tuple of different size not allowed.")
+            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))
+        return super().__call__(mask, true_field, false_field)
 
 
 def where_builtin_function(fun: Callable[_P, _R]) -> WhereBuiltinFunction[_R, _P]:
@@ -185,14 +189,6 @@ def where(
     false_field: Field | gt4py_defs.ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
-    if isinstance(true_field, tuple) or isinstance(false_field, tuple):
-        if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
-            raise ValueError(
-                f"Either both or none can be tuple in {true_field=} and {false_field=}."
-            )
-        if len(true_field) != len(false_field):
-            raise ValueError("Tuple of different size not allowed.")
-        return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))
     raise NotImplementedError()
 
 
