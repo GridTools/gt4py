@@ -422,6 +422,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
 
         local_shifts = TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
+            assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []
             )
