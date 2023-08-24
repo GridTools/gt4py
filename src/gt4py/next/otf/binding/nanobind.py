@@ -17,7 +17,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence, Union
+from typing import Any, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
@@ -191,8 +191,8 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-) -> stages.BindingSource[languages.Cpp, languages.Python]:
+    program_source: stages.ProgramSource[NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+) -> stages.BindingSource[NanobindSrcL, languages.Python]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -263,10 +263,13 @@ def create_bindings(
     )
 
 
+NanobindSrcL = TypeVar("NanobindSrcL", bound=languages.Cpp | languages.Cuda)
+
+
 @workflow.make_step
 def bind_source(
-    inp: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+    inp: stages.ProgramSource[NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ) -> stages.CompilableSource[
-    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+    NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
 ]:
     return stages.CompilableSource(program_source=inp, binding_source=create_bindings(inp))

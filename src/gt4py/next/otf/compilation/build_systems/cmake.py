@@ -38,7 +38,7 @@ class BuildType(enum.Enum):
 @dataclasses.dataclass
 class CMakeFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        languages.Cpp | languages.Cuda, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""

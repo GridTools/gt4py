@@ -91,15 +91,17 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
 
 
 GTFN_DEFAULT_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
+    source_language=languages.Cpp,
     enable_itir_transforms=True,
     use_imperative_backend=False,
-    hardware_accelerator=gtfn_module.HardwareAccelerator.CPU,
+    #  hardware_accelerator=gtfn_module.HardwareAccelerator.CPU,
 )
 
 GTFN_GPU_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
+    source_language=languages.Cuda,
     enable_itir_transforms=True,
     use_imperative_backend=False,
-    hardware_accelerator=gtfn_module.HardwareAccelerator.GPU,
+    #  hardware_accelerator=gtfn_module.HardwareAccelerator.GPU,
 )
 
 GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(

@@ -23,7 +23,7 @@ import subprocess
 from typing import Optional
 
 from gt4py.next.otf import languages, stages
-from gt4py.next.otf.binding import interface
+from gt4py.next.otf.binding import interface, nanobind
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
 
@@ -31,7 +31,7 @@ from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
 @dataclasses.dataclass
 class CompiledbFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """
@@ -48,7 +48,7 @@ class CompiledbFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp,
+            nanobind.NanobindSrcL,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -95,7 +95,7 @@ class CompiledbFactory(
 @dataclasses.dataclass()
 class CompiledbProject(
     stages.BuildSystemProject[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """
@@ -115,7 +115,7 @@ class CompiledbProject(
     compile_commands_cache: pathlib.Path
     bindings_file_name: str
 
-    def build(self):
+    def build(self) -> None:
         self._write_files()
         if build_data.read_data(self.root_path).status < build_data.BuildStatus.CONFIGURED:
             self._run_config()
@@ -126,7 +126,7 @@ class CompiledbProject(
         ):
             self._run_build()
 
-    def _write_files(self):
+    def _write_files(self) -> None:
         def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
             pattern = r"((lib.*\.a)|(.*\.lib))"
             libraries = [child for child in children if re.match(pattern, child)]
@@ -153,7 +153,7 @@ class CompiledbProject(
             path=self.root_path,
         )
 
-    def _run_config(self):
+    def _run_config(self) -> None:
         compile_db = json.loads(self.compile_commands_cache.read_text())
 
         (self.root_path / "build").mkdir(exist_ok=True)
@@ -178,7 +178,7 @@ class CompiledbProject(
             self.root_path,
         )
 
-    def _run_build(self):
+    def _run_build(self) -> None:
         logfile = self.root_path / "log_build.txt"
         compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
         assert compile_db
@@ -214,7 +214,7 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: cmake.BuildType,
     cmake_flags: list[str],
-    language: type[languages.Cpp | languages.Cuda],
+    language: type[nanobind.NanobindSrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
