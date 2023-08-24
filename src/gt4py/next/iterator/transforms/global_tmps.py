@@ -428,13 +428,13 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             for shift_chain in shift_chains:
                 consumed_domain = SymbolicDomain.from_expr(domain)
                 for shift in zip(shift_chain[::2], shift_chain[1::2], strict=True):
-                    offset_name, offset = shift[0].value, shift[1].value
+                    offset_name, offset = shift[0].value, shift[1]
                     assert isinstance(offset_name, str)
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        assert isinstance(offset, int)
+                        assert isinstance(offset, ir.OffsetLiteral)
                         dim = offset_provider[offset_name].value
-                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
+                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset.value)
                     elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
