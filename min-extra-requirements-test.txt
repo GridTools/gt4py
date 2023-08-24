@@ -40,7 +40,7 @@ flake8-pyproject==1.2.2
 flake8-rst-docstrings==0.0.14
 flake8==5.0.4
 frozendict==2.3
-gridtools-cpp==2.3.0
+gridtools-cpp==2.3.1
 hypothesis==6.0.0
 importlib-resources==5.0;python_version<'3.9'
 isort==5.10

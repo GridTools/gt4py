@@ -17,7 +17,7 @@ import sys
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef
-from gt4py.next.iterator.tracing import trace
+from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
@@ -65,7 +65,7 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace(tridiagonal_solve_fencil, [None] * 8)
+    prog = trace_fencil_definition(tridiagonal_solve_fencil, [None] * 8, use_arg_types=False)
     offset_provider = {"I": gtx.Dimension("IDim"), "J": gtx.Dimension("JDim")}
     generated_code = generate(
         prog,
