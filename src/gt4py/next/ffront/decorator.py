@@ -31,7 +31,7 @@ from devtools import debug
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.eve.utils import UIDGenerator
+from gt4py.eve.utils import UIDGenerator, content_hash
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -539,6 +539,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     definition: Optional[types.FunctionType] = None
     backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
+    _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -607,6 +608,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
+        hash_ = content_hash(
+            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
+        )
+        try:
+            return self._program_cache[hash_]
+        except KeyError:
+            pass
 
         loc = self.foast_node.location
         param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
@@ -660,12 +668,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        return Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+        return self._program_cache[hash_]
 
     def __call__(
         self,
