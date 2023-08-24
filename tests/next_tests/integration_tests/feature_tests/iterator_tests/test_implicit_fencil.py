@@ -75,7 +75,7 @@ def test_2_arguments(program_processor, dom):
     run_processor(fun[dom], program_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(np.asarray(inp0) + np.asarray(inp1), out)
+        assert np.allclose(inp0 + inp1, out)
 
 
 def test_lambda_domain(program_processor):

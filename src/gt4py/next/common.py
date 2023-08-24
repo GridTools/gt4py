@@ -38,7 +38,6 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeVar,
     extended_runtime_checkable,
-    final,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
@@ -384,18 +383,11 @@ def is_field(
     return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
-class MutableField(Field[DimsT, core_defs.ScalarT]):
+@extended_runtime_checkable
+class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, key, value) -> None:
+    def __setitem__(self, index: FieldSlice, value: Field | core_defs.ScalarT) -> None:
         ...
-
-
-class FieldABC(Field[DimsT, core_defs.ScalarT]):
-    """Abstract base class for implementations of the :class:`Field` protocol."""
-
-    @final
-    def __setattr__(self, key, value) -> None:
-        raise TypeError("Immutable type")
 
 
 @functools.singledispatch

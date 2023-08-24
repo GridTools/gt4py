@@ -842,7 +842,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
     ]
 
 
-def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tuple:
+def _wrap_field(field: common.Field | tuple) -> common.Field | NDArrayLocatedFieldWrapper | tuple:
     if isinstance(field, tuple):
         return tuple(_wrap_field(f) for f in field)
     elif common.is_field(field):
@@ -1039,7 +1039,7 @@ def np_as_located_field(
 
 
 @dataclasses.dataclass(frozen=True)
-class IndexField(common.FieldABC):
+class IndexField(common.Field[[common.DimT], common.IntIndex]):
     """
     Minimal index field implementation.
 
@@ -1067,11 +1067,11 @@ class IndexField(common.FieldABC):
         return common.Domain((self._dimension,), (common.UnitRange.infinity(),))
 
     @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+    def dtype(self) -> core_defs.DType[common.IntIndex]:
         return np.dtype(self._value_type)
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
+    def value_type(self) -> common.IntIndex:
         return self._value_type
 
     @property
@@ -1082,7 +1082,7 @@ class IndexField(common.FieldABC):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.FieldSlice) -> common.Field:
+    def restrict(self, item: common.FieldSlice) -> common.Field | common.IntIndex:
         if common.is_domain_slice(item) and all(common.is_named_index(e) for e in item):
             d, r = item[0]
             assert d == self._dimension
@@ -1139,7 +1139,7 @@ def index_field(axis: common.Dimension, dtype: npt.DTypeLike = np.int32) -> comm
 
 
 @dataclasses.dataclass(frozen=True)
-class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
+class ConstantField(common.Field[[], core_defs.ScalarT]):
     """
     Minimal constant field implementation.
 
@@ -1229,9 +1229,10 @@ class ConstantField(common.FieldABC[[], core_defs.ScalarT]):
         raise NotImplementedError()
 
 
-def constant_field(value: Any, dtype: Optional[npt.DTypeLike] = None) -> common.Field:
-    if dtype is None:
-        dtype = infer_dtype_like_type(value)
+def constant_field(value: Any, dtype_like: Optional[npt.DTypeLike] = None) -> common.Field:
+    if dtype_like is None:
+        dtype_like = infer_dtype_like_type(value)
+    dtype = np.dtype(dtype_like)
     return ConstantField(dtype.type(value), dtype.type)
 
 

@@ -82,7 +82,7 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
+class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     """
     Shared field implementation for NumPy-like fields.
 
@@ -213,8 +213,10 @@ class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         __getitem__  # type:ignore[assignment] # TODO(havogt) I don't see the problem that mypy has
     )
 
-    def __setitem__(self, domain, value):
-        slices = _get_slices_from_domain_slice(self.domain, domain)
+    def __setitem__(
+        self, index: common.FieldSlice, value: common.Field | core_defs.ScalarT
+    ) -> None:
+        slices = _get_slices_from_domain_slice(self.domain, index)
         self.ndarray[slices] = value
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
@@ -405,7 +407,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast
 def _get_slices_from_domain_slice(
     domain: common.Domain,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> tuple[slice | int | None, ...]:
+) -> tuple[slice | common.IntIndex | None, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
     This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
