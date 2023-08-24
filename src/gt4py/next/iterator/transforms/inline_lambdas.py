@@ -142,7 +142,7 @@ class InlineLambdas(NodeTranslator):
         force_inline_trivial_lift_args=False,
     ):
         """
-        Inline lambda calls by substituting every arguments by its value.
+        Inline lambda calls by substituting every argument by its value.
 
         Examples:
             `(λ(x) → x)(y)` to `y`
@@ -158,7 +158,7 @@ class InlineLambdas(NodeTranslator):
             force_inline_lift_args: Inline all arguments that are applied lifts, i.e.
                 `lift(λ(...) → ...)(...)`.
             force_inline_trivial_lift_args: Inline all arguments that are trivial
-                applied lifts, i.e. `lift(λ() → 1)()`.
+                applied lifts, e.g. `lift(λ() → 1)()`.
 
         """
         return cls(

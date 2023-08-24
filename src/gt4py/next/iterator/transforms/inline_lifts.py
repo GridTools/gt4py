@@ -105,6 +105,9 @@ def _transform_and_extract_lift_args(
     return (im.lift(inner_stencil)(*new_args), extracted_args)
 
 
+# TODO(tehrengruber): This pass has many different options that should be written as dedicated
+#  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
+#  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
 class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """Inline lifted function calls.
@@ -114,10 +117,23 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
 
     class Flag(enum.IntEnum):
+        #: `shift(...)(lift(f)(args...))` -> `lift(f)(shift(...)(args)...)`
         PROPAGATE_SHIFT = 1
+        #: `deref(lift(f)())` -> `f()`
         INLINE_TRIVIAL_DEREF_LIFT = 2
+        #: `deref(lift(f)(args...))` -> `f(args...)`
         INLINE_DEREF_LIFT = 2 + 4
+        #: `can_deref(lift(f)(args...))` -> `and(can_deref(arg[0]), and(can_deref(arg[1]), ...))`
         PROPAGATE_CAN_DEREF = 8
+        #: Inline arguments to lifted stencil calls, e.g.:
+        #:  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
+        #: is transformed into:
+        #:  lift(λ(b) → inner_ex(outer_ex(b)))(arg)
+        #: Note: This option is only needed when there is no outer `deref` by which the previous
+        #: branches eliminate the lift calls. This occurs for example for the `reduce` builtin
+        #: or when a better readable expression of a lift statement is needed during debugging.
+        #: Due to its complexity we might want to remove this option at some point again,
+        #: when we see that it is not required.
         INLINE_LIFTED_ARGS = 16
 
     predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
@@ -144,7 +160,6 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
         if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
-            # shift(...)(lift(f)(args...)) -> lift(f)(shift(...)(args)...)
             shift = node.fun
             assert len(node.args) == 1
             lift_call = node.args[0]
@@ -163,7 +178,6 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 self.flags & self.Flag.INLINE_DEREF_LIFT
                 or (self.flags & self.Flag.INLINE_TRIVIAL_DEREF_LIFT and is_trivial)
             ) and is_eligible:
-                # deref(lift(f)(args...)) -> f(args...)
                 assert isinstance(node.args[0], ir.FunCall) and isinstance(
                     node.args[0].fun, ir.FunCall
                 )
@@ -179,7 +193,6 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             #  this need to be changed to be 100% compliant
             assert len(node.args) == 1
             if _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context):
-                # can_deref(lift(f)(args...)) -> and(can_deref(arg[0]), and(can_deref(arg[1]), ...))
                 assert isinstance(node.args[0], ir.FunCall) and isinstance(
                     node.args[0].fun, ir.FunCall
                 )
@@ -201,16 +214,6 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             and len(node.args) > 0
             and self.predicate(node, is_scan_pass_context)
         ):
-            # Inline arguments to lifted stencil calls, e.g.:
-            #  lift(λ(a) → inner_ex(a))(lift(λ(b) → outer_ex(b))(arg))
-            # is transformed into:
-            #  lift(λ(b) → inner_ex(outer_ex(b)))(arg)
-            #  lift(λ(a) → inner_ex(shift(...)(a)))(lift(λ(b) → outer_ex(b))(arg))
-            # Note: This branch is only needed when there is no outer `deref` by which the previous
-            # branches eliminate the lift calls. This occurs for example for the `reduce` builtin
-            # or when a better readable expression of a lift statement is needed during debugging.
-            # Due to its complexity we might want to remove this branch at some point again,
-            # when we see that it is not required.
             stencil = node.fun.args[0]  # type: ignore[attr-defined] # node already asserted to be of type ir.FunCall
             eligible_lifted_args = [
                 _is_lift(arg) and self.predicate(arg, is_scan_pass_context) for arg in node.args
