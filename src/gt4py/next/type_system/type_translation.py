@@ -183,7 +183,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         return candidate_type
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
-    elif isinstance(value, common.Field):
+    elif common.is_field(value):
         dims = list(value.__gt_dims__)
         dtype = from_type_hint(value.value_type)
         symbol_type = ts.FieldType(dims=dims, dtype=dtype)

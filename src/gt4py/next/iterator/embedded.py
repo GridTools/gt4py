@@ -481,7 +481,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif isinstance(val, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
+    elif common.is_field(val):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -845,7 +845,7 @@ def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
 def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tuple:
     if isinstance(field, tuple):
         return tuple(_wrap_field(f) for f in field)
-    elif isinstance(field, common.Field):  # type: ignore[misc] # we use extended_runtime_checkable which is fine
+    elif common.is_field(field):
         return NDArrayLocatedFieldWrapper(field)
     else:
         return field
@@ -1057,7 +1057,7 @@ class IndexField(common.FieldABC):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension,), (common.UnitRange.infinite(),))
+        return common.Domain((self._dimension,), (common.UnitRange.infinity(),))
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -1374,12 +1374,12 @@ def has_uniform_tuple_element(field) -> bool:
 
 def is_tuple_of_field(field) -> bool:
     return isinstance(field, tuple) and all(
-        isinstance(f, common.Field) or is_tuple_of_field(f) for f in field
+        common.is_field(f) or is_tuple_of_field(f) for f in field
     )
 
 
 def is_field_of_tuple(field) -> bool:
-    return isinstance(field, common.Field) and has_uniform_tuple_element(field)
+    return common.is_field(field) and has_uniform_tuple_element(field)
 
 
 def can_be_tuple_field(field) -> bool:
@@ -1495,7 +1495,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (isinstance(out, common.Field) or can_be_tuple_field(out)):
+        if not (common.is_field(out) or can_be_tuple_field(out)):
             raise TypeError("Out needs to be a located field.")
 
         column_range = None

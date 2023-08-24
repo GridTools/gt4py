@@ -56,7 +56,7 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
     def _builtin_binary_op(a: _BaseNdArrayField, b: common.Field) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
-        if hasattr(b, "__gt_builtin_func__"):  # isinstance(b, common.Field):
+        if hasattr(b, "__gt_builtin_func__"):  # common.is_field(b):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
                 a_broadcasted = _broadcast(a, domain_intersection.dims)

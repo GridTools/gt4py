@@ -349,7 +349,7 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     field = common.field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
 
@@ -392,7 +392,7 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     field = common.field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 
@@ -436,7 +436,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
     field = common.field(np.ones((10, 15, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 
