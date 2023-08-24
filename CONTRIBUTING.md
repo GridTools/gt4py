@@ -171,43 +171,6 @@ Before submitting a pull request, check that it meets the following criteria:
 6. Pick one reviewer and try to contact them directly to let them know about the pull request. If there is no feedback in 24h/48h try to contact them again or pick another reviewer.
 7. Once the pull request has been approved, it should be squash-merged as soon as possible with a meaningful description of the changes. Although it is optional, we encourage the use of the [Conventional Commits][conventional-commits] specification for writing informative and automation-friendly commit messages (_commit types: `build`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `feature`, `style`, `test`_).
 
-## Releasing Process
-
-This section documents the process of releasing new versions of GT4Py and it is only useful to core members of the development team.
-
-Currently, GT4Py releases are published as commit tags in the main GitHub repository (although they will be soon available in TestPyPi and PyPI). To create a new release you should:
-
-1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the main public branch.
-
-2. Use `bump2version` to update the version number.
-
-   ```bash
-   $ bump2version minor # or patch
-   ```
-
-3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. This process can be fully or partially automated if commit messages follow the [Conventional Commits][conventional-commits] convention as suggested in the section about [Pull Request and Merge Guidelines](#pull-request-and-merge-guidelines).
-
-4. Commit the changes with the following commit message:
-
-   ```bash
-   $ git commit -m 'Releasing 0.{M}.{m}.{p} version.'
-   ```
-
-5. Add a new lightweight tag like: `v0.{M}.{m}.{p}`
-
-   ```bash
-   $ git tag v0.{M}.{m}.{p}
-   ```
-
-6. Push the new commit and tag directly to the upstream repo:
-
-   ```bash
-   $ git push upstream
-   $ git push upstream v0.{M}.{m}.{p}
-   ```
-
-7. Go to the GitHub website and verify that the new tag has been successfully created.
-
 ## Tools
 
 As mentioned above, we use several tools to help us write high-quality code. New tools could be added in the future, especially if they do not add a large overhead to our workflow and they bring extra benefits to keep our codebase in shape. The most important ones which we currently rely on are:

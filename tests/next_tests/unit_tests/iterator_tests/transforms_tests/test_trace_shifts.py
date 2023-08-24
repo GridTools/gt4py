@@ -23,10 +23,9 @@ def test_trivial():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [()]}
+    expected = {"inp": {()}}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
 
 
@@ -51,10 +50,9 @@ def test_shift():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
+    expected = {"inp": {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
 
 
@@ -84,10 +82,9 @@ def test_lift():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
+    expected = {"inp": {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
 
 
@@ -105,16 +102,15 @@ def test_neighbors():
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
     expected = {
-        "inp": [
+        "inp": {
             (
                 ir.OffsetLiteral(value="O"),
                 ALL_NEIGHBORS,
             )
-        ]
+        }
     }
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
 
 
@@ -134,10 +130,9 @@ def test_reduce():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [()]}
+    expected = {"inp": {()}}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
 
 
@@ -150,11 +145,64 @@ def test_shifted_literal():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": []}
+    expected = {"inp": set()}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
+
+
+def test_tuple_get():
+    testee = ir.StencilClosure(
+        # λ(x, y) → ·{x, y}[1]
+        stencil=im.lambda_("x", "y")(im.deref(im.tuple_get(1, im.make_tuple("x", "y")))),
+        inputs=[ir.SymRef(id="inp1"), ir.SymRef(id="inp2")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp1": set(), "inp2": {()}}  # never derefed  # once derefed
+
+    actual = TraceShifts.apply(testee)
+    assert actual == expected
+
+
+def test_trace_non_closure_input_arg():
+    x, y = im.sym("x"), im.sym("y")
+    testee = ir.StencilClosure(
+        # λ(x) → (λ(y) → ·⟪Iₒ, 1ₒ⟫(y))(⟪Iₒ, 2ₒ⟫(x))
+        stencil=im.lambda_(x)(
+            im.call(im.lambda_(y)(im.deref(im.shift("I", 1)("y"))))(im.shift("I", 2)("x"))
+        ),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+
+    actual = TraceShifts.apply(testee, inputs_only=False)
+
+    assert actual[id(x)] == {
+        (
+            ir.OffsetLiteral(value="I"),
+            ir.OffsetLiteral(value=2),
+            ir.OffsetLiteral(value="I"),
+            ir.OffsetLiteral(value=1),
+        )
+    }
+    assert actual[id(y)] == {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}
+
+
+def test_inner_iterator():
+    inner_shift = im.shift("I", 1)("x")
+    testee = ir.StencilClosure(
+        # λ(x) → ·⟪Iₒ, 1ₒ⟫(⟪Iₒ, 1ₒ⟫(x))
+        stencil=im.lambda_("x")(im.deref(im.shift("I", 1)(inner_shift))),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}
+
+    actual = TraceShifts.apply(testee, inputs_only=False)
+    assert actual[id(inner_shift)] == expected
 
 
 def test_tuple_get_on_closure_input():
@@ -165,8 +213,127 @@ def test_tuple_get_on_closure_input():
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
     )
-    expected = {"inp": [(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))]}
+    expected = {"inp": {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}}
 
-    actual = dict()
-    TraceShifts().visit(testee, shifts=actual)
+    actual = TraceShifts.apply(testee)
     assert actual == expected
+
+
+def test_if_tuple_branch_broadcasting():
+    testee = ir.StencilClosure(
+        # λ(cond, inp) → (if ·cond then ·inp else {1, 2})[1]
+        stencil=im.lambda_("cond", "inp")(
+            im.tuple_get(
+                1,
+                im.if_(
+                    im.deref("cond"),
+                    im.deref("inp"),
+                    im.make_tuple(im.literal_from_value(1), im.literal_from_value(2)),
+                ),
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"cond": {()}, "inp": {()}}
+
+    actual = TraceShifts.apply(testee)
+    assert actual == expected
+
+
+def test_if_of_iterators():
+    testee = ir.StencilClosure(
+        # λ(cond, x) → ·⟪Iₒ, 1ₒ⟫(if ·cond then ⟪Iₒ, 2ₒ⟫(x) else ⟪Iₒ, 3ₒ⟫(x))
+        stencil=im.lambda_("cond", "x")(
+            im.deref(
+                im.shift("I", 1)(
+                    im.if_(im.deref("cond"), im.shift("I", 2)("x"), im.shift("I", 3)("x"))
+                )
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {
+        "cond": {()},
+        "inp": {
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=2),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=3),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+        },
+    }
+
+    actual = TraceShifts.apply(testee)
+    assert actual == expected
+
+
+def test_if_of_tuples_of_iterators():
+    testee = ir.StencilClosure(
+        # λ(cond, x) →
+        #   ·⟪Iₒ, 1ₒ⟫((if ·cond then {⟪Iₒ, 2ₒ⟫(x), ⟪Iₒ, 3ₒ⟫(x)} else {⟪Iₒ, 4ₒ⟫(x), ⟪Iₒ, 5ₒ⟫(x)})[0])
+        stencil=im.lambda_("cond", "x")(
+            im.deref(
+                im.shift("I", 1)(
+                    im.tuple_get(
+                        0,
+                        im.if_(
+                            im.deref("cond"),
+                            im.make_tuple(im.shift("I", 2)("x"), im.shift("I", 3)("x")),
+                            im.make_tuple(im.shift("I", 4)("x"), im.shift("I", 5)("x")),
+                        ),
+                    )
+                )
+            )
+        ),
+        inputs=[ir.SymRef(id="cond"), ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {
+        "cond": {()},
+        "inp": {
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=2),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+            (
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=4),
+                ir.OffsetLiteral(value="I"),
+                ir.OffsetLiteral(value=1),
+            ),
+        },
+    }
+
+    actual = TraceShifts.apply(testee)
+    assert actual == expected
+
+
+def test_non_derefed_iterator():
+    """
+    Test that even if an iterator is not derefed the resulting dict has an (empty) entry for it.
+    """
+    non_derefed_it = im.shift("I", 1)("x")
+    testee = ir.StencilClosure(
+        # λ(x) → (λ(non_derefed_it) → ·x)(⟪Iₒ, 1ₒ⟫(x))
+        stencil=im.lambda_("x")(im.let("non_derefed_it", non_derefed_it)(im.deref("x"))),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+
+    actual = TraceShifts.apply(testee, inputs_only=False)
+    assert actual[id(non_derefed_it)] == set()

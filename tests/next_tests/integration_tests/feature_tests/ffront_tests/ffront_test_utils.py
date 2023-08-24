@@ -22,7 +22,9 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
+
+import next_tests
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -30,7 +32,15 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-@pytest.fixture(params=[roundtrip.executor, gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative])
+@pytest.fixture(
+    params=[
+        roundtrip.executor,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        dace_iterator.run_dace_iterator,
+    ],
+    ids=lambda p: next_tests.get_processor_id(p),
+)
 def fieldview_backend(request):
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
@@ -70,6 +80,7 @@ size = 10
 def reduction_setup():
     num_vertices = 9
     num_cells = 8
+    k_levels = 10
     v2edim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
     e2vdim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
     c2vdim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
@@ -86,7 +97,8 @@ def reduction_setup():
             [6, 12, 8, 15],  # 6
             [7, 13, 6, 16],
             [8, 14, 7, 17],
-        ]
+        ],
+        dtype=gtx.IndexType,
     )
 
     c2v_arr = np.array(
@@ -99,7 +111,8 @@ def reduction_setup():
             [7, 8, 2, 1],
             [2, 0, 3, 5],
             [5, 3, 6, 8],
-        ]
+        ],
+        dtype=gtx.IndexType,
     )
 
     c2e_arr = np.array(
@@ -112,7 +125,8 @@ def reduction_setup():
             [7, 17, 1, 16],
             [2, 9, 5, 11],
             [5, 12, 8, 14],
-        ]
+        ],
+        dtype=gtx.IndexType,
     )
 
     # create e2v connectivity by inverting v2e
@@ -122,7 +136,7 @@ def reduction_setup():
         for e in v2e_arr[v]:
             e2v_arr[e].append(v)
     assert all(len(row) == 2 for row in e2v_arr)
-    e2v_arr = np.asarray(e2v_arr)
+    e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
     yield namedtuple(
         "ReductionSetup",
@@ -130,6 +144,7 @@ def reduction_setup():
             "num_vertices",
             "num_edges",
             "num_cells",
+            "k_levels",
             "V2EDim",
             "E2VDim",
             "C2VDim",
@@ -148,6 +163,7 @@ def reduction_setup():
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
+        k_levels=k_levels,
         V2EDim=v2edim,
         E2VDim=e2vdim,
         C2VDim=c2vdim,
@@ -157,8 +173,8 @@ def reduction_setup():
         C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
         C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
         # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
-        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int64)),
-        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int64)),
+        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int32)),
+        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
             "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),

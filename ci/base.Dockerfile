@@ -1,4 +1,4 @@
-FROM docker.io/nvidia/cuda:11.2.0-devel-ubuntu20.04
+FROM docker.io/nvidia/cuda:11.2.2-devel-ubuntu20.04
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 
@@ -54,5 +54,4 @@ RUN pyenv update && \
 ENV PATH="/root/.pyenv/shims:${PATH}"
 
 
-RUN pip install --upgrade pip setuptools wheel tox cupy-cuda112
-
+RUN pip install --upgrade pip setuptools wheel tox cupy-cuda11x

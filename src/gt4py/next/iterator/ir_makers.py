@@ -14,7 +14,9 @@
 
 from typing import Callable, Union
 
+from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
@@ -51,7 +53,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     return itir.SymRef(id=ref_or_name)
 
 
-def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -61,17 +63,16 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type='int')
+    Literal(value='3', type='int32')
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
-    elif isinstance(literal_or_expr, int):
-        return itir.Literal(value=str(literal_or_expr), type="int")
-    elif isinstance(literal_or_expr, float):
-        return itir.Literal(value=str(literal_or_expr), type="float")
+    elif core_defs.is_scalar_type(literal_or_expr):
+        return literal_from_value(literal_or_expr)
+    assert isinstance(literal_or_expr, itir.Expr)
     return literal_or_expr
 
 
@@ -116,7 +117,7 @@ class call:
     Examples
     --------
     >>> call("plus")(1, 1)
-    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int'), Literal(value='1', type='int')])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int32'), Literal(value='1', type='int32')])
     """
 
     def __init__(self, expr):
@@ -218,9 +219,9 @@ def make_tuple(*args):
     return call("make_tuple")(*args)
 
 
-def tuple_get(index, tuple_expr):
+def tuple_get(index: str | int, tuple_expr):
     """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
-    return call("tuple_get")(index, tuple_expr)
+    return call("tuple_get")(literal(str(index), itir.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
@@ -239,16 +240,21 @@ class let:
 
     Examples
     --------
-    >>> let("a", "b")("a")  # doctest: +ELLIPSIS
-    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
+    >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
+    '(λ(a) → a)(b)'
+    >>> str(let("a", 1,
+    ...         "b", 2
+    ... )(plus("a", "b")))
+    '(λ(a, b) → a + b)(1, 2)'
     """
 
-    def __init__(self, var, init_form):
-        self.var = var
-        self.init_form = init_form
+    def __init__(self, *vars_and_values):
+        assert len(vars_and_values) % 2 == 0
+        self.vars = vars_and_values[0::2]
+        self.init_forms = vars_and_values[1::2]
 
     def __call__(self, form):
-        return call(lambda_(self.var)(form))(self.init_form)
+        return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
 def shift(offset, value=None):
@@ -273,6 +279,35 @@ def shift(offset, value=None):
 
 def literal(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
+
+
+def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
+    """
+    Make a literal node from a value.
+
+    >>> literal_from_value(1.)
+    Literal(value='1.0', type='float64')
+    >>> literal_from_value(1)
+    Literal(value='1', type='int32')
+    >>> literal_from_value(2147483648)
+    Literal(value='2147483648', type='int64')
+    >>> literal_from_value(True)
+    Literal(value='True', type='bool')
+    """
+    if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
+        raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
+
+    # At the time this has been written the iterator module has its own type system that is
+    # uncoupled from the one used in the frontend. However since we decided to eventually replace
+    # it with the frontend type system we already use it here (avoiding unnecessary code
+    # duplication).
+    type_spec = type_translation.from_value(val)
+    assert isinstance(type_spec, ts.ScalarType)
+
+    typename = type_spec.kind.name.lower()
+    assert typename in itir.TYPEBUILTINS
+
+    return itir.Literal(value=str(val), type=typename)
 
 
 def neighbors(offset, it):
@@ -325,7 +360,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
         args = [
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`
-        return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)  # type: ignore[operator] # `op` is not `str`
+        return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
 

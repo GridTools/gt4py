@@ -22,8 +22,10 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    errors,
     float32,
     float64,
+    int32,
     int64,
     maximum,
     minimum,
@@ -31,20 +33,17 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeductionError
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     C2E,
     E2V,
     V2E,
     E2VDim,
-    Edge,
     IDim,
     Ioff,
     JDim,
-    Joff,
     KDim,
     Koff,
     V2EDim,
@@ -70,6 +69,9 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return a, b
@@ -160,6 +162,9 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
@@ -175,7 +180,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @gtx.field_operator
-    def testee(a: int) -> cases.VField:
+    def testee(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
     cases.verify_with_default_data(
@@ -184,7 +189,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
         ref=lambda a: np.full(
             [unstructured_case.default_sizes[Vertex]],
             a + 1,
-            dtype=int,
+            dtype=int32,
         ),
         comparison=lambda a, b: np.all(a == b),
     )
@@ -192,23 +197,26 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee_inner(a: int) -> cases.VField:
+    def testee_inner(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
 
     @gtx.field_operator
-    def testee(a: int) -> cases.VField:
+    def testee(a: int32) -> cases.VField:
         return testee_inner(a + 1)
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int),
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 2, dtype=int32),
     )
 
 
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: index fields, constant fields")
+
     @gtx.field_operator
-    def testee(a: cases.IJKField, b: int) -> cases.IJKField:
+    def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
         return tmp(Ioff[1])
 
@@ -221,25 +229,28 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail(
-            "Scalar arguments not supported to be used in both domain specification "
-            "and as an argument to a field operator."
-        )
+    pytest.xfail(
+        "Scalar arguments not supported to be used in both domain specification "
+        "and as an argument to a field operator."
+    )
 
     @gtx.field_operator
-    def testee_op(size: int) -> cases.IField:
+    def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
 
     @gtx.program
-    def testee(size: int, out: cases.IField):
+    def testee(size: gtx.IndexType, out: gtx.Field[[IDim], gtx.IndexType]):
         testee_op(size, out=out, domain={IDim: (0, size)})
 
     size = cartesian_case.default_sizes[IDim]
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case, testee, size, out=out, ref=np.full_like(out.array(), size, dtype=int)
+        cartesian_case,
+        testee,
+        size,
+        out=out,
+        ref=np.full_like(out.array(), size, dtype=gtx.IndexType),
     )
 
 
@@ -264,6 +275,8 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple arguments")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -284,21 +297,49 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
+def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
+    def testee_scan(state: float, inp: float) -> float:
+        return inp
+
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[KDim], float]) -> gtx.Field[[KDim], float]:
+        return testee_scan(inp(Koff[1]))
+
+    inp = cases.allocate(
+        cartesian_case,
+        testee,
+        "inp",
+        extend={KDim: (0, 1)},
+        strategy=cases.UniqueInitializer(start=2),
+    )()
+    out = cases.allocate(cartesian_case, testee, "inp").zeros()()
+    ksize = cartesian_case.default_sizes[KDim]
+    expected = np.full((ksize), np.arange(start=3, stop=ksize + 3, step=1).astype(float64))
+
+    cases.run(cartesian_case, testee, inp, out=out)
+
+    cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
+
+
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
-    def testee(a: cases.IFloatField) -> cases.IField:
+    def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
         b = astype(a, int64)
         return b
 
     cases.verify_with_default_data(
         cartesian_case,
         testee,
-        ref=lambda a: a.astype(int),
+        ref=lambda a: a.astype(int64),
         comparison=lambda a, b: np.all(a == b),
     )
 
 
-def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
+def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
@@ -310,6 +351,17 @@ def test_astype_bool(cartesian_case):  # noqa: F811 # fixtures
         ref=lambda a: a.astype(bool),
         comparison=lambda a, b: np.all(a == b),
     )
+
+
+@pytest.mark.parametrize("inp", [0.0, 2.0])
+def test_astype_bool_scalar(cartesian_case, inp):  # noqa: F811 # fixtures
+    @gtx.field_operator
+    def testee(inp: float) -> gtx.Field[[IDim], bool]:
+        return broadcast(astype(inp, bool), (IDim,))
+
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    cases.verify(cartesian_case, testee, inp, out=out, ref=bool(inp))
 
 
 def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
@@ -327,6 +379,8 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_offset_field(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: offset fields")
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -360,6 +414,9 @@ def test_offset_field(cartesian_case):
 
 
 def test_nested_tuple_return(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def pack_tuple(
         a: cases.IField, b: cases.IField
@@ -375,6 +432,9 @@ def test_nested_tuple_return(cartesian_case):
 
 
 def test_nested_reduction(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
+
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
@@ -415,6 +475,9 @@ def test_nested_reduction_shift_first(unstructured_case):
 
 
 def test_tuple_return_2(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
@@ -433,6 +496,9 @@ def test_tuple_return_2(unstructured_case):
 
 
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuples")
+
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
         tup = e(V2E), v
@@ -450,6 +516,9 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
 
 
 def test_tuple_arg(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple args")
+
     @gtx.field_operator
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
         return 3 * a[0][0] + a[0][1] + a[1]
@@ -481,7 +550,9 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("Transformation passes fail in putting `scan` to the top.")
+        pytest.xfail("Nested `scan`s requires creating temporaries.")
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: scans")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -518,7 +589,7 @@ def test_solve_triag(cartesian_case):
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator(cartesian_case, left, right):
     @gtx.field_operator
-    def testee(a: cases.IField, b: cases.IField, left: int64, right: int64) -> cases.IField:
+    def testee(a: cases.IField, b: cases.IField, left: int32, right: int32) -> cases.IField:
         return a if left < right else b
 
     a = cases.allocate(cartesian_case, testee, "a")()
@@ -528,7 +599,7 @@ def test_ternary_operator(cartesian_case, left, right):
     cases.verify(cartesian_case, testee, a, b, left, right, out=out, ref=(a if left < right else b))
 
     @gtx.field_operator
-    def testee(left: int64, right: int64) -> cases.IField:
+    def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
     e = np.asarray(a) if left < right else np.asarray(b)
@@ -544,9 +615,12 @@ def test_ternary_operator(cartesian_case, left, right):
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
 def test_ternary_operator_tuple(cartesian_case, left, right):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def testee(
-        a: cases.IField, b: cases.IField, left: int64, right: int64
+        a: cases.IField, b: cases.IField, left: int32, right: int32
     ) -> tuple[cases.IField, cases.IField]:
         return (a, b) if left < right else (b, a)
 
@@ -560,6 +634,9 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 
 
 def test_ternary_builtin_neighbor_sum(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
+
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
@@ -596,14 +673,18 @@ def test_ternary_scan(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 def test_scan_nested_tuple_output(forward, cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
-    expected = np.arange(1, 1 + k_size, 1, dtype=int64)
+    expected = np.arange(1, 1 + k_size, 1, dtype=int32)
     if not forward:
         expected = np.flip(expected)
 
     @gtx.scan_operator(axis=KDim, forward=forward, init=init)
-    def simple_scan_operator(carry: tuple[int, tuple[int, int]]) -> tuple[int, tuple[int, int]]:
+    def simple_scan_operator(
+        carry: tuple[int32, tuple[int32, int32]]
+    ) -> tuple[int32, tuple[int32, int32]]:
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
     @gtx.program
@@ -621,6 +702,8 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 
 
 def test_scan_nested_tuple_input(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple args")
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
     inp1 = gtx.np_as_located_field(KDim)(np.ones((k_size,)))
@@ -658,6 +741,26 @@ def test_docstring(cartesian_case):
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
 
 
+def test_with_bound_args(cartesian_case):
+    @gtx.field_operator
+    def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:
+        if not condition:
+            scalar = 0
+        return a + a + scalar
+
+    @gtx.program
+    def program_bound_args(a: cases.IField, scalar: int32, condition: bool, out: cases.IField):
+        fieldop_bound_args(a, scalar, condition, out=out)
+
+    a = cases.allocate(cartesian_case, program_bound_args, "a")()
+    scalar = int32(1)
+    ref = a.array() + a.array() + 1
+    out = cases.allocate(cartesian_case, program_bound_args, "out")()
+
+    prog_bounds = program_bound_args.with_bound_args(scalar=scalar, condition=True)
+    cases.verify(cartesian_case, prog_bounds, a, out, inout=out, ref=ref)
+
+
 def test_domain(cartesian_case):
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:
@@ -678,6 +781,8 @@ def test_domain(cartesian_case):
 def test_domain_input_bounds(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: type inference failure")
 
     lower_i = 1
     upper_i = 10
@@ -687,7 +792,9 @@ def test_domain_input_bounds(cartesian_case):
         return a + a
 
     @gtx.program
-    def program_domain(inp: cases.IField, out: cases.IField, lower_i: int64, upper_i: int64):
+    def program_domain(
+        inp: cases.IField, out: cases.IField, lower_i: gtx.IndexType, upper_i: gtx.IndexType
+    ):
         fieldop_domain(
             inp,
             out=out,
@@ -723,10 +830,10 @@ def test_domain_input_bounds_1(cartesian_case):
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
-        lower_i: int64,
-        upper_i: int64,
-        lower_j: int64,
-        upper_j: int64,
+        lower_i: gtx.IndexType,
+        upper_i: gtx.IndexType,
+        lower_j: gtx.IndexType,
+        upper_j: gtx.IndexType,
     ):
         fieldop_domain(
             a,
@@ -752,6 +859,9 @@ def test_domain_input_bounds_1(cartesian_case):
 
 
 def test_domain_tuple(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def fieldop_domain_tuple(
         a: cases.IJField, b: cases.IJField
@@ -785,22 +895,25 @@ def test_domain_tuple(cartesian_case):
 
 
 def test_where_k_offset(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
-        pytest.xfail("IndexFields are not supported yet.")
-
     @gtx.field_operator
-    def fieldop_where_k_offset(a: cases.IKField, k_index: cases.KField) -> cases.IKField:
-        return where(k_index > 0, a(Koff[-1]), 2)
+    def fieldop_where_k_offset(
+        inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
+    ) -> cases.IKField:
+        return where(k_index > 0, inp(Koff[-1]), 2)
 
-    cases.verify_with_default_data(
-        cartesian_case,
-        fieldop_where_k_offset,
-        ref=lambda a, k_index: np.where(k_index > 0, np.roll(a, 1, axis=1), 2),
-    )
+    inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
+    k_index = cases.allocate(
+        cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
+    )()
+    out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
+
+    ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
+
+    cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
-    with pytest.raises(FieldOperatorTypeDeductionError, match="Undeclared symbol"):
+    with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def return_undefined():
@@ -808,6 +921,9 @@ def test_undefined_symbols(cartesian_case):
 
 
 def test_zero_dims_fields(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: zero-dimensional fields")
+
     @gtx.field_operator
     def implicit_broadcast_scalar(inp: cases.EmptyField):
         return inp
@@ -821,7 +937,7 @@ def test_zero_dims_fields(cartesian_case):
 def test_implicit_broadcast_mixed_dim(cartesian_case):
     @gtx.field_operator
     def fieldop_implicit_broadcast(
-        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int
+        zero_dim_inp: cases.EmptyField, inp: cases.IField, scalar: int32
     ) -> cases.IField:
         return inp + zero_dim_inp * scalar
 
@@ -836,6 +952,9 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
 
 
 def test_tuple_unpacking(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
@@ -849,6 +968,8 @@ def test_tuple_unpacking(cartesian_case):
 
 
 def test_tuple_unpacking_star_multi(cartesian_case):
+    if cartesian_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
     OutType = tuple[
         cases.IField,
         cases.IField,
@@ -895,23 +1016,21 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
-        FieldOperatorTypeDeductionError,
+        errors.DSLError,
         match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
     ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
-        def _star_unpack() -> tuple[int, float64, int]:
+        def _star_unpack() -> tuple[int32, float64, int32]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(
-        FieldOperatorTypeDeductionError, match=(r"Assignment value must be of type tuple!")
-    ):
+    with pytest.raises(errors.DSLError, match=(r"Assignment value must be of type tuple!")):
 
         @gtx.field_operator(backend=cartesian_case.backend)
-        def _invalid_unpack() -> tuple[int, float64, int]:
+        def _invalid_unpack() -> tuple[int32, float64, int32]:
             a, b, c = 1
             return a
 
@@ -920,12 +1039,12 @@ def test_constant_closure_vars(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(
-        PI=np.int64(3),
-        E=np.int64(2),
+        PI=np.float64(3.142),
+        E=np.float64(2.718),
     )
 
     @gtx.field_operator
-    def consume_constants(input: cases.IField) -> cases.IField:
+    def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(

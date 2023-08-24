@@ -48,7 +48,7 @@ import numpy.typing as npt
 
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
-from gt4py.next.iterator import builtins, runtime, utils
+from gt4py.next.iterator import builtins, runtime
 
 
 EMBEDDED = "embedded"
@@ -67,9 +67,7 @@ FieldIndex: TypeAlias = (
 FieldIndices: TypeAlias = tuple[FieldIndex, ...]
 FieldIndexOrIndices: TypeAlias = FieldIndex | FieldIndices
 
-FieldAxis: TypeAlias = (
-    common.Dimension | runtime.Offset
-)  # TODO Offset should be removed, is sometimes used for sparse dimensions
+FieldAxis: TypeAlias = common.Dimension
 TupleAxis: TypeAlias = type[None]
 Axis: TypeAlias = Union[FieldAxis, TupleAxis]
 Scalar: TypeAlias = (
@@ -138,9 +136,18 @@ Position: TypeAlias = Union[ConcretePosition, IncompletePosition]
 #: A ``None`` position flags invalid not-a-neighbor results in neighbor-table lookups
 MaybePosition: TypeAlias = Optional[Position]
 
+NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
+
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, np.integer))
+
+
+def _tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
 
 
 @runtime_checkable
@@ -167,21 +174,26 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, indices: NamedFieldIndices) -> Any:
         ...
 
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        return tuple([0] * len(self.__gt_dims__))
 
+
+@runtime_checkable
 class MutableLocatedField(LocatedField, Protocol):
     """A LocatedField with write access."""
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any) -> None:
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
         ...
 
 
@@ -672,25 +684,28 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
-) -> Sequence[common.Dimension | runtime.Offset]:  # arbitrary nesting of tuples of LocatedField
-    return (
-        _get_axes(field_or_tuple[0]) if isinstance(field_or_tuple, tuple) else field_or_tuple.axes
-    )
+) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
+    if isinstance(field_or_tuple, tuple):
+        first = _get_axes(field_or_tuple[0])
+        assert all(first == _get_axes(f) for f in field_or_tuple)
+        return first
+    else:
+        return field_or_tuple.__gt_dims__
 
 
 def _single_vertical_idx(
-    indices: FieldIndices, column_axis_idx: int, column_index: IntIndex
-) -> tuple[FieldIndex, ...]:
-    transformed = tuple(
-        index if i != column_axis_idx else column_index for i, index in enumerate(indices)
-    )
+    indices: NamedFieldIndices, column_axis: Tag, column_index: IntIndex
+) -> NamedFieldIndices:
+    transformed = {
+        axis: (index if axis != column_axis else column_index) for axis, index in indices.items()
+    }
     return transformed
 
 
 @overload
 def _make_tuple(
     field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
 ) -> tuple[tuple | Column, ...]:
@@ -700,7 +715,7 @@ def _make_tuple(
 @overload
 def _make_tuple(
     field_or_tuple: tuple[tuple | LocatedField, ...],  # arbitrary nesting of tuples of LocatedField
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
 ) -> tuple[tuple | npt.DTypeLike, ...]:  # arbitrary nesting
@@ -708,20 +723,25 @@ def _make_tuple(
 
 
 @overload
-def _make_tuple(field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Tag) -> Column:
+def _make_tuple(
+    field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
+) -> Column:
     ...
 
 
 @overload
 def _make_tuple(
-    field_or_tuple: LocatedField, indices: FieldIndices, *, column_axis: Literal[None] = None
+    field_or_tuple: LocatedField,
+    named_indices: NamedFieldIndices,
+    *,
+    column_axis: Literal[None] = None,
 ) -> npt.DTypeLike:
     ...
 
 
 def _make_tuple(
     field_or_tuple: LocatedField | tuple[tuple | LocatedField, ...],
-    indices: FieldIndices,
+    named_indices: NamedFieldIndices,
     *,
     column_axis: Optional[Tag] = None,
 ) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
@@ -730,11 +750,8 @@ def _make_tuple(
         if column_axis is not None:
             assert column_range
             # construct a Column of tuples
-            column_axis_idx = _axis_idx(_get_axes(field_or_tuple), column_axis)
-            if column_axis_idx is None:
-                column_axis_idx = -1  # field doesn't have the column index, e.g. ContantField
             first = tuple(
-                _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, column_range.start))
+                _make_tuple(f, _single_vertical_idx(named_indices, column_axis, column_range.start))
                 for f in field_or_tuple
             )
             col = Column(
@@ -743,14 +760,14 @@ def _make_tuple(
             col[0] = first
             for i in column_range[1:]:
                 col[i] = tuple(
-                    _make_tuple(f, _single_vertical_idx(indices, column_axis_idx, i))
+                    _make_tuple(f, _single_vertical_idx(named_indices, column_axis, i))
                     for f in field_or_tuple
                 )
             return col
         else:
-            return tuple(_make_tuple(f, indices) for f in field_or_tuple)
+            return tuple(_make_tuple(f, named_indices) for f in field_or_tuple)
     else:
-        data = field_or_tuple.field_getitem(indices)
+        data = field_or_tuple.field_getitem(named_indices)
         if column_axis is not None:
             # wraps a vertical slice of an input field into a `Column`
             assert column_range is not None
@@ -759,7 +776,7 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[common.Dimension | runtime.Offset], axis: Tag) -> Optional[int]:
+def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
     for i, a in enumerate(axes):
         if a.value == axis:
             return i
@@ -809,23 +826,19 @@ class MDIterator:
             slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
 
         assert _is_concrete_position(shifted_pos)
-        ordered_indices = get_ordered_indices(
-            axes,
-            {**shifted_pos, **slice_column},
-        )
+        position = {**shifted_pos, **slice_column}
         return _make_tuple(
             self.field,
-            ordered_indices,
+            position,
             column_axis=self.column_axis,
         )
 
 
-def _get_sparse_dimensions(axes: Sequence[common.Dimension | runtime.Offset]) -> list[Tag]:
+def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
     return [
-        cast(Tag, axis.value)  # axis.value is always `str`
+        axis.value
         for axis in axes
-        if isinstance(axis, runtime.Offset)
-        or (isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL)
+        if isinstance(axis, common.Dimension) and axis.kind == common.DimensionKind.LOCAL
     ]
 
 
@@ -869,7 +882,7 @@ class LocatedFieldImpl(MutableLocatedField):
     """A Field with named dimensions/axes."""
 
     @property
-    def axes(self) -> tuple[common.Dimension, ...]:
+    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._axes
 
     def __init__(
@@ -880,29 +893,39 @@ class LocatedFieldImpl(MutableLocatedField):
         *,
         setter: Callable[[FieldIndexOrIndices, Any], None],
         array: Callable[[], npt.NDArray],
+        origin: Optional[dict[common.Dimension, int]] = None,
     ):
         self.getter = getter
         self._axes = axes
         self.setter = setter
         self.array = array
         self.dtype = dtype
+        self.origin = origin
 
     def __getitem__(self, indices: ArrayIndexOrIndices) -> Any:
         return self.array()[indices]
 
     # TODO in a stable implementation of the Field concept we should make this behavior the default behavior for __getitem__
-    def field_getitem(self, indices: FieldIndexOrIndices) -> Any:
-        indices = utils.tupelize(indices)
-        return self.getter(indices)
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        return self.getter(get_ordered_indices(self._axes, named_indices))
 
     def __setitem__(self, indices: ArrayIndexOrIndices, value: Any):
         self.array()[indices] = value
 
-    def field_setitem(self, indices: FieldIndexOrIndices, value: Any):
-        self.setter(indices, value)
+    def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
+        self.setter(get_ordered_indices(self._axes, named_indices), value)
 
     def __array__(self) -> np.ndarray:
         return self.array()
+
+    @property
+    def __gt_origin__(self) -> tuple[int, ...]:
+        if not self.origin:
+            return tuple([0] * len(self.__gt_dims__))
+        return cast(
+            tuple[int],
+            get_ordered_indices(self.__gt_dims__, {k.value: v for k, v in self.origin.items()}),
+        )
 
     @property
     def shape(self):
@@ -912,7 +935,7 @@ class LocatedFieldImpl(MutableLocatedField):
 
 
 def _is_field_axis(axis: Axis) -> TypeGuard[FieldAxis]:
-    return isinstance(axis, FieldAxis)  # type: ignore[misc,arg-type] # see https://github.com/python/mypy/issues/11673
+    return isinstance(axis, FieldAxis)
 
 
 def _is_tuple_axis(axis: Axis) -> TypeGuard[TupleAxis]:
@@ -925,9 +948,7 @@ def _is_sparse_position_entry(
     return isinstance(pos, list)
 
 
-def get_ordered_indices(
-    axes: Iterable[Axis], pos: Mapping[Tag, FieldIndex | SparsePositionEntry]
-) -> tuple[FieldIndex, ...]:
+def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[FieldIndex, ...]:
     res: list[FieldIndex] = []
     sparse_position_tracker: dict[Tag, int] = {}
     for axis in axes:
@@ -1008,7 +1029,7 @@ def np_as_located_field(
             offsets = None
 
         def setter(indices, value):
-            indices = utils.tupelize(indices)
+            indices = _tupelize(indices)
             a[_shift_field_indices(indices, offsets) if offsets else indices] = value
 
         def getter(indices):
@@ -1020,6 +1041,7 @@ def np_as_located_field(
             dtype=a.dtype,
             setter=setter,
             array=a.__array__,
+            origin=origin,
         )
 
     return _maker
@@ -1030,7 +1052,8 @@ class IndexField(LocatedField):
         self.axis = axis
         self.dtype = np.dtype(dtype)
 
-    def field_getitem(self, index: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        index = get_ordered_indices(self.__gt_dims__, named_indices)
         if isinstance(index, int):
             return self.dtype.type(index)
         else:
@@ -1038,11 +1061,11 @@ class IndexField(LocatedField):
             return self.dtype.type(index[0])
 
     @property
-    def axes(self) -> tuple[common.Dimension]:
+    def __gt_dims__(self) -> tuple[common.Dimension]:
         return (self.axis,)
 
 
-def index_field(axis: common.Dimension, dtype: npt.DTypeLike = int) -> LocatedField:
+def index_field(axis: common.Dimension, dtype: npt.DTypeLike = np.int32) -> LocatedField:
     return IndexField(axis, dtype)
 
 
@@ -1051,11 +1074,11 @@ class ConstantField(LocatedField):
         self.value = value
         self.dtype = np.dtype(dtype).type
 
-    def field_getitem(self, _: FieldIndexOrIndices) -> Any:
+    def field_getitem(self, _: NamedFieldIndices) -> Any:
         return self.dtype(self.value)
 
     @property
-    def axes(self) -> tuple[()]:
+    def __gt_dims__(self) -> tuple[()]:
         return ()
 
 
@@ -1178,7 +1201,6 @@ class ColumnDescriptor:
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
-    offsets: Sequence[OffsetPart] = dataclasses.field(default_factory=list, kw_only=True)
 
     def deref(self) -> Any:
         if not self.can_deref():
@@ -1189,7 +1211,7 @@ class ScanArgIterator:
         return self.wrapped_iter.can_deref()
 
     def shift(self, *offsets: OffsetPart) -> ScanArgIterator:
-        return ScanArgIterator(self.wrapped_iter, self.k_pos, offsets=[*offsets, *self.offsets])
+        return ScanArgIterator(self.wrapped_iter.shift(*offsets), self.k_pos)
 
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
@@ -1199,8 +1221,12 @@ def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     return impl
 
 
-def is_located_field(field: Any) -> bool:
+def is_located_field(field: Any) -> TypeGuard[LocatedField]:
     return isinstance(field, LocatedField)  # TODO(havogt): avoid isinstance on Protocol
+
+
+def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
+    return isinstance(field, MutableLocatedField)  # TODO(havogt): avoid isinstance on Protocol
 
 
 def has_uniform_tuple_element(field) -> bool:
@@ -1234,33 +1260,25 @@ class TupleField(metaclass=TupleFieldMeta):
     pass
 
 
-def _get_axeses(field):
+def _build_tuple_result(field: tuple | LocatedField, named_indices: NamedFieldIndices) -> Any:
     if isinstance(field, tuple):
-        return tuple(itertools.chain(*tuple(_get_axeses(f) for f in field)))
+        return tuple(_build_tuple_result(f, named_indices) for f in field)
     else:
         assert is_located_field(field)
-        return (field.axes,)
+        return field.field_getitem(named_indices)
 
 
-def _build_tuple_result(field, indices):
-    if isinstance(field, tuple):
-        return tuple(_build_tuple_result(f, indices) for f in field)
-    else:
-        assert is_located_field(field)
-        return field[indices]
-
-
-def _tuple_assign(field, value, indices):
+def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices: NamedFieldIndices):
     if isinstance(field, tuple):
         if len(field) != len(value):
             raise RuntimeError(
                 f"Tuple of incompatible size, expected tuple of len={len(field)}, got len={len(value)}"
             )
         for f, v in zip(field, value):
-            _tuple_assign(f, v, indices)
+            _tuple_assign(f, v, named_indices)
     else:
-        assert is_located_field(field)
-        field[indices] = value
+        assert is_mutable_located_field(field)
+        field.field_setitem(named_indices, value)
 
 
 class TupleOfFields(TupleField):
@@ -1268,20 +1286,18 @@ class TupleOfFields(TupleField):
         if not is_tuple_of_field(data):
             raise TypeError("Can only be instantiated with a tuple of fields")
         self.data = data
-        axeses = _get_axeses(data)
-        self.axes = axeses[0]
+        self.__gt_dims__ = _get_axes(data)
 
-    def field_getitem(self, indices):
-        return _build_tuple_result(self.data, indices)
+    def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
+        return _build_tuple_result(self.data, named_indices)
 
-    def field_setitem(self, indices, value):
+    def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if not isinstance(value, tuple):
             raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
+        _tuple_assign(self.data, value, named_indices)
 
-        _tuple_assign(self.data, value, indices)
 
-
-def as_tuple_field(field):
+def as_tuple_field(field: tuple | TupleField) -> TupleField:
     assert can_be_tuple_field(field)
 
     if is_tuple_of_field(field):
@@ -1356,7 +1372,13 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        out = as_tuple_field(out) if can_be_tuple_field(out) else out
+        out = (
+            as_tuple_field(  # type:ignore[assignment]
+                out  # type:ignore[arg-type] # TODO(havogt) improve the code around TupleField construction
+            )
+            if can_be_tuple_field(out)
+            else out
+        )
 
         def _closure_runner():
             # Set context variables before executing the closure
@@ -1377,15 +1399,13 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
                 if column is None:
                     assert _is_concrete_position(pos)
-                    ordered_indices = get_ordered_indices(out.axes, pos)
-                    out.field_setitem(ordered_indices, res)
+                    out.field_setitem(pos, res)
                 else:
                     col_pos = pos.copy()
                     for k in column.col_range:
                         col_pos[column.axis] = k
                         assert _is_concrete_position(col_pos)
-                        ordered_indices = get_ordered_indices(out.axes, col_pos)
-                        out.field_setitem(ordered_indices, res[k])
+                        out.field_setitem(col_pos, res[k])
 
         ctx = cvars.copy_context()
         ctx.run(_closure_runner)

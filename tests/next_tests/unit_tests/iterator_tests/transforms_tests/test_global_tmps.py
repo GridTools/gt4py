@@ -12,9 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import gt4py.next as gtx
 from gt4py.eve.utils import UIDs
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,
@@ -183,7 +183,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -247,10 +247,13 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
-                                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
+                                        args=[
+                                            ir.SymRef(id="i"),
+                                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
+                                        ],
                                     ),
                                 ],
                             )
@@ -260,7 +263,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -285,10 +288,13 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value="IDim"),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.FunCall(
                                         fun=ir.SymRef(id="plus"),
-                                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
+                                        args=[
+                                            ir.SymRef(id="i"),
+                                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
+                                        ],
                                     ),
                                 ],
                             )
@@ -298,7 +304,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -317,7 +323,7 @@ def test_update_cartesian_domains():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )
@@ -359,7 +365,7 @@ def test_update_cartesian_domains():
             Temporary(id="_gtmp_1"),
         ],
     )
-    actual = update_cartesian_domains(testee, {"I": CartesianAxis("IDim")})
+    actual = update_cartesian_domains(testee, {"I": gtx.Dimension("IDim")})
     assert actual == expected
 
 
@@ -371,10 +377,13 @@ def test_collect_tmps_info():
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value="IDim"),
-                    ir.Literal(value="0", type="int"),
+                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
-                        args=[ir.SymRef(id="i"), ir.Literal(value="1", type="int")],
+                        args=[
+                            ir.SymRef(id="i"),
+                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
+                        ],
                     ),
                 ],
             )
@@ -384,7 +393,7 @@ def test_collect_tmps_info():
                 fun=ir.SymRef(id="named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type="int"),
+                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                     ir.SymRef(id=s),
                 ],
             )
@@ -431,7 +440,7 @@ def test_collect_tmps_info():
                                 fun=ir.SymRef(id="named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type="int"),
+                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                                     ir.SymRef(id=s),
                                 ],
                             )

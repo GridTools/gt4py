@@ -129,6 +129,12 @@ def fencil_generator(
     ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
+
+    # format output in debug mode for better debuggability
+    # (e.g. line numbers, overview in the debugger).
+    if debug:
+        program = codegen.format_python_source(program)
+
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
         .if_isinstance(itir.OffsetLiteral)
@@ -159,7 +165,7 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
+        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")

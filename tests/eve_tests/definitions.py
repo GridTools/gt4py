@@ -297,7 +297,7 @@ def make_source_location(*, fixed: bool = False) -> SourceLocation:
     str_value = make_str_value(fixed=fixed)
     source = f"file_{str_value}.py"
 
-    return SourceLocation(line=line, column=column, source=source)
+    return SourceLocation(line=line, column=column, filename=source)
 
 
 def make_source_location_group(*, fixed: bool = False) -> SourceLocationGroup:
@@ -472,7 +472,7 @@ def make_frozen_simple_node(*, fixed: bool = False) -> FrozenSimpleNode:
 
 # -- Makers of invalid nodes --
 def make_invalid_location_node(*, fixed: bool = False) -> LocationNode:
-    return LocationNode(loc=SourceLocation(line=0, column=-1, source="<str>"))
+    return LocationNode(loc=SourceLocation(line=0, column=-1, filename="<str>"))
 
 
 def make_invalid_at_int_simple_node(*, fixed: bool = False) -> SimpleNode:

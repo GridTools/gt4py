@@ -14,29 +14,22 @@
 
 # flake8: noqa: F401
 
-"""GridTools storages classes."""
+"""GridTools storages utilities."""
 
-from . import interface, layout
-from .interface import empty, from_array, full, ones, zeros  # noqa: F401
-from .layout import from_name, register
-
-
-try:
-    from .interface import dace_descriptor  # noqa: F401
-except ImportError:
-    pass
+from . import cartesian
+from .cartesian import layout
+from .cartesian.interface import empty, from_array, full, ones, zeros  # noqa: F401
+from .cartesian.layout import from_name, register
 
 
 __all__ = [
-    "interface",
+    "cartesian",
     "layout",
     "empty",
     "from_array",
     "full",
     "ones",
-    "zeros" "from_name",
+    "zeros",
+    "from_name",
     "register",
 ]
-
-if "dace_descriptor" in globals():
-    __all__ += ["dace_descriptor"]

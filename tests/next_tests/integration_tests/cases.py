@@ -50,18 +50,19 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 # mypy does not accept [IDim, ...] as a type
 
-IField: TypeAlias = gtx.Field[[IDim], np.int64]  # type: ignore [valid-type]
+IField: TypeAlias = gtx.Field[[IDim], np.int32]  # type: ignore [valid-type]
 IFloatField: TypeAlias = gtx.Field[[IDim], np.float64]  # type: ignore [valid-type]
-KField: TypeAlias = gtx.Field[[KDim], np.int64]  # type: ignore [valid-type]
-IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int64]  # type: ignore [valid-type]
-IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int64]  # type: ignore [valid-type]
+IBoolField: TypeAlias = gtx.Field[[IDim], bool]  # type: ignore [valid-type]
+KField: TypeAlias = gtx.Field[[KDim], np.int32]  # type: ignore [valid-type]
+IJField: TypeAlias = gtx.Field[[IDim, JDim], np.int32]  # type: ignore [valid-type]
+IKField: TypeAlias = gtx.Field[[IDim, KDim], np.int32]  # type: ignore [valid-type]
 IKFloatField: TypeAlias = gtx.Field[[IDim, KDim], np.float64]  # type: ignore [valid-type]
-IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int64]  # type: ignore [valid-type]
+IJKField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.int32]  # type: ignore [valid-type]
 IJKFloatField: TypeAlias = gtx.Field[[IDim, JDim, KDim], np.float64]  # type: ignore [valid-type]
-VField: TypeAlias = gtx.Field[[Vertex], np.int64]  # type: ignore [valid-type]
-EField: TypeAlias = gtx.Field[[Edge], np.int64]  # type: ignore [valid-type]
-CField: TypeAlias = gtx.Field[[Cell], np.int64]  # type: ignore [valid-type]
-EmptyField: TypeAlias = gtx.Field[[], np.int64]  # type: ignore [valid-type]
+VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
+EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
+CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
+EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
 
 # TODO(ricoh): unify the following with the `ffront_test_utils.reduction_setup`
 #   fixture if `ffront_test_utils.reduction_setup` is not completely superseded
@@ -144,6 +145,35 @@ class ZeroInitializer(ConstInitializer):
 
     def __init__(self):
         self.value = 0
+
+
+class IndexInitializer(DataInitializer):
+    """Initialize a 1d field with the index of the coordinate point."""
+
+    @property
+    def scalar_value(self) -> ScalarValue:
+        raise AttributeError("`scalar_value` not supported in `IndexInitializer`.")
+
+    def field(
+        self,
+        backend: ppi.ProgramProcessor,
+        sizes: dict[gtx.Dimension, int],
+        dtype: np.typing.DTypeLike,
+    ) -> FieldValue:
+        if len(sizes) > 1:
+            raise ValueError(
+                f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
+            )
+        n_data = list(sizes.values())[0]
+        return gtx.np_as_located_field(*sizes.keys())(np.arange(0, n_data, dtype=dtype))
+
+    def from_case(
+        self: Self,
+        case: Case,
+        fieldview_prog: decorator.FieldOperator | decorator.Program,
+        arg_name: str,
+    ) -> Self:
+        return self
 
 
 @dataclasses.dataclass
@@ -366,9 +396,9 @@ def verify(
             does not take an ``out`` keyword argument, so some of the other
             arguments must be in/out parameters. Pass the according field
             or tuple of fields here and they will be compared to ``ref`` under
-            the assumption that the fieldview code stores it's results in
+            the assumption that the fieldview code stores its results in
             them.
-        offset_provied: An override for the test case's offset_provider.
+        offset_provider: An override for the test case's offset_provider.
             Use with care!
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
@@ -453,6 +483,7 @@ def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtu
             Vertex: reduction_setup.num_vertices,
             Edge: reduction_setup.num_edges,
             Cell: reduction_setup.num_cells,
+            KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )

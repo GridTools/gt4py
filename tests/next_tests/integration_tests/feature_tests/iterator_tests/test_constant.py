@@ -19,8 +19,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef
 from gt4py.next.program_processors.runners import roundtrip
 
-
-IDim = gtx.Dimension("IDim")
+from next_tests.integration_tests.cases import IDim
 
 
 def test_constant():
@@ -31,7 +30,7 @@ def test_constant():
 
         return deref(inp) + deref(lift(constant_stencil)())
 
-    inp = gtx.np_as_located_field(IDim)(np.asarray([0, 42]))
+    inp = gtx.np_as_located_field(IDim)(np.asarray([0, 42], dtype=np.int32))
     res = gtx.np_as_located_field(IDim)(np.zeros_like(inp))
 
     add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend=roundtrip.executor)

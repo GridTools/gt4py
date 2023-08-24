@@ -235,7 +235,9 @@ def test_call():
     field_type = type_translation.from_type_hint(gtx.Field[[TDim], float64])
     identity = SimpleNamespace(
         __gt_type__=lambda: ts_ffront.FieldOperatorType(
-            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+            definition=ts.FunctionType(
+                pos_only_args=[field_type], pos_or_kw_args={}, kw_only_args={}, returns=field_type
+            )
         )
     )
 
@@ -405,8 +407,8 @@ def test_compare_scalars():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("greater")(
-        im.promote_to_const_iterator(im.literal("3", "int64")),
-        im.promote_to_const_iterator(im.literal("4", "int64")),
+        im.promote_to_const_iterator(im.literal("3", "int32")),
+        im.promote_to_const_iterator(im.literal("4", "int32")),
     )
 
     assert lowered.expr == reference
@@ -525,25 +527,21 @@ def test_reduction_lowering_expr():
 def test_builtin_int_constructors():
     def int_constrs() -> (
         tuple[
-            int,
-            int,
+            int32,
             int32,
             int64,
-            int,
             int32,
             int64,
         ]
     ):
-        return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
+        return 1, int32(1), int64(1), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal("1", "int64")),
-        im.promote_to_const_iterator(im.literal("1", "int64")),
         im.promote_to_const_iterator(im.literal("1", "int32")),
-        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int64")),
         im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int64")),

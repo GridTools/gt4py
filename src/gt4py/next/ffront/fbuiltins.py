@@ -12,11 +12,25 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
+import inspect
 from builtins import bool, float, int, tuple
-from dataclasses import dataclass
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Optional,
+    ParamSpec,
+    Tuple,
+    TypeAlias,
+    TypeVar,
+    Union,
+    cast,
+)
 
 from numpy import float32, float64, int32, int64
 
+from gt4py._core import definitions as gt4py_defs
 from gt4py.next.common import Dimension, DimensionKind, Field
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
@@ -29,98 +43,144 @@ PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
+# Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
+# work.
+IndexType: TypeAlias = int32
 
-@dataclass
-class BuiltInFunction:
-    __gt_type: ts.FunctionType
-
-    def __call__(self, *args, **kwargs):
-        """Act as an empty place holder for the built in function."""
-
-    def __gt_type__(self):
-        return self.__gt_type
+TYPE_ALIAS_NAMES = ["IndexType"]
 
 
-_reduction_like = BuiltInFunction(
-    ts.FunctionType(
-        args=[ts.DeferredType(constraint=ts.FieldType)],
-        kwargs={"axis": ts.DeferredType(constraint=ts.DimensionType)},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
-neighbor_sum = _reduction_like
-max_over = _reduction_like
-min_over = _reduction_like
 
-broadcast = BuiltInFunction(
-    ts.FunctionType(
-        args=[
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType)),
-            ts.DeferredType(constraint=ts.TupleType),
-        ],
-        kwargs={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
+def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSpec], ...]:
+    if t is Field:
+        return ts.FieldType
+    elif t is Dimension:
+        return ts.DimensionType
+    elif t is gt4py_defs.ScalarT:
+        return ts.ScalarType
+    elif t is type:
+        return (
+            ts.FunctionType
+        )  # our type of type is currently represented by the type constructor function
+    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+        return ts.TupleType
+    elif hasattr(t, "__origin__") and t.__origin__ is Union:
+        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
+        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    else:
+        raise AssertionError("Illegal type encountered.")
 
-where = BuiltInFunction(
-    ts.FunctionType(
-        args=[
-            ts.DeferredType(constraint=ts.FieldType),
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
-            ts.DeferredType(constraint=(ts.FieldType, ts.ScalarType, ts.TupleType)),
-        ],
-        kwargs={},
-        returns=ts.DeferredType(constraint=(ts.FieldType, ts.TupleType)),
-    )
-)
 
-astype = BuiltInFunction(
-    ts.FunctionType(
-        args=[
-            ts.DeferredType(constraint=ts.FieldType),
-            ts.DeferredType(constraint=ts.FunctionType),
-        ],
-        kwargs={},
-        returns=ts.DeferredType(constraint=ts.FieldType),
-    )
-)
+def _type_conversion(t: type) -> ts.DeferredType:
+    return ts.DeferredType(constraint=_type_conversion_helper(t))
 
-_unary_math_builtin = BuiltInFunction(
-    ts.FunctionType(
-        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        kwargs={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
 
-# unary math builtins (number) -> number
-abs = _unary_math_builtin  # noqa: A001
+@dataclasses.dataclass(frozen=True)
+class BuiltInFunction(Generic[_R, _P]):
+    name: str = dataclasses.field(init=False)
+    # `function` can be used to provide a default implementation for all `Field` implementations,
+    # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
+    function: Callable[_P, _R]
+
+    def __post_init__(self):
+        object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        impl = self.dispatch(*args)
+        return impl(*args, **kwargs)
+
+    def dispatch(self, *args: Any) -> Callable[_P, _R]:
+        arg_types = tuple(type(arg) for arg in args)
+        for atype in arg_types:
+            # current strategy is to select the implementation of the first arg that supports the operation
+            # TODO: define a strategy that converts or prevents conversion
+            if (dispatcher := getattr(atype, "__gt_builtin_func__", None)) is not None and (
+                op_func := dispatcher(self)
+            ) is not NotImplemented:
+                return op_func
+        else:
+            return self.function
+
+    def __gt_type__(self) -> ts.FunctionType:
+        signature = inspect.signature(self.function)
+        params = signature.parameters
+
+        return ts.FunctionType(
+            pos_only_args=[
+                _type_conversion(param.annotation)
+                for param in params.values()
+                if param.kind == inspect.Parameter.POSITIONAL_ONLY
+            ],
+            pos_or_kw_args={
+                k: _type_conversion(v.annotation)
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
+            },
+            kw_only_args={
+                k: _type_conversion(v.annotation)
+                for k, v in params.items()
+                if v.kind == inspect.Parameter.KEYWORD_ONLY
+            },
+            returns=_type_conversion(signature.return_annotation),
+        )
+
+
+def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
+    return BuiltInFunction(fun)
+
+
+@builtin_function
+def neighbor_sum(
+    field: Field,
+    /,
+    axis: Dimension,
+) -> Field:
+    raise NotImplementedError()
+
+
+@builtin_function
+def max_over(
+    field: Field,
+    /,
+    axis: Dimension,
+) -> Field:
+    raise NotImplementedError()
+
+
+@builtin_function
+def min_over(
+    field: Field,
+    /,
+    axis: Dimension,
+) -> Field:
+    raise NotImplementedError()
+
+
+@builtin_function
+def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /) -> Field:
+    raise NotImplementedError()
+
+
+@builtin_function
+def where(
+    mask: Field,
+    true_field: Field | gt4py_defs.ScalarT | Tuple,
+    false_field: Field | gt4py_defs.ScalarT | Tuple,
+    /,
+) -> Field | Tuple:
+    raise NotImplementedError()
+
+
+@builtin_function
+def astype(field: Field | gt4py_defs.ScalarT, type_: type, /) -> Field:
+    raise NotImplementedError()
+
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
-
-# unary math builtins (float) -> float
-sin = _unary_math_builtin
-cos = _unary_math_builtin
-tan = _unary_math_builtin
-arcsin = _unary_math_builtin
-arccos = _unary_math_builtin
-arctan = _unary_math_builtin
-sinh = _unary_math_builtin
-cosh = _unary_math_builtin
-tanh = _unary_math_builtin
-arcsinh = _unary_math_builtin
-arccosh = _unary_math_builtin
-arctanh = _unary_math_builtin
-sqrt = _unary_math_builtin
-exp = _unary_math_builtin
-log = _unary_math_builtin
-gamma = _unary_math_builtin
-cbrt = _unary_math_builtin
-floor = _unary_math_builtin
-ceil = _unary_math_builtin
-trunc = _unary_math_builtin
 
 UNARY_MATH_FP_BUILTIN_NAMES = [
     "sin",
@@ -145,39 +205,43 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "trunc",
 ]
 
-# unary math predicates (float) -> bool
-_unary_math_predicate_builtin = BuiltInFunction(
-    ts.FunctionType(
-        args=[ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType))],
-        kwargs={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
-
-isfinite = _unary_math_predicate_builtin
-isinf = _unary_math_predicate_builtin
-isnan = _unary_math_predicate_builtin
 
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
-# binary math builtins (number, number) -> number
-_binary_math_builtin = BuiltInFunction(
-    ts.FunctionType(
-        args=[
-            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-            ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-        ],
-        kwargs={},
-        returns=ts.DeferredType(constraint=(ts.ScalarType, ts.FieldType)),
-    )
-)
 
-minimum = _binary_math_builtin
-maximum = _binary_math_builtin
-fmod = _binary_math_builtin
-power = _binary_math_builtin
+def _make_unary_math_builtin(name):
+    def impl(value: Field | gt4py_defs.ScalarT, /) -> Field | gt4py_defs.ScalarT:
+        raise NotImplementedError()
+
+    impl.__name__ = name
+    globals()[name] = builtin_function(impl)
+
+
+for f in (
+    UNARY_MATH_NUMBER_BUILTIN_NAMES
+    + UNARY_MATH_FP_BUILTIN_NAMES
+    + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+):
+    _make_unary_math_builtin(f)
+
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
+
+
+def _make_binary_math_builtin(name):
+    def impl(
+        lhs: Field | gt4py_defs.ScalarT,
+        rhs: Field | gt4py_defs.ScalarT,
+        /,
+    ) -> Field | gt4py_defs.ScalarT:
+        raise NotImplementedError()
+
+    impl.__name__ = name
+    globals()[name] = builtin_function(impl)
+
+
+for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
+    _make_binary_math_builtin(f)
 
 MATH_BUILTIN_NAMES = (
     UNARY_MATH_NUMBER_BUILTIN_NAMES
@@ -200,17 +264,18 @@ BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
 BUILTINS = {name: globals()[name] for name in BUILTIN_NAMES}
 
-__all__ = [*(set(BUILTIN_NAMES) - {"Dimension", "Field"})]
+__all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field"})]
 
 
 # TODO(tehrengruber): FieldOffset and runtime.Offset are not an exact conceptual
 #  match. Revisit if we want to continue subclassing here. If we split
 #  them also check whether Dimension should continue to be the shared or define
 #  guidelines for decision.
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
     source: Dimension
     target: tuple[Dimension] | tuple[Dimension, Dimension]
+    connectivity: Optional[Any] = None  # TODO
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:

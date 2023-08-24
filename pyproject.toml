@@ -34,11 +34,12 @@ dependencies = [
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.0,==2.*',
+  'gridtools-cpp>=2.3.1,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
+  'nanobind>=1.4.0 ',
   'ninja>=1.10',
   'numpy>=1.21.2',
   'packaging>=20.0',
@@ -65,16 +66,9 @@ readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-cuda = ['cupy']
-cuda110 = ['cupy-cuda110']
-cuda111 = ['cupy-cuda111']
-cuda112 = ['cupy-cuda112']
-cuda113 = ['cupy-cuda113']
-cuda114 = ['cupy-cuda114']
-cuda115 = ['cupy-cuda115']
-cuda116 = ['cupy-cuda116']
-cuda117 = ['cupy-cuda117']
-cuda11x = ['cupy-cuda11x']
+cuda = ['cupy>=12.0']
+cuda11x = ['cupy-cuda11x>=12.0']
+cuda12x = ['cupy-cuda12x>=12.0']
 dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
 formatting = ['clang-format>=9.0']
 # Always add all extra packages to 'full' for a simple full gt4py installation
@@ -84,8 +78,10 @@ full = [
   'hypothesis>=6.0.0',
   'pytest>=7.0',
   'sympy>=1.7',
-  'scipy>=1.7.2'
+  'scipy>=1.7.2',
+  'jax[cpu]>=0.4.13'
 ]
+jax = ['jax[cpu]>=0.4.13']
 performance = ['scipy>=1.7.2']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 

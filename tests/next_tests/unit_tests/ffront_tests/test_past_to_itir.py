@@ -19,7 +19,7 @@ import pytest
 import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.common import GTTypeError
+from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
@@ -59,24 +59,24 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int"),
-                        P(itir.SymRef, id=eve.SymbolRef("__out_field_size_0")),
+                        P(itir.Literal, value="0", type="int32"),
+                        P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
                     ],
                 )
             ],
         ),
         stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
         inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
-        output=P(itir.SymRef, id=eve.SymbolRef("out_field")),
+        output=P(itir.SymRef, id=eve.SymbolRef("out")),
     )
     fencil_pattern = P(
         itir.FencilDefinition,
         id=eve.SymbolName("copy_program"),
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("out")),
             P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
         ],
         closures=[closure_pattern],
     )
@@ -100,8 +100,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type="int"),
-                        P(itir.Literal, value="2", type="int"),
+                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
                     ],
                 )
             ],
@@ -112,9 +112,9 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
         id=eve.SymbolName("copy_restrict_program"),
         params=[
             P(itir.Sym, id=eve.SymbolName("in_field")),
-            P(itir.Sym, id=eve.SymbolName("out_field")),
+            P(itir.Sym, id=eve.SymbolName("out")),
             P(itir.Sym, id=eve.SymbolName("__in_field_size_0")),
-            P(itir.Sym, id=eve.SymbolName("__out_field_size_0")),
+            P(itir.Sym, id=eve.SymbolName("__out_size_0")),
         ],
         closures=[closure_pattern],
     )
@@ -157,7 +157,7 @@ def test_inout_prohibited(identity_def):
         identity(inout_field, out=inout_field)
 
     with pytest.raises(
-        GTTypeError,
+        ValueError,
         match=(r"Call to function with field as input and output not allowed."),
     ):
         ProgramLowering.apply(
@@ -169,7 +169,7 @@ def test_inout_prohibited(identity_def):
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
     with pytest.raises(
-        GTTypeError,
+        errors.DSLError,
     ) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),

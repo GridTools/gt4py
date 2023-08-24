@@ -16,11 +16,11 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
+from gt4py.next import errors
 from gt4py.next.program_processors.runners import roundtrip
 
-from next_tests.integration_tests.feature_tests import cases
-from next_tests.integration_tests.feature_tests.cases import (  # noqa: F401 # fixtures
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
     fieldview_backend,
 )
@@ -87,7 +87,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
 
-    with pytest.raises(common.GTTypeError):
+    with pytest.raises(errors.DSLError):
         cases.verify(cartesian_case, addition, a, b, out=out, ref=a.array() + b.array())
 
 

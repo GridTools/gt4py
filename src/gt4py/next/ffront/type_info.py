@@ -13,50 +13,59 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from functools import reduce
-from typing import Iterable, Iterator, cast
+from typing import Iterator, cast
 
 import gt4py.next.ffront.type_specifications as ts_ffront
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next.common import Dimension, GTTypeError
+from gt4py.next import common
 from gt4py.next.type_system import type_info
 
 
 def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
-    return (
-        isinstance(field, ts.FieldType)
-        and isinstance(field.dims, Iterable)
-        and len(field.dims) == 0
-    )
+    return isinstance(field, ts.FieldType) and len(field.dims) == 0
 
 
 def promote_zero_dims(
-    args: list[ts.TypeSpec],
-    function_type: ts_ffront.FieldOperatorType | ts_ffront.ProgramType | ts.FunctionType,
-) -> list:
-    """Promote arg types to zero dimensional fields if compatible and required by function signature."""
-    new_args = []
-    for arg_i, arg in enumerate(args):
-        def_type = (
-            function_type.args[arg_i]
-            if isinstance(function_type, ts.FunctionType)
-            else function_type.definition.args[arg_i]
-        )
+    function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+) -> tuple[list, dict]:
+    """
+    Promote arg types to zero dimensional fields if compatible and required by function signature.
 
-        def _as_field(arg: ts.TypeSpec, path: tuple):
-            el_def_type = reduce(lambda type_, idx: type_.types[idx], path, def_type)  # noqa: B023
+    This function expects the arguments to already be canonicalized using `canonicalize_arguments`.
+    """
 
-            if _is_zero_dim_field(el_def_type) and type_info.is_number(arg):
-                if type_info.extract_dtype(el_def_type) == type_info.extract_dtype(arg):
-                    return el_def_type
+    def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.TypeSpec:
+        def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
+            param_el = param
+            for idx in path:
+                if not isinstance(param_el, ts.TupleType):
+                    # The parameter has a different structure than the actual argument. Just return
+                    # the argument unpromoted and let the further error handling take care of printing
+                    # a meaningful error.
+                    return arg_el
+                param_el = param_el.types[idx]
+
+            if _is_zero_dim_field(param_el) and (
+                type_info.is_number(arg_el) or type_info.is_logical(arg_el)
+            ):
+                if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
+                    return param_el
                 else:
-                    raise GTTypeError(f"{arg} is not compatible with {el_def_type}.")
-            return arg
+                    raise ValueError(f"{arg_el} is not compatible with {param_el}.")
+            return arg_el
 
-        new_args.append(
-            type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
-        )
+        return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
 
-    return new_args
+    new_args = [*args]
+    for i, (param, arg) in enumerate(
+        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+    ):
+        new_args[i] = promote_arg(param, arg)
+    new_kwargs = {**kwargs}
+    for name in set(function_type.kw_only_args.keys()) & set(kwargs.keys()):
+        new_kwargs[name] = promote_arg(function_type.kw_only_args[name], kwargs[name])
+
+    return new_args, new_kwargs
 
 
 @type_info.return_type.register
@@ -72,16 +81,101 @@ def return_type_fieldop(
     return ret_type
 
 
+@type_info.canonicalize_arguments.register(ts_ffront.FieldOperatorType)
+@type_info.canonicalize_arguments.register(ts_ffront.ProgramType)
+def canonicalize_program_or_fieldop_arguments(
+    program_type: ts_ffront.ProgramType,
+    args: tuple | list,
+    kwargs: dict,
+    *,
+    ignore_errors=False,
+    use_signature_ordering=False,
+) -> tuple[list, dict]:
+    return type_info.canonicalize_arguments(
+        program_type.definition,
+        args,
+        kwargs,
+        ignore_errors=ignore_errors,
+        use_signature_ordering=use_signature_ordering,
+    )
+
+
+@type_info.canonicalize_arguments.register
+def canonicalize_scanop_arguments(
+    scanop_type: ts_ffront.ScanOperatorType,
+    args: tuple | list,
+    kwargs: dict,
+    *,
+    ignore_errors=False,
+    use_signature_ordering=False,
+) -> tuple[list, dict]:
+    (_, *cargs), ckwargs = type_info.canonicalize_arguments(
+        scanop_type.definition,
+        (None, *args),
+        kwargs,
+        ignore_errors=ignore_errors,
+        use_signature_ordering=use_signature_ordering,
+    )
+    return cargs, ckwargs
+
+
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_fieldop(
     fieldop_type: ts_ffront.FieldOperatorType,
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    new_args = promote_zero_dims(args, fieldop_type)
-    yield from type_info.function_signature_incompatibilities_func(
-        fieldop_type.definition, new_args, kwargs
+    args, kwargs = type_info.canonicalize_arguments(
+        fieldop_type.definition, args, kwargs, ignore_errors=True
     )
+
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            fieldop_type.definition, args, kwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
+
+    new_args, new_kwargs = promote_zero_dims(fieldop_type.definition, args, kwargs)
+    yield from type_info.function_signature_incompatibilities_func(
+        fieldop_type.definition, new_args, new_kwargs, skip_canonicalization=True
+    )
+
+
+def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType | ts.TupleType:
+    """
+    Promote parameter of a scan pass to match dimensions of respective scan operator argument.
+
+    More specifically: Given a scalar type `param` and a field type `arg` return a field with the
+    dtype of the `param` and the dimensions of `arg`. If `param` is a composite of scalars
+    the promotion is element-wise.
+
+    Example:
+    --------
+    >>> _scan_param_promotion(
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
+    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ... )
+    FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
+    """
+
+    def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
+        assert isinstance(dtype, ts.ScalarType)
+        try:
+            el_type = reduce(
+                lambda type_, idx: type_.types[idx], path, arg  # type: ignore[attr-defined]
+            )
+            return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
+        except (IndexError, AttributeError):
+            # The structure of the scan passes argument and the requested
+            # argument type differ. As such we can not extract the dimensions
+            # and just return a generic field shown in the error later on.
+            # TODO: we want some generic field type here, but our type system does not support it yet.
+            return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
+
+    return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
 
 
 @type_info.function_signature_incompatibilities.register
@@ -94,49 +188,63 @@ def function_signature_incompatibilities_scanop(
         yield "Arguments to scan operator must be fields, scalars or tuples thereof."
         return
 
+    scan_pass_type: ts.FunctionType = scanop_type.definition
+    assert len(scan_pass_type.pos_only_args) == 0
+
+    # canonicalize function arguments
+    cargs, ckwargs = type_info.canonicalize_arguments(scanop_type, args, kwargs, ignore_errors=True)
+
+    # check for structural errors
+    num_pos_args = len(cargs) - cargs.count(type_info.UNDEFINED_ARG)
+    if num_pos_args != len(scan_pass_type.pos_or_kw_args) - 1:
+        yield f"Scan operator takes {len(scan_pass_type.pos_or_kw_args) - 1} positional arguments, but {num_pos_args} were given."
+        return
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            scan_pass_type, [None, *cargs], ckwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
+    assert ckwargs.keys() == scan_pass_type.kw_only_args.keys()
+
+    # ensure the dimensions of all arguments can be promoted to a common list of dimensions
     arg_dims = [
-        type_info.extract_dims(el) for arg in args for el in type_info.primitive_constituents(arg)
+        type_info.extract_dims(el)
+        for arg in [*cargs, *ckwargs.values()]
+        for el in type_info.primitive_constituents(arg)
     ]
     try:
-        type_info.promote_dims(*arg_dims)
-    except GTTypeError as e:
+        common.promote_dims(*arg_dims)
+    except ValueError as e:
         yield e.args[0]
 
-    if len(args) != len(scanop_type.definition.args) - 1:
-        yield f"Scan operator takes {len(scanop_type.definition.args)-1} arguments, but {len(args)} were given."
-        return
+    assert len(scan_pass_type.pos_only_args) == 0
 
-    promoted_args = []
-    for i, scan_pass_arg in enumerate(scanop_type.definition.args[1:]):
-        # Helper function that given a scalar type in the signature of the scan
-        # pass return a field type with that dtype and the dimensions of the
-        # corresponding field type in the requested `args` type. Defined here
-        # as we capture `i`.
-        def _as_field(dtype: ts.ScalarType, path: tuple[int, ...]) -> ts.FieldType:
-            try:
-                el_type = reduce(lambda type_, idx: type_.types[idx], path, args[i])  # type: ignore[attr-defined] # noqa: B023
-                return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
-            except (IndexError, AttributeError):
-                # The structure of the scan passes argument and the requested
-                # argument type differ. As such we can not extract the dimensions
-                # and just return a generic field shown in the error later on.
-                # TODO: we want some generic field type here, but our type system does not support it yet.
-                return ts.FieldType(dims=[Dimension("...")], dtype=dtype)
+    # promote parameters
+    promoted_params = {}
+    for (name, param), arg in zip(list(scan_pass_type.pos_or_kw_args.items())[1:], cargs):
+        promoted_params[name] = _scan_param_promotion(param, arg)
+    promoted_kwparams = {}
+    for name, param, arg in zip(
+        ckwargs.keys(), scan_pass_type.kw_only_args.values(), ckwargs.values()
+    ):
+        promoted_kwparams[name] = _scan_param_promotion(param, arg)
 
-        promoted_args.append(
-            type_info.apply_to_primitive_constituents(scan_pass_arg, _as_field, with_path_arg=True)  # type: ignore[arg-type]
-        )
-
-    # build a function type to leverage the already existing signature checking
-    #  capabilities
+    # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
-        args=promoted_args,
-        kwargs={},
+        pos_only_args=[],
+        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
+        kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
         returns=ts.DeferredType(constraint=None),
     )
 
-    yield from type_info.function_signature_incompatibilities(
-        function_type, promote_zero_dims(args, function_type), kwargs
+    yield from type_info.function_signature_incompatibilities_func(
+        function_type,
+        *promote_zero_dims(function_type, cargs, ckwargs),
+        skip_canonicalization=True,
+        skip_structural_checks=True,
     )
 
 
@@ -144,9 +252,22 @@ def function_signature_incompatibilities_scanop(
 def function_signature_incompatibilities_program(
     program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
-    new_args = promote_zero_dims(args, program_type)
+    args, kwargs = type_info.canonicalize_arguments(
+        program_type.definition, args, kwargs, ignore_errors=True
+    )
+
+    error_list = list(
+        type_info.structural_function_signature_incompatibilities(
+            program_type.definition, args, kwargs
+        )
+    )
+    if len(error_list) > 0:
+        yield from error_list
+        return
+
+    new_args, new_kwargs = promote_zero_dims(program_type.definition, args, kwargs)
     yield from type_info.function_signature_incompatibilities_func(
-        program_type.definition, new_args, kwargs
+        program_type.definition, new_args, new_kwargs, skip_canonicalization=True
     )
 
 
@@ -158,10 +279,10 @@ def return_type_scanop(
     with_kwargs: dict[str, ts.TypeSpec],
 ):
     carry_dtype = callable_type.definition.returns
-    promoted_dims = type_info.promote_dims(
+    promoted_dims = common.promote_dims(
         *(
             type_info.extract_dims(el)
-            for arg in with_args
+            for arg in with_args + list(with_kwargs.values())
             for el in type_info.primitive_constituents(arg)
         ),
         # the vertical axis is always added to the dimension of the returned

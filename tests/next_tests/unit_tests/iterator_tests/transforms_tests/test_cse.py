@@ -11,9 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import textwrap
 
+from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir, ir_makers as im
-from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination as CSE
+from gt4py.next.iterator.transforms.cse import (
+    CommonSubexpressionElimination as CSE,
+    extract_subexpression,
+)
 
 
 def test_trivial():
@@ -143,14 +148,14 @@ def test_if_can_deref_no_extraction():
         im.call("can_deref")(im.shift("I", 1)("it")),
         im.plus(im.deref(im.shift("I", 1)("it")), im.deref(im.shift("I", 1)("it"))),
         # use something more involved where a subexpression can still be eliminated
-        im.literal("1", "int"),
+        im.literal("1", "int32"),
     )
     # (λ(_cs_1) → if can_deref(_cs_1) then (λ(_cs_2) → _cs_2 + _cs_2)(·_cs_1) else 1)(⟪Iₒ, 1ₒ⟫(it))
     expected = im.let("_cs_1", im.shift("I", 1)("it"))(
         im.if_(
             im.call("can_deref")("_cs_1"),
             im.let("_cs_2", im.deref("_cs_1"))(im.plus("_cs_2", "_cs_2")),
-            im.literal("1", "int"),
+            im.literal("1", "int32"),
         )
     )
 
@@ -176,4 +181,91 @@ def test_if_can_deref_eligible_extraction():
     )
 
     actual = CSE().visit(testee)
+    assert actual == expected
+
+
+def test_if_eligible_extraction():
+    # Test that a subexpression only occurring in the condition of an `if_` is moved outside the
+    # if statement.
+
+    # if ((a ∧ b) ∧ (a ∧ b)) then c else d
+    testee = im.if_(
+        im.and_(im.and_("a", "b"), im.and_("a", "b")),
+        "c",
+        "d",
+    )
+    # (λ(_cs_1) → if _cs_1 ∧ _cs_1 then c else d)(a ∧ b)
+    expected = im.let("_cs_1", im.and_("a", "b"))(im.if_(im.and_("_cs_1", "_cs_1"), "c", "d"))
+
+    actual = CSE().visit(testee)
+    assert actual == expected
+
+
+def test_extract_subexpression_conversion_to_assignment_stmt_form():
+    # TODO(tehrengruber): Remove. This test is too complicated for the little coverage of
+    #  `extract_subexpression` it has. Since the algorithm is useful we just leave it here for now.
+    # Test `extract_subexpression` component of CSE pass. We start by an ITIR let expression
+    #  and rewrite it into an assignment statement based form (e.g. a string of `var = value`
+    #  and a return expression). The rewriting is based on the `extract_subexpression` function.
+    def is_let(node: ir.Expr):
+        return isinstance(node, ir.FunCall) and isinstance(node.fun, ir.Lambda)
+
+    testee = im.plus(
+        im.let(
+            "c",
+            im.let(
+                "a",
+                1,
+                "b",
+                2,
+            )(im.plus("a", "b")),
+            "d",
+            3,
+        )(im.plus("c", "d")),
+        4,
+    )
+
+    expected = textwrap.dedent(
+        """
+        a = 1
+        b = 2
+        c = a + b
+        d = 3
+        _let_result_1 = c + d
+        return _let_result_1 + 4
+    """
+    ).strip()
+
+    uid_gen = UIDGenerator(prefix="_let_result")
+
+    def convert_to_assignment_stmt_form(node: ir.Expr) -> tuple[list[tuple[str, ir.Expr]], ir.Expr]:
+        assignment_stmts: list[tuple[str, ir.Expr]] = []
+
+        if is_let(node):
+            let_expr = node  # just for readability
+            for let_param, let_arg in zip(let_expr.fun.params, let_expr.args, strict=True):
+                sub_assignments, new_let_arg = convert_to_assignment_stmt_form(let_arg)
+                assignment_stmts.extend(sub_assignments)
+                assignment_stmts.append((let_param.id, new_let_arg))
+            return assignment_stmts, let_expr.fun.expr
+
+        return_expr, let_exprs, _ = extract_subexpression(
+            node, lambda subexpr, num_occurences: is_let(subexpr), uid_gen
+        )
+
+        if let_exprs:
+            for sym, let_expr in let_exprs.items():
+                sub_assignments, new_let_expr = convert_to_assignment_stmt_form(let_expr)
+                assignment_stmts.extend(sub_assignments)
+                assignment_stmts.append((sym.id, new_let_expr))
+        return assignment_stmts, return_expr
+
+    def render_stmt_form(assignments: list[tuple[str, ir.Expr]], return_expr: ir.Expr) -> str:
+        result = ""
+        for var, value in assignments:
+            result = result + f"{var} = {value}\n"
+        result = result + f"return {return_expr}"
+        return result
+
+    actual = render_stmt_form(*convert_to_assignment_stmt_form(testee))
     assert actual == expected
