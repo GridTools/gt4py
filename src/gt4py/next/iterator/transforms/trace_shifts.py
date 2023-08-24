@@ -12,16 +12,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import enum
-import boltons.typeutils
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Iterable, Literal
+
+import boltons.typeutils
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
 
 
 ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
+
 
 class Sentinel(enum.Enum):
     VALUE = object()

@@ -434,7 +434,9 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         # cartesian shift
                         assert isinstance(offset, ir.OffsetLiteral)
                         dim = offset_provider[offset_name].value
-                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset.value)
+                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(
+                            offset.value
+                        )
                     elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
