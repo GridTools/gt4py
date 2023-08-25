@@ -252,23 +252,19 @@ if TYPE_CHECKING:
             ...
 
 
-class NextGTDimsInferface(Protocol):
+class NextGTDimsInterface(core_defs.GTDimsInterface, Protocol):
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:
         ...
 
 
 @extended_runtime_checkable
-class Field(NextGTDimsInferface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
+class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
     def domain(self) -> Domain:
         ...
-
-    @property
-    def shape(self) -> tuple[int, ...]:  # TODO discuss this
-        return tuple(len(r) for r in self.domain.ranges)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:

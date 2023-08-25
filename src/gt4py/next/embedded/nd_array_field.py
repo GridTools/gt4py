@@ -133,6 +133,10 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         return self._domain
 
     @property
+    def shape(self) -> tuple[int, ...]:
+        return self._ndarray.shape
+
+    @property
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._domain.dims
 
