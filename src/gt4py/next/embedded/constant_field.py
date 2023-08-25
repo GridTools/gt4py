@@ -10,7 +10,7 @@ from gt4py.next import common
 from gt4py.next.common import Infinity
 from gt4py.next.embedded import nd_array_field
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.embedded.nd_array_field import _R, _P, _get_slices_from_domain_slice
+from gt4py.next.embedded.nd_array_field import _R, _P, _get_slices_from_domain_slice, _broadcast
 
 
 def cf_operand_adapter(method):
@@ -107,8 +107,14 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
                 new_data = op(broadcasted_ndarray, other.ndarray)
                 return other.__class__.from_array(new_data, domain=other.domain)
             else:
-                # TODO
-                pass
+                domain_intersection = self.domain & other.domain
+                self_broadcasted = _constant_field_broadcast(self, domain_intersection.dims)
+
+                other_broadcasted = _broadcast(other, other.domain.dims)
+                other_slices = _get_slices_from_domain_slice(other_broadcasted.domain, domain_intersection)
+
+                new_data = op(self_broadcasted.ndarray, other_broadcasted.ndarray[other_slices])
+                return other.__class__.from_array(new_data, domain=domain_intersection)
 
         return self.__class__(op(self.value, other.value))
 

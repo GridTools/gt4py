@@ -73,3 +73,15 @@ def test_constant_field_binary_op_with_field():
     result = cf + field
     assert result.ndarray.shape == (10, 10)
     assert np.all(result.ndarray == 11)
+
+
+def test_constant_field_binary_op_with_field_intersection():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    domain2 = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 5), UnitRange(0, 5)))
+    cf = constant_field.ConstantField(2, domain2)
+
+    result = cf + field
+    assert result.ndarray.shape == (2, 5)
+    assert np.all(result.ndarray == 3)
