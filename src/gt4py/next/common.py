@@ -19,9 +19,9 @@ import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence, Set
+from collections.abc import Set
 from types import EllipsisType
-from typing import TypeGuard, overload
+from typing import TypeGuard, overload, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -42,7 +42,6 @@ from gt4py.eve.extended_typing import (
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
-
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
@@ -481,116 +480,3 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
-
-
-def _constant_field_op(method: Callable):
-    @functools.wraps(method)
-    def wrapper(self, other):
-        new = ConstantField(other) if not isinstance(other, ConstantField) else other
-        return method(self, new)
-    return wrapper
-
-
-@dataclasses.dataclass(frozen=True)
-class ConstantField(FieldABC[DimsT, core_defs.ScalarT]):
-    value: core_defs.ScalarT
-    _domain: Optional[Domain] = dataclasses.field(default=None)
-
-
-    def remap(self, index_field: Field) -> Field:
-        raise NotImplementedError()
-
-    def __getitem__(self, index: Domain | Sequence[NamedRange]) -> "ConstantField" | core_defs.ScalarT:
-        if not self._domain:
-            if isinstance(index, Domain):
-                return ConstantField(self.value, index)
-            elif isinstance(index, Sequence) and all(is_named_range(elem) for elem in index):
-                domain = Domain(
-                    dims=tuple(dim for dim, _ in index),
-                    ranges=tuple(range_ for _, range_ in index)
-                )
-                return ConstantField(self.value, domain)
-            else:
-                raise Exception("Can only use Domain or NamedRange to slice ConstantField without domain.")
-
-        # TODO: Implement slicing when domain is not None.
-
-        return self.value
-
-    @property
-    def domain(self) -> Domain:
-        return self._domain
-
-    @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return type(self.value)
-
-    @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        return type(self.value)
-
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        if self._domain is None:
-            return None
-
-        shape = [len(rng) for _, rng in self.domain]
-        return np.full(tuple(shape), self.value)
-
-    restrict = __getitem__
-
-    def __call__(self, *args, **kwargs) -> Field:
-        return self
-
-    def _binary_op_wrapper(self, other: ConstantField, op: Callable):
-        return self.__class__(op(self.value, other.value))
-
-    @_constant_field_op
-    def __add__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x + y)
-
-    @_constant_field_op
-    def __sub__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x - y)
-
-    @_constant_field_op
-    def __mul__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x * y)
-
-    @_constant_field_op
-    def __truediv__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x / y)
-
-    @_constant_field_op
-    def __floordiv__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x // y)
-
-    @_constant_field_op
-    def __rfloordiv__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: y // x)
-
-    @_constant_field_op
-    def __pow__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: x**y)
-
-    @_constant_field_op
-    def __rtruediv__(self, other: ConstantField):
-        return self._binary_op_wrapper(other, lambda x, y: y / x)
-
-    @_constant_field_op
-    def __radd__(self, other):
-        return self._binary_op_wrapper(other, lambda x, y: y + x)
-
-    @_constant_field_op
-    def __rmul__(self, other):
-        return self._binary_op_wrapper(other, lambda x, y: y * x)
-
-    @_constant_field_op
-    def __rsub__(self, other):
-        return self._binary_op_wrapper(other, lambda x, y: y - x)
-
-    def __abs__(self):
-        return self.__class__(abs(self.value))
-
-    def __neg__(self):
-        return self.__class__(-self.value)

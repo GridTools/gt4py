@@ -11,12 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import operator
 from typing import Optional, Pattern
-import numpy as np
 import pytest
 
-from gt4py.next import common
 from gt4py.next.common import Dimension, DimensionKind, Domain, Infinity, UnitRange, promote_dims
 
 
@@ -307,65 +304,3 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
-
-
-def rfloordiv(x, y):
-    return operator.floordiv(y, x)
-
-
-@pytest.mark.parametrize(
-    "op_func, expected_result",
-    [
-        (operator.add, 10 + 20),
-        (operator.sub, 10 - 20),
-        (operator.mul, 10 * 20),
-        (operator.truediv, 10 / 20),
-        (operator.floordiv, 10 // 20),
-        (rfloordiv, 20 // 10),
-        (operator.pow, 10**20),
-        (lambda x, y: operator.truediv(y, x), 20 / 10),
-        (operator.add, 10 + 20),
-        (operator.mul, 10 * 20),
-        (lambda x, y: operator.sub(y, x), 20 - 10),
-    ],
-)
-def test_binary_operations(op_func, expected_result):
-    cf1 = common.ConstantField(10)
-    cf2 = common.ConstantField(20)
-    result = op_func(cf1, cf2)
-    assert result.value == expected_result
-
-
-@pytest.mark.parametrize(
-    "cf1,cf2,expected",
-    [
-        (common.ConstantField(10.0), common.ConstantField(20), 30.0),
-        (common.ConstantField(10.0), 10, 20.0),
-    ],
-)
-def test_constant_field_incompatible_value_type(cf1, cf2, expected):
-    res = cf1 + cf2
-    assert res.value == expected
-    assert res.dtype == float
-
-
-def test_constant_field_getitem_domain():
-    cf = common.ConstantField(10)
-    domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    result = cf[domain]
-    assert isinstance(result.domain, Domain)
-
-
-def test_constant_field_getitem_named_range():
-    cf = common.ConstantField(10)
-    nr = ((IDim, UnitRange(0, 10)),)
-    result = cf[nr]
-    assert isinstance(result.domain, Domain)
-
-
-def test_constant_field_array():
-    cf = common.ConstantField(10)
-    nr = ((IDim, UnitRange(0, 5)),(JDim, UnitRange(-3, 13)))
-    result = cf[nr]
-    assert result.ndarray.shape == (5, 16)
-    assert np.all(result.ndarray == 10)

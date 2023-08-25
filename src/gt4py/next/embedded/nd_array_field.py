@@ -19,15 +19,15 @@ import functools
 import itertools
 from collections.abc import Callable, Sequence
 from types import EllipsisType, ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, overload
+from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, overload
 
 import numpy as np
 from numpy import typing as npt
+from typing_extensions import ClassVar, Any
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
-
 
 try:
     import cupy as cp
@@ -328,37 +328,6 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _find_index_of_dim(
-    dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> Optional[int]:
-    for i, (d, _) in enumerate(domain_slice):
-        if dim == d:
-            return i
-    return None
-
-
-def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
-    domain_slice: list[slice | None] = []
-    new_domain_dims = []
-    new_domain_ranges = []
-    for dim in new_dimensions:
-        if (pos := _find_index_of_dim(dim, field.domain)) is not None:
-            domain_slice.append(slice(None))
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(field.domain[pos][1])
-        else:
-            domain_slice.append(np.newaxis)
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(
-                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
-            )
-    return common.field(
-        field.ndarray[tuple(domain_slice)],
-        domain=common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
-    )
-
-
 def _builtins_broadcast(
     field: common.Field | core_defs.Scalar, new_dimensions: tuple[common.Dimension, ...]
 ) -> common.Field:  # separated for typing reasons
@@ -452,3 +421,33 @@ def _expand_ellipsis(
         else:
             expanded_indices.append(idx)
     return tuple(expanded_indices)
+
+
+def _find_index_of_dim(
+    dim: common.Dimension,
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+) -> Optional[int]:
+    if len(domain_slice) > 0:
+        for i, (d, _) in enumerate(domain_slice):
+            if dim == d:
+                return i
+    return None
+
+
+def _broadcast(field_to_broadcast: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+    domain_slice: list[slice | None] = []
+    new_domain_dims = []
+    new_domain_ranges = []
+    for dim in new_dimensions:
+        if (pos := _find_index_of_dim(dim, field_to_broadcast.domain)) is not None:
+            domain_slice.append(slice(None))
+            new_domain_dims.append(dim)
+            new_domain_ranges.append(field_to_broadcast.domain[pos][1])
+        else:
+            domain_slice.append(np.newaxis)
+            new_domain_dims.append(dim)
+            new_domain_ranges.append(common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
+    return common.field(
+        field_to_broadcast.ndarray[tuple(domain_slice)],
+        domain=common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
+    )

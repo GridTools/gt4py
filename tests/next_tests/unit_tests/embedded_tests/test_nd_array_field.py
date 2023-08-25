@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import dataclasses
 import itertools
 import math
 import operator
@@ -28,6 +27,7 @@ from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
+from tests.next_tests.unit_tests.test_common import IDim, JDim
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
