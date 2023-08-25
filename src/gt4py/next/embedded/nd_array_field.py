@@ -201,30 +201,6 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         __getitem__  # type:ignore[assignment] # TODO(havogt) I don't see the problem that mypy has
     )
 
-    def __setitem__(
-        self,
-        index: common.FieldSlice,
-        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
-    ) -> None:
-        index = _tuplize_field_slice(index)
-        if common.is_field(value):
-            # TODO(havogt): in case of `is_field(value)` we should additionally check that `value.domain == self[slice].domain`
-            value = value.ndarray
-
-        if common.is_domain_slice(index):
-            slices = _get_slices_from_domain_slice(self.domain, index)
-            self.ndarray[slices] = value
-            return
-
-        assert isinstance(index, tuple)
-        if all(
-            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
-        ):
-            self.ndarray[index] = value
-            return
-
-        raise IndexError(f"Unsupported index type: {index}")
-
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
     __abs__ = _make_unary_array_field_intrinsic_func("abs", "abs")
@@ -335,6 +311,30 @@ _BaseNdArrayField.register_builtin_func(
     fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
 )
 
+
+def _np_cp_setitem(
+    self,
+    index: common.FieldSlice,
+    value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+) -> None:
+    index = _tuplize_field_slice(index)
+    if common.is_field(value):
+        # TODO(havogt): in case of `is_field(value)` we should additionally check that `value.domain == self[slice].domain`
+        value = value.ndarray
+
+    if common.is_domain_slice(index):
+        slices = _get_slices_from_domain_slice(self.domain, index)
+        self.ndarray[slices] = value
+        return
+
+    assert isinstance(index, tuple)
+    if all(isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index):
+        self.ndarray[index] = value
+        return
+
+    raise IndexError(f"Unsupported index type: {index}")
+
+
 # -- Concrete array implementations --
 # NumPy
 _nd_array_implementations = [np]
@@ -343,6 +343,8 @@ _nd_array_implementations = [np]
 @dataclasses.dataclass(frozen=True)
 class NumPyArrayField(_BaseNdArrayField):
     array_ns: ClassVar[ModuleType] = np
+
+    __setitem__ = _np_cp_setitem
 
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
@@ -355,6 +357,8 @@ if cp:
     class CuPyArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
+        __setitem__ = _np_cp_setitem
+
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 
 # JAX
@@ -364,6 +368,14 @@ if jnp:
     @dataclasses.dataclass(frozen=True)
     class JaxArrayField(_BaseNdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
+
+        def __setitem__(
+            self,
+            index: common.FieldSlice,
+            value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+        ) -> None:
+            # use `self.ndarray.at(index).set(value)`
+            raise NotImplementedError("`__setitem__` for JaxArrayField not yet implemented.")
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
@@ -505,3 +517,6 @@ def _expand_ellipsis(
         else:
             expanded_indices.append(idx)
     return tuple(expanded_indices)
+
+
+jnp.asarray([1, 2, 3]).__setitem__

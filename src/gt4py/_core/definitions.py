@@ -401,9 +401,6 @@ class NDArrayObjectProto(Protocol):
     def __getitem__(self, item: SliceLike) -> NDArrayObject:
         ...
 
-    def __setitem__(self, item: SliceLike, value: Any) -> None:
-        ...
-
     def __abs__(self) -> NDArrayObject:
         ...
 
