@@ -137,7 +137,9 @@ MaskT = TypeVar("MaskT", bound=Field)
 FieldT = TypeVar("FieldT", bound=Union[Field, gt4py_defs.Scalar, Tuple])
 
 
-class WhereBuiltinFunction(BuiltInFunction[_R, [MaskT, FieldT, FieldT]]):
+class WhereBuiltinFunction(
+    BuiltInFunction[_R, [MaskT, FieldT, FieldT]], Generic[_R, MaskT, FieldT]
+):
     def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
