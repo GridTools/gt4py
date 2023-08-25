@@ -1,13 +1,13 @@
 import operator
 
 import pytest
-
-import gt4py.next
+import numpy as np
 from gt4py.next import common
+from gt4py.next.common import UnitRange, Dimension
 from gt4py.next.embedded import constant_field
-from gt4py.next.common import UnitRange
-from tests.next_tests.unit_tests.embedded_tests.test_nd_array_field import IDim
 
+IDim = Dimension("IDim")
+JDim = Dimension("JDim")
 
 def rfloordiv(x, y):
     return operator.floordiv(y, x)
@@ -58,23 +58,18 @@ def test_constant_field_getitem_missing_domain(index):
         cf[index]
 
 
-
-# def test_constant_field_binary_op_with_field():
-#     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
-#     field = common.field(np.ones((10, 10)), domain=domain)
-#
-#     cf = gt4py.next.embedded.nd_array_field.ConstantField(10)
-#
-#     result = cf + field
-#     assert result.ndarray.shape == (5, 16)
+def test_constant_field_ndarray():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    cf = constant_field.ConstantField(10, domain)
+    assert cf.ndarray.shape == (10, 10)
+    assert np.all(cf.ndarray == 10)
 
 
-# def test_constant_field_array():
-#     cf = common.ConstantField(10)
-#     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-#
-#     cf_broadcasted = gt4py.next.embedded.nd_array_field._broadcast(cf, domain.dims)
-#
-#     result = cf[nr]
-#     assert result.ndarray.shape == (5, 16)
-#     assert np.all(result.ndarray == 10)
+def test_constant_field_binary_op_with_field():
+    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    cf = constant_field.ConstantField(10)
+
+    result = cf + field
+    assert result.ndarray.shape == (10, 10)
+    assert np.all(result.ndarray == 11)
