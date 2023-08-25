@@ -19,6 +19,7 @@ from dataclasses import dataclass
 import pytest
 
 import gt4py.next as gtx
+from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
@@ -28,6 +29,8 @@ from gt4py.next.program_processors.runners import (
     gtfn_cpu,
     roundtrip,
 )
+
+import next_tests
 
 
 @pytest.fixture(
@@ -42,20 +45,19 @@ def lift_mode(request):
     return request.param
 
 
+class _RemoveITIRSymTypes(eve.NodeTranslator):
+    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
+        return itir.Sym(id=node.id, dtype=None, kind=None)
+
+
 @ppi.program_formatter
 def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
+    # remove types from ITIR as they are not supported for the roundtrip
+    root = _RemoveITIRSymTypes().visit(root)
     pretty = pretty_printer.pformat(root)
     parsed = pretty_parser.pparse(pretty)
     assert parsed == root
     return pretty
-
-
-def get_processor_id(processor):
-    if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
-        module_path = processor.__module__.split(".")[-1]
-        name = processor.__name__
-        return f"{module_path}.{name}"
-    return repr(processor)
 
 
 @pytest.fixture(
@@ -72,7 +74,7 @@ def get_processor_id(processor):
         (gtfn.format_sourcecode, False),
         (dace_iterator.run_dace_iterator, True),
     ],
-    ids=lambda p: get_processor_id(p[0]),
+    ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
     return request.param

@@ -30,7 +30,7 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 def convert_arg(arg: Any):
     if isinstance(arg, LocatedField):
-        sorted_dims = sorted(enumerate(arg.axes), key=lambda v: v[1].value)
+        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
         ndim = len(sorted_dims)
         dim_indices = [dim[0] for dim in sorted_dims]
         return np.moveaxis(np.asarray(arg), range(ndim), dim_indices)

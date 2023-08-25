@@ -124,7 +124,7 @@ class GTFunctorFactory(factory.Factory):
     param_list = undefined_symbol_list(
         lambda name: GTAccessorFactory(name=name),
         "applies",
-        list_creator=lambda l: GTParamListFactory(accessors=l),
+        list_creator=lambda lst: GTParamListFactory(accessors=lst),
     )
 
 
