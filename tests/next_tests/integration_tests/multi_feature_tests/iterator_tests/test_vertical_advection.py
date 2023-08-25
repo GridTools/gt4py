@@ -132,7 +132,7 @@ def test_tridiag(fencil, tridiag_reference, program_processor_no_dace_exec, lift
         ]
         and lift_mode == LiftMode.FORCE_INLINE
     ):
-        pytest.xfail("gtfn does only support lifted scans when using temporaries")
+        pytest.skip("gtfn does only support lifted scans when using temporaries")
     if (
         program_processor == gtfn_cpu.run_gtfn_with_temporaries
         or lift_mode == LiftMode.FORCE_TEMPORARIES

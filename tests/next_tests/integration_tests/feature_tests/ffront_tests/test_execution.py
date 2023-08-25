@@ -918,15 +918,6 @@ def test_domain_tuple(cartesian_case):
 
 
 def test_where_k_offset(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("IndexFields are not supported yet.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: index fields")
-
     @gtx.field_operator
     def fieldop_where_k_offset(
         inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
