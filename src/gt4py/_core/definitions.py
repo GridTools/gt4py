@@ -338,19 +338,28 @@ def dtype(dtype_like: DTypeLike) -> DType:
     return dtype_like if isinstance(dtype_like, DType) else DType(np.dtype(dtype_like).type)
 
 
-class StrLike(Protocol):
-    def __str__(self) -> str:
-        ...
-
-
 # -- Custom protocols  --
 class GTDimsInterface(Protocol):
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming the buffer dimensions.
+
+    In `gt4py.cartesian` the allowed values are `"I"`, `"J"` and `"K"` with the established semantics.
+
+    See :ref:`cartesian-arrays-dimension-mapping` for details.
+    """
+
     @property
-    def __gt_dims__(self) -> Tuple[str | StrLike, ...]:
+    def __gt_dims__(self) -> Tuple[str, ...]:
         ...
 
 
 class GTOriginInterface(Protocol):
+    """
+    A `GTOriginInterface` is an object providing `__gt_origin__`, describing the origin of a buffer.
+
+    See :ref:`cartesian-arrays-default-origin` for details.
+    """
+
     @property
     def __gt_origin__(self) -> Tuple[int, ...]:
         ...

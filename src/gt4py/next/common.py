@@ -252,7 +252,15 @@ if TYPE_CHECKING:
             ...
 
 
-class NextGTDimsInterface(core_defs.GTDimsInterface, Protocol):
+class NextGTDimsInterface(Protocol):
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+
+    The dimension names are objects of type :class:`Dimension`, in contrast to :py:mod:`gt4py.cartesian`,
+    where the labels are `str` s with implied semantics, see :py:class:`~gt4py._core.definitions.GTDimsInterface` .
+    """
+
+    # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:
         ...
