@@ -213,18 +213,13 @@ class DType(Generic[ScalarT]):
     """
 
     scalar_type: Type[ScalarT]
-    tensor_shape: TensorShape
+    tensor_shape: TensorShape = dataclasses.field(default=())
 
-    def __init__(
-        self, scalar_type: Type[ScalarT], tensor_shape: Sequence[IntegralScalar] = ()
-    ) -> None:
-        if not isinstance(scalar_type, type):
-            raise TypeError(f"Invalid scalar type '{scalar_type}'")
-        if not is_valid_tensor_shape(tensor_shape):
-            raise TypeError(f"Invalid tensor shape '{tensor_shape}'")
-
-        object.__setattr__(self, "scalar_type", scalar_type)
-        object.__setattr__(self, "tensor_shape", tensor_shape)
+    def __post_init__(self) -> None:
+        if not isinstance(self.scalar_type, type):
+            raise TypeError(f"Invalid scalar type '{self.scalar_type}'")
+        if not is_valid_tensor_shape(self.tensor_shape):
+            raise TypeError(f"Invalid tensor shape '{self.tensor_shape}'")
 
     @functools.cached_property
     def kind(self) -> DTypeKind:

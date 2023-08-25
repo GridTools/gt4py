@@ -275,16 +275,11 @@ class Field(NextGTDimsInferface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        ...
-
-    @property
     def ndarray(self) -> core_defs.NDArrayObject:
         ...
 
     def __str__(self) -> str:
-        codomain = self.value_type.__name__
-        return f"⟨{self.domain!s} → {codomain}⟩"
+        return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
     def remap(self, index_field: Field) -> Field:
@@ -381,7 +376,7 @@ def field(
     /,
     *,
     domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-    value_type: Optional[type] = None,
+    dtype: Optional[core_defs.DType] = None,
 ) -> Field:
     raise NotImplementedError
 

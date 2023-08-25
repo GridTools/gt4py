@@ -1047,7 +1047,6 @@ class IndexField(common.Field):
     """
 
     _dimension: common.Dimension
-    _value_type: type
 
     @property
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
@@ -1066,12 +1065,8 @@ class IndexField(common.Field):
         return common.Domain((self._dimension,), (common.UnitRange.infinity(),))
 
     @property
-    def dtype(self) -> core_defs.DType:
-        return core_defs.dtype(self._value_type)
-
-    @property
-    def value_type(self) -> type:
-        return self._value_type
+    def dtype(self) -> core_defs.Int32DType:
+        return core_defs.Int32DType()
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -1081,12 +1076,12 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.FieldSlice) -> common.Field | int:
+    def restrict(self, item: common.FieldSlice) -> common.Field | core_defs.int32:
         if common.is_domain_slice(item) and all(common.is_named_index(e) for e in item):
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
-            return self.value_type(r)
+            return self.dtype.scalar_type(r)
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1133,8 +1128,8 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
 
-def index_field(axis: common.Dimension, dtype: npt.DTypeLike = np.int32) -> common.Field:
-    return IndexField(axis, core_defs.dtype(dtype).scalar_type)
+def index_field(axis: common.Dimension) -> common.Field:
+    return IndexField(axis)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1146,7 +1141,6 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     """
 
     _value: core_defs.ScalarT
-    _value_type: type
 
     @property
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
@@ -1166,11 +1160,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return core_defs.dtype(self._value_type)
-
-    @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        return self._value_type
+        return core_defs.dtype(type(self._value))
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -1227,11 +1217,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
 
-def constant_field(value: Any, dtype_like: Optional[npt.DTypeLike] = None) -> common.Field:
+def constant_field(value: Any, dtype_like: Optional[core_defs.DTypeLike] = None) -> common.Field:
     if dtype_like is None:
         dtype_like = infer_dtype_like_type(value)
     dtype = core_defs.dtype(dtype_like)
-    return ConstantField(dtype.scalar_type(value), dtype.scalar_type)
+    return ConstantField(dtype.scalar_type(value))
 
 
 @builtins.shift.register(EMBEDDED)
@@ -1375,30 +1365,14 @@ def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
     return isinstance(field, MutableLocatedField)
 
 
-def has_uniform_tuple_element(field) -> bool:
-    dtype = np.dtype(field.value_type)
-    return dtype.fields is not None and all(
-        next(iter(dtype.fields))[0] == f[0] for f in iter(dtype.fields)
-    )
-
-
 def is_tuple_of_field(field) -> bool:
     return isinstance(field, tuple) and all(
         common.is_field(f) or is_tuple_of_field(f) for f in field
     )
 
 
-def is_field_of_tuple(field) -> bool:
-    return common.is_field(field) and has_uniform_tuple_element(field)
-
-
-def can_be_tuple_field(field) -> bool:
-    return is_tuple_of_field(field) or is_field_of_tuple(field)
-
-
 class TupleFieldMeta(type):
-    def __instancecheck__(self, arg):
-        return super().__instancecheck__(arg) or is_field_of_tuple(arg)
+    ...
 
 
 class TupleField(metaclass=TupleFieldMeta):
@@ -1443,14 +1417,9 @@ class TupleOfFields(TupleField):
 
 
 def as_tuple_field(field: tuple | TupleField) -> TupleField:
-    assert can_be_tuple_field(field)
-
-    if is_tuple_of_field(field):
-        assert not isinstance(field, TupleField)
-        return TupleOfFields(tuple(_wrap_field(f) for f in field))
-
-    assert isinstance(field, TupleField)  # e.g. field of tuple is already TupleField
-    return field
+    assert is_tuple_of_field(field)
+    assert not isinstance(field, TupleField)
+    return TupleOfFields(tuple(_wrap_field(f) for f in field))
 
 
 def _column_dtype(elem: Any) -> np.dtype:
@@ -1506,7 +1475,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (common.is_field(out) or can_be_tuple_field(out)):
+        if not (common.is_field(out) or is_tuple_of_field(out)):
             raise TypeError("Out needs to be a located field.")
 
         column_range = None
@@ -1518,7 +1487,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
 
             column_range = column.col_range
 
-        out = as_tuple_field(out) if can_be_tuple_field(out) else _wrap_field(out)
+        out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
         def _closure_runner():
             # Set context variables before executing the closure

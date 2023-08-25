@@ -94,7 +94,6 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
-    _value_type: type[core_defs.ScalarT]
 
     array_ns: ClassVar[
         ModuleType
@@ -149,12 +148,8 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         return np.asarray(self._ndarray, dtype)
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        return self._value_type
-
-    @property
     def dtype(self):
-        return self.array_ns.dtype(self._value_type)
+        return core_defs.dtype(self._ndarray.dtype.type)
 
     @classmethod
     def from_array(
@@ -164,15 +159,15 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         /,
         *,
         domain: common.Domain,
-        value_type: Optional[type] = None,
+        dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
     ) -> _BaseNdArrayField:
         xp = cls.array_ns
-        dtype = None
-        if value_type is not None:
-            dtype = xp.dtype(value_type)
-        array = xp.asarray(data, dtype=dtype)
 
-        value_type = array.dtype.type  # TODO add support for Dimensions as value_type
+        xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
+        array = xp.asarray(data, dtype=xp_dtype)
+
+        if dtype_like is not None:
+            assert array.dtype.type == core_defs.dtype(dtype_like).scalar_type
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
@@ -183,8 +178,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             for r, s in zip(domain.ranges, array.shape)
         )
 
-        assert value_type is not None  # for mypy
-        return cls(domain, array, value_type)
+        return cls(domain, array)
 
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
@@ -287,7 +281,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             assert core_defs.is_scalar_type(new)
             return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
-            return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
+            return self.__class__.from_array(new, domain=new_domain)
 
     def _getitem_relative_slice(
         self, indices: tuple[slice | common.IntIndex | EllipsisType, ...]
@@ -311,7 +305,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             assert core_defs.is_scalar_type(new), new
             return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
-            return self.__class__.from_array(new, domain=new_domain, value_type=self.value_type)
+            return self.__class__.from_array(new, domain=new_domain)
 
 
 # -- Specialized implementations for intrinsic operations on array fields --
