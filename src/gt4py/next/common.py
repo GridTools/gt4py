@@ -349,7 +349,11 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
 
 def is_field(
     v: Any,
-) -> TypeGuard[Field]:  # this function is introduced to localize the `type: ignore``
+) -> TypeGuard[Field]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
     return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
@@ -362,7 +366,11 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
 
 def is_mutable_field(
     v: Any,
-) -> TypeGuard[MutableField]:  # this function is introduced to localize the `type: ignore``
+) -> TypeGuard[MutableField]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
     return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 

@@ -152,7 +152,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         return np.asarray(self._ndarray, dtype)
 
     @property
-    def dtype(self):
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
         return core_defs.dtype(self._ndarray.dtype.type)
 
     @classmethod
@@ -187,7 +187,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def __getitem__(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
         index = _tuplize_field_slice(index)
 
         if common.is_domain_slice(index):
@@ -201,9 +201,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
         raise IndexError(f"Unsupported index type: {index}")
 
-    restrict = (
-        __getitem__  # type:ignore[assignment] # TODO(havogt) I don't see the problem that mypy has
-    )
+    __getitem__ = restrict
 
     __call__ = None  # type: ignore[assignment]  # TODO: remap
 
@@ -211,8 +209,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __neg__ = _make_unary_array_field_intrinsic_func("neg", "negative")
 
-    def __pos__(self):
-        return self
+    __pos__ = _make_unary_array_field_intrinsic_func("pos", "positive")
 
     __add__ = __radd__ = _make_binary_array_field_intrinsic_func("add", "add")
 
@@ -230,11 +227,35 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __mod__ = __rmod__ = _make_binary_array_field_intrinsic_func("mod", "mod")
 
-    __and__ = __rand__ = _make_binary_array_field_intrinsic_func("bitwise_and", "bitwise_and")
-    __or__ = __ror__ = _make_binary_array_field_intrinsic_func("bitwise_or", "bitwise_or")
-    __xor__ = __rxor__ = _make_binary_array_field_intrinsic_func("bitwise_xor", "bitwise_xor")
+    def __and__(self, other: common.Field) -> _BaseNdArrayField:
+        if self.dtype == core_defs.BoolDType():
+            return _make_binary_array_field_intrinsic_func("logical_and", "logical_and")(
+                self, other
+            )
+        raise NotImplementedError("`__and__` not implemented for non-`bool` fields.")
 
-    __invert__ = _make_unary_array_field_intrinsic_func("invert", "invert")
+    __rand__ = __and__
+
+    def __or__(self, other: common.Field) -> _BaseNdArrayField:
+        if self.dtype == core_defs.BoolDType():
+            return _make_binary_array_field_intrinsic_func("logical_or", "logical_or")(self, other)
+        raise NotImplementedError("`__or__` not implemented for non-`bool` fields.")
+
+    __ror__ = __or__
+
+    def __xor__(self, other: common.Field) -> _BaseNdArrayField:
+        if self.dtype == core_defs.BoolDType():
+            return _make_binary_array_field_intrinsic_func("logical_xor", "logical_xor")(
+                self, other
+            )
+        raise NotImplementedError("`__xor__` not implemented for non-`bool` fields.")
+
+    __rxor__ = __xor__
+
+    def __invert__(self) -> _BaseNdArrayField:
+        if self.dtype == core_defs.BoolDType():
+            return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
+        raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
     def _getitem_absolute_slice(
         self, index: common.DomainSlice
@@ -385,6 +406,11 @@ if jnp:
 
 
 def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
+    """
+    Wrap a single index/slice/range into a tuple.
+
+    Note: the condition is complex as `NamedRange`, `NamedIndex` are implemented as `tuple`.
+    """
     if (
         not isinstance(v, tuple)
         and not common.is_domain_slice(v)

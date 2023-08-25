@@ -246,6 +246,14 @@ class DType(Generic[ScalarT]):
     def subndim(self) -> int:
         return len(self.tensor_shape)
 
+    def __eq__(self, other: Any) -> bool:
+        # TODO: discuss (make concrete subclasses equal to instances of this with the same type)
+        return (
+            isinstance(other, DType)
+            and self.scalar_type == other.scalar_type
+            and self.tensor_shape == other.tensor_shape
+        )
+
 
 @dataclasses.dataclass(frozen=True)
 class IntegerDType(DType[IntegralT]):
@@ -315,6 +323,11 @@ class Float32DType(FloatingDType[float32]):
 @dataclasses.dataclass(frozen=True)
 class Float64DType(FloatingDType[float64]):
     scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
+
+
+@dataclasses.dataclass(frozen=True)
+class BoolDType(DType[bool_]):
+    scalar_type: Final[Type[bool_]] = dataclasses.field(default=bool_, init=False)
 
 
 DTypeLike = Union[DType, npt.DTypeLike]
