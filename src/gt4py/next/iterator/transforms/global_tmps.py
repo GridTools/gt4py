@@ -484,7 +484,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
 
             # compute the bounds of all consumed domains
             if consumed_domains:
-                domains[param] = domain_union(consumed_domains)
+                domains[param] = domain_union(consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
