@@ -898,13 +898,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._ndarrayfield.__gt_dims__
 
-    def _promote_tags_to_dims_and_sort(
-        self, named_indices: NamedFieldIndices
-    ) -> Mapping[common.Dimension, FieldIndex | SparsePositionEntry]:
-        return {d: named_indices[d.value] for d in self._ndarrayfield.__gt_dims__}
-
     def _translate_named_indices(self, _named_indices: NamedFieldIndices) -> common.DomainSlice:
-        named_indices = self._promote_tags_to_dims_and_sort(_named_indices)
+        named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
+            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_dims__
+        }
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
@@ -928,9 +925,6 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
             self._ndarrayfield[self._translate_named_indices(named_indices)] = value
         else:
             raise RuntimeError("Assigment into a non-mutable Field.")
-
-    def __array__(self) -> core_defs.NDArrayObject:
-        return self._ndarrayfield.ndarray
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
