@@ -547,6 +547,3 @@ def _expand_ellipsis(
         else:
             expanded_indices.append(idx)
     return tuple(expanded_indices)
-
-
-jnp.asarray([1, 2, 3]).__setitem__
