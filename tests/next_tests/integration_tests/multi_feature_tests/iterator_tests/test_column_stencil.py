@@ -344,7 +344,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
     inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
     out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
-    ref = inp0 + np.asarray(inp1)[:-1]
+    ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
 
     run_processor(
         sum_fencil,

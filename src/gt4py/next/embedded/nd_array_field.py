@@ -67,7 +67,7 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
                 return a.__class__.from_array(new_data, domain=domain_intersection)
             new_data = op(a.ndarray, xp.asarray(b.ndarray))
         else:
-            # assert isinstance(b, core_defs.SCALAR_TYPES) # TODO reenable this assert (if b is an array it should be wrapped into a field)
+            assert isinstance(b, core_defs.SCALAR_TYPES)
             new_data = op(a.ndarray, b)
 
         return a.__class__.from_array(new_data, domain=a.domain)
