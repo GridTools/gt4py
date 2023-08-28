@@ -233,6 +233,10 @@ if TYPE_CHECKING:
 class Field(Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
+    if TYPE_CHECKING:
+        register_builtin_func: Callable
+        _builtin_func_map: dict[fbuiltins.BuiltInFunction, Callable]
+
     @property
     def domain(self) -> Domain:
         ...
