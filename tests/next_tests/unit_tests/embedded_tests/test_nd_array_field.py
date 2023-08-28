@@ -40,16 +40,42 @@ def nd_array_implementation(request):
 
 
 @pytest.fixture(
-    params=[operator.add, operator.sub, operator.mul, operator.truediv, operator.floordiv],
+    params=[
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv,
+        operator.floordiv,
+        operator.mod,
+    ]
 )
-def binary_op(request):
+def binary_arithmetic_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation):
+@pytest.fixture(
+    params=[operator.xor, operator.and_, operator.or_],
+)
+def binary_logical_op(request):
+    yield request.param
+
+
+@pytest.fixture(params=[operator.neg, operator.pos])
+def unary_arithmetic_op(request):
+    yield request.param
+
+
+@pytest.fixture(params=[operator.invert])
+def unary_logical_op(request):
+    yield request.param
+
+
+def _make_field(lst: Iterable, nd_array_implementation, *, dtype=None):
+    if not dtype:
+        dtype = nd_array_implementation.float32
     return common.field(
-        nd_array_implementation.asarray(lst, dtype=nd_array_implementation.float32),
-        domain=((common.Dimension("foo"), common.UnitRange(0, len(lst))),),
+        nd_array_implementation.asarray(lst, dtype=dtype),
+        domain=common.Domain((common.Dimension("foo"),), (common.UnitRange(0, len(lst)),)),
     )
 
 
@@ -72,16 +98,57 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
     assert np.allclose(result.ndarray, expected)
 
 
-def test_binary_ops(binary_op, nd_array_implementation):
+def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation):
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
     inputs = [inp_a, inp_b]
 
-    expected = binary_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+    expected = binary_arithmetic_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
 
     field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
 
-    result = binary_op(*field_inputs)
+    result = binary_arithmetic_op(*field_inputs)
+
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_binary_logical_ops(binary_logical_op, nd_array_implementation):
+    inp_a = [True, True, False, False]
+    inp_b = [True, False, True, False]
+    inputs = [inp_a, inp_b]
+
+    expected = binary_logical_op(*[np.asarray(inp) for inp in inputs])
+
+    field_inputs = [_make_field(inp, nd_array_implementation, dtype=bool) for inp in inputs]
+
+    result = binary_logical_op(*field_inputs)
+
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_unary_logical_ops(unary_logical_op, nd_array_implementation):
+    inp = [
+        True,
+        False,
+    ]
+
+    expected = unary_logical_op(np.asarray(inp))
+
+    field_input = _make_field(inp, nd_array_implementation, dtype=bool)
+
+    result = unary_logical_op(field_input)
+
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_unary_arithmetic_ops(unary_arithmetic_op, nd_array_implementation):
+    inp = [1.0, -2.0, 0.0]
+
+    expected = unary_arithmetic_op(np.asarray(inp, dtype=np.float32))
+
+    field_input = _make_field(inp, nd_array_implementation)
+
+    result = unary_arithmetic_op(field_input)
 
     assert np.allclose(result.ndarray, expected)
 
@@ -93,7 +160,7 @@ def test_binary_ops(binary_op, nd_array_implementation):
         ((JDim,), (None, slice(5, 10))),
     ],
 )
-def test_binary_operations_with_intersection(binary_op, dims, expected_indices):
+def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expected_indices):
     arr1 = np.arange(10)
     arr1_domain = common.Domain(dims=dims, ranges=(UnitRange(0, 10),))
 
@@ -103,8 +170,8 @@ def test_binary_operations_with_intersection(binary_op, dims, expected_indices):
     field1 = common.field(arr1, domain=arr1_domain)
     field2 = common.field(arr2, domain=arr2_domain)
 
-    op_result = binary_op(field1, field2)
-    expected_result = binary_op(arr1[expected_indices[0], expected_indices[1]], arr2)
+    op_result = binary_arithmetic_op(field1, field2)
+    expected_result = binary_arithmetic_op(arr1[expected_indices[0], expected_indices[1]], arr2)
 
     assert op_result.ndarray.shape == (5, 5)
     assert np.allclose(op_result.ndarray, expected_result)
@@ -282,7 +349,7 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     field = common.field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
 
@@ -325,7 +392,7 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     field = common.field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 
@@ -369,7 +436,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
     field = common.field(np.ones((10, 15, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert isinstance(indexed_field, common.Field)
+    assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 

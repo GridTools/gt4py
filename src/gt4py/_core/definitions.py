@@ -213,18 +213,13 @@ class DType(Generic[ScalarT]):
     """
 
     scalar_type: Type[ScalarT]
-    tensor_shape: TensorShape
+    tensor_shape: TensorShape = dataclasses.field(default=())
 
-    def __init__(
-        self, scalar_type: Type[ScalarT], tensor_shape: Sequence[IntegralScalar] = ()
-    ) -> None:
-        if not isinstance(scalar_type, type):
-            raise TypeError(f"Invalid scalar type '{scalar_type}'")
-        if not is_valid_tensor_shape(tensor_shape):
-            raise TypeError(f"Invalid tensor shape '{tensor_shape}'")
-
-        object.__setattr__(self, "scalar_type", scalar_type)
-        object.__setattr__(self, "tensor_shape", tensor_shape)
+    def __post_init__(self) -> None:
+        if not isinstance(self.scalar_type, type):
+            raise TypeError(f"Invalid scalar type '{self.scalar_type}'")
+        if not is_valid_tensor_shape(self.tensor_shape):
+            raise TypeError(f"Invalid tensor shape '{self.tensor_shape}'")
 
     @functools.cached_property
     def kind(self) -> DTypeKind:
@@ -250,6 +245,14 @@ class DType(Generic[ScalarT]):
     @property
     def subndim(self) -> int:
         return len(self.tensor_shape)
+
+    def __eq__(self, other: Any) -> bool:
+        # TODO: discuss (make concrete subclasses equal to instances of this with the same type)
+        return (
+            isinstance(other, DType)
+            and self.scalar_type == other.scalar_type
+            and self.tensor_shape == other.tensor_shape
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -322,6 +325,11 @@ class Float64DType(FloatingDType[float64]):
     scalar_type: Final[Type[float64]] = dataclasses.field(default=float64, init=False)
 
 
+@dataclasses.dataclass(frozen=True)
+class BoolDType(DType[bool_]):
+    scalar_type: Final[Type[bool_]] = dataclasses.field(default=bool_, init=False)
+
+
 DTypeLike = Union[DType, npt.DTypeLike]
 
 
@@ -332,11 +340,29 @@ def dtype(dtype_like: DTypeLike) -> DType:
 
 # -- Custom protocols  --
 class GTDimsInterface(Protocol):
-    __gt_dims__: Tuple[str, ...]
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming the buffer dimensions.
+
+    In `gt4py.cartesian` the allowed values are `"I"`, `"J"` and `"K"` with the established semantics.
+
+    See :ref:`cartesian-arrays-dimension-mapping` for details.
+    """
+
+    @property
+    def __gt_dims__(self) -> Tuple[str, ...]:
+        ...
 
 
 class GTOriginInterface(Protocol):
-    __gt_origin__: Tuple[int, ...]
+    """
+    A `GTOriginInterface` is an object providing `__gt_origin__`, describing the origin of a buffer.
+
+    See :ref:`cartesian-arrays-default-origin` for details.
+    """
+
+    @property
+    def __gt_origin__(self) -> Tuple[int, ...]:
+        ...
 
 
 # -- Device representation --
