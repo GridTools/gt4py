@@ -15,7 +15,15 @@ from typing import Optional, Pattern
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Domain, Infinity, UnitRange, promote_dims
+from gt4py.next.common import (
+    Dimension,
+    DimensionKind,
+    Domain,
+    Infinity,
+    UnitRange,
+    promote_dims,
+    to_named_range,
+)
 
 
 IDim = Dimension("IDim")
@@ -26,14 +34,7 @@ KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 @pytest.fixture
 def domain():
-    range1 = UnitRange(0, 10)
-    range2 = UnitRange(5, 15)
-    range3 = UnitRange(20, 30)
-
-    dimensions = (IDim, JDim, KDim)
-    ranges = (range1, range2, range3)
-
-    return Domain(dimensions, ranges)
+    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
 
 
 def test_empty_range():
@@ -51,6 +52,11 @@ def test_unit_range_length(rng):
     assert rng.start == -5
     assert rng.stop == 5
     assert len(rng) == 10
+
+
+@pytest.mark.parametrize("rng_like", [(2, 4), range(2, 4), UnitRange(2, 4)])
+def test_from_unit_range_like(rng_like):
+    assert UnitRange.from_unit_range_like(rng_like) == UnitRange(2, 4)
 
 
 def test_unit_range_repr(rng):
@@ -142,8 +148,34 @@ def test_mixed_infinity_range():
     assert len(mixed_inf_range) == Infinity.positive()
 
 
+@pytest.mark.parametrize(
+    "named_rng_like",
+    [
+        (IDim, (2, 4)),
+        (IDim, range(2, 4)),
+        (IDim, UnitRange(2, 4)),
+    ],
+)
+def test_to_named_range(named_rng_like):
+    assert to_named_range(named_rng_like) == (IDim, UnitRange(2, 4))
+
+
 def test_domain_length(domain):
     assert len(domain) == 3
+
+
+@pytest.mark.parametrize(
+    "domain_like",
+    [
+        (Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5)))),
+        ((IDim, (2, 4)), (JDim, (3, 5))),
+        ({IDim: (2, 4), JDim: (3, 5)}),
+    ],
+)
+def test_from_domain_like(domain_like):
+    assert Domain.from_domain_like(domain_like) == Domain(
+        dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5))
+    )
 
 
 def test_domain_iteration(domain):
@@ -160,16 +192,25 @@ def test_domain_contains_named_range(domain):
     "second_domain, expected",
     [
         (
-            Domain((IDim, JDim), (UnitRange(2, 12), UnitRange(7, 17))),
-            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(7, 15), UnitRange(20, 30))),
+            Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 12), UnitRange(7, 17))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(2, 10), UnitRange(7, 15), UnitRange(20, 30)),
+            ),
         ),
         (
-            Domain((IDim, KDim), (UnitRange(2, 12), UnitRange(7, 27))),
-            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(5, 15), UnitRange(20, 27))),
+            Domain(dims=(IDim, KDim), ranges=(UnitRange(2, 12), UnitRange(7, 27))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(2, 10), UnitRange(5, 15), UnitRange(20, 27)),
+            ),
         ),
         (
-            Domain((JDim, KDim), (UnitRange(2, 12), UnitRange(4, 27))),
-            Domain((IDim, JDim, KDim), (UnitRange(0, 10), UnitRange(5, 12), UnitRange(20, 27))),
+            Domain(dims=(JDim, KDim), ranges=(UnitRange(2, 12), UnitRange(4, 27))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(0, 10), UnitRange(5, 12), UnitRange(20, 27)),
+            ),
         ),
     ],
 )
@@ -181,9 +222,7 @@ def test_domain_intersection_different_dimensions(domain, second_domain, expecte
 
 
 def test_domain_intersection_reversed_dimensions(domain):
-    dimensions = (JDim, IDim)
-    ranges = (UnitRange(2, 12), UnitRange(7, 17))
-    domain2 = Domain(dimensions, ranges)
+    domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
 
     with pytest.raises(
         ValueError,
@@ -249,7 +288,7 @@ def test_domain_repeat_dims():
     dims = (IDim, JDim, IDim)
     ranges = (UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3))
     with pytest.raises(NotImplementedError, match=r"Domain dimensions must be unique, not .*"):
-        Domain(dims, ranges)
+        Domain(dims=dims, ranges=ranges)
 
 
 def test_domain_dims_ranges_length_mismatch():
@@ -304,4 +343,6 @@ def test_dimension_promotion(
         with pytest.raises(Exception) as exc_info:
             promote_dims(*dim_list)
 
+        assert exc_info.match(expected_error_msg)
+        assert exc_info.match(expected_error_msg)
         assert exc_info.match(expected_error_msg)

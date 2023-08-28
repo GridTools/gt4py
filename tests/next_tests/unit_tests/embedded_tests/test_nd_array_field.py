@@ -75,7 +75,7 @@ def _make_field(lst: Iterable, nd_array_implementation, *, dtype=None):
         dtype = nd_array_implementation.float32
     return common.field(
         nd_array_implementation.asarray(lst, dtype=dtype),
-        domain=common.Domain((common.Dimension("foo"),), (common.UnitRange(0, len(lst)),)),
+        domain={common.Dimension("foo"): (0, len(lst))},
     )
 
 
@@ -189,10 +189,8 @@ def product_nd_array_implementation(request):
 
 def test_mixed_fields(product_nd_array_implementation):
     first_impl, second_impl = product_nd_array_implementation
-    if (first_impl.__name__ == "cupy" and second_impl.__name__ == "numpy") or (
-        first_impl.__name__ == "numpy" and second_impl.__name__ == "cupy"
-    ):
-        pytest.skip("Binary operation between CuPy and NumPy requires explicit conversion.")
+    if "numpy" in first_impl.__name__ and "cupy" in second_impl.__name__:
+        pytest.skip("Binary operation between NumPy and CuPy requires explicit conversion.")
 
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
@@ -371,19 +369,23 @@ def test_absolute_indexing_value_return():
         (
             (slice(None, 5), slice(None, 2)),
             (5, 2),
-            Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 4))),
+            Domain((IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 4))),
         ),
-        ((slice(None, 5),), (5, 10), Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 12)))),
-        ((Ellipsis, 1), (10,), Domain((IDim,), (UnitRange(5, 15),))),
+        ((slice(None, 5),), (5, 10), Domain((IDim, UnitRange(5, 10)), (JDim, UnitRange(2, 12)))),
+        (
+            (Ellipsis, 1),
+            (10,),
+            Domain((IDim, UnitRange(5, 15))),
+        ),
         (
             (slice(2, 3), slice(5, 7)),
             (1, 2),
-            Domain((IDim, JDim), (UnitRange(7, 8), UnitRange(7, 9))),
+            Domain((IDim, UnitRange(7, 8)), (JDim, UnitRange(7, 9))),
         ),
         (
             (slice(1, 2), 0),
             (1,),
-            Domain((IDim,), (UnitRange(6, 7),)),
+            Domain((IDim, UnitRange(6, 7))),
         ),
     ],
 )
@@ -400,32 +402,44 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
 @pytest.mark.parametrize(
     "index, expected_shape, expected_domain",
     [
-        ((1, slice(None), 2), (15,), Domain((JDim,), (UnitRange(10, 25),))),
+        ((1, slice(None), 2), (15,), Domain(dims=(JDim,), ranges=(UnitRange(10, 25),))),
         (
             (slice(None), slice(None), 2),
             (10, 15),
-            Domain((IDim, JDim), (UnitRange(5, 15), UnitRange(10, 25))),
+            Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(10, 25))),
         ),
         (
             (slice(None),),
             (10, 15, 10),
-            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20)),
+            ),
         ),
         (
             (slice(None), slice(None), slice(None)),
             (10, 15, 10),
-            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20)),
+            ),
         ),
         (
             (slice(None)),
             (10, 15, 10),
-            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20)),
+            ),
         ),
-        ((0, Ellipsis, 0), (15,), Domain((JDim,), (UnitRange(10, 25),))),
+        ((0, Ellipsis, 0), (15,), Domain(dims=(JDim,), ranges=(UnitRange(10, 25),))),
         (
             Ellipsis,
             (10, 15, 10),
-            Domain((IDim, JDim, KDim), (UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20)),
+            ),
         ),
     ],
 )
@@ -477,7 +491,7 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common.field(np.ones((10,)) * 42.0, domain=common.Domain((JDim,), (UnitRange(0, 10),))),
+            common.field(np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(0, 10)))),
         ),
     ],
 )
@@ -502,7 +516,7 @@ def test_setitem_wrong_domain():
     )
 
     value_incompatible = common.field(
-        np.ones((10,)) * 42.0, domain=common.Domain((JDim,), (UnitRange(-5, 5),))
+        np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(-5, 5)))
     )
 
     with pytest.raises(ValueError, match=r"Incompatible `Domain`.*"):

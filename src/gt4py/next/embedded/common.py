@@ -33,8 +33,7 @@ def sub_domain(domain: common.Domain, index: common.FieldSlice) -> common.Domain
 
 
 def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> common.Domain:
-    new_dims = []
-    new_ranges = []
+    named_ranges: list[common.NamedRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
@@ -43,30 +42,25 @@ def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> co
         domain, expanded, fillvalue=slice(None)
     ):
         if isinstance(idx, slice):
-            new_dims.append(dim)
-            new_ranges.append(_slice_range(rng, idx))
+            named_ranges.append((dim, _slice_range(rng, idx)))
         else:
             assert common.is_int_index(idx)  # not in new_domain
 
-    return common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
+    return common.Domain(*named_ranges)
 
 
 def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> common.Domain:
-    new_ranges = []
-    new_dims = []
-
+    named_ranges: list[common.NamedRange] = []
     for i, dim in enumerate(domain.dims):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             index_or_range = index[pos][1]
             if isinstance(index_or_range, common.UnitRange):
-                new_ranges.append(index_or_range)
-                new_dims.append(dim)
+                named_ranges.append((dim, index_or_range))
         else:
             # dimension not mentioned in slice
-            new_ranges.append(domain.ranges[i])
-            new_dims.append(dim)
+            named_ranges.append((dim, domain.ranges[i]))
 
-    return common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
+    return common.Domain(*named_ranges)
 
 
 def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
@@ -119,4 +113,5 @@ def _find_index_of_dim(
     for i, (d, _) in enumerate(domain_slice):
         if dim == d:
             return i
+    return None
     return None
