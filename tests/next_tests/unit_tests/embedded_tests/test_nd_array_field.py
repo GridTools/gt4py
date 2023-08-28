@@ -23,7 +23,8 @@ import pytest
 from gt4py.next import Dimension, common
 from gt4py.next.common import Domain, UnitRange
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice, _slice_range
+from gt4py.next.embedded.common import _slice_range
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
