@@ -25,8 +25,15 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Infinity
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import _P, _R, _broadcast, _get_slices_from_domain_slice, _expand_ellipsis, \
-    _slice_range, _find_index_of_dim
+from gt4py.next.embedded.nd_array_field import (
+    _P,
+    _R,
+    _broadcast,
+    _expand_ellipsis,
+    _find_index_of_dim,
+    _get_slices_from_domain_slice,
+    _slice_range,
+)
 from gt4py.next.ffront import fbuiltins
 
 
@@ -88,10 +95,10 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
             raise IndexError("Cannot slice ConstantField without domain.")
 
         if (
-                not isinstance(index, tuple)
-                and not common.is_domain_slice(index)
-                or common.is_named_index(index)
-                or common.is_named_range(index)
+            not isinstance(index, tuple)
+            and not common.is_domain_slice(index)
+            or common.is_named_index(index)
+            or common.is_named_range(index)
         ):
             index = cast(common.FieldSlice, (index,))
 
@@ -105,7 +112,7 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         raise IndexError(f"Unsupported index type: {index}")
 
     def _getitem_absolute_slice(
-            self, index: common.DomainSlice
+        self, index: common.DomainSlice
     ) -> ConstantField | core_defs.ScalarT:
         slices = _get_slices_from_domain_slice(self.domain, index)
         new_ranges = []
@@ -132,15 +139,17 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
             return self.__class__(new, new_domain)
 
     def _getitem_relative_slice(
-            self, indices: tuple[slice | int | EllipsisType, ...]
+        self, indices: tuple[slice | int | EllipsisType, ...]
     ) -> ConstantField | core_defs.ScalarT:
         new = self.ndarray[indices]
         new_dims = []
         new_ranges = []
 
         for (dim, rng), idx in itertools.zip_longest(
-                # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-                self.domain, _expand_ellipsis(indices, len(self.domain)), fillvalue=slice(None)
+            # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
+            self.domain,
+            _expand_ellipsis(indices, len(self.domain)),
+            fillvalue=slice(None),
         ):
             if isinstance(idx, slice):
                 new_dims.append(dim)

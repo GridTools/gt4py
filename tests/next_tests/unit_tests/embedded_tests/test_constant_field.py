@@ -22,6 +22,7 @@ from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import constant_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
+
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim")
@@ -100,7 +101,7 @@ test_cases = [
         common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 5), UnitRange(0, 5))),
         2,
         (2, 5),
-        3
+        3,
     ),
     (
         common.Domain(dims=(IDim, JDim), ranges=(UnitRange(-5, 2), UnitRange(3, 8))),
@@ -108,12 +109,17 @@ test_cases = [
         common.Domain(dims=(IDim,), ranges=(UnitRange(-5, 0),)),
         5,
         (5, 5),
-        6
-    )
+        6,
+    ),
 ]
 
-@pytest.mark.parametrize("domain1, field_data, domain2, constant_value, expected_shape, expected_value", test_cases)
-def test_constant_field_binary_op_with_field_intersection(domain1, field_data, domain2, constant_value, expected_shape, expected_value):
+
+@pytest.mark.parametrize(
+    "domain1, field_data, domain2, constant_value, expected_shape, expected_value", test_cases
+)
+def test_constant_field_binary_op_with_field_intersection(
+    domain1, field_data, domain2, constant_value, expected_shape, expected_value
+):
     field = common.field(field_data, domain=domain1)
     cf = constant_field.ConstantField(constant_value, domain2)
 
@@ -130,7 +136,11 @@ def test_constant_field_binary_op_with_field_intersection(domain1, field_data, d
             (5, 2),
             common.Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 4))),
         ),
-        ((slice(None, 5),), (5, 10), common.Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 12)))),
+        (
+            (slice(None, 5),),
+            (5, 10),
+            common.Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 12))),
+        ),
         ((Ellipsis, 1), (10,), common.Domain((IDim,), (UnitRange(5, 15),))),
         (
             (slice(2, 3), slice(5, 7)),
@@ -152,6 +162,7 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     assert isinstance(indexed_field, constant_field.ConstantField)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
+
 
 @pytest.mark.parametrize(
     "domain_slice,expected_dimensions,expected_shape",
