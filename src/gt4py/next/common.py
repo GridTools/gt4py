@@ -218,7 +218,6 @@ def _broadcast_ranges(
 
 
 if TYPE_CHECKING:
-    import gt4py.next.embedded.nd_array_field as nd
     import gt4py.next.ffront.fbuiltins as fbuiltins
 
     _Value: TypeAlias = "Field" | core_defs.ScalarT
@@ -484,7 +483,7 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     )
 
 
-def enable_builtin_func_registry(cls: Type[nd._BaseNdArrayField]) -> Type[nd._BaseNdArrayField]:
+def enable_builtin_func_registry(cls: Type[Field]) -> Type[Field]:
     cls._builtin_func_map = {}
     setattr(cls, "register_builtin_func", classmethod(register_builtin_func))
     setattr(cls, "__gt_builtin_func__", classmethod(__gt_builtin_func__))

@@ -27,6 +27,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 
+
 try:
     import cupy as cp
 except ImportError:
@@ -79,8 +80,8 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
-@dataclasses.dataclass(frozen=True)
 @common.enable_builtin_func_registry
+@dataclasses.dataclass(frozen=True)
 class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
     """
     Shared field implementation for NumPy-like fields.
