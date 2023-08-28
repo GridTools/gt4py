@@ -477,3 +477,42 @@ def test_slice_range():
 
     result = _slice_range(input_range, slice_obj)
     assert result == expected
+
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        ((1, 1), 42.0),
+        ((1, slice(None)), np.ones((10,)) * 42.0),
+        (
+            (1, slice(None)),
+            common.field(np.ones((10,)) * 42.0, domain=common.Domain((JDim,), (UnitRange(0, 10),))),
+        ),
+    ],
+)
+def test_setitem(index, value):
+    field = common.field(
+        np.arange(100).reshape(10, 10),
+        domain=common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+    )
+
+    expected = np.copy(field.ndarray)
+    expected[index] = value
+
+    field[index] = value
+
+    assert np.allclose(field.ndarray, expected)
+
+
+def test_setitem_wrong_domain():
+    field = common.field(
+        np.arange(100).reshape(10, 10),
+        domain=common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
+    )
+
+    value_incompatible = common.field(
+        np.ones((10,)) * 42.0, domain=common.Domain((JDim,), (UnitRange(-5, 5),))
+    )
+
+    with pytest.raises(ValueError, match=r"Incompatible `Domain`.*"):
+        field[(1, slice(None))] = value_incompatible

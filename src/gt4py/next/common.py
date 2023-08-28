@@ -141,14 +141,9 @@ DomainRange: TypeAlias = UnitRange | IntIndex
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+BufferSlice: TypeAlias = tuple[slice | IntIndex | EllipsisType, ...]
 FieldSlice: TypeAlias = (
-    DomainSlice
-    | tuple[slice | IntIndex | EllipsisType, ...]
-    | slice
-    | IntIndex
-    | EllipsisType
-    | NamedRange
-    | NamedIndex
+    DomainSlice | BufferSlice | slice | IntIndex | EllipsisType | NamedRange | NamedIndex
 )
 
 
