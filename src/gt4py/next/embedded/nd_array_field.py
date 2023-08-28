@@ -188,18 +188,14 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
-        index = _tuplize_field_slice(index)
+        new_domain, buffer_slice = self._slice(index)
 
-        if common.is_domain_slice(index):
-            return self._getitem_absolute_slice(index)
-
-        assert isinstance(index, tuple)
-        if all(
-            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
-        ):
-            return self._getitem_relative_slice(index)
-
-        raise IndexError(f"Unsupported index type: {index}")
+        new_buffer = self.ndarray[buffer_slice]
+        if len(new_domain) == 0:
+            assert core_defs.is_scalar_type(new_buffer)
+            return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
+        else:
+            return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
 
@@ -257,13 +253,26 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
-    def _getitem_absolute_slice(
+    def _slice(self, index: common.FieldSlice) -> tuple[common.Domain, common.BufferSlice]:
+        index = _tuplize_field_slice(index)
+
+        if common.is_domain_slice(index):
+            return self._absolute_slice(index)
+
+        assert isinstance(index, tuple)
+        if all(
+            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
+        ):
+            return self._relative_slice(index)
+
+        raise IndexError(f"Unsupported index type: {index}")
+
+    def _absolute_slice(
         self, index: common.DomainSlice
-    ) -> common.Field | core_defs.ScalarT:
+    ) -> tuple[common.Domain, common.BufferSlice]:
         slices = _get_slices_from_domain_slice(self.domain, index)
         new_ranges = []
         new_dims = []
-        new = self.ndarray[slices]
 
         for i, dim in enumerate(self.domain.dims):
             if (pos := _find_index_of_dim(dim, index)) is not None:
@@ -278,21 +287,21 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
         new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
 
-        if len(new_domain) == 0:
-            assert core_defs.is_scalar_type(new)
-            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__.from_array(new, domain=new_domain)
+        return new_domain, slices
 
-    def _getitem_relative_slice(
-        self, indices: tuple[slice | common.IntIndex | EllipsisType, ...]
-    ) -> common.Field | core_defs.ScalarT:
-        new = self.ndarray[indices]
+    def _relative_slice(
+        self, indices: common.BufferSlice
+    ) -> tuple[common.Domain, common.BufferSlice]:
         new_dims = []
         new_ranges = []
 
+        expanded = _expand_ellipsis(indices, len(self.domain))
+        if len(self.domain) < len(expanded):
+            raise IndexError(
+                f"Trying to index a `Field` with {len(self.domain)} dimensions with {indices}."
+            )
         for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-            self.domain, _expand_ellipsis(indices, len(self.domain)), fillvalue=slice(None)
+            self.domain, expanded, fillvalue=slice(None)
         ):
             if isinstance(idx, slice):
                 new_dims.append(dim)
@@ -301,12 +310,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
                 assert common.is_int_index(idx)  # not in new_domain
 
         new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-
-        if len(new_domain) == 0:
-            assert core_defs.is_scalar_type(new), new
-            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__.from_array(new, domain=new_domain)
+        return new_domain, indices
 
 
 # -- Specialized implementations for intrinsic operations on array fields --
@@ -338,26 +342,21 @@ _BaseNdArrayField.register_builtin_func(
 
 
 def _np_cp_setitem(
-    self,
+    self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],
     index: common.FieldSlice,
     value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
 ) -> None:
-    index = _tuplize_field_slice(index)
+    target_domain, target_slice = self._slice(index)
+
     if common.is_field(value):
-        # TODO(havogt): in case of `is_field(value)` we should additionally check that `value.domain == self[slice].domain`
+        if not value.domain == target_domain:
+            raise ValueError(
+                f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+            )
         value = value.ndarray
 
-    if common.is_domain_slice(index):
-        slices = _get_slices_from_domain_slice(self.domain, index)
-        self.ndarray[slices] = value
-        return
-
-    assert isinstance(index, tuple)
-    if all(isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index):
-        self.ndarray[index] = value
-        return
-
-    raise IndexError(f"Unsupported index type: {index}")
+    assert hasattr(self.ndarray, "__setitem__")
+    self.ndarray[target_slice] = value
 
 
 # -- Concrete array implementations --
@@ -466,7 +465,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast
 def _get_slices_from_domain_slice(
     domain: common.Domain,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> tuple[slice | common.IntIndex | None, ...]:
+) -> tuple[slice | common.IntIndex, ...]:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
     This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
@@ -481,7 +480,7 @@ def _get_slices_from_domain_slice(
                                        specified in the Domain. If a dimension is not included in the named indices
                                        or ranges, a None is used to indicate expansion along that axis.
     """
-    slice_indices: list[slice | common.IntIndex | None] = []
+    slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
