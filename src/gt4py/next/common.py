@@ -21,7 +21,7 @@ import functools
 import sys
 from collections.abc import Sequence, Set
 from types import EllipsisType
-from typing import TypeGuard, overload
+from typing import Type, TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -218,6 +218,7 @@ def _broadcast_ranges(
 
 
 if TYPE_CHECKING:
+    import gt4py.next.embedded.nd_array_field as nd
     import gt4py.next.ffront.fbuiltins as fbuiltins
 
     _Value: TypeAlias = "Field" | core_defs.ScalarT
@@ -232,14 +233,6 @@ if TYPE_CHECKING:
 @extended_runtime_checkable
 class Field(Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
-
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-    ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
-        raise NotImplementedError
-
-    _builtin_func_map: dict[fbuiltins.BuiltInFunction, Callable] = {}
 
     @property
     def domain(self) -> Domain:
@@ -489,3 +482,23 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
+
+
+def enable_builtin_func_registry(cls: Type[nd._BaseNdArrayField]) -> Type[nd._BaseNdArrayField]:
+    cls._builtin_func_map = {}
+    setattr(cls, "register_builtin_func", classmethod(register_builtin_func))
+    setattr(cls, "__gt_builtin_func__", classmethod(__gt_builtin_func__))
+    return cls
+
+
+def register_builtin_func(
+    cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+) -> Any:
+    assert op not in cls._builtin_func_map
+    if op_func is None:  # when used as a decorator
+        return functools.partial(cls.register_builtin_func, op)
+    return cls._builtin_func_map.setdefault(op, op_func)
+
+
+def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Any:
+    return cls._builtin_func_map.get(func, NotImplemented)

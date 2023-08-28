@@ -14,18 +14,15 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 import inspect
 from builtins import bool, float, int, tuple
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
     Optional,
     ParamSpec,
     Tuple,
-    Type,
     TypeAlias,
     TypeVar,
     Union,
@@ -284,30 +281,3 @@ class FieldOffset(runtime.Offset):
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
-
-
-if TYPE_CHECKING:
-    from gt4py.next.embedded import nd_array_field as nd
-
-
-def register_builtin_func(
-    cls, /, op: BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-) -> Any:
-    assert op not in cls._builtin_func_map
-    if op_func is None:  # when used as a decorator
-        return functools.partial(cls.register_builtin_func, op)
-    return cls._builtin_func_map.setdefault(op, op_func)
-
-
-def __gt_builtin_func__(cls, /, func: BuiltInFunction[_R, _P]) -> Any:
-    return cls._builtin_func_map.get(func, NotImplemented)
-
-
-_builtin_func_map: dict[BuiltInFunction, Callable] = {}
-
-
-def registrable(cls: Type[nd._BaseNdArrayField]) -> Type[nd._BaseNdArrayField]:
-    cls._builtin_func_map = _builtin_func_map
-    setattr(cls, "register_builtin_func", classmethod(register_builtin_func))
-    setattr(cls, "__gt_builtin_func__", classmethod(__gt_builtin_func__))
-    return cls
