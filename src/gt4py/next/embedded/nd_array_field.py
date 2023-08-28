@@ -263,7 +263,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             if common.is_domain_slice(index)
             else index
         )
-        assert isinstance(slice_, common.BufferSlice)
+        assert common.is_buffer_slice(slice_), slice_
         return new_domain, slice_
 
 
