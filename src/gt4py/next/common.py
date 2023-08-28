@@ -233,6 +233,14 @@ if TYPE_CHECKING:
 class Field(Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
+    @classmethod
+    def register_builtin_func(
+        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
+        raise NotImplementedError
+
+    _builtin_func_map: dict[fbuiltins.BuiltInFunction, Callable] = {}
+
     @property
     def domain(self) -> Domain:
         ...

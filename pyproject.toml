@@ -162,7 +162,8 @@ ignore = [
   'DAR',  # Disable dargling errors by default
   'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
+  'W503',  # Line break occurred before a binary operator
+  'B010'  # Call setattr with a constant attribute value
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above
