@@ -26,6 +26,9 @@ from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
+SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL, covariant=True)
+
+
 class Expr(eve.Node):
     pass
 
@@ -191,8 +194,8 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
-) -> stages.BindingSource[NanobindSrcL, languages.Python]:
+    program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+) -> stages.BindingSource[SrcL, languages.Python]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -263,13 +266,8 @@ def create_bindings(
     )
 
 
-NanobindSrcL = TypeVar("NanobindSrcL", bound=languages.Cpp | languages.Cuda)
-
-
 @workflow.make_step
 def bind_source(
-    inp: stages.ProgramSource[NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
-) -> stages.CompilableSource[
-    NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
-]:
+    inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
     return stages.CompilableSource(program_source=inp, binding_source=create_bindings(inp))

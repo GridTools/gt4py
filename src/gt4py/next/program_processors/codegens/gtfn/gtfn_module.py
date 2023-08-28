@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-from typing import Any, Final, Optional, TypeVar
+from typing import Any, Final, Optional
 
 import numpy as np
 
@@ -26,12 +26,10 @@ from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages, step_types, workflow
-from gt4py.next.otf.binding import cpp_interface, interface, nanobind
+from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
-
-T = TypeVar("T")
 
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
@@ -49,15 +47,14 @@ class HardwareAccelerator(enum.IntEnum):
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
         stages.ProgramCall,
-        stages.ProgramSource[nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
-    step_types.TranslationStep[nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
+    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ):
-    source_language: type[nanobind.NanobindSrcL] = languages.Cpp
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
-    #  hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
+    hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
 
     @staticmethod
     def _default_language_settings(
@@ -177,7 +174,7 @@ class GTFNTranslationStep(
     def __call__(
         self,
         inp: stages.ProgramCall,
-    ) -> stages.ProgramSource[nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
+    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
 
@@ -213,15 +210,11 @@ class GTFNTranslationStep(
         language_settings = (
             self.language_settings
             if self.language_settings is not None
-            else self.__class__._default_language_settings(
-                HardwareAccelerator.GPU
-                if self.source_language == languages.Cuda
-                else HardwareAccelerator.CPU
-            )
+            else self.__class__._default_language_settings(self.hardware_accelerator)
         )
         backend_header = (
             "gridtools/fn/backend/gpu.hpp"
-            if self.source_language is languages.Cuda
+            if self.hardware_accelerator is HardwareAccelerator.GPU
             else "gridtools/fn/backend/naive.hpp"
         )
         source_code = interface.format_source(
@@ -236,27 +229,31 @@ class GTFNTranslationStep(
         )
 
         library_name = (
-            "gridtools_gpu" if self.source_language is languages.Cuda else "gridtools_cpu"
+            "gridtools_gpu"
+            if self.hardware_accelerator is HardwareAccelerator.GPU
+            else "gridtools_cpu"
         )
-        module = stages.ProgramSource(
+        module: stages.ProgramSource[
+            languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
+        ] = stages.ProgramSource(
             entry_point=function,
             library_deps=(interface.LibraryDependency(library_name, "master"),),
             source_code=source_code,
-            language=self.source_language,
+            language=languages.Cuda
+            if self.hardware_accelerator is HardwareAccelerator.GPU
+            else languages.Cpp,
             language_settings=language_settings,
         )
         return module
 
     def _get_backend_type(self):
-        if self.source_language == languages.Cuda:
+        if self.hardware_accelerator is HardwareAccelerator.GPU:
             return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
         return "gridtools::fn::backend::naive{}"
 
 
-translate_program_cpu: Final[
-    step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings]
-] = GTFNTranslationStep()
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
 
-translate_program_gpu: Final[
-    step_types.TranslationStep[languages.Cuda, languages.LanguageWithHeaderFilesSettings]
-] = GTFNTranslationStep(languages.Cuda)
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
+    hardware_accelerator=HardwareAccelerator.GPU
+)

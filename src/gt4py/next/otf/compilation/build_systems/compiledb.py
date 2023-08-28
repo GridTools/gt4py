@@ -20,18 +20,21 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Optional
+from typing import Optional, TypeVar
 
 from gt4py.next.otf import languages, stages
-from gt4py.next.otf.binding import interface, nanobind
+from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
+
+
+SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
 
 
 @dataclasses.dataclass
 class CompiledbFactory(
     compiler.BuildSystemProjectGenerator[
-        nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
+        SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """
@@ -48,7 +51,7 @@ class CompiledbFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            nanobind.NanobindSrcL,
+            SrcL,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -94,9 +97,7 @@ class CompiledbFactory(
 
 @dataclasses.dataclass()
 class CompiledbProject(
-    stages.BuildSystemProject[
-        nanobind.NanobindSrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
-    ]
+    stages.BuildSystemProject[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]
 ):
     """
     Compiledb build system for gt4py programs.
@@ -117,11 +118,12 @@ class CompiledbProject(
 
     def build(self) -> None:
         self._write_files()
-        if build_data.read_data(self.root_path).status < build_data.BuildStatus.CONFIGURED:
+        current_data = build_data.read_data(self.root_path)
+        if current_data is None or current_data.status < build_data.BuildStatus.CONFIGURED:
             self._run_config()
-        if (
+        elif (
             build_data.BuildStatus.CONFIGURED
-            <= build_data.read_data(self.root_path).status
+            <= current_data.status
             < build_data.BuildStatus.COMPILED
         ):
             self._run_build()
@@ -214,7 +216,7 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: cmake.BuildType,
     cmake_flags: list[str],
-    language: type[nanobind.NanobindSrcL],
+    language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
