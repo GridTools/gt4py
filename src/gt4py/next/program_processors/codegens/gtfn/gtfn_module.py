@@ -60,7 +60,7 @@ class GTFNTranslationStep(
     def _default_language_settings(
         hardware_accelerator: HardwareAccelerator,
     ) -> languages.LanguageWithHeaderFilesSettings:
-        if hardware_accelerator == HardwareAccelerator.GPU:
+        if hardware_accelerator is HardwareAccelerator.GPU:
             return languages.LanguageWithHeaderFilesSettings(
                 formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
                 formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
@@ -113,7 +113,7 @@ class GTFNTranslationStep(
                         isinstance(
                             dim, fbuiltins.FieldOffset
                         )  # TODO(havogt): remove support for FieldOffset as Dimension
-                        or dim.kind == common.DimensionKind.LOCAL
+                        or dim.kind is common.DimensionKind.LOCAL
                     ):
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
@@ -214,7 +214,7 @@ class GTFNTranslationStep(
         )
         backend_header = (
             "gridtools/fn/backend/gpu.hpp"
-            if self.hardware_accelerator == HardwareAccelerator.GPU
+            if self.hardware_accelerator is HardwareAccelerator.GPU
             else "gridtools/fn/backend/naive.hpp"
         )
         source_code = interface.format_source(
@@ -230,12 +230,12 @@ class GTFNTranslationStep(
 
         language = (
             languages.Cuda
-            if self.hardware_accelerator == HardwareAccelerator.GPU
+            if self.hardware_accelerator is HardwareAccelerator.GPU
             else languages.Cpp
         )
         library_name = (
             "gridtools_gpu"
-            if self.hardware_accelerator == HardwareAccelerator.GPU
+            if self.hardware_accelerator is HardwareAccelerator.GPU
             else "gridtools_cpu"
         )
         module: stages.ProgramSource[
@@ -250,7 +250,7 @@ class GTFNTranslationStep(
         return module
 
     def _get_backend_type(self):
-        if self.hardware_accelerator == HardwareAccelerator.GPU:
+        if self.hardware_accelerator is HardwareAccelerator.GPU:
             return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
         return "gridtools::fn::backend::naive{}"
 

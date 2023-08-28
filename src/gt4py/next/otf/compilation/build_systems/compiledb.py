@@ -121,8 +121,10 @@ class CompiledbProject(
         current_data = build_data.read_data(self.root_path)
         if current_data is None or current_data.status < build_data.BuildStatus.CONFIGURED:
             self._run_config()
-        elif (
-            build_data.BuildStatus.CONFIGURED
+            current_data = build_data.read_data(self.root_path)  # update after config
+        if (
+            current_data is not None
+            and build_data.BuildStatus.CONFIGURED
             <= current_data.status
             < build_data.BuildStatus.COMPILED
         ):
