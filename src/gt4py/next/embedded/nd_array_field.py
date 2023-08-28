@@ -16,16 +16,16 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import itertools
 from collections.abc import Callable, Sequence
-from types import EllipsisType, ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, overload
+from types import ModuleType
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
+from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
 
 
@@ -254,63 +254,17 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
     def _slice(self, index: common.FieldSlice) -> tuple[common.Domain, common.BufferSlice]:
-        index = _tuplize_field_slice(index)
+        new_domain = embedded_common.sub_domain(self.domain, index)
 
-        if common.is_domain_slice(index):
-            return self._absolute_slice(index)
+        index = embedded_common._tuplize_field_slice(index)
 
-        assert isinstance(index, tuple)
-        if all(
-            isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index
-        ):
-            return self._relative_slice(index)
-
-        raise IndexError(f"Unsupported index type: {index}")
-
-    def _absolute_slice(
-        self, index: common.DomainSlice
-    ) -> tuple[common.Domain, common.BufferSlice]:
-        slices = _get_slices_from_domain_slice(self.domain, index)
-        new_ranges = []
-        new_dims = []
-
-        for i, dim in enumerate(self.domain.dims):
-            if (pos := _find_index_of_dim(dim, index)) is not None:
-                index_or_range = index[pos][1]
-                if isinstance(index_or_range, common.UnitRange):
-                    new_ranges.append(index_or_range)
-                    new_dims.append(dim)
-            else:
-                # dimension not mentioned in slice
-                new_ranges.append(self.domain.ranges[i])
-                new_dims.append(dim)
-
-        new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-
-        return new_domain, slices
-
-    def _relative_slice(
-        self, indices: common.BufferSlice
-    ) -> tuple[common.Domain, common.BufferSlice]:
-        new_dims = []
-        new_ranges = []
-
-        expanded = _expand_ellipsis(indices, len(self.domain))
-        if len(self.domain) < len(expanded):
-            raise IndexError(
-                f"Trying to index a `Field` with {len(self.domain)} dimensions with {indices}."
-            )
-        for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-            self.domain, expanded, fillvalue=slice(None)
-        ):
-            if isinstance(idx, slice):
-                new_dims.append(dim)
-                new_ranges.append(_slice_range(rng, idx))
-            else:
-                assert common.is_int_index(idx)  # not in new_domain
-
-        new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-        return new_domain, indices
+        slice_ = (
+            _get_slices_from_domain_slice(self.domain, index)
+            if common.is_domain_slice(index)
+            else index
+        )
+        assert isinstance(slice_, common.BufferSlice)
+        return new_domain, slice_
 
 
 # -- Specialized implementations for intrinsic operations on array fields --
@@ -404,38 +358,12 @@ if jnp:
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
-    """
-    Wrap a single index/slice/range into a tuple.
-
-    Note: the condition is complex as `NamedRange`, `NamedIndex` are implemented as `tuple`.
-    """
-    if (
-        not isinstance(v, tuple)
-        and not common.is_domain_slice(v)
-        or common.is_named_index(v)
-        or common.is_named_range(v)
-    ):
-        return cast(common.FieldSlice, (v,))
-    return v
-
-
-def _find_index_of_dim(
-    dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> Optional[int]:
-    for i, (d, _) in enumerate(domain_slice):
-        if dim == d:
-            return i
-    return None
-
-
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice: list[slice | None] = []
     new_domain_dims = []
     new_domain_ranges = []
     for dim in new_dimensions:
-        if (pos := _find_index_of_dim(dim, field.domain)) is not None:
+        if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
             new_domain_dims.append(dim)
             new_domain_ranges.append(field.domain[pos][1])
@@ -465,7 +393,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast
 def _get_slices_from_domain_slice(
     domain: common.Domain,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> tuple[slice | common.IntIndex, ...]:
+) -> common.BufferSlice:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
     This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
@@ -483,7 +411,7 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if (pos := _find_index_of_dim(dim, domain_slice)) is not None:
+        if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
@@ -519,30 +447,3 @@ def _compute_slice(
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
-
-
-def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
-    # handle slice(None) case
-    if slice_obj == slice(None):
-        return common.UnitRange(input_range.start, input_range.stop)
-
-    start = (
-        input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop
-    ) + (slice_obj.start or 0)
-    stop = (
-        input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop
-    ) + (slice_obj.stop or len(input_range))
-
-    return common.UnitRange(start, stop)
-
-
-def _expand_ellipsis(
-    indices: tuple[common.IntIndex | slice | EllipsisType, ...], target_size: int
-) -> tuple[common.IntIndex | slice, ...]:
-    expanded_indices: list[common.IntIndex | slice] = []
-    for idx in indices:
-        if idx is Ellipsis:
-            expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))
-        else:
-            expanded_indices.append(idx)
-    return tuple(expanded_indices)
