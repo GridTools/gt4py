@@ -170,6 +170,12 @@ def is_domain_slice(v: Any) -> TypeGuard[DomainSlice]:
     return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
 
 
+def is_buffer_slice(v: Any) -> TypeGuard[BufferSlice]:
+    return isinstance(v, tuple) and all(
+        isinstance(e, slice) or is_int_index(e) or e is Ellipsis for e in v
+    )
+
+
 @dataclasses.dataclass(frozen=True)
 class Domain(Sequence[NamedRange]):
     dims: tuple[Dimension, ...]
