@@ -23,11 +23,12 @@ from typing import ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, cast, over
 
 import numpy as np
 from numpy import typing as npt
-from typing_extensions import ClassVar, Any
+from typing_extensions import Any, ClassVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
+
 
 try:
     import cupy as cp
@@ -434,7 +435,9 @@ def _find_index_of_dim(
     return None
 
 
-def _broadcast(field_to_broadcast: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+def _broadcast(
+    field_to_broadcast: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> common.Field:
     domain_slice: list[slice | None] = []
     new_domain_dims = []
     new_domain_ranges = []
@@ -446,7 +449,9 @@ def _broadcast(field_to_broadcast: common.Field, new_dimensions: tuple[common.Di
         else:
             domain_slice.append(np.newaxis)
             new_domain_dims.append(dim)
-            new_domain_ranges.append(common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
+            new_domain_ranges.append(
+                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
+            )
     return common.field(
         field_to_broadcast.ndarray[tuple(domain_slice)],
         domain=common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),

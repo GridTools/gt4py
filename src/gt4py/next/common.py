@@ -21,7 +21,7 @@ import functools
 import sys
 from collections.abc import Set
 from types import EllipsisType
-from typing import TypeGuard, overload, Sequence
+from typing import Sequence, TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -42,6 +42,7 @@ from gt4py.eve.extended_typing import (
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
+
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)

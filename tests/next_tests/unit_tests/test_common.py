@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Optional, Pattern
+
 import pytest
 
 from gt4py.next.common import Dimension, DimensionKind, Domain, Infinity, UnitRange, promote_dims
