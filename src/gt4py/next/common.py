@@ -15,13 +15,14 @@
 from __future__ import annotations
 
 import abc
+import collections
 import dataclasses
 import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
 from types import EllipsisType
-from typing import Type, TypeGuard, overload
+from typing import ChainMap, TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -232,10 +233,6 @@ if TYPE_CHECKING:
 @extended_runtime_checkable
 class Field(Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
-
-    if TYPE_CHECKING:
-        register_builtin_func: Callable
-        _builtin_func_map: dict[fbuiltins.BuiltInFunction, Callable]
 
     @property
     def domain(self) -> Domain:
@@ -487,21 +484,21 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     )
 
 
-def enable_builtin_func_registry(cls: Type[Field]) -> Type[Field]:
-    cls._builtin_func_map = {}
-    setattr(cls, "register_builtin_func", classmethod(register_builtin_func))
-    setattr(cls, "__gt_builtin_func__", classmethod(__gt_builtin_func__))
-    return cls
+class FieldBuiltinFuncRegistry:
+    _builtin_func_map: ChainMap[fbuiltins.BuiltInFunction, Callable] = collections.ChainMap()
 
+    def __init_subclass__(cls, **kwargs):
+        cls._builtin_func_map = cls._builtin_func_map.new_child()
 
-def register_builtin_func(
-    cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-) -> Any:
-    assert op not in cls._builtin_func_map
-    if op_func is None:  # when used as a decorator
-        return functools.partial(cls.register_builtin_func, op)
-    return cls._builtin_func_map.setdefault(op, op_func)
+    @classmethod
+    def register_builtin_func(
+        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Any:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)
+        return cls._builtin_func_map.setdefault(op, op_func)
 
-
-def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Any:
-    return cls._builtin_func_map.get(func, NotImplemented)
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Any:
+        return cls._builtin_func_map.get(func, NotImplemented)

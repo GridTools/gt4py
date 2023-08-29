@@ -25,6 +25,7 @@ from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
+from gt4py.next.common import FieldBuiltinFuncRegistry
 from gt4py.next.ffront import fbuiltins
 
 
@@ -80,9 +81,8 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
-@common.enable_builtin_func_registry
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
+class _BaseNdArrayField(common.FieldABC[common.DimsT, core_defs.ScalarT], FieldBuiltinFuncRegistry):
     """
     Shared field implementation for NumPy-like fields.
 
