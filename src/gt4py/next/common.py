@@ -91,17 +91,6 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def from_unit_range_like(cls, r: UnitRangeLike) -> UnitRange:
-        assert is_unit_range_like(r)
-        if isinstance(r, UnitRange):
-            return r
-        if isinstance(r, range) and r.step == 1:
-            return cls(r.start, r.stop)
-        if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
-            return cls(r[0], r[1])
-        raise RuntimeError("Unreachable")
-
-    @classmethod
     def infinity(cls) -> UnitRange:
         return cls(Infinity.negative(), Infinity.positive())
 
@@ -145,6 +134,17 @@ class UnitRange(Sequence[int], Set[int]):
             return UnitRange(start, stop)
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
+
+
+def unit_range(r: UnitRangeLike) -> UnitRange:
+    assert is_unit_range_like(r)
+    if isinstance(r, UnitRange):
+        return r
+    if isinstance(r, range) and r.step == 1:
+        return UnitRange(r.start, r.stop)
+    if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
+        return UnitRange(r[0], r[1])
+    raise RuntimeError("Unreachable")
 
 
 IntIndex: TypeAlias = int | np.integer
@@ -211,8 +211,8 @@ def is_domain_like(v: Any) -> TypeGuard[DomainLike]:
     )
 
 
-def to_named_range(v: tuple[Dimension, UnitRangeLike]) -> NamedRange:
-    return (v[0], UnitRange.from_unit_range_like(v[1]))
+def named_range(v: tuple[Dimension, UnitRangeLike]) -> NamedRange:
+    return (v[0], unit_range(v[1]))
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -251,25 +251,6 @@ class Domain(Sequence[NamedRange]):
 
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
-
-    @classmethod
-    def from_domain_like(cls, domain_like: DomainLike) -> Domain:
-        assert is_domain_like(domain_like)
-        if isinstance(domain_like, Domain):
-            return domain_like
-        if isinstance(domain_like, Sequence) and all(
-            isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
-            for e in domain_like
-        ):
-            return cls(*tuple(to_named_range(d) for d in domain_like))
-        if isinstance(domain_like, Mapping) and all(
-            isinstance(d, Dimension) and is_unit_range_like(r) for d, r in domain_like.items()
-        ):
-            return cls(
-                dims=tuple(domain_like.keys()),
-                ranges=tuple(UnitRange.from_unit_range_like(r) for r in domain_like.values()),
-            )
-        raise RuntimeError("Unreachable")
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -312,6 +293,25 @@ class Domain(Sequence[NamedRange]):
             )
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+
+def domain(domain_like: DomainLike) -> Domain:
+    assert is_domain_like(domain_like)
+    if isinstance(domain_like, Domain):
+        return domain_like
+    if isinstance(domain_like, Sequence) and all(
+        isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
+        for e in domain_like
+    ):
+        return Domain(*tuple(named_range(d) for d in domain_like))
+    if isinstance(domain_like, Mapping) and all(
+        isinstance(d, Dimension) and is_unit_range_like(r) for d, r in domain_like.items()
+    ):
+        return Domain(
+            dims=tuple(domain_like.keys()),
+            ranges=tuple(unit_range(r) for r in domain_like.values()),
+        )
+    raise RuntimeError("Unreachable")
 
 
 def _broadcast_ranges(

@@ -117,11 +117,11 @@ K = common.Dimension("K")
     ],
 )
 def test_sub_domain(domain, index, expected):
-    domain = common.Domain.from_domain_like(domain)
+    domain = common.domain(domain)
     if expected is IndexError:
         with pytest.raises(embedded_exceptions.IndexOutOfBounds):
             sub_domain(domain, index)
     else:
-        expected = common.Domain.from_domain_like(expected)
+        expected = common.domain(expected)
         result = sub_domain(domain, index)
         assert result == expected

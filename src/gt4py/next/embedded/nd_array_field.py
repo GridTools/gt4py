@@ -165,7 +165,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         domain: common.DomainLike,
         dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
     ) -> _BaseNdArrayField:
-        domain = common.Domain.from_domain_like(domain)
+        domain = common.domain(domain)
         xp = cls.array_ns
 
         xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
