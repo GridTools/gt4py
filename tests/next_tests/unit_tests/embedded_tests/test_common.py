@@ -18,6 +18,7 @@ import pytest
 
 from gt4py.next import common
 from gt4py.next.common import UnitRange
+from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import _slice_range, sub_domain
 
 
@@ -47,15 +48,17 @@ K = common.Dimension("K")
         ([(I, (-2, 3))], (I, 1), []),
         ([(I, (-2, 3))], (I, UnitRange(2, 3)), [(I, (2, 3))]),
         ([(I, (-2, 3))], -5, []),
-        # ([(I, (-2, 3))], -6, IndexError),
-        # ([(I, (-2, 3))], slice(-6, -7), IndexError),
+        ([(I, (-2, 3))], -6, IndexError),
+        ([(I, (-2, 3))], slice(-7, -6), IndexError),
+        ([(I, (-2, 3))], slice(-6, -7), IndexError),
         ([(I, (-2, 3))], 4, []),
-        # ([(I, (-2, 3))], 5, IndexError),
-        # ([(I, (-2, 3))], slice(4, 5), IndexError),
-        # ([(I, (-2, 3))], (I, -3), IndexError),
-        # ([(I, (-2, 3))], (I, UnitRange(-3, -2)), IndexError),
-        # ([(I, (-2, 3))], (I, 3), IndexError),
-        # ([(I, (-2, 3))], (I, UnitRange(3, 4)), IndexError),
+        ([(I, (-2, 3))], 5, IndexError),
+        ([(I, (-2, 3))], slice(4, 5), [(I, (2, 3))]),
+        ([(I, (-2, 3))], slice(5, 6), IndexError),
+        ([(I, (-2, 3))], (I, -3), IndexError),
+        ([(I, (-2, 3))], (I, UnitRange(-3, -2)), IndexError),
+        ([(I, (-2, 3))], (I, 3), IndexError),
+        ([(I, (-2, 3))], (I, UnitRange(3, 4)), IndexError),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             2,
@@ -116,7 +119,7 @@ K = common.Dimension("K")
 def test_sub_domain(domain, index, expected):
     domain = common.Domain.from_domain_like(domain)
     if expected is IndexError:
-        with pytest.raises(IndexError):
+        with pytest.raises(embedded_exceptions.IndexOutOfBounds):
             sub_domain(domain, index)
     else:
         expected = common.Domain.from_domain_like(expected)

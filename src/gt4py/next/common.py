@@ -151,11 +151,10 @@ IntIndex: TypeAlias = int | np.integer
 DomainRange: TypeAlias = UnitRange | IntIndex
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
+AnyIndex: TypeAlias = IntIndex | NamedRange | NamedIndex | slice | EllipsisType
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 BufferSlice: TypeAlias = tuple[slice | IntIndex | EllipsisType, ...]
-FieldSlice: TypeAlias = (
-    DomainSlice | BufferSlice | slice | IntIndex | EllipsisType | NamedRange | NamedIndex
-)
+FieldSlice: TypeAlias = DomainSlice | BufferSlice | AnyIndex
 UnitRangeLike: TypeAlias = UnitRange | range | tuple[int, int]
 DomainLike: TypeAlias = (
     Sequence[tuple[Dimension, UnitRangeLike]] | Mapping[Dimension, UnitRangeLike]
