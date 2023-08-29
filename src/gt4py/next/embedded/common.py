@@ -16,6 +16,8 @@ import itertools
 from types import EllipsisType
 from typing import Any, Optional, Sequence, cast
 
+import numpy as np
+
 from gt4py.next import common
 
 
@@ -120,3 +122,25 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
+
+
+def _compute_new_domain_info(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> tuple[Sequence[common.Dimension], Sequence[common.UnitRange], Sequence[Optional[slice]]]:
+    domain_slice = []
+    new_domain_dims = []
+    new_domain_ranges = []
+
+    for dim in new_dimensions:
+        if (pos := _find_index_of_dim(dim, field.domain)) is not None:
+            domain_slice.append(slice(None))
+            new_domain_dims.append(dim)
+            new_domain_ranges.append(field.domain[pos][1])
+        else:
+            domain_slice.append(np.newaxis)
+            new_domain_dims.append(dim)
+            new_domain_ranges.append(
+                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
+            )
+
+    return new_domain_dims, new_domain_ranges, domain_slice

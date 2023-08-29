@@ -359,20 +359,9 @@ if jnp:
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
-    domain_slice: list[slice | None] = []
-    new_domain_dims = []
-    new_domain_ranges = []
-    for dim in new_dimensions:
-        if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
-            domain_slice.append(slice(None))
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(field.domain[pos][1])
-        else:
-            domain_slice.append(np.newaxis)
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(
-                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
-            )
+    new_domain_dims, new_domain_ranges, domain_slice = embedded_common._compute_new_domain_info(
+        field, new_dimensions
+    )
     return common.field(
         field.ndarray[tuple(domain_slice)],
         domain=common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),

@@ -15,27 +15,18 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
-from types import EllipsisType
-from typing import Callable, ClassVar, Optional, Sequence, cast
+from typing import Any, Callable
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Infinity
-from gt4py.next.embedded import nd_array_field
-from gt4py.next.embedded.nd_array_field import (
-    _P,
-    _R,
-    _broadcast,
-    _get_slices_from_domain_slice,
-)
-from gt4py.next.embedded import common as embedded_common
-from gt4py.next.ffront import fbuiltins
+from gt4py.next.embedded import common as embedded_common, nd_array_field
+from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
 
-def cf_operand_adapter(method):
+def cf_operand_adapter(method: Callable):
     def wrapper(self, other):
         if isinstance(other, common.Field):
             new = other
@@ -46,115 +37,21 @@ def cf_operand_adapter(method):
     return wrapper
 
 
-def _constant_field_broadcast(
-    cf: ConstantField, new_dimensions: tuple[common.Dimension, ...]
-) -> ConstantField:
-    domain_slice: list[slice | None] = []
-    new_domain_dims = []
-    new_domain_ranges = []
-    for dim in new_dimensions:
-        if (pos := embedded_common._find_index_of_dim(dim, cf.domain)) is not None:
-            domain_slice.append(slice(None))
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(cf.domain[pos][1])
-        else:
-            domain_slice.append(np.newaxis)
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(
-                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
-            )
-    return ConstantField(
-        cf.value,
-        common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
-    )
-
-
 @dataclasses.dataclass(frozen=True)
-class ConstantField(common.MutableField[common.DimsT, core_defs.ScalarT]):
+class ConstantField(common.Field[common.DimsT, core_defs.ScalarT]):
     value: core_defs.ScalarT
-    _domain: Optional[common.Domain] = dataclasses.field(default=common.Domain((), ()))
+    _domain: common.Domain = dataclasses.field(default=common.Domain((), ()))
 
-    __setitem__ = None
+    def _has_empty_domain(self) -> bool:
+        return len(self._domain) < 1
 
-    def remap(self, index_field: common.Field) -> common.Field:
-        raise NotImplementedError()
+    def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+        if self._has_empty_domain():
+            raise IndexError("Cannot slice ConstantField without a Domain.")
+        new_domain = embedded_common.sub_domain(self.domain, index)
+        return self.__class__(self.value, new_domain)
 
-    def __getitem__(
-        self, index: common.Domain | Sequence[common.NamedRange]
-    ) -> "ConstantField" | core_defs.ScalarT:
-        if not self._domain:
-            raise IndexError("Cannot slice ConstantField without domain.")
-
-        if (
-            not isinstance(index, tuple)
-            and not common.is_domain_slice(index)
-            or common.is_named_index(index)
-            or common.is_named_range(index)
-        ):
-            index = cast(common.FieldSlice, (index,))
-
-        if common.is_domain_slice(index):
-            return self._getitem_absolute_slice(index)
-
-        assert isinstance(index, tuple)
-        if all(isinstance(idx, (slice, int)) or idx is Ellipsis for idx in index):
-            return self._getitem_relative_slice(index)
-
-        raise IndexError(f"Unsupported index type: {index}")
-
-    def _getitem_absolute_slice(
-        self, index: common.DomainSlice
-    ) -> ConstantField | core_defs.ScalarT:
-        slices = _get_slices_from_domain_slice(self.domain, index)
-        new_ranges = []
-        new_dims = []
-        new = self.ndarray[slices]
-
-        for i, dim in enumerate(self.domain.dims):
-            if (pos := embedded_common._find_index_of_dim(dim, index)) is not None:
-                index_or_range = index[pos][1]
-                if isinstance(index_or_range, common.UnitRange):
-                    new_ranges.append(index_or_range)
-                    new_dims.append(dim)
-            else:
-                # dimension not mentioned in slice
-                new_ranges.append(self.domain.ranges[i])
-                new_dims.append(dim)
-
-        new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-
-        if len(new_domain) == 0:
-            assert core_defs.is_scalar_type(new)
-            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__(new, new_domain)
-
-    def _getitem_relative_slice(
-        self, indices: tuple[slice | int | EllipsisType, ...]
-    ) -> ConstantField | core_defs.ScalarT:
-        new = self.ndarray[indices]
-        new_dims = []
-        new_ranges = []
-
-        for (dim, rng), idx in itertools.zip_longest(
-            # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-            self.domain,
-            embedded_common._expand_ellipsis(indices, len(self.domain)),
-            fillvalue=slice(None),
-        ):
-            if isinstance(idx, slice):
-                new_dims.append(dim)
-                new_ranges.append(embedded_common._slice_range(rng, idx))
-            else:
-                assert isinstance(idx, int)  # not in new_domain
-
-        new_domain = common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
-
-        if len(new_domain) == 0:
-            assert core_defs.is_scalar_type(new), new
-            return new  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__(new, new_domain)
+    __getitem__ = restrict
 
     @property
     def domain(self) -> common.Domain:
@@ -162,19 +59,14 @@ class ConstantField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        return type(self.value)
-
-    @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        return type(self.value)
+        return core_defs.dtype(type(self.value))
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        if len(self._domain) < 1:
+        if self._has_empty_domain():
             raise ValueError("Cannot get ndarray for ConstantField without Domain.")
 
         shape = []
-
         for _, rng in self.domain:
             if Infinity.positive() in (abs(rng.start), abs(rng.stop)):
                 shape.append(1)
@@ -183,31 +75,33 @@ class ConstantField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
         return np.full(tuple(shape), self.value)
 
-    restrict = __getitem__
-
-    def __call__(self, *args, **kwargs) -> common.Field:
-        raise NotImplementedError()
-
     def _binary_op_wrapper(self, other: ConstantField | common.Field, op: Callable):
         if isinstance(other, nd_array_field._BaseNdArrayField):
             if len(self.domain) < 1:
-                self_broadcasted = _constant_field_broadcast(self, other.domain.dims)
-                broadcasted_ndarray = self_broadcasted.ndarray
-                new_data = op(broadcasted_ndarray, other.ndarray)
-                return other.__class__.from_array(new_data, domain=other.domain)
+                self_broadcasted = self._broadcast(other.domain.dims)
+                new_data = op(self_broadcasted.ndarray, other.ndarray)
             else:
                 domain_intersection = self.domain & other.domain
-                self_broadcasted = _constant_field_broadcast(self, domain_intersection.dims)
-
-                other_broadcasted = _broadcast(other, domain_intersection.dims)
+                self_broadcasted = self._broadcast(domain_intersection.dims)
+                other_broadcasted = nd_array_field._broadcast(other, domain_intersection.dims)
                 other_slices = _get_slices_from_domain_slice(
                     other_broadcasted.domain, domain_intersection
                 )
-
                 new_data = op(self_broadcasted.ndarray, other_broadcasted.ndarray[other_slices])
-                return other.__class__.from_array(new_data, domain=domain_intersection)
+            return other.__class__.from_array(
+                new_data, domain=domain_intersection if len(self.domain) > 0 else other.domain
+            )
 
         return self.__class__(op(self.value, other.value))
+
+    def _broadcast(self, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+        new_domain_dims, new_domain_ranges, _ = embedded_common._compute_new_domain_info(
+            self, new_dimensions
+        )
+        return self.__class__(
+            self.value,
+            common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
+        )
 
     @cf_operand_adapter
     def __add__(self, other: ConstantField):
@@ -258,3 +152,9 @@ class ConstantField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     def __neg__(self):
         return self.__class__(-self.value)
+
+    def remap(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError()

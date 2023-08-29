@@ -17,6 +17,7 @@ import operator
 import numpy as np
 import pytest
 
+from gt4py._core.definitions import float64
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import constant_field
@@ -65,7 +66,7 @@ def test_binary_operations_constant_field(op_func, expected_result):
 def test_constant_field_binary_op_float(cf1, cf2, expected):
     res = cf1 + cf2
     assert res.value == expected
-    assert res.dtype == float
+    assert res.dtype.dtype == float64
 
 
 @pytest.mark.parametrize(
@@ -156,7 +157,7 @@ def test_constant_field_binary_op_with_field_intersection(
 )
 def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
-    field = constant_field.ConstantField(np.ones((10, 10)), domain)
+    field = constant_field.ConstantField(10, domain)
     indexed_field = field[index]
 
     assert isinstance(indexed_field, constant_field.ConstantField)
@@ -203,20 +204,9 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     domain = common.Domain(
         dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
-    field = constant_field.ConstantField(np.ones((5, 10, 15)), domain)
+    field = constant_field.ConstantField(10, domain)
     indexed_field = field[domain_slice]
 
     assert isinstance(indexed_field, constant_field.ConstantField)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
-
-
-def test_absolute_indexing_value_return():
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
-    field = constant_field.ConstantField(np.ones((10, 10), dtype=np.int32), domain)
-
-    named_index = ((IDim, 2), (JDim, 4))
-    value = field[named_index]
-
-    assert isinstance(value, np.int32)
-    assert value == 1
