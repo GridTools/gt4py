@@ -29,11 +29,9 @@ from gt4py.next.embedded.nd_array_field import (
     _P,
     _R,
     _broadcast,
-    _expand_ellipsis,
-    _find_index_of_dim,
     _get_slices_from_domain_slice,
-    _slice_range,
 )
+from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
 
 
@@ -55,7 +53,7 @@ def _constant_field_broadcast(
     new_domain_dims = []
     new_domain_ranges = []
     for dim in new_dimensions:
-        if (pos := common._find_index_of_dim(dim, cf.domain)) is not None:
+        if (pos := embedded_common._find_index_of_dim(dim, cf.domain)) is not None:
             domain_slice.append(slice(None))
             new_domain_dims.append(dim)
             new_domain_ranges.append(cf.domain[pos][1])
@@ -72,18 +70,11 @@ def _constant_field_broadcast(
 
 
 @dataclasses.dataclass(frozen=True)
-class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
+class ConstantField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     value: core_defs.ScalarT
     _domain: Optional[common.Domain] = dataclasses.field(default=common.Domain((), ()))
 
-    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {
-        fbuiltins.broadcast,
-        _constant_field_broadcast,
-    }
-
-    @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
+    __setitem__ = None
 
     def remap(self, index_field: common.Field) -> common.Field:
         raise NotImplementedError()
@@ -120,7 +111,7 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         new = self.ndarray[slices]
 
         for i, dim in enumerate(self.domain.dims):
-            if (pos := _find_index_of_dim(dim, index)) is not None:
+            if (pos := embedded_common._find_index_of_dim(dim, index)) is not None:
                 index_or_range = index[pos][1]
                 if isinstance(index_or_range, common.UnitRange):
                     new_ranges.append(index_or_range)
@@ -148,12 +139,12 @@ class ConstantField(common.FieldABC[common.DimsT, core_defs.ScalarT]):
         for (dim, rng), idx in itertools.zip_longest(
             # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
             self.domain,
-            _expand_ellipsis(indices, len(self.domain)),
+            embedded_common._expand_ellipsis(indices, len(self.domain)),
             fillvalue=slice(None),
         ):
             if isinstance(idx, slice):
                 new_dims.append(dim)
-                new_ranges.append(_slice_range(rng, idx))
+                new_ranges.append(embedded_common._slice_range(rng, idx))
             else:
                 assert isinstance(idx, int)  # not in new_domain
 
