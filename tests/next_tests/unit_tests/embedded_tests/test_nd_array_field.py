@@ -22,7 +22,7 @@ import pytest
 
 from gt4py.next import Dimension, common
 from gt4py.next.common import Domain, UnitRange
-from gt4py.next.embedded import nd_array_field
+from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 
@@ -336,7 +336,7 @@ def test_get_slices_invalid_type():
             (JDim, KDim),
             (2, 15),
         ),
-        ((IDim, 1), (JDim, KDim), (10, 15)),
+        ((IDim, 5), (JDim, KDim), (10, 15)),
         ((IDim, UnitRange(5, 7)), (IDim, JDim, KDim), (2, 10, 15)),
     ],
 )
@@ -354,13 +354,13 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
 
 def test_absolute_indexing_value_return():
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
-    field = common.field(np.ones((10, 10), dtype=np.int32), domain=domain)
+    field = common.field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
-    named_index = ((IDim, 2), (JDim, 4))
+    named_index = ((IDim, 12), (JDim, 6))
     value = field[named_index]
 
     assert isinstance(value, np.int32)
-    assert value == 1
+    assert value == 21
 
 
 @pytest.mark.parametrize(
@@ -472,7 +472,7 @@ def test_relative_indexing_out_of_bounds(lazy_slice):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common.field(np.ones((10, 10)), domain=domain)
 
-    with pytest.raises(IndexError):
+    with pytest.raises((embedded_exceptions.IndexOutOfBounds, IndexError)):
         lazy_slice(field)
 
 
