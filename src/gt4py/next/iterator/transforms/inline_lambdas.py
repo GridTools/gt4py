@@ -17,18 +17,9 @@ from typing import Optional
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
-
-
-def _is_applied_lift(arg: ir.Node) -> bool:
-    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, ir.FunCall)
-        and isinstance(arg.fun, ir.FunCall)
-        and isinstance(arg.fun.fun, ir.SymRef)
-        and arg.fun.fun.id == "lift"
-    )
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
@@ -59,13 +50,13 @@ def inline_lambda(  # noqa: C901  # see todo above
     # inline lifts, i.e. `lift(λ(...) → ...)(...)`
     if force_inline_lift_args:
         for i, arg in enumerate(node.args):
-            if _is_applied_lift(arg):
+            if is_applied_lift(arg):
                 eligible_params[i] = True
 
     # inline trivial lifts, i.e. `lift(λ() → 1)()`
     if force_inline_trivial_lift_args:
         for i, arg in enumerate(node.args):
-            if _is_applied_lift(arg) and len(arg.args) == 0:  # type: ignore[attr-defined]
+            if is_applied_lift(arg) and len(arg.args) == 0:
                 eligible_params[i] = True
 
     if node.fun.params and not any(eligible_params):

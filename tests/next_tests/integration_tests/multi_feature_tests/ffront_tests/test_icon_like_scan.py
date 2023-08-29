@@ -235,7 +235,10 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
-        pytest.xfail("Needs implementation of scan projector.")
+        pytest.xfail(
+            "Needs implementation of scan projector. Breaks in type inference as executed"
+            "again after CollapseTuple."
+        )
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
     if fieldview_backend == dace_iterator.run_dace_iterator:

@@ -142,6 +142,76 @@ def test_split_closures():
     assert actual.fencil == expected
 
 
+def test_split_closures_lifted_scan():
+    UIDs.reset_sequence()
+
+    testee = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("inp"), im.sym("out")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("a")(
+                    im.call(
+                        im.call("scan")(
+                            im.lambda_("carry", "b")(im.plus("carry", im.deref("b"))),
+                            True,
+                            im.literal_from_value(0.0),
+                        )
+                    )(
+                        im.lift(
+                            im.call("scan")(
+                                im.lambda_("carry", "c")(im.plus("carry", im.deref("c"))),
+                                False,
+                                im.literal_from_value(0.0),
+                            )
+                        )("a")
+                    )
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp")],
+            )
+        ],
+    )
+
+    expected = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("inp"), im.sym("out"), im.sym("_tmp_1"), im.sym("_gtmp_auto_domain")],
+        closures=[
+            ir.StencilClosure(
+                domain=AUTO_DOMAIN,
+                stencil=im.call("scan")(
+                    im.lambda_("carry", "c")(im.plus("carry", im.deref("c"))),
+                    False,
+                    im.literal_from_value(0.0),
+                ),
+                output=im.ref("_tmp_1"),
+                inputs=[im.ref("inp")],
+            ),
+            ir.StencilClosure(
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                stencil=im.lambda_("a", "_tmp_1")(
+                    im.call(
+                        im.call("scan")(
+                            im.lambda_("carry", "b")(im.plus("carry", im.deref("b"))),
+                            True,
+                            im.literal_from_value(0.0),
+                        )
+                    )("_tmp_1")
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp"), im.ref("_tmp_1")],
+            ),
+        ],
+    )
+
+    actual = split_closures(testee, offset_provider={})
+    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.fencil == expected
+
+
 def test_update_cartesian_domains():
     testee = FencilWithTemporaries(
         fencil=ir.FencilDefinition(

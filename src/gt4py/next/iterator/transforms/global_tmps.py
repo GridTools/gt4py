@@ -24,6 +24,7 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir, ir_makers as im, type_inference
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
+from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
@@ -119,9 +120,11 @@ PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # typ
 
 
 # Main implementation
-def canonicalize_applied_lift(closure_params: list[str], node: ir.Node) -> ir.Node:
+def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir.FunCall:
     """
     Canonicalize applied lift expressions.
+
+    Transform lift such that the arguments to the applied lift are only symbols.
 
     >>> expr = im.lift(im.lambda_("a")(im.deref("a")))(im.lift("deref")("inp"))
     >>> print(expr)
@@ -147,22 +150,40 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.Node) -> ir.No
 
 def temporary_extraction_predicate(expr: ir.Node, num_occurences: int) -> bool:
     """Determine if `expr` is an applied lift that should be extracted as a temporary."""
-    if not (
-        isinstance(expr, ir.FunCall)
-        and isinstance(expr.fun, ir.FunCall)
-        and expr.fun.fun == ir.SymRef(id="lift")
-    ):
+    if not is_applied_lift(expr):
         return False
     # do not extract when the result is a list as we can not create temporaries for
     # these stencils
     if isinstance(expr.annex.type.dtype, type_inference.List):
         return False
-    stencil = expr.fun.args[0]
+    stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
     used_symbols = collect_symbol_refs(stencil)
     # do not extract when the stencil is capturing
     if used_symbols:
         return False
     return True
+
+
+def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
+    """
+    Create a mapping from the closures parameters to the closure arguments.
+
+    E.g. for the closure `out ← (λ(param) → ...)(arg) @ u⟨ ... ⟩;` we get a mapping from `param`
+    to `arg`. In case the stencil is a scan, a mapping from closure inputs to scan pass (i.e. first
+    arg is ignored) is returned.
+    """
+    is_scan = isinstance(closure.stencil, ir.FunCall) and closure.stencil.fun == im.ref("scan")
+
+    if is_scan:
+        stencil = closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
+        return {
+            param.id: arg for param, arg in zip(stencil.params[1:], closure.inputs, strict=True)
+        }
+    else:
+        assert isinstance(closure.stencil, ir.Lambda)
+        return {
+            param.id: arg for param, arg in zip(closure.stencil.params, closure.inputs, strict=True)
+        }
 
 
 def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemporaries:
@@ -228,19 +249,9 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                     # in post-order of the tree)
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
-                    # create a mapping from the closures parameters to the closure arguments, e.g.
-                    # for the closure `out ← (λ(param) → ...)(arg) @ u⟨ ... ⟩;` we get a mapping
-                    # from `param` to `arg`
-                    stencil_arg_map = {
-                        param.id: arg
-                        for param, arg in zip(
-                            current_closure_stencil.params
-                            if not is_scan
-                            else current_closure_stencil.params[1:],
-                            current_closure.inputs,
-                            strict=True,
-                        )
-                    }
+                    # create a mapping from the closures parameters to the closure arguments
+                    closure_param_arg_mapping = _closure_parameter_argument_mapping(current_closure)
+
                     stencil: ir.Node = lift_expr.fun.args[0]  # usually an ir.Lambda or scan
 
                     # allocate a new temporary
@@ -253,7 +264,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                             domain=AUTO_DOMAIN,
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
-                            inputs=[stencil_arg_map[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
                         )
                     )
 
@@ -353,7 +364,7 @@ class SymbolicRange:
     start: ir.Expr
     stop: ir.Expr
 
-    def translate(self, distance):
+    def translate(self, distance: int) -> "SymbolicRange":
         return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
 
 
@@ -391,6 +402,24 @@ class SymbolicDomain:
         )
 
 
+def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
+    """Return the (set) union of a list of domains."""
+    new_domain_ranges = {}
+    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
+    assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
+    for dim in domains[0].ranges.keys():
+        start = functools.reduce(
+            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            [domain.ranges[dim].start for domain in domains],
+        )
+        stop = functools.reduce(
+            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            [domain.ranges[dim].stop for domain in domains],
+        )
+        new_domain_ranges[dim] = SymbolicRange(start, stop)
+    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
+
+
 def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
@@ -422,6 +451,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
 
         local_shifts = TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
+            assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
                 [SymbolicDomain.from_expr(domains[param])] if param in domains else []
             )
@@ -454,19 +484,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
 
             # compute the bounds of all consumed domains
             if consumed_domains:
-                param_domain_ranges = {}
-                for dim in consumed_domains[0].ranges.keys():
-                    start = functools.reduce(
-                        lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
-                        [consumed_domain.ranges[dim].start for consumed_domain in consumed_domains],
-                    )
-                    stop = functools.reduce(
-                        lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
-                        [consumed_domain.ranges[dim].stop for consumed_domain in consumed_domains],
-                    )
-                    param_domain_ranges[dim] = SymbolicRange(start, stop)
-                assert domain.fun in [im.ref("unstructured_domain"), im.ref("cartesian_domain")]
-                domains[param] = SymbolicDomain(domain.fun.id, param_domain_ranges).as_expr()  # type: ignore[attr-defined]  # ensured by assert above
+                domains[param] = domain_union(consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(

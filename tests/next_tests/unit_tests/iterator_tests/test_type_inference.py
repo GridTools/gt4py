@@ -24,8 +24,10 @@ def test_unsatisfiable_constraints():
 
     testee = im.lambda_(a, b)(im.plus("a", "b"))
 
-    # TODO(tehrengruber): For whatever reason the ordering in the error message is not
-    #  deterministic. Ignoring for now, as we want to refactor the type inference anyway.
+    # The type inference uses a set to store the constraints. Since the TypeVar indices use a
+    # global counter the constraint resolution order depends on previous runs of the inference.
+    # To avoid false positives we just ignore which way the constraints have been resolved.
+    # (The previous description has never been verified.)
     expected_error = [
         (
             "Type inference failed: Can not satisfy constraints:\n"
@@ -749,9 +751,6 @@ def test_stencil_closure():
             dtype=ti.TypeVar(idx=0),
             size=ti.Column(),
             current_loc=ti.ANYWHERE,
-            # TODO: remove comment below
-            # TODO(tehrengruber): the TypeVar here should match the defined_loc of the input, but
-            #  we are currently not enforcing it as it breaks for scalar fencil arguments
             defined_loc=ti.TypeVar(idx=1),
         ),
         inputs=ti.Tuple.from_elems(

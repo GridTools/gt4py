@@ -87,7 +87,7 @@ def test_hdiff(hdiff_reference, program_processor_no_dace_exec, lift_mode):
         from gt4py.next.iterator import transforms
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:
-            pytest.xfail("there is an issue with temporaries that crashes the application")
+            pytest.xfail("Temporaries are not compatible with origins.")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
