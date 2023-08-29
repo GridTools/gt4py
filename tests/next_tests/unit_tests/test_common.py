@@ -346,5 +346,3 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
-        assert exc_info.match(expected_error_msg)
-        assert exc_info.match(expected_error_msg)
