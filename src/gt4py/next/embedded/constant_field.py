@@ -55,7 +55,7 @@ def _constant_field_broadcast(
     new_domain_dims = []
     new_domain_ranges = []
     for dim in new_dimensions:
-        if (pos := nd_array_field._find_index_of_dim(dim, cf.domain)) is not None:
+        if (pos := common._find_index_of_dim(dim, cf.domain)) is not None:
             domain_slice.append(slice(None))
             new_domain_dims.append(dim)
             new_domain_ranges.append(cf.domain[pos][1])

@@ -38,14 +38,14 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeVar,
     extended_runtime_checkable,
-    final,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
 
 
-DimT = TypeVar("DimT", bound="Dimension")
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+DimsT = TypeVar(
+    "DimsT", covariant=True
+)  # bound to `Sequence[Dimension]` if instance of Dimension would be a type
 
 
 class Infinity(int):
@@ -136,19 +136,44 @@ class UnitRange(Sequence[int], Set[int]):
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
 
-DomainRange: TypeAlias = UnitRange | int
+IntIndex: TypeAlias = int | np.integer
+DomainRange: TypeAlias = UnitRange | IntIndex
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
-NamedIndex: TypeAlias = tuple[Dimension, int]
+NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
+BufferSlice: TypeAlias = tuple[slice | IntIndex | EllipsisType, ...]
 FieldSlice: TypeAlias = (
-    DomainSlice
-    | tuple[slice | int | EllipsisType, ...]
-    | slice
-    | int
-    | EllipsisType
-    | NamedRange
-    | NamedIndex
+    DomainSlice | BufferSlice | slice | IntIndex | EllipsisType | NamedRange | NamedIndex
 )
+
+
+def is_int_index(p: Any) -> TypeGuard[IntIndex]:
+    return isinstance(p, (int, np.integer))
+
+
+def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+    return (
+        isinstance(v, tuple)
+        and len(v) == 2
+        and isinstance(v[0], Dimension)
+        and isinstance(v[1], UnitRange)
+    )
+
+
+def is_named_index(v: Any) -> TypeGuard[NamedRange]:
+    return (
+        isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
+    )
+
+
+def is_domain_slice(v: Any) -> TypeGuard[DomainSlice]:
+    return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
+
+
+def is_buffer_slice(v: Any) -> TypeGuard[BufferSlice]:
+    return isinstance(v, tuple) and all(
+        isinstance(e, slice) or is_int_index(e) or e is Ellipsis for e in v
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -212,8 +237,7 @@ def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
-        for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.infinity() for d in broadcast_dims
     )
 
 
@@ -229,8 +253,22 @@ if TYPE_CHECKING:
             ...
 
 
+class NextGTDimsInterface(Protocol):
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+
+    The dimension names are objects of type :class:`Dimension`, in contrast to :py:mod:`gt4py.cartesian`,
+    where the labels are `str` s with implied semantics, see :py:class:`~gt4py._core.definitions.GTDimsInterface` .
+    """
+
+    # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
+    @property
+    def __gt_dims__(self) -> tuple[Dimension, ...]:
+        ...
+
+
 @extended_runtime_checkable
-class Field(Protocol[DimsT, core_defs.ScalarT]):
+class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -242,16 +280,11 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        ...
-
-    @property
     def ndarray(self) -> core_defs.NDArrayObject:
         ...
 
     def __str__(self) -> str:
-        codomain = self.value_type.__name__
-        return f"⟨{self.domain!s} → {codomain}⟩"
+        return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
     def remap(self, index_field: Field) -> Field:
@@ -325,20 +358,29 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
 
 def is_field(
     v: Any,
-) -> TypeGuard[Field]:  # this function is introduced to localize the `type: ignore``
+) -> TypeGuard[Field]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
     return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
-class FieldABC(Field[DimsT, core_defs.ScalarT]):
-    """Abstract base class for implementations of the :class:`Field` protocol."""
+@extended_runtime_checkable
+class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
+    @abc.abstractmethod
+    def __setitem__(self, index: FieldSlice, value: Field | core_defs.ScalarT) -> None:
+        ...
 
-    @final
-    def __setattr__(self, key, value) -> None:
-        raise TypeError("Immutable type")
 
-    @final
-    def __setitem__(self, key, value) -> None:
-        raise TypeError("Immutable type")
+def is_mutable_field(
+    v: Any,
+) -> TypeGuard[MutableField]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
+    return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 @functools.singledispatch
@@ -347,7 +389,7 @@ def field(
     /,
     *,
     domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-    value_type: Optional[type] = None,
+    dtype: Optional[core_defs.DType] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -467,17 +509,3 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
-
-
-def is_named_range(v: Any) -> TypeGuard[NamedRange]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], UnitRange)
-
-
-def is_named_index(v: Any) -> TypeGuard[NamedIndex]:
-    return isinstance(v, tuple) and isinstance(v[0], Dimension) and isinstance(v[1], int)
-
-
-def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
-    return isinstance(index, Sequence) and all(
-        is_named_range(idx) or is_named_index(idx) for idx in index
-    )
