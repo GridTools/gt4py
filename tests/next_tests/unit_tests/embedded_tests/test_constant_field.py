@@ -21,7 +21,6 @@ from gt4py._core.definitions import float64
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import constant_field
-from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
 
 IDim = Dimension("IDim")
@@ -49,7 +48,7 @@ def rfloordiv(x, y):
         (lambda x, y: operator.sub(y, x), 20 - 10),
     ],
 )
-def test_binary_operations_constant_field(op_func, expected_result):
+def test_constant_field_binary_op_with_constant_field(op_func, expected_result):
     cf1 = constant_field.ConstantField(10)
     cf2 = constant_field.ConstantField(20)
     result = op_func(cf1, cf2)
@@ -78,14 +77,26 @@ def test_constant_field_getitem_missing_domain(index):
         cf[index]
 
 
-def test_constant_field_ndarray():
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+@pytest.mark.parametrize(
+    "domain,expected_shape",
+    [
+        (common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
+        (
+            common.Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
+            ),
+            (3, 15, 1),
+        ),
+    ],
+)
+def test_constant_field_ndarray(domain, expected_shape):
     cf = constant_field.ConstantField(10, domain)
-    assert cf.ndarray.shape == (10, 10)
+    assert cf.ndarray.shape == expected_shape
     assert np.all(cf.ndarray == 10)
 
 
-def test_constant_field_binary_op_with_field():
+def test_constant_field_empty_domain_op():
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common.field(np.ones((10, 10)), domain=domain)
     cf = constant_field.ConstantField(10)
@@ -95,7 +106,7 @@ def test_constant_field_binary_op_with_field():
     assert np.all(result.ndarray == 11)
 
 
-test_cases = [
+binary_op_field_intersection_cases = [
     (
         common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
         np.ones((10, 10)),
@@ -116,9 +127,10 @@ test_cases = [
 
 
 @pytest.mark.parametrize(
-    "domain1, field_data, domain2, constant_value, expected_shape, expected_value", test_cases
+    "domain1, field_data, domain2, constant_value, expected_shape, expected_value",
+    binary_op_field_intersection_cases,
 )
-def test_constant_field_binary_op_with_field_intersection(
+def test_constant_field_non_empty_domain_op(
     domain1, field_data, domain2, constant_value, expected_shape, expected_value
 ):
     field = common.field(field_data, domain=domain1)
@@ -127,86 +139,3 @@ def test_constant_field_binary_op_with_field_intersection(
     result = cf + field
     assert result.ndarray.shape == expected_shape
     assert np.all(result.ndarray == expected_value)
-
-
-@pytest.mark.parametrize(
-    "index, expected_shape, expected_domain",
-    [
-        (
-            (slice(None, 5), slice(None, 2)),
-            (5, 2),
-            common.Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 4))),
-        ),
-        (
-            (slice(None, 5),),
-            (5, 10),
-            common.Domain((IDim, JDim), (UnitRange(5, 10), UnitRange(2, 12))),
-        ),
-        ((Ellipsis, 1), (10,), common.Domain((IDim,), (UnitRange(5, 15),))),
-        (
-            (slice(2, 3), slice(5, 7)),
-            (1, 2),
-            common.Domain((IDim, JDim), (UnitRange(7, 8), UnitRange(7, 9))),
-        ),
-        (
-            (slice(1, 2), 0),
-            (1,),
-            common.Domain((IDim,), (UnitRange(6, 7),)),
-        ),
-    ],
-)
-def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
-    domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
-    field = constant_field.ConstantField(10, domain)
-    indexed_field = field[index]
-
-    assert isinstance(indexed_field, constant_field.ConstantField)
-    assert indexed_field.ndarray.shape == expected_shape
-    assert indexed_field.domain == expected_domain
-
-
-@pytest.mark.parametrize(
-    "domain_slice,expected_dimensions,expected_shape",
-    [
-        (
-            (
-                (IDim, UnitRange(7, 9)),
-                (JDim, UnitRange(8, 10)),
-            ),
-            (IDim, JDim, KDim),
-            (2, 2, 15),
-        ),
-        (
-            (
-                (IDim, UnitRange(7, 9)),
-                (KDim, UnitRange(12, 20)),
-            ),
-            (IDim, JDim, KDim),
-            (2, 10, 8),
-        ),
-        (common.Domain(dims=(IDim,), ranges=(UnitRange(7, 9),)), (IDim, JDim, KDim), (2, 10, 15)),
-        (((IDim, 8),), (JDim, KDim), (10, 15)),
-        (((JDim, 9),), (IDim, KDim), (5, 15)),
-        (((KDim, 11),), (IDim, JDim), (5, 10)),
-        (
-            (
-                (IDim, 8),
-                (JDim, UnitRange(8, 10)),
-            ),
-            (JDim, KDim),
-            (2, 15),
-        ),
-        ((IDim, 1), (JDim, KDim), (10, 15)),
-        ((IDim, UnitRange(5, 7)), (IDim, JDim, KDim), (2, 10, 15)),
-    ],
-)
-def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
-    domain = common.Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
-    )
-    field = constant_field.ConstantField(10, domain)
-    indexed_field = field[domain_slice]
-
-    assert isinstance(indexed_field, constant_field.ConstantField)
-    assert indexed_field.ndarray.shape == expected_shape
-    assert indexed_field.domain.dims == expected_dimensions

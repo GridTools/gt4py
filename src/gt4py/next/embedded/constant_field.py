@@ -15,20 +15,20 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Callable
+from typing import Callable
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Infinity
-from gt4py.next.embedded import common as embedded_common, nd_array_field
+from gt4py.next.embedded import common as embedded_common, nd_array_field as nd
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
 
 def cf_operand_adapter(method: Callable):
     def wrapper(self, other):
-        if isinstance(other, common.Field):
+        if isinstance(other, (ConstantField, nd._BaseNdArrayField)):
             new = other
         elif isinstance(other, (int, float, complex)):
             new = ConstantField(other)
@@ -75,26 +75,31 @@ class ConstantField(common.Field[common.DimsT, core_defs.ScalarT]):
 
         return np.full(tuple(shape), self.value)
 
-    def _binary_op_wrapper(self, other: ConstantField | common.Field, op: Callable):
-        if isinstance(other, nd_array_field._BaseNdArrayField):
-            if len(self.domain) < 1:
-                self_broadcasted = self._broadcast(other.domain.dims)
-                new_data = op(self_broadcasted.ndarray, other.ndarray)
+    def _binary_op_wrapper(self, other: ConstantField | nd._BaseNdArrayField, op: Callable):
+        if isinstance(other, nd._BaseNdArrayField):
+            if self._has_empty_domain():
+                return self._handle_empty_domain_op(other, op)
             else:
-                domain_intersection = self.domain & other.domain
-                self_broadcasted = self._broadcast(domain_intersection.dims)
-                other_broadcasted = nd_array_field._broadcast(other, domain_intersection.dims)
-                other_slices = _get_slices_from_domain_slice(
-                    other_broadcasted.domain, domain_intersection
-                )
-                new_data = op(self_broadcasted.ndarray, other_broadcasted.ndarray[other_slices])
-            return other.__class__.from_array(
-                new_data, domain=domain_intersection if len(self.domain) > 0 else other.domain
-            )
+                return self._handle_non_empty_domain_op(other, op)
+        return self._handle_scalar_op(other, op)
 
+    def _handle_empty_domain_op(self, other: nd._BaseNdArrayField, op: Callable) -> nd._BaseNdArrayField:
+        self_broadcasted = self._broadcast(other.domain.dims)
+        new_data = op(self_broadcasted.ndarray, other.ndarray)
+        return other.__class__.from_array(new_data, domain=other.domain)
+
+    def _handle_non_empty_domain_op(self, other: nd._BaseNdArrayField, op: Callable) -> nd._BaseNdArrayField:
+        domain_intersection = self.domain & other.domain
+        self_broadcasted = self._broadcast(domain_intersection.dims)
+        other_broadcasted = nd._broadcast(other, domain_intersection.dims)
+        other_slices = _get_slices_from_domain_slice(other_broadcasted.domain, domain_intersection)
+        new_data = op(self_broadcasted.ndarray, other_broadcasted.ndarray[other_slices])
+        return other.__class__.from_array(new_data, domain=domain_intersection)
+
+    def _handle_scalar_op(self, other: ConstantField, op: Callable) -> ConstantField:
         return self.__class__(op(self.value, other.value))
 
-    def _broadcast(self, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+    def _broadcast(self, new_dimensions: tuple[common.Dimension, ...]) -> ConstantField:
         new_domain_dims, new_domain_ranges, _ = embedded_common._compute_new_domain_info(
             self, new_dimensions
         )

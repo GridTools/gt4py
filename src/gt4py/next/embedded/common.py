@@ -126,8 +126,8 @@ def _find_index_of_dim(
 
 def _compute_new_domain_info(
     field: common.Field, new_dimensions: tuple[common.Dimension, ...]
-) -> tuple[Sequence[common.Dimension], Sequence[common.UnitRange], Sequence[Optional[slice]]]:
-    domain_slice = []
+) -> tuple[list[common.Dimension], list[common.UnitRange], list[None | slice]]:
+    domain_slice: list[None | slice] = []
     new_domain_dims = []
     new_domain_ranges = []
 
