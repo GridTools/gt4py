@@ -488,6 +488,7 @@ class FieldBuiltinFuncRegistry:
     _builtin_func_map: ChainMap[fbuiltins.BuiltInFunction, Callable] = collections.ChainMap()
 
     def __init_subclass__(cls, **kwargs):
+        # might break in multiple inheritance (if multiple ancestors have `_builtin_func_map`)
         cls._builtin_func_map = cls._builtin_func_map.new_child()
 
     @classmethod
@@ -500,5 +501,5 @@ class FieldBuiltinFuncRegistry:
         return cls._builtin_func_map.setdefault(op, op_func)
 
     @classmethod
-    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Any:
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
