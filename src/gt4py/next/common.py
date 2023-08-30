@@ -153,7 +153,7 @@ def unit_range(r: UnitRangeLike) -> UnitRange:
         return UnitRange(r.start, r.stop)
     if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
         return UnitRange(r[0], r[1])
-    raise RuntimeError("Unreachable")
+    raise ValueError(f"`{r}` is not `UnitRangeLike`.")
 
 
 IntIndex: TypeAlias = int | np.integer
@@ -339,7 +339,7 @@ def domain(domain_like: DomainLike) -> Domain:
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),
         )
-    raise RuntimeError("Unreachable")
+    raise ValueError(f"`{domain_like}` is not `DomainLike`.")
 
 
 def _broadcast_ranges(
