@@ -142,4 +142,3 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
-    return None

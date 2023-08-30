@@ -442,4 +442,3 @@ def _compute_slice(
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
-        raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")

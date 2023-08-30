@@ -590,10 +590,3 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
-    return topologically_sorted_list
