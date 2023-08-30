@@ -777,13 +777,6 @@ def _make_tuple(
             return data
 
 
-def _axis_idx(axes: Sequence[common.Dimension], axis: Tag) -> Optional[int]:
-    for i, a in enumerate(axes):
-        if a.value == axis:
-            return i
-    return None
-
-
 @dataclasses.dataclass(frozen=True)
 class MDIterator:
     field: LocatedField | tuple[LocatedField | tuple, ...]  # arbitrary nesting
