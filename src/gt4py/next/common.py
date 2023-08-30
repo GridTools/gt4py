@@ -64,8 +64,11 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __str__(self):
+    def __repr__(self):
         return f"{type(self).__name__}.{self.name}"
+
+    def __str__(self):
+        return self.value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,8 +76,11 @@ class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
+    def __repr__(self):
+        return f'Dimension(value="{self.value}", kind={repr(self.kind)})'
+
     def __str__(self):
-        return f'Dimension(value="{self.value}", kind={self.kind})'
+        return f"{self.value}[{self.kind}]"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -134,6 +140,9 @@ class UnitRange(Sequence[int], Set[int]):
             return UnitRange(start, stop)
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
+
+    def __str__(self) -> str:
+        return f"({self.start}:{self.stop})"
 
 
 def unit_range(r: UnitRangeLike) -> UnitRange:
@@ -217,6 +226,8 @@ def named_range(v: tuple[Dimension, UnitRangeLike]) -> NamedRange:
 
 @dataclasses.dataclass(frozen=True, init=False)
 class Domain(Sequence[NamedRange]):
+    """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
+
     dims: tuple[Dimension, ...]
     ranges: tuple[UnitRange, ...]
 
@@ -294,8 +305,25 @@ class Domain(Sequence[NamedRange]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
+    def __str__(self) -> str:
+        return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+
 
 def domain(domain_like: DomainLike) -> Domain:
+    """
+    Construct `Domain` from `DomainLike` object.
+
+    Examples:
+    ---------
+    >>> I = Dimension("I")
+    >>> J = Dimension("J")
+
+    >>> domain(((I, (2, 4)), (J, (3, 5))))
+    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+
+    >>> domain({I: (2, 4), J: (3, 5)})
+    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    """
     assert is_domain_like(domain_like)
     if isinstance(domain_like, Domain):
         return domain_like
