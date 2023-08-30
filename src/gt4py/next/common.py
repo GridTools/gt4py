@@ -19,7 +19,7 @@ import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence, Set
+from collections.abc import Mapping, Sequence, Set
 from types import EllipsisType
 from typing import TypeGuard, overload
 
@@ -64,8 +64,11 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __str__(self):
+    def __repr__(self):
         return f"{type(self).__name__}.{self.name}"
+
+    def __str__(self):
+        return self.value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -73,8 +76,11 @@ class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
+    def __repr__(self):
+        return f'Dimension(value="{self.value}", kind={repr(self.kind)})'
+
     def __str__(self):
-        return f'Dimension(value="{self.value}", kind={self.kind})'
+        return f"{self.value}[{self.kind}]"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -135,15 +141,32 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
+    def __str__(self) -> str:
+        return f"({self.start}:{self.stop})"
+
+
+def unit_range(r: UnitRangeLike) -> UnitRange:
+    assert is_unit_range_like(r)
+    if isinstance(r, UnitRange):
+        return r
+    if isinstance(r, range) and r.step == 1:
+        return UnitRange(r.start, r.stop)
+    if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
+        return UnitRange(r[0], r[1])
+    raise ValueError(f"`{r}` is not `UnitRangeLike`.")
+
 
 IntIndex: TypeAlias = int | np.integer
 DomainRange: TypeAlias = UnitRange | IntIndex
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
+AnyIndex: TypeAlias = IntIndex | NamedRange | NamedIndex | slice | EllipsisType
 DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
 BufferSlice: TypeAlias = tuple[slice | IntIndex | EllipsisType, ...]
-FieldSlice: TypeAlias = (
-    DomainSlice | BufferSlice | slice | IntIndex | EllipsisType | NamedRange | NamedIndex
+FieldSlice: TypeAlias = DomainSlice | BufferSlice | AnyIndex
+UnitRangeLike: TypeAlias = UnitRange | range | tuple[int, int]
+DomainLike: TypeAlias = (
+    Sequence[tuple[Dimension, UnitRangeLike]] | Mapping[Dimension, UnitRangeLike]
 )
 
 
@@ -176,19 +199,69 @@ def is_buffer_slice(v: Any) -> TypeGuard[BufferSlice]:
     )
 
 
-@dataclasses.dataclass(frozen=True)
+def is_unit_range_like(v: Any) -> TypeGuard[UnitRangeLike]:
+    return (
+        isinstance(v, UnitRange)
+        or (isinstance(v, range) and v.step == 1)
+        or (isinstance(v, tuple) and isinstance(v[0], int) and isinstance(v[1], int))
+    )
+
+
+def is_domain_like(v: Any) -> TypeGuard[DomainLike]:
+    return (
+        isinstance(v, Sequence)
+        and all(
+            isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
+            for e in v
+        )
+    ) or (
+        isinstance(v, Mapping)
+        and all(isinstance(d, Dimension) and is_unit_range_like(r) for d, r in v.items())
+    )
+
+
+def named_range(v: tuple[Dimension, UnitRangeLike]) -> NamedRange:
+    return (v[0], unit_range(v[1]))
+
+
+@dataclasses.dataclass(frozen=True, init=False)
 class Domain(Sequence[NamedRange]):
+    """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
+
     dims: tuple[Dimension, ...]
     ranges: tuple[UnitRange, ...]
 
-    def __post_init__(self):
+    def __init__(
+        self,
+        *args: NamedRange,
+        dims: Optional[tuple[Dimension, ...]] = None,
+        ranges: Optional[tuple[UnitRange, ...]] = None,
+    ):
+        if dims is not None or ranges is not None:
+            if dims is None and ranges is None:
+                raise ValueError("Either both none of `dims` and `ranges` must be specified.")
+            if len(args) > 0:
+                raise ValueError(
+                    "No extra `args` allowed when constructing fomr `dims` and `ranges`."
+                )
+
+            assert dims is not None
+            assert ranges is not None
+            if len(dims) != len(ranges):
+                raise ValueError(
+                    f"Number of provided dimensions ({len(dims)}) does not match number of provided ranges ({len(ranges)})."
+                )
+
+            object.__setattr__(self, "dims", dims)
+            object.__setattr__(self, "ranges", ranges)
+        else:
+            assert all(is_named_range(arg) for arg in args)
+            dims, ranges = zip(*args) if len(args) > 0 else ((), ())
+            object.__setattr__(self, "dims", tuple(dims))
+            object.__setattr__(self, "ranges", tuple(ranges))
+
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
-
-        if len(self.dims) != len(self.ranges):
-            raise ValueError(
-                f"Number of provided dimensions ({len(self.dims)}) does not match number of provided ranges ({len(self.ranges)})."
-            )
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -211,7 +284,7 @@ class Domain(Sequence[NamedRange]):
         elif isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
-            return Domain(dims_slice, ranges_slice)
+            return Domain(dims=dims_slice, ranges=ranges_slice)
         elif isinstance(index, Dimension):
             try:
                 index_pos = self.dims.index(index)
@@ -221,7 +294,7 @@ class Domain(Sequence[NamedRange]):
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
-    def __and__(self, other: "Domain") -> "Domain":
+    def __and__(self, other: Domain) -> Domain:
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
             rng1 & rng2
@@ -230,7 +303,43 @@ class Domain(Sequence[NamedRange]):
                 _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         )
-        return Domain(broadcast_dims, intersected_ranges)
+        return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __str__(self) -> str:
+        return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+
+
+def domain(domain_like: DomainLike) -> Domain:
+    """
+    Construct `Domain` from `DomainLike` object.
+
+    Examples:
+    ---------
+    >>> I = Dimension("I")
+    >>> J = Dimension("J")
+
+    >>> domain(((I, (2, 4)), (J, (3, 5))))
+    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+
+    >>> domain({I: (2, 4), J: (3, 5)})
+    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    """
+    assert is_domain_like(domain_like)
+    if isinstance(domain_like, Domain):
+        return domain_like
+    if isinstance(domain_like, Sequence) and all(
+        isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
+        for e in domain_like
+    ):
+        return Domain(*tuple(named_range(d) for d in domain_like))
+    if isinstance(domain_like, Mapping) and all(
+        isinstance(d, Dimension) and is_unit_range_like(r) for d, r in domain_like.items()
+    ):
+        return Domain(
+            dims=tuple(domain_like.keys()),
+            ranges=tuple(unit_range(r) for r in domain_like.values()),
+        )
+    raise ValueError(f"`{domain_like}` is not `DomainLike`.")
 
 
 def _broadcast_ranges(
@@ -388,7 +497,7 @@ def field(
     definition: Any,
     /,
     *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
+    domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
 ) -> Field:
     raise NotImplementedError

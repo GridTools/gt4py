@@ -33,16 +33,18 @@ from gt4py.eve import SourceLocation
 from . import formatting
 
 
-class DSLError(Exception):
+class GT4PyError(Exception):
+    @property
+    def message(self) -> str:
+        return self.args[0]
+
+
+class DSLError(GT4PyError):
     location: Optional[SourceLocation]
 
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         self.location = location
         super().__init__(message)
-
-    @property
-    def message(self) -> str:
-        return self.args[0]
 
     def with_location(self, location: Optional[SourceLocation]) -> DSLError:
         self.location = location

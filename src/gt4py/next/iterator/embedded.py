@@ -1026,7 +1026,7 @@ def np_as_located_field(
             offset = origin.get(d, 0)
             ranges.append(common.UnitRange(-offset, s - offset))
 
-        res = common.field(a, domain=common.Domain(tuple(axes), tuple(ranges)))
+        res = common.field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
         return res
 
     return _maker
@@ -1056,7 +1056,7 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension,), (common.UnitRange.infinity(),))
+        return common.Domain((self._dimension, common.UnitRange.infinity()))
 
     @property
     def dtype(self) -> core_defs.Int32DType:
@@ -1150,7 +1150,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain(tuple(), tuple())
+        return common.Domain(dims=(), ranges=())
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:

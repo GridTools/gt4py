@@ -17,6 +17,7 @@ from types import EllipsisType
 from typing import Any, Optional, Sequence, cast
 
 from gt4py.next import common
+from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
 def sub_domain(domain: common.Domain, index: common.FieldSlice) -> common.Domain:
@@ -33,8 +34,7 @@ def sub_domain(domain: common.Domain, index: common.FieldSlice) -> common.Domain
 
 
 def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> common.Domain:
-    new_dims = []
-    new_ranges = []
+    named_ranges: list[common.NamedRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
@@ -43,30 +43,50 @@ def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> co
         domain, expanded, fillvalue=slice(None)
     ):
         if isinstance(idx, slice):
-            new_dims.append(dim)
-            new_ranges.append(_slice_range(rng, idx))
+            try:
+                sliced = _slice_range(rng, idx)
+                named_ranges.append((dim, sliced))
+            except IndexError:
+                raise embedded_exceptions.IndexOutOfBounds(
+                    domain=domain, indices=index, index=idx, dim=dim
+                )
         else:
-            assert common.is_int_index(idx)  # not in new_domain
+            # not in new domain
+            assert common.is_int_index(idx)
+            new_index = (rng.start if idx >= 0 else rng.stop) + idx
+            if new_index < rng.start or new_index >= rng.stop:
+                raise embedded_exceptions.IndexOutOfBounds(
+                    domain=domain, indices=index, index=idx, dim=dim
+                )
 
-    return common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
+    return common.Domain(*named_ranges)
 
 
 def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> common.Domain:
-    new_ranges = []
-    new_dims = []
-
-    for i, dim in enumerate(domain.dims):
+    named_ranges: list[common.NamedRange] = []
+    for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
-            index_or_range = index[pos][1]
-            if isinstance(index_or_range, common.UnitRange):
-                new_ranges.append(index_or_range)
-                new_dims.append(dim)
+            named_idx = index[pos]
+            idx = named_idx[1]
+            if isinstance(idx, common.UnitRange):
+                if not idx <= rng:
+                    raise embedded_exceptions.IndexOutOfBounds(
+                        domain=domain, indices=index, index=named_idx, dim=dim
+                    )
+
+                named_ranges.append((dim, idx))
+            else:
+                # not in new domain
+                assert common.is_int_index(idx)
+                if idx < rng.start or idx >= rng.stop:
+                    raise embedded_exceptions.IndexOutOfBounds(
+                        domain=domain, indices=index, index=named_idx, dim=dim
+                    )
         else:
             # dimension not mentioned in slice
-            new_ranges.append(domain.ranges[i])
-            new_dims.append(dim)
+            named_ranges.append((dim, domain.ranges[i]))
 
-    return common.Domain(dims=tuple(new_dims), ranges=tuple(new_ranges))
+    return common.Domain(*named_ranges)
 
 
 def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
@@ -98,7 +118,6 @@ def _expand_ellipsis(
 
 
 def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
-    # handle slice(None) case
     if slice_obj == slice(None):
         return common.UnitRange(input_range.start, input_range.stop)
 
@@ -108,6 +127,9 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     stop = (
         input_range.start if slice_obj.stop is None or slice_obj.stop >= 0 else input_range.stop
     ) + (slice_obj.stop or len(input_range))
+
+    if start < input_range.start or stop > input_range.stop:
+        raise IndexError()
 
     return common.UnitRange(start, stop)
 

@@ -162,9 +162,10 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
         | core_defs.NDArrayObject,  # TODO: NDArrayObject should be part of ArrayLike
         /,
         *,
-        domain: common.Domain,
+        domain: common.DomainLike,
         dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
     ) -> _BaseNdArrayField:
+        domain = common.domain(domain)
         xp = cls.array_ns
 
         xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
@@ -360,23 +361,17 @@ if jnp:
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice: list[slice | None] = []
-    new_domain_dims = []
-    new_domain_ranges = []
+    named_ranges = []
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(field.domain[pos][1])
+            named_ranges.append((dim, field.domain[pos][1]))
         else:
             domain_slice.append(np.newaxis)
-            new_domain_dims.append(dim)
-            new_domain_ranges.append(
-                common.UnitRange(common.Infinity.negative(), common.Infinity.positive())
+            named_ranges.append(
+                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
             )
-    return common.field(
-        field.ndarray[tuple(domain_slice)],
-        domain=common.Domain(tuple(new_domain_dims), tuple(new_domain_ranges)),
-    )
+    return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(
