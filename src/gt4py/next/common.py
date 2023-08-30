@@ -64,9 +64,6 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __repr__(self):
-        return f"{type(self).__name__}.{self.name}"
-
     def __str__(self):
         return self.value
 
@@ -75,9 +72,6 @@ class DimensionKind(StrEnum):
 class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
-
-    def __repr__(self):
-        return f'Dimension(value="{self.value}", kind={repr(self.kind)})'
 
     def __str__(self):
         return f"{self.value}[{self.kind}]"
@@ -319,10 +313,10 @@ def domain(domain_like: DomainLike) -> Domain:
     >>> J = Dimension("J")
 
     >>> domain(((I, (2, 4)), (J, (3, 5))))
-    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
     >>> domain({I: (2, 4), J: (3, 5)})
-    Domain(dims=(Dimension(value="I", kind=DimensionKind.HORIZONTAL), Dimension(value="J", kind=DimensionKind.HORIZONTAL)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
     """
     assert is_domain_like(domain_like)
     if isinstance(domain_like, Domain):
