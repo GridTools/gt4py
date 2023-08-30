@@ -144,13 +144,6 @@ MaybePosition: TypeAlias = Optional[Position]
 NamedFieldIndices: TypeAlias = Mapping[Tag, FieldIndex | SparsePositionEntry]
 
 
-def _tupelize(tup):
-    if isinstance(tup, tuple):
-        return tup
-    else:
-        return (tup,)
-
-
 @runtime_checkable
 class ItIterator(Protocol):
     """
@@ -508,20 +501,6 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     else:
         impl = getattr(np, math_builtin_name)
     globals()[math_builtin_name] = decorator(impl)
-
-
-def _lookup_offset_provider(offset_provider: OffsetProvider, tag: Tag) -> OffsetProviderElem:
-    if tag not in offset_provider:
-        raise RuntimeError(f"Missing offset provider for `{tag}`")
-    return offset_provider[tag]
-
-
-def _get_connectivity(offset_provider: OffsetProvider, tag: Tag) -> common.Connectivity:
-    if not isinstance(
-        connectivity := _lookup_offset_provider(offset_provider, tag), common.Connectivity
-    ):
-        raise RuntimeError(f"Expected a `Connectivity` for `{tag}`")
-    return connectivity
 
 
 def _named_range(axis: str, range_: Iterable[int]) -> Iterable[CompleteOffset]:
