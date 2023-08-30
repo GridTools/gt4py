@@ -139,3 +139,65 @@ def test_constant_field_non_empty_domain_op(
     result = cf + field
     assert result.ndarray.shape == expected_shape
     assert np.all(result.ndarray == expected_value)
+
+
+def adder(i, j, k=None):
+    return i + j
+
+
+@pytest.mark.parametrize(
+    "domain,expected_shape",
+    [
+        (common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
+        (
+            common.Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
+            ),
+            (3, 15, 1),
+        ),
+    ],
+)
+def test_function_field_ndarray(domain, expected_shape):
+    ff = constant_field.FunctionField(adder, domain)
+    assert ff.ndarray.shape == expected_shape
+
+    indices = np.indices(ff.ndarray.shape)
+    expected_values = np.vectorize(adder)(*indices)
+    assert np.allclose(ff.ndarray, expected_values)
+
+
+@pytest.mark.parametrize(
+    "domain",
+    [
+        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
+    ],
+)
+def test_function_field_unary(domain):
+    ff = constant_field.FunctionField(adder, domain)
+
+    # Test negation and absolute value
+    for operation in [lambda x: -x, abs]:
+        modified_ff = operation(ff)
+        indices = np.indices(ff.ndarray.shape)
+        expected_values = np.vectorize(operation)(np.vectorize(adder)(*indices))
+        assert np.allclose(modified_ff.ndarray, expected_values)
+
+# TODO: add  more tests with domain intersection
+@pytest.mark.parametrize(
+    "domain",
+    [
+        common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
+    ],
+)
+def test_function_field_identity(domain):
+    ff = constant_field.FunctionField(adder, domain)
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    result = ff + field
+
+    indices = np.indices(ff.ndarray.shape)
+    expected_values = np.vectorize(adder)(*indices) + 1
+
+    assert result.ndarray.shape == (10, 10)
+    assert np.allclose(result.ndarray, expected_values)
