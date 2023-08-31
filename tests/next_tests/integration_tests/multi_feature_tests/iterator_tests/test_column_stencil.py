@@ -117,6 +117,51 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
 
 
 @fundef
+def k_level_condition_lower(k_idx, k_level):
+    return if_(deref(k_idx) > deref(k_level), deref(shift(K, -1)(k_idx)), 0)
+
+
+@fundef
+def k_level_condition_upper(k_idx, k_level):
+    return if_(deref(k_idx) < deref(k_level), deref(shift(K, +1)(k_idx)), 0)
+
+
+@pytest.mark.parametrize(
+    "fun, k_level, ref_function",
+    [
+        (k_level_condition_lower, lambda inp: 0, lambda inp: np.concatenate([[0], inp[:-1]])),
+        (
+            k_level_condition_upper,
+            lambda inp: inp.shape[0] - 1,
+            lambda inp: np.concatenate([inp[1:], [0]]),
+        ),
+    ],
+)
+def test_k_level_condition(program_processor, lift_mode, fun, k_level, ref_function):
+    program_processor, validate = program_processor
+
+    k_size = 5
+    inp = gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32))
+    ref = ref_function(inp)
+
+    out = gtx.np_as_located_field(KDim)(np.zeros_like(inp))
+
+    run_processor(
+        fun[{KDim: range(0, k_size)}],
+        program_processor,
+        inp,
+        k_level(inp),
+        out=out,
+        offset_provider={"K": KDim},
+        column_axis=KDim,
+        lift_mode=lift_mode,
+    )
+
+    if validate:
+        np.allclose(ref, out)
+
+
+@fundef
 def sum_scanpass(state, inp):
     return state + deref(inp)
 
@@ -360,4 +405,5 @@ def test_different_vertical_sizes_with_origin(program_processor):
         assert np.allclose(ref, out)
 
 
+# TODO(havogt) test tuple_get builtin on a Column
 # TODO(havogt) test tuple_get builtin on a Column

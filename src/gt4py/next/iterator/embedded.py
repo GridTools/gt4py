@@ -50,6 +50,7 @@ import numpy.typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
+from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.iterator import builtins, runtime
 
 
@@ -747,13 +748,32 @@ def _make_tuple(
         else:
             return tuple(_make_tuple(f, named_indices) for f in field_or_tuple)
     else:
-        data = field_or_tuple.field_getitem(named_indices)
         if column_axis is not None:
+            data = np.full((len(column_range),), np.nan)
+            rng = named_indices[column_axis]
+
+            start = rng.start
+            start_target = 0
+            stop = rng.stop
+            stop_target = len(column_range)
+            if rng.start < column_range.start:
+                start = column_range.start
+                start_target = column_range.start - rng.start
+            if rng.stop > column_range.stop:
+                stop = column_range.stop
+                stop_target = column_range.stop - rng.stop
+            named_indices[column_axis] = range(start, stop)
+
+            data[start_target:stop_target] = field_or_tuple.field_getitem(named_indices)
             # wraps a vertical slice of an input field into a `Column`
             assert column_range is not None
-            return Column(column_range.start, data.ndarray if hasattr(data, "ndarray") else data)
+            return Column(column_range.start, data)
         else:
-            return data
+            try:
+                data = field_or_tuple.field_getitem(named_indices)
+                return data
+            except embedded_exceptions.IndexOutOfBounds:
+                return np.nan  # TODO what about non floats
 
 
 @dataclasses.dataclass(frozen=True)
