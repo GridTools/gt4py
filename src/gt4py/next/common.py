@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import abc
+import collections
 import dataclasses
 import enum
 import functools
@@ -653,3 +654,26 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
+
+
+class FieldBuiltinFuncRegistry:
+    _builtin_func_map: collections.ChainMap[
+        fbuiltins.BuiltInFunction, Callable
+    ] = collections.ChainMap()
+
+    def __init_subclass__(cls, **kwargs):
+        # might break in multiple inheritance (if multiple ancestors have `_builtin_func_map`)
+        cls._builtin_func_map = cls._builtin_func_map.new_child()
+
+    @classmethod
+    def register_builtin_func(
+        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Any:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)
+        return cls._builtin_func_map.setdefault(op, op_func)
+
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return cls._builtin_func_map.get(func, NotImplemented)

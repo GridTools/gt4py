@@ -15,10 +15,9 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
 
 import numpy as np
 from numpy import typing as npt
@@ -82,7 +81,9 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
+class _BaseNdArrayField(
+    common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
+):
     """
     Shared field implementation for NumPy-like fields.
 
@@ -98,35 +99,6 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     array_ns: ClassVar[
         ModuleType
     ]  # TODO(havogt) after storage PR is merged, update to the NDArrayNamespace protocol
-
-    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
-
-    @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
-    ) -> functools.partial[Callable[_P, _R]]:
-        ...
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
-    ) -> Callable[_P, _R]:
-        ...
-
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-    ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
-        return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
     def domain(self) -> common.Domain:
