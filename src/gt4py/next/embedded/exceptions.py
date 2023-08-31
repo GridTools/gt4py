@@ -20,8 +20,8 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
     def __init__(
         self,
         domain: common.Domain,
-        indices: common.FieldSlice,
-        index: common.AnyIndex,
+        indices: common.AnyIndex,
+        index: common.AnyIndexElement,
         dim: common.Dimension,
     ):
         super().__init__(

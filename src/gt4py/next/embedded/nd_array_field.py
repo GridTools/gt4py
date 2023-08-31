@@ -188,7 +188,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndex) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
 
         new_buffer = self.ndarray[buffer_slice]
@@ -254,17 +254,16 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
-    def _slice(self, index: common.FieldSlice) -> tuple[common.Domain, common.BufferSlice]:
+    def _slice(self, index: common.AnyIndex) -> tuple[common.Domain, common.RelativeIndexSequence]:
         new_domain = embedded_common.sub_domain(self.domain, index)
 
-        index = embedded_common._tuplize_field_slice(index)
-
+        index_sequence = common.as_any_index_sequence(index)
         slice_ = (
-            _get_slices_from_domain_slice(self.domain, index)
-            if common.is_domain_slice(index)
-            else index
+            _get_slices_from_domain_slice(self.domain, index_sequence)
+            if common.is_absolute_index_sequence(index_sequence)
+            else index_sequence
         )
-        assert common.is_buffer_slice(slice_), slice_
+        assert common.is_relative_index_sequence(slice_), slice_
         return new_domain, slice_
 
 
@@ -298,7 +297,7 @@ _BaseNdArrayField.register_builtin_func(
 
 def _np_cp_setitem(
     self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],
-    index: common.FieldSlice,
+    index: common.AnyIndex,
     value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
 ) -> None:
     target_domain, target_slice = self._slice(index)
@@ -350,7 +349,7 @@ if jnp:
 
         def __setitem__(
             self,
-            index: common.FieldSlice,
+            index: common.AnyIndex,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
             # use `self.ndarray.at(index).set(value)`
@@ -388,7 +387,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast
 def _get_slices_from_domain_slice(
     domain: common.Domain,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> common.BufferSlice:
+) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
     This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
@@ -415,7 +414,7 @@ def _get_slices_from_domain_slice(
 
 
 def _compute_slice(
-    rng: common.DomainRange, domain: common.Domain, pos: int
+    rng: common.UnitRange | common.IntIndex, domain: common.Domain, pos: int
 ) -> slice | common.IntIndex:
     """Compute a slice or integer based on the provided range, domain, and position.
 

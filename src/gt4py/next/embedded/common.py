@@ -14,26 +14,27 @@
 
 import itertools
 from types import EllipsisType
-from typing import Any, Optional, Sequence, cast
+from typing import Any, Optional, Sequence
 
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
-def sub_domain(domain: common.Domain, index: common.FieldSlice) -> common.Domain:
-    index = _tuplize_field_slice(index)
+def sub_domain(domain: common.Domain, index: common.AnyIndex) -> common.Domain:
+    index_sequence = common.as_any_index_sequence(index)
 
-    if common.is_domain_slice(index):
-        return _absolute_sub_domain(domain, index)
+    if common.is_absolute_index_sequence(index_sequence):
+        return _absolute_sub_domain(domain, index_sequence)
 
-    assert isinstance(index, tuple)
-    if all(isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index):
-        return _relative_sub_domain(domain, index)
+    if common.is_relative_index_sequence(index_sequence):
+        return _relative_sub_domain(domain, index_sequence)
 
     raise IndexError(f"Unsupported index type: {index}")
 
 
-def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> common.Domain:
+def _relative_sub_domain(
+    domain: common.Domain, index: common.RelativeIndexSequence
+) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
@@ -62,7 +63,9 @@ def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> co
     return common.Domain(*named_ranges)
 
 
-def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> common.Domain:
+def _absolute_sub_domain(
+    domain: common.Domain, index: common.AbsoluteIndexSequence
+) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
@@ -87,22 +90,6 @@ def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> co
             named_ranges.append((dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
-
-
-def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
-    """
-    Wrap a single index/slice/range into a tuple.
-
-    Note: the condition is complex as `NamedRange`, `NamedIndex` are implemented as `tuple`.
-    """
-    if (
-        not isinstance(v, tuple)
-        and not common.is_domain_slice(v)
-        or common.is_named_index(v)
-        or common.is_named_range(v)
-    ):
-        return cast(common.FieldSlice, (v,))
-    return v
 
 
 def _expand_ellipsis(

@@ -21,7 +21,7 @@ import functools
 import sys
 from collections.abc import Mapping, Sequence, Set
 from types import EllipsisType
-from typing import TypeGuard, overload
+from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -36,7 +36,9 @@ from gt4py.eve.extended_typing import (
     ParamSpec,
     Protocol,
     TypeAlias,
+    TypeGuard,
     TypeVar,
+    cast,
     extended_runtime_checkable,
     runtime_checkable,
 )
@@ -139,36 +141,42 @@ class UnitRange(Sequence[int], Set[int]):
         return f"({self.start}:{self.stop})"
 
 
-def unit_range(r: UnitRangeLike) -> UnitRange:
-    assert is_unit_range_like(r)
+RangeLike: TypeAlias = UnitRange | range | tuple[int, int]
+
+
+def unit_range(r: RangeLike) -> UnitRange:
     if isinstance(r, UnitRange):
         return r
-    if isinstance(r, range) and r.step == 1:
+    if isinstance(r, range):
+        if r.step != 1:
+            raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
         return UnitRange(r.start, r.stop)
     if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
         return UnitRange(r[0], r[1])
-    raise ValueError(f"`{r}` is not `UnitRangeLike`.")
+    raise ValueError(f"`{r}` cannot be interpreted as `UnitRange`.")
 
 
-IntIndex: TypeAlias = int | np.integer
-DomainRange: TypeAlias = UnitRange | IntIndex
-NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
-AnyIndex: TypeAlias = IntIndex | NamedRange | NamedIndex | slice | EllipsisType
-DomainSlice: TypeAlias = Sequence[NamedRange | NamedIndex]
-BufferSlice: TypeAlias = tuple[slice | IntIndex | EllipsisType, ...]
-FieldSlice: TypeAlias = DomainSlice | BufferSlice | AnyIndex
-UnitRangeLike: TypeAlias = UnitRange | range | tuple[int, int]
-DomainLike: TypeAlias = (
-    Sequence[tuple[Dimension, UnitRangeLike]] | Mapping[Dimension, UnitRangeLike]
-)
+NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+RelativeIndexElement: TypeAlias = IntIndex | slice | EllipsisType
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
+AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
+RelativeIndexSequence: TypeAlias = tuple[
+    slice | IntIndex | EllipsisType, ...
+]  # is a tuple but called Sequence for symmetry
+AnyIndexSequence: TypeAlias = RelativeIndexSequence | AbsoluteIndexSequence
+AnyIndex: TypeAlias = AnyIndexElement | AnyIndexSequence
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
-    return isinstance(p, (int, np.integer))
+    # should be replaced by isinstance(p, IntIndex), but mypy complains with
+    # `Argument 2 to "isinstance" has incompatible type "<typing special form>"; expected "_ClassInfo"  [arg-type]`
+    return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
 
 
-def is_named_range(v: Any) -> TypeGuard[NamedRange]:
+def is_named_range(v: AnyIndex) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple)
         and len(v) == 2
@@ -177,44 +185,41 @@ def is_named_range(v: Any) -> TypeGuard[NamedRange]:
     )
 
 
-def is_named_index(v: Any) -> TypeGuard[NamedRange]:
+def is_named_index(v: AnyIndex) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
 
 
-def is_domain_slice(v: Any) -> TypeGuard[DomainSlice]:
+def is_any_index_element(v: AnyIndex) -> TypeGuard[AnyIndexElement]:
+    return (
+        is_int_index(v)
+        or is_named_range(v)
+        or is_named_index(v)
+        or isinstance(v, slice)
+        or v is Ellipsis
+    )
+
+
+def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
     return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
 
 
-def is_buffer_slice(v: Any) -> TypeGuard[BufferSlice]:
+def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
     return isinstance(v, tuple) and all(
         isinstance(e, slice) or is_int_index(e) or e is Ellipsis for e in v
     )
 
 
-def is_unit_range_like(v: Any) -> TypeGuard[UnitRangeLike]:
-    return (
-        isinstance(v, UnitRange)
-        or (isinstance(v, range) and v.step == 1)
-        or (isinstance(v, tuple) and isinstance(v[0], int) and isinstance(v[1], int))
+def as_any_index_sequence(index: AnyIndex) -> AnyIndexSequence:
+    # `cast` because mypy/typing doesn't special case 1-element tuples, i.e. `tuple[A|B] != tuple[A]|tuple[B]`
+    return cast(
+        AnyIndexSequence,
+        (index,) if is_any_index_element(index) else index,
     )
 
 
-def is_domain_like(v: Any) -> TypeGuard[DomainLike]:
-    return (
-        isinstance(v, Sequence)
-        and all(
-            isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
-            for e in v
-        )
-    ) or (
-        isinstance(v, Mapping)
-        and all(isinstance(d, Dimension) and is_unit_range_like(r) for d, r in v.items())
-    )
-
-
-def named_range(v: tuple[Dimension, UnitRangeLike]) -> NamedRange:
+def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
     return (v[0], unit_range(v[1]))
 
 
@@ -230,7 +235,8 @@ class Domain(Sequence[NamedRange]):
         *args: NamedRange,
         dims: Optional[tuple[Dimension, ...]] = None,
         ranges: Optional[tuple[UnitRange, ...]] = None,
-    ):
+    ) -> None:
+        # TODO throw user error in case pre-conditions are not met
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
                 raise ValueError("Either both none of `dims` and `ranges` must be specified.")
@@ -239,8 +245,15 @@ class Domain(Sequence[NamedRange]):
                     "No extra `args` allowed when constructing fomr `dims` and `ranges`."
                 )
 
-            assert dims is not None
-            assert ranges is not None
+            assert dims is not None and ranges is not None  # for mypy
+            if not all(isinstance(dim, Dimension) for dim in dims):
+                raise ValueError(
+                    f"`dims` argument needs to be a `tuple[Dimension, ...], got `{dims}`."
+                )
+            if not all(isinstance(rng, Dimension) for rng in ranges):
+                raise ValueError(
+                    f"`ranges` argument needs to be a `tuple[UnitRange, ...], got `{ranges}`."
+                )
             if len(dims) != len(ranges):
                 raise ValueError(
                     f"Number of provided dimensions ({len(dims)}) does not match number of provided ranges ({len(ranges)})."
@@ -249,7 +262,8 @@ class Domain(Sequence[NamedRange]):
             object.__setattr__(self, "dims", dims)
             object.__setattr__(self, "ranges", ranges)
         else:
-            assert all(is_named_range(arg) for arg in args)
+            if not all(is_named_range(arg) for arg in args):
+                raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
             dims, ranges = zip(*args) if len(args) > 0 else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
@@ -265,7 +279,7 @@ class Domain(Sequence[NamedRange]):
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> "Domain":
+    def __getitem__(self, index: slice) -> Domain:
         ...
 
     @overload
@@ -303,6 +317,9 @@ class Domain(Sequence[NamedRange]):
         return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
 
 
+DomainLike: TypeAlias = Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+
+
 def domain(domain_like: DomainLike) -> Domain:
     """
     Construct `Domain` from `DomainLike` object.
@@ -318,17 +335,11 @@ def domain(domain_like: DomainLike) -> Domain:
     >>> domain({I: (2, 4), J: (3, 5)})
     Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
     """
-    assert is_domain_like(domain_like)
     if isinstance(domain_like, Domain):
         return domain_like
-    if isinstance(domain_like, Sequence) and all(
-        isinstance(e, tuple) and isinstance(e[0], Dimension) and is_unit_range_like(e[1])
-        for e in domain_like
-    ):
+    if isinstance(domain_like, Sequence):
         return Domain(*tuple(named_range(d) for d in domain_like))
-    if isinstance(domain_like, Mapping) and all(
-        isinstance(d, Dimension) and is_unit_range_like(r) for d, r in domain_like.items()
-    ):
+    if isinstance(domain_like, Mapping):
         return Domain(
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),
@@ -394,7 +405,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: FieldSlice) -> Field | core_defs.ScalarT:
+    def restrict(self, item: AnyIndex) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -403,7 +414,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: FieldSlice) -> Field | core_defs.ScalarT:
+    def __getitem__(self, item: AnyIndex) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -472,12 +483,12 @@ def is_field(
 @extended_runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, index: FieldSlice, value: Field | core_defs.ScalarT) -> None:
+    def __setitem__(self, index: AnyIndex, value: Field | core_defs.ScalarT) -> None:
         ...
 
 
 def is_mutable_field(
-    v: Any,
+    v: Field,
 ) -> TypeGuard[MutableField]:
     # This function is introduced to localize the `type: ignore` because
     # extended_runtime_checkable does not make the protocol runtime_checkable
