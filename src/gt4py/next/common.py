@@ -15,13 +15,14 @@
 from __future__ import annotations
 
 import abc
+import collections
 import dataclasses
 import enum
 import functools
 import sys
 from collections.abc import Sequence, Set
 from types import EllipsisType
-from typing import TypeGuard, overload
+from typing import ChainMap, TypeGuard, overload
 
 import numpy as np
 import numpy.typing as npt
@@ -481,3 +482,24 @@ def is_domain_slice(index: Any) -> TypeGuard[DomainSlice]:
     return isinstance(index, Sequence) and all(
         is_named_range(idx) or is_named_index(idx) for idx in index
     )
+
+
+class FieldBuiltinFuncRegistry:
+    _builtin_func_map: ChainMap[fbuiltins.BuiltInFunction, Callable] = collections.ChainMap()
+
+    def __init_subclass__(cls, **kwargs):
+        # might break in multiple inheritance (if multiple ancestors have `_builtin_func_map`)
+        cls._builtin_func_map = cls._builtin_func_map.new_child()
+
+    @classmethod
+    def register_builtin_func(
+        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Any:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)
+        return cls._builtin_func_map.setdefault(op, op_func)
+
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return cls._builtin_func_map.get(func, NotImplemented)

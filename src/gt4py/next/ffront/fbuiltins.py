@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 import dataclasses
 import inspect
 from builtins import bool, float, int, tuple
@@ -48,7 +47,6 @@ TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 IndexType: TypeAlias = int32
 
 TYPE_ALIAS_NAMES = ["IndexType"]
-
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -205,7 +203,6 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "trunc",
 ]
 
-
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
@@ -223,7 +220,6 @@ for f in (
     + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
 ):
     _make_unary_math_builtin(f)
-
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
