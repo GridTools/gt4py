@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import operator
-from typing import Callable, TypeAlias, Any
+from typing import Any, Callable, TypeAlias, TypeGuard
 
 import numpy as np
 
@@ -25,6 +25,7 @@ from gt4py.next import common
 from gt4py.next.common import Infinity
 from gt4py.next.embedded import common as embedded_common, nd_array_field as nd
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
+
 
 _EMPTY_DOMAIN = common.Domain((), ())
 
@@ -37,7 +38,7 @@ class FunctionField:
     domain: common.Domain = _EMPTY_DOMAIN
     _constant: bool = False
 
-    def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.FieldSlice) -> FunctionField:
         if _has_empty_domain(self):
             raise IndexError("Cannot slice ConstantField without a Domain.")
         new_domain = embedded_common.sub_domain(self.domain, index)
@@ -136,12 +137,6 @@ class FunctionField:
     def __pow__(self, other: FunctionFieldOperand) -> FunctionFieldOperand:
         return self._binary_operation(operator.pow, other)
 
-    def __eq__(self, other: FunctionFieldOperand) -> FunctionFieldOperand:
-        return self._binary_operation(operator.eq, other)
-
-    def __ne__(self, other: FunctionFieldOperand) -> FunctionFieldOperand:
-        return self._binary_operation(operator.ne, other)
-
     def __lt__(self, other: FunctionFieldOperand) -> FunctionFieldOperand:
         return self._binary_operation(operator.lt, other)
 
@@ -180,7 +175,7 @@ def _compose(operation: Callable, *fields: FunctionField) -> Callable:
     return lambda *args: operation(*[f.func(*args) for f in fields])
 
 
-def _broadcast(field: FunctionField, dims: tuple[common.Dimension]) -> FunctionField:
+def _broadcast(field: FunctionField, dims: tuple[common.Dimension, ...]) -> FunctionField:
     def broadcasted_function(*args: int):
         if not _has_empty_domain(field):
             selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
@@ -194,7 +189,7 @@ def _broadcast(field: FunctionField, dims: tuple[common.Dimension]) -> FunctionF
     return FunctionField(broadcasted_function, broadcasted_domain)
 
 
-def _is_nd_array(other: Any) -> bool:
+def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
     return isinstance(other, nd._BaseNdArrayField)
 
 
