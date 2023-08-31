@@ -12,9 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
-from types import EllipsisType
-from typing import Any, Optional, Sequence
+from typing import Any, Optional, Sequence, cast
 
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
@@ -40,9 +38,8 @@ def _relative_sub_domain(
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
         raise IndexError(f"Trying to index a `Field` with {len(domain)} dimensions with {index}.")
-    for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-        domain, expanded, fillvalue=slice(None)
-    ):
+    expanded += (slice(None),) * (len(domain) - len(expanded))
+    for (dim, rng), idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(rng, idx)
@@ -93,15 +90,14 @@ def _absolute_sub_domain(
 
 
 def _expand_ellipsis(
-    indices: tuple[common.IntIndex | slice | EllipsisType, ...], target_size: int
+    indices: common.RelativeIndexSequence, target_size: int
 ) -> tuple[common.IntIndex | slice, ...]:
-    expanded_indices: list[common.IntIndex | slice] = []
-    for idx in indices:
-        if idx is Ellipsis:
-            expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))
-        else:
-            expanded_indices.append(idx)
-    return tuple(expanded_indices)
+    if Ellipsis in indices:
+        idx = indices.index(Ellipsis)
+        indices = (
+            indices[:idx] + (slice(None),) * (target_size - (len(indices) - 1)) + indices[idx + 1 :]
+        )
+    return cast(tuple[common.IntIndex | slice, ...], indices)  # mypy leave me alone and trust me!
 
 
 def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:

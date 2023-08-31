@@ -17,6 +17,11 @@ from gt4py.next.errors import exceptions as gt4py_exceptions
 
 
 class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
+    domain: common.Domain
+    indices: common.AnyIndex
+    index: common.AnyIndexElement
+    dim: common.Dimension
+
     def __init__(
         self,
         domain: common.Domain,
@@ -27,3 +32,7 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
         super().__init__(
             f"Out of bounds: slicing {domain} with index `{indices}`, `{index}` is out of bounds in dimension `{dim}`."
         )
+        self.domain = domain
+        self.indices = indices
+        self.index = index
+        self.dim = dim

@@ -19,8 +19,8 @@ import dataclasses
 import enum
 import functools
 import sys
+import types
 from collections.abc import Mapping, Sequence, Set
-from types import EllipsisType
 from typing import overload
 
 import numpy as np
@@ -159,12 +159,12 @@ def unit_range(r: RangeLike) -> UnitRange:
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
-RelativeIndexElement: TypeAlias = IntIndex | slice | EllipsisType
+RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
-    slice | IntIndex | EllipsisType, ...
+    slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
 AnyIndexSequence: TypeAlias = RelativeIndexSequence | AbsoluteIndexSequence
 AnyIndex: TypeAlias = AnyIndexElement | AnyIndexSequence
@@ -250,7 +250,7 @@ class Domain(Sequence[NamedRange]):
                 raise ValueError(
                     f"`dims` argument needs to be a `tuple[Dimension, ...], got `{dims}`."
                 )
-            if not all(isinstance(rng, Dimension) for rng in ranges):
+            if not all(isinstance(rng, UnitRange) for rng in ranges):
                 raise ValueError(
                     f"`ranges` argument needs to be a `tuple[UnitRange, ...], got `{ranges}`."
                 )
@@ -264,7 +264,7 @@ class Domain(Sequence[NamedRange]):
         else:
             if not all(is_named_range(arg) for arg in args):
                 raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
-            dims, ranges = zip(*args) if len(args) > 0 else ((), ())
+            dims, ranges = zip(*args) if args else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
 
@@ -303,6 +303,20 @@ class Domain(Sequence[NamedRange]):
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: Domain) -> Domain:
+        """
+        Intersect `Domain`s, missing `Dimension`s are considered infinite.
+
+        Examples:
+        ---------
+        >>> I = Dimension("I")
+        >>> J = Dimension("J")
+
+        >>> Domain((I, UnitRange(-1, 3))) & Domain((I, UnitRange(1, 6)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+
+        >>> Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4))) & Domain((I, UnitRange(1, 6)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+        """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
             rng1 & rng2
@@ -371,8 +385,8 @@ class NextGTDimsInterface(Protocol):
     """
     A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to :py:mod:`gt4py.cartesian`,
-    where the labels are `str` s with implied semantics, see :py:class:`~gt4py._core.definitions.GTDimsInterface` .
+    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
+    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
     """
 
     # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
@@ -426,6 +440,10 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
+    def __invert__(self) -> Field:
+        """Only defined for `Field` of value type `bool`."""
+
+    @abc.abstractmethod
     def __add__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
@@ -468,6 +486,18 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
     @abc.abstractmethod
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
+
+    @abc.abstractmethod
+    def __and__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
+
+    @abc.abstractmethod
+    def __or__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
+
+    @abc.abstractmethod
+    def __xor__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
 
 
 def is_field(

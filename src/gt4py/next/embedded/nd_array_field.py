@@ -224,7 +224,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __mod__ = __rmod__ = _make_binary_array_field_intrinsic_func("mod", "mod")
 
-    def __and__(self, other: common.Field) -> _BaseNdArrayField:
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_and", "logical_and")(
                 self, other
@@ -233,14 +233,14 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __rand__ = __and__
 
-    def __or__(self, other: common.Field) -> _BaseNdArrayField:
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_or", "logical_or")(self, other)
         raise NotImplementedError("`__or__` not implemented for non-`bool` fields.")
 
     __ror__ = __or__
 
-    def __xor__(self, other: common.Field) -> _BaseNdArrayField:
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_xor", "logical_xor")(
                 self, other
@@ -263,7 +263,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             if common.is_absolute_index_sequence(index_sequence)
             else index_sequence
         )
-        assert common.is_relative_index_sequence(slice_), slice_
+        assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
 
@@ -352,7 +352,7 @@ if jnp:
             index: common.AnyIndex,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # use `self.ndarray.at(index).set(value)`
+            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
             raise NotImplementedError("`__setitem__` for JaxArrayField not yet implemented.")
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
