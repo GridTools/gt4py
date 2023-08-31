@@ -189,8 +189,7 @@ class FunctionField:
             else:
                 shape.append(len(rng))
 
-        indices = np.indices(shape)
-        values = np.vectorize(self.func)(*indices)
+        values = np.fromfunction(lambda *indices: self.func(*indices), shape)
         return values
 
     def _has_empty_domain(self) -> bool:
