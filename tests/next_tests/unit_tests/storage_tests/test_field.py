@@ -25,32 +25,6 @@ from gt4py.next.storage import allocators as next_allocators
 I = gtx.Dimension("I")
 J = gtx.Dimension("J")
 
-a = gtx.field.empty(
-    common.Domain(dims=(I, J), ranges=(common.UnitRange(10, 20), common.UnitRange(30, 40))),
-    dtype=core_defs.dtype(float),
-)
-
-
-arr = cp.full((10, 10), 42.0)
-b = gtx.field.asfield(
-    common.Domain(dims=(I, J), ranges=(common.UnitRange(10, 20), common.UnitRange(30, 40))),
-    arr,
-    dtype=core_defs.dtype(float),
-    allocator=next_allocators.DefaultCUDAAllocator(),
-)
-
-out = gtx.field.asfield(
-    common.Domain(dims=(I, J), ranges=(common.UnitRange(10, 20), common.UnitRange(30, 40))),
-    arr,
-    dtype=core_defs.dtype(float),
-    allocator=next_allocators.DefaultCUDAAllocator(),
-)
-
-
-assert isinstance(a.ndarray, np.ndarray)
-assert isinstance(b.ndarray, cp.ndarray)
-assert b.ndarray[0, 0] == 42.0, b.ndarray[0, 0]
-
 
 @gtx.field_operator
 def add(
@@ -68,4 +42,27 @@ def prog(
     add(a, b, out=out)
 
 
+a = gtx.field.ones(
+    common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+    dtype=core_defs.dtype(np.float32),
+    allocator=prog.backend,
+)
+
+
+arr = np.full((10, 10), 42.0)
+b = gtx.field.asfield(
+    common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+    arr,
+    dtype=core_defs.dtype(np.float32),
+    allocator=prog.backend,
+)
+
+out = gtx.field.empty(
+    common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+    dtype=core_defs.dtype(np.float32),
+    allocator=prog.backend,
+)
+
 prog(a, b, out, offset_provider={})
+
+print(out.ndarray)

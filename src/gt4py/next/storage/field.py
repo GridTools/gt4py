@@ -84,7 +84,7 @@ def zeros(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.value_type(0)  # TODO dtype.scalar_type
+    field.ndarray[...] = field.dtype.scalar_type(0)
     return field
 
 
@@ -103,7 +103,7 @@ def ones(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.value_type(1)  # TODO dtype.scalar_type
+    field.ndarray[...] = field.dtype.scalar_type(1)
     return field
 
 
@@ -123,7 +123,7 @@ def full(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.value_type(fill_value)  # TODO dtype.scalar_type
+    field.ndarray[...] = field.dtype.scalar_type(fill_value)
     return field
 
 

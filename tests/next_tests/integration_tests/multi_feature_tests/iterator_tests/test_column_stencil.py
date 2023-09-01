@@ -228,16 +228,16 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
     [
         (
             0,
-            np.asarray(
-                [[(0, 0), (1, 1), (3, 3), (6, 6), (10, 10), (15, 15), (21, 21)]],
-                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            (
+                np.asarray([0, 1, 3, 6, 10, 15, 21], dtype=np.float64),
+                np.asarray([0, 1, 3, 6, 10, 15, 21], dtype=np.int32),
             ),
         ),
         (
             2,
-            np.asarray(
-                [[(0, 0), (0, 0), (2, 2), (5, 5), (9, 9), (14, 14), (20, 20)]],
-                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            (
+                np.asarray([0, 0, 2, 5, 9, 14, 20], dtype=np.float64),
+                np.asarray([0, 0, 2, 5, 9, 14, 20], dtype=np.int32),
             ),
         ),
     ],
@@ -255,7 +255,10 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     shape = [1, 7]
     inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=reference.dtype))
+    out = (
+        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float64)),
+        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float32)),
+    )
 
     run_processor(
         kdoublesum_fencil,
@@ -271,8 +274,8 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     )
 
     if validate:
-        for n in reference.dtype.names:
-            assert np.allclose(reference[n], np.asarray(out)[n])
+        for ref, o in zip(reference, out):
+            assert np.allclose(ref, o)
 
 
 @fundef
@@ -301,7 +304,7 @@ def test_different_vertical_sizes(program_processor):
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
     inp1 = gtx.np_as_located_field(KDim)(np.arange(0, k_size + 1))
     out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=inp0.dtype))
-    ref = inp0 + inp1[1:]
+    ref = inp0.ndarray + inp1.ndarray[1:]
 
     run_processor(
         sum_shifted_fencil,
@@ -341,7 +344,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
     inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
     out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
-    ref = inp0 + np.asarray(inp1)[:-1]
+    ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
 
     run_processor(
         sum_fencil,

@@ -157,7 +157,7 @@ def tridiag_test(tridiag_reference, program_processor_no_dace_exec, lift_mode):
     yield run
 
     if validate:
-        assert np.allclose(x, np.asarray(x_s))
+        assert np.allclose(x, x_s)
 
 
 def test_tridiag(tridiag_test):

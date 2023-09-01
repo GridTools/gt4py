@@ -27,6 +27,15 @@ from gt4py.next import common
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
+from gt4py.next.program_processors.processor_interface import program_executor
+from gt4py.next.storage import allocators as next_allocators
+
+
+def _create_tmp(axes, origin, shape, dtype):
+    if isinstance(dtype, tuple):
+        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
+    else:
+        return f"gtx.np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype=np.dtype('{dtype}')))"
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -59,14 +68,7 @@ def ${id}(${','.join(params)}):
     def visit_FencilWithTemporaries(self, node, **kwargs):
         params = self.visit(node.params)
 
-        def np_dtype(dtype):
-            if isinstance(dtype, int):
-                return params[dtype] + ".dtype"
-            if isinstance(dtype, tuple):
-                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
-            return f"np.dtype('{dtype}')"
-
-        tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
+        tmps = "\n    ".join(self.visit(node.tmps))
         args = ", ".join(params + [tmp.id for tmp in node.tmps])
         params = ", ".join(params)
         fencil = self.visit(node.fencil)
@@ -78,7 +80,7 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node, *, np_dtype, **kwargs):
+    def visit_Temporary(self, node, **kwargs):
         assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
             "cartesian_domain",
             "unstructured_domain",
@@ -91,8 +93,7 @@ def ${id}(${','.join(params)}):
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
-        dtype = np_dtype(node.dtype)
-        return f"{node.id} = gtx.np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
+        return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -216,10 +217,8 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-class Executor:
-    from gt4py._core import definitions as core_defs
-    from gt4py.next.storage import common as storage_common
-
+@program_executor
+class Executor(next_allocators.DefaultCPUAllocator):
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
 

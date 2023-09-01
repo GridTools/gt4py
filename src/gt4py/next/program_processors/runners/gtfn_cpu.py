@@ -14,13 +14,12 @@
 
 from typing import Any
 
-import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
 from gt4py.next.otf import languages, recipes, stages, workflow
-from gt4py.next.otf.binding import cpp_interface, pybind
+from gt4py.next.otf.binding import cpp_interface, nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import otf_compile_executor
@@ -32,9 +31,9 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
-        arr = np.asarray(arg)
-        origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
+    if common.is_field(arg):
+        arr = arg.ndarray
+        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
     else:
         return arg
@@ -102,7 +101,7 @@ GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
 
 GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
     translation=GTFN_DEFAULT_TRANSLATION_STEP,
-    bindings=pybind.bind_source,
+    bindings=nanobind.bind_source,
     compilation=GTFN_DEFAULT_COMPILE_STEP,
     decoration=convert_args,
 )

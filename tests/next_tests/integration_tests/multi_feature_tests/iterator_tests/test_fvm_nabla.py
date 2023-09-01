@@ -204,9 +204,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
 
-    S = gtx.np_as_located_field(Edge)(
-        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
-    )
+    S = tuple(gtx.np_as_located_field(Edge)(s) for s in setup.S_fields)
 
     zavgS = (
         gtx.np_as_located_field(Edge)(np.zeros((setup.edges_size))),
@@ -305,9 +303,7 @@ def test_nabla2(program_processor, lift_mode):
 
     sign = gtx.np_as_located_field(Vertex, V2EDim)(setup.sign_field)
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
-    S_M = gtx.np_as_located_field(Edge)(
-        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
-    )
+    S_M = tuple(gtx.np_as_located_field(Edge)(s) for s in setup.S_fields)
     vol = gtx.np_as_located_field(Vertex)(setup.vol_field)
 
     pnabla_MXX = gtx.np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))

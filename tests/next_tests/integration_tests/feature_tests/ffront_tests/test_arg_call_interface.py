@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import itertools
+import re
 import typing
 
 import numpy as np
@@ -20,8 +21,9 @@ import pytest
 
 from gt4py.next import errors
 from gt4py.next.common import Field
+from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import int32, int64
+from gt4py.next.ffront.fbuiltins import broadcast, int32, int64
 from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
@@ -271,3 +273,55 @@ def test_scan_wrong_state_type(cartesian_case):
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
+
+
+@pytest.fixture
+def bound_args_testee():
+    @field_operator
+    def fieldop_bound_args() -> cases.IField:
+        return broadcast(0, (IDim,))
+
+    @program
+    def program_bound_args(arg1: bool, arg2: bool, out: cases.IField):
+        # for the test itself we don't care what happens here, but empty programs are not supported
+        fieldop_bound_args(out=out)
+
+    return program_bound_args
+
+
+def test_bind_invalid_arg(cartesian_case, bound_args_testee):
+    with pytest.raises(
+        TypeError, match="Keyword argument `inexistent_arg` is not a valid program parameter."
+    ):
+        bound_args_testee.with_bound_args(inexistent_arg=1)
+
+
+def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
+    program_with_bound_arg = bound_args_testee.with_bound_args(arg1=True)
+    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
+
+    with pytest.raises(TypeError) as exc_info:
+        program_with_bound_arg(out, offset_provider={})
+
+    assert (
+        re.search(
+            "Function takes 2 positional arguments, but 1 were given.",
+            exc_info.value.__cause__.args[0],
+        )
+        is not None
+    )
+
+
+def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_testee):
+    program_with_bound_arg = bound_args_testee.with_bound_args(arg2=True)
+    out = cases.allocate(cartesian_case, bound_args_testee, "out")()
+
+    with pytest.raises(TypeError) as exc_info:
+        program_with_bound_arg(True, out, arg2=True, offset_provider={})
+
+    assert (
+        re.search(
+            "Parameter `arg2` already set as a bound argument.", exc_info.value.__cause__.args[0]
+        )
+        is not None
+    )

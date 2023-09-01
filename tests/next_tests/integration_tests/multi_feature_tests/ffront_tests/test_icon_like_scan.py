@@ -204,7 +204,7 @@ def test_setup():
         w = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q_ref, w_ref = reference(z_alpha, z_beta, z_q, w)
+        z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
         dummy = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
         z_q_out = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
 
