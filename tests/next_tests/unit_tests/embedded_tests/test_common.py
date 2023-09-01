@@ -22,12 +22,17 @@ from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import _slice_range, sub_domain
 
 
-def test_slice_range():
-    input_range = UnitRange(2, 10)
-    slice_obj = slice(2, -2)
-    expected = UnitRange(4, 8)
-
-    result = _slice_range(input_range, slice_obj)
+@pytest.mark.parametrize(
+    "rng, slce, expected",
+    [
+        (UnitRange(2, 10), slice(2, -2), UnitRange(4, 8)),
+        (UnitRange(2, 10), slice(2, None), UnitRange(4, 10)),
+        (UnitRange(2, 10), slice(None, -2), UnitRange(2, 8)),
+        (UnitRange(2, 10), slice(None), UnitRange(2, 10)),
+    ],
+)
+def test_slice_range(rng, slce, expected):
+    result = _slice_range(rng, slce)
     assert result == expected
 
 
@@ -113,6 +118,11 @@ K = common.Dimension("K")
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             (slice(1, 2), Ellipsis, slice(2, 3)),
             [(I, (3, 4)), (J, (3, 6)), (K, (6, 7))],
+        ),
+        (
+            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+            (slice(1, 2), slice(1, 2), Ellipsis),
+            [(I, (3, 4)), (J, (4, 5)), (K, (4, 7))],
         ),
     ],
 )

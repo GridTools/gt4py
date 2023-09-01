@@ -12,36 +12,34 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import itertools
-from types import EllipsisType
 from typing import Any, Optional, Sequence, cast
 
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
-def sub_domain(domain: common.Domain, index: common.FieldSlice) -> common.Domain:
-    index = _tuplize_field_slice(index)
+def sub_domain(domain: common.Domain, index: common.AnyIndex) -> common.Domain:
+    index_sequence = common.as_any_index_sequence(index)
 
-    if common.is_domain_slice(index):
-        return _absolute_sub_domain(domain, index)
+    if common.is_absolute_index_sequence(index_sequence):
+        return _absolute_sub_domain(domain, index_sequence)
 
-    assert isinstance(index, tuple)
-    if all(isinstance(idx, slice) or common.is_int_index(idx) or idx is Ellipsis for idx in index):
-        return _relative_sub_domain(domain, index)
+    if common.is_relative_index_sequence(index_sequence):
+        return _relative_sub_domain(domain, index_sequence)
 
     raise IndexError(f"Unsupported index type: {index}")
 
 
-def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> common.Domain:
+def _relative_sub_domain(
+    domain: common.Domain, index: common.RelativeIndexSequence
+) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
         raise IndexError(f"Trying to index a `Field` with {len(domain)} dimensions with {index}.")
-    for (dim, rng), idx in itertools.zip_longest(  # type: ignore[misc] # "slice" object is not iterable, not sure which slice...
-        domain, expanded, fillvalue=slice(None)
-    ):
+    expanded += (slice(None),) * (len(domain) - len(expanded))
+    for (dim, rng), idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(rng, idx)
@@ -62,7 +60,9 @@ def _relative_sub_domain(domain: common.Domain, index: common.BufferSlice) -> co
     return common.Domain(*named_ranges)
 
 
-def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> common.Domain:
+def _absolute_sub_domain(
+    domain: common.Domain, index: common.AbsoluteIndexSequence
+) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
@@ -89,32 +89,15 @@ def _absolute_sub_domain(domain: common.Domain, index: common.DomainSlice) -> co
     return common.Domain(*named_ranges)
 
 
-def _tuplize_field_slice(v: common.FieldSlice) -> common.FieldSlice:
-    """
-    Wrap a single index/slice/range into a tuple.
-
-    Note: the condition is complex as `NamedRange`, `NamedIndex` are implemented as `tuple`.
-    """
-    if (
-        not isinstance(v, tuple)
-        and not common.is_domain_slice(v)
-        or common.is_named_index(v)
-        or common.is_named_range(v)
-    ):
-        return cast(common.FieldSlice, (v,))
-    return v
-
-
 def _expand_ellipsis(
-    indices: tuple[common.IntIndex | slice | EllipsisType, ...], target_size: int
+    indices: common.RelativeIndexSequence, target_size: int
 ) -> tuple[common.IntIndex | slice, ...]:
-    expanded_indices: list[common.IntIndex | slice] = []
-    for idx in indices:
-        if idx is Ellipsis:
-            expanded_indices.extend([slice(None)] * (target_size - (len(indices) - 1)))
-        else:
-            expanded_indices.append(idx)
-    return tuple(expanded_indices)
+    if Ellipsis in indices:
+        idx = indices.index(Ellipsis)
+        indices = (
+            indices[:idx] + (slice(None),) * (target_size - (len(indices) - 1)) + indices[idx + 1 :]
+        )
+    return cast(tuple[common.IntIndex | slice, ...], indices)  # mypy leave me alone and trust me!
 
 
 def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
