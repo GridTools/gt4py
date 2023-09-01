@@ -220,10 +220,6 @@ class Executor:
     from gt4py._core import definitions as core_defs
     from gt4py.next.storage import common as storage_common
 
-    storage_info = storage_common.StorageInfo(
-        device=core_defs.Device(device_type=core_defs.DeviceType.CPU, device_id=0)
-    )
-
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
 

@@ -138,6 +138,7 @@ class UnitRange(Sequence[int], Set[int]):
 
 
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, int]
 
 
 @dataclasses.dataclass(frozen=True)

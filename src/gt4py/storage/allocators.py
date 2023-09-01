@@ -150,7 +150,7 @@ class BufferAllocator(Protocol[core_defs.NDArrayObjectT]):
         shape: Sequence[core_defs.IntegralScalar],
         dtype: core_defs.DType[_ScalarT],
         layout_map: BufferLayoutMap,
-        device: core_defs.Device,
+        device: core_defs.Device,  # TODO should be device_id
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
     ) -> TensorBuffer[core_defs.NDArrayObjectT, _ScalarT]:
@@ -158,10 +158,10 @@ class BufferAllocator(Protocol[core_defs.NDArrayObjectT]):
         Allocate a TensorBuffer with the given shape, layout and alignment settings.
 
         Args:
-            device: Device where the buffer is allocated.
+            device_id: Id of the device of `device_type` where the buffer is allocated.
             dtype: Data type descriptor.
             shape: Tensor dimensions.
-            layout_map: layout of the dimensions in the buffer.
+            layout_map: layout of the dimensions in the buffer assuming C-layout.
                 layout_map[i] = j means that the i-th dimension of the tensor
                 corresponds to the j-th dimension of the buffer.
             byte_alignment: Alignment (in bytes) of the first valid element.

@@ -23,7 +23,7 @@ to create a streamlined user experience. `from module import *` can be used but 
 module in question is a submodule, defines `__all__` and exports many public API objects.
 """
 
-from . import common, ffront, iterator, program_processors, type_inference
+from . import common, ffront, iterator, program_processors, storage, type_inference
 from .common import Dimension, DimensionKind, Field, GridType
 from .embedded import nd_array_field
 from .ffront import fbuiltins
@@ -36,6 +36,7 @@ from .iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from .storage import field
 
 
 __all__ = [
@@ -61,4 +62,6 @@ __all__ = [
     "program",
     "scan_operator",
     *fbuiltins.__all__,
+    # from storage
+    "field",
 ]
