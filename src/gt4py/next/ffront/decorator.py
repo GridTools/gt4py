@@ -213,6 +213,8 @@ class Program:
             raise RuntimeError(
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
+        if self.backend is not None and hasattr(self.backend, "__gt_allocate__"):
+            object.__setattr__(self, "__gt_allocate__", self.backend.__gt_allocate__)
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)

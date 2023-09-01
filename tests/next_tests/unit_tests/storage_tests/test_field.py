@@ -45,7 +45,7 @@ def prog(
 a = gtx.field.ones(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     dtype=core_defs.dtype(np.float32),
-    allocator=prog.backend,
+    allocator=prog,
 )
 
 
@@ -54,13 +54,13 @@ b = gtx.field.asfield(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     arr,
     dtype=core_defs.dtype(np.float32),
-    allocator=prog.backend,
+    allocator=prog,
 )
 
 out = gtx.field.empty(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     dtype=core_defs.dtype(np.float32),
-    allocator=prog.backend,
+    allocator=prog,
 )
 
 prog(a, b, out, offset_provider={})
