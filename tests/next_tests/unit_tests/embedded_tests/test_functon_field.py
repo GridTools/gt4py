@@ -1,0 +1,265 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+import operator
+
+import numpy as np
+import pytest
+
+from gt4py.next import common
+from gt4py.next.common import Dimension, UnitRange
+from gt4py.next.embedded import function_field as funcf
+
+
+I = Dimension("I")
+J = Dimension("J")
+K = Dimension("K")
+
+
+def rfloordiv(x, y):
+    return operator.floordiv(y, x)
+
+
+@pytest.mark.parametrize(
+    "op_func, expected_result",
+    [
+        (operator.add, 10 + 20),
+        (operator.sub, 10 - 20),
+        (operator.mul, 10 * 20),
+        (operator.truediv, 10 / 20),
+        (operator.floordiv, 10 // 20),
+        (rfloordiv, 20 // 10),
+        (operator.pow, 10**20),
+        (lambda x, y: operator.truediv(y, x), 20 / 10),
+        (operator.add, 10 + 20),
+        (operator.mul, 10 * 20),
+        (lambda x, y: operator.sub(y, x), 20 - 10),
+    ],
+)
+def test_constant_field_no_domain(op_func, expected_result):
+    cf1 = funcf.constant_field(10)
+    cf2 = funcf.constant_field(20)
+    result = op_func(cf1, cf2)
+    assert result.func() == expected_result
+    with pytest.raises(ValueError):
+        result.ndarray
+
+
+@pytest.mark.parametrize(
+    "op_func",
+    [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv,
+        operator.floordiv,
+        rfloordiv,
+        operator.pow,
+        lambda x, y: operator.truediv(y, x),
+        operator.add,
+        operator.mul,
+        lambda x, y: operator.sub(y, x),
+    ],
+)
+def test_function_field_no_domain(op_func):
+    func1 = lambda x, y: x + y
+    func2 = lambda x, y: 2 * x + y
+
+    ff1 = funcf.FunctionField(func1)
+    ff2 = funcf.FunctionField(func2)
+
+    result = op_func(ff1, ff2)
+
+    assert result.func(1, 2) == op_func(func1(1, 2), func2(1, 2))
+    with pytest.raises(ValueError):
+        result.ndarray
+
+
+@pytest.mark.parametrize(
+    "op_func",
+    [
+        operator.add,
+        operator.sub,
+        operator.mul,
+        operator.truediv,
+        operator.floordiv,
+        rfloordiv,
+        operator.pow,
+        lambda x, y: operator.truediv(y, x),
+        operator.add,
+        operator.mul,
+        lambda x, y: operator.sub(y, x),
+    ],
+)
+def test_function_field_broadcast(op_func):
+    func1 = lambda x, y: x + y
+    func2 = lambda y: 2 * y
+
+    domain1 = common.Domain(dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10)))
+    domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
+
+    ff1 = funcf.FunctionField(func1, domain1)
+    ff2 = funcf.FunctionField(func2, domain2)
+
+    result = op_func(ff1, ff2)
+
+    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
+    assert isinstance(result.ndarray, np.ndarray)
+
+
+@pytest.mark.parametrize(
+    "index", [((I, UnitRange(0, 10)),), common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))]
+)
+def test_constant_field_getitem_missing_domain(index):
+    cf = funcf.constant_field(10)
+    with pytest.raises(IndexError):
+        cf[index]
+
+
+@pytest.mark.parametrize(
+    "domain,expected_shape",
+    [
+        (common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
+        (
+            common.Domain(
+                dims=(I, J, K),
+                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
+            ),
+            (3, 15, 1),
+        ),
+    ],
+)
+def test_constant_field_ndarray(domain, expected_shape):
+    cf = funcf.constant_field(10, domain)
+    assert cf.ndarray.shape == expected_shape
+    assert np.all(cf.ndarray == 10)
+
+
+def test_constant_field_empty_domain_op():
+    domain = common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
+    field = common.field(np.ones((10, 10)), domain=domain)
+    cf = funcf.constant_field(10)
+
+    result = cf + field
+    assert result.ndarray.shape == (10, 10)
+    assert np.all(result.ndarray == 11)
+
+
+binary_op_field_intersection_cases = [
+    (
+        common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
+        np.ones((10, 10)),
+        common.Domain(dims=(I, J), ranges=(UnitRange(3, 5), UnitRange(0, 5))),
+        2,
+        (2, 5),
+        3,
+    ),
+    (
+        common.Domain(dims=(I, J), ranges=(UnitRange(-5, 2), UnitRange(3, 8))),
+        np.ones((7, 5)),
+        common.Domain(dims=(I,), ranges=(UnitRange(-5, 0),)),
+        5,
+        (5, 5),
+        6,
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    "domain1, field_data, domain2, constant_value, expected_shape, expected_value",
+    binary_op_field_intersection_cases,
+)
+def test_constant_field_non_empty_domain_op(
+    domain1, field_data, domain2, constant_value, expected_shape, expected_value
+):
+    field = common.field(field_data, domain=domain1)
+    cf = funcf.constant_field(constant_value, domain2)
+
+    result = cf + field
+    assert result.ndarray.shape == expected_shape
+    assert np.all(result.ndarray == expected_value)
+
+
+def adder(i, j, k=None):
+    return i + j
+
+
+@pytest.mark.parametrize(
+    "domain,expected_shape",
+    [
+        (common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
+        (
+            common.Domain(
+                dims=(I, J, K),
+                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
+            ),
+            (3, 15, 1),
+        ),
+    ],
+)
+def test_function_field_ndarray(domain, expected_shape):
+    ff = funcf.FunctionField(adder, domain)
+    assert ff.ndarray.shape == expected_shape
+
+    ff_func = lambda *indices: adder(*indices)
+    expected_values = np.fromfunction(ff_func, ff.ndarray.shape)
+    assert np.allclose(ff.ndarray, expected_values)
+
+
+@pytest.mark.parametrize(
+    "domain",
+    [
+        common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
+    ],
+)
+def test_function_field_with_field(domain):
+    ff = funcf.FunctionField(adder, domain)
+    field = common.field(np.ones((10, 10)), domain=domain)
+
+    result = ff + field
+
+    ff_func = lambda *indices: adder(*indices) + 1
+    expected_values = np.fromfunction(ff_func, result.ndarray.shape)
+
+    assert result.ndarray.shape == (10, 10)
+    assert np.allclose(result.ndarray, expected_values)
+
+
+def test_function_field_addition():
+    res = funcf.FunctionField(
+        lambda x, y: x + 42 * y,
+        domain=common.Domain(
+            dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
+        ),
+    ) + funcf.FunctionField(
+        lambda y: 2 * y, domain=common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
+    )
+
+    assert res.func(1, 2) == 89
+
+
+def test_function_field_unary():
+    ff = funcf.FunctionField(adder)
+
+    pos_result = +ff
+    assert pos_result.func(1, 2) == 3
+
+    neg_result = -ff
+    assert neg_result.func(1, 2) == -3
+
+    invert_result = ~ff
+    assert invert_result.func(1, 2) == -4
+
+    abs_result = abs(ff)
+    assert abs_result.func(1, 2) == 3

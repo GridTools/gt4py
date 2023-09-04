@@ -27,7 +27,7 @@ from gt4py.next.embedded import common as embedded_common, nd_array_field as nd
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
 
-_EMPTY_DOMAIN = common.Domain((), ())
+_EMPTY_DOMAIN = common.Domain()
 
 ConstantFieldValue: TypeAlias = int | float | complex
 
