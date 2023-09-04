@@ -2,12 +2,13 @@
 #
 
 # You can set these variables from the command line.
-SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
-PAPER         = 
-SRCDIR        = ../../../src/gt4py
-AUTODOCDIR    = _source
-BUILDDIR      = _build
+SPHINXOPTS         =
+SPHINXBUILD        = sphinx-build
+PAPER              = 
+SRCDIR             = ../../../src/gt4py
+SPHINX_APIDOC_OPTS = --private # private modules for gt4py._core
+AUTODOCDIR         = _source
+BUILDDIR           = _build
 
 # User-friendly check for sphinx-build
 ifeq ($(shell which $(SPHINXBUILD) >/dev/null 2>&1; echo $$?), 1)
@@ -55,7 +56,7 @@ clean:
 autodoc:
 	@echo
 	@echo "Running sphinx-apidoc..."
-	sphinx-apidoc ${SPHINX_OPTS} -o ${AUTODOCDIR} ${SRCDIR}
+	sphinx-apidoc ${SPHINX_APIDOC_OPTS} -o ${AUTODOCDIR} ${SRCDIR}
 	@echo
 	@echo "sphinx-apidoc finished. The generated autodocs are in $(AUTODOCDIR)."
 

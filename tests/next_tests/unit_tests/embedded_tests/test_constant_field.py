@@ -19,7 +19,7 @@ import pytest
 
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
-from gt4py.next.embedded import constant_field
+from gt4py.next.embedded import function_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 
 
