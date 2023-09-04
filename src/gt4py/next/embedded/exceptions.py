@@ -36,3 +36,28 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
         self.indices = indices
         self.index = index
         self.dim = dim
+
+
+class EmptyDomainIndexError(gt4py_exceptions.GT4PyError):
+    index: common.AnyIndex
+
+    def __init__(self, cls_name: str):
+        super().__init__(f"Error in `{cls_name}`: Cannot index `{cls_name}` with an empty domain.")
+        self.cls_name = cls_name
+
+
+class InvalidDomainForNdarrayError(gt4py_exceptions.GT4PyError):
+    def __init__(self, cls_name: str):
+        super().__init__(
+            f"Error in `{cls_name}`: Cannot construct an ndarray with an empty domain."
+        )
+        self.cls_name = cls_name
+
+
+class InfiniteRangeNdarrayError(gt4py_exceptions.GT4PyError):
+    def __init__(self, cls_name: str, domain: common.Domain):
+        super().__init__(
+            f"Error in `{cls_name}`: Cannot construct an ndarray with an infinite range in domain: `{domain}`."
+        )
+        self.cls_name = cls_name
+        self.domain = domain

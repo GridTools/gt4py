@@ -331,6 +331,12 @@ class Domain(Sequence[NamedRange]):
     def __str__(self) -> str:
         return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
 
+    def is_finite(self) -> bool:
+        for _, rng in self:
+            if Infinity.positive() in (abs(rng.start), abs(rng.stop)):
+                return False
+        return True
+
 
 DomainLike: TypeAlias = Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
 

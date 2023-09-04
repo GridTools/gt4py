@@ -19,7 +19,7 @@ import pytest
 
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
-from gt4py.next.embedded import function_field as funcf
+from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
 
 
 I = Dimension("I")
@@ -52,7 +52,7 @@ def test_constant_field_no_domain(op_func, expected_result):
     cf2 = funcf.constant_field(20)
     result = op_func(cf1, cf2)
     assert result.func() == expected_result
-    with pytest.raises(ValueError):
+    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
         result.ndarray
 
 
@@ -82,7 +82,7 @@ def test_function_field_no_domain(op_func):
     result = op_func(ff1, ff2)
 
     assert result.func(1, 2) == op_func(func1(1, 2), func2(1, 2))
-    with pytest.raises(ValueError):
+    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
         result.ndarray
 
 
@@ -123,7 +123,7 @@ def test_function_field_broadcast(op_func):
 )
 def test_constant_field_getitem_missing_domain(index):
     cf = funcf.constant_field(10)
-    with pytest.raises(IndexError):
+    with pytest.raises(embedded_exceptions.EmptyDomainIndexError):
         cf[index]
 
 
@@ -151,9 +151,8 @@ def test_constant_field_empty_domain_op():
     field = common.field(np.ones((10, 10)), domain=domain)
     cf = funcf.constant_field(10)
 
-    result = cf + field
-    assert result.ndarray.shape == (10, 10)
-    assert np.all(result.ndarray == 11)
+    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
+        cf + field
 
 
 binary_op_field_intersection_cases = [
@@ -228,7 +227,6 @@ def test_function_field_with_field(domain):
     field = common.field(np.ones((10, 10)), domain=domain)
 
     result = ff + field
-
     ff_func = lambda *indices: adder(*indices) + 1
     expected_values = np.fromfunction(ff_func, result.ndarray.shape)
 
