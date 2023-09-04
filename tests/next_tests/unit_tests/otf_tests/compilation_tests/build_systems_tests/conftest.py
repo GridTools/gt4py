@@ -21,7 +21,7 @@ import pytest
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.next.otf import languages, stages
-from gt4py.next.otf.binding import cpp_interface, interface, pybind
+from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
 
 
@@ -99,7 +99,7 @@ def program_source_example():
 def compilable_source_example(program_source_example):
     return stages.CompilableSource(
         program_source=program_source_example,
-        binding_source=pybind.create_bindings(program_source_example),
+        binding_source=nanobind.create_bindings(program_source_example),
     )
 
 

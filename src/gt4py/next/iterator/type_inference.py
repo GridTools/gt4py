@@ -21,7 +21,6 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -37,6 +36,17 @@ TYPED_IR_NODES: typing.Final = (
     ir.FencilDefinition,
     ir.Sym,
 )
+
+
+class UnsatisfiableConstraintsError(Exception):
+    unsatisfiable_constraints: list[tuple[Type, Type]]
+
+    def __init__(self, unsatisfiable_constraints: list[tuple[Type, Type]]):
+        self.unsatisfiable_constraints = unsatisfiable_constraints
+        msg = "Type inference failed: Can not satisfy constraints:"
+        for lhs, rhs in unsatisfiable_constraints:
+            msg += f"\n  {lhs} ≡ {rhs}"
+        super().__init__(msg)
 
 
 class EmptyTuple(Type):
@@ -397,6 +407,12 @@ BUILTIN_CATEGORY_MAPPING = (
         ),
     ),
     (
+        {"power"},
+        FunctionType(
+            args=Tuple.from_elems(Val_T0_T1, Val(kind=Value(), dtype=T2, size=T1)), ret=Val_T0_T1
+        ),
+    ),
+    (
         ir.BINARY_MATH_NUMBER_BUILTINS,
         FunctionType(args=Tuple.from_elems(Val_T0_T1, Val_T0_T1), ret=Val_T0_T1),
     ),
@@ -542,7 +558,7 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
-                if isinstance(axis, CartesianAxis):
+                if isinstance(axis, gtx.Dimension):
                     continue  # Cartesian shifts don’t change the location type
                 elif isinstance(
                     axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
@@ -582,6 +598,12 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, TYPED_IR_NODES):
             assert isinstance(result, Type)
+            if not (
+                id(node) not in self.collected_types or self.collected_types[id(node)] == result
+            ):
+                # using the same node in multiple places is fine as long as the type is the same
+                # for all occurences
+                self.constraints.add((result, self.collected_types[id(node)]))
             self.collected_types[id(node)] = result
 
         return result
@@ -707,6 +729,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
             raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
 
+        # Visit arguments such that their type is also inferred
+        self.visit(node.args, **kwargs)
+
         max_length: Type = TypeVar.fresh()
         has_skip_values: Type = TypeVar.fresh()
         if self.offset_provider:
@@ -820,7 +845,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         node: ir.FunCall,
         **kwargs,
     ) -> Type:
-        if isinstance(node.fun, ir.SymRef) and hasattr(self, f"_visit_{node.fun.id}"):
+        if isinstance(node.fun, ir.SymRef) and node.fun.id in ir.GRAMMAR_BUILTINS:
             # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
             return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
 
@@ -963,10 +988,14 @@ def infer_all(
     collected_types = dict(reversed(inferrer.collected_types.items()))
 
     # Compute the most general type that satisfies all constraints
-    unified_types = unify(list(collected_types.values()), inferrer.constraints)
+    unified_types, unsatisfiable_constraints = unify(
+        list(collected_types.values()), inferrer.constraints
+    )
 
     if reindex:
-        unified_types = reindex_vars(list(unified_types))
+        unified_types, unsatisfiable_constraints = reindex_vars(
+            (unified_types, unsatisfiable_constraints)
+        )
 
     result = {
         id_: unified_type
@@ -975,6 +1004,9 @@ def infer_all(
 
     if save_to_annex:
         _save_types_to_annex(node, result)
+
+    if unsatisfiable_constraints:
+        raise UnsatisfiableConstraintsError(unsatisfiable_constraints)
 
     return result
 

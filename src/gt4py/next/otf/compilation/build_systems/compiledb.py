@@ -18,6 +18,7 @@ import dataclasses
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 from typing import Optional
 
@@ -124,6 +125,20 @@ class CompiledbProject(
             self._run_build()
 
     def _write_files(self):
+        def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
+            pattern = r"((lib.*\.a)|(.*\.lib))"
+            libraries = [child for child in children if re.match(pattern, child)]
+            folders = [child for child in children if (pathlib.Path(folder) / child).is_dir()]
+            ignored = list(set(children) - set(libraries) - set(folders))
+            return ignored
+
+        shutil.copytree(
+            self.compile_commands_cache.parent,
+            self.root_path,
+            ignore=ignore_not_libraries,
+            dirs_exist_ok=True,
+        )
+
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
 
@@ -140,7 +155,7 @@ class CompiledbProject(
         compile_db = json.loads(self.compile_commands_cache.read_text())
 
         (self.root_path / "build").mkdir(exist_ok=True)
-        (self.root_path / "bin").mkdir(exist_ok=True)
+        (self.root_path / "build" / "bin").mkdir(exist_ok=True)
 
         for entry in compile_db:
             for key, value in entry.items():
@@ -155,7 +170,7 @@ class CompiledbProject(
         build_data.write_data(
             build_data.BuildData(
                 status=build_data.BuildStatus.CONFIGURED,
-                module=pathlib.Path(compile_db[-1]["output"]),
+                module=pathlib.Path(compile_db[-1]["directory"]) / compile_db[-1]["output"],
                 entry_point_name=self.program_name,
             ),
             self.root_path,
@@ -171,7 +186,7 @@ class CompiledbProject(
                     log_file_pointer.write(entry["command"] + "\n")
                     subprocess.check_call(
                         entry["command"],
-                        cwd=self.root_path,
+                        cwd=entry["directory"],
                         shell=True,
                         stdout=log_file_pointer,
                         stderr=log_file_pointer,
@@ -251,19 +266,17 @@ def _cc_create_compiledb(
         program_name=name,
     )
 
-    prototype_project._write_files()
-    prototype_project._run_config()
+    prototype_project.build()
 
     log_file = cache_path / "log_compiledb.txt"
 
     with log_file.open("w") as log_file_pointer:
-        commands = json.loads(
-            subprocess.check_output(
-                ["ninja", "-t", "compdb"],
-                cwd=cache_path / "build",
-                stderr=log_file_pointer,
-            ).decode("utf-8")
-        )
+        commands_json_str = subprocess.check_output(
+            ["ninja", "-t", "compdb"],
+            cwd=cache_path / "build",
+            stderr=log_file_pointer,
+        ).decode("utf-8")
+        commands = json.loads(commands_json_str)
 
     compile_db = [
         cmd for cmd in commands if name in pathlib.Path(cmd["file"]).stem and cmd["command"]
@@ -272,10 +285,10 @@ def _cc_create_compiledb(
     assert compile_db
 
     for entry in compile_db:
-        entry["directory"] = "$SRC_PATH"
+        entry["directory"] = entry["directory"].replace(str(cache_path), "$SRC_PATH")
         entry["command"] = (
             entry["command"]
-            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(f"CMakeFiles/{name}.dir", ".")
             .replace(str(cache_path), "$SRC_PATH")
             .replace(f"{name}.cpp", "$BINDINGS_FILE")
             .replace(f"{name}", "$NAME")
@@ -283,13 +296,13 @@ def _cc_create_compiledb(
         )
         entry["file"] = (
             entry["file"]
-            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(f"CMakeFiles/{name}.dir", ".")
             .replace(str(cache_path), "$SRC_PATH")
             .replace(f"{name}.cpp", "$BINDINGS_FILE")
         )
         entry["output"] = (
             entry["output"]
-            .replace(f"CMakeFiles/{name}.dir", "build")
+            .replace(f"CMakeFiles/{name}.dir", ".")
             .replace(f"{name}.cpp", "$BINDINGS_FILE")
             .replace(f"{name}", "$NAME")
         )

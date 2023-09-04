@@ -116,27 +116,14 @@ def freshen(dtypes: list[T] | T) -> list[T] | T:
     return [_TypeVarReindexer(indexer).visit(dtype, index_map=index_map) for dtype in dtypes]
 
 
-@typing.overload
-def reindex_vars(dtypes: list[T]) -> list[T]:
-    ...
-
-
-@typing.overload
-def reindex_vars(dtypes: T) -> T:
-    ...
-
-
-def reindex_vars(dtypes: list[T] | T) -> list[T] | T:
+def reindex_vars(dtypes: typing.Any) -> typing.Any:
     """Reindex all type variables, to have nice indices starting at zero."""
-    if not isinstance(dtypes, list):
-        assert isinstance(dtypes, Type)
-        return reindex_vars([dtypes])[0]
 
     def indexer(index_map: dict[int, int]) -> int:
         return len(index_map)
 
     index_map = dict[int, int]()
-    return [_TypeVarReindexer(indexer).visit(dtype, index_map=index_map) for dtype in dtypes]
+    return _TypeVarReindexer(indexer).visit(dtypes, index_map=index_map)
 
 
 class _FreeVariables(eve.NodeVisitor):
@@ -265,20 +252,27 @@ class _Unifier:
             self._renamer.register(s)
             self._renamer.register(t)
 
-    def unify(self) -> list[Type]:
+    def unify(self) -> tuple[list[Type] | Type, list[tuple[Type, Type]]]:
         """Run the unification."""
+        unsatisfiable_constraints = []
         while self._constraints:
             constraint = self._constraints.pop()
-            handled = self._handle_constraint(constraint)
-            if not handled:
-                # Try with swapped LHS and RHS
-                handled = self._handle_constraint(constraint[::-1])
-            if not handled:
-                raise TypeError(
-                    f"Can not satisfy constraint: {constraint[0].value} ≡ {constraint[1].value}"
-                )
+            try:
+                handled = self._handle_constraint(constraint)
+                if not handled:
+                    # Try with swapped LHS and RHS
+                    handled = self._handle_constraint(constraint[::-1])
+            except TypeError:
+                # custom constraint handler raised an error as constraint is not satisfiable
+                # (contrary to just not handled)
+                handled = False
 
-        return [dtype.value for dtype in self._dtypes]  # unbox
+            if not handled:
+                unsatisfiable_constraints.append((constraint[0].value, constraint[1].value))
+
+        unboxed_dtypes = [dtype.value for dtype in self._dtypes]
+
+        return unboxed_dtypes, unsatisfiable_constraints
 
     def _rename(self, x: Type, y: Type) -> None:
         """Type renaming/replacement."""
@@ -329,19 +323,30 @@ class _Unifier:
 
 
 @typing.overload
-def unify(dtypes: list[Type], constraints: set[tuple[Type, Type]]) -> list[Type]:
+def unify(
+    dtypes: list[Type], constraints: set[tuple[Type, Type]]
+) -> tuple[list[Type], list[tuple[Type, Type]]]:
     ...
 
 
 @typing.overload
-def unify(dtypes: Type, constraints: set[tuple[Type, Type]]) -> Type:
+def unify(
+    dtypes: Type, constraints: set[tuple[Type, Type]]
+) -> tuple[Type, list[tuple[Type, Type]]]:
     ...
 
 
-def unify(dtypes: list[Type] | Type, constraints: set[tuple[Type, Type]]) -> list[Type] | Type:
-    """Unify all given constraints."""
+def unify(
+    dtypes: list[Type] | Type, constraints: set[tuple[Type, Type]]
+) -> tuple[list[Type] | Type, list[tuple[Type, Type]]]:
+    """
+    Unify all given constraints.
+
+    Returns the unified types and a list of unsatisfiable constraints.
+    """
     if isinstance(dtypes, Type):
-        return unify([dtypes], constraints)[0]
+        result_types, unsatisfiable_constraints = unify([dtypes], constraints)
+        return result_types[0], unsatisfiable_constraints
 
     # Deduplicate type nodes, this can speed up later things a bit
     memo = dict[Type, Type]()
