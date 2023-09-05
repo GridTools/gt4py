@@ -25,7 +25,9 @@ module in question is a submodule, defines `__all__` and exports many public API
 
 from . import common, ffront, iterator, program_processors, storage, type_inference
 from .common import Dimension, DimensionKind, Field, GridType
-from .embedded import nd_array_field
+from .embedded import (  # Just for registering field implementations
+    nd_array_field as _nd_array_field,
+)
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here

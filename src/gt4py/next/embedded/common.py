@@ -18,7 +18,7 @@ from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
-def sub_domain(domain: common.Domain, index: common.AnyIndex) -> common.Domain:
+def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
     index_sequence = common.as_any_index_sequence(index)
 
     if common.is_absolute_index_sequence(index_sequence):
@@ -112,7 +112,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     ) + (slice_obj.stop or len(input_range))
 
     if start < input_range.start or stop > input_range.stop:
-        raise IndexError()
+        raise IndexError("Slice out of range (no clipping following array API standard).")
 
     return common.UnitRange(start, stop)
 

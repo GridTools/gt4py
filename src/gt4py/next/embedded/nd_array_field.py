@@ -160,7 +160,7 @@ class _BaseNdArrayField(
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self, index: common.AnyIndex) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
 
         new_buffer = self.ndarray[buffer_slice]
@@ -226,7 +226,9 @@ class _BaseNdArrayField(
             return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
-    def _slice(self, index: common.AnyIndex) -> tuple[common.Domain, common.RelativeIndexSequence]:
+    def _slice(
+        self, index: common.AnyIndexSpec
+    ) -> tuple[common.Domain, common.RelativeIndexSequence]:
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -269,7 +271,7 @@ _BaseNdArrayField.register_builtin_func(
 
 def _np_cp_setitem(
     self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],
-    index: common.AnyIndex,
+    index: common.AnyIndexSpec,
     value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
 ) -> None:
     target_domain, target_slice = self._slice(index)
@@ -321,7 +323,7 @@ if jnp:
 
         def __setitem__(
             self,
-            index: common.AnyIndex,
+            index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
             # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
