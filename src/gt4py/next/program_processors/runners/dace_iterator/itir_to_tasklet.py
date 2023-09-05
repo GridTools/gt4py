@@ -761,12 +761,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 == 1
             )
 
-            self.context.reduce_limit = self.context.body.arrays[neighbor_args[0].value.data].shape[
-                0
-            ]
+            nreduce = self.context.body.arrays[neighbor_args[0].value.data].shape[0]
+            nreduce_domain = {"__idx": f"0:{nreduce}"}
+
+            # set variable in context to enable dereference of neighbors in input fields
+            self.context.reduce_limit = nreduce
             for i, node_arg in enumerate(node.args):
                 if not args[i]:
                     args[i] = self.visit(node_arg)[0]
+            # clear context
             self.context.reduce_limit = 0
 
             result_dtype = neighbor_args[0].dtype
@@ -776,18 +779,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             lambda_node = itir.Lambda(expr=fun_node.expr.args[1], params=fun_node.params[1:])
             lambda_context, inner_inputs, inner_outputs = self.visit(lambda_node, args=args)
 
-            nreduce = self.context.body.arrays[neighbor_args[0].value.data].shape[0]
-            nreduce_domain = {"__idx": f"0:{nreduce}"}
-
-            input_memlets = [
-                create_memlet_at(expr.value.data, ("__idx",)) for arg, expr in zip(node.args, args)
-            ]
-
             # this is a lambda function for reduction of neighbors, so neighbor tables are not needed inside
             neighbor_tables = filter_neighbor_tables(self.offset_provider)
             for conn, _ in neighbor_tables:
                 var = connectivity_identifier(conn)
                 lambda_context.body.remove_data(var)
+
+            input_memlets = [
+                create_memlet_at(expr.value.data, ("__idx",)) for arg, expr in zip(node.args, args)
+            ]
 
             op_name = fun_node.expr.fun
             assert isinstance(op_name, itir.SymRef)
