@@ -112,7 +112,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     ) + (slice_obj.stop or len(input_range))
 
     if start < input_range.start or stop > input_range.stop:
-        raise IndexError()
+        raise IndexError("Slice out of range (no clipping following array API standard).")
 
     return common.UnitRange(start, stop)
 
