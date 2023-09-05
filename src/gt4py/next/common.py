@@ -331,7 +331,9 @@ class Domain(Sequence[NamedRange]):
         return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
 
 
-DomainLike: TypeAlias = Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+DomainLike: TypeAlias = (
+    Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+)  # `Domain` is `Sequence[NamedRange]` and therefore a subset
 
 
 def domain(domain_like: DomainLike) -> Domain:
@@ -656,13 +658,26 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
 
 class FieldBuiltinFuncRegistry:
+    """
+    Mixin for adding `fbuiltins` registry to a `Field`.
+
+    Subclasses of a `Field` with `FieldBuiltinFuncRegistry` get their own registry,
+    dispatching (via ChainMap) to its parent's registries.
+    """
+
     _builtin_func_map: collections.ChainMap[
         fbuiltins.BuiltInFunction, Callable
     ] = collections.ChainMap()
 
     def __init_subclass__(cls, **kwargs):
-        # might break in multiple inheritance (if multiple ancestors have `_builtin_func_map`)
-        cls._builtin_func_map = cls._builtin_func_map.new_child()
+        cls._builtin_func_map = collections.ChainMap(
+            {},  # New empty `dict`` for new registrations on this class
+            *[
+                c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
+                for c in cls.__mro__
+                if "_builtin_func_map" in c.__dict__
+            ],
+        )
 
     @classmethod
     def register_builtin_func(
