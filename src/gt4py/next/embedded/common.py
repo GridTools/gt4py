@@ -11,8 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
 
 from typing import Any, Optional, Sequence, cast
+
+import numpy as np
 
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
@@ -125,3 +128,25 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
+
+
+def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> list[slice | None]:
+    domain_slice = []
+    for dim in new_dimensions:
+        if _find_index_of_dim(dim, field.domain) is not None:
+            domain_slice.append(slice(None))
+        else:
+            domain_slice.append(np.newaxis)
+    return domain_slice
+
+
+def _compute_named_ranges(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> list[common.NamedRange]:
+    named_ranges = []
+    for dim in new_dimensions:
+        if (pos := _find_index_of_dim(dim, field.domain)) is not None:
+            named_ranges.append((dim, field.domain[pos][1]))
+        else:
+            named_ranges.append(
+                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
+            )
+    return named_ranges

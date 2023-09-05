@@ -27,6 +27,7 @@ from gt4py.next.embedded import (
     exceptions as embedded_exceptions,
     nd_array_field as nd,
 )
+from gt4py.next.ffront import fbuiltins
 
 
 @dataclasses.dataclass(frozen=True)
@@ -133,17 +134,14 @@ def _compose(operation: Callable, *fields: FunctionField) -> Callable:
 
 
 def _broadcast(field: FunctionField, dims: tuple[common.Dimension, ...]) -> FunctionField:
-    def broadcasted_function(*args: int):
+    def broadcasted_func(*args: int):
         if not _has_empty_domain(field):
             selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
             return field.func(*selected_args)
         return field.func(*args)
 
-    broadcasted_domain = common.Domain(
-        dims=dims, ranges=tuple([common.UnitRange.infinity()] * len(dims))
-    )
-
-    return FunctionField(broadcasted_function, broadcasted_domain)
+    named_ranges = embedded_common._compute_named_ranges(field, dims)
+    return FunctionField(broadcasted_func, common.Domain(*named_ranges))
 
 
 def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
@@ -158,3 +156,6 @@ def constant_field(
     value: core_defs.ScalarT, domain: common.Domain = common.Domain()
 ) -> FunctionField:
     return FunctionField(lambda: value, domain, _constant=True)
+
+
+FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)

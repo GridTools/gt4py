@@ -25,6 +25,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
+from gt4py.next.embedded.common import _compute_domain_slice, _compute_named_ranges
 from gt4py.next.ffront import fbuiltins
 
 
@@ -333,17 +334,8 @@ if jnp:
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
-    domain_slice: list[slice | None] = []
-    named_ranges = []
-    for dim in new_dimensions:
-        if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
-            domain_slice.append(slice(None))
-            named_ranges.append((dim, field.domain[pos][1]))
-        else:
-            domain_slice.append(np.newaxis)
-            named_ranges.append(
-                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-            )
+    domain_slice = _compute_domain_slice(field, new_dimensions)
+    named_ranges = _compute_named_ranges(field, new_dimensions)
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
