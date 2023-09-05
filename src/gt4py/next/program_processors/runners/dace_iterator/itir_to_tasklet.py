@@ -36,6 +36,7 @@ from .utility import (
     create_memlet_full,
     filter_neighbor_tables,
     map_nested_sdfg_symbols,
+    unique_name,
     unique_var_name,
 )
 
@@ -179,13 +180,15 @@ def builtin_neighbors(
     table_name = connectivity_identifier(offset_dim)
     table_array = sdfg.arrays[table_name]
 
+    # generate unique map index name to avoid conflict with other maps inside same state
+    index_name = unique_name("__neigh_idx")
     me, mx = state.add_map(
         f"{offset_dim}_neighbors_map",
-        ndrange={"neigh_idx": f"0:{table.max_neighbors}"},
+        ndrange={index_name: f"0:{table.max_neighbors}"},
     )
     shift_tasklet = state.add_tasklet(
         "shift",
-        code="__result = __table[__idx, neigh_idx]",
+        code=f"__result = __table[__idx, {index_name}]",
         inputs={"__table", "__idx"},
         outputs={"__result"},
     )
@@ -239,7 +242,7 @@ def builtin_neighbors(
         data_access_tasklet,
         mx,
         result_access,
-        memlet=dace.Memlet(data=result_name, subset="neigh_idx"),
+        memlet=dace.Memlet(data=result_name, subset=index_name),
         src_conn="__result",
     )
 
@@ -555,13 +558,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
             result_access = self.context.state.add_access(result_name)
 
+            # generate unique map index name to avoid conflict with other maps inside same state
+            index_name = unique_name("__deref_idx")
             me, mx = self.context.state.add_map(
                 "deref_map",
-                ndrange={"__idx": f"0:{self.context.reduce_limit}"},
+                ndrange={index_name: f"0:{self.context.reduce_limit}"},
             )
 
             array_index = [
-                f"{iterator.indices[dim].data}_v" if dim in iterator.indices else "__idx"
+                f"{iterator.indices[dim].data}_v" if dim in iterator.indices else index_name
                 for dim in sorted(iterator.dimensions)
             ]
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
@@ -588,7 +593,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 deref_tasklet,
                 mx,
                 result_access,
-                memlet=dace.Memlet(data=result_name, subset="__idx"),
+                memlet=dace.Memlet(data=result_name, subset=index_name),
                 src_conn="__result",
             )
 

@@ -153,7 +153,11 @@ def add_mapped_nested_sdfg(
 _unique_id = 0
 
 
-def unique_var_name():
+def unique_name(prefix):
     global _unique_id
     _unique_id += 1
-    return f"__var_{_unique_id}"
+    return f"{prefix}_{_unique_id}"
+
+
+def unique_var_name():
+    return unique_name("__var")
