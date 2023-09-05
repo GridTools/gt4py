@@ -31,7 +31,7 @@ from gt4py.next.ffront import fbuiltins
 
 
 @dataclasses.dataclass(frozen=True)
-class FunctionField(common.FieldBuiltinFuncRegistry):
+class FunctionField(common.Field, common.FieldBuiltinFuncRegistry):
     func: Callable
     domain: common.Domain = common.Domain()
     _constant: bool = False
@@ -70,11 +70,11 @@ class FunctionField(common.FieldBuiltinFuncRegistry):
         )
 
     @overload
-    def _binary_operation(self, op: Callable, other: common.Field) -> common.Field:
+    def _binary_operation(self, op: Callable, other: FunctionField) -> FunctionField:
         ...
 
     @overload
-    def _binary_operation(self, op: Callable, other: FunctionField) -> FunctionField:
+    def _binary_operation(self, op: Callable, other: common.Field) -> common.Field:
         ...
 
     def _binary_operation(self, op, other):
@@ -127,6 +127,36 @@ class FunctionField(common.FieldBuiltinFuncRegistry):
 
     def __abs__(self) -> FunctionField:
         return self.__class__(_compose(abs, self), self.domain)
+
+    def __and__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __and__ not implemented")
+
+    def __call__(self, *args, **kwargs) -> 'FunctionField':
+        raise NotImplementedError("Method __call__ not implemented")
+
+    def __or__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __or__ not implemented")
+
+    def __radd__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __radd__ not implemented")
+
+    def __rfloordiv__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __rfloordiv__ not implemented")
+
+    def __rmul__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __rmul__ not implemented")
+
+    def __rsub__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __rsub__ not implemented")
+
+    def __rtruediv__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __rtruediv__ not implemented")
+
+    def __xor__(self, other) -> 'FunctionField':
+        raise NotImplementedError("Method __xor__ not implemented")
+
+    def remap(self, *args, **kwargs) -> 'FunctionField':
+        raise NotImplementedError("Method remap not implemented")
 
 
 def _compose(operation: Callable, *fields: FunctionField) -> Callable:

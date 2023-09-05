@@ -130,8 +130,8 @@ def _find_index_of_dim(
     return None
 
 
-def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> list[slice | None]:
-    domain_slice = []
+def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> Sequence[slice | None]:
+    domain_slice: list[slice | None] = []
     for dim in new_dimensions:
         if _find_index_of_dim(dim, field.domain) is not None:
             domain_slice.append(slice(None))
@@ -140,7 +140,7 @@ def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dime
     return domain_slice
 
 
-def _compute_named_ranges(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> list[common.NamedRange]:
+def _compute_named_ranges(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> Sequence[common.NamedRange]:
     named_ranges = []
     for dim in new_dimensions:
         if (pos := _find_index_of_dim(dim, field.domain)) is not None:
