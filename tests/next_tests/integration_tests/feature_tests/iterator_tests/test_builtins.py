@@ -171,10 +171,6 @@ def arithmetic_and_logical_test_data():
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail(
-            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
-        )
 
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
@@ -207,10 +203,6 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail(
-            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
-        )
 
     if builtin_name == "gamma":
         # numpy has no gamma function
