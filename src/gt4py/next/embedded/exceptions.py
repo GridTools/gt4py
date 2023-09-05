@@ -18,14 +18,14 @@ from gt4py.next.errors import exceptions as gt4py_exceptions
 
 class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
     domain: common.Domain
-    indices: common.AnyIndex
+    indices: common.AnyIndexSpec
     index: common.AnyIndexElement
     dim: common.Dimension
 
     def __init__(
         self,
         domain: common.Domain,
-        indices: common.AnyIndex,
+        indices: common.AnyIndexSpec,
         index: common.AnyIndexElement,
         dim: common.Dimension,
     ):
@@ -39,7 +39,7 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
 
 
 class EmptyDomainIndexError(gt4py_exceptions.GT4PyError):
-    index: common.AnyIndex
+    index: common.AnyIndexSpec
 
     def __init__(self, cls_name: str):
         super().__init__(f"Error in `{cls_name}`: Cannot index `{cls_name}` with an empty domain.")

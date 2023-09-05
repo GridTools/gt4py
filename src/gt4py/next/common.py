@@ -168,7 +168,7 @@ RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
 AnyIndexSequence: TypeAlias = RelativeIndexSequence | AbsoluteIndexSequence
-AnyIndex: TypeAlias = AnyIndexElement | AnyIndexSequence
+AnyIndexSpec: TypeAlias = AnyIndexElement | AnyIndexSequence
 
 
 def is_int_index(p: Any) -> TypeGuard[IntIndex]:
@@ -177,7 +177,7 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
 
 
-def is_named_range(v: AnyIndex) -> TypeGuard[NamedRange]:
+def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple)
         and len(v) == 2
@@ -186,13 +186,13 @@ def is_named_range(v: AnyIndex) -> TypeGuard[NamedRange]:
     )
 
 
-def is_named_index(v: AnyIndex) -> TypeGuard[NamedRange]:
+def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
 
 
-def is_any_index_element(v: AnyIndex) -> TypeGuard[AnyIndexElement]:
+def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
     return (
         is_int_index(v)
         or is_named_range(v)
@@ -212,7 +212,7 @@ def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSe
     )
 
 
-def as_any_index_sequence(index: AnyIndex) -> AnyIndexSequence:
+def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
     # `cast` because mypy/typing doesn't special case 1-element tuples, i.e. `tuple[A|B] != tuple[A]|tuple[B]`
     return cast(
         AnyIndexSequence,
@@ -237,7 +237,6 @@ class Domain(Sequence[NamedRange]):
         dims: Optional[tuple[Dimension, ...]] = None,
         ranges: Optional[tuple[UnitRange, ...]] = None,
     ) -> None:
-        # TODO throw user error in case pre-conditions are not met
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
                 raise ValueError("Either both none of `dims` and `ranges` must be specified.")
@@ -338,7 +337,9 @@ class Domain(Sequence[NamedRange]):
         return True
 
 
-DomainLike: TypeAlias = Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+DomainLike: TypeAlias = (
+    Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+)  # `Domain` is `Sequence[NamedRange]` and therefore a subset
 
 
 def domain(domain_like: DomainLike) -> Domain:
@@ -426,7 +427,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndex) -> Field | core_defs.ScalarT:
+    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -435,7 +436,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndex) -> Field | core_defs.ScalarT:
+    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -520,7 +521,7 @@ def is_field(
 @extended_runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, index: AnyIndex, value: Field | core_defs.ScalarT) -> None:
+    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None:
         ...
 
 
@@ -663,13 +664,26 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
 
 
 class FieldBuiltinFuncRegistry:
+    """
+    Mixin for adding `fbuiltins` registry to a `Field`.
+
+    Subclasses of a `Field` with `FieldBuiltinFuncRegistry` get their own registry,
+    dispatching (via ChainMap) to its parent's registries.
+    """
+
     _builtin_func_map: collections.ChainMap[
         fbuiltins.BuiltInFunction, Callable
     ] = collections.ChainMap()
 
     def __init_subclass__(cls, **kwargs):
-        # might break in multiple inheritance (if multiple ancestors have `_builtin_func_map`)
-        cls._builtin_func_map = cls._builtin_func_map.new_child()
+        cls._builtin_func_map = collections.ChainMap(
+            {},  # New empty `dict`` for new registrations on this class
+            *[
+                c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
+                for c in cls.__mro__
+                if "_builtin_func_map" in c.__dict__
+            ],
+        )
 
     @classmethod
     def register_builtin_func(
