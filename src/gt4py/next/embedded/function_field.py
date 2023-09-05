@@ -157,4 +157,4 @@ def _has_empty_domain(field: FunctionField) -> bool:
 def constant_field(
     value: core_defs.ScalarT, domain: common.Domain = common.Domain()
 ) -> FunctionField:
-    return FunctionField(lambda *args: value, domain, _constant=True)
+    return FunctionField(lambda: value, domain, _constant=True)
