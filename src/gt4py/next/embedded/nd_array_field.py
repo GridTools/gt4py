@@ -15,10 +15,9 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, overload
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
 
 import numpy as np
 from numpy import typing as npt
@@ -82,7 +81,9 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
+class _BaseNdArrayField(
+    common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
+):
     """
     Shared field implementation for NumPy-like fields.
 
@@ -98,35 +99,6 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     array_ns: ClassVar[
         ModuleType
     ]  # TODO(havogt) after storage PR is merged, update to the NDArrayNamespace protocol
-
-    _builtin_func_map: ClassVar[dict[fbuiltins.BuiltInFunction, Callable]] = {}
-
-    @classmethod
-    def __gt_builtin_func__(cls, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: None
-    ) -> functools.partial[Callable[_P, _R]]:
-        ...
-
-    @overload
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Callable[_P, _R]
-    ) -> Callable[_P, _R]:
-        ...
-
-    @classmethod
-    def register_builtin_func(
-        cls, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-    ) -> Callable[_P, _R] | functools.partial[Callable[_P, _R]]:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)  # type: ignore[arg-type]
-        return cls._builtin_func_map.setdefault(op, op_func)
 
     @property
     def domain(self) -> common.Domain:
@@ -188,7 +160,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
     def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
         raise NotImplementedError()
 
-    def restrict(self, index: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
 
         new_buffer = self.ndarray[buffer_slice]
@@ -224,7 +196,7 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __mod__ = __rmod__ = _make_binary_array_field_intrinsic_func("mod", "mod")
 
-    def __and__(self, other: common.Field) -> _BaseNdArrayField:
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_and", "logical_and")(
                 self, other
@@ -233,14 +205,14 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
 
     __rand__ = __and__
 
-    def __or__(self, other: common.Field) -> _BaseNdArrayField:
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_or", "logical_or")(self, other)
         raise NotImplementedError("`__or__` not implemented for non-`bool` fields.")
 
     __ror__ = __or__
 
-    def __xor__(self, other: common.Field) -> _BaseNdArrayField:
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_xor", "logical_xor")(
                 self, other
@@ -254,17 +226,18 @@ class _BaseNdArrayField(common.MutableField[common.DimsT, core_defs.ScalarT]):
             return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
 
-    def _slice(self, index: common.FieldSlice) -> tuple[common.Domain, common.BufferSlice]:
+    def _slice(
+        self, index: common.AnyIndexSpec
+    ) -> tuple[common.Domain, common.RelativeIndexSequence]:
         new_domain = embedded_common.sub_domain(self.domain, index)
 
-        index = embedded_common._tuplize_field_slice(index)
-
+        index_sequence = common.as_any_index_sequence(index)
         slice_ = (
-            _get_slices_from_domain_slice(self.domain, index)
-            if common.is_domain_slice(index)
-            else index
+            _get_slices_from_domain_slice(self.domain, index_sequence)
+            if common.is_absolute_index_sequence(index_sequence)
+            else index_sequence
         )
-        assert common.is_buffer_slice(slice_), slice_
+        assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
 
@@ -298,7 +271,7 @@ _BaseNdArrayField.register_builtin_func(
 
 def _np_cp_setitem(
     self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],
-    index: common.FieldSlice,
+    index: common.AnyIndexSpec,
     value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
 ) -> None:
     target_domain, target_slice = self._slice(index)
@@ -350,10 +323,10 @@ if jnp:
 
         def __setitem__(
             self,
-            index: common.FieldSlice,
+            index: common.AnyIndexSpec,
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
-            # use `self.ndarray.at(index).set(value)`
+            # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
             raise NotImplementedError("`__setitem__` for JaxArrayField not yet implemented.")
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
@@ -388,7 +361,7 @@ _BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast
 def _get_slices_from_domain_slice(
     domain: common.Domain,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
-) -> common.BufferSlice:
+) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
     This function generates a tuple of slices that can be used to extract sub-arrays from a field. The provided
@@ -415,7 +388,7 @@ def _get_slices_from_domain_slice(
 
 
 def _compute_slice(
-    rng: common.DomainRange, domain: common.Domain, pos: int
+    rng: common.UnitRange | common.IntIndex, domain: common.Domain, pos: int
 ) -> slice | common.IntIndex:
     """Compute a slice or integer based on the provided range, domain, and position.
 

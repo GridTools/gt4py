@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, ClassVar, TypeGuard
+from typing import Any, ClassVar, TypeGuard, TypeVar
 
 
 class RecursionGuard:
@@ -51,5 +51,8 @@ class RecursionGuard:
         self.guarded_objects.remove(id(self.obj))
 
 
-def is_tuple_of(v: Any, t: type) -> TypeGuard[tuple]:
+_T = TypeVar("_T")
+
+
+def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)

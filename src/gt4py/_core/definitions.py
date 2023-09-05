@@ -247,12 +247,14 @@ class DType(Generic[ScalarT]):
         return len(self.tensor_shape)
 
     def __eq__(self, other: Any) -> bool:
-        # TODO: discuss (make concrete subclasses equal to instances of this with the same type)
         return (
             isinstance(other, DType)
             and self.scalar_type == other.scalar_type
             and self.tensor_shape == other.tensor_shape
         )
+
+    def __hash__(self) -> int:
+        return hash((self.scalar_type, self.tensor_shape))
 
 
 @dataclasses.dataclass(frozen=True)
