@@ -136,6 +136,18 @@ class Context:
     body: dace.SDFG
     state: dace.SDFGState
     symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
+    reduce_limit: int
+
+    def __init__(
+        self,
+        body: dace.SDFG,
+        state: dace.SDFGState,
+        symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr],
+    ):
+        self.body = body
+        self.state = state
+        self.symbol_map = symbol_map
+        self.reduce_limit = 0
 
 
 def builtin_neighbors(
@@ -532,15 +544,66 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
-        args = [ValueExpr(iterator.field, iterator.dtype)] + [
-            ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions
-        ]
-        sorted_args = sorted(args, key=lambda x: x.value.data)
-        array_index = [f"{arg.value.data}_v" for arg in args[1:]]
-        expr = f"{args[0].value.data}_v[{', '.join(array_index)}]"
-        return self.add_expr_tasklet(
-            [(arg, f"{arg.value.data}_v") for arg in sorted_args], expr, iterator.dtype, "deref"
-        )
+        args: list[ValueExpr]
+        if self.context.reduce_limit:
+            result_name = unique_var_name()
+            self.context.body.add_array(
+                result_name,
+                dtype=iterator.dtype,
+                shape=(self.context.reduce_limit,),
+                transient=True,
+            )
+            result_access = self.context.state.add_access(result_name)
+
+            me, mx = self.context.state.add_map(
+                "deref_map",
+                ndrange={"__idx": f"0:{self.context.reduce_limit}"},
+            )
+
+            array_index = [
+                f"{iterator.indices[dim].data}_v" if dim in iterator.indices else "__idx"
+                for dim in sorted(iterator.dimensions)
+            ]
+            args = [ValueExpr(iterator.field, iterator.dtype)] + [
+                ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.indices
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+
+            deref_tasklet = self.context.state.add_tasklet(
+                name="deref",
+                inputs=set(internals),
+                outputs={"__result"},
+                code=f"__result = {args[0].value.data}_v[{', '.join(array_index)}]",
+            )
+
+            for arg, internal in zip(args, internals):
+                input_memlet = create_memlet_full(
+                    arg.value.data, self.context.body.arrays[arg.value.data]
+                )
+                self.context.state.add_memlet_path(
+                    arg.value, me, deref_tasklet, memlet=input_memlet, dst_conn=internal
+                )
+
+            self.context.state.add_memlet_path(
+                deref_tasklet,
+                mx,
+                result_access,
+                memlet=dace.Memlet(data=result_name, subset="__idx"),
+                src_conn="__result",
+            )
+
+            return [ValueExpr(value=result_access, dtype=iterator.dtype)]
+
+        else:
+            sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
+            flat_index = [
+                ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
+            ]
+
+            args = [ValueExpr(iterator.field, int), *flat_index]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]}[{', '.join(internals[1:])}]"
+            return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
 
     def _split_shift_args(
         self, args: list[itir.Expr]
@@ -676,43 +739,48 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert isinstance(node.fun.args[0], itir.Lambda)
             fun_node = node.fun.args[0]
 
-            args = list(itertools.chain(*self.visit(node.args)))
-            assert len(node.args) == len(args)
-            # filter neighbor expressions
-            neighbors_expr = [
-                expr
-                for arg, expr in zip(node.args, args)
-                if isinstance(arg, itir.FunCall)
-                and isinstance(arg.fun, itir.SymRef)
-                and arg.fun.id == "neighbors"
-            ]
+            args = []
+            for node_arg in node.args:
+                if (
+                    isinstance(node_arg, itir.FunCall)
+                    and isinstance(node_arg.fun, itir.SymRef)
+                    and node_arg.fun.id == "neighbors"
+                ):
+                    expr = self.visit(node_arg)
+                    args.append(*expr)
+                else:
+                    args.append(None)
+
+            neighbor_args = [arg for arg in args if arg]
+
             # check that all neighbors expression have the same range
             assert (
                 len(
-                    set(
-                        [self.context.body.arrays[expr.value.data].shape for expr in neighbors_expr]
-                    )
+                    set([self.context.body.arrays[expr.value.data].shape for expr in neighbor_args])
                 )
                 == 1
             )
-            result_dtype = neighbors_expr[0].dtype
 
+            self.context.reduce_limit = self.context.body.arrays[neighbor_args[0].value.data].shape[
+                0
+            ]
+            for i, node_arg in enumerate(node.args):
+                if not args[i]:
+                    args[i] = self.visit(node_arg)[0]
+            self.context.reduce_limit = 0
+
+            result_dtype = neighbor_args[0].dtype
             self.context.body.add_scalar(result_name, result_dtype, transient=True)
 
             assert isinstance(fun_node.expr, itir.FunCall)
             lambda_node = itir.Lambda(expr=fun_node.expr.args[1], params=fun_node.params[1:])
             lambda_context, inner_inputs, inner_outputs = self.visit(lambda_node, args=args)
 
-            nreduce = self.context.body.arrays[neighbors_expr[0].value.data].shape[0]
+            nreduce = self.context.body.arrays[neighbor_args[0].value.data].shape[0]
             nreduce_domain = {"__idx": f"0:{nreduce}"}
 
             input_memlets = [
-                create_memlet_at(expr.value.data, ("__idx",))
-                if isinstance(arg, itir.FunCall)
-                and isinstance(arg.fun, itir.SymRef)
-                and arg.fun.id == "neighbors"
-                else create_memlet_full(expr.value.data, self.context.body.arrays[expr.value.data])
-                for arg, expr in zip(node.args, args)
+                create_memlet_at(expr.value.data, ("__idx",)) for arg, expr in zip(node.args, args)
             ]
 
             # this is a lambda function for reduction of neighbors, so neighbor tables are not needed inside
