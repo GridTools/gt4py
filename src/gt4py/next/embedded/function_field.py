@@ -35,7 +35,7 @@ class FunctionField(common.FieldBuiltinFuncRegistry):
     domain: common.Domain = common.Domain()
     _constant: bool = False
 
-    def restrict(self, index: common.AnyIndex) -> FunctionField:
+    def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         if _has_empty_domain(self):
             raise embedded_exceptions.EmptyDomainIndexError(self.__class__.__name__)
         new_domain = embedded_common.sub_domain(self.domain, index)
