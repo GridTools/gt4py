@@ -18,7 +18,7 @@ from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
-def sub_domain(domain: common.Domain, index: common.AnyIndex) -> common.Domain:
+def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
     index_sequence = common.as_any_index_sequence(index)
 
     if common.is_absolute_index_sequence(index_sequence):
