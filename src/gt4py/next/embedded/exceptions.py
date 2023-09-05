@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Optional
 from gt4py.next import common
 from gt4py.next.errors import exceptions as gt4py_exceptions
 
@@ -19,19 +20,21 @@ from gt4py.next.errors import exceptions as gt4py_exceptions
 class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
     domain: common.Domain
     indices: common.AnyIndexSpec
-    index: common.AnyIndexElement
-    dim: common.Dimension
+    index: Optional[common.AnyIndexElement]
+    dim: Optional[common.Dimension]
 
     def __init__(
         self,
         domain: common.Domain,
         indices: common.AnyIndexSpec,
-        index: common.AnyIndexElement,
-        dim: common.Dimension,
+        index: Optional[common.AnyIndexElement] = None,
+        dim: Optional[common.Dimension] = None,
     ):
-        super().__init__(
-            f"Out of bounds: slicing {domain} with index `{indices}`, `{index}` is out of bounds in dimension `{dim}`."
-        )
+        msg = f"Out of bounds: slicing {domain} with index `{indices}`."
+        if index is not None and dim is not None:
+            msg += f" `{index}` is out of bounds in dimension `{dim}`."
+
+        super().__init__(msg)
         self.domain = domain
         self.indices = indices
         self.index = index

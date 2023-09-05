@@ -124,6 +124,11 @@ K = common.Dimension("K")
             (slice(1, 2), slice(1, 2), Ellipsis),
             [(I, (3, 4)), (J, (4, 5)), (K, (4, 7))],
         ),
+        ([], Ellipsis, []),
+        ([], slice(None), IndexError),
+        ([], 0, IndexError),
+        ([], (I, 0), IndexError),
+        # ([], (), []), # once we implement the array API standard
     ],
 )
 def test_sub_domain(domain, index, expected):

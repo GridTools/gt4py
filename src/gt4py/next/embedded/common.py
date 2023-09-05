@@ -40,7 +40,7 @@ def _relative_sub_domain(
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
-        raise IndexError(f"Trying to index a `Field` with {len(domain)} dimensions with {index}.")
+        raise embedded_exceptions.IndexOutOfBounds(domain=domain, indices=index)
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for (dim, rng), idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
@@ -130,7 +130,9 @@ def _find_index_of_dim(
     return None
 
 
-def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> Sequence[slice | None]:
+def _compute_domain_slice(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> Sequence[slice | None]:
     domain_slice: list[slice | None] = []
     for dim in new_dimensions:
         if _find_index_of_dim(dim, field.domain) is not None:
@@ -140,7 +142,9 @@ def _compute_domain_slice(field: common.Field, new_dimensions: tuple[common.Dime
     return domain_slice
 
 
-def _compute_named_ranges(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> Sequence[common.NamedRange]:
+def _compute_named_ranges(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> Sequence[common.NamedRange]:
     named_ranges = []
     for dim in new_dimensions:
         if (pos := _find_index_of_dim(dim, field.domain)) is not None:
