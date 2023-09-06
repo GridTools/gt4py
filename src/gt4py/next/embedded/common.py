@@ -19,7 +19,6 @@ from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 
-# TODO: handle 0-D empty domain case. If Ellipsis should give back domain and in all other cases error.
 def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
     index_sequence = common.as_any_index_sequence(index)
 

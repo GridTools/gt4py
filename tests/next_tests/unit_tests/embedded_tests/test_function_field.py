@@ -77,13 +77,22 @@ def test_constant_field_no_domain(op_func, expected_result):
     assert result.func() == expected_result
 
 
-@pytest.mark.parametrize(
-    "index", [((I, UnitRange(0, 10)),), common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))]
+@pytest.fixture(
+    params=[((I, UnitRange(0, 10)),), common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))]
 )
-def test_constant_field_getitem_missing_domain(index):
+def test_index(request):
+    return request.param
+
+
+def test_constant_field_getitem_missing_domain(test_index):
     cf = funcf.constant_field(10)
     with pytest.raises(embedded_exceptions.IndexOutOfBounds):
-        cf[index]
+        cf[test_index]
+
+
+def test_constant_field_getitem_missing_domain_ellipsis(test_index):
+    cf = funcf.constant_field(10)
+    cf[...].domain == cf.domain
 
 
 @pytest.mark.parametrize(
@@ -175,9 +184,7 @@ def test_function_field_logical_operators(op_func):
     func1 = lambda x, y: x > 5
     func2 = lambda y: y < 10
 
-    domain1 = common.Domain(
-        dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
-    )
+    domain1 = common.Domain(dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10)))
     domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
 
     ff1 = funcf.FunctionField(func1, domain1)
