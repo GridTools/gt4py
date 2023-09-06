@@ -336,7 +336,15 @@ if jnp:
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice = _compute_domain_slice(field, new_dimensions)
     named_ranges = _compute_named_ranges(field, new_dimensions)
-    return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+
+    # handle case where we have a constant FunctionField where ndarray is a scalar
+    if isinstance(value := field.ndarray, (int, float)):
+        shape = [len(rng) for rng in field.domain.ranges]
+        ndarray = np.full(shape, value)
+    else:
+        ndarray = field.ndarray
+
+    return common.field(ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(

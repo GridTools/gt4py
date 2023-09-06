@@ -20,7 +20,7 @@ import numpy as np
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
-
+# TODO: handle 0-D empty domain case. If Ellipsis should give back domain and in all other cases error.
 def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
     index_sequence = common.as_any_index_sequence(index)
 
@@ -67,6 +67,10 @@ def _absolute_sub_domain(
     domain: common.Domain, index: common.AbsoluteIndexSequence
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
+
+    if len(domain) < len(index):
+        raise embedded_exceptions.IndexOutOfBounds(domain=domain, indices=index)
+
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]

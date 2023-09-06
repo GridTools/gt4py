@@ -123,7 +123,7 @@ def test_function_field_broadcast(op_func):
 )
 def test_constant_field_getitem_missing_domain(index):
     cf = funcf.constant_field(10)
-    with pytest.raises(embedded_exceptions.EmptyDomainIndexError):
+    with pytest.raises(embedded_exceptions.IndexOutOfBounds):
         cf[index]
 
 
@@ -142,8 +142,8 @@ def test_constant_field_getitem_missing_domain(index):
 )
 def test_constant_field_ndarray(domain, expected_shape):
     cf = funcf.constant_field(10, domain)
-    assert cf.ndarray.shape == expected_shape
-    assert np.all(cf.ndarray == 10)
+    assert isinstance(cf.ndarray, int)
+    assert cf.ndarray == 10
 
 
 def test_constant_field_empty_domain_op():
@@ -160,7 +160,7 @@ binary_op_field_intersection_cases = [
         common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
         np.ones((10, 10)),
         common.Domain(dims=(I, J), ranges=(UnitRange(3, 5), UnitRange(0, 5))),
-        2,
+        2.0,
         (2, 5),
         3,
     ),
@@ -261,3 +261,9 @@ def test_function_field_unary():
 
     abs_result = abs(ff)
     assert abs_result.func(1, 2) == 3
+
+
+def test_function_field_scalar_op():
+    ff = funcf.FunctionField(adder)
+    new = ff * 5.0
+    assert new.func(1, 2) == 15

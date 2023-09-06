@@ -31,14 +31,11 @@ from gt4py.next.ffront import fbuiltins
 
 
 @dataclasses.dataclass(frozen=True)
-class FunctionField(common.Field, common.FieldBuiltinFuncRegistry):
+class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry):
     func: Callable
     domain: common.Domain = common.Domain()
-    _constant: bool = False
 
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
-        if _has_empty_domain(self):
-            raise embedded_exceptions.EmptyDomainIndexError(self.__class__.__name__)
         new_domain = embedded_common.sub_domain(self.domain, index)
         return self.__class__(self.func, new_domain)
 
@@ -54,23 +51,24 @@ class FunctionField(common.Field, common.FieldBuiltinFuncRegistry):
 
         shape = [len(rng) for rng in self.domain.ranges]
 
-        if self._constant:
-            return np.full(shape, self.func())
-
-        return np.fromfunction(lambda *indices: self.func(*indices), shape)
+        return np.fromfunction(self.func, shape)
 
     def _handle_function_field_op(
-        self, other: FunctionField, operator_func: Callable
+        self, other: FunctionField, op: Callable
     ) -> FunctionField:
         domain_intersection = self.domain & other.domain
         broadcasted_self = _broadcast(self, domain_intersection.dims)
         broadcasted_other = _broadcast(other, domain_intersection.dims)
         return self.__class__(
-            _compose(operator_func, broadcasted_self, broadcasted_other), domain_intersection
+            _compose(op, broadcasted_self, broadcasted_other), domain_intersection
         )
 
+    def _handle_scalar_op(self, other: FunctionField, op: Callable) -> FunctionField:
+        new_func = lambda *args: op(self.func(*args), other)
+        return self.__class__(new_func, self.domain)
+
     @overload
-    def _binary_operation(self, op: Callable, other: FunctionField) -> FunctionField:
+    def _binary_operation(self, op: Callable, other: core_defs.ScalarT) -> common.Field:
         ...
 
     @overload
@@ -80,82 +78,84 @@ class FunctionField(common.Field, common.FieldBuiltinFuncRegistry):
     def _binary_operation(self, op, other):
         if isinstance(other, self.__class__):
             return self._handle_function_field_op(other, op)
+        elif isinstance(other, (int, float)):  # Handle scalar values
+            return self._handle_scalar_op(other, op)
         else:
             return op(other, self)
 
-    def __add__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)
 
-    def __sub__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __sub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.sub, other)
 
-    def __mul__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __mul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mul, other)
 
-    def __truediv__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __truediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.truediv, other)
 
-    def __floordiv__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __floordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.floordiv, other)
 
-    def __mod__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __mod__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mod, other)
 
-    def __pow__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.pow, other)
 
-    def __lt__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __lt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.lt, other)
 
-    def __le__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __le__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.le, other)
 
-    def __gt__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __gt__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.gt, other)
 
-    def __ge__(self, other: common.Field | FunctionField) -> common.Field | FunctionField:
+    def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.ge, other)
 
-    def __pos__(self) -> FunctionField:
+    def __pos__(self) -> common.Field:
         return self.__class__(_compose(operator.pos, self), self.domain)
 
-    def __neg__(self) -> FunctionField:
+    def __neg__(self) -> common.Field:
         return self.__class__(_compose(operator.neg, self), self.domain)
 
-    def __invert__(self) -> FunctionField:
+    def __invert__(self) -> common.Field:
         return self.__class__(_compose(operator.invert, self), self.domain)
 
-    def __abs__(self) -> FunctionField:
+    def __abs__(self) -> common.Field:
         return self.__class__(_compose(abs, self), self.domain)
 
-    def __and__(self, other) -> 'FunctionField':
+    def __and__(self, other) -> common.Field:
         raise NotImplementedError("Method __and__ not implemented")
 
-    def __call__(self, *args, **kwargs) -> 'FunctionField':
+    def __call__(self, *args, **kwargs) -> common.Field:
         raise NotImplementedError("Method __call__ not implemented")
 
-    def __or__(self, other) -> 'FunctionField':
+    def __or__(self, other) -> common.Field:
         raise NotImplementedError("Method __or__ not implemented")
 
-    def __radd__(self, other) -> 'FunctionField':
+    def __radd__(self, other) -> common.Field:
         raise NotImplementedError("Method __radd__ not implemented")
 
-    def __rfloordiv__(self, other) -> 'FunctionField':
+    def __rfloordiv__(self, other) -> common.Field:
         raise NotImplementedError("Method __rfloordiv__ not implemented")
 
-    def __rmul__(self, other) -> 'FunctionField':
+    def __rmul__(self, other) -> common.Field:
         raise NotImplementedError("Method __rmul__ not implemented")
 
-    def __rsub__(self, other) -> 'FunctionField':
+    def __rsub__(self, other) -> common.Field:
         raise NotImplementedError("Method __rsub__ not implemented")
 
-    def __rtruediv__(self, other) -> 'FunctionField':
+    def __rtruediv__(self, other) -> common.Field:
         raise NotImplementedError("Method __rtruediv__ not implemented")
 
-    def __xor__(self, other) -> 'FunctionField':
+    def __xor__(self, other) -> common.Field:
         raise NotImplementedError("Method __xor__ not implemented")
 
-    def remap(self, *args, **kwargs) -> 'FunctionField':
+    def remap(self, *args, **kwargs) -> common.Field:
         raise NotImplementedError("Method remap not implemented")
 
 
@@ -178,14 +178,14 @@ def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
     return isinstance(other, nd._BaseNdArrayField)
 
 
-def _has_empty_domain(field: FunctionField) -> bool:
+def _has_empty_domain(field: common.Field) -> bool:
     return len(field.domain) < 1
 
 
 def constant_field(
     value: core_defs.ScalarT, domain: common.Domain = common.Domain()
-) -> FunctionField:
-    return FunctionField(lambda: value, domain, _constant=True)
+) -> common.Field:
+    return FunctionField(lambda *args: value, domain)
 
 
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)
