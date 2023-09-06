@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional, cast
 
 import dace
 import numpy as np
+from dace.transformation.passes.prune_symbols import RemoveUnusedSymbols
 
 import gt4py.eve.codegen
 from gt4py.next import Dimension, type_inference as next_typing
@@ -784,11 +785,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             lambda_node = itir.Lambda(expr=fun_node.expr.args[1], params=fun_node.params[1:])
             lambda_context, inner_inputs, inner_outputs = self.visit(lambda_node, args=args)
 
-            # this is a lambda function for reduction of neighbors, so neighbor tables are not needed inside
+            # the connectivity arrays (neighbor tables) are not needed inside the lambda SDFG
             neighbor_tables = filter_neighbor_tables(self.offset_provider)
             for conn, _ in neighbor_tables:
                 var = connectivity_identifier(conn)
                 lambda_context.body.remove_data(var)
+            # cleanup symbols previously used for shape and stride of connectivity arrays
+            p = RemoveUnusedSymbols()
+            p.apply_pass(lambda_context.body, {})
 
             input_memlets = [
                 create_memlet_at(expr.value.data, ("__idx",)) for arg, expr in zip(node.args, args)
