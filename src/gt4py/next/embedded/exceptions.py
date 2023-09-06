@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Optional
+
 from gt4py.next import common
 from gt4py.next.errors import exceptions as gt4py_exceptions
 

@@ -21,7 +21,8 @@ from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
 
-from .test_common import mixed_domain, infinite_domain
+from .test_common import infinite_domain, mixed_domain
+
 
 I = Dimension("I")
 J = Dimension("J")

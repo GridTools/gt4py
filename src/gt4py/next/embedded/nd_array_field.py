@@ -15,9 +15,9 @@
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, Sequence
+from typing import Any, ClassVar, Optional, ParamSpec, Sequence, TypeAlias, TypeVar
 
 import numpy as np
 from numpy import typing as npt
@@ -336,15 +336,14 @@ if jnp:
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice = _compute_domain_slice(field, new_dimensions)
     named_ranges = _broadcast_domain(field, new_dimensions)
+    ndarray_ = field.ndarray
 
-    # handle case where we have a constant FunctionField where ndarray is a scalar
-    if isinstance(value := field.ndarray, (int, float)):
+    # handle case where we have a constant FunctionField where field.ndarray is a scalar
+    if isinstance(ndarray_, (int, float)):
         shape = [len(rng) for rng in field.domain.ranges]
-        ndarray = np.full(shape, value)
-    else:
-        ndarray = field.ndarray
+        ndarray_ = np.full(shape, ndarray_)
 
-    return common.field(ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+    return common.field(ndarray_[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(
