@@ -42,11 +42,15 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
             try:
                 func_params = self.func.__code__.co_argcount
                 if func_params != num_params:
-                    raise ValueError(
-                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the self.func ({func_params})."
+                    raise embedded_exceptions.FunctionFieldError(
+                        self.__class__.__name__,
+                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({func_params})",
                     )
             except AttributeError:
-                raise ValueError(f"Must pass a function as an argument to self.func.")
+                raise embedded_exceptions.FunctionFieldError(
+                    self.__class__.__name__,
+                    f"Invalid first argument type: Expected a function but got {self.func}",
+                )
 
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         new_domain = embedded_common.sub_domain(self.domain, index)
@@ -57,10 +61,11 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         if not self.domain.is_finite():
-            embedded_exceptions.InfiniteRangeNdarrayError(self.__class__.__name__, self.domain)
+            raise embedded_exceptions.InfiniteRangeNdarrayError(
+                self.__class__.__name__, self.domain
+            )
 
         shape = [len(rng) for rng in self.domain.ranges]
-
         return np.fromfunction(self.func, shape)
 
     def _handle_function_field_op(self, other: FunctionField, op: Callable) -> FunctionField:
@@ -90,7 +95,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def _binary_operation(self, op, other):
         if isinstance(other, self.__class__):
             return self._handle_function_field_op(other, op)
-        elif isinstance(other, (int, float)):  # Handle scalar values
+        elif isinstance(other, (int, float)):
             return self._handle_scalar_op(other, op)
         else:
             return op(other, self)
@@ -183,7 +188,7 @@ def _broadcast(field: FunctionField, dims: tuple[common.Dimension, ...]) -> Func
         selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
         return field.func(*selected_args)
 
-    named_ranges = embedded_common._compute_named_ranges(field, dims)
+    named_ranges = embedded_common._broadcast_domain(field, dims)
     return FunctionField(broadcasted_func, common.Domain(*named_ranges), _skip_invariant=True)
 
 

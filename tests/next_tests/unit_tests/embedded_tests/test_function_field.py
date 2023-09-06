@@ -21,6 +21,7 @@ from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
 
+from .test_common import mixed_domain, infinite_domain
 
 I = Dimension("I")
 J = Dimension("J")
@@ -29,6 +30,21 @@ K = Dimension("K")
 
 def rfloordiv(x, y):
     return operator.floordiv(y, x)
+
+
+operators = [
+    operator.add,
+    operator.sub,
+    operator.mul,
+    operator.truediv,
+    operator.floordiv,
+    rfloordiv,
+    operator.pow,
+    lambda x, y: operator.truediv(y, x),
+    operator.add,
+    operator.mul,
+    lambda x, y: operator.sub(y, x),
+]
 
 
 @pytest.mark.parametrize(
@@ -55,69 +71,6 @@ def test_constant_field_no_domain(op_func, expected_result):
 
 
 @pytest.mark.parametrize(
-    "op_func",
-    [
-        operator.add,
-        operator.sub,
-        operator.mul,
-        operator.truediv,
-        operator.floordiv,
-        rfloordiv,
-        operator.pow,
-        lambda x, y: operator.truediv(y, x),
-        operator.add,
-        operator.mul,
-        lambda x, y: operator.sub(y, x),
-    ],
-)
-def test_function_field_no_domain(op_func):
-    func1 = lambda x, y: x + y
-    func2 = lambda x, y: 2 * x + y
-
-    domain = common.Domain(*((I, UnitRange(5, 10)), (J, UnitRange(10, 15))))
-
-    ff1 = funcf.FunctionField(func1, domain)
-    ff2 = funcf.FunctionField(func2, domain)
-
-    result = op_func(ff1, ff2)
-
-    assert result.func(1, 2) == op_func(func1(1, 2), func2(1, 2))
-    assert isinstance(result.ndarray, np.ndarray)
-
-
-@pytest.mark.parametrize(
-    "op_func",
-    [
-        operator.add,
-        operator.sub,
-        operator.mul,
-        operator.truediv,
-        operator.floordiv,
-        rfloordiv,
-        operator.pow,
-        lambda x, y: operator.truediv(y, x),
-        operator.add,
-        operator.mul,
-        lambda x, y: operator.sub(y, x),
-    ],
-)
-def test_function_field_broadcast(op_func):
-    func1 = lambda x, y: x + y
-    func2 = lambda y: 2 * y
-
-    domain1 = common.Domain(dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10)))
-    domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
-
-    ff1 = funcf.FunctionField(func1, domain1)
-    ff2 = funcf.FunctionField(func2, domain2)
-
-    result = op_func(ff1, ff2)
-
-    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
-    assert isinstance(result.ndarray, np.ndarray)
-
-
-@pytest.mark.parametrize(
     "index", [((I, UnitRange(0, 10)),), common.Domain(dims=(I,), ranges=(UnitRange(0, 10),))]
 )
 def test_constant_field_getitem_missing_domain(index):
@@ -127,31 +80,28 @@ def test_constant_field_getitem_missing_domain(index):
 
 
 @pytest.mark.parametrize(
-    "domain,expected_shape",
+    "domain",
     [
-        (common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
-        (
-            common.Domain(
-                dims=(I, J, K),
-                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
-            ),
-            (3, 15, 1),
+        common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))),
+        common.Domain(
+            dims=(I, J, K), ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2))
         ),
     ],
 )
-def test_constant_field_ndarray(domain, expected_shape):
+def test_constant_field_ndarray(domain):
     cf = funcf.constant_field(10, domain)
     assert isinstance(cf.ndarray, int)
     assert cf.ndarray == 10
 
 
-def test_constant_field_empty_domain_op():
+def test_constant_field_and_field_op():
     domain = common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
     field = common.field(np.ones((10, 10)), domain=domain)
     cf = funcf.constant_field(10)
 
     result = cf + field
     assert np.allclose(result.ndarray, 11)
+    assert result.domain == domain
 
 
 binary_op_field_intersection_cases = [
@@ -194,6 +144,26 @@ def adder(i, j):
 
 
 @pytest.mark.parametrize(
+    "op_func",
+    operators,
+)
+def test_function_field_broadcast(op_func):
+    func1 = lambda x, y: x + y
+    func2 = lambda y: 2 * y
+
+    domain1 = common.Domain(dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10)))
+    domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
+
+    ff1 = funcf.FunctionField(func1, domain1)
+    ff2 = funcf.FunctionField(func2, domain2)
+
+    result = op_func(ff1, ff2)
+
+    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
+    assert isinstance(result.ndarray, np.ndarray)
+
+
+@pytest.mark.parametrize(
     "domain,expected_shape",
     [
         (common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
@@ -225,13 +195,8 @@ def test_function_field_with_field(domain):
     assert result.ndarray.shape == (10, 10)
     assert np.allclose(result.ndarray, expected_values)
 
-@pytest.fixture
-def function_field():
-    return funcf.FunctionField(adder, domain=common.Domain(
-            dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
-        ))
 
-def test_function_field_addition():
+def test_function_field_function_field_op():
     res = funcf.FunctionField(
         lambda x, y: x + 42 * y,
         domain=common.Domain(
@@ -244,8 +209,17 @@ def test_function_field_addition():
     assert res.func(1, 2) == 89
 
 
-def test_function_field_unary(function_field):
+@pytest.fixture
+def function_field():
+    return funcf.FunctionField(
+        adder,
+        domain=common.Domain(
+            dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
+        ),
+    )
 
+
+def test_function_field_unary(function_field):
     pos_result = +function_field
     assert pos_result.func(1, 2) == 3
 
@@ -262,3 +236,29 @@ def test_function_field_unary(function_field):
 def test_function_field_scalar_op(function_field):
     new = function_field * 5.0
     assert new.func(1, 2) == 15
+
+
+@pytest.mark.parametrize("func", ["foo", 1.0, 1])
+def test_function_field_invalid_func(func):
+    with pytest.raises(embedded_exceptions.FunctionFieldError, match="Invalid first argument type"):
+        funcf.FunctionField(func)
+
+
+@pytest.mark.parametrize(
+    "domain",
+    [
+        common.Domain(),
+        common.Domain(*((I, UnitRange(1, 10)), (J, UnitRange(5, 10)))),
+    ],
+)
+def test_function_field_invalid_invariant(domain):
+    with pytest.raises(embedded_exceptions.FunctionFieldError, match="Invariant violation"):
+        funcf.FunctionField(lambda x: x, domain)
+
+
+def test_function_field_infinite_range(infinite_domain, mixed_domain):
+    domains = [infinite_domain, mixed_domain]
+    for d in domains:
+        with pytest.raises(embedded_exceptions.InfiniteRangeNdarrayError):
+            ff = funcf.FunctionField(adder, d)
+            ff.ndarray

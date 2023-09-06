@@ -49,12 +49,11 @@ class EmptyDomainIndexError(gt4py_exceptions.GT4PyError):
         self.cls_name = cls_name
 
 
-class InvalidDomainForNdarrayError(gt4py_exceptions.GT4PyError):
-    def __init__(self, cls_name: str):
-        super().__init__(
-            f"Error in `{cls_name}`: Cannot construct an ndarray with an empty domain."
-        )
+class FunctionFieldError(gt4py_exceptions.GT4PyError):
+    def __init__(self, cls_name: str, msg: str):
+        super().__init__(f"Error in `{cls_name}`: {msg}.")
         self.cls_name = cls_name
+        self.msg = msg
 
 
 class InfiniteRangeNdarrayError(gt4py_exceptions.GT4PyError):

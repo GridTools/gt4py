@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar, Sequence
 
 import numpy as np
 from numpy import typing as npt
@@ -25,7 +25,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
-from gt4py.next.embedded.common import _compute_domain_slice, _compute_named_ranges
+from gt4py.next.embedded.common import _broadcast_domain, _find_index_of_dim
 from gt4py.next.ffront import fbuiltins
 
 
@@ -335,7 +335,7 @@ if jnp:
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice = _compute_domain_slice(field, new_dimensions)
-    named_ranges = _compute_named_ranges(field, new_dimensions)
+    named_ranges = _broadcast_domain(field, new_dimensions)
 
     # handle case where we have a constant FunctionField where ndarray is a scalar
     if isinstance(value := field.ndarray, (int, float)):
@@ -415,3 +415,15 @@ def _compute_slice(
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
+
+
+def _compute_domain_slice(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> Sequence[slice | None]:
+    domain_slice: list[slice | None] = []
+    for dim in new_dimensions:
+        if _find_index_of_dim(dim, field.domain) is not None:
+            domain_slice.append(slice(None))
+        else:
+            domain_slice.append(np.newaxis)
+    return domain_slice
