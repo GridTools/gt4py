@@ -38,12 +38,19 @@ operators = [
     operator.mul,
     operator.truediv,
     operator.floordiv,
-    rfloordiv,
-    operator.pow,
     lambda x, y: operator.truediv(y, x),
-    operator.add,
-    operator.mul,
-    lambda x, y: operator.sub(y, x),
+    operator.pow,
+    lambda x, y: operator.truediv(y, x),  # Reverse true division
+    lambda x, y: operator.add(y, x),  # Reverse addition
+    lambda x, y: operator.mul(y, x),  # Reverse multiplication
+    lambda x, y: operator.sub(y, x),  # Reverse subtraction
+    lambda x, y: operator.floordiv(y, x),  # Reverse floor division
+]
+
+logical_operators = [
+    operator.xor,
+    operator.and_,
+    operator.or_,
 ]
 
 
@@ -152,6 +159,25 @@ def test_function_field_broadcast(op_func):
     func2 = lambda y: 2 * y
 
     domain1 = common.Domain(dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10)))
+    domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
+
+    ff1 = funcf.FunctionField(func1, domain1)
+    ff2 = funcf.FunctionField(func2, domain2)
+
+    result = op_func(ff1, ff2)
+
+    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
+    assert isinstance(result.ndarray, np.ndarray)
+
+
+@pytest.mark.parametrize("op_func", logical_operators)
+def test_function_field_logical_operators(op_func):
+    func1 = lambda x, y: x > 5
+    func2 = lambda y: y < 10
+
+    domain1 = common.Domain(
+        dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
+    )
     domain2 = common.Domain(dims=(J,), ranges=(common.UnitRange(7, 15),))
 
     ff1 = funcf.FunctionField(func1, domain1)

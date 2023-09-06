@@ -165,6 +165,30 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __ge__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.ge, other)
 
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(operator.and_, other)
+
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(operator.or_, other)
+
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(operator.xor, other)
+
+    def __radd__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(lambda x, y: y + x, other)
+
+    def __rfloordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(lambda x, y: y // x, other)
+
+    def __rmul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(lambda x, y: y * x, other)
+
+    def __rsub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(lambda x, y: y - x, other)
+
+    def __rtruediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return self._binary_operation(lambda x, y: y / x, other)
+
     def __pos__(self) -> common.Field:
         return self._unary_op(operator.pos)
 
@@ -177,35 +201,12 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __abs__(self) -> common.Field:
         return self._unary_op(abs)
 
-    def __and__(self, other) -> common.Field:
-        raise NotImplementedError("Method __and__ not implemented")
-
     def __call__(self, *args, **kwargs) -> common.Field:
-        raise NotImplementedError("Method __call__ not implemented")
-
-    def __or__(self, other) -> common.Field:
-        raise NotImplementedError("Method __or__ not implemented")
-
-    def __radd__(self, other) -> common.Field:
-        raise NotImplementedError("Method __radd__ not implemented")
-
-    def __rfloordiv__(self, other) -> common.Field:
-        raise NotImplementedError("Method __rfloordiv__ not implemented")
-
-    def __rmul__(self, other) -> common.Field:
-        raise NotImplementedError("Method __rmul__ not implemented")
-
-    def __rsub__(self, other) -> common.Field:
-        raise NotImplementedError("Method __rsub__ not implemented")
-
-    def __rtruediv__(self, other) -> common.Field:
-        raise NotImplementedError("Method __rtruediv__ not implemented")
-
-    def __xor__(self, other) -> common.Field:
-        raise NotImplementedError("Method __xor__ not implemented")
+        return self.func(*args, **kwargs)
 
     def remap(self, *args, **kwargs) -> common.Field:
         raise NotImplementedError("Method remap not implemented")
+
 
 
 def _compose(operation: Callable, *fields: FunctionField) -> Callable:
