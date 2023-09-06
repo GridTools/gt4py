@@ -65,64 +65,64 @@ K = common.Dimension("K")
         ([(I, (-2, 3))], (I, 3), IndexError),
         ([(I, (-2, 3))], (I, UnitRange(3, 4)), IndexError),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            2,
-            [(J, (3, 6)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                2,
+                [(J, (3, 6)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            slice(2, 3),
-            [(I, (4, 5)), (J, (3, 6)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                slice(2, 3),
+                [(I, (4, 5)), (J, (3, 6)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (I, 2),
-            [(J, (3, 6)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (I, 2),
+                [(J, (3, 6)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (I, UnitRange(2, 3)),
-            [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (I, UnitRange(2, 3)),
+                [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (J, 3),
-            [(I, (2, 5)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (J, 3),
+                [(I, (2, 5)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (J, UnitRange(4, 5)),
-            [(I, (2, 5)), (J, (4, 5)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (J, UnitRange(4, 5)),
+                [(I, (2, 5)), (J, (4, 5)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            ((J, 3), (I, 2)),
-            [(K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                ((J, 3), (I, 2)),
+                [(K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            ((J, UnitRange(4, 5)), (I, 2)),
-            [(J, (4, 5)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                ((J, UnitRange(4, 5)), (I, 2)),
+                [(J, (4, 5)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (slice(1, 2), slice(2, 3)),
-            [(I, (3, 4)), (J, (5, 6)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (slice(1, 2), slice(2, 3)),
+                [(I, (3, 4)), (J, (5, 6)), (K, (4, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (Ellipsis, slice(2, 3)),
-            [(I, (2, 5)), (J, (3, 6)), (K, (6, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (Ellipsis, slice(2, 3)),
+                [(I, (2, 5)), (J, (3, 6)), (K, (6, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (slice(1, 2), Ellipsis, slice(2, 3)),
-            [(I, (3, 4)), (J, (3, 6)), (K, (6, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (slice(1, 2), Ellipsis, slice(2, 3)),
+                [(I, (3, 4)), (J, (3, 6)), (K, (6, 7))],
         ),
         (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (slice(1, 2), slice(1, 2), Ellipsis),
-            [(I, (3, 4)), (J, (4, 5)), (K, (4, 7))],
+                [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
+                (slice(1, 2), slice(1, 2), Ellipsis),
+                [(I, (3, 4)), (J, (4, 5)), (K, (4, 7))],
         ),
         ([], Ellipsis, []),
         ([], slice(None), IndexError),
@@ -140,3 +140,35 @@ def test_sub_domain(domain, index, expected):
         expected = common.domain(expected)
         result = sub_domain(domain, index)
         assert result == expected
+
+
+@pytest.fixture
+def finite_domain():
+    I = common.Dimension("I")
+    J = common.Dimension("J")
+    return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4)))
+
+
+@pytest.fixture
+def infinite_domain():
+    I = common.Dimension("I")
+    return common.Domain((I, UnitRange.infinity()))
+
+
+@pytest.fixture
+def mixed_domain():
+    I = common.Dimension("I")
+    J = common.Dimension("J")
+    return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange.infinity()))
+
+
+def test_finite_domain_is_finite(finite_domain):
+    assert finite_domain.is_finite() == True
+
+
+def test_infinite_domain_is_finite(infinite_domain):
+    assert infinite_domain.is_finite() == False
+
+
+def test_mixed_domain_is_finite(mixed_domain):
+    assert mixed_domain.is_finite() == False

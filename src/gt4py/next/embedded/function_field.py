@@ -43,7 +43,8 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
                 func_params = self.func.__code__.co_argcount
                 if func_params != num_params:
                     raise ValueError(
-                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the self.func ({func_params}).")
+                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the self.func ({func_params})."
+                    )
             except AttributeError:
                 raise ValueError(f"Must pass a function as an argument to self.func.")
 
@@ -62,19 +63,21 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
         return np.fromfunction(self.func, shape)
 
-    def _handle_function_field_op(
-        self, other: FunctionField, op: Callable
-    ) -> FunctionField:
+    def _handle_function_field_op(self, other: FunctionField, op: Callable) -> FunctionField:
         domain_intersection = self.domain & other.domain
         broadcasted_self = _broadcast(self, domain_intersection.dims)
         broadcasted_other = _broadcast(other, domain_intersection.dims)
         return self.__class__(
-            _compose(op, broadcasted_self, broadcasted_other), domain_intersection, _skip_invariant=True
+            _compose(op, broadcasted_self, broadcasted_other),
+            domain_intersection,
+            _skip_invariant=True,
         )
 
     def _handle_scalar_op(self, other: FunctionField, op: Callable) -> FunctionField:
         new_func = lambda *args: op(self.func(*args), other)
-        return self.__class__(new_func, self.domain, _skip_invariant=True)  # skip invariant as we cannot deduce number of args
+        return self.__class__(
+            new_func, self.domain, _skip_invariant=True
+        )  # skip invariant as we cannot deduce number of args
 
     @overload
     def _binary_operation(self, op: Callable, other: core_defs.ScalarT) -> common.Field:
