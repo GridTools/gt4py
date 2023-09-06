@@ -34,6 +34,18 @@ from gt4py.next.ffront import fbuiltins
 class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry):
     func: Callable
     domain: common.Domain = common.Domain()
+    _skip_invariant: bool = False
+
+    def __post_init__(self):
+        if not self._skip_invariant:
+            num_params = len(self.domain)
+            try:
+                func_params = self.func.__code__.co_argcount
+                if func_params != num_params:
+                    raise ValueError(
+                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the self.func ({func_params}).")
+            except AttributeError:
+                raise ValueError(f"Must pass a function as an argument to self.func.")
 
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         new_domain = embedded_common.sub_domain(self.domain, index)
@@ -43,9 +55,6 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        if _has_empty_domain(self):
-            raise embedded_exceptions.InvalidDomainForNdarrayError(self.__class__.__name__)
-
         if not self.domain.is_finite():
             embedded_exceptions.InfiniteRangeNdarrayError(self.__class__.__name__, self.domain)
 
@@ -60,12 +69,12 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         broadcasted_self = _broadcast(self, domain_intersection.dims)
         broadcasted_other = _broadcast(other, domain_intersection.dims)
         return self.__class__(
-            _compose(op, broadcasted_self, broadcasted_other), domain_intersection
+            _compose(op, broadcasted_self, broadcasted_other), domain_intersection, _skip_invariant=True
         )
 
     def _handle_scalar_op(self, other: FunctionField, op: Callable) -> FunctionField:
         new_func = lambda *args: op(self.func(*args), other)
-        return self.__class__(new_func, self.domain)
+        return self.__class__(new_func, self.domain, _skip_invariant=True)  # skip invariant as we cannot deduce number of args
 
     @overload
     def _binary_operation(self, op: Callable, other: core_defs.ScalarT) -> common.Field:
@@ -82,6 +91,9 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
             return self._handle_scalar_op(other, op)
         else:
             return op(other, self)
+
+    def _unary_op(self, op: Callable) -> FunctionField:
+        return self.__class__(_compose(op, self), self.domain, _skip_invariant=True)
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)
@@ -117,16 +129,16 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         return self._binary_operation(operator.ge, other)
 
     def __pos__(self) -> common.Field:
-        return self.__class__(_compose(operator.pos, self), self.domain)
+        return self._unary_op(operator.pos)
 
     def __neg__(self) -> common.Field:
-        return self.__class__(_compose(operator.neg, self), self.domain)
+        return self._unary_op(operator.neg)
 
     def __invert__(self) -> common.Field:
-        return self.__class__(_compose(operator.invert, self), self.domain)
+        return self._unary_op(operator.invert)
 
     def __abs__(self) -> common.Field:
-        return self.__class__(_compose(abs, self), self.domain)
+        return self._unary_op(abs)
 
     def __and__(self, other) -> common.Field:
         raise NotImplementedError("Method __and__ not implemented")
@@ -165,27 +177,21 @@ def _compose(operation: Callable, *fields: FunctionField) -> Callable:
 
 def _broadcast(field: FunctionField, dims: tuple[common.Dimension, ...]) -> FunctionField:
     def broadcasted_func(*args: int):
-        if not _has_empty_domain(field):
-            selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
-            return field.func(*selected_args)
-        return field.func(*args)
+        selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
+        return field.func(*selected_args)
 
     named_ranges = embedded_common._compute_named_ranges(field, dims)
-    return FunctionField(broadcasted_func, common.Domain(*named_ranges))
+    return FunctionField(broadcasted_func, common.Domain(*named_ranges), _skip_invariant=True)
 
 
 def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
     return isinstance(other, nd._BaseNdArrayField)
 
 
-def _has_empty_domain(field: common.Field) -> bool:
-    return len(field.domain) < 1
-
-
 def constant_field(
     value: core_defs.ScalarT, domain: common.Domain = common.Domain()
 ) -> common.Field:
-    return FunctionField(lambda *args: value, domain)
+    return FunctionField(lambda *args: value, domain, _skip_invariant=True)
 
 
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)

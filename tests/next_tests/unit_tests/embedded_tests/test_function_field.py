@@ -52,8 +52,6 @@ def test_constant_field_no_domain(op_func, expected_result):
     cf2 = funcf.constant_field(20)
     result = op_func(cf1, cf2)
     assert result.func() == expected_result
-    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
-        result.ndarray
 
 
 @pytest.mark.parametrize(
@@ -76,14 +74,15 @@ def test_function_field_no_domain(op_func):
     func1 = lambda x, y: x + y
     func2 = lambda x, y: 2 * x + y
 
-    ff1 = funcf.FunctionField(func1)
-    ff2 = funcf.FunctionField(func2)
+    domain = common.Domain(*((I, UnitRange(5, 10)), (J, UnitRange(10, 15))))
+
+    ff1 = funcf.FunctionField(func1, domain)
+    ff2 = funcf.FunctionField(func2, domain)
 
     result = op_func(ff1, ff2)
 
     assert result.func(1, 2) == op_func(func1(1, 2), func2(1, 2))
-    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
-        result.ndarray
+    assert isinstance(result.ndarray, np.ndarray)
 
 
 @pytest.mark.parametrize(
@@ -151,8 +150,8 @@ def test_constant_field_empty_domain_op():
     field = common.field(np.ones((10, 10)), domain=domain)
     cf = funcf.constant_field(10)
 
-    with pytest.raises(embedded_exceptions.InvalidDomainForNdarrayError):
-        cf + field
+    result = cf + field
+    assert np.allclose(result.ndarray, 11)
 
 
 binary_op_field_intersection_cases = [
@@ -190,7 +189,7 @@ def test_constant_field_non_empty_domain_op(
     assert np.all(result.ndarray == expected_value)
 
 
-def adder(i, j, k=None):
+def adder(i, j):
     return i + j
 
 
@@ -198,13 +197,6 @@ def adder(i, j, k=None):
     "domain,expected_shape",
     [
         (common.Domain(dims=(I, J), ranges=(UnitRange(3, 13), UnitRange(-5, 5))), (10, 10)),
-        (
-            common.Domain(
-                dims=(I, J, K),
-                ranges=(UnitRange(-6, -3), UnitRange(-5, 10), UnitRange(1, 2)),
-            ),
-            (3, 15, 1),
-        ),
     ],
 )
 def test_function_field_ndarray(domain, expected_shape):
@@ -233,6 +225,11 @@ def test_function_field_with_field(domain):
     assert result.ndarray.shape == (10, 10)
     assert np.allclose(result.ndarray, expected_values)
 
+@pytest.fixture
+def function_field():
+    return funcf.FunctionField(adder, domain=common.Domain(
+            dims=(I, J), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
+        ))
 
 def test_function_field_addition():
     res = funcf.FunctionField(
@@ -247,23 +244,21 @@ def test_function_field_addition():
     assert res.func(1, 2) == 89
 
 
-def test_function_field_unary():
-    ff = funcf.FunctionField(adder)
+def test_function_field_unary(function_field):
 
-    pos_result = +ff
+    pos_result = +function_field
     assert pos_result.func(1, 2) == 3
 
-    neg_result = -ff
+    neg_result = -function_field
     assert neg_result.func(1, 2) == -3
 
-    invert_result = ~ff
+    invert_result = ~function_field
     assert invert_result.func(1, 2) == -4
 
-    abs_result = abs(ff)
+    abs_result = abs(function_field)
     assert abs_result.func(1, 2) == 3
 
 
-def test_function_field_scalar_op():
-    ff = funcf.FunctionField(adder)
-    new = ff * 5.0
+def test_function_field_scalar_op(function_field):
+    new = function_field * 5.0
     assert new.func(1, 2) == 15
