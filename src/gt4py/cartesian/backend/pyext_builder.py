@@ -21,8 +21,8 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast, overload
 
 import pybind11
 import setuptools
-from setuptools.command.build_ext import build_ext
 from setuptools import distutils
+from setuptools.command.build_ext import build_ext
 
 from gt4py.cartesian import config as gt_config
 
