@@ -49,7 +49,6 @@ IndexType: TypeAlias = int32
 
 TYPE_ALIAS_NAMES = ["IndexType"]
 
-
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -205,7 +204,6 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "trunc",
 ]
 
-
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
@@ -223,7 +221,6 @@ for f in (
     + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
 ):
     _make_unary_math_builtin(f)
-
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
