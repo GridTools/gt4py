@@ -136,20 +136,32 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)
 
+    __radd__ = __add__
+
     def __sub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.sub, other)
+
+    __rsub__ = __sub__
 
     def __mul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mul, other)
 
+    __rmul__ = __mul__
+
     def __truediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.truediv, other)
+
+    __rtruediv__ = __truediv__
 
     def __floordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.floordiv, other)
 
+    __rfloordiv__ = __floordiv__
+
     def __mod__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mod, other)
+
+    __rmod__ = __mod__
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.pow, other)
@@ -169,11 +181,17 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.and_, other)
 
+    __rand__ = __and__
+
     def __or__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.or_, other)
 
+    __ror__ = __or__
+
     def __xor__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.xor, other)
+
+    __rxor__ = __xor__
 
     def __radd__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(lambda x, y: y + x, other)
@@ -232,20 +250,25 @@ def constant_field(
     return FunctionField(lambda *args: value, domain, _skip_invariant=True)
 
 
+def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
+    def _composed_function_field(field: FunctionField) -> FunctionField:
+        if builtin_name not in _BUILTINS:
+            raise ValueError(f"Unsupported built-in function: {builtin_name}")
+
+        if builtin_name in ["abs", "power", "gamma"]:
+            return field
+
+        builtin_func = getattr(np, builtin_name)
+        new_func = lambda *args: builtin_func(field.func(*args))
+        new_field: FunctionField = FunctionField(new_func, field.domain, _skip_invariant=True)
+        return new_field
+    return _composed_function_field
+
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
+_BUILTINS = fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 
-def _compose_with_builtin(builtin_name: str, field: FunctionField) -> FunctionField:
-    if builtin_name not in fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES:
-        raise ValueError(f"Unsupported built-in function: {builtin_name}")
-
+for builtin_name in _BUILTINS:
     if builtin_name in ["abs", "power", "gamma"]:
-        return field
-
-    builtin_func = getattr(np, builtin_name)
-
-    new_func = lambda *args: builtin_func(field.func(*args))
-
-    new_field: FunctionField = FunctionField(new_func, field.domain, _skip_invariant=True)
-
-    return new_field
+        continue
+    FunctionField.register_builtin_func(getattr(fbuiltins, builtin_name), _compose_function_field_with_builtin(builtin_name))

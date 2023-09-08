@@ -300,14 +300,14 @@ def test_function_field_infinite_range(infinite_domain, mixed_domain):
             ff.ndarray
 
 
-@pytest.mark.parametrize("builtin_name", fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES)
-def test_compose_with_builtin(function_field, builtin_name):
-    new_ff = funcf._compose_with_builtin(builtin_name, function_field)
+@pytest.mark.parametrize("builtin_name", funcf._BUILTINS)
+def test_function_field_builtins(function_field, builtin_name):
+    if builtin_name in ["abs", "power", "gamma"]:
+        pytest.skip(f"Skipping '{builtin_name}'")
 
-    if builtin_name == "gamma":
-        pytest.skip("Skipping 'gamma'")
+    fbuiltin_func = getattr(fbuiltins, builtin_name)
 
-    result = new_ff.func(1, 2)
+    result = fbuiltin_func(function_field).func(1, 2)
 
     if math.isnan(result):
         assert math.isnan(np.__getattribute__(builtin_name)(3))
