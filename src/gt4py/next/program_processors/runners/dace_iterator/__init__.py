@@ -14,8 +14,8 @@
 
 from typing import Any, Mapping, Sequence
 
+import dace
 import numpy as np
-import pytest
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
@@ -26,13 +26,6 @@ from gt4py.next.type_system import type_translation
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables
-
-
-dace_available = True
-try:
-    import dace
-except ImportError:
-    dace_available = False
 
 
 def convert_arg(arg: Any):
@@ -92,9 +85,6 @@ def get_stride_args(
 
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    if not dace_available:
-        pytest.skip("DaCe module not installed.")
-
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
