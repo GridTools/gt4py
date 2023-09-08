@@ -23,16 +23,12 @@ from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
+from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
 
 dace_available = True
 try:
-    from gt4py.next.program_processors.runners import (
-        dace_iterator,
-        double_roundtrip,
-        gtfn_cpu,
-        roundtrip,
-    )
+    import gt4py.next.program_processors.runners.dace_iterator
 except ModuleNotFoundError as e:
     if "dace" in str(e):
         dace_available = False
@@ -69,6 +65,11 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
+optional_processors = []
+if dace_available:
+    optional_processors.append((dace_iterator.run_dace_iterator, True))
+
+
 @pytest.fixture(
     params=[
         # (processor, do_validate)
@@ -82,9 +83,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn.format_sourcecode, False),
     ]
-    + [(dace_iterator.run_dace_iterator, True)]
-    if dace_available
-    else [],
+    + optional_processors,
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
