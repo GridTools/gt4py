@@ -144,7 +144,7 @@ def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_nor_dace_exec,
         assert np.allclose(inp4, out_np2[:]["f1"])
 
 
-def test_tuple_of_tuple_of_field_output(program_processor):
+def test_tuple_of_tuple_of_field_output(program_processor_no_dace_exec):
     # Not supported in DaCe backend: tuple returns
     program_processor, validate = program_processor_no_dace_exec
 
