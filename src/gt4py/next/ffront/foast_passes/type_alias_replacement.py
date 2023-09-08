@@ -78,7 +78,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
         for var in node.closure_vars:
             actual_type_symbol = self._add_actual_type_to_closure_vars(var.id, node.location)
-            if actual_type_symbol:
+            if actual_type_symbol and actual_type_symbol not in new_closure_vars:
                 new_closure_vars.append(actual_type_symbol)
             else:
                 new_closure_vars.append(var)  # Keep the variable as is
