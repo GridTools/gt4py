@@ -37,7 +37,11 @@ from gt4py.next.program_processors.formatters.gtfn import (
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.integration_tests.cases import IDim
-from next_tests.unit_tests.conftest import program_processor_no_dace_exec, run_processor
+from next_tests.unit_tests.conftest import (
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 I = offset("I")
