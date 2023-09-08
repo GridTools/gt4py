@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import math
 import operator
 
 import numpy as np
@@ -20,8 +20,10 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
+from gt4py.next import fbuiltins
 
 from .test_common import infinite_domain, mixed_domain
+
 
 
 I = Dimension("I")
@@ -296,3 +298,18 @@ def test_function_field_infinite_range(infinite_domain, mixed_domain):
         with pytest.raises(embedded_exceptions.InfiniteRangeNdarrayError):
             ff = funcf.FunctionField(adder, d)
             ff.ndarray
+
+
+@pytest.mark.parametrize("builtin_name", fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES)
+def test_compose_with_builtin(function_field, builtin_name):
+    new_ff = funcf._compose_with_builtin(builtin_name, function_field)
+
+    if builtin_name == "gamma":
+        pytest.skip("Skipping 'gamma'")
+
+    result = new_ff.func(1, 2)
+
+    if math.isnan(result):
+        assert math.isnan(np.__getattribute__(builtin_name)(3))
+    else:
+        assert result == np.__getattribute__(builtin_name)(3)

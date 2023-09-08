@@ -259,16 +259,6 @@ for name in (
         getattr(fbuiltins, name), _make_unary_array_field_intrinsic_func(name, name)
     )
 
-_BaseNdArrayField.register_builtin_func(
-    fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
-)
-_BaseNdArrayField.register_builtin_func(
-    fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
-)
-_BaseNdArrayField.register_builtin_func(
-    fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
-)
-
 
 def _np_cp_setitem(
     self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],

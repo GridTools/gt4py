@@ -233,3 +233,19 @@ def constant_field(
 
 
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)
+
+
+def _compose_with_builtin(builtin_name: str, field: FunctionField) -> FunctionField:
+    if builtin_name not in fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES:
+        raise ValueError(f"Unsupported built-in function: {builtin_name}")
+
+    if builtin_name in ["abs", "power", "gamma"]:
+        return field
+
+    builtin_func = getattr(np, builtin_name)
+
+    new_func = lambda *args: builtin_func(field.func(*args))
+
+    new_field: FunctionField = FunctionField(new_func, field.domain, _skip_invariant=True)
+
+    return new_field
