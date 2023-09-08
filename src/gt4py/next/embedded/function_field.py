@@ -136,27 +136,17 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)
 
-    __radd__ = __add__
-
     def __sub__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.sub, other)
-
-    __rsub__ = __sub__
 
     def __mul__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mul, other)
 
-    __rmul__ = __mul__
-
     def __truediv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.truediv, other)
 
-    __rtruediv__ = __truediv__
-
     def __floordiv__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.floordiv, other)
-
-    __rfloordiv__ = __floordiv__
 
     def __mod__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.mod, other)
