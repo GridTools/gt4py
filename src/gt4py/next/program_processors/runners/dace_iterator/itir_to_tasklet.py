@@ -19,6 +19,7 @@ from typing import Any, Callable, Optional, cast
 
 import dace
 import numpy as np
+from dace.transformation.dataflow import MapFusion
 from dace.transformation.passes.prune_symbols import RemoveUnusedSymbols
 
 import gt4py.eve.codegen
@@ -860,6 +861,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 input_nodes={arg.value.data: arg.value for arg in args},
                 output_nodes={result_name: result_access},
             )
+
+            # map fusion is beneficial for reduction stencils:
+            # the solution was designed to keep code generation simple and let DaCe fuse maps
+            self.context.body.apply_transformations_repeated([MapFusion])
 
         return [ValueExpr(result_access, result_dtype)]
 

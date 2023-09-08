@@ -16,7 +16,6 @@ from typing import Any, Mapping, Sequence
 
 import dace
 import numpy as np
-from dace.transformation.dataflow import MapFusion
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
@@ -95,10 +94,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     sdfg.simplify()
-
-    # map fusion is beneficial for reduction stencils:
-    # the design decision was to keep code generation simple and let DaCe fuse maps
-    sdfg.apply_transformations_repeated([MapFusion])
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
