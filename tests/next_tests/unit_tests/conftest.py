@@ -24,6 +24,7 @@ from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runti
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
 
+
 dace_available = True
 try:
     from gt4py.next.program_processors.runners import (
@@ -80,7 +81,10 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (gtfn_cpu.run_gtfn, True),
         (gtfn_cpu.run_gtfn_imperative, True),
         (gtfn.format_sourcecode, False),
-    ] + [(dace_iterator.run_dace_iterator, True)] if dace_available else [],
+    ]
+    + [(dace_iterator.run_dace_iterator, True)]
+    if dace_available
+    else [],
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
