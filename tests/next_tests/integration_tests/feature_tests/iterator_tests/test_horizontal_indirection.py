@@ -34,11 +34,10 @@ from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.integration_tests.cases import IDim
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor_no_dace_exec, run_processor
 
 
 I = offset("I")
@@ -54,15 +53,14 @@ def conditional_indirection(inp, cond):
     return deref(compute_shift(cond)(inp))
 
 
-def test_simple_indirection(program_processor):
-    program_processor, validate = program_processor
+def test_simple_indirection(program_processor_no_dace_exec):
+    program_processor, validate = program_processor_no_dace_exec
 
     if program_processor in [
         type_check.check,
         run_gtfn,
         run_gtfn_imperative,
         gtfn_format_sourcecode,
-        run_dace_iterator,
     ]:
         pytest.xfail(
             "We only support applied shifts in type_inference."
@@ -96,10 +94,9 @@ def direct_indirection(inp, cond):
     return deref(shift(I, deref(cond))(inp))
 
 
-def test_direct_offset_for_indirection(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: shift offsets not literals")
+def test_direct_offset_for_indirection(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: shift offsets not literals
+    program_processor, validate = program_processor_no_dace_exec
 
     shape = [4]
     inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0]), dtype=np.float64))

@@ -52,11 +52,14 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import (
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 def asarray(*lists):
@@ -246,10 +249,9 @@ def _can_deref_lifted(inp):
 
 
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
-def test_can_deref(program_processor, stencil):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: can_deref")
+def test_can_deref(program_processor_no_dace_exec, stencil):
+    # Not supported in DaCe backend: can_deref
+    program_processor, validate = program_processor_no_dace_exec
 
     Node = gtx.Dimension("Node")
 

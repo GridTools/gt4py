@@ -18,9 +18,8 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor_no_dace_exec, run_processor
 
 
 IDim = gtx.Dimension("IDim")
@@ -32,10 +31,9 @@ def test_conditional(inp):
     return tuple_get(0, tmp) + tuple_get(1, tmp)
 
 
-def test_conditional_w_tuple(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_conditional_w_tuple(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     shape = [5]
 

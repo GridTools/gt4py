@@ -13,21 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, scan, shift
 from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
-def test_scan_in_stencil(program_processor, lift_mode):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: shift inside lambda")
+def test_scan_in_stencil(program_processor_no_dace_exec, lift_mode):
+    # Not supported in DaCe backend: shift inside lambda
+    program_processor, validate = program_processor_no_dace_exec
 
     isize = 1
     ksize = 3

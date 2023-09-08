@@ -18,11 +18,11 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import (
     program_processor,
-    program_processor_no_gtfn_exec,
+    program_processor_no_dace_exec,
+    program_processor_no_gtfn_nor_dace_exec,
     run_processor,
 )
 
@@ -54,10 +54,9 @@ def tuple_output2(inp1, inp2):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_tuple_output(program_processor, stencil):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_output(program_processor_no_dace_exec, stencil):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -98,10 +97,9 @@ def tuple_of_tuple_output2(inp1, inp2, inp3, inp4):
     "stencil",
     [tuple_of_tuple_output1, tuple_of_tuple_output2],
 )
-def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_nor_dace_exec, stencil):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -147,9 +145,8 @@ def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec, stencil)
 
 
 def test_tuple_of_tuple_of_field_output(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     @fundef
     def stencil(inp1, inp2, inp3, inp4):
@@ -207,10 +204,9 @@ def test_tuple_of_tuple_of_field_output(program_processor):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_tuple_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_field_of_tuple_output(program_processor_no_gtfn_nor_dace_exec, stencil):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -239,10 +235,9 @@ def test_field_of_tuple_output(program_processor_no_gtfn_exec, stencil):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_of_field_output_constructed_inside(program_processor_no_dace_exec, stencil):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     @fendef
     def fencil(size0, size1, size2, inp1, inp2, out1, out2):
@@ -286,10 +281,9 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
         assert np.allclose(inp2, out2)
 
 
-def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     @fundef
     def stencil(inp1, inp2, inp3):
@@ -348,10 +342,8 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_extra_dim_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_field_of_extra_dim_output(program_processor_no_gtfn_nor_dace_exec, stencil):
+    # Not supported in DaCe backend: tuple returns
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -382,10 +374,9 @@ def tuple_input(inp):
     return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
 
 
-def test_tuple_field_input(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_field_input(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -408,10 +399,9 @@ def test_tuple_field_input(program_processor):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
-def test_field_of_tuple_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_field_of_tuple_input(program_processor_no_gtfn_nor_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -437,10 +427,9 @@ def test_field_of_tuple_input(program_processor_no_gtfn_exec):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
-def test_field_of_extra_dim_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_field_of_extra_dim_input(program_processor_no_gtfn_nor_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -473,10 +462,9 @@ def tuple_tuple_input(inp):
     )
 
 
-def test_tuple_of_field_of_tuple_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_of_field_of_tuple_input(program_processor_no_gtfn_nor_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -508,10 +496,9 @@ def test_tuple_of_field_of_tuple_input(program_processor_no_gtfn_exec):
         assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
 
 
-def test_tuple_of_tuple_of_field_input(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_of_tuple_of_field_input(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -549,10 +536,9 @@ def test_tuple_of_tuple_of_field_input(program_processor):
         )
 
 
-def test_field_of_2_extra_dim_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_field_of_2_extra_dim_input(program_processor_no_gtfn_nor_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

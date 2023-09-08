@@ -108,6 +108,18 @@ def program_processor_no_gtfn_exec(program_processor):
     return program_processor
 
 
+@pytest.fixture
+def program_processor_no_gtfn_nor_dace_exec(program_processor):
+    if (
+        program_processor[0] == gtfn_cpu.run_gtfn
+        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+    ):
+        pytest.xfail("gtfn backend not yet supported.")
+    elif dace_available and program_processor[0] == dace_iterator.run_dace_iterator:
+        pytest.xfail("DaCe backend not yet supported.")
+    return program_processor
+
+
 def run_processor(
     program: runtime.FendefDispatcher,
     processor: ppi.ProgramExecutor | ppi.ProgramFormatter,
