@@ -26,12 +26,11 @@ from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
 from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
 
 
-dace_available = True
 try:
-    import gt4py.next.program_processors.runners.dace_iterator
+    from gt4py.next.program_processors.runners import dace_iterator
 except ModuleNotFoundError as e:
     if "dace" in str(e):
-        dace_available = False
+        dace_iterator = None
     else:
         raise e
 
@@ -66,7 +65,7 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
 
 
 optional_processors = []
-if dace_available:
+if dace_iterator:
     optional_processors.append((dace_iterator.run_dace_iterator, True))
 
 
@@ -92,7 +91,7 @@ def program_processor(request):
 
 @pytest.fixture
 def program_processor_no_dace_exec(program_processor):
-    if dace_available and program_processor[0] == dace_iterator.run_dace_iterator:
+    if dace_iterator and program_processor[0] == dace_iterator.run_dace_iterator:
         pytest.xfail("DaCe backend not yet supported.")
     return program_processor
 
@@ -114,7 +113,7 @@ def program_processor_no_gtfn_nor_dace_exec(program_processor):
         or program_processor[0] == gtfn_cpu.run_gtfn_imperative
     ):
         pytest.xfail("gtfn backend not yet supported.")
-    elif dace_available and program_processor[0] == dace_iterator.run_dace_iterator:
+    elif dace_iterator and program_processor[0] == dace_iterator.run_dace_iterator:
         pytest.xfail("DaCe backend not yet supported.")
     return program_processor
 
