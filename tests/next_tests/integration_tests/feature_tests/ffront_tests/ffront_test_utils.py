@@ -22,7 +22,16 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+
+
+try:
+    from gt4py.next.program_processors.runners import dace_iterator
+except ModuleNotFoundError as e:
+    if "dace" in str(e):
+        dace_iterator = None
+    else:
+        raise e
 
 import next_tests
 
@@ -32,13 +41,18 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
+optional_processors = []
+if dace_iterator:
+    optional_processors.append(dace_iterator.run_dace_iterator)
+
+
 @pytest.fixture(
     params=[
         roundtrip.executor,
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ],
+    ]
+    + optional_processors,
     ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
@@ -46,6 +60,13 @@ def fieldview_backend(request):
     decorator.DEFAULT_BACKEND = no_backend
     yield request.param
     decorator.DEFAULT_BACKEND = backup_backend
+
+
+@pytest.fixture
+def fieldview_backend_no_dace_exec(fieldview_backend):
+    if dace_iterator and fieldview_backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("DaCe backend not yet supported.")
+    return fieldview_backend
 
 
 def debug_itir(tree):

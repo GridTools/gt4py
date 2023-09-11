@@ -475,6 +475,11 @@ def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
 
 
 @pytest.fixture
+def cartesian_case_no_dace_exec(fieldview_backend_no_dace_exec):  # noqa: F811 # fixtures
+    cartesian_case(fieldview_backend_no_dace_exec)
+
+
+@pytest.fixture
 def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
@@ -487,6 +492,13 @@ def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtu
         },
         grid_type=common.GridType.UNSTRUCTURED,
     )
+
+
+@pytest.fixture
+def unstructured_case_no_dace_exec(
+    reduction_setup, fieldview_backend_no_dace_exec  # noqa: F811 # fixtures
+):
+    unstructured_case(reduction_setup, fieldview_backend_no_dace_exec)
 
 
 def _allocate_from_type(

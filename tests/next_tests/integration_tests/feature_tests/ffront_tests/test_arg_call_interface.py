@@ -24,7 +24,7 @@ from gt4py.next.common import Field
 from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
 from gt4py.next.ffront.fbuiltins import broadcast, int32, int64
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -35,6 +35,7 @@ from next_tests.integration_tests.cases import (
     JDim,
     KDim,
     cartesian_case,
+    cartesian_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -169,9 +170,9 @@ def test_call_field_operator_from_program(cartesian_case):
     )
 
 
-def test_call_scan_operator_from_field_operator(cartesian_case):
+def test_call_scan_operator_from_field_operator(cartesian_case_no_dace_exec):
+    cartesian_case = cartesian_case_no_dace_exec
     if cartesian_case.backend in [
-        dace_iterator.run_dace_iterator,
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
     ]:

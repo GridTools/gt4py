@@ -33,7 +33,7 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -49,7 +49,9 @@ from next_tests.integration_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
+    cartesian_case_no_dace_exec,
     unstructured_case,
+    unstructured_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -68,9 +70,9 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
-def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_multicopy(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
@@ -161,9 +163,9 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a[1:] + b[2:])
 
 
-def test_tuples(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuples(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
@@ -211,9 +213,9 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     )
 
 
-def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: index fields, constant fields")
+def test_scalar_arg_with_field(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
+    # Not supported in DaCe backend: index fields, constant fields
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
@@ -272,11 +274,11 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
-def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
+def test_tuple_scalar_scan(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
+    # Not supported in DaCe backend: tuple arguments
+    cartesian_case = cartesian_case_no_dace_exec
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple arguments")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
@@ -297,9 +299,9 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
-def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
+def test_scalar_scan_vertical_offset(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
+    # Not supported in DaCe backend: scans
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
@@ -378,9 +380,9 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_offset_field(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: offset fields")
+def test_offset_field(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: offset fields
+    cartesian_case = cartesian_case_no_dace_exec
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -413,9 +415,9 @@ def test_offset_field(cartesian_case):
     assert np.allclose(out.array(), ref)
 
 
-def test_nested_tuple_return(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_nested_tuple_return(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def pack_tuple(
@@ -431,9 +433,9 @@ def test_nested_tuple_return(cartesian_case):
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
-def test_nested_reduction(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
+def test_nested_reduction(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: reductions over lift expressions
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
@@ -474,9 +476,9 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
-def test_tuple_return_2(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_return_2(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -495,9 +497,9 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
-def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuples")
+def test_tuple_with_local_field_in_reduction_shifted(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: tuples
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -515,9 +517,9 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     )
 
 
-def test_tuple_arg(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple args")
+def test_tuple_arg(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple args
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
@@ -548,11 +550,11 @@ def test_fieldop_from_scan(cartesian_case, forward):
     cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
-def test_solve_triag(cartesian_case):
+def test_solve_triag(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: scans
+    cartesian_case = cartesian_case_no_dace_exec
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("Nested `scan`s requires creating temporaries.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
     def tridiag_forward(
@@ -614,9 +616,9 @@ def test_ternary_operator(cartesian_case, left, right):
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
-def test_ternary_operator_tuple(cartesian_case, left, right):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_ternary_operator_tuple(cartesian_case_no_dace_exec, left, right):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def testee(
@@ -633,9 +635,9 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
     )
 
 
-def test_ternary_builtin_neighbor_sum(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions over lift expressions")
+def test_ternary_builtin_neighbor_sum(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: reductions over lift expressions
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
@@ -672,9 +674,9 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_scan_nested_tuple_output(forward, cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
     init = (1, (2, 3))
     k_size = cartesian_case.default_sizes[KDim]
     expected = np.arange(1, 1 + k_size, 1, dtype=int32)
@@ -701,9 +703,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     )
 
 
-def test_scan_nested_tuple_input(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple args")
+def test_scan_nested_tuple_input(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple args
+    cartesian_case = cartesian_case_no_dace_exec
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
     inp1 = gtx.np_as_located_field(KDim)(np.ones((k_size,)))
@@ -781,8 +783,6 @@ def test_domain(cartesian_case):
 def test_domain_input_bounds(cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: type inference failure")
 
     lower_i = 1
     upper_i = 10
@@ -858,9 +858,9 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-def test_domain_tuple(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_domain_tuple(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def fieldop_domain_tuple(
@@ -920,9 +920,9 @@ def test_undefined_symbols(cartesian_case):
             return undefined_symbol
 
 
-def test_zero_dims_fields(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: zero-dimensional fields")
+def test_zero_dims_fields(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: zero-dimensional fields
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def implicit_broadcast_scalar(inp: cases.EmptyField):
@@ -951,9 +951,9 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
     )
 
 
-def test_tuple_unpacking(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_unpacking(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def unpack(
@@ -967,9 +967,10 @@ def test_tuple_unpacking(cartesian_case):
     )
 
 
-def test_tuple_unpacking_star_multi(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_unpacking_star_multi(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
+
     OutType = tuple[
         cases.IField,
         cases.IField,

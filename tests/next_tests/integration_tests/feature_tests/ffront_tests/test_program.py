@@ -20,10 +20,16 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners import dace_iterator
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
+from next_tests.integration_tests.cases import (
+    IDim,
+    Ioff,
+    JDim,
+    cartesian_case,
+    cartesian_case_no_dace_exec,
+    fieldview_backend,
+)
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
@@ -129,9 +135,9 @@ def test_calling_fo_from_fo_execution(cartesian_case):
     )
 
 
-def test_tuple_program_return_constructed_inside(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_program_return_constructed_inside(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def pack_tuple(
@@ -158,9 +164,9 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
     assert np.allclose((a, b), (out_a, out_b))
 
 
-def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def pack_tuple(
@@ -188,9 +194,9 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert out_a[0] == 0 and out_b[0] == 0
 
 
-def test_tuple_program_return_constructed_inside_nested(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_tuple_program_return_constructed_inside_nested(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def pack_tuple(

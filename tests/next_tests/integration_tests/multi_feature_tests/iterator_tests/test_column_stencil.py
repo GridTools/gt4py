@@ -21,11 +21,15 @@ from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import (
+    lift_mode,
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 I = offset("I")
@@ -79,11 +83,10 @@ def basic_stencils(request):
     return request.param
 
 
-def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
-    program_processor, validate = program_processor
+def test_basic_column_stencils(program_processor_no_dace_exec, lift_mode, basic_stencils):
+    # Not supported in DaCe backend: origin
+    program_processor, validate = program_processor_no_dace_exec
     stencil, ref_fun, inp_fun = basic_stencils
-    if program_processor == run_dace_iterator and inp_fun:
-        pytest.xfail("Not supported in DaCe backend: origin")
 
     shape = [5, 7]
     inp = (
@@ -94,13 +97,6 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = ref_fun(inp)
-
-    if (
-        program_processor == run_dace_iterator
-        and stencil.__name__ == "shift_stencil"
-        and inp.origin
-    ):
-        pytest.xfail("Not supported in DaCe backend: origin")
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
@@ -242,11 +238,10 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
         ),
     ],
 )
-def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
-    program_processor, validate = program_processor
+def test_kdoublesum_scan(program_processor_no_dace_exec, lift_mode, kstart, reference):
+    program_processor, validate = program_processor_no_dace_exec
     if (
-        program_processor == run_dace_iterator
-        or program_processor == run_gtfn
+        program_processor == run_gtfn
         or program_processor == run_gtfn_imperative
         or program_processor == gtfn_format_sourcecode
     ):
@@ -328,10 +323,9 @@ def sum_fencil(out, inp0, inp1, k_size):
     )
 
 
-def test_different_vertical_sizes_with_origin(program_processor):
-    program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: origin")
+def test_different_vertical_sizes_with_origin(program_processor_no_dace_exec):
+    # Not supported in DaCe backend: origin
+    program_processor, validate = program_processor_no_dace_exec
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))

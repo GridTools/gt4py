@@ -18,7 +18,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -32,7 +32,9 @@ from next_tests.integration_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
+    cartesian_case_no_dace_exec,
     unstructured_case,
+    unstructured_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -90,11 +92,11 @@ def test_reduction_execution(unstructured_case):
     )
 
 
-def test_reduction_expression_in_call(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        # -edge_f(V2E) * tmp_nbh * 2 gets inlined with the neighbor_sum operation in the reduction in itir,
-        # so in addition to the skipped reason, currently itir is a lambda instead of the 'plus' operation
-        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
+def test_reduction_expression_in_call(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: Reductions not directly on a field.
+    # -edge_f(V2E) * tmp_nbh * 2 gets inlined with the neighbor_sum operation in the reduction in itir,
+    # so in addition to the skipped reason, currently itir is a lambda instead of the 'plus' operation
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def reduce_expr(edge_f: cases.EField) -> cases.VField:
@@ -114,9 +116,9 @@ def test_reduction_expression_in_call(unstructured_case):
     )
 
 
-def test_reduction_with_common_expression(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
+def test_reduction_with_common_expression(unstructured_case_no_dace_exec):
+    # Not supported in DaCe backend: Reductions not directly on a field.
+    unstructured_case = unstructured_case_no_dace_exec
 
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
@@ -129,9 +131,9 @@ def test_reduction_with_common_expression(unstructured_case):
     )
 
 
-def test_conditional_nested_tuple(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
+def test_conditional_nested_tuple(cartesian_case_no_dace_exec):
+    # Not supported in DaCe backend: tuple returns
+    cartesian_case = cartesian_case_no_dace_exec
 
     @gtx.field_operator
     def conditional_nested_tuple(
