@@ -29,7 +29,7 @@ IDim = gtx.Dimension("IDim")
 
 
 @fundef
-def test_conditional(inp):
+def stencil_conditional(inp):
     tmp = if_(eq(deref(inp), 0), make_tuple(1.0, 2.0), make_tuple(3.0, 4.0))
     return tuple_get(0, tmp) + tuple_get(1, tmp)
 
@@ -47,7 +47,7 @@ def test_conditional_w_tuple(program_processor_no_dace_exec):
         IDim: range(0, shape[0]),
     }
     run_processor(
-        test_conditional[dom],
+        stencil_conditional[dom],
         program_processor,
         inp,
         out=out,
