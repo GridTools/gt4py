@@ -142,9 +142,7 @@ def map_make_const_list(in_edges):
 def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == run_dace_iterator:
-        pytest.xfail(
-            "Not supported in DaCe backend: make_const_list"
-        )
+        pytest.xfail("Not supported in DaCe backend: make_const_list")
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
@@ -166,9 +164,7 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
-def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(
-    program_processor, lift_mode
-):
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processor, lift_mode):
     program_processor, validate = program_processor
     inp = vertex_index_field()
     out = gtx.np_as_located_field(Cell)(np.zeros([9], dtype=inp.dtype))
