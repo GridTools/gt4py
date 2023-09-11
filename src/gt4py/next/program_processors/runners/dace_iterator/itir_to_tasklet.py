@@ -154,6 +154,7 @@ class Context:
     body: dace.SDFG
     state: dace.SDFGState
     symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
+    # if we encounter a reduction node, the reduction state needs to be pushed to child nodes
     reduce_limit: int
     reduce_wcr: Optional[str]
 
@@ -435,6 +436,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 None,
                 result_access,
                 None,
+                # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
                 dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
             )
             result = ValueExpr(value=result_access, dtype=result.dtype)
@@ -574,6 +576,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         args: list[ValueExpr]
         if self.context.reduce_limit:
+            # we are visiting a child node of reduction, so the neighbor index can be used for indirect addressing
             result_name = unique_var_name()
             self.context.body.add_array(
                 result_name,
@@ -590,6 +593,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 ndrange={index_name: f"0:{self.context.reduce_limit}"},
             )
 
+            # if dim is not found in iterator indices, we take the neighbor index over the reduction domain
             array_index = [
                 f"{iterator.indices[dim].data}_v" if dim in iterator.indices else index_name
                 for dim in sorted(iterator.dimensions)
@@ -781,6 +785,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 else:
                     args.append(None)
 
+            # first visit only arguments for neighbor selection, all other arguments are none
             neighbor_args = [arg for arg in args if arg]
 
             # check that all neighbors expression have the same range
@@ -801,6 +806,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             op_name = fun_node.expr.fun
             assert isinstance(op_name, itir.SymRef)
 
+            # initialize the reduction result based on type of operation
             init_value = reduction_init_value(op_name.id, result_dtype)
             init_state = self.context.body.add_state_before(self.context.state, "init")
             init_tasklet = init_state.add_tasklet(
@@ -814,12 +820,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 dace.Memlet.simple(result_name, "0"),
             )
 
-            # set variable in context to enable dereference of neighbors in input fields and WCR on reduce tasklet
+            # set reduction state to enable dereference of neighbors in input fields and to set WCR on reduce tasklet
             self.context.reduce_limit = nreduce
             self.context.reduce_wcr = "lambda x, y: " + _MATH_BUILTINS_MAPPING[str(op_name)].format(
                 "x", "y"
             )
 
+            # visit child nodes for input arguments
             for i, node_arg in enumerate(node.args):
                 if not args[i]:
                     args[i] = self.visit(node_arg)[0]
@@ -831,7 +838,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             self.context.reduce_limit = 0
             self.context.reduce_wcr = None
 
-            # the connectivity arrays (neighbor tables) are not needed inside the lambda SDFG
+            # the connectivity arrays (neighbor tables) are not needed inside the reduce lambda SDFG
             neighbor_tables = filter_neighbor_tables(self.offset_provider)
             for conn, _ in neighbor_tables:
                 var = connectivity_identifier(conn)
@@ -864,7 +871,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             # map fusion is beneficial for reduction stencils:
             # the solution was designed to keep code generation simple and let DaCe fuse maps
-            self.context.body.apply_transformations_repeated([MapFusion])
+            self.context.body.apply_transformations_repeated([MapFusion], validate=False)
 
         return [ValueExpr(result_access, result_dtype)]
 
