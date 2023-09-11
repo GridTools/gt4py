@@ -42,6 +42,7 @@ from next_tests.integration_tests.cases import (
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
     fieldview_backend,
+    fieldview_backend_no_dace_exec,
     size,
 )
 

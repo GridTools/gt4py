@@ -38,6 +38,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
+    fieldview_backend_no_dace_exec,
     reduction_setup,
 )
 

@@ -29,6 +29,7 @@ from next_tests.integration_tests.cases import (
     cartesian_case,
     cartesian_case_no_dace_exec,
     fieldview_backend,
+    fieldview_backend_no_dace_exec,
 )
 from next_tests.past_common_fixtures import (
     copy_program_def,
