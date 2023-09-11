@@ -169,9 +169,9 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
 
 
 def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(
-    program_processor_no_dace_exec, lift_mode
+    program_processor, lift_mode
 ):
-    program_processor, validate = program_processor_no_dace_exec
+    program_processor, validate = program_processor
     inp = vertex_index_field()
     out = gtx.np_as_located_field(Cell)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
