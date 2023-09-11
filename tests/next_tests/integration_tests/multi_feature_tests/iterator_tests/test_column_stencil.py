@@ -82,8 +82,6 @@ def basic_stencils(request):
 def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     program_processor, validate = program_processor
     stencil, ref_fun, inp_fun = basic_stencils
-    if program_processor == run_dace_iterator and inp_fun:
-        pytest.xfail("Not supported in DaCe backend: origin")
 
     shape = [5, 7]
     inp = (
@@ -94,13 +92,6 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = ref_fun(inp)
-
-    if (
-        program_processor == run_dace_iterator
-        and stencil.__name__ == "shift_stencil"
-        and inp.origin
-    ):
-        pytest.xfail("Not supported in DaCe backend: origin")
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
@@ -330,8 +321,6 @@ def sum_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: origin")
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
