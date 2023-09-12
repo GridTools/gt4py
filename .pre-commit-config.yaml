@@ -148,7 +148,7 @@ repos:
   ##]]]
   #========= FROM constraints.txt: v1.5.1 =========
   ##[[[end]]]
-  rev: v1.5.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.5.1  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
