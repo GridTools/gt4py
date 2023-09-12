@@ -15,7 +15,17 @@ from typing import Optional, Pattern
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Domain, Infinity, UnitRange, promote_dims
+from gt4py.next.common import (
+    Dimension,
+    DimensionKind,
+    Domain,
+    Infinity,
+    UnitRange,
+    domain,
+    named_range,
+    promote_dims,
+    unit_range,
+)
 
 
 IDim = Dimension("IDim")
@@ -25,15 +35,8 @@ KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 
 @pytest.fixture
-def domain():
-    range1 = UnitRange(0, 10)
-    range2 = UnitRange(5, 15)
-    range3 = UnitRange(20, 30)
-
-    dimensions = (IDim, JDim, KDim)
-    ranges = (range1, range2, range3)
-
-    return Domain(dimensions, ranges)
+def a_domain():
+    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
 
 
 def test_empty_range():
@@ -51,6 +54,11 @@ def test_unit_range_length(rng):
     assert rng.start == -5
     assert rng.stop == 5
     assert len(rng) == 10
+
+
+@pytest.mark.parametrize("rng_like", [(2, 4), range(2, 4), UnitRange(2, 4)])
+def test_unit_range_like(rng_like):
+    assert unit_range(rng_like) == UnitRange(2, 4)
 
 
 def test_unit_range_repr(rng):
@@ -142,54 +150,87 @@ def test_mixed_infinity_range():
     assert len(mixed_inf_range) == Infinity.positive()
 
 
-def test_domain_length(domain):
-    assert len(domain) == 3
+@pytest.mark.parametrize(
+    "named_rng_like",
+    [
+        (IDim, (2, 4)),
+        (IDim, range(2, 4)),
+        (IDim, UnitRange(2, 4)),
+    ],
+)
+def test_named_range_like(named_rng_like):
+    assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
 
 
-def test_domain_iteration(domain):
-    iterated_values = [val for val in domain]
-    assert iterated_values == list(zip(domain.dims, domain.ranges))
+def test_domain_length(a_domain):
+    assert len(a_domain) == 3
 
 
-def test_domain_contains_named_range(domain):
-    assert (IDim, UnitRange(0, 10)) in domain
-    assert (IDim, UnitRange(-5, 5)) not in domain
+@pytest.mark.parametrize(
+    "domain_like",
+    [
+        (Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5)))),
+        ((IDim, (2, 4)), (JDim, (3, 5))),
+        ({IDim: (2, 4), JDim: (3, 5)}),
+    ],
+)
+def test_domain_like(domain_like):
+    assert domain(domain_like) == Domain(
+        dims=(IDim, JDim), ranges=(UnitRange(2, 4), UnitRange(3, 5))
+    )
+
+
+def test_domain_iteration(a_domain):
+    iterated_values = [val for val in a_domain]
+    assert iterated_values == list(zip(a_domain.dims, a_domain.ranges))
+
+
+def test_domain_contains_named_range(a_domain):
+    assert (IDim, UnitRange(0, 10)) in a_domain
+    assert (IDim, UnitRange(-5, 5)) not in a_domain
 
 
 @pytest.mark.parametrize(
     "second_domain, expected",
     [
         (
-            Domain((IDim, JDim), (UnitRange(2, 12), UnitRange(7, 17))),
-            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(7, 15), UnitRange(20, 30))),
+            Domain(dims=(IDim, JDim), ranges=(UnitRange(2, 12), UnitRange(7, 17))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(2, 10), UnitRange(7, 15), UnitRange(20, 30)),
+            ),
         ),
         (
-            Domain((IDim, KDim), (UnitRange(2, 12), UnitRange(7, 27))),
-            Domain((IDim, JDim, KDim), (UnitRange(2, 10), UnitRange(5, 15), UnitRange(20, 27))),
+            Domain(dims=(IDim, KDim), ranges=(UnitRange(2, 12), UnitRange(7, 27))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(2, 10), UnitRange(5, 15), UnitRange(20, 27)),
+            ),
         ),
         (
-            Domain((JDim, KDim), (UnitRange(2, 12), UnitRange(4, 27))),
-            Domain((IDim, JDim, KDim), (UnitRange(0, 10), UnitRange(5, 12), UnitRange(20, 27))),
+            Domain(dims=(JDim, KDim), ranges=(UnitRange(2, 12), UnitRange(4, 27))),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange(0, 10), UnitRange(5, 12), UnitRange(20, 27)),
+            ),
         ),
     ],
 )
-def test_domain_intersection_different_dimensions(domain, second_domain, expected):
-    result_domain = domain & second_domain
+def test_domain_intersection_different_dimensions(a_domain, second_domain, expected):
+    result_domain = a_domain & second_domain
     print(result_domain)
 
     assert result_domain == expected
 
 
-def test_domain_intersection_reversed_dimensions(domain):
-    dimensions = (JDim, IDim)
-    ranges = (UnitRange(2, 12), UnitRange(7, 17))
-    domain2 = Domain(dimensions, ranges)
+def test_domain_intersection_reversed_dimensions(a_domain):
+    domain2 = Domain(dims=(JDim, IDim), ranges=(UnitRange(2, 12), UnitRange(7, 17)))
 
     with pytest.raises(
         ValueError,
         match="Dimensions can not be promoted. The following dimensions appear in contradicting order: IDim, JDim.",
     ):
-        domain & domain2
+        a_domain & domain2
 
 
 @pytest.mark.parametrize(
@@ -202,8 +243,8 @@ def test_domain_intersection_reversed_dimensions(domain):
         (-2, (JDim, UnitRange(5, 15))),
     ],
 )
-def test_domain_integer_indexing(domain, index, expected):
-    result = domain[index]
+def test_domain_integer_indexing(a_domain, index, expected):
+    result = a_domain[index]
     assert result == expected
 
 
@@ -214,8 +255,8 @@ def test_domain_integer_indexing(domain, index, expected):
         (slice(1, None), ((JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))),
     ],
 )
-def test_domain_slice_indexing(domain, slice_obj, expected):
-    result = domain[slice_obj]
+def test_domain_slice_indexing(a_domain, slice_obj, expected):
+    result = a_domain[slice_obj]
     assert isinstance(result, Domain)
     assert len(result) == len(expected)
     assert all(res == exp for res, exp in zip(result, expected))
@@ -228,28 +269,28 @@ def test_domain_slice_indexing(domain, slice_obj, expected):
         (KDim, (KDim, UnitRange(20, 30))),
     ],
 )
-def test_domain_dimension_indexing(domain, index, expected_result):
-    result = domain[index]
+def test_domain_dimension_indexing(a_domain, index, expected_result):
+    result = a_domain[index]
     assert result == expected_result
 
 
-def test_domain_indexing_dimension_missing(domain):
+def test_domain_indexing_dimension_missing(a_domain):
     with pytest.raises(KeyError, match=r"No Dimension of type .* is present in the Domain."):
-        domain[ECDim]
+        a_domain[ECDim]
 
 
-def test_domain_indexing_invalid_type(domain):
+def test_domain_indexing_invalid_type(a_domain):
     with pytest.raises(
         KeyError, match="Invalid index type, must be either int, slice, or Dimension."
     ):
-        domain["foo"]
+        a_domain["foo"]
 
 
 def test_domain_repeat_dims():
     dims = (IDim, JDim, IDim)
     ranges = (UnitRange(0, 5), UnitRange(0, 8), UnitRange(0, 3))
     with pytest.raises(NotImplementedError, match=r"Domain dimensions must be unique, not .*"):
-        Domain(dims, ranges)
+        Domain(dims=dims, ranges=ranges)
 
 
 def test_domain_dims_ranges_length_mismatch():

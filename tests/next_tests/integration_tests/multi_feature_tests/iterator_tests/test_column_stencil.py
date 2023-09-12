@@ -292,10 +292,6 @@ def sum_shifted_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail(
-            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
-        )
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
