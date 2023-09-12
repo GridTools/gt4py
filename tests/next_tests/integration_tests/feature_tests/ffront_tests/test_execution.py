@@ -68,6 +68,7 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
+@pytest.mark.uses_tuple_returns  # TODO(tehrengruber): should the name contain the namespace of where it is important?
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: tuple returns")

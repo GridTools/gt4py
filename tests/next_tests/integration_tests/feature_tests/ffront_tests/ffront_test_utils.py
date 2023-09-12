@@ -42,9 +42,16 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
+    backend = request.param
+
+    if backend == dace_iterator.run_dace_iterator:
+        # TODO: move what tests to skip to a different (maybe central) file
+        if request.node.get_closest_marker("uses_tuple_returns"):
+            pytest.xfail("Not supported in DaCe backend: tuple returns")
+
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
-    yield request.param
+    yield backend
     decorator.DEFAULT_BACKEND = backup_backend
 
 
