@@ -126,25 +126,53 @@ def k_level_condition_upper(k_idx, k_level):
     return if_(deref(k_idx) < deref(k_level), deref(shift(K, +1)(k_idx)), 0)
 
 
+@fundef
+def k_level_condition_upper_tuple(k_idx, k_level):
+    shifted_val = deref(shift(K, +1)(k_idx))
+    return if_(
+        tuple_get(0, deref(k_idx)) < deref(k_level),
+        tuple_get(0, shifted_val) + tuple_get(1, shifted_val),
+        0,
+    )
+
+
 @pytest.mark.parametrize(
-    "fun, k_level, ref_function",
+    "fun, k_level, inp_function, ref_function",
     [
-        (k_level_condition_lower, lambda inp: 0, lambda inp: np.concatenate([[0], inp[:-1]])),
+        (
+            k_level_condition_lower,
+            lambda inp: 0,
+            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            lambda inp: np.concatenate([[0], inp[:-1]]),
+        ),
         (
             k_level_condition_upper,
             lambda inp: inp.shape[0] - 1,
+            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([inp[1:], [0]]),
+        ),
+        (
+            k_level_condition_upper_tuple,
+            lambda inp: inp[0].shape[0] - 1,
+            lambda k_size: (
+                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            ),
+            lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
         ),
     ],
 )
-def test_k_level_condition(program_processor, lift_mode, fun, k_level, ref_function):
+def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_function, ref_function):
     program_processor, validate = program_processor
 
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple arguments")
+
     k_size = 5
-    inp = gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32))
+    inp = inp_function(k_size)
     ref = ref_function(inp)
 
-    out = gtx.np_as_located_field(KDim)(np.zeros_like(inp))
+    out = gtx.np_as_located_field(KDim)(np.zeros((5,), dtype=np.int32))
 
     run_processor(
         fun[{KDim: range(0, k_size)}],
