@@ -17,6 +17,8 @@ try:
 except ModuleNotFoundError:
     import sys
 
+    if "pytest" in sys.modules:
+        raise
     print("Error, module dace not found", file=sys.stderr)
     exit()
 

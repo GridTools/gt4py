@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 
 import pytest
@@ -27,12 +28,18 @@ from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, ro
 
 
 try:
+    import dace
+
+    # import dace_iterator only if dace is available
     from gt4py.next.program_processors.runners import dace_iterator
 except ModuleNotFoundError as e:
     if "dace" in str(e):
         dace_iterator = None
     else:
         raise e
+finally:
+    if dace_iterator:
+        del dace
 
 import next_tests
 
