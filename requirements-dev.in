@@ -5,7 +5,7 @@
 ## for pkg in ['hypothesis', 'pytest']:
 ##    print(re.search(f"\n({pkg} *[=>~!].*)\n", versions)[1])
 ##]]]
-hypothesis>=6.84.2
+hypothesis>=6.0.0
 pytest>=7.0
 ##[[[end]]]
 
