@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import math
 import operator
+import array
 
 import numpy as np
 import pytest
@@ -313,3 +314,14 @@ def test_function_field_builtins(function_field, builtin_name):
         assert math.isnan(np.__getattribute__(builtin_name)(3))
     else:
         assert result == np.__getattribute__(builtin_name)(3)
+
+
+def test_ndarray_with_transform(function_field):
+    def transform_to_array(arr):
+        return array.array('d', arr.flatten())
+
+    result = function_field.as_array(func=transform_to_array)
+
+    assert isinstance(result, array.array)
+    assert len(result) == 45
+    assert result.typecode == 'd'

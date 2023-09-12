@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import operator
-from typing import Any, Callable, TypeGuard, overload
+from typing import Any, Callable, TypeGuard, overload, Optional
 
 import numpy as np
 
@@ -56,7 +56,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         >>> domain = common.Domain((I, common.UnitRange(0, 5)))
         >>> func = lambda i: i ** 2
         >>> field = FunctionField(func, domain)
-        >>> ndarray = field.ndarray
+        >>> ndarray = field.ndarray()
         >>> expected_ndarray = np.fromfunction(func, (5,))
         >>> np.array_equal(ndarray, expected_ndarray)
         True
@@ -93,13 +93,17 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     __getitem__ = restrict
 
     @property
-    def ndarray(self) -> core_defs.NDArrayObject | int | float:
+    def ndarray(self):
+        return self.as_array()
+
+    def as_array(self, func: Optional[Callable[[core_defs.NDArrayObject], Any]] = None) -> core_defs.NDArrayObject | int | float:
         if not self.domain.is_finite():
             raise embedded_exceptions.InfiniteRangeNdarrayError(
                 self.__class__.__name__, self.domain
             )
         shape = [len(rng) for rng in self.domain.ranges]
-        return np.fromfunction(self.func, shape)
+        _ndarray = np.fromfunction(self.func, shape)
+        return _ndarray if func is None else func(_ndarray)
 
     def _handle_function_field_op(self, other: FunctionField, op: Callable) -> FunctionField:
         domain_intersection = self.domain & other.domain
