@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import operator
 from typing import Any, Callable, TypeGuard, overload
 
@@ -66,20 +67,24 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     _skip_invariant: bool = False
 
     def __post_init__(self):
+        if not callable(self.func):
+            raise embedded_exceptions.FunctionFieldError(
+                self.__class__.__name__,
+                f"Invalid first argument type: Expected a function but got {self.func}",
+            )
+
         if not self._skip_invariant:
-            num_params = len(self.domain)
-            try:
-                func_params = self.func.__code__.co_argcount
-                if func_params != num_params:
+            if __debug__:
+                try:
+                    num_params = len(self.domain)
+                    target_shape = tuple(1 for _ in range(num_params))
+                    np.fromfunction(self.func, target_shape)
+                except Exception as e:
+                    params = _get_params(self.func)
                     raise embedded_exceptions.FunctionFieldError(
                         self.__class__.__name__,
-                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({func_params})",
+                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({params})",
                     )
-            except AttributeError:
-                raise embedded_exceptions.FunctionFieldError(
-                    self.__class__.__name__,
-                    f"Invalid first argument type: Expected a function but got {self.func}",
-                )
 
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         new_domain = embedded_common.sub_domain(self.domain, index)
@@ -262,3 +267,12 @@ for builtin_name in _BUILTINS:
     if builtin_name in ["abs", "power", "gamma"]:
         continue
     FunctionField.register_builtin_func(getattr(fbuiltins, builtin_name), _compose_function_field_with_builtin(builtin_name))
+
+
+def _get_params(func: Callable) -> str:
+    """Pretty print callable parameters."""
+    signature = inspect.signature(func)
+    parameters = signature.parameters
+    param_strings = [f"{name}: {param}" for name, param in parameters.items()]
+    formatted_params = ', '.join(param_strings)
+    return formatted_params

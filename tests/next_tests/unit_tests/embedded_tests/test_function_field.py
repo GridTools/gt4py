@@ -289,7 +289,7 @@ def test_function_field_invalid_func(func):
 )
 def test_function_field_invalid_invariant(domain):
     with pytest.raises(embedded_exceptions.FunctionFieldError, match="Invariant violation"):
-        funcf.FunctionField(lambda x: x, domain)
+        funcf.FunctionField(lambda *args, x: x, domain)
 
 
 def test_function_field_infinite_range(infinite_domain, mixed_domain):
