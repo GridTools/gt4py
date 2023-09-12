@@ -39,6 +39,8 @@ Internally, gt4py uses the utilities :code:`gt4py.utils.as_numpy` and :code:`gt4
 buffers. GT4Py developers are advised to always use those utilities as to guarantee support across gt4py as the
 supported interfaces are extended.
 
+.. _cartesian-arrays-dimension-mapping:
+
 Dimension Mapping
 ^^^^^^^^^^^^^^^^^
 
@@ -55,6 +57,8 @@ which implements this lookup.
 
 Note: Support for xarray can be added manually by the user by means of the mechanism described
 `here <https://xarray.pydata.org/en/stable/internals/extending-xarray.html>`_.
+
+.. _cartesian-arrays-default-origin:
 
 Default Origin
 ^^^^^^^^^^^^^^

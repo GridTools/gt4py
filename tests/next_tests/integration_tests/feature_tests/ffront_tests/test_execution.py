@@ -804,8 +804,6 @@ def test_domain_input_bounds(cartesian_case):
         gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: type inference failure")
 
     lower_i = 1
     upper_i = 10

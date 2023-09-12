@@ -16,18 +16,15 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
-import boltons.typeutils
-
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-
-
-ALL_NEIGHBORS = boltons.typeutils.make_sentinel("ALL_NEIGHBORS")
 
 
 class Sentinel(enum.Enum):
     VALUE = object()
     TYPE = object()
+
+    ALL_NEIGHBORS = object()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -154,7 +151,7 @@ def _map(f):
 
 
 def _neighbors(o, x):
-    return _deref(_shift(o, ALL_NEIGHBORS)(x))
+    return _deref(_shift(o, Sentinel.ALL_NEIGHBORS)(x))
 
 
 def _scan(f, forward, init):

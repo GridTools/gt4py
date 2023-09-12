@@ -15,7 +15,7 @@ import copy
 import dataclasses
 import functools
 from collections.abc import Mapping
-from typing import Any, Final, Iterable, Literal, Optional
+from typing import Any, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.eve as eve
 import gt4py.next as gtx
@@ -24,13 +24,13 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir, ir_makers as im, type_inference
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
 """Iterator IR extension for global temporaries.
@@ -186,6 +186,11 @@ def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
         }
 
 
+def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> None:
+    used_symbol_refs = collect_symbol_refs(expr)
+    assert not (set(used_symbol_refs) - {param.id for param in whitelist})
+
+
 def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemporaries:
     """Split closures on lifted function calls and introduce new temporary buffers for return values.
 
@@ -214,7 +219,6 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                 closures.append(current_closure)
                 continue
 
-            # TODO(tehrengruber): extracting from a scan is untested.
             is_scan: bool = isinstance(
                 current_closure.stencil, ir.FunCall
             ) and current_closure.stencil.fun == im.ref("scan")
@@ -233,11 +237,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
             if extracted_lifts:
                 for tmp_sym, lift_expr in extracted_lifts.items():
                     # make sure the applied lift is not capturing anything except of closure params
-                    used_symbol_refs = collect_symbol_refs(lift_expr)
-                    assert not (
-                        set(used_symbol_refs)
-                        - {param.id for param in current_closure_stencil.params}
-                    )
+                    _ensure_expr_does_not_capture(lift_expr, current_closure_stencil.params)
 
                     assert isinstance(lift_expr, ir.FunCall) and isinstance(
                         lift_expr.fun, ir.FunCall
@@ -420,6 +420,22 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 
+def _group_offsets(
+    offset_literals: Sequence[ir.OffsetLiteral],
+) -> Sequence[tuple[str, int | Literal[trace_shifts.Sentinel.ALL_NEIGHBORS]]]:
+    tags = [tag.value for tag in offset_literals[::2]]
+    offsets = [
+        offset.value if isinstance(offset, ir.OffsetLiteral) else offset
+        for offset in offset_literals[1::2]
+    ]
+    assert all(isinstance(tag, str) for tag in tags)
+    assert all(
+        isinstance(offset, int) or offset == trace_shifts.Sentinel.ALL_NEIGHBORS
+        for offset in offsets
+    )
+    return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
+
+
 def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
@@ -449,7 +465,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 domains[input_arg.id] = domain
             continue
 
-        local_shifts = TraceShifts.apply(closure)
+        local_shifts = trace_shifts.TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
             assert isinstance(param, str)
             consumed_domains: list[SymbolicDomain] = (
@@ -457,16 +473,11 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             )
             for shift_chain in shift_chains:
                 consumed_domain = SymbolicDomain.from_expr(domain)
-                for shift in zip(shift_chain[::2], shift_chain[1::2], strict=True):
-                    offset_name, offset = shift[0].value, shift[1]
-                    assert isinstance(offset_name, str)
+                for offset_name, offset in _group_offsets(shift_chain):
                     if isinstance(offset_provider[offset_name], gtx.Dimension):
                         # cartesian shift
-                        assert isinstance(offset, ir.OffsetLiteral)
                         dim = offset_provider[offset_name].value
-                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(
-                            offset.value
-                        )
+                        consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
                     elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
