@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.next.iterator import ir, ir_makers as im
-from gt4py.next.iterator.transforms.trace_shifts import ALL_NEIGHBORS, TraceShifts
+from gt4py.next.iterator.transforms.trace_shifts import Sentinel, TraceShifts
 
 
 def test_trivial():
@@ -105,7 +105,7 @@ def test_neighbors():
         "inp": {
             (
                 ir.OffsetLiteral(value="O"),
-                ALL_NEIGHBORS,
+                Sentinel.ALL_NEIGHBORS,
             )
         }
     }
