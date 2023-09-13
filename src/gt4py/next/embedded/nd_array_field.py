@@ -25,7 +25,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
-from gt4py.next.embedded.common import broadcast_domain, find_index_of_dim
+from gt4py.next.embedded.common import broadcast_domain, _compute_domain_slice
 from gt4py.next.ffront import fbuiltins
 
 
@@ -59,8 +59,8 @@ def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_nam
         if hasattr(b, "__gt_builtin_func__"):  # common.is_field(b):
             if not a.domain == b.domain:
                 domain_intersection = a.domain & b.domain
-                a_broadcasted = _broadcast(a, domain_intersection.dims)
-                b_broadcasted = _broadcast(b, domain_intersection.dims)
+                a_broadcasted = fbuiltins.broadcast(a, domain_intersection.dims)
+                b_broadcasted = fbuiltins.broadcast(b, domain_intersection.dims)
                 a_slices = _get_slices_from_domain_slice(a_broadcasted.domain, domain_intersection)
                 b_slices = _get_slices_from_domain_slice(b_broadcasted.domain, domain_intersection)
                 new_data = op(a_broadcasted.ndarray[a_slices], b_broadcasted.ndarray[b_slices])
@@ -336,14 +336,7 @@ if jnp:
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
     domain_slice = _compute_domain_slice(field, new_dimensions)
     named_ranges = broadcast_domain(field, new_dimensions)
-    ndarray_ = field.ndarray
-
-    # handle case where we have a constant FunctionField where field.ndarray is a scalar
-    if isinstance(ndarray_, (int, float)):
-        shape = [len(rng) for rng in field.domain.ranges]
-        ndarray_ = np.full(shape, ndarray_)
-
-    return common.field(ndarray_[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+    return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(
@@ -414,15 +407,3 @@ def _compute_slice(
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
-
-
-def _compute_domain_slice(
-    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
-) -> Sequence[slice | None]:
-    domain_slice: list[slice | None] = []
-    for dim in new_dimensions:
-        if find_index_of_dim(dim, field.domain) is not None:
-            domain_slice.append(slice(None))
-        else:
-            domain_slice.append(np.newaxis)
-    return domain_slice

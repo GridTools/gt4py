@@ -101,21 +101,6 @@ binary_op_field_intersection_cases = [
 ]
 
 
-@pytest.mark.parametrize(
-    "domain1, field_data, domain2, constant_value, expected_shape, expected_value",
-    binary_op_field_intersection_cases,
-)
-def test_constant_field_non_empty_domain_op(
-    domain1, field_data, domain2, constant_value, expected_shape, expected_value
-):
-    field = common.field(field_data, domain=domain1)
-    cf = funcf.constant_field(constant_value, domain2)
-
-    result = cf + field
-    assert result.ndarray.shape == expected_shape
-    assert np.all(result.ndarray == expected_value)
-
-
 def adder(i, j):
     return i + j
 

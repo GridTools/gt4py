@@ -72,15 +72,17 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
         if __debug__:
             try:
-                num_params = len(self.domain)
-                target_shape = tuple(1 for _ in range(num_params))
-                np.fromfunction(self.func, target_shape)
+                self._trigger_func()
             except Exception as e:
                 params = _get_params(self.func)
                 raise embedded_exceptions.FunctionFieldError(
                     self.__class__.__name__,
-                    f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({params})",
+                    f"Invariant violation: len(self.domain) ({len(self.domain)}) does not match the number of parameters of the provided function ({params})",
                 )
+
+    def _trigger_func(self):
+        target_shape = tuple(1 for _ in range(len(self.domain)))
+        return np.fromfunction(self.func, target_shape)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -94,6 +96,11 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject | int | float:
+
+        # handle case where we have a constant FunctionField where field.ndarray is a scalar
+        if isinstance(self._trigger_func(), (int, float)) and not self.domain.is_finite():
+            return np.full(tuple(1 for _ in self.domain.shape), self.func())
+
         if not self.domain.is_finite():
             raise embedded_exceptions.InfiniteRangeNdarrayError(
                 self.__class__.__name__, self.domain
