@@ -552,7 +552,8 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def is_protocol(type_: Type) -> bool:
+# TODO(ricoh): check why mypy claims this is a redefinition
+def is_protocol(type_: Type) -> bool:  # type: ignore[no-redef]  # at least in python 3.10 this seems to be false negative
     """Check if a type is a Protocol definition."""
     return getattr(type_, "_is_protocol", False)
 
