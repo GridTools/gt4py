@@ -70,7 +70,7 @@ def _absolute_sub_domain(
         raise embedded_exceptions.IndexOutOfBounds(domain=domain, indices=index)
 
     for i, (dim, rng) in enumerate(domain):
-        if (pos := _find_index_of_dim(dim, index)) is not None:
+        if (pos := find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
             idx = named_idx[1]
             if isinstance(idx, common.UnitRange):
@@ -122,7 +122,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     return common.UnitRange(start, stop)
 
 
-def _find_index_of_dim(
+def find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> Optional[int]:
@@ -132,12 +132,12 @@ def _find_index_of_dim(
     return None
 
 
-def _broadcast_domain(
+def broadcast_domain(
     field: common.Field, new_dimensions: tuple[common.Dimension, ...]
 ) -> Sequence[common.NamedRange]:
     named_ranges = []
     for dim in new_dimensions:
-        if (pos := _find_index_of_dim(dim, field.domain)) is not None:
+        if (pos := find_index_of_dim(dim, field.domain)) is not None:
             named_ranges.append((dim, field.domain[pos][1]))
         else:
             named_ranges.append(

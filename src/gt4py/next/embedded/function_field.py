@@ -43,8 +43,6 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         func (Callable): The callable function that generates field values.
         domain (common.Domain, optional): The domain over which the function is defined.
             Defaults to an empty domain.
-        _skip_invariant (bool, optional): Internal flag to skip invariant checks.
-            Defaults to False.
 
     Examples:
         Create a FunctionField and compute its ndarray:
@@ -56,7 +54,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         >>> domain = common.Domain((I, common.UnitRange(0, 5)))
         >>> func = lambda i: i ** 2
         >>> field = FunctionField(func, domain)
-        >>> ndarray = field.ndarray()
+        >>> ndarray = field.ndarray
         >>> expected_ndarray = np.fromfunction(func, (5,))
         >>> np.array_equal(ndarray, expected_ndarray)
         True
@@ -64,7 +62,6 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
     func: Callable
     domain: common.Domain = common.Domain()
-    _skip_invariant: bool = False
 
     def __post_init__(self):
         if not callable(self.func):
@@ -73,18 +70,17 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
                 f"Invalid first argument type: Expected a function but got {self.func}",
             )
 
-        if not self._skip_invariant:
-            if __debug__:
-                try:
-                    num_params = len(self.domain)
-                    target_shape = tuple(1 for _ in range(num_params))
-                    np.fromfunction(self.func, target_shape)
-                except Exception as e:
-                    params = _get_params(self.func)
-                    raise embedded_exceptions.FunctionFieldError(
-                        self.__class__.__name__,
-                        f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({params})",
-                    )
+        if __debug__:
+            try:
+                num_params = len(self.domain)
+                target_shape = tuple(1 for _ in range(num_params))
+                np.fromfunction(self.func, target_shape)
+            except Exception as e:
+                params = _get_params(self.func)
+                raise embedded_exceptions.FunctionFieldError(
+                    self.__class__.__name__,
+                    f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({params})",
+                )
 
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         new_domain = embedded_common.sub_domain(self.domain, index)
@@ -93,17 +89,12 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     __getitem__ = restrict
 
     @property
-    def ndarray(self):
-        return self.as_array()
-
-    def as_array(self, func: Optional[Callable[[core_defs.NDArrayObject], Any]] = None) -> core_defs.NDArrayObject | int | float:
+    def ndarray(self) -> core_defs.NDArrayObject | int | float:
         if not self.domain.is_finite():
             raise embedded_exceptions.InfiniteRangeNdarrayError(
                 self.__class__.__name__, self.domain
             )
-        shape = [len(rng) for rng in self.domain.ranges]
-        _ndarray = np.fromfunction(self.func, shape)
-        return _ndarray if func is None else func(_ndarray)
+        return np.fromfunction(self.func, self.domain.shape)
 
     def _handle_function_field_op(self, other: FunctionField, op: Callable) -> FunctionField:
         domain_intersection = self.domain & other.domain
@@ -112,7 +103,6 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         return self.__class__(
             _compose(op, broadcasted_self, broadcasted_other),
             domain_intersection,
-            _skip_invariant=True,
         )
 
     def _handle_scalar_op(self, other: FunctionField, op: Callable) -> FunctionField:
@@ -120,7 +110,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
             return op(self.func(*args), other)
 
         return self.__class__(
-            new_func, self.domain, _skip_invariant=True
+            new_func, self.domain
         )  # skip invariant as we cannot deduce number of args
 
     @overload
@@ -140,7 +130,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
             return op(other, self)
 
     def _unary_op(self, op: Callable) -> FunctionField:
-        return self.__class__(_compose(op, self), self.domain, _skip_invariant=True)
+        return self.__class__(_compose(op, self), self.domain)
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)
@@ -213,14 +203,14 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __neg__(self) -> common.Field:
         return self._unary_op(operator.neg)
 
-    def __invert__(self) -> common.Field:
-        return self._unary_op(operator.invert)
-
     def __abs__(self) -> common.Field:
         return self._unary_op(abs)
 
     def __call__(self, *args, **kwargs) -> common.Field:
         return self.func(*args, **kwargs)
+
+    def __invert__(self) -> common.Field:
+        raise NotImplementedError("Method invert not implemented")
 
     def remap(self, *args, **kwargs) -> common.Field:
         raise NotImplementedError("Method remap not implemented")
@@ -231,12 +221,12 @@ def _compose(operation: Callable, *fields: FunctionField) -> Callable:
 
 
 def _broadcast(field: FunctionField, dims: tuple[common.Dimension, ...]) -> FunctionField:
-    def broadcasted_func(*args: int):
+    def broadcasted_func(*args: int | core_defs.NDArrayObject):
         selected_args = [args[i] for i, dim in enumerate(dims) if dim in field.domain.dims]
         return field.func(*selected_args)
 
-    named_ranges = embedded_common._broadcast_domain(field, dims)
-    return FunctionField(broadcasted_func, common.Domain(*named_ranges), _skip_invariant=True)
+    named_ranges = embedded_common.broadcast_domain(field, dims)
+    return FunctionField(broadcasted_func, common.Domain(*named_ranges))
 
 
 def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
@@ -246,7 +236,7 @@ def _is_nd_array(other: Any) -> TypeGuard[nd._BaseNdArrayField]:
 def constant_field(
     value: core_defs.ScalarT, domain: common.Domain = common.Domain()
 ) -> common.Field:
-    return FunctionField(lambda *args: value, domain, _skip_invariant=True)
+    return FunctionField(lambda *args: value, domain)
 
 
 def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
@@ -259,7 +249,7 @@ def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
 
         builtin_func = getattr(np, builtin_name)
         new_func = lambda *args: builtin_func(field.func(*args))
-        new_field: FunctionField = FunctionField(new_func, field.domain, _skip_invariant=True)
+        new_field: FunctionField = FunctionField(new_func, field.domain)
         return new_field
     return _composed_function_field
 

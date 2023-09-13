@@ -274,6 +274,10 @@ class Domain(Sequence[NamedRange]):
     def __len__(self) -> int:
         return len(self.ranges)
 
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return tuple(len(r) for r in self.ranges)
+
     @overload
     def __getitem__(self, index: int) -> NamedRange:
         ...

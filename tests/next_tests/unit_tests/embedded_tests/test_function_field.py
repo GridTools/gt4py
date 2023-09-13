@@ -23,7 +23,7 @@ from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
 from gt4py.next import fbuiltins
 
-from .test_common import infinite_domain, mixed_domain
+from .test_common import get_infinite_domain, get_mixed_domain
 
 
 
@@ -42,7 +42,6 @@ operators = [
     operator.mul,
     operator.truediv,
     operator.floordiv,
-    lambda x, y: operator.truediv(y, x),
     operator.pow,
     lambda x, y: operator.truediv(y, x),  # Reverse true division
     lambda x, y: operator.add(y, x),  # Reverse addition
@@ -263,9 +262,6 @@ def test_function_field_unary(function_field):
     neg_result = -function_field
     assert neg_result.func(1, 2) == -3
 
-    invert_result = ~function_field
-    assert invert_result.func(1, 2) == -4
-
     abs_result = abs(function_field)
     assert abs_result.func(1, 2) == 3
 
@@ -293,8 +289,8 @@ def test_function_field_invalid_invariant(domain):
         funcf.FunctionField(lambda *args, x: x, domain)
 
 
-def test_function_field_infinite_range(infinite_domain, mixed_domain):
-    domains = [infinite_domain, mixed_domain]
+def test_function_field_infinite_range(get_infinite_domain, get_mixed_domain):
+    domains = [get_infinite_domain, get_mixed_domain]
     for d in domains:
         with pytest.raises(embedded_exceptions.InfiniteRangeNdarrayError):
             ff = funcf.FunctionField(adder, d)
@@ -314,14 +310,3 @@ def test_function_field_builtins(function_field, builtin_name):
         assert math.isnan(np.__getattribute__(builtin_name)(3))
     else:
         assert result == np.__getattribute__(builtin_name)(3)
-
-
-def test_ndarray_with_transform(function_field):
-    def transform_to_array(arr):
-        return array.array('d', arr.flatten())
-
-    result = function_field.as_array(func=transform_to_array)
-
-    assert isinstance(result, array.array)
-    assert len(result) == 45
-    assert result.typecode == 'd'

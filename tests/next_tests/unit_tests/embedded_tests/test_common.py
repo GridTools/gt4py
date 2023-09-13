@@ -143,27 +143,27 @@ def test_sub_domain(domain, index, expected):
 
 
 @pytest.fixture
-def finite_domain():
+def get_finite_domain():
     return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4)))
 
 
 @pytest.fixture
-def infinite_domain():
+def get_infinite_domain():
     return common.Domain((I, UnitRange.infinity()), (J, UnitRange.infinity()))
 
 
 @pytest.fixture
-def mixed_domain():
+def get_mixed_domain():
     return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange.infinity()))
 
 
-def test_finite_domain_is_finite(finite_domain):
-    assert finite_domain.is_finite() == True
+def test_finite_domain_is_finite(get_finite_domain):
+    assert get_finite_domain.is_finite()
 
 
-def test_infinite_domain_is_finite(infinite_domain):
-    assert infinite_domain.is_finite() == False
+def test_infinite_domain_is_finite(get_infinite_domain):
+    assert not get_infinite_domain.is_finite()
 
 
-def test_mixed_domain_is_finite(mixed_domain):
-    assert mixed_domain.is_finite() == False
+def test_mixed_domain_is_finite(get_mixed_domain):
+    assert not get_mixed_domain.is_finite()
