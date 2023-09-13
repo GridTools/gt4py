@@ -707,7 +707,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> tuple[tuple | npt.DTypeLike, ...]:  # arbitrary nesting
+) -> tuple[tuple | npt.DTypeLike | Undefined, ...]:  # arbitrary nesting
     ...
 
 
@@ -724,7 +724,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> npt.DTypeLike:
+) -> npt.DTypeLike | Undefined:
     ...
 
 
@@ -733,7 +733,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Optional[Tag] = None,
-) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...] | Undefined:
+) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike | Undefined, ...] | Undefined:
     if column_axis is None:
         if isinstance(field_or_tuple, tuple):
             return tuple(_make_tuple(f, named_indices) for f in field_or_tuple)
@@ -753,7 +753,7 @@ def _make_tuple(
             try:
                 col.append(
                     tuple(
-                        _make_tuple(
+                        _make_tuple(  # type: ignore[misc] # TODO(havogt) don't want to waste time now trying to fix the error "Generator has incompatible item type"
                             f,
                             _single_vertical_idx(
                                 named_indices, column_axis, i - column_range.start
@@ -770,7 +770,11 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 col.append(_UNDEFINED)
 
-        first = next((v for v in col if v != _UNDEFINED))
+        first = next((v for v in col if v != _UNDEFINED), None)
+        if first is None:
+            raise RuntimeError(
+                "Found 'Undefined' value, this should not happen for a legal program."
+            )
         dtype = _column_dtype(first)
         return Column(column_range.start, np.asarray(col, dtype=dtype))
 
