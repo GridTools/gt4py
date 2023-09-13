@@ -82,6 +82,10 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
                     f"Invariant violation: len(self.domain) ({num_params}) does not match the number of parameters of the provided function ({params})",
                 )
 
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
+        return core_defs.dtype(self.ndarray.dtype.type)
+
     def restrict(self, index: common.AnyIndexSpec) -> FunctionField:
         new_domain = embedded_common.sub_domain(self.domain, index)
         return self.__class__(self.func, new_domain)
@@ -206,11 +210,13 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
     def __abs__(self) -> common.Field:
         return self._unary_op(abs)
 
+    def __invert__(self) -> common.Field:
+        if self.dtype == core_defs.BoolDType():
+            return self._unary_op(operator.invert)
+        raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
+
     def __call__(self, *args, **kwargs) -> common.Field:
         return self.func(*args, **kwargs)
-
-    def __invert__(self) -> common.Field:
-        raise NotImplementedError("Method invert not implemented")
 
     def remap(self, *args, **kwargs) -> common.Field:
         raise NotImplementedError("Method remap not implemented")

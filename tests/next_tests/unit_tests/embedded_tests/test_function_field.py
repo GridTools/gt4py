@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import math
 import operator
-import array
 
 import numpy as np
 import pytest
@@ -310,3 +309,16 @@ def test_function_field_builtins(function_field, builtin_name):
         assert math.isnan(np.__getattribute__(builtin_name)(3))
     else:
         assert result == np.__getattribute__(builtin_name)(3)
+
+
+def test_unary_logical_op_boolean():
+    boolean_func = lambda x: x % 2 != 0
+    field = funcf.FunctionField(boolean_func, common.Domain((I, UnitRange(1, 10))))
+    assert np.allclose(~field.ndarray, np.invert(np.fromfunction(boolean_func, (9,))))
+
+
+def test_unary_logical_op_scalar():
+    scalar_func = lambda x: x % 2
+    field = funcf.FunctionField(scalar_func, common.Domain((I, UnitRange(1, 10))))
+    with pytest.raises(NotImplementedError):
+        ~field
