@@ -247,7 +247,7 @@ def constant_field(
 
 def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
     def _composed_function_field(field: FunctionField) -> FunctionField:
-        if builtin_name not in _BUILTINS:
+        if builtin_name not in _UNARY_BUILTINS:
             raise ValueError(f"Unsupported built-in function: {builtin_name}")
 
         if builtin_name in ["abs", "power", "gamma"]:
@@ -261,13 +261,14 @@ def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
 
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
-_BUILTINS = fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+_UNARY_BUILTINS = fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 
-for builtin_name in _BUILTINS:
-    if builtin_name in ["abs", "power", "gamma"]:
+for builtin_name in _UNARY_BUILTINS:
+    if builtin_name in ["abs", "gamma"]:
         continue
     FunctionField.register_builtin_func(getattr(fbuiltins, builtin_name), _compose_function_field_with_builtin(builtin_name))
 
+FunctionField.register_builtin_func(fbuiltins.abs, FunctionField.__abs__)
 
 def _get_params(func: Callable) -> str:
     """Pretty print callable parameters."""

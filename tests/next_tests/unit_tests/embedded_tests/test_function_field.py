@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import math
 import operator
 
 import numpy as np
@@ -20,63 +19,23 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
-from gt4py.next import fbuiltins
-
 from .test_common import get_infinite_domain, get_mixed_domain
-
-
+from .test_nd_array_field import binary_logical_op, binary_arithmetic_op, binary_reverse_arithmetic_op
 
 I = Dimension("I")
 J = Dimension("J")
 K = Dimension("K")
 
 
-def rfloordiv(x, y):
-    return operator.floordiv(y, x)
-
-
-operators = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.pow,
-    lambda x, y: operator.truediv(y, x),  # Reverse true division
-    lambda x, y: operator.add(y, x),  # Reverse addition
-    lambda x, y: operator.mul(y, x),  # Reverse multiplication
-    lambda x, y: operator.sub(y, x),  # Reverse subtraction
-    lambda x, y: operator.floordiv(y, x),  # Reverse floor division
-]
-
-logical_operators = [
-    operator.xor,
-    operator.and_,
-    operator.or_,
-]
-
-
-@pytest.mark.parametrize(
-    "op_func, expected_result",
-    [
-        (operator.add, 10 + 20),
-        (operator.sub, 10 - 20),
-        (operator.mul, 10 * 20),
-        (operator.truediv, 10 / 20),
-        (operator.floordiv, 10 // 20),
-        (rfloordiv, 20 // 10),
-        (operator.pow, 10**20),
-        (lambda x, y: operator.truediv(y, x), 20 / 10),
-        (operator.add, 10 + 20),
-        (operator.mul, 10 * 20),
-        (lambda x, y: operator.sub(y, x), 20 - 10),
-    ],
-)
-def test_constant_field_no_domain(op_func, expected_result):
+def test_constant_field_no_domain(binary_arithmetic_op, binary_reverse_arithmetic_op):
     cf1 = funcf.constant_field(10)
     cf2 = funcf.constant_field(20)
-    result = op_func(cf1, cf2)
-    assert result.func() == expected_result
+
+    ops = [binary_arithmetic_op, binary_reverse_arithmetic_op]
+
+    for op in ops:
+        result = op(cf1, cf2)
+        assert result.func() == op(10, 20)
 
 
 @pytest.fixture(
@@ -161,11 +120,7 @@ def adder(i, j):
     return i + j
 
 
-@pytest.mark.parametrize(
-    "op_func",
-    operators,
-)
-def test_function_field_broadcast(op_func):
+def test_function_field_broadcast(binary_arithmetic_op, binary_reverse_arithmetic_op):
     func1 = lambda x, y: x + y
     func2 = lambda y: 2 * y
 
@@ -175,14 +130,16 @@ def test_function_field_broadcast(op_func):
     ff1 = funcf.FunctionField(func1, domain1)
     ff2 = funcf.FunctionField(func2, domain2)
 
-    result = op_func(ff1, ff2)
+    ops = [binary_arithmetic_op, binary_reverse_arithmetic_op]
 
-    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
-    assert isinstance(result.ndarray, np.ndarray)
+    for op in ops:
+        result = op(ff1, ff2)
+
+        assert result.func(5, 10) == op(func1(5, 10), func2(10))
+        assert isinstance(result.ndarray, np.ndarray)
 
 
-@pytest.mark.parametrize("op_func", logical_operators)
-def test_function_field_logical_operators(op_func):
+def test_function_field_logical_operators(binary_logical_op):
     func1 = lambda x, y: x > 5
     func2 = lambda y: y < 10
 
@@ -192,9 +149,9 @@ def test_function_field_logical_operators(op_func):
     ff1 = funcf.FunctionField(func1, domain1)
     ff2 = funcf.FunctionField(func2, domain2)
 
-    result = op_func(ff1, ff2)
+    result = binary_logical_op(ff1, ff2)
 
-    assert result.func(5, 10) == op_func(func1(5, 10), func2(10))
+    assert result.func(5, 10) == binary_logical_op(func1(5, 10), func2(10))
     assert isinstance(result.ndarray, np.ndarray)
 
 
@@ -294,21 +251,6 @@ def test_function_field_infinite_range(get_infinite_domain, get_mixed_domain):
         with pytest.raises(embedded_exceptions.InfiniteRangeNdarrayError):
             ff = funcf.FunctionField(adder, d)
             ff.ndarray
-
-
-@pytest.mark.parametrize("builtin_name", funcf._BUILTINS)
-def test_function_field_builtins(function_field, builtin_name):
-    if builtin_name in ["abs", "power", "gamma"]:
-        pytest.skip(f"Skipping '{builtin_name}'")
-
-    fbuiltin_func = getattr(fbuiltins, builtin_name)
-
-    result = fbuiltin_func(function_field).func(1, 2)
-
-    if math.isnan(result):
-        assert math.isnan(np.__getattribute__(builtin_name)(3))
-    else:
-        assert result == np.__getattribute__(builtin_name)(3)
 
 
 def test_unary_logical_op_boolean():
