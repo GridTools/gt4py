@@ -747,13 +747,15 @@ def _make_tuple(
         column_range = column_range_cvar.get()
         assert column_range is not None
 
-        col: list[npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...] | Undefined] = []
+        col: list[
+            npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike | Undefined, ...] | Undefined
+        ] = []
         for i in column_range:
             # we don't know the buffer size, therefore we have to try.
             try:
                 col.append(
                     tuple(
-                        _make_tuple(  # type: ignore[misc] # TODO(havogt) don't want to waste time now trying to fix the error "Generator has incompatible item type"
+                        _make_tuple(
                             f,
                             _single_vertical_idx(
                                 named_indices, column_axis, i - column_range.start
