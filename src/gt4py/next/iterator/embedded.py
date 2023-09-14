@@ -22,6 +22,7 @@ import copy
 import dataclasses
 import itertools
 import math
+import sys
 from typing import (
     Any,
     Callable,
@@ -50,6 +51,7 @@ import numpy.typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
+from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.iterator import builtins, runtime
 
 
@@ -603,6 +605,12 @@ class Undefined:
     def __float__(self):
         return np.nan
 
+    def __int__(self):
+        return sys.maxsize
+
+    def __repr__(self):
+        return "_UNDEFINED"
+
     @classmethod
     def _setup_math_operations(cls):
         ops = [
@@ -677,7 +685,8 @@ def _single_vertical_idx(
     indices: NamedFieldIndices, column_axis: Tag, column_index: common.IntIndex
 ) -> NamedFieldIndices:
     transformed = {
-        axis: (index if axis != column_axis else column_index) for axis, index in indices.items()
+        axis: (index if axis != column_axis else index.start + column_index)  # type: ignore[union-attr] # trust me, `index` is range in case of `column_axis`
+        for axis, index in indices.items()
     }
     return transformed
 
@@ -698,7 +707,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> tuple[tuple | npt.DTypeLike, ...]:  # arbitrary nesting
+) -> tuple[tuple | npt.DTypeLike | Undefined, ...]:  # arbitrary nesting
     ...
 
 
@@ -715,7 +724,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> npt.DTypeLike:
+) -> npt.DTypeLike | Undefined:
     ...
 
 
@@ -724,36 +733,52 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Optional[Tag] = None,
-) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike, ...]:
-    column_range = column_range_cvar.get()
-    if isinstance(field_or_tuple, tuple):
-        if column_axis is not None:
-            assert column_range
-            # construct a Column of tuples
-            first = tuple(
-                _make_tuple(f, _single_vertical_idx(named_indices, column_axis, column_range.start))
-                for f in field_or_tuple
-            )
-            col = Column(
-                column_range.start, np.zeros(len(column_range), dtype=_column_dtype(first))
-            )
-            col[0] = first
-            for i in column_range[1:]:
-                col[i] = tuple(
-                    _make_tuple(f, _single_vertical_idx(named_indices, column_axis, i))
-                    for f in field_or_tuple
-                )
-            return col
-        else:
+) -> Column | npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike | Undefined, ...] | Undefined:
+    if column_axis is None:
+        if isinstance(field_or_tuple, tuple):
             return tuple(_make_tuple(f, named_indices) for f in field_or_tuple)
-    else:
-        data = field_or_tuple.field_getitem(named_indices)
-        if column_axis is not None:
-            # wraps a vertical slice of an input field into a `Column`
-            assert column_range is not None
-            return Column(column_range.start, data.ndarray if hasattr(data, "ndarray") else data)
         else:
-            return data
+            try:
+                data = field_or_tuple.field_getitem(named_indices)
+                return data
+            except embedded_exceptions.IndexOutOfBounds:
+                return _UNDEFINED
+    else:
+        column_range = column_range_cvar.get()
+        assert column_range is not None
+
+        col: list[
+            npt.DTypeLike | tuple[tuple | Column | npt.DTypeLike | Undefined, ...] | Undefined
+        ] = []
+        for i in column_range:
+            # we don't know the buffer size, therefore we have to try.
+            try:
+                col.append(
+                    tuple(
+                        _make_tuple(
+                            f,
+                            _single_vertical_idx(
+                                named_indices, column_axis, i - column_range.start
+                            ),
+                        )
+                        for f in field_or_tuple
+                    )
+                    if isinstance(field_or_tuple, tuple)
+                    else _make_tuple(
+                        field_or_tuple,
+                        _single_vertical_idx(named_indices, column_axis, i - column_range.start),
+                    )
+                )
+            except embedded_exceptions.IndexOutOfBounds:
+                col.append(_UNDEFINED)
+
+        first = next((v for v in col if v != _UNDEFINED), None)
+        if first is None:
+            raise RuntimeError(
+                "Found 'Undefined' value, this should not happen for a legal program."
+            )
+        dtype = _column_dtype(first)
+        return Column(column_range.start, np.asarray(col, dtype=dtype))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -870,7 +895,9 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     def __gt_dims__(self) -> tuple[common.Dimension, ...]:
         return self._ndarrayfield.__gt_dims__
 
-    def _translate_named_indices(self, _named_indices: NamedFieldIndices) -> common.DomainSlice:
+    def _translate_named_indices(
+        self, _named_indices: NamedFieldIndices
+    ) -> common.AbsoluteIndexSequence:
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
             d: _named_indices[d.value] for d in self._ndarrayfield.__gt_dims__
         }
@@ -1042,8 +1069,8 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.FieldSlice) -> common.Field | core_defs.int32:
-        if common.is_domain_slice(item) and all(common.is_named_index(e) for e in item):
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
+        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
@@ -1058,6 +1085,9 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __neg__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __invert__(self) -> common.Field:
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1091,6 +1121,15 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
 
@@ -1136,7 +1175,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.FieldSlice) -> common.Field | core_defs.ScalarT:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         # TODO set a domain...
         return self._value
 
@@ -1147,6 +1186,9 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __neg__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __invert__(self) -> common.Field:
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1180,6 +1222,15 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __pow__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        raise NotImplementedError()
+
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
 
@@ -1318,7 +1369,7 @@ class ScanArgIterator:
 
 def shifted_scan_arg(k_pos: int) -> Callable[[ItIterator], ScanArgIterator]:
     def impl(it: ItIterator) -> ScanArgIterator:
-        return ScanArgIterator(it, k_pos=k_pos)
+        return ScanArgIterator(it, k_pos=k_pos)  # here we evaluate the full column in every step
 
     return impl
 
