@@ -100,7 +100,7 @@ def test_mod(cartesian_case):
     inp1 = gtx.np_as_located_field(IDim)(np.asarray(range(10), dtype=int32) - 5)
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
-    cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1.array() % 2)
+    cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
 
 
 def test_bit_xor(cartesian_case):
@@ -117,7 +117,7 @@ def test_bit_xor(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, binary_xor, cases.RETURN)()
-    cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1.array() ^ inp2.array())
+    cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1 ^ inp2)
 
 
 def test_bit_and(cartesian_case):
@@ -134,7 +134,7 @@ def test_bit_and(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, bit_and, cases.RETURN)()
-    cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1.array() & inp2.array())
+    cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1 & inp2)
 
 
 def test_bit_or(cartesian_case):
@@ -151,7 +151,7 @@ def test_bit_or(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, bit_or, cases.RETURN)()
-    cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1.array() | inp2.array())
+    cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1 | inp2)
 
 
 # Unary builtins
@@ -176,7 +176,7 @@ def test_unary_invert(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, tilde_fieldop, cases.RETURN)()
-    cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1.array())
+    cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1)
 
 
 def test_unary_not(cartesian_case):
@@ -190,7 +190,7 @@ def test_unary_not(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, not_fieldop, cases.RETURN)()
-    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1.array())
+    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1)
 
 
 # Trig builtins

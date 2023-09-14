@@ -163,8 +163,8 @@ def test_compute_zavgS(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-199755464.25741270, min(zavgS))
-        assert_close(388241977.58389181, max(zavgS))
+        assert_close(-199755464.25741270, np.min(zavgS))
+        assert_close(388241977.58389181, np.max(zavgS))
 
     run_processor(
         compute_zavgS_fencil,
@@ -177,8 +177,8 @@ def test_compute_zavgS(program_processor, lift_mode):
         lift_mode=lift_mode,
     )
     if validate:
-        assert_close(-1000788897.3202186, min(zavgS))
-        assert_close(1000788897.3202186, max(zavgS))
+        assert_close(-1000788897.3202186, np.min(zavgS))
+        assert_close(1000788897.3202186, np.max(zavgS))
 
 
 @fendef
@@ -204,9 +204,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
 
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
 
-    S = gtx.np_as_located_field(Edge)(
-        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
-    )
+    S = tuple(gtx.np_as_located_field(Edge)(s) for s in setup.S_fields)
 
     zavgS = (
         gtx.np_as_located_field(Edge)(np.zeros((setup.edges_size))),
@@ -229,11 +227,11 @@ def test_compute_zavgS2(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-199755464.25741270, min(zavgS[0]))
-        assert_close(388241977.58389181, max(zavgS[0]))
+        assert_close(-199755464.25741270, np.min(zavgS[0]))
+        assert_close(388241977.58389181, np.max(zavgS[0]))
 
-        assert_close(-1000788897.3202186, min(zavgS[1]))
-        assert_close(1000788897.3202186, max(zavgS[1]))
+        assert_close(-1000788897.3202186, np.min(zavgS[1]))
+        assert_close(1000788897.3202186, np.max(zavgS[1]))
 
 
 def test_nabla(program_processor, lift_mode):
@@ -274,10 +272,10 @@ def test_nabla(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))
 
 
 @fendef
@@ -305,9 +303,7 @@ def test_nabla2(program_processor, lift_mode):
 
     sign = gtx.np_as_located_field(Vertex, V2EDim)(setup.sign_field)
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
-    S_M = gtx.np_as_located_field(Edge)(
-        np.array([(a, b) for a, b in zip(*(setup.S_fields[0], setup.S_fields[1]))], dtype="d,d")
-    )
+    S_M = tuple(gtx.np_as_located_field(Edge)(s) for s in setup.S_fields)
     vol = gtx.np_as_located_field(Vertex)(setup.vol_field)
 
     pnabla_MXX = gtx.np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
@@ -333,10 +329,10 @@ def test_nabla2(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))
 
 
 @fundef
@@ -420,7 +416,7 @@ def test_nabla_sign(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))

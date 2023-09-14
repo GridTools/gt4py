@@ -53,5 +53,5 @@ def test_conditional_w_tuple(program_processor):
         offset_provider={},
     )
     if validate:
-        assert np.all(out[np.asarray(inp) == 0] == 3.0)
-        assert np.all(out[np.asarray(inp) == 1] == 7.0)
+        assert np.all(out.ndarray[np.asarray(inp) == 0] == 3.0)
+        assert np.all(out.ndarray[np.asarray(inp) == 1] == 7.0)
