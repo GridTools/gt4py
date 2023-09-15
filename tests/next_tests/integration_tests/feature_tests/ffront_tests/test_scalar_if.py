@@ -107,7 +107,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
         condition1,
         condition2,
         out=out,
-        ref=(a if condition1 else b).array() + (0 if condition2 else 1),
+        ref=(a if condition1 else b) + (0 if condition2 else 1),
     )
 
 

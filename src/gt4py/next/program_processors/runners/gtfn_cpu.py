@@ -14,7 +14,6 @@
 
 from typing import Any
 
-import numpy as np
 import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
@@ -33,9 +32,9 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
-        arr = np.asarray(arg)
-        origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
+    if common.is_field(arg):
+        arr = arg.ndarray
+        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
     else:
         return arg
