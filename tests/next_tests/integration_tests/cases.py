@@ -134,13 +134,11 @@ class ConstInitializer(DataInitializer):
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        return field.fill(
-            domain=common.Domain(
-                tuple(sizes.keys()), tuple(common.UnitRange(0, s) for s in sizes.values())
-            ),
+        return field.full(
+            domain=common.domain(sizes),
             fill_value=self.value,
             dtype=dtype,
-            storage_info=backend.storage_info,
+            allocator=backend,
         )
 
 
@@ -170,8 +168,8 @@ class IndexInitializer(DataInitializer):
                 f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
             )
         n_data = list(sizes.values())[0]
-        return field.from_array(
-            np.arange(0, n_data, dtype=dtype), sizes.keys(), storage_info=backend.storage_info
+        return field.asfield(
+            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
         )
 
     def from_case(
@@ -210,10 +208,10 @@ class UniqueInitializer(DataInitializer):
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return field.from_array(
+        return field.asfield(
+            common.domain(sizes),
             np.arange(start, start + n_data, dtype=dtype).reshape(svals),
-            sizes.keys(),
-            storage_info=backend.storage_info,
+            allocator=backend,
         )
 
     def from_case(

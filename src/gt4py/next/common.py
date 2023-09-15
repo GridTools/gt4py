@@ -142,12 +142,14 @@ class UnitRange(Sequence[int], Set[int]):
         return f"({self.start}:{self.stop})"
 
 
-RangeLike: TypeAlias = UnitRange | range | tuple[int, int]
+RangeLike: TypeAlias = UnitRange | range | tuple[int, int], int
 
 
 def unit_range(r: RangeLike) -> UnitRange:
     if isinstance(r, UnitRange):
         return r
+    if isinstance(r, core_defs.INTEGRAL_TYPES):
+        return UnitRange(0, r)
     if isinstance(r, range):
         if r.step != 1:
             raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
@@ -354,12 +356,23 @@ def domain(domain_like: DomainLike) -> Domain:
 
     >>> domain({I: (2, 4), J: (3, 5)})
     Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+
+    >>> domain(((I, 2), (J, 4)))
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+
+    >>> domain({I: 2, J: 4})
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
     if isinstance(domain_like, Sequence):
         return Domain(*tuple(named_range(d) for d in domain_like))
     if isinstance(domain_like, Mapping):
+        if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
+            return Domain(
+                dims=tuple(domain_like.keys()),
+                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),
+            )
         return Domain(
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),

@@ -29,7 +29,6 @@ from __future__ import annotations
 from typing import Callable, Protocol, TypeGuard, TypeVar, cast
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.storage import common as storage_common
 
 
 OutputT = TypeVar("OutputT", covariant=True)
@@ -44,10 +43,6 @@ class ProgramProcessorFunction(Protocol[OutputT]):
 class ProgramProcessor(ProgramProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
     def kind(self) -> type[ProcessorKindT]:
-        ...
-
-    @property
-    def storage_info(self) -> storage_common.StorageInfo:  # TODO maybe move to ProgramExecutor?
         ...
 
 

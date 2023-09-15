@@ -38,13 +38,6 @@ def _create_tmp(axes, origin, shape, dtype):
         return f"gtx.np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype=np.dtype('{dtype}')))"
 
 
-def _create_tmp(axes, origin, shape, dtype):
-    if isinstance(dtype, tuple):
-        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
-    else:
-        return f"gtx.np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype=np.dtype('{dtype}')))"
-
-
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")

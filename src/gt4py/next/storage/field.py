@@ -110,7 +110,7 @@ def ones(
 def full(
     domain: common.Domain,
     fill_value: core_defs.Scalar,
-    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
+    dtype: Optional[core_defs.DTypeLike] = None,
     allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
     device_id: int = 0,
@@ -118,7 +118,7 @@ def full(
 ) -> common.Field:
     field = empty(
         domain=domain,
-        dtype=dtype,
+        dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
         allocator=allocator,
         device_id=device_id,
         aligned_index=aligned_index,
@@ -130,7 +130,7 @@ def full(
 def asfield(
     domain: common.Domain,
     data: core_defs.NDArrayObject,
-    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
+    dtype: Optional[core_defs.DTypeLike] = None,
     allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
     device_id: int = 0,
