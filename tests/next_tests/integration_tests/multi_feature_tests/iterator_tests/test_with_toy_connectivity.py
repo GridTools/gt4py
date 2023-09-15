@@ -415,7 +415,11 @@ def shift_sparse_stencil2(inp):
 
 def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    if program_processor == gtfn_cpu.run_gtfn or program_processor == gtfn_cpu.run_gtfn_imperative:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
         )  # observed in `cache.Strategy.PERSISTENT` mode

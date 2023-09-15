@@ -48,7 +48,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 def test_maxover_execution_(unstructured_case, strategy):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
         pytest.xfail("Not supported in DaCe backend: reductions")
-    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if unstructured_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("`maxover` broken in gtfn, see #1289.")
 
     @gtx.field_operator

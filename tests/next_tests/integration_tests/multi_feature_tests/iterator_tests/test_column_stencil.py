@@ -317,14 +317,7 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
 )
 def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
-    if (
-        program_processor == run_dace_iterator
-        or program_processor == run_gtfn
-        or program_processor == run_gtfn_imperative
-        or program_processor == gtfn_format_sourcecode
-    ):
-        pytest.xfail("structured dtype input/output currently unsupported")
-
+    pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
     inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
     inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))

@@ -18,6 +18,7 @@ import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
+from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, recipes, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, nanobind
 from gt4py.next.otf.compilation import cache, compiler
@@ -126,3 +127,13 @@ run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor[
     name="run_gtfn_cached",
     otf_workflow=workflow.CachedStep(step=run_gtfn.otf_workflow, hash_function=compilation_hash),
 )  # todo(ricoh): add API for converting an executor to a cached version of itself and vice versa
+
+
+run_gtfn_with_temporaries = otf_compile_executor.OTFCompileExecutor[
+    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python, Any
+](
+    name="run_gtfn_with_temporaries",
+    otf_workflow=run_gtfn.otf_workflow.replace(
+        translation=run_gtfn.otf_workflow.translation.replace(lift_mode=LiftMode.FORCE_TEMPORARIES),
+    ),
+)
