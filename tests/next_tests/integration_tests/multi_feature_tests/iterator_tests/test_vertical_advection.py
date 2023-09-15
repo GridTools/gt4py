@@ -164,4 +164,4 @@ def test_tridiag(fencil, tridiag_reference, program_processor_no_dace_exec, lift
     )
 
     if validate:
-        assert np.allclose(x, np.asarray(x_s))
+        assert np.allclose(x, x_s)

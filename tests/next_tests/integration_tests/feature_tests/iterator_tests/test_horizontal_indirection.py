@@ -75,9 +75,9 @@ def test_simple_indirection(program_processor):
     cond = gtx.np_as_located_field(IDim)(rng.normal(size=shape))
     out = gtx.np_as_located_field(IDim)(np.zeros(shape, dtype=inp.dtype))
 
-    ref = np.zeros(shape)
+    ref = np.zeros(shape, dtype=inp.dtype)
     for i in range(shape[0]):
-        ref[i] = inp[i + 1 - 1] if cond[i] < 0 else inp[i + 1 + 1]
+        ref[i] = inp.ndarray[i + 1 - 1] if cond[i] < 0.0 else inp.ndarray[i + 1 + 1]
 
     run_processor(
         conditional_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],

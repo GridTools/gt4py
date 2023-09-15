@@ -558,7 +558,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
         ],
     )
 
-
+# TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol).
 class CreateGlobalTmps(NodeTranslator):
     """Main entry point for introducing global temporaries.
 

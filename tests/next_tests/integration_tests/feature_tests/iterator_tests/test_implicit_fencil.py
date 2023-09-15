@@ -59,6 +59,10 @@ def test_single_argument(program_processor, dom):
 
 def test_2_arguments(program_processor, dom):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
+        )
 
     @fundef
     def fun(inp0, inp1):
@@ -71,7 +75,7 @@ def test_2_arguments(program_processor, dom):
     run_processor(fun[dom], program_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(inp0.array() + inp1.array(), out)
+        assert np.allclose(inp0 + inp1, out)
 
 
 def test_lambda_domain(program_processor):

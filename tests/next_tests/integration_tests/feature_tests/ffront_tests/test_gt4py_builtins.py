@@ -46,6 +46,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
     if unstructured_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
@@ -62,11 +64,14 @@ def test_maxover_execution_(unstructured_case, strategy):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    ref = np.max(inp[v2e_table], axis=1)
+    ref = np.max(inp.ndarray[v2e_table], axis=1)
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
 def test_minover_execution(unstructured_case):
+    if unstructured_case.backend == dace_iterator.run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: reductions")
+
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)

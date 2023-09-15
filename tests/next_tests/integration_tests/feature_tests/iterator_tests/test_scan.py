@@ -38,9 +38,9 @@ def test_scan_in_stencil(program_processor, lift_mode):
     out = gtx.np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
 
     reference = np.zeros((isize, ksize - 1))
-    reference[:, 0] = inp[:, 0] + inp[:, 1]
+    reference[:, 0] = inp.ndarray[:, 0] + inp.ndarray[:, 1]
     for k in range(1, ksize - 1):
-        reference[:, k] = reference[:, k - 1] + inp[:, k] + inp[:, k + 1]
+        reference[:, k] = reference[:, k - 1] + inp.ndarray[:, k] + inp.ndarray[:, k + 1]
 
     @fundef
     def sum(state, k, kp):
