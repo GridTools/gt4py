@@ -29,11 +29,11 @@ from gt4py.next.ffront.ast_passes import (
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
-from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
 from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
+from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
