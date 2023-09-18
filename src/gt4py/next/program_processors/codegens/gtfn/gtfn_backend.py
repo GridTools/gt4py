@@ -47,18 +47,17 @@ def _lower(
 def generate(
     program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
 ) -> str:
-    do_unroll = not ("imperative" in kwargs and kwargs["imperative"])
-    if "imperative" in kwargs and kwargs["imperative"]:
+    if kwargs.get("imperative", False):
         try:
             gtfn_ir = _lower(
                 program=program,
                 enable_itir_transforms=enable_itir_transforms,
-                do_unroll=do_unroll,
+                do_unroll=False,
                 **kwargs,
             )
         except EveValueError:
-            # if we don't unroll, there may be lifts left in the itir which can't be lowered to gtfn. in this case
-            # case, just retry with unrolled reductions
+            # if we don't unroll, there may be lifts left in the itir which can't be lowered to
+            # gtfn. In this case, just retry with unrolled reductions.
             gtfn_ir = _lower(
                 program=program,
                 enable_itir_transforms=enable_itir_transforms,

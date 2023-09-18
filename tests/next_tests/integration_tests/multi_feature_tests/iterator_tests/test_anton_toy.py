@@ -15,10 +15,11 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
-from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
+from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
@@ -47,9 +48,9 @@ def lap(inp):
     return dif2(i)(inp) + dif2(j)(inp)
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 
 @fendef(offset_provider={"i": IDim, "j": JDim})
@@ -77,15 +78,24 @@ def naive_lap(inp):
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
-        pytest.xfail("TODO: this test does not validate")
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
+        from gt4py.next.iterator import transforms
+
+        if lift_mode != transforms.LiftMode.FORCE_INLINE:
+            pytest.xfail("TODO: issue with temporaries that crashes the application")
+    if program_processor == run_dace_iterator:
+        pytest.xfail("TODO: not supported in DaCe backend")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp = np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
+    inp = gtx.np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
         rng.normal(size=(shape[0] + 2, shape[1] + 2, shape[2])),
     )
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
     ref = naive_lap(inp)
 
     run_processor(

@@ -12,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
 import pytest
 
+import gt4py.next as gtx
 import gt4py.next.otf.binding.cpp_interface as cpp
 import gt4py.next.type_system.type_specifications as ts
 from gt4py.eve.codegen import format_source
-from gt4py.next.common import Dimension
 from gt4py.next.otf.binding import interface
 
 
@@ -67,14 +66,14 @@ def function_buffer_example():
             interface.Parameter(
                 name="a_buf",
                 type_=ts.FieldType(
-                    dims=[Dimension("foo"), Dimension("bar")],
+                    dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                     dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                 ),
             ),
             interface.Parameter(
                 name="b_buf",
                 type_=ts.FieldType(
-                    dims=[Dimension("foo")],
+                    dims=[gtx.Dimension("foo")],
                     dtype=ts.ScalarType(ts.ScalarKind.INT64),
                 ),
             ),
@@ -90,7 +89,7 @@ def test_render_function_declaration_buffer(function_buffer_example):
         "cpp",
         """\
     template <class BufferT0, class BufferT1>
-    decltype(auto) example(BufferT0&& a_buf, BufferT1&& b_buf) {
+    decltype(auto) example(BufferT0 &&a_buf, BufferT1 &&b_buf) {
         return;
     }\
     """,
@@ -119,11 +118,11 @@ def function_tuple_example():
                 type_=ts.TupleType(
                     types=[
                         ts.FieldType(
-                            dims=[Dimension("foo"), Dimension("bar")],
+                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                         ts.FieldType(
-                            dims=[Dimension("foo"), Dimension("bar")],
+                            dims=[gtx.Dimension("foo"), gtx.Dimension("bar")],
                             dtype=ts.ScalarType(ts.ScalarKind.FLOAT64),
                         ),
                     ]
@@ -141,7 +140,7 @@ def test_render_function_declaration_tuple(function_tuple_example):
         "cpp",
         """\
     template <class BufferT0>
-    decltype(auto) example(BufferT0&& a_buf) {
+    decltype(auto) example(BufferT0 &&a_buf) {
         return;
     }\
     """,

@@ -15,8 +15,8 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
-from gt4py.next.iterator import embedded, ir as itir
+import gt4py.next as gtx
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 
@@ -30,8 +30,8 @@ def fencil_example():
                 fun=itir.SymRef(id="named_range"),
                 args=[
                     itir.AxisLiteral(value="X"),
-                    itir.Literal(value="0", type="int"),
-                    itir.Literal(value="10", type="int"),
+                    itir.Literal(value="0", type=itir.INTEGER_INDEX_BUILTIN),
+                    itir.Literal(value="10", type=itir.INTEGER_INDEX_BUILTIN),
                 ],
             )
         ],
@@ -43,7 +43,7 @@ def fencil_example():
             itir.FunctionDefinition(
                 id="stencil",
                 params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
-                expr=itir.Literal(value="1", type="float"),
+                expr=itir.Literal(value="1", type="float64"),
             )
         ],
         closures=[
@@ -55,9 +55,9 @@ def fencil_example():
             )
         ],
     )
-    IDim = Dimension("I")
+    IDim = gtx.Dimension("I")
     params = [
-        embedded.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        gtx.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
         np.float32(3.14),
     ]
     return fencil, params

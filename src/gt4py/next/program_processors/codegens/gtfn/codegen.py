@@ -56,10 +56,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "maximum": "std::max",
         "fmod": "std::fmod",
         "power": "std::pow",
-        "float": "double",
         "float32": "float",
         "float64": "double",
-        "int": "long",
         "int32": "std::int32_t",
         "int64": "std::int64_t",
         "bool": "bool",
@@ -101,8 +99,6 @@ class GTFNCodegen(codegen.TemplatedGenerator):
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         match pytype_to_cpptype(node.type):
-            case "int":
-                return node.value + "_c"
             case "float":
                 return self.asfloat(node.value) + "f"
             case "double":
@@ -111,6 +107,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 return node.value.lower()
             case _:
                 return node.value
+
+    IntegralConstant = as_fmt("{value}_c")
 
     UnaryExpr = as_fmt("{op}({expr})")
     BinaryExpr = as_fmt("({lhs}{op}{rhs})")
@@ -162,7 +160,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    Scan = as_fmt("assign({output}, {function}(), {', '.join([init] + inputs)})")
+    Scan = as_fmt(
+        "assign({output}_c, {function}(), {', '.join([init] + [input + '_c' for input in inputs])})"
+    )
     ScanExecution = as_fmt(
         "{backend}.vertical_executor({axis})().{'.'.join('arg(' + a + ')' for a in args)}.{'.'.join(scans)}.execute();"
     )
@@ -223,8 +223,24 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
+    def visit_TemporaryAllocation(self, node, **kwargs):
+        # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
+        #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
+        #  size and offset values, just to here convert back in order to obtain stop values again.
+        # TODO(tehrengruber): Fix memory alignment.
+        assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
+        tags = node.domain.tagged_offsets.tags
+        new_sizes = []
+        for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
+            new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
+        return self.generic_visit(
+            node,
+            tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
+            **kwargs,
+        )
+
     TemporaryAllocation = as_fmt(
-        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
+        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
     )
 
     FencilDefinition = as_mako(

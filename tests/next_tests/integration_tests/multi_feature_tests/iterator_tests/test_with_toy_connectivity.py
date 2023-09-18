@@ -15,6 +15,7 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import (
     deref,
@@ -28,22 +29,22 @@ from gt4py.next.iterator.builtins import (
     reduce,
     shift,
 )
-from gt4py.next.iterator.embedded import (
-    NeighborTableOffsetProvider,
-    index_field,
-    np_as_located_field,
-)
-from gt4py.next.iterator.runtime import fundef, offset
-from gt4py.next.program_processors.formatters import gtfn, type_check
+from gt4py.next.iterator.runtime import fundef
+from gt4py.next.program_processors.formatters import gtfn
 from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.toy_connectivity import (
     C2E,
     E2V,
     V2E,
     V2V,
+    C2EDim,
     Cell,
+    E2VDim,
     Edge,
+    V2EDim,
+    V2VDim,
     Vertex,
     c2e_arr,
     e2v_arr,
@@ -53,17 +54,18 @@ from next_tests.toy_connectivity import (
 from next_tests.unit_tests.conftest import (
     lift_mode,
     program_processor,
+    program_processor_no_dace_exec,
     program_processor_no_gtfn_exec,
     run_processor,
 )
 
 
-def edge_index_field():  # TODO replace by index_field once supported in bindings
-    return np_as_located_field(Edge)(np.arange(e2v_arr.shape[0]))
+def edge_index_field():  # TODO replace by gtx.index_field once supported in bindings
+    return gtx.np_as_located_field(Edge)(np.arange(e2v_arr.shape[0], dtype=np.int32))
 
 
-def vertex_index_field():  # TODO replace by index_field once supported in bindings
-    return np_as_located_field(Vertex)(np.arange(v2e_arr.shape[0]))
+def vertex_index_field():  # TODO replace by gtx.index_field once supported in bindings
+    return gtx.np_as_located_field(Vertex)(np.arange(v2e_arr.shape[0], dtype=np.int32))
 
 
 @fundef
@@ -91,10 +93,10 @@ def sum_edges_to_vertices_reduce(in_edges):
     "stencil",
     [sum_edges_to_vertices, sum_edges_to_vertices_list_get_neighbors, sum_edges_to_vertices_reduce],
 )
-def test_sum_edges_to_vertices(program_processor, lift_mode, stencil):
-    program_processor, validate = program_processor
+def test_sum_edges_to_vertices(program_processor_no_dace_exec, lift_mode, stencil):
+    program_processor, validate = program_processor_no_dace_exec
     inp = edge_index_field()
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     run_processor(
@@ -102,7 +104,7 @@ def test_sum_edges_to_vertices(program_processor, lift_mode, stencil):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
         lift_mode=lift_mode,
     )
     if validate:
@@ -116,8 +118,10 @@ def map_neighbors(in_edges):
 
 def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: map_ builtin, neighbors, reduce")
+    inp = edge_index_field()
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
 
     run_processor(
@@ -125,7 +129,7 @@ def test_map_neighbors(program_processor_no_gtfn_exec, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
         lift_mode=lift_mode,
     )
     if validate:
@@ -139,8 +143,12 @@ def map_make_const_list(in_edges):
 
 def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Edge)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: map_ builtin, neighbors, reduce, make_const_list"
+        )
+    inp = edge_index_field()
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
 
     run_processor(
@@ -148,7 +156,7 @@ def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
         lift_mode=lift_mode,
     )
     if validate:
@@ -163,7 +171,7 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
 def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processor, lift_mode):
     program_processor, validate = program_processor
     inp = vertex_index_field()
-    out = np_as_located_field(Cell)(np.zeros([9]))
+    out = gtx.np_as_located_field(Cell)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
 
     run_processor(
@@ -172,8 +180,8 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processo
         inp,
         out=out,
         offset_provider={
-            "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
-            "C2E": NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4),
+            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
+            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4),
         },
         lift_mode=lift_mode,
     )
@@ -186,13 +194,12 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(neighbors(V2E, non_sparse), deref(inp))
 
 
-def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == type_check.check:
-        pytest.xfail("Partial shifts not properly supported by type inference.")
-    non_sparse = np_as_located_field(Edge)(np.zeros(18))
-    inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_sparse_input_field(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+
+    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
+    inp = gtx.np_as_located_field(Vertex, V2EDim)(np.asarray([[1, 2, 3, 4]] * 9, dtype=np.int32))
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = np.ones([9]) * 10
 
@@ -202,7 +209,7 @@ def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
         non_sparse,
         inp,
         out=out,
-        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+        offset_provider={"V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
         lift_mode=lift_mode,
     )
 
@@ -210,14 +217,12 @@ def test_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
         assert np.allclose(out, ref)
 
 
-def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == type_check.check:
-        pytest.xfail("Partial shifts not properly supported by type inference.")
+def test_sparse_input_field_v2v(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
 
-    non_sparse = np_as_located_field(Edge)(np.zeros(18))
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = np.asarray(list(sum(row) for row in v2v_arr))
 
@@ -228,8 +233,8 @@ def test_sparse_input_field_v2v(program_processor_no_gtfn_exec, lift_mode):
         inp,
         out=out,
         offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-            "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
         },
         lift_mode=lift_mode,
     )
@@ -243,10 +248,10 @@ def slice_sparse_stencil(sparse):
     return list_get(1, deref(sparse))
 
 
-def test_slice_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_slice_sparse(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = v2v_arr[:, 1]
 
@@ -256,7 +261,7 @@ def test_slice_sparse(program_processor_no_gtfn_exec, lift_mode):
         inp,
         out=out,
         offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
         lift_mode=lift_mode,
     )
@@ -271,10 +276,10 @@ def slice_twice_sparse_stencil(sparse):
 
 
 @pytest.mark.xfail(reason="Field with more than one sparse dimension is not implemented.")
-def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V, V2V)(v2v_arr[v2v_arr])
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_slice_twice_sparse(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    inp = gtx.np_as_located_field(Vertex, V2VDim, V2VDim)(v2v_arr[v2v_arr])
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
     run_processor(
@@ -283,7 +288,7 @@ def test_slice_twice_sparse(program_processor_no_gtfn_exec, lift_mode):
         inp,
         out=out,
         offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
         lift_mode=lift_mode,
     )
@@ -297,10 +302,10 @@ def shift_sliced_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_shift_sliced_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_shift_sliced_sparse(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
@@ -310,7 +315,7 @@ def test_shift_sliced_sparse(program_processor_no_gtfn_exec, lift_mode):
         inp,
         out=out,
         offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
         lift_mode=lift_mode,
     )
@@ -324,10 +329,10 @@ def slice_shifted_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_slice_shifted_sparse(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = v2v_arr[:, 1][v2v_arr][:, 0]
 
@@ -337,7 +342,7 @@ def test_slice_shifted_sparse(program_processor_no_gtfn_exec, lift_mode):
         inp,
         out=out,
         offset_provider={
-            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
+            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
         },
         lift_mode=lift_mode,
     )
@@ -356,10 +361,10 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(program_processor, lift_mode):
-    program_processor, validate = program_processor
+def test_lift(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
     inp = vertex_index_field()
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
@@ -367,7 +372,7 @@ def test_lift(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
     if validate:
@@ -379,10 +384,10 @@ def sparse_shifted_stencil(inp):
     return list_get(2, list_get(0, neighbors(V2V, inp)))
 
 
-def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+def test_shift_sparse_input_field(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(np.asarray(range(9)))
 
     run_processor(
@@ -390,7 +395,7 @@ def test_shift_sparse_input_field(program_processor_no_gtfn_exec, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 
@@ -408,16 +413,24 @@ def shift_sparse_stencil2(inp):
     return list_get(1, list_get(3, neighbors(V2E, inp)))
 
 
-def test_shift_sparse_input_field2(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    inp = index_field(Vertex)
-    inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
-    out1 = np_as_located_field(Vertex)(np.zeros([9]))
-    out2 = np_as_located_field(Vertex)(np.zeros([9]))
+def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
+        pytest.xfail(
+            "Bug in bindings/compilation/caching: only the first program seems to be compiled."
+        )  # observed in `cache.Strategy.PERSISTENT` mode
+    inp = vertex_index_field()
+    inp_sparse = gtx.np_as_located_field(Edge, E2VDim)(e2v_arr)
+    out1 = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
+    out2 = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     offset_provider = {
-        "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
-        "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+        "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
+        "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
     }
 
     domain = {Vertex: range(0, 9)}
@@ -455,12 +468,14 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
     if program_processor == gtfn.format_sourcecode:
         pytest.xfail("We cannot unroll a reduction on a sparse field only.")
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: illegal iterator IR")
 
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
-    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-    out = np_as_located_field(Vertex)(np.zeros([9]))
+    inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = []
     for row in v2v_arr:
@@ -477,7 +492,7 @@ def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode
         program_processor,
         inp,
         out=out,
-        offset_provider={"V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 

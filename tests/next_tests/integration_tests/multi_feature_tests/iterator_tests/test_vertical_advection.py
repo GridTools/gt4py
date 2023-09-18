@@ -15,17 +15,22 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.integration_tests.cases import IDim, JDim, KDim
+from next_tests.unit_tests.conftest import (
+    lift_mode,
+    program_processor,
+    program_processor_no_dace_exec,
+    run_processor,
+)
 
 
 @fundef
@@ -86,11 +91,6 @@ def tridiag_reference():
     return a, b, c, d, x
 
 
-IDim = Dimension("IDim")
-JDim = Dimension("JDim")
-KDim = Dimension("KDim")
-
-
 @fendef
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     closure(
@@ -119,50 +119,49 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
     )
 
 
-@pytest.fixture
-def tridiag_test(tridiag_reference, program_processor, lift_mode):
-    program_processor, validate = program_processor
+@pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
+def test_tridiag(fencil, tridiag_reference, program_processor_no_dace_exec, lift_mode):
+    program_processor, validate = program_processor_no_dace_exec
     if (
-        program_processor == run_gtfn
-        or program_processor == run_gtfn_imperative
-        or program_processor == gtfn_format_sourcecode
-    ) and lift_mode == LiftMode.FORCE_INLINE:
-        pytest.xfail("gtfn does only support lifted scans when using temporaries")
+        program_processor
+        in [
+            gtfn_cpu.run_gtfn,
+            gtfn_cpu.run_gtfn_imperative,
+            gtfn_cpu.run_gtfn_with_temporaries,
+            gtfn_format_sourcecode,
+        ]
+        and lift_mode == LiftMode.FORCE_INLINE
+    ):
+        pytest.skip("gtfn does only support lifted scans when using temporaries")
+    if (
+        program_processor == gtfn_cpu.run_gtfn_with_temporaries
+        or lift_mode == LiftMode.FORCE_TEMPORARIES
+    ):
+        pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
-    as_3d_field = np_as_located_field(IDim, JDim, KDim)
+    as_3d_field = gtx.np_as_located_field(IDim, JDim, KDim)
     a_s = as_3d_field(a)
     b_s = as_3d_field(b)
     c_s = as_3d_field(c)
     d_s = as_3d_field(d)
     x_s = as_3d_field(np.zeros_like(x))
 
-    def run(fencil):
-        run_processor(
-            fencil,
-            program_processor,
-            shape[0],
-            shape[1],
-            shape[2],
-            a_s,
-            b_s,
-            c_s,
-            d_s,
-            x_s,
-            offset_provider={},
-            column_axis=KDim,
-            lift_mode=lift_mode,
-        )
-
-    yield run
+    run_processor(
+        fencil,
+        program_processor,
+        shape[0],
+        shape[1],
+        shape[2],
+        a_s,
+        b_s,
+        c_s,
+        d_s,
+        x_s,
+        offset_provider={},
+        column_axis=KDim,
+        lift_mode=lift_mode,
+    )
 
     if validate:
-        assert np.allclose(x, np.asarray(x_s))
-
-
-def test_tridiag(tridiag_test):
-    tridiag_test(fen_solve_tridiag)
-
-
-def test_tridiag2(tridiag_test):
-    tridiag_test(fen_solve_tridiag2)
+        assert np.allclose(x, x_s)

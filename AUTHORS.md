@@ -8,6 +8,7 @@
 - Davis, Eddie. Allen Institute for AI
 - Deconinck, Florian. SSAI/NASA-GSFC
 - Ehrengruber, Till. ETH Zurich - CSCS
+- Elbert, Oliver D. NOAA-GFDL
 - Farabullini, Nicoletta. ETH Zurich - C2SM
 - George, Rhea. Allen Institute for AI
 - González Paredes, Enrique. ETH Zurich - CSCS
@@ -21,6 +22,7 @@
 - Mariotti, Kean. ETH Zurich - CSCS
 - Müller, Christoph. MeteoSwiss
 - Osuna, Carlos. MeteoSwiss
+- Paone, Edoardo. ETH Zurich - CSCS
 - Röthlin, Matthias. MeteoSwiss
 - Serafini, Giacomo. MeteoSwiss
 - Szenes, Kalman. ETH Zurich - CSCS

@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import abc
 import collections.abc
 import sys
@@ -19,12 +21,12 @@ import time
 from dataclasses import dataclass
 from numbers import Number
 from pickle import dumps
-from typing import Any, Callable, ClassVar, Dict, Optional, Tuple, Union, cast
+from typing import Any, Callable, ClassVar, Dict, Literal, Optional, Tuple, Union, cast
 
 import numpy as np
 
 import gt4py.cartesian.gtc.utils as gtc_utils
-import gt4py.storage.utils as storage_utils
+import gt4py.storage.cartesian.utils as storage_utils
 from gt4py import cartesian as gt4pyc
 from gt4py.cartesian.definitions import AccessKind, DomainInfo, FieldInfo, ParameterInfo
 from gt4py.cartesian.gtc.definitions import Index, Shape
@@ -39,17 +41,15 @@ FieldType = Union["cp.ndarray", np.ndarray]
 OriginType = Union[Tuple[int, int, int], Dict[str, Tuple[int, ...]]]
 
 
-def _compute_cache_key(
-    field_args: Dict[str, Optional[FieldType]],
+def _compute_domain_origin_cache_key(
+    field_args_info: Dict[str, Optional[ArgsInfo]],
     parameter_args: Dict[str, Optional[Number]],
     domain: Optional[Tuple[int, ...]],
     origin: Optional[OriginType],
-    device: str,
 ) -> int:
-    asarray = storage_utils.as_cupy if device == "gpu" else storage_utils.as_numpy
     field_data = tuple(
-        (name, asarray(arg).shape, getattr(arg, "__gt_origin__", (0, 0, 0)))
-        for name, arg in field_args.items()
+        (name, arg.array.shape, arg.origin or (0, 0, 0))
+        for name, arg in field_args_info.items()
         if arg is not None
     )
     return hash((field_data, *parameter_args.keys(), dumps(domain), dumps(origin)))
@@ -65,15 +65,14 @@ class ArgsInfo:
 
 
 def _extract_array_infos(
-    field_args: Dict[str, Optional[FieldType]], device: str
+    field_args: Dict[str, Optional[FieldType]], device: Literal["cpu", "gpu"]
 ) -> Dict[str, Optional[ArgsInfo]]:
-    asarray = storage_utils.as_cupy if device == "gpu" else storage_utils.as_numpy
     array_infos: Dict[str, Optional[ArgsInfo]] = {}
     for name, arg in field_args.items():
         if arg is None:
             array_infos[name] = None
         else:
-            array = asarray(arg)
+            array = storage_utils.asarray(arg, device=device)
             dimensions = storage_utils.get_dims(arg)
             if dimensions is not None:
                 sorted_dimensions = [d for d in "IJK" if d in dimensions]
@@ -212,7 +211,7 @@ class StencilObject(abc.ABC):
         raise AttributeError("Attempting a deletion of an attribute in a frozen class")
 
     def __eq__(self, other) -> bool:
-        return type(self) == type(other)
+        return type(self) is type(other)
 
     def __str__(self) -> str:
         result = """
@@ -485,7 +484,7 @@ class StencilObject(abc.ABC):
             if parameter_info.access != AccessKind.NONE:
                 if name not in param_args:
                     raise ValueError(f"Missing value for '{name}' parameter.")
-                elif type(parameter := param_args[name]) != parameter_info.dtype:
+                elif np.dtype(type(parameter := param_args[name])) != parameter_info.dtype:
                     raise TypeError(
                         f"The type of parameter '{name}' is '{type(parameter)}' instead of '{parameter_info.dtype}'"
                     )
@@ -571,7 +570,7 @@ class StencilObject(abc.ABC):
         device = backend_cls.storage_info["device"]
         array_infos = _extract_array_infos(field_args, device)
 
-        cache_key = _compute_cache_key(field_args, parameter_args, domain, origin, device)
+        cache_key = _compute_domain_origin_cache_key(array_infos, parameter_args, domain, origin)
         if cache_key not in self._domain_origin_cache:
             origin = self._normalize_origins(array_infos, self.field_info, origin)
 

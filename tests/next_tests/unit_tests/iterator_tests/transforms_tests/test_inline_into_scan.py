@@ -25,7 +25,7 @@ def _make_scan(*args: list[str], scanpass_body: ir.Expr) -> ir.Expr:
                 params=[ir.Sym(id="state")] + [ir.Sym(id=f"{arg}") for arg in args],
                 expr=scanpass_body,
             ),
-            ir.Literal(value="0.0", type="float"),
+            ir.Literal(value="0.0", type="float64"),
             ir.Literal(value="True", type="bool"),
         ],
     )

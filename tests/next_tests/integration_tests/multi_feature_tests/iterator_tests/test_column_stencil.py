@@ -15,23 +15,21 @@
 import numpy as np
 import pytest
 
-from gt4py.next.common import Dimension
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
+from next_tests.integration_tests.cases import IDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")
 K = offset("K")
-
-KDim = Dimension("KDim")
-IDim = Dimension("IDim")
 
 
 @fundef
@@ -56,27 +54,22 @@ def shift_stencil(inp):
 
 @pytest.fixture(
     params=[
-        # (stencil, reference_function, inp_fun (None=default), (skip_backend_fun, msg))
-        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None, None),
-        (if_scalar_cond, lambda inp: np.asarray(inp), None, None),
-        (if_scalar_return, lambda inp: np.ones_like(inp), None, None),
+        # (stencil, reference_function, inp_fun (None=default)
+        (add_scalar, lambda inp: np.asarray(inp) + 1.0, None),
+        (if_scalar_cond, lambda inp: np.asarray(inp), None),
+        (if_scalar_return, lambda inp: np.ones_like(inp), None),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 1:],
-            lambda shape: np_as_located_field(IDim, KDim)(
+            lambda shape: gtx.np_as_located_field(IDim, KDim)(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
             ),
-            None,
         ),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 2:],
-            lambda shape: np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
+            lambda shape: gtx.np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
                 np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
-            ),
-            (
-                lambda backend: backend == run_gtfn or backend == run_gtfn_imperative,
-                "origin not supported in gtfn",
             ),
         ),
     ],
@@ -88,21 +81,26 @@ def basic_stencils(request):
 
 def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     program_processor, validate = program_processor
-    stencil, ref_fun, inp_fun, skip_backend = basic_stencils
-    if skip_backend is not None:
-        skip_backend_fun, msg = skip_backend
-        if skip_backend_fun(program_processor):
-            pytest.xfail(msg)
+    stencil, ref_fun, inp_fun = basic_stencils
+    if program_processor == run_dace_iterator and inp_fun:
+        pytest.xfail("Not supported in DaCe backend: origin")
 
     shape = [5, 7]
     inp = (
-        np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
+        gtx.np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
         if inp_fun is None
         else inp_fun(shape)
     )
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
 
     ref = ref_fun(inp)
+
+    if (
+        program_processor == run_dace_iterator
+        and stencil.__name__ == "shift_stencil"
+        and inp.origin
+    ):
+        pytest.xfail("Not supported in DaCe backend: origin")
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
@@ -116,6 +114,79 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
 
     if validate:
         assert np.allclose(ref, out)
+
+
+@fundef
+def k_level_condition_lower(k_idx, k_level):
+    return if_(deref(k_idx) > deref(k_level), deref(shift(K, -1)(k_idx)), 0)
+
+
+@fundef
+def k_level_condition_upper(k_idx, k_level):
+    return if_(deref(k_idx) < deref(k_level), deref(shift(K, +1)(k_idx)), 0)
+
+
+@fundef
+def k_level_condition_upper_tuple(k_idx, k_level):
+    shifted_val = deref(shift(K, +1)(k_idx))
+    return if_(
+        tuple_get(0, deref(k_idx)) < deref(k_level),
+        tuple_get(0, shifted_val) + tuple_get(1, shifted_val),
+        0,
+    )
+
+
+@pytest.mark.parametrize(
+    "fun, k_level, inp_function, ref_function",
+    [
+        (
+            k_level_condition_lower,
+            lambda inp: 0,
+            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            lambda inp: np.concatenate([[0], inp[:-1]]),
+        ),
+        (
+            k_level_condition_upper,
+            lambda inp: inp.shape[0] - 1,
+            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            lambda inp: np.concatenate([inp[1:], [0]]),
+        ),
+        (
+            k_level_condition_upper_tuple,
+            lambda inp: inp[0].shape[0] - 1,
+            lambda k_size: (
+                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            ),
+            lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
+        ),
+    ],
+)
+def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_function, ref_function):
+    program_processor, validate = program_processor
+
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple arguments")
+
+    k_size = 5
+    inp = inp_function(k_size)
+    ref = ref_function(inp)
+
+    out = gtx.np_as_located_field(KDim)(np.zeros((5,), dtype=np.int32))
+
+    run_processor(
+        fun[{KDim: range(0, k_size)}],
+        program_processor,
+        inp,
+        k_level(inp),
+        out=out,
+        offset_provider={"K": KDim},
+        column_axis=KDim,
+        lift_mode=lift_mode,
+    )
+
+    if validate:
+        np.allclose(ref, out)
 
 
 @fundef
@@ -148,8 +219,8 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
 
     run_processor(
         ksum_fencil,
@@ -185,8 +256,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
 
@@ -230,32 +301,30 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
     [
         (
             0,
-            np.asarray(
-                [[(0, 0), (1, 1), (3, 3), (6, 6), (10, 10), (15, 15), (21, 21)]],
-                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            (
+                np.asarray([0, 1, 3, 6, 10, 15, 21], dtype=np.float64),
+                np.asarray([0, 1, 3, 6, 10, 15, 21], dtype=np.int32),
             ),
         ),
         (
             2,
-            np.asarray(
-                [[(0, 0), (0, 0), (2, 2), (5, 5), (9, 9), (14, 14), (20, 20)]],
-                dtype=np.dtype([("foo", np.float64), ("bar", np.int32)]),
+            (
+                np.asarray([0, 0, 2, 5, 9, 14, 20], dtype=np.float64),
+                np.asarray([0, 0, 2, 5, 9, 14, 20], dtype=np.int32),
             ),
         ),
     ],
 )
 def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
-    if (
-        program_processor == run_gtfn
-        or program_processor == run_gtfn_imperative
-        or program_processor == gtfn_format_sourcecode
-    ):
-        pytest.xfail("structured dtype input/output currently unsupported")
+    pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
-    inp0 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
-    inp1 = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
-    out = np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=reference.dtype))
+    inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
+    inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
+    out = (
+        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float64)),
+        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float32)),
+    )
 
     run_processor(
         kdoublesum_fencil,
@@ -271,8 +340,8 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     )
 
     if validate:
-        for n in reference.dtype.names:
-            assert np.allclose(reference[n], np.asarray(out)[n])
+        for ref, o in zip(reference, out):
+            assert np.allclose(ref, o)
 
 
 @fundef
@@ -292,12 +361,16 @@ def sum_shifted_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail(
+            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
+        )
 
     k_size = 10
-    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = np_as_located_field(KDim)(np.asarray(list(range(k_size + 1))))
-    out = np_as_located_field(KDim)(np.zeros(k_size))
-    ref = inp0 + inp1[1:]
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim)(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=inp0.dtype))
+    ref = inp0.ndarray + inp1.ndarray[1:]
 
     run_processor(
         sum_shifted_fencil,
@@ -330,14 +403,14 @@ def sum_fencil(out, inp0, inp1, k_size):
 
 def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [run_gtfn, run_gtfn_imperative]:
-        pytest.xfail("origin not supported in gtfn")
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: origin")
 
     k_size = 10
-    inp0 = np_as_located_field(KDim)(np.asarray(list(range(k_size))))
-    inp1 = np_as_located_field(KDim, origin={KDim: 1})(np.asarray(list(range(k_size + 1))))
-    out = np_as_located_field(KDim)(np.zeros(k_size))
-    ref = inp0 + np.asarray(inp1)[:-1]
+    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
+    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
+    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
+    ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
 
     run_processor(
         sum_fencil,

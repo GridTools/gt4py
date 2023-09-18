@@ -14,7 +14,9 @@
 
 from typing import Callable, Union
 
+from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
@@ -51,7 +53,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     return itir.SymRef(id=ref_or_name)
 
 
-def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
+def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:
     """
     Convert literals into a SymRef or Literal and let expressions pass unchanged.
 
@@ -61,17 +63,16 @@ def ensure_expr(literal_or_expr: Union[str, int, itir.Expr]) -> itir.Expr:
     SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type='int')
+    Literal(value='3', type='int32')
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
-    elif isinstance(literal_or_expr, int):
-        return itir.Literal(value=str(literal_or_expr), type="int")
-    elif isinstance(literal_or_expr, float):
-        return itir.Literal(value=str(literal_or_expr), type="float")
+    elif core_defs.is_scalar_type(literal_or_expr):
+        return literal_from_value(literal_or_expr)
+    assert isinstance(literal_or_expr, itir.Expr)
     return literal_or_expr
 
 
@@ -92,13 +93,13 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     return str_or_offset
 
 
-class lambda__:
+class lambda_:
     """
     Create a lambda from params and an expression.
 
     Examples
     --------
-    >>> lambda__("a")(deref_("a"))  # doctest: +ELLIPSIS
+    >>> lambda_("a")(deref("a"))  # doctest: +ELLIPSIS
     Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
     """
 
@@ -109,14 +110,14 @@ class lambda__:
         return itir.Lambda(params=[sym(arg) for arg in self.args], expr=ensure_expr(expr))
 
 
-class call_:
+class call:
     """
     Create a FunCall from an expression and arguments.
 
     Examples
     --------
-    >>> call_("plus")(1, 1)
-    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int'), Literal(value='1', type='int')])
+    >>> call("plus")(1, 1)
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int32'), Literal(value='1', type='int32')])
     """
 
     def __init__(self, expr):
@@ -126,111 +127,111 @@ class call_:
         return itir.FunCall(fun=self.fun, args=[ensure_expr(expr) for expr in exprs])
 
 
-def deref_(expr):
+def deref(expr):
     """Create a deref FunCall, shorthand for ``call("deref")(expr)``."""
-    return call_("deref")(expr)
+    return call("deref")(expr)
 
 
-def plus_(left, right):
+def plus(left, right):
     """Create a plus FunCall, shorthand for ``call("plus")(left, right)``."""
-    return call_("plus")(left, right)
+    return call("plus")(left, right)
 
 
-def minus_(left, right):
+def minus(left, right):
     """Create a minus FunCall, shorthand for ``call("minus")(left, right)``."""
-    return call_("minus")(left, right)
+    return call("minus")(left, right)
 
 
 def multiplies_(left, right):
     """Create a multiplies FunCall, shorthand for ``call("multiplies")(left, right)``."""
-    return call_("multiplies")(left, right)
+    return call("multiplies")(left, right)
 
 
 def divides_(left, right):
     """Create a divides FunCall, shorthand for ``call("divides")(left, right)``."""
-    return call_("divides")(left, right)
+    return call("divides")(left, right)
 
 
 def floordiv_(left, right):
     """Create a floor division FunCall, shorthand for ``call("floordiv")(left, right)``."""
     # TODO(tehrengruber): Use int(floor(left/right)) as soon as we support integer casting
     #  and remove the `floordiv` builtin again.
-    return call_("floordiv")(left, right)
+    return call("floordiv")(left, right)
 
 
-def mod_(left, right):
+def mod(left, right):
     """Create a modulo FunCall, shorthand for ``call("mod")(left, right)``."""
-    return call_("mod")(left, right)
+    return call("mod")(left, right)
 
 
-def and__(left, right):
+def and_(left, right):
     """Create an and_ FunCall, shorthand for ``call("and_")(left, right)``."""
-    return call_("and_")(left, right)
+    return call("and_")(left, right)
 
 
-def or__(left, right):
+def or_(left, right):
     """Create an or_ FunCall, shorthand for ``call("or_")(left, right)``."""
-    return call_("or_")(left, right)
+    return call("or_")(left, right)
 
 
-def xor__(left, right):
+def xor_(left, right):
     """Create an xor_ FunCall, shorthand for ``call("xor_")(left, right)``."""
-    return call_("xor_")(left, right)
+    return call("xor_")(left, right)
 
 
-def greater_(left, right):
+def greater(left, right):
     """Create a greater FunCall, shorthand for ``call("greater")(left, right)``."""
-    return call_("greater")(left, right)
+    return call("greater")(left, right)
 
 
-def less_(left, right):
+def less(left, right):
     """Create a less FunCall, shorthand for ``call("less")(left, right)``."""
-    return call_("less")(left, right)
+    return call("less")(left, right)
 
 
-def less_equal_(left, right):
+def less_equal(left, right):
     """Create a less_equal FunCall, shorthand for ``call("less_equal")(left, right)``."""
-    return call_("less_equal")(left, right)
+    return call("less_equal")(left, right)
 
 
-def greater_equal_(left, right):
-    """Create a greater_equal_ FunCall, shorthand for ``call("greater_equal")(left, right)``."""
-    return call_("greater_equal")(left, right)
+def greater_equal(left, right):
+    """Create a greater_equal FunCall, shorthand for ``call("greater_equal")(left, right)``."""
+    return call("greater_equal")(left, right)
 
 
-def not_eq_(left, right):
-    """Create a not_eq_ FunCall, shorthand for ``call("not_eq_")(left, right)``."""
-    return call_("not_eq_")(left, right)
+def not_eq(left, right):
+    """Create a not_eq FunCall, shorthand for ``call("not_eq")(left, right)``."""
+    return call("not_eq")(left, right)
 
 
-def eq_(left, right):
+def eq(left, right):
     """Create a eq FunCall, shorthand for ``call("eq")(left, right)``."""
-    return call_("eq")(left, right)
+    return call("eq")(left, right)
 
 
-def not__(expr):
+def not_(expr):
     """Create a not_ FunCall, shorthand for ``call("not_")(expr)``."""
-    return call_("not_")(expr)
+    return call("not_")(expr)
 
 
-def make_tuple_(*args):
+def make_tuple(*args):
     """Create a make_tuple FunCall, shorthand for ``call("make_tuple")(*args)``."""
-    return call_("make_tuple")(*args)
+    return call("make_tuple")(*args)
 
 
-def tuple_get_(tuple_expr, index):
-    """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(tuple_expr, index)``."""
-    return call_("tuple_get")(tuple_expr, index)
+def tuple_get(index: str | int, tuple_expr):
+    """Create a tuple_get FunCall, shorthand for ``call("tuple_get")(index, tuple_expr)``."""
+    return call("tuple_get")(literal(str(index), itir.INTEGER_INDEX_BUILTIN), tuple_expr)
 
 
 def if_(cond, true_val, false_val):
     """Create a not_ FunCall, shorthand for ``call("if_")(expr)``."""
-    return call_("if_")(cond, true_val, false_val)
+    return call("if_")(cond, true_val, false_val)
 
 
-def lift_(expr):
+def lift(expr):
     """Create a lift FunCall, shorthand for ``call(call("lift")(expr))``."""
-    return call_(call_("lift")(expr))
+    return call(call("lift")(expr))
 
 
 class let:
@@ -239,28 +240,33 @@ class let:
 
     Examples
     --------
-    >>> let("a", "b")("a")  # doctest: +ELLIPSIS
-    FunCall(fun=Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=SymRef(id=SymbolRef('a'))), args=[SymRef(id=SymbolRef('b'))])
+    >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
+    '(λ(a) → a)(b)'
+    >>> str(let("a", 1,
+    ...         "b", 2
+    ... )(plus("a", "b")))
+    '(λ(a, b) → a + b)(1, 2)'
     """
 
-    def __init__(self, var, init_form):
-        self.var = var
-        self.init_form = init_form
+    def __init__(self, *vars_and_values):
+        assert len(vars_and_values) % 2 == 0
+        self.vars = vars_and_values[0::2]
+        self.init_forms = vars_and_values[1::2]
 
     def __call__(self, form):
-        return call_(lambda__(self.var)(form))(self.init_form)
+        return call(lambda_(*self.vars)(form))(*self.init_forms)
 
 
-def shift_(offset, value=None):
+def shift(offset, value=None):
     """
     Create a shift call.
 
     Examples
     --------
-    >>> shift_("i", 0)("a")
+    >>> shift("i", 0)("a")
     FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), OffsetLiteral(value=0)]), args=[SymRef(id=SymbolRef('a'))])
 
-    >>> shift_("V2E")("b")
+    >>> shift("V2E")("b")
     FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
     """
     offset = ensure_offset(offset)
@@ -268,16 +274,45 @@ def shift_(offset, value=None):
     if value is not None:
         value = ensure_offset(value)
         args.append(value)
-    return call_(call_("shift")(*args))
+    return call(call("shift")(*args))
 
 
-def literal_(value: str, typename: str):
+def literal(value: str, typename: str):
     return itir.Literal(value=value, type=typename)
 
 
-def neighbors_(offset, it):
+def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
+    """
+    Make a literal node from a value.
+
+    >>> literal_from_value(1.)
+    Literal(value='1.0', type='float64')
+    >>> literal_from_value(1)
+    Literal(value='1', type='int32')
+    >>> literal_from_value(2147483648)
+    Literal(value='2147483648', type='int64')
+    >>> literal_from_value(True)
+    Literal(value='True', type='bool')
+    """
+    if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
+        raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
+
+    # At the time this has been written the iterator module has its own type system that is
+    # uncoupled from the one used in the frontend. However since we decided to eventually replace
+    # it with the frontend type system we already use it here (avoiding unnecessary code
+    # duplication).
+    type_spec = type_translation.from_value(val)
+    assert isinstance(type_spec, ts.ScalarType)
+
+    typename = type_spec.kind.name.lower()
+    assert typename in itir.TYPEBUILTINS
+
+    return itir.Literal(value=str(val), type=typename)
+
+
+def neighbors(offset, it):
     offset = ensure_offset(offset)
-    return call_("neighbors")(offset, it)
+    return call("neighbors")(offset, it)
 
 
 def lifted_neighbors(offset, it) -> itir.Expr:
@@ -289,7 +324,7 @@ def lifted_neighbors(offset, it) -> itir.Expr:
     >>> str(lifted_neighbors("off", "a"))
     '(↑(λ(it) → neighbors(offₒ, it)))(a)'
     """
-    return lift_(lambda__("it")(neighbors_(offset, "it")))(it)
+    return lift(lambda_("it")(neighbors(offset, "it")))(it)
 
 
 def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
@@ -301,7 +336,7 @@ def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     >>> str(promote_to_const_iterator("foo"))
     '(↑(λ() → foo))()'
     """
-    return lift_(lambda__()(expr))()
+    return lift(lambda_()(expr))()
 
 
 def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[..., itir.Expr]:
@@ -319,17 +354,17 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
     if isinstance(op, (str, itir.SymRef)):
-        op = call_(op)
+        op = call(op)
 
     def _impl(*its: itir.Expr) -> itir.Expr:
         args = [
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`
-        return lift_(lambda__(*args)(op(*[deref_(arg) for arg in args])))(*its)  # type: ignore[operator] # `op` is not `str`
+        return lift(lambda_(*args)(op(*[deref(arg) for arg in args])))(*its)
 
     return _impl
 
 
-def map__(op):
+def map_(op):
     """Create a `map_` call."""
-    return call_(call_("map_")(op))
+    return call(call("map_")(op))

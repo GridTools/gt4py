@@ -84,10 +84,10 @@ class nabla_setup:
     def is_pole_edge_field(self):
         edge_flags = np.array(self.mesh.edges.flags())
 
-        pole_edge_field = np.zeros((self.edges_size,))
+        pole_edge_field = np.zeros((self.edges_size,), dtype=bool)
         for e in range(self.edges_size):
             pole_edge_field[e] = self._is_pole_edge(e, edge_flags)
-        return edge_flags
+        return pole_edge_field
 
     @property
     def sign_field(self):

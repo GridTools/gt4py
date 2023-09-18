@@ -17,8 +17,8 @@ from __future__ import annotations
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next.common import Dimension, DimensionKind, GridType, GTTypeError
-from gt4py.next.ffront import program_ast as past
+from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -37,9 +37,7 @@ def _flatten_tuple_expr(
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise GTTypeError(
-        "Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed."
-    )
+    raise ValueError("Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed.")
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -49,13 +47,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     Examples
     --------
     >>> from gt4py.next.ffront.func_to_past import ProgramParser
-    >>> from gt4py.next.iterator.runtime import offset
     >>> from gt4py.next.iterator import ir
-    >>> from gt4py.next.ffront.fbuiltins import Dimension, Field
+    >>> from gt4py.next import Dimension, Field
     >>>
     >>> float64 = float
     >>> IDim = Dimension("IDim")
-    >>> Ioff = offset("Ioff")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
     ...    ...
@@ -66,7 +62,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> fieldop_def = ir.FunctionDefinition(
     ...     id="fieldop",
     ...     params=[ir.Sym(id="inp")],
-    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")])
     ... )  # doctest: +SKIP
     >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
     ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
@@ -135,15 +131,25 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
-        domain = node.kwargs.get("domain", None)
+        node_kwargs = {**node.kwargs}
+        domain = node_kwargs.pop("domain", None)
         output, lowered_domain = self._visit_stencil_call_out_arg(
-            node.kwargs["out"], domain, **kwargs
+            node_kwargs.pop("out"), domain, **kwargs
+        )
+
+        assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
+
+        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+            node.func.type,
+            self.visit(node.args, **kwargs),
+            self.visit(node_kwargs, **kwargs),
+            use_signature_ordering=True,
         )
 
         return itir.StencilClosure(
             domain=lowered_domain,
             stencil=itir.SymRef(id=node.func.id),
-            inputs=self.visit(node.args, **kwargs),
+            inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
         )
 
@@ -157,9 +163,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
-            assert (
-                isinstance(slice_bound.type, ts.ScalarType)
-                and slice_bound.type.kind == ts.ScalarKind.INT
+            assert isinstance(slice_bound.type, ts.ScalarType) and type_info.is_integral(
+                slice_bound.type
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
@@ -183,7 +188,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
             )
         else:
-            raise GTTypeError(
+            raise ValueError(
                 "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
                 " or a `past.TupleExpr` thereof."
             )
@@ -219,7 +224,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    itir.Literal(value="0", type="int"),
+                    itir.Literal(value="0", type=itir.INTEGER_INDEX_BUILTIN),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
@@ -227,7 +232,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
             if dim.kind == DimensionKind.LOCAL:
-                raise GTTypeError(f"Dimension {dim.value} must not be local.")
+                raise ValueError(f"Dimension {dim.value} must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
@@ -253,7 +258,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
-            raise GTTypeError(
+            raise ValueError(
                 f"Dimensions in out field and field domain are not equivalent"
                 f"Expected {dim}, but got {keys_dims_types} "
             )
@@ -277,7 +282,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node_dims_ls = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims_ls, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
-            raise GTTypeError(
+            raise ValueError(
                 f"Too many indices for field {out_field_name}: field is {len(node_dims_ls)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
             )
@@ -338,8 +343,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
             typename = node.type.kind.name.lower()
-            if typename.startswith("int"):
-                typename = "int"
             return itir.Literal(value=str(node.value), type=typename)
 
         raise NotImplementedError("Only scalar literals supported currently.")

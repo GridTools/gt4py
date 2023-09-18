@@ -15,9 +15,10 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from gt4py.next.iterator.runtime import closure, fendef, fundef
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import (
     program_processor,
@@ -26,9 +27,9 @@ from next_tests.unit_tests.conftest import (
 )
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 # semantics of stencil return that is called from the fencil (after `:` the structure of the output)
 # `return a` -> a: field
@@ -55,19 +56,21 @@ def tuple_output2(inp1, inp2):
 )
 def test_tuple_output(program_processor, stencil):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out = (
-        np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-        np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+        gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+        gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
     )
 
     dom = {
@@ -81,58 +84,20 @@ def test_tuple_output(program_processor, stencil):
         assert np.allclose(inp2, out[1])
 
 
-def test_tuple_of_field_of_tuple_output(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+@fundef
+def tuple_of_tuple_output1(inp1, inp2, inp3, inp4):
+    return (deref(inp1), deref(inp2)), (deref(inp3), deref(inp4))
 
-    @fundef
-    def stencil(inp1, inp2, inp3, inp4):
-        return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
 
-    shape = [5, 7, 9]
-    rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp3 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp4 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-
-    out_np1 = np.zeros(shape, dtype="f8, f8")
-    out1 = np_as_located_field(IDim, JDim, KDim)(out_np1)
-    out_np2 = np.zeros(shape, dtype="f8, f8")
-    out2 = np_as_located_field(IDim, JDim, KDim)(out_np2)
-    out = (out1, out2)
-
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
-    run_processor(
-        stencil[dom],
-        program_processor,
-        inp1,
-        inp2,
-        inp3,
-        inp4,
-        out=out,
-        offset_provider={},
-    )
-    if validate:
-        assert np.allclose(inp1, out_np1[:]["f0"])
-        assert np.allclose(inp2, out_np1[:]["f1"])
-        assert np.allclose(inp3, out_np2[:]["f0"])
-        assert np.allclose(inp4, out_np2[:]["f1"])
+@fundef
+def tuple_of_tuple_output2(inp1, inp2, inp3, inp4):
+    return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
 
 
 def test_tuple_of_tuple_of_field_output(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @fundef
     def stencil(inp1, inp2, inp3, inp4):
@@ -140,27 +105,27 @@ def test_tuple_of_tuple_of_field_output(program_processor):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp3 = np_as_located_field(IDim, JDim, KDim)(
+    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp4 = np_as_located_field(IDim, JDim, KDim)(
+    inp4 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out = (
         (
-            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
         ),
         (
-            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-            np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
         ),
     )
 
@@ -190,38 +155,10 @@ def test_tuple_of_tuple_of_field_output(program_processor):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_tuple_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
-
-    shape = [5, 7, 9]
-    rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2])),
-    )
-
-    out_np = np.zeros(shape, dtype="f8, f8")
-    out = np_as_located_field(IDim, JDim, KDim)(out_np)
-
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
-    run_processor(stencil[dom], program_processor, inp1, inp2, out=out, offset_provider={})
-    if validate:
-        assert np.allclose(inp1, out_np[:]["f0"])
-        assert np.allclose(inp2, out_np[:]["f1"])
-
-
-@pytest.mark.parametrize(
-    "stencil",
-    [tuple_output1, tuple_output2],
-)
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @fendef
     def fencil(size0, size1, size2, inp1, inp2, out1, out2):
@@ -238,15 +175,15 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out1 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out2 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out1 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out2 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     run_processor(
         fencil,
@@ -267,6 +204,8 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
 def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     @fundef
     def stencil(inp1, inp2, inp3):
@@ -287,19 +226,19 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp3 = np_as_located_field(IDim, JDim, KDim)(
+    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out1 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out2 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out3 = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out1 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out2 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out3 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     run_processor(
         fencil,
@@ -321,24 +260,27 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
         assert np.allclose(inp3, out3)
 
 
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 @pytest.mark.parametrize(
     "stencil",
     [tuple_output1, tuple_output2],
 )
 def test_field_of_extra_dim_output(program_processor_no_gtfn_exec, stencil):
     program_processor, validate = program_processor_no_gtfn_exec
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out_np = np.zeros(shape + [2])
-    out = np_as_located_field(IDim, JDim, KDim, None)(out_np)
+    out = gtx.np_as_located_field(IDim, JDim, KDim, None)(out_np)
 
     dom = {
         IDim: range(0, shape[0]),
@@ -359,17 +301,19 @@ def tuple_input(inp):
 
 def test_tuple_field_input(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -381,35 +325,11 @@ def test_tuple_field_input(program_processor):
         assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
 
 
-def test_field_of_tuple_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-
-    shape = [5, 7, 9]
-    rng = np.random.default_rng()
-
-    inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
-    inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
-    inp = np.zeros(shape, dtype="f8, f8")
-    for i in range(shape[0]):
-        for j in range(shape[1]):
-            for k in range(shape[2]):
-                inp[i, j, k] = (inp1[i, j, k], inp2[i, j, k])
-
-    inp = np_as_located_field(IDim, JDim, KDim)(inp)
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
-    run_processor(tuple_input[dom], program_processor, inp, out=out, offset_provider={})
-    if validate:
-        assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
-
-
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 def test_field_of_extra_dim_input(program_processor_no_gtfn_exec):
     program_processor, validate = program_processor_no_gtfn_exec
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -418,8 +338,8 @@ def test_field_of_extra_dim_input(program_processor_no_gtfn_exec):
     inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
     inp = np.stack((inp1, inp2), axis=-1)
 
-    inp = np_as_located_field(IDim, JDim, KDim, None)(inp)
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim, JDim, KDim, None)(inp)
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -442,51 +362,28 @@ def tuple_tuple_input(inp):
     )
 
 
-def test_tuple_of_field_of_tuple_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
-
-    shape = [5, 7, 9]
-    rng = np.random.default_rng()
-
-    inp1 = rng.normal(size=(shape[0], shape[1], shape[2]))
-    inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
-    inp = np.zeros(shape, dtype="f8, f8")
-    for i in range(shape[0]):
-        for j in range(shape[1]):
-            for k in range(shape[2]):
-                inp[i, j, k] = (inp1[i, j, k], inp2[i, j, k])
-
-    inp = np_as_located_field(IDim, JDim, KDim)(inp)
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-
-    dom = {
-        IDim: range(0, shape[0]),
-        JDim: range(0, shape[1]),
-        KDim: range(0, shape[2]),
-    }
-    run_processor(
-        tuple_tuple_input[dom],
-        program_processor,
-        (inp, inp),
-        out=out,
-        offset_provider={},
-    )
-    if validate:
-        assert np.allclose(2.0 * (np.asarray(inp1) + np.asarray(inp2)), out)
-
-
 def test_tuple_of_tuple_of_field_input(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp1 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp2 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp3 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
-    inp4 = np_as_located_field(IDim, JDim, KDim)(rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2]))
+    )
+    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2]))
+    )
+    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2]))
+    )
+    inp4 = gtx.np_as_located_field(IDim, JDim, KDim)(
+        rng.normal(size=(shape[0], shape[1], shape[2]))
+    )
 
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -506,17 +403,20 @@ def test_tuple_of_tuple_of_field_input(program_processor):
         )
 
 
+@pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
 def test_field_of_2_extra_dim_input(program_processor_no_gtfn_exec):
     program_processor, validate = program_processor_no_gtfn_exec
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp = np_as_located_field(IDim, JDim, KDim, None, None)(
+    inp = gtx.np_as_located_field(IDim, JDim, KDim, None, None)(
         rng.normal(size=(shape[0], shape[1], shape[2], 2, 2))
     )
 
-    out = np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),

@@ -331,6 +331,7 @@ class DefIRToGTIR(IRNodeVisitor):
         NativeFunction.SQRT: common.NativeFunction.SQRT,
         NativeFunction.EXP: common.NativeFunction.EXP,
         NativeFunction.LOG: common.NativeFunction.LOG,
+        NativeFunction.LOG10: common.NativeFunction.LOG10,
         NativeFunction.GAMMA: common.NativeFunction.GAMMA,
         NativeFunction.CBRT: common.NativeFunction.CBRT,
         NativeFunction.ISFINITE: common.NativeFunction.ISFINITE,

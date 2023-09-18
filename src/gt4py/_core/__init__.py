@@ -12,9 +12,4 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-
-def tupelize(tup):
-    if isinstance(tup, tuple):
-        return tup
-    else:
-        return (tup,)
+"""GridTools core definitions and utilities."""

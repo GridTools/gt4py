@@ -68,6 +68,11 @@ class Literal(Expr):
     value: str
     type: str  # noqa: A003
 
+    @datamodels.validator("type")
+    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
+        if value not in TYPEBUILTINS:
+            raise ValueError(f"{value} is not a valid builtin type.")
+
 
 class NoneLiteral(Expr):
     _none_literal: int = 0
@@ -142,12 +147,12 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "minimum",
     "maximum",
     "fmod",
-    "power",
     "plus",
     "minus",
     "multiplies",
     "divides",
     "mod",
+    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
 BINARY_MATH_COMPARISON_BUILTINS = {
     "eq",
@@ -163,34 +168,46 @@ BINARY_LOGICAL_BUILTINS = {
     "xor_",
 }
 
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
-
-BUILTINS = {
-    "cartesian_domain",
-    "unstructured_domain",
-    "named_range",
-    "neighbors",
-    "list_get",
-    "map_",
-    "make_const_list",
-    "lift",
-    "make_tuple",
-    "tuple_get",
-    "reduce",
-    "deref",
-    "can_deref",
-    "shift",
-    "scan",
-    "if_",
-    "cast_",
-    "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
+ARITHMETIC_BUILTINS = {
     *UNARY_MATH_NUMBER_BUILTINS,
     *UNARY_LOGICAL_BUILTINS,
     *UNARY_MATH_FP_BUILTINS,
     *UNARY_MATH_FP_PREDICATE_BUILTINS,
     *BINARY_MATH_NUMBER_BUILTINS,
+    "power",
     *BINARY_MATH_COMPARISON_BUILTINS,
     *BINARY_LOGICAL_BUILTINS,
+}
+
+#: builtin / dtype used to construct integer indices, like domain bounds
+INTEGER_INDEX_BUILTIN = "int32"
+INTEGER_BUILTINS = {"int32", "int64"}
+FLOATING_POINT_BUILTINS = {"float32", "float64"}
+TYPEBUILTINS = {*INTEGER_BUILTINS, *FLOATING_POINT_BUILTINS, "bool"}
+
+GRAMMAR_BUILTINS = {
+    "cartesian_domain",
+    "unstructured_domain",
+    "make_tuple",
+    "tuple_get",
+    "shift",
+    "neighbors",
+    "cast_",
+}
+
+BUILTINS = {
+    *GRAMMAR_BUILTINS,
+    "named_range",
+    "list_get",
+    "map_",
+    "make_const_list",
+    "lift",
+    "reduce",
+    "deref",
+    "can_deref",
+    "scan",
+    "if_",
+    *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
 

@@ -81,5 +81,5 @@ def test_custom_type_inference():
 
     expected = Fun(arg=Fun(arg=Basic(name="int"), ret=Basic(name="int")), ret=ti.TypeVar(idx=0))
 
-    actual = ti.reindex_vars(ti.unify(dtype, constraints))
+    actual = ti.reindex_vars(ti.unify(dtype, constraints)[0])
     assert actual == expected

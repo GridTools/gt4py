@@ -14,6 +14,7 @@
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,7 @@ def _execute_cmake(backend_str: str):
     build_dir = _build_dir(backend_str)
     build_dir.mkdir(exist_ok=True)
     cmake = ["cmake", "-B", build_dir, f"-DBACKEND={backend_str}"]
-    subprocess.run(cmake, cwd=_source_dir(), check=True)
+    subprocess.run(cmake, cwd=_source_dir(), check=True, stderr=sys.stderr)
 
 
 def _get_available_cpu_count():

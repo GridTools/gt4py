@@ -17,9 +17,8 @@ import textwrap
 
 import pytest
 
-from gt4py.next.common import Dimension, DimensionKind, Field
-from gt4py.next.ffront.decorator import field_operator, scan_operator
-from gt4py.next.ffront.fbuiltins import int64
+from gt4py.next import Dimension, DimensionKind, Field, field_operator, int32, int64, scan_operator
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_pretty_printer import pretty_format
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 
@@ -52,19 +51,21 @@ def test_one_to_one(test_case: str):
 
 
 def test_fieldop():
-    @field_operator
-    def foo(inp: Field[[], int64]):
-        return inp
+    I = Dimension("I")
 
     @field_operator
-    def bar(inp: Field[[], int64]) -> Field[[], int64]:
-        return foo(inp)
+    def foo(inp1: Field[[I], int64], inp2: Field[[I], int64]):
+        return inp1 + inp2
+
+    @field_operator
+    def bar(inp1: Field[[I], int64], inp2: Field[[I], int64]) -> Field[[I], int64]:
+        return foo(inp1, inp2=inp2)
 
     expected = textwrap.dedent(
         """
         @field_operator
-        def bar(inp: Field[[], int64]) -> Field[[], int64]:
-          return foo(inp)
+        def bar(inp1: Field[[I], int64], inp2: Field[[I], int64]) -> Field[[I], int64]:
+          return foo(inp1, inp2=inp2)
         """
     ).strip()
 
@@ -74,16 +75,16 @@ def test_fieldop():
 def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-    @scan_operator(axis=KDim, forward=False, init=1.0)
-    def scan(inp: int64) -> int64:
+    @scan_operator(axis=KDim, forward=False, init=1)
+    def scan(inp: int32) -> int32:
         foo = inp
         return inp
 
     expected = textwrap.dedent(
-        """
-        @scan_operator(axis=Dimension(value="KDim", kind=DimensionKind.VERTICAL), forward=False, init=1.0)
-        def scan(inp: int64) -> int64:
-          foo__0 = inp
+        f"""
+        @scan_operator(axis=KDim[vertical], forward=False, init=1)
+        def scan(inp: int32) -> int32:
+          {ssa.unique_name("foo", 0)} = inp
           return inp
         """
     ).strip()

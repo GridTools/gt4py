@@ -15,14 +15,15 @@
 import numpy as np
 import pytest
 
+import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
-from gt4py.next.iterator.embedded import np_as_located_field
-from gt4py.next.iterator.runtime import CartesianAxis, closure, fendef, fundef
+from gt4py.next.iterator.runtime import closure, fendef, fundef
+from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-IDim = CartesianAxis("IDim")
+IDim = gtx.Dimension("IDim")
 
 
 @fundef
@@ -33,11 +34,13 @@ def test_conditional(inp):
 
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
+    if program_processor == run_dace_iterator:
+        pytest.xfail("Not supported in DaCe backend: tuple returns")
 
     shape = [5]
 
-    inp = np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
-    out = np_as_located_field(IDim)(np.zeros(shape))
+    inp = gtx.np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
+    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -50,5 +53,5 @@ def test_conditional_w_tuple(program_processor):
         offset_provider={},
     )
     if validate:
-        assert np.all(out[np.asarray(inp) == 0] == 3.0)
-        assert np.all(out[np.asarray(inp) == 1] == 7.0)
+        assert np.all(out.ndarray[np.asarray(inp) == 0] == 3.0)
+        assert np.all(out.ndarray[np.asarray(inp) == 1] == 7.0)

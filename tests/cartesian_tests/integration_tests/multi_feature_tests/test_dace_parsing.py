@@ -24,7 +24,7 @@ from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.gtscript import PARALLEL, computation, interval
 from gt4py.cartesian.stencil_builder import StencilBuilder
-from gt4py.storage import utils as storage_utils
+from gt4py.storage.cartesian import utils as storage_utils
 
 from cartesian_tests.utils import OriginWrapper
 

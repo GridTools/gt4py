@@ -62,7 +62,7 @@ repos:
   ## version = re.search('black==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"rev: '{version}'  # version from constraints.txt")
   ##]]]
-  rev: '23.3.0'  # version from constraints.txt
+  rev: '23.7.0'  # version from constraints.txt
   ##[[[end]]]
   hooks:
   - id: black
@@ -84,7 +84,7 @@ repos:
   ## version = re.search('flake8==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"rev: '{version}'  # version from constraints.txt")
   ##]]]
-  rev: '5.0.4'  # version from constraints.txt
+  rev: '6.1.0'  # version from constraints.txt
   ##[[[end]]]
   hooks:
   - id: flake8
@@ -97,14 +97,14 @@ repos:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - darglint==1.8.1
-    - flake8-bugbear==23.3.12
+    - flake8-bugbear==23.7.10
     - flake8-builtins==2.1.0
     - flake8-debugger==4.1.2
     - flake8-docstrings==1.7.0
-    - flake8-eradicate==1.4.0
+    - flake8-eradicate==1.5.0
     - flake8-mutable==1.2.0
     - flake8-pyproject==1.2.3
-    - pygments==2.14.0
+    - pygments==2.16.1
     ##[[[end]]]
     # - flake8-rst-docstrings  # Disabled for now due to random false positives
     exclude: |
@@ -130,7 +130,14 @@ repos:
       tests/cartesian_tests/integration_tests/multi_feature_tests/utils.py |
       tests/cartesian_tests/integration_tests/feature_tests/test_call_interface.py |
       tests/cartesian_tests/unit_tests/frontend_tests/test_gtscript_frontend.py |
-      tests/next_tests/.*
+      tests/next_tests/unit_tests/.* |
+      tests/next_tests/integration_tests/multi_feature_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
+      tests/next_tests/past_common_fixtures.py |
+      tests/next_tests/toy_connectivity.py |
       )$
 
 - repo: https://github.com/pre-commit/mirrors-mypy
@@ -139,9 +146,9 @@ repos:
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.1.1 =========
+  #========= FROM constraints.txt: v1.5.0 =========
   ##[[[end]]]
-  rev: v1.1.1  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.5.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
@@ -154,26 +161,27 @@ repos:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
     ##]]]
     - astunparse==1.6.3
-    - attrs==22.2.0
-    - black==23.3.0
+    - attrs==23.1.0
+    - black==23.7.0
     - boltons==23.0.0
     - cached-property==1.5.2
-    - click==8.1.3
-    - cmake==3.26.1
-    - cytoolz==0.12.1
-    - deepdiff==6.3.0
-    - devtools==0.10.0
-    - frozendict==2.3.6
-    - gridtools-cpp==2.2.3
-    - importlib-resources==5.12.0
+    - click==8.1.6
+    - cmake==3.27.2
+    - cytoolz==0.12.2
+    - deepdiff==6.3.1
+    - devtools==0.11.0
+    - frozendict==2.3.8
+    - gridtools-cpp==2.3.1
+    - importlib-resources==6.0.1
     - jinja2==3.1.2
-    - lark==1.1.5
+    - lark==1.1.7
     - mako==1.2.4
+    - nanobind==1.5.0
     - ninja==1.11.1
-    - numpy==1.24.2
-    - packaging==23.0
-    - pybind11==2.10.4
-    - setuptools==67.6.1
+    - numpy==1.24.4
+    - packaging==23.1
+    - pybind11==2.11.1
+    - setuptools==68.1.0
     - tabulate==0.9.0
     - typing-extensions==4.5.0
     - xxhash==3.0.0
@@ -187,5 +195,15 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
+      tests/conftest.py |
+      tests/cartesian_tests/.* |
+      tests/next_tests/unit_tests/.* |
+      tests/next_tests/integration_tests/multi_feature_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
+      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
+      tests/next_tests/past_common_fixtures.py |
+      tests/next_tests/toy_connectivity.py |
       tests/.*
       )$

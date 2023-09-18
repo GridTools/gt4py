@@ -23,30 +23,23 @@ from types import SimpleNamespace
 
 import pytest
 
-from gt4py.next.common import DimensionKind, Field
-from gt4py.next.ffront import itir_makers as im, type_specifications as ts_ffront
-from gt4py.next.ffront.fbuiltins import (
-    Dimension,
-    FieldOffset,
-    float32,
-    float64,
-    int32,
-    int64,
-    neighbor_sum,
-)
+import gt4py.next as gtx
+from gt4py.next import float32, float64, int32, int64, neighbor_sum
+from gt4py.next.ffront import type_specifications as ts_ffront
+from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import ir as itir, ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-IDim = Dimension("IDim")
-Edge = Dimension("Edge")
-Vertex = Dimension("Vertex")
-Cell = Dimension("Cell")
-V2EDim = Dimension("V2E", DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-TDim = Dimension("TDim")  # Meaningless dimension, used for tests.
+IDim = gtx.Dimension("IDim")
+Edge = gtx.Dimension("Edge")
+Vertex = gtx.Dimension("Vertex")
+Cell = gtx.Dimension("Cell")
+V2EDim = gtx.Dimension("V2E", gtx.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+TDim = gtx.Dimension("TDim")  # Meaningless dimension, used for tests.
 
 
 def debug_itir(tree):
@@ -60,7 +53,7 @@ def debug_itir(tree):
 
 
 def test_copy():
-    def copy_field(inp: Field[[TDim], float64]):
+    def copy_field(inp: gtx.Field[[TDim], float64]):
         return inp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
@@ -71,7 +64,7 @@ def test_copy():
 
 
 def test_scalar_arg():
-    def scalar_arg(bar: Field[[IDim], int64], alpha: int64) -> Field[[IDim], int64]:
+    def scalar_arg(bar: gtx.Field[[IDim], int64], alpha: int64) -> gtx.Field[[IDim], int64]:
         return alpha * bar
 
     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
@@ -85,7 +78,7 @@ def test_scalar_arg():
 
 
 def test_multicopy():
-    def multicopy(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def multicopy(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
         return inp1, inp2
 
     parsed = FieldOperatorParser.apply_to_function(multicopy)
@@ -97,7 +90,7 @@ def test_multicopy():
 
 
 def test_arithmetic():
-    def arithmetic(inp1: Field[[IDim], float64], inp2: Field[[IDim], float64]):
+    def arithmetic(inp1: gtx.Field[[IDim], float64], inp2: gtx.Field[[IDim], float64]):
         return inp1 + inp2
 
     parsed = FieldOperatorParser.apply_to_function(arithmetic)
@@ -109,35 +102,35 @@ def test_arithmetic():
 
 
 def test_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: gtx.Field[[IDim], float64]):
         return inp(Ioff[1])
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.shift_("Ioff", 1)("inp")
+    reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("inp")
 
     assert lowered.expr == reference
 
 
 def test_negative_shift():
-    Ioff = FieldOffset("Ioff", source=IDim, target=(IDim,))
+    Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
 
-    def shift_by_one(inp: Field[[IDim], float64]):
+    def shift_by_one(inp: gtx.Field[[IDim], float64]):
         return inp(Ioff[-1])
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.shift_("Ioff", -1)("inp")
+    reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))))("inp")
 
     assert lowered.expr == reference
 
 
 def test_temp_assignment():
-    def copy_field(inp: Field[[TDim], float64]):
+    def copy_field(inp: gtx.Field[[TDim], float64]):
         tmp = inp
         inp = tmp
         tmp2 = inp
@@ -146,11 +139,17 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let(itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"), "inp")(
-        im.let(itir.Sym(id="inp__0", dtype=("float64", False), kind="Iterator"), "tmp__0")(
-            im.let(itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), "inp__0")(
-                "tmp2__0"
-            )
+    reference = im.let(
+        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"), "inp"
+    )(
+        im.let(
+            itir.Sym(id=ssa.unique_name("inp", 0), dtype=("float64", False), kind="Iterator"),
+            ssa.unique_name("tmp", 0),
+        )(
+            im.let(
+                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                ssa.unique_name("inp", 0),
+            )(ssa.unique_name("tmp2", 0))
         )
     )
 
@@ -158,7 +157,7 @@ def test_temp_assignment():
 
 
 def test_unary_ops():
-    def unary(inp: Field[[TDim], float64]):
+    def unary(inp: gtx.Field[[TDim], float64]):
         tmp = +inp
         tmp = -tmp
         return tmp
@@ -167,17 +166,17 @@ def test_unary_ops():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        itir.Sym(id="tmp__0", dtype=("float64", False), kind="Iterator"),
+        itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"),
         im.promote_to_lifted_stencil("plus")(
-            im.promote_to_const_iterator(im.literal_("0", "float64")), "inp"
+            im.promote_to_const_iterator(im.literal("0", "float64")), "inp"
         ),
     )(
         im.let(
-            itir.Sym(id="tmp__1", dtype=("float64", False), kind="Iterator"),
+            itir.Sym(id=ssa.unique_name("tmp", 1), dtype=("float64", False), kind="Iterator"),
             im.promote_to_lifted_stencil("minus")(
-                im.promote_to_const_iterator(im.literal_("0", "float64")), "tmp__0"
+                im.promote_to_const_iterator(im.literal("0", "float64")), ssa.unique_name("tmp", 0)
             ),
-        )("tmp__1")
+        )(ssa.unique_name("tmp", 1))
     )
 
     assert lowered.expr == reference
@@ -187,8 +186,8 @@ def test_unpacking():
     """Unpacking assigns should get separated."""
 
     def unpacking(
-        inp1: Field[[TDim], float64], inp2: Field[[TDim], float64]
-    ) -> Field[[TDim], float64]:
+        inp1: gtx.Field[[TDim], float64], inp2: gtx.Field[[TDim], float64]
+    ) -> gtx.Field[[TDim], float64]:
         tmp1, tmp2 = inp1, inp2  # noqa
         return tmp1
 
@@ -196,14 +195,18 @@ def test_unpacking():
     lowered = FieldOperatorLowering.apply(parsed)
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
-    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get_(0, x))("__tuple_tmp_0")
-    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get_(1, x))("__tuple_tmp_0")
+    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
+    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
-        im.let(itir.Sym(id="tmp1__0", dtype=("float64", False), kind="Iterator"), tuple_access_0)(
+        im.let(
+            itir.Sym(id=ssa.unique_name("tmp1", 0), dtype=("float64", False), kind="Iterator"),
+            tuple_access_0,
+        )(
             im.let(
-                itir.Sym(id="tmp2__0", dtype=("float64", False), kind="Iterator"), tuple_access_1
-            )("tmp1__0")
+                itir.Sym(id=ssa.unique_name("tmp2", 0), dtype=("float64", False), kind="Iterator"),
+                tuple_access_1,
+            )(ssa.unique_name("tmp1", 0))
         )
     )
 
@@ -211,16 +214,16 @@ def test_unpacking():
 
 
 def test_annotated_assignment():
-    pytest.skip("Annotated assignments are not properly supported at the moment.")
+    pytest.xfail("Annotated assignments are not properly supported at the moment.")
 
-    def copy_field(inp: Field[[TDim], float64]):
-        tmp: Field[[TDim], float64] = inp
+    def copy_field(inp: gtx.Field[[TDim], float64]):
+        tmp: gtx.Field[[TDim], float64] = inp
         return tmp
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.let("tmp__0", "inp")("tmp__0")
+    reference = im.let(ssa.unique_name("tmp", 0), "inp")(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
 
@@ -229,20 +232,22 @@ def test_call():
     # create something that appears to the lowering like a field operator.
     #  we could also create an actual field operator, but we want to avoid
     #  using such heavy constructs for testing the lowering.
-    field_type = type_translation.from_type_hint(Field[[TDim], float64])
+    field_type = type_translation.from_type_hint(gtx.Field[[TDim], float64])
     identity = SimpleNamespace(
         __gt_type__=lambda: ts_ffront.FieldOperatorType(
-            definition=ts.FunctionType(args=[field_type], kwargs={}, returns=field_type)
+            definition=ts.FunctionType(
+                pos_only_args=[field_type], pos_or_kw_args={}, kw_only_args={}, returns=field_type
+            )
         )
     )
 
-    def call(inp: Field[[TDim], float64]) -> Field[[TDim], float64]:
+    def call(inp: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return identity(inp)
 
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift_(im.lambda__("__arg0")(im.call_("identity")("__arg0")))("inp")
+    reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
 
     assert lowered.expr == reference
 
@@ -250,7 +255,7 @@ def test_call():
 def test_temp_tuple():
     """Returning a temp tuple should work."""
 
-    def temp_tuple(a: Field[[TDim], float64], b: Field[[TDim], int64]):
+    def temp_tuple(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], int64]):
         tmp = a, b
         return tmp
 
@@ -258,13 +263,13 @@ def test_temp_tuple():
     lowered = FieldOperatorLowering.apply(parsed)
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("a", "b")
-    reference = im.let("tmp__0", tuple_expr)("tmp__0")
+    reference = im.let(ssa.unique_name("tmp", 0), tuple_expr)(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
 
 
 def test_unary_not():
-    def unary_not(cond: Field[[TDim], "bool"]):
+    def unary_not(cond: gtx.Field[[TDim], "bool"]):
         return not cond
 
     parsed = FieldOperatorParser.apply_to_function(unary_not)
@@ -276,7 +281,7 @@ def test_unary_not():
 
 
 def test_binary_plus():
-    def plus(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def plus(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a + b
 
     parsed = FieldOperatorParser.apply_to_function(plus)
@@ -288,21 +293,21 @@ def test_binary_plus():
 
 
 def test_add_scalar_literal_to_field():
-    def scalar_plus_field(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
+    def scalar_plus_field(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
         return 2.0 + a
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("plus")(
-        im.promote_to_const_iterator(im.literal_("2.0", "float64")), "a"
+        im.promote_to_const_iterator(im.literal("2.0", "float64")), "a"
     )
 
     assert lowered.expr == reference
 
 
 def test_add_scalar_literals():
-    def scalar_plus_scalar(a: Field[[IDim], "int32"]) -> Field[[IDim], "int32"]:
+    def scalar_plus_scalar(a: gtx.Field[[IDim], "int32"]) -> gtx.Field[[IDim], "int32"]:
         tmp = int32(1) + int32("1")
         return a + tmp
 
@@ -310,18 +315,18 @@ def test_add_scalar_literals():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.let(
-        "tmp__0",
+        ssa.unique_name("tmp", 0),
         im.promote_to_lifted_stencil("plus")(
-            im.promote_to_const_iterator(im.literal_("1", "int32")),
-            im.promote_to_const_iterator(im.literal_("1", "int32")),
+            im.promote_to_const_iterator(im.literal("1", "int32")),
+            im.promote_to_const_iterator(im.literal("1", "int32")),
         ),
-    )(im.promote_to_lifted_stencil("plus")("a", "tmp__0"))
+    )(im.promote_to_lifted_stencil("plus")("a", ssa.unique_name("tmp", 0)))
 
     assert lowered.expr == reference
 
 
 def test_binary_mult():
-    def mult(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def mult(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a * b
 
     parsed = FieldOperatorParser.apply_to_function(mult)
@@ -333,7 +338,7 @@ def test_binary_mult():
 
 
 def test_binary_minus():
-    def minus(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def minus(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a - b
 
     parsed = FieldOperatorParser.apply_to_function(minus)
@@ -345,7 +350,7 @@ def test_binary_minus():
 
 
 def test_binary_div():
-    def division(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def division(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a / b
 
     parsed = FieldOperatorParser.apply_to_function(division)
@@ -357,7 +362,7 @@ def test_binary_div():
 
 
 def test_binary_and():
-    def bit_and(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bit_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a & b
 
     parsed = FieldOperatorParser.apply_to_function(bit_and)
@@ -369,21 +374,21 @@ def test_binary_and():
 
 
 def test_scalar_and():
-    def scalar_and(a: Field[[IDim], "bool"]) -> Field[[IDim], "bool"]:
+    def scalar_and(a: gtx.Field[[IDim], "bool"]) -> gtx.Field[[IDim], "bool"]:
         return a & False
 
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("and_")(
-        "a", im.promote_to_const_iterator(im.literal_("False", "bool"))
+        "a", im.promote_to_const_iterator(im.literal("False", "bool"))
     )
 
     assert lowered.expr == reference
 
 
 def test_binary_or():
-    def bit_or(a: Field[[TDim], "bool"], b: Field[[TDim], "bool"]):
+    def bit_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a | b
 
     parsed = FieldOperatorParser.apply_to_function(bit_or)
@@ -402,15 +407,15 @@ def test_compare_scalars():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("greater")(
-        im.promote_to_const_iterator(im.literal_("3", "int64")),
-        im.promote_to_const_iterator(im.literal_("4", "int64")),
+        im.promote_to_const_iterator(im.literal("3", "int32")),
+        im.promote_to_const_iterator(im.literal("4", "int32")),
     )
 
     assert lowered.expr == reference
 
 
 def test_compare_gt():
-    def comp_gt(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def comp_gt(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a > b
 
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
@@ -422,7 +427,7 @@ def test_compare_gt():
 
 
 def test_compare_lt():
-    def comp_lt(a: Field[[TDim], float64], b: Field[[TDim], float64]):
+    def comp_lt(a: gtx.Field[[TDim], float64], b: gtx.Field[[TDim], float64]):
         return a < b
 
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
@@ -434,7 +439,7 @@ def test_compare_lt():
 
 
 def test_compare_eq():
-    def comp_eq(a: Field[[TDim], "int64"], b: Field[[TDim], "int64"]):
+    def comp_eq(a: gtx.Field[[TDim], "int64"], b: gtx.Field[[TDim], "int64"]):
         return a == b
 
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
@@ -447,8 +452,8 @@ def test_compare_eq():
 
 def test_compare_chain():
     def compare_chain(
-        a: Field[[IDim], float64], b: Field[[IDim], float64], c: Field[[IDim], float64]
-    ) -> Field[[IDim], bool]:
+        a: gtx.Field[[IDim], float64], b: gtx.Field[[IDim], float64], c: gtx.Field[[IDim], float64]
+    ) -> gtx.Field[[IDim], bool]:
         return a > b > c
 
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
@@ -463,17 +468,17 @@ def test_compare_chain():
 
 
 def test_reduction_lowering_simple():
-    def reduction(edge_f: Field[[Edge], float64]):
+    def reduction(edge_f: gtx.Field[[Edge], float64]):
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil(
-        im.call_(
-            im.call_("reduce")(
+        im.call(
+            im.call("reduce")(
                 "plus",
-                im.deref_(im.promote_to_const_iterator(im.literal_(value="0", typename="float64"))),
+                im.deref(im.promote_to_const_iterator(im.literal(value="0", typename="float64"))),
             ),
         )
     )(
@@ -484,30 +489,30 @@ def test_reduction_lowering_simple():
 
 
 def test_reduction_lowering_expr():
-    def reduction(e1: Field[[Edge], float64], e2: Field[[Vertex, V2EDim], float64]):
+    def reduction(e1: gtx.Field[[Edge], float64], e2: gtx.Field[[Vertex, V2EDim], float64]):
         e1_nbh = e1(V2E)
         return neighbor_sum(1.1 * (e1_nbh + e2), axis=V2EDim)
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    mapped = im.promote_to_lifted_stencil(im.map__("multiplies"))(
+    mapped = im.promote_to_lifted_stencil(im.map_("multiplies"))(
         im.promote_to_lifted_stencil("make_const_list")(
-            im.promote_to_const_iterator(im.literal_("1.1", "float64"))
+            im.promote_to_const_iterator(im.literal("1.1", "float64"))
         ),
-        im.promote_to_lifted_stencil(im.map__("plus"))("e1_nbh__0", "e2"),
+        im.promote_to_lifted_stencil(im.map_("plus"))(ssa.unique_name("e1_nbh", 0), "e2"),
     )
 
     reference = im.let(
-        itir.Sym(id="e1_nbh__0", dtype=("float64", True), kind="Iterator"),
+        itir.Sym(id=ssa.unique_name("e1_nbh", 0), dtype=("float64", True), kind="Iterator"),
         im.lifted_neighbors("V2E", "e1"),
     )(
         im.promote_to_lifted_stencil(
-            im.call_(
-                im.call_("reduce")(
+            im.call(
+                im.call("reduce")(
                     "plus",
-                    im.deref_(
-                        im.promote_to_const_iterator(im.literal_(value="0", typename="float64"))
+                    im.deref(
+                        im.promote_to_const_iterator(im.literal(value="0", typename="float64"))
                     ),
                 ),
             )
@@ -522,28 +527,24 @@ def test_reduction_lowering_expr():
 def test_builtin_int_constructors():
     def int_constrs() -> (
         tuple[
-            int,
-            int,
+            int32,
             int32,
             int64,
-            int,
             int32,
             int64,
         ]
     ):
-        return 1, int(1), int32(1), int64(1), int("1"), int32("1"), int64("1")
+        return 1, int32(1), int64(1), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int32")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
-        im.promote_to_const_iterator(im.literal_("1", "int32")),
-        im.promote_to_const_iterator(im.literal_("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
+        im.promote_to_const_iterator(im.literal("1", "int32")),
+        im.promote_to_const_iterator(im.literal("1", "int64")),
     )
 
     assert lowered.expr == reference
@@ -575,13 +576,13 @@ def test_builtin_float_constructors():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float32")),
-        im.promote_to_const_iterator(im.literal_("0.1", "float64")),
-        im.promote_to_const_iterator(im.literal_(".1", "float64")),
-        im.promote_to_const_iterator(im.literal_(".1", "float32")),
-        im.promote_to_const_iterator(im.literal_(".1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal("0.1", "float32")),
+        im.promote_to_const_iterator(im.literal("0.1", "float64")),
+        im.promote_to_const_iterator(im.literal(".1", "float64")),
+        im.promote_to_const_iterator(im.literal(".1", "float32")),
+        im.promote_to_const_iterator(im.literal(".1", "float64")),
     )
 
     assert lowered.expr == reference
@@ -595,14 +596,14 @@ def test_builtin_bool_constructors():
     lowered = FieldOperatorLowering.apply(parsed)
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
-        im.promote_to_const_iterator(im.literal_(str(True), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(False), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(True), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(False), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool(0)), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool(5)), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool("True")), "bool")),
-        im.promote_to_const_iterator(im.literal_(str(bool("False")), "bool")),
+        im.promote_to_const_iterator(im.literal(str(True), "bool")),
+        im.promote_to_const_iterator(im.literal(str(False), "bool")),
+        im.promote_to_const_iterator(im.literal(str(True), "bool")),
+        im.promote_to_const_iterator(im.literal(str(False), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool(0)), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool(5)), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool("True")), "bool")),
+        im.promote_to_const_iterator(im.literal(str(bool("False")), "bool")),
     )
 
     assert lowered.expr == reference
