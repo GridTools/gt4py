@@ -60,7 +60,7 @@ def itir_type_as_dace_type(type_: next_typing.Type):
     raise NotImplementedError()
 
 
-def reduction_init_value(op_name_: str, type_: Any):
+def get_reduce_identity_value(op_name_: str, type_: Any):
     if op_name_ == "plus":
         init_value = type_(0)
     elif op_name_ == "multiplies":
@@ -807,7 +807,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert isinstance(op_name, itir.SymRef)
 
             # initialize the reduction result based on type of operation
-            init_value = reduction_init_value(op_name.id, result_dtype)
+            init_value = get_reduce_identity_value(op_name.id, result_dtype)
             init_state = self.context.body.add_state_before(self.context.state, "init")
             init_tasklet = init_state.add_tasklet(
                 "init_reduce", {}, {"__out"}, f"__out = {init_value}"
