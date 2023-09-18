@@ -229,11 +229,6 @@ def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
-    pytest.xfail(
-        "Scalar arguments not supported to be used in both domain specification "
-        "and as an argument to a field operator."
-    )
-
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))
