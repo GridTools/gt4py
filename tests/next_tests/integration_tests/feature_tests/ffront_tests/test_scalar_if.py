@@ -50,6 +50,7 @@ def test_simple_if(condition, cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -74,6 +75,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -105,7 +107,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
         condition1,
         condition2,
         out=out,
-        ref=(a if condition1 else b).array() + (0 if condition2 else 1),
+        ref=(a if condition1 else b) + (0 if condition2 else 1),
     )
 
 
@@ -114,6 +116,7 @@ def test_local_if(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -139,6 +142,7 @@ def test_temporary_if(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -167,6 +171,7 @@ def test_if_return(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -195,6 +200,7 @@ def test_if_stmt_if_branch_returns(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -220,6 +226,7 @@ def test_if_stmt_else_branch_returns(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -247,6 +254,7 @@ def test_if_stmt_both_branches_return(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -270,10 +278,11 @@ def test_if_stmt_both_branches_return(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
-def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
+def test_nested_if_stmt_conditinal(cartesian_case, condition1, condition2):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -317,6 +326,7 @@ def test_nested_if(cartesian_case, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
@@ -358,6 +368,7 @@ def test_if_without_else(cartesian_case, condition1, condition2):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("If-stmts are not supported yet.")

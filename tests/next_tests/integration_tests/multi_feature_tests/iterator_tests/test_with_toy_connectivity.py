@@ -168,10 +168,8 @@ def first_vertex_neigh_of_first_edge_neigh_of_cells(in_vertices):
     return deref(shift(E2V, 0)(shift(C2E, 0)(in_vertices)))
 
 
-def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(
-    program_processor_no_dace_exec, lift_mode
-):
-    program_processor, validate = program_processor_no_dace_exec
+def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = vertex_index_field()
     out = gtx.np_as_located_field(Cell)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(list(v2e_arr[c[0]][0] for c in c2e_arr))
@@ -417,7 +415,11 @@ def shift_sparse_stencil2(inp):
 
 def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    if program_processor == gtfn_cpu.run_gtfn or program_processor == gtfn_cpu.run_gtfn_imperative:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
         )  # observed in `cache.Strategy.PERSISTENT` mode

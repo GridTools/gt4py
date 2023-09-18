@@ -37,6 +37,7 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
         roundtrip.executor,
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         dace_iterator.run_dace_iterator,
     ],
     ids=lambda p: next_tests.get_processor_id(p),

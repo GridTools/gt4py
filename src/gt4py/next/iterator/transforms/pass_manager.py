@@ -44,9 +44,18 @@ class LiftMode(enum.Enum):
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
-    if lift_mode == LiftMode.SIMPLE_HEURISTIC:
+    elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
         return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
-    assert lift_mode == LiftMode.FORCE_TEMPORARIES
+    elif lift_mode == LiftMode.FORCE_TEMPORARIES:
+        return InlineLifts(
+            flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
+            | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
+            | InlineLifts.Flag.INLINE_LIFTED_ARGS
+            # needed for UnrollReduce and lift args like `(↑(λ() → constant)`
+        ).visit(ir)
+    else:
+        raise ValueError()
+
     return ir
 
 
@@ -54,7 +63,7 @@ def _inline_into_scan(ir, *, max_iter=10):
     for _ in range(10):
         # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
         inlined = InlineIntoScan().visit(ir)
-        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift=True)
+        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift_args=True)
         if inlined == ir:
             break
         ir = inlined
@@ -84,13 +93,15 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
-        if lift_mode != LiftMode.FORCE_TEMPORARIES:
-            inlined = _inline_lifts(inlined, lift_mode)
+        inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
             inlined,
             opcount_preserving=True,
-            force_inline_lift=(lift_mode == LiftMode.FORCE_INLINE),
+            force_inline_lift_args=(lift_mode == LiftMode.FORCE_INLINE),
+            # If trivial lifts are not inlined we might create temporaries for constants. In all
+            #  other cases we want it anyway.
+            force_inline_trivial_lift_args=True,
         )
         inlined = ConstantFolding.apply(inlined)
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments

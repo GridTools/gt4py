@@ -96,6 +96,7 @@ _MATH_BUILTINS_MAPPING = {
     "minus": "({} - {})",
     "multiplies": "({} * {})",
     "divides": "({} / {})",
+    "floordiv": "({} // {})",
     "eq": "({} == {})",
     "not_eq": "({} != {})",
     "less": "({} < {})",
