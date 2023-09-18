@@ -18,7 +18,7 @@ import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
-from gt4py.next.iterator.transforms import LiftMode
+from gt4py.next.iterator.transforms import LiftMode, global_tmps
 from gt4py.next.otf import languages, recipes, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, nanobind
 from gt4py.next.otf.compilation import cache, compiler
@@ -134,6 +134,9 @@ run_gtfn_with_temporaries = otf_compile_executor.OTFCompileExecutor[
 ](
     name="run_gtfn_with_temporaries",
     otf_workflow=run_gtfn.otf_workflow.replace(
-        translation=run_gtfn.otf_workflow.translation.replace(lift_mode=LiftMode.FORCE_TEMPORARIES),
+        translation=run_gtfn.otf_workflow.translation.replace(
+            lift_mode=LiftMode.FORCE_TEMPORARIES,
+            temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+        ),
     ),
 )

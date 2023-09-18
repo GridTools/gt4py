@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from typing import Any, Final, Optional, TypeVar
+from typing import Any, Callable, Final, Optional, TypeVar
 
 import numpy as np
 
@@ -53,6 +53,9 @@ class GTFNTranslationStep(
     enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None
 
     def _process_regular_arguments(
         self,
@@ -181,10 +184,10 @@ class GTFNTranslationStep(
         #  here and warn the user if it differs from the one configured.
         runtime_lift_mode = inp.kwargs.pop("lift_mode", None)
         lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode != self.lift_mode:
+        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
             warnings.warn(
                 f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
-                "overriden to be {str(runtime_lift_mode)} at runtime."
+                f"overriden to be {str(runtime_lift_mode)} at runtime."
             )
 
         # combine into a format that is aligned with what the backend expects
@@ -202,6 +205,7 @@ class GTFNTranslationStep(
             enable_itir_transforms=self.enable_itir_transforms,
             lift_mode=lift_mode,
             imperative=self.use_imperative_backend,
+            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
             **inp.kwargs,
         )
         source_code = interface.format_source(
