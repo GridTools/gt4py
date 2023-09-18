@@ -93,6 +93,19 @@ if dace_iterator:
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
+    backend, _ = request.param
+
+    if dace_iterator and backend == dace_iterator.run_dace_iterator:
+        feat = next(
+            filter(
+                lambda x: request.node.get_closest_marker(x),
+                next_tests.backend_unsupported_features["dace"],
+            ),
+            None,
+        )
+        if feat:
+            pytest.xfail("Not supported in DaCe backend: " + feat)
+
     return request.param
 
 

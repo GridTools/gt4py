@@ -13,6 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+_feat_origin = "uses_origin"
+_feat_tuple_returns = "uses_tuple_returns"
+backend_unsupported_features = {
+    "dace": [
+        _feat_origin,
+        _feat_tuple_returns,
+    ],
+}
+
+
 def get_processor_id(processor):
     if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
         module_path = processor.__module__.split(".")[-1]

@@ -56,9 +56,22 @@ if dace_iterator:
     ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
+    backend = request.param
+
+    if backend == dace_iterator.run_dace_iterator:
+        feat = next(
+            filter(
+                lambda x: request.node.get_closest_marker(x),
+                next_tests.backend_unsupported_features["dace"],
+            ),
+            None,
+        )
+        if feat:
+            pytest.xfail("Not supported in DaCe backend: " + feat)
+
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
-    yield request.param
+    yield backend
     decorator.DEFAULT_BACKEND = backup_backend
 
 

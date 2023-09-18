@@ -83,9 +83,9 @@ def basic_stencils(request):
     return request.param
 
 
-def test_basic_column_stencils(program_processor_no_dace_exec, lift_mode, basic_stencils):
-    # Not supported in DaCe backend: origin
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_origin
+def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
+    program_processor, validate = program_processor
     stencil, ref_fun, inp_fun = basic_stencils
 
     shape = [5, 7]
@@ -323,9 +323,9 @@ def sum_fencil(out, inp0, inp1, k_size):
     )
 
 
-def test_different_vertical_sizes_with_origin(program_processor_no_dace_exec):
-    # Not supported in DaCe backend: origin
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_origin
+def test_different_vertical_sizes_with_origin(program_processor):
+    program_processor, validate = program_processor
 
     k_size = 10
     inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))

@@ -71,10 +71,8 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
-def test_multicopy(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return a, b
