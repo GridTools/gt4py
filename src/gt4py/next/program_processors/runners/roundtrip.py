@@ -27,7 +27,7 @@ from gt4py.next import common
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
-from gt4py.next.program_processors.processor_interface import program_executor
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.storage import allocators as next_allocators
 
 
@@ -217,10 +217,9 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-@program_executor
-class Executor(next_allocators.DefaultCPUAllocator):
+class RoundtripExecutor(ppi.ProgramExecutor, next_allocators.DefaultCPUAllocator):
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
 
 
-executor = Executor()
+executor = RoundtripExecutor()

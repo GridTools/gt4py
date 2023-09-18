@@ -142,20 +142,20 @@ class UnitRange(Sequence[int], Set[int]):
         return f"({self.start}:{self.stop})"
 
 
-RangeLike: TypeAlias = UnitRange | range | tuple[int, int], int
+RangeLike: TypeAlias = UnitRange | range | tuple[int, int] | int
 
 
 def unit_range(r: RangeLike) -> UnitRange:
     if isinstance(r, UnitRange):
         return r
-    if isinstance(r, core_defs.INTEGRAL_TYPES):
-        return UnitRange(0, r)
     if isinstance(r, range):
         if r.step != 1:
             raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
         return UnitRange(r.start, r.stop)
     if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
         return UnitRange(r[0], r[1])
+    if isinstance(r, core_defs.INTEGRAL_TYPES):
+        return UnitRange(0, r)
     raise ValueError(f"`{r}` cannot be interpreted as `UnitRange`.")
 
 
@@ -371,7 +371,7 @@ def domain(domain_like: DomainLike) -> Domain:
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
                 dims=tuple(domain_like.keys()),
-                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),
+                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),  # type: ignore[arg-type] # type of `s` is checked in condition
             )
         return Domain(
             dims=tuple(domain_like.keys()),

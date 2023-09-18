@@ -28,7 +28,7 @@ def empty(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.Field:
+) -> common.MutableField:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
 
     !!!TODO!!!
@@ -66,7 +66,10 @@ def empty(
     """
     dtype = core_defs.dtype(dtype)
     buffer = allocator.__gt_allocate__(domain, dtype, device_id, aligned_index)
-    return common.field(buffer, domain=domain)
+
+    res = common.field(buffer, domain=domain)
+    assert common.is_mutable_field(res)
+    return res
 
 
 def zeros(
@@ -76,7 +79,7 @@ def zeros(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.Field:
+) -> common.MutableField:
     field = empty(
         domain=domain,
         dtype=dtype,
@@ -84,7 +87,7 @@ def zeros(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.dtype.scalar_type(0)
+    field[...] = field.dtype.scalar_type(0)
     return field
 
 
@@ -95,7 +98,7 @@ def ones(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.Field:
+) -> common.MutableField:
     field = empty(
         domain=domain,
         dtype=dtype,
@@ -103,7 +106,7 @@ def ones(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.dtype.scalar_type(1)
+    field[...] = field.dtype.scalar_type(1)
     return field
 
 
@@ -115,7 +118,7 @@ def full(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.Field:
+) -> common.MutableField:
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
@@ -123,7 +126,7 @@ def full(
         device_id=device_id,
         aligned_index=aligned_index,
     )
-    field.ndarray[...] = field.dtype.scalar_type(fill_value)
+    field[...] = field.dtype.scalar_type(fill_value)
     return field
 
 
@@ -136,7 +139,7 @@ def asfield(
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     # copy=False, TODO
-) -> common.Field:
+) -> common.MutableField:
     # TODO make sure we don't reallocate if its in correct layout and device
     shape = storage_utils.asarray(data).shape
     if shape != domain.shape:
@@ -153,6 +156,6 @@ def asfield(
         aligned_index=aligned_index,
     )
 
-    field.ndarray[...] = field.array_ns.asarray(data)
+    field[...] = field.array_ns.asarray(data)
 
     return field
