@@ -869,8 +869,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 output_nodes={result_name: result_access},
             )
 
-            # map fusion is beneficial for reduction stencils:
-            # the solution was designed to keep code generation simple and let DaCe fuse maps
+            # we apply map fusion only to the nested-SDFG which is generated for the reduction operator
+            # the purpose is to keep the ITIR-visitor program simple and to clean up the generated SDFG
             self.context.body.apply_transformations_repeated([MapFusion], validate=False)
 
         return [ValueExpr(result_access, result_dtype)]
