@@ -23,7 +23,7 @@ chardet==5.2.0            # via tox
 charset-normalizer==3.2.0  # via requests
 clang-format==16.0.6      # via -r requirements-dev.in, gt4py (pyproject.toml)
 click==8.1.7              # via black, flask, gt4py (pyproject.toml), pip-tools
-cmake==3.27.4.1           # via gt4py (pyproject.toml)
+cmake==3.27.5             # via gt4py (pyproject.toml)
 cogapp==3.3.0             # via -r requirements-dev.in
 colorama==0.4.6           # via tox
 coverage[toml]==7.3.1     # via -r requirements-dev.in, pytest-cov
@@ -43,9 +43,9 @@ executing==1.2.0          # via devtools
 factory-boy==3.3.0        # via -r requirements-dev.in, pytest-factoryboy
 faker==19.6.1             # via factory-boy
 fastjsonschema==2.18.0    # via nbformat
-filelock==3.12.2          # via tox, virtualenv
+filelock==3.12.4          # via tox, virtualenv
 flake8==6.1.0             # via -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
-flake8-bugbear==23.7.10   # via -r requirements-dev.in
+flake8-bugbear==23.9.16   # via -r requirements-dev.in
 flake8-builtins==2.1.0    # via -r requirements-dev.in
 flake8-debugger==4.1.2    # via -r requirements-dev.in
 flake8-docstrings==1.7.0  # via -r requirements-dev.in
@@ -56,8 +56,8 @@ flake8-rst-docstrings==0.3.0  # via -r requirements-dev.in
 flask==2.3.3              # via dace
 frozendict==2.3.8         # via gt4py (pyproject.toml)
 gridtools-cpp==2.3.1      # via gt4py (pyproject.toml)
-hypothesis==6.84.3        # via -r requirements-dev.in, gt4py (pyproject.toml)
-identify==2.5.28          # via pre-commit
+hypothesis==6.86.1        # via -r requirements-dev.in, gt4py (pyproject.toml)
+identify==2.5.29          # via pre-commit
 idna==3.4                 # via requests
 imagesize==1.4.1          # via sphinx
 importlib-metadata==6.8.0  # via build, flask, sphinx
@@ -70,7 +70,7 @@ jinja2==3.1.2             # via flask, gt4py (pyproject.toml), sphinx
 jsonschema==4.19.0        # via nbformat
 jsonschema-specifications==2023.7.1  # via jsonschema
 jupyter-core==5.3.1       # via nbformat
-jupytext==1.15.1          # via -r requirements-dev.in
+jupytext==1.15.2          # via -r requirements-dev.in
 lark==1.1.7               # via gt4py (pyproject.toml)
 mako==1.2.4               # via gt4py (pyproject.toml)
 markdown-it-py==3.0.0     # via jupytext, mdit-py-plugins
@@ -117,8 +117,8 @@ pyyaml==6.0.1             # via dace, jupytext, pre-commit
 referencing==0.30.2       # via jsonschema, jsonschema-specifications
 requests==2.31.0          # via dace, sphinx
 restructuredtext-lint==1.4.0  # via flake8-rst-docstrings
-rpds-py==0.10.2           # via jsonschema, referencing
-ruff==0.0.288             # via -r requirements-dev.in
+rpds-py==0.10.3           # via jsonschema, referencing
+ruff==0.0.290             # via -r requirements-dev.in
 six==1.16.0               # via asttokens, astunparse, python-dateutil
 snowballstemmer==2.2.0    # via pydocstyle, sphinx
 sortedcontainers==2.4.0   # via hypothesis
@@ -136,8 +136,8 @@ tabulate==0.9.0           # via gt4py (pyproject.toml)
 toml==0.10.2              # via jupytext
 tomli==2.0.1              # via -r requirements-dev.in, black, build, coverage, flake8-pyproject, mypy, pip-tools, pyproject-api, pyproject-hooks, pytest, tox
 toolz==0.12.0             # via cytoolz
-tox==4.10.0               # via -r requirements-dev.in
-traitlets==5.9.0          # via jupyter-core, nbformat
+tox==4.11.3               # via -r requirements-dev.in
+traitlets==5.10.0         # via jupyter-core, nbformat
 types-aiofiles==23.2.0.0  # via types-all
 types-all==1.0.0          # via -r requirements-dev.in
 types-annoy==1.17.8.4     # via types-all
@@ -205,10 +205,10 @@ types-pysftp==0.2.17.6    # via types-all
 types-python-dateutil==2.8.19.14  # via types-all, types-datetimerange
 types-python-gflags==3.1.7.3  # via types-all
 types-python-slugify==8.0.0.3  # via types-all
-types-pytz==2023.3.0.1    # via types-all, types-tzlocal
+types-pytz==2023.3.1.0    # via types-all, types-tzlocal
 types-pyvmomi==8.0.0.6    # via types-all
 types-pyyaml==6.0.12.11   # via types-all
-types-redis==4.6.0.5      # via types-all
+types-redis==4.6.0.6      # via types-all
 types-requests==2.31.0.2  # via types-all
 types-retry==0.9.9.4      # via types-all
 types-routes==2.5.0       # via types-all
@@ -239,4 +239,4 @@ zipp==3.16.2              # via importlib-metadata, importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 pip==23.2.1               # via pip-tools
-setuptools==68.2.1        # via gt4py (pyproject.toml), nodeenv, pip-tools
+setuptools==68.2.2        # via gt4py (pyproject.toml), nodeenv, pip-tools
