@@ -51,6 +51,7 @@ if dace_iterator:
         roundtrip.executor,
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]
     + optional_processors,
     ids=lambda p: next_tests.get_processor_id(p),

@@ -87,6 +87,7 @@ if dace_iterator:
         (double_roundtrip.executor, True),
         (gtfn_cpu.run_gtfn, True),
         (gtfn_cpu.run_gtfn_imperative, True),
+        (gtfn_cpu.run_gtfn_with_temporaries, True),
         (gtfn.format_sourcecode, False),
     ]
     + optional_processors,
@@ -116,6 +117,7 @@ def program_processor_no_gtfn_exec(program_processor):
     if (
         program_processor[0] == gtfn_cpu.run_gtfn
         or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+        or program_processor[0] == gtfn_cpu.run_gtfn_with_temporaries
     ):
         pytest.xfail("gtfn backend not yet supported.")
     return program_processor

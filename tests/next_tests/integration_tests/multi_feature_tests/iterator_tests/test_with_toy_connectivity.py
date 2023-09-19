@@ -92,8 +92,8 @@ def sum_edges_to_vertices_reduce(in_edges):
     "stencil",
     [sum_edges_to_vertices, sum_edges_to_vertices_list_get_neighbors, sum_edges_to_vertices_reduce],
 )
-def test_sum_edges_to_vertices(program_processor_no_dace_exec, lift_mode, stencil):
-    program_processor, validate = program_processor_no_dace_exec
+def test_sum_edges_to_vertices(program_processor, lift_mode, stencil):
+    program_processor, validate = program_processor
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
@@ -115,8 +115,8 @@ def map_neighbors(in_edges):
     return reduce(plus, 0)(map_(plus)(neighbors(V2E, in_edges), neighbors(V2E, in_edges)))
 
 
-def test_map_neighbors(program_processor_no_gtfn_nor_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
+def test_map_neighbors(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
@@ -139,6 +139,7 @@ def map_make_const_list(in_edges):
 
 
 def test_map_make_const_list(program_processor_no_gtfn_nor_dace_exec, lift_mode):
+    # Not supported in DaCe backend: make_const_list
     program_processor, validate = program_processor_no_gtfn_nor_dace_exec
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], inp.dtype))
@@ -187,10 +188,10 @@ def sparse_stencil(non_sparse, inp):
     return reduce(lambda a, b, c: a + c, 0)(neighbors(V2E, non_sparse), deref(inp))
 
 
-def test_sparse_input_field(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+def test_sparse_input_field(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
-    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
+    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18, dtype=np.int32))
     inp = gtx.np_as_located_field(Vertex, V2EDim)(np.asarray([[1, 2, 3, 4]] * 9, dtype=np.int32))
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
@@ -210,10 +211,10 @@ def test_sparse_input_field(program_processor_no_dace_exec, lift_mode):
         assert np.allclose(out, ref)
 
 
-def test_sparse_input_field_v2v(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+def test_sparse_input_field_v2v(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
-    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18))
+    non_sparse = gtx.np_as_located_field(Edge)(np.zeros(18, dtype=np.int32))
     inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
@@ -272,7 +273,7 @@ def slice_twice_sparse_stencil(sparse):
 def test_slice_twice_sparse(program_processor, lift_mode):
     program_processor, validate = program_processor
     inp = gtx.np_as_located_field(Vertex, V2VDim, V2VDim)(v2v_arr[v2v_arr])
-    out = gtx.np_as_located_field(Vertex)(np.zeros([9]))
+    out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
     ref = v2v_arr[v2v_arr][:, 2, 1]
     run_processor(
@@ -408,7 +409,11 @@ def shift_sparse_stencil2(inp):
 
 def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
-    if program_processor == gtfn_cpu.run_gtfn or program_processor == gtfn_cpu.run_gtfn_imperative:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
         )  # observed in `cache.Strategy.PERSISTENT` mode

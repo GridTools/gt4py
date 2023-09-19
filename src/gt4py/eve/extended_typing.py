@@ -552,9 +552,12 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def is_protocol(type_: Type) -> bool:
+def _is_protocol(type_: type, /) -> bool:
     """Check if a type is a Protocol definition."""
     return getattr(type_, "_is_protocol", False)
+
+
+is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
 
 
 def get_partial_type_hints(

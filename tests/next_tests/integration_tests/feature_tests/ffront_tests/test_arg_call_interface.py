@@ -176,6 +176,8 @@ def test_call_scan_operator_from_field_operator(cartesian_case_no_dace_exec):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+        dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("Calling scan from field operator not fully supported.")
 

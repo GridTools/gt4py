@@ -194,8 +194,8 @@ class TestExecInfo:
             else:
                 assert stencil_info["total_run_cpp_time"] > stencil_info["run_cpp_time"]
 
-    @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
+    @given(data=hyp_st.data())
     def test_backcompatibility(self, data, backend, worker_id):
         # set backend as instance attribute
         self.backend = backend
@@ -237,8 +237,8 @@ class TestExecInfo:
         assert type(self.advection).__name__ not in exec_info
         assert type(self.diffusion).__name__ not in exec_info
 
-    @given(data=hyp_st.data())
     @pytest.mark.parametrize("backend", ALL_BACKENDS)
+    @given(data=hyp_st.data())
     def test_aggregate(self, data, backend, worker_id):
         # set backend as instance attribute
         self.backend = backend

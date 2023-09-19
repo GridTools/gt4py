@@ -29,7 +29,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -76,7 +75,7 @@ E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
-FieldValue: TypeAlias = gtx.Field | embedded.LocatedFieldImpl
+FieldValue: TypeAlias = gtx.Field
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
 ReferenceValue: TypeAlias = (
@@ -342,7 +341,9 @@ def allocate(
             Useful for shifted fields, which must start off bigger
             than the output field in the shifted dimension.
     """
-    sizes = extend_sizes(case.default_sizes | (sizes or {}), extend)
+    sizes = extend_sizes(
+        case.default_sizes | (sizes or {}), extend
+    )  # TODO: this should take into account the Domain of the allocated field
     arg_type = get_param_types(fieldview_prog)[name]
     if strategy is None:
         if name in ["out", RETURN]:
@@ -422,8 +423,8 @@ def verify(
     out_comp = out or inout
     out_comp_str = str(out_comp)
     assert out_comp is not None
-    if hasattr(out_comp, "array"):
-        out_comp_str = str(out_comp.array())
+    if hasattr(out_comp, "ndarray"):
+        out_comp_str = str(out_comp.ndarray)
     assert comparison(ref, out_comp), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
@@ -448,12 +449,12 @@ def verify_with_default_data(
         case: The test case.
         fieldview_prog: The field operator or program to be verified.
         ref: A callable which will be called with all the input arguments
-            of the fieldview code, after applying ``.array()`` on the fields.
+            of the fieldview code, after applying ``.ndarray`` on the fields.
         comparison: A comparison function, which will be called as
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.array() if hasattr(i, "array") else i for i in inps)
+    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
     verify(
         case,
         fieldop,

@@ -20,6 +20,7 @@ from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 
 
 def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -34,17 +35,9 @@ def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and arg.fun == itir.SymRef(id="neighbors")
 
 
-def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="lift")
-    )
-
-
 def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return _is_neighbors(arg) or (
-        _is_applied_lift(arg)
+        is_applied_lift(arg)
         and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
     )
 
@@ -67,7 +60,7 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
         assert isinstance(offset.value, str)
         return offset.value
     else:
-        assert _is_applied_lift(arg)
+        assert is_applied_lift(arg)
         assert _is_list_of_funcalls(arg.args)
         partial_offsets = [_get_partial_offset_tag(arg) for arg in arg.args]
         assert all(o == partial_offsets[0] for o in partial_offsets)

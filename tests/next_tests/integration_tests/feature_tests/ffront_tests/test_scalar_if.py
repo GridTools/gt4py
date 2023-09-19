@@ -53,6 +53,7 @@ def test_simple_if(condition, cartesian_case_no_dace_exec):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -77,6 +78,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case_no_dace_ex
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -107,7 +109,7 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case_no_dace_ex
         condition1,
         condition2,
         out=out,
-        ref=(a if condition1 else b).array() + (0 if condition2 else 1),
+        ref=(a if condition1 else b) + (0 if condition2 else 1),
     )
 
 
@@ -117,6 +119,7 @@ def test_local_if(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -142,6 +145,7 @@ def test_temporary_if(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -170,6 +174,7 @@ def test_if_return(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -198,6 +203,7 @@ def test_if_stmt_if_branch_returns(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -223,6 +229,7 @@ def test_if_stmt_else_branch_returns(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -250,6 +257,7 @@ def test_if_stmt_both_branches_return(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -277,6 +285,7 @@ def test_nested_if_stmt_conditional(cartesian_case_no_dace_exec, condition1, con
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -320,6 +329,7 @@ def test_nested_if(cartesian_case_no_dace_exec, condition):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 
@@ -361,6 +371,7 @@ def test_if_without_else(cartesian_case_no_dace_exec, condition1, condition2):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("If-stmts are not supported yet.")
 

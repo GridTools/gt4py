@@ -34,7 +34,7 @@ from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import (
     format_sourcecode as gtfn_format_sourcecode,
 )
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import (
@@ -62,8 +62,9 @@ def test_simple_indirection(program_processor_no_dace_exec):
 
     if program_processor in [
         type_check.check,
-        run_gtfn,
-        run_gtfn_imperative,
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
         gtfn_format_sourcecode,
     ]:
         pytest.xfail(
@@ -76,9 +77,9 @@ def test_simple_indirection(program_processor_no_dace_exec):
     cond = gtx.np_as_located_field(IDim)(rng.normal(size=shape))
     out = gtx.np_as_located_field(IDim)(np.zeros(shape, dtype=inp.dtype))
 
-    ref = np.zeros(shape)
+    ref = np.zeros(shape, dtype=inp.dtype)
     for i in range(shape[0]):
-        ref[i] = inp[i + 1 - 1] if cond[i] < 0 else inp[i + 1 + 1]
+        ref[i] = inp.ndarray[i + 1 - 1] if cond[i] < 0.0 else inp.ndarray[i + 1 + 1]
 
     run_processor(
         conditional_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
@@ -101,6 +102,9 @@ def direct_indirection(inp, cond):
 def test_direct_offset_for_indirection(program_processor_no_dace_exec):
     # Not supported in DaCe backend: shift offsets not literals
     program_processor, validate = program_processor_no_dace_exec
+
+    if program_processor == gtfn_cpu.run_gtfn_with_temporaries:
+        pytest.xfail("Dynamic offsets not supported in temporaries pass.")
 
     shape = [4]
     inp = gtx.np_as_located_field(IDim)(np.asarray(range(shape[0]), dtype=np.float64))

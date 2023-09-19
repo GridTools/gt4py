@@ -82,8 +82,8 @@ def test_shift_by_one_execution(cartesian_case):
         shift_by_one_program,
         in_field,
         out_field,
-        inout=out_field.array()[:-1],
-        ref=in_field.array()[1:-1],
+        inout=out_field[:-1],
+        ref=in_field[1:-1],
     )
 
 
@@ -191,7 +191,7 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case_no_
 
     cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
 
-    assert np.allclose((a.array()[1:], b.array()[1:]), (out_a.array()[1:], out_b.array()[1:]))
+    assert np.allclose((a[1:], b[1:]), (out_a[1:], out_b[1:]))
     assert out_a[0] == 0 and out_b[0] == 0
 
 

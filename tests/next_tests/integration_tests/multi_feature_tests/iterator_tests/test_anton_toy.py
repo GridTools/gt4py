@@ -18,7 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.unit_tests.conftest import (
     lift_mode,
@@ -82,7 +82,11 @@ def naive_lap(inp):
 def test_anton_toy(program_processor_no_dace_exec, lift_mode):
     program_processor, validate = program_processor_no_dace_exec
 
-    if program_processor in [run_gtfn, run_gtfn_imperative]:
+    if program_processor in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         from gt4py.next.iterator import transforms
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:

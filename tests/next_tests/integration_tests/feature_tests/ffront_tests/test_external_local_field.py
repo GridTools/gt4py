@@ -34,10 +34,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_external_local_field(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: reductions over non-field expressions
-    unstructured_case = unstructured_case_no_dace_exec
-
+def test_external_local_field(unstructured_case):
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
