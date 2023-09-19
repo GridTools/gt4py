@@ -35,11 +35,9 @@ from next_tests.integration_tests.cases import (
     JDim,
     KDim,
     cartesian_case,
-    cartesian_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
-    fieldview_backend_no_dace_exec,
 )
 
 
@@ -171,13 +169,12 @@ def test_call_field_operator_from_program(cartesian_case):
     )
 
 
-def test_call_scan_operator_from_field_operator(cartesian_case_no_dace_exec):
-    cartesian_case = cartesian_case_no_dace_exec
+@pytest.mark.uses_scan_in_field_operator
+def test_call_scan_operator_from_field_operator(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
-        dace_iterator.run_dace_iterator,
     ]:
         pytest.xfail("Calling scan from field operator not fully supported.")
 

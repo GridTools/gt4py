@@ -22,15 +22,7 @@ import pytest
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    IDim,
-    Ioff,
-    JDim,
-    cartesian_case,
-    cartesian_case_no_dace_exec,
-    fieldview_backend,
-    fieldview_backend_no_dace_exec,
-)
+from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
@@ -136,10 +128,8 @@ def test_calling_fo_from_fo_execution(cartesian_case):
     )
 
 
-def test_tuple_program_return_constructed_inside(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_program_return_constructed_inside(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
@@ -165,10 +155,8 @@ def test_tuple_program_return_constructed_inside(cartesian_case_no_dace_exec):
     assert np.allclose((a, b), (out_a, out_b))
 
 
-def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField
@@ -195,10 +183,8 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case_no_
     assert out_a[0] == 0 and out_b[0] == 0
 
 
-def test_tuple_program_return_constructed_inside_nested(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
         a: cases.IFloatField, b: cases.IFloatField, c: cases.IFloatField

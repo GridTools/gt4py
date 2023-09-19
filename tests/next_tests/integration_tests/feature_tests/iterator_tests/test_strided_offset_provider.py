@@ -18,13 +18,8 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.unit_tests.conftest import (
-    program_processor,
-    program_processor_no_dace_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 LocA = gtx.Dimension("LocA")
@@ -52,14 +47,9 @@ def fencil(size, out, inp):
     )
 
 
-def test_strided_offset_provider(program_processor_no_dace_exec):
-    program_processor, validate = program_processor_no_dace_exec
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("gtx.StridedNeighborOffsetProvider not implemented in bindings.")
+@pytest.mark.uses_strided_neighbor_offset
+def test_strided_offset_provider(program_processor):
+    program_processor, validate = program_processor
 
     LocA_size = 2
     max_neighbors = LocA2LocAB_offset_provider.max_neighbors

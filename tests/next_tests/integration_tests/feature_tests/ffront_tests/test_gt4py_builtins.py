@@ -32,13 +32,10 @@ from next_tests.integration_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    cartesian_case_no_dace_exec,
     unstructured_case,
-    unstructured_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
-    fieldview_backend_no_dace_exec,
     reduction_setup,
 )
 
@@ -97,10 +94,8 @@ def test_reduction_execution(unstructured_case):
     )
 
 
-def test_reduction_expression_in_call(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: make_const_list
-    unstructured_case = unstructured_case_no_dace_exec
-
+@pytest.mark.uses_constant_fields
+def test_reduction_expression_in_call(unstructured_case):
     @gtx.field_operator
     def reduce_expr(edge_f: cases.EField) -> cases.VField:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
@@ -131,10 +126,8 @@ def test_reduction_with_common_expression(unstructured_case):
     )
 
 
-def test_conditional_nested_tuple(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_conditional_nested_tuple(cartesian_case):
     @gtx.field_operator
     def conditional_nested_tuple(
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField

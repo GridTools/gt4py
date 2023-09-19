@@ -132,6 +132,5 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("compiler", "build_type", value="Debug")
-        dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
         sdfg(**expected_args)

@@ -260,9 +260,8 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_extra_dim_output(program_processor_no_gtfn_nor_dace_exec, stencil):
-    # Not supported in DaCe backend: tuple returns
-    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
+def test_field_of_extra_dim_output(program_processor_no_gtfn_exec, stencil):
+    program_processor, validate = program_processor_no_gtfn_exec
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

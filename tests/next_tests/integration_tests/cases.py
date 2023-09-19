@@ -43,7 +43,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Koff,
     Vertex,
     fieldview_backend,
-    fieldview_backend_no_dace_exec,
     reduction_setup,
 )
 
@@ -477,36 +476,9 @@ def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
 
 
 @pytest.fixture
-def cartesian_case_no_dace_exec(fieldview_backend_no_dace_exec):  # noqa: F811 # fixtures
-    yield Case(
-        fieldview_backend_no_dace_exec,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
-        default_sizes={IDim: 10, JDim: 10, KDim: 10},
-        grid_type=common.GridType.CARTESIAN,
-    )
-
-
-@pytest.fixture
 def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
         fieldview_backend,
-        offset_provider=reduction_setup.offset_provider,
-        default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
-    )
-
-
-@pytest.fixture
-def unstructured_case_no_dace_exec(
-    reduction_setup, fieldview_backend_no_dace_exec  # noqa: F811 # fixtures
-):
-    yield Case(
-        fieldview_backend_no_dace_exec,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,

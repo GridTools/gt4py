@@ -329,8 +329,22 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
-  'uses_origin: tests that use non-zero origin in field domain',
-  'uses_tuple_returns: tests that return a tuple of fields'
+  'uses_applied_shifts',
+  'uses_atlas_tables',
+  'uses_can_deref',
+  'uses_constant_fields',
+  'uses_dynamic_offsets',
+  'uses_if_stmts',
+  'uses_index_fields',
+  'uses_lift_expressions',
+  'uses_negative_modulo',
+  'uses_origin',
+  'uses_reduction_over_lift_expressions',
+  'uses_scan_in_field_operator',
+  'uses_strided_neighbor_offset',
+  'uses_tuple_args',
+  'uses_tuple_returns',
+  'uses_zero_dimensional_fields'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'

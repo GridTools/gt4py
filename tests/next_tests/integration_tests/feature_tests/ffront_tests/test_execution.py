@@ -49,13 +49,10 @@ from next_tests.integration_tests.cases import (
     V2EDim,
     Vertex,
     cartesian_case,
-    cartesian_case_no_dace_exec,
     unstructured_case,
-    unstructured_case_no_dace_exec,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
-    fieldview_backend_no_dace_exec,
     reduction_setup,
 )
 
@@ -162,10 +159,8 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
-def test_tuples(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
@@ -212,10 +207,8 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     )
 
 
-def test_scalar_arg_with_field(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
-    # Not supported in DaCe backend: index fields, constant fields
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_index_fields
+def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
@@ -273,6 +266,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
+@pytest.mark.uses_tuple_args
 def test_tuple_scalar_scan(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
     # Not supported in DaCe backend: tuple arguments
     cartesian_case = cartesian_case_no_dace_exec
@@ -302,10 +296,8 @@ def test_tuple_scalar_scan(cartesian_case_no_dace_exec):  # noqa: F811 # fixture
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
-def test_scalar_scan_vertical_offset(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
-    # Not supported in DaCe backend: scans
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_index_fields
+def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
         return inp
@@ -383,12 +375,8 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_offset_field(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: offset fields
-    cartesian_case = cartesian_case_no_dace_exec
-    if cartesian_case.backend == gtfn_cpu.run_gtfn_with_temporaries:
-        pytest.xfail("Dynamic offsets not supported in gtfn")
-
+@pytest.mark.uses_dynamic_offsets
+def test_offset_field(cartesian_case):
     ref = np.full(
         (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
     )
@@ -421,10 +409,8 @@ def test_offset_field(cartesian_case_no_dace_exec):
     assert np.allclose(out, ref)
 
 
-def test_nested_tuple_return(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
         a: cases.IField, b: cases.IField
@@ -439,10 +425,8 @@ def test_nested_tuple_return(cartesian_case_no_dace_exec):
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
-def test_nested_reduction(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: reductions over lift expressions
-    unstructured_case = unstructured_case_no_dace_exec
-
+@pytest.mark.uses_lift_expressions
+def test_nested_reduction(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
@@ -482,10 +466,8 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
-def test_tuple_return_2(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    unstructured_case = unstructured_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
@@ -503,10 +485,8 @@ def test_tuple_return_2(unstructured_case_no_dace_exec):
     )
 
 
-def test_tuple_with_local_field_in_reduction_shifted(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: tuples
-    unstructured_case = unstructured_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
         tup = e(V2E), v
@@ -523,10 +503,8 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case_no_dace_e
     )
 
 
-def test_tuple_arg(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple args
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_args
+def test_tuple_arg(cartesian_case):
     @gtx.field_operator
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
         return 3 * a[0][0] + a[0][1] + a[1]
@@ -556,9 +534,8 @@ def test_fieldop_from_scan(cartesian_case, forward):
     cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
-def test_solve_triag(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: scans
-    cartesian_case = cartesian_case_no_dace_exec
+@pytest.mark.uses_lift_expressions
+def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
@@ -628,10 +605,8 @@ def test_ternary_operator(cartesian_case, left, right):
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
-def test_ternary_operator_tuple(cartesian_case_no_dace_exec, left, right):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
         a: cases.IField, b: cases.IField, left: int32, right: int32
@@ -647,10 +622,8 @@ def test_ternary_operator_tuple(cartesian_case_no_dace_exec, left, right):
     )
 
 
-def test_ternary_builtin_neighbor_sum(unstructured_case_no_dace_exec):
-    # Not supported in DaCe backend: reductions over lift expressions
-    unstructured_case = unstructured_case_no_dace_exec
-
+@pytest.mark.uses_reduction_over_lift_expressions
+def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> cases.VField:
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
@@ -720,9 +693,8 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     )
 
 
-def test_scan_nested_tuple_input(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple args
-    cartesian_case = cartesian_case_no_dace_exec
+@pytest.mark.uses_tuple_args
+def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
     inp1 = gtx.np_as_located_field(KDim)(np.ones((k_size,)))
@@ -877,10 +849,8 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-def test_domain_tuple(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(
         a: cases.IJField, b: cases.IJField
@@ -939,10 +909,8 @@ def test_undefined_symbols(cartesian_case):
             return undefined_symbol
 
 
-def test_zero_dims_fields(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: zero-dimensional fields
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_zero_dimensional_fields
+def test_zero_dims_fields(cartesian_case):
     @gtx.field_operator
     def implicit_broadcast_scalar(inp: cases.EmptyField):
         return inp
@@ -970,10 +938,8 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
     )
 
 
-def test_tuple_unpacking(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
@@ -986,10 +952,8 @@ def test_tuple_unpacking(cartesian_case_no_dace_exec):
     )
 
 
-def test_tuple_unpacking_star_multi(cartesian_case_no_dace_exec):
-    # Not supported in DaCe backend: tuple returns
-    cartesian_case = cartesian_case_no_dace_exec
-
+@pytest.mark.uses_tuple_returns
+def test_tuple_unpacking_star_multi(cartesian_case):
     OutType = tuple[
         cases.IField,
         cases.IField,

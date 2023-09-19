@@ -40,15 +40,9 @@ from gt4py.next import (
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    IDim,
-    cartesian_case,
-    cartesian_case_no_dace_exec,
-    unstructured_case,
-)
+from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
-    fieldview_backend_no_dace_exec,
 )
 
 
@@ -90,8 +84,8 @@ def test_floordiv(cartesian_case):
     cases.verify_with_default_data(cartesian_case, floorDiv, ref=lambda inp1: inp1 // 2)
 
 
-def test_mod(cartesian_case_no_dace_exec):
-    cartesian_case = cartesian_case_no_dace_exec
+@pytest.mark.uses_negative_modulo
+def test_mod(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,

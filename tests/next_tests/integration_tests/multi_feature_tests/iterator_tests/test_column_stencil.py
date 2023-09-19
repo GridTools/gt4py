@@ -18,16 +18,9 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.formatters.gtfn import (
-    format_sourcecode as gtfn_format_sourcecode,
-)
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import (
-    lift_mode,
-    program_processor,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")

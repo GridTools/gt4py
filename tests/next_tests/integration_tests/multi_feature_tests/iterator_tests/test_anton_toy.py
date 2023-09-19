@@ -20,12 +20,7 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_ra
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn_cpu
 
-from next_tests.unit_tests.conftest import (
-    lift_mode,
-    program_processor,
-    program_processor_no_dace_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 @fundef
@@ -79,8 +74,9 @@ def naive_lap(inp):
     return out
 
 
-def test_anton_toy(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_origin
+def test_anton_toy(program_processor, lift_mode):
+    program_processor, validate = program_processor
 
     if program_processor in [
         gtfn_cpu.run_gtfn,

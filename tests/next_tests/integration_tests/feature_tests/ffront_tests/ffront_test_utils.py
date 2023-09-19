@@ -71,13 +71,6 @@ def fieldview_backend(request):
     decorator.DEFAULT_BACKEND = backup_backend
 
 
-@pytest.fixture
-def fieldview_backend_no_dace_exec(fieldview_backend):
-    if dace_iterator and fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("DaCe backend not yet supported.")
-    return fieldview_backend
-
-
 def debug_itir(tree):
     """Compare tree snippets while debugging."""
     from devtools import debug

@@ -54,7 +54,7 @@ from next_tests.unit_tests.conftest import (
     lift_mode,
     program_processor,
     program_processor_no_dace_exec,
-    program_processor_no_gtfn_nor_dace_exec,
+    program_processor_no_gtfn_exec,
     run_processor,
 )
 
@@ -138,9 +138,9 @@ def map_make_const_list(in_edges):
     return reduce(plus, 0)(map_(multiplies)(neighbors(V2E, in_edges), make_const_list(2)))
 
 
-def test_map_make_const_list(program_processor_no_gtfn_nor_dace_exec, lift_mode):
-    # Not supported in DaCe backend: make_const_list
-    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
+@pytest.mark.uses_constant_fields
+def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
@@ -457,8 +457,9 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(neighbors(V2V, lift(lambda x: reduce(sum_, 0)(deref(x)))(inp)))
 
 
-def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_nor_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_nor_dace_exec
+@pytest.mark.uses_lift_expressions
+def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode):
+    program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == gtfn.format_sourcecode:
         pytest.xfail("We cannot unroll a reduction on a sparse field only.")
         # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
