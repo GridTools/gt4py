@@ -11,15 +11,33 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import enum
+
+import pytest
 
 
-_feat_origin = "uses_origin"
-_feat_tuple_returns = "uses_tuple_returns"
-backend_unsupported_features = {
-    "dace": [
-        _feat_origin,
-        _feat_tuple_returns,
-    ],
+# Skip definitions
+class SkipMark(enum.Enum):
+    XFAIL = pytest.xfail
+    SKIP = pytest.skip
+
+
+# Skip messages (available format keys: 'marker', 'backend')
+UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
+
+# Processors
+DACE = "gt4py.next.program_processors.runners.dace_iterator.run_dace_iterator"
+
+# Test markers
+USES_ORIGIN = "uses_origin"
+USES_TUPLE_RETURNS = "uses_tuple_returns"
+
+# Skip matrix
+BACKEND_SKIP_TEST_MATRIX = {
+    DACE: [
+        (USES_ORIGIN, SkipMark.XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_TUPLE_RETURNS, SkipMark.XFAIL, UNSUPPORTED_MESSAGE),
+    ]
 }
 
 

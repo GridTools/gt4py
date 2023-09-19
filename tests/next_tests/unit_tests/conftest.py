@@ -94,17 +94,12 @@ if dace_iterator:
 )
 def program_processor(request):
     backend, _ = request.param
+    backend_id = f"{backend.__module__}.{backend.__qualname__}"
 
-    if dace_iterator and backend == dace_iterator.run_dace_iterator:
-        feat = next(
-            filter(
-                lambda x: request.node.get_closest_marker(x),
-                next_tests.backend_unsupported_features["dace"],
-            ),
-            None,
-        )
-        if feat:
-            pytest.xfail("Not supported in DaCe backend: " + feat)
+    if skip_cases := next_tests.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
+        for marker, skip_mark, msg in skip_cases:
+            if request.node.get_closest_marker(marker):
+                skip_mark(msg.format(marker=marker, backend=backend_id))
 
     return request.param
 
