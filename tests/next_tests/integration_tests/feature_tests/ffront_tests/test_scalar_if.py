@@ -64,7 +64,7 @@ def test_simple_if(condition, cartesian_case):
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
 @pytest.mark.uses_if_stmts
-def test_simple_if_conditional(condition1, condition2, cartesian_case_no_dace_exec):
+def test_simple_if_conditional(condition1, condition2, cartesian_case):
     @field_operator
     def simple_if(
         a: cases.IField,

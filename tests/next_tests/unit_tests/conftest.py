@@ -95,7 +95,7 @@ if dace_iterator:
 )
 def program_processor(request):
     backend, _ = request.param
-    backend_id = f"{backend.__module__}.{backend.__qualname__}"
+    backend_id = next_tests.get_processor_id(backend)
 
     if skip_cases := next_tests.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
         for marker, skip_mark, msg in skip_cases:

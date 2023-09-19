@@ -27,10 +27,10 @@ UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
 BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings"
 
 # Processors
-DACE = "gt4py.next.program_processors.runners.dace_iterator.run_dace_iterator"
-GTFN_CPU = "gt4py.next.program_processors.runners.gtfn_cpu.run_gtfn"
-GTFN_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn_cpu.run_gtfn_imperative"
-GTFN_CPU_WITH_TEMP = "gt4py.next.program_processors.runners.gtfn_cpu.run_gtfn_with_temporaries"
+DACE = "dace_iterator.run_dace_iterator"
+GTFN_CPU = "otf_compile_executor.run_gtfn"
+GTFN_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
+GTFN_CPU_WITH_TEMP = "otf_compile_executor.run_gtfn_with_temporaries"
 
 # Test markers
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
