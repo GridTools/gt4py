@@ -71,9 +71,9 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
-optional_processors = []
+OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    optional_processors.append((dace_iterator.run_dace_iterator, True))
+    OPTIONAL_PROCESSORS.append((dace_iterator.run_dace_iterator, True))
 
 
 @pytest.fixture(
@@ -90,7 +90,7 @@ if dace_iterator:
         (gtfn_cpu.run_gtfn_with_temporaries, True),
         (gtfn.format_sourcecode, False),
     ]
-    + optional_processors,
+    + OPTIONAL_PROCESSORS,
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
@@ -106,13 +106,6 @@ def program_processor(request):
 
 
 @pytest.fixture
-def program_processor_no_dace_exec(program_processor):
-    if dace_iterator and program_processor[0] == dace_iterator.run_dace_iterator:
-        pytest.xfail("DaCe backend not yet supported.")
-    return program_processor
-
-
-@pytest.fixture
 def program_processor_no_gtfn_exec(program_processor):
     if (
         program_processor[0] == gtfn_cpu.run_gtfn
@@ -120,18 +113,6 @@ def program_processor_no_gtfn_exec(program_processor):
         or program_processor[0] == gtfn_cpu.run_gtfn_with_temporaries
     ):
         pytest.xfail("gtfn backend not yet supported.")
-    return program_processor
-
-
-@pytest.fixture
-def program_processor_no_gtfn_nor_dace_exec(program_processor):
-    if (
-        program_processor[0] == gtfn_cpu.run_gtfn
-        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
-    ):
-        pytest.xfail("gtfn backend not yet supported.")
-    elif dace_iterator and program_processor[0] == dace_iterator.run_dace_iterator:
-        pytest.xfail("DaCe backend not yet supported.")
     return program_processor
 
 

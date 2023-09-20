@@ -53,7 +53,6 @@ from next_tests.toy_connectivity import (
 from next_tests.unit_tests.conftest import (
     lift_mode,
     program_processor,
-    program_processor_no_dace_exec,
     program_processor_no_gtfn_exec,
     run_processor,
 )
@@ -242,8 +241,9 @@ def slice_sparse_stencil(sparse):
     return list_get(1, deref(sparse))
 
 
-def test_slice_sparse(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_sparse_fields
+def test_slice_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
@@ -296,8 +296,9 @@ def shift_sliced_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_shift_sliced_sparse(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_sparse_fields
+def test_shift_sliced_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
@@ -323,8 +324,9 @@ def slice_shifted_sparse_stencil(sparse):
     return list_get(1, deref(shift(V2V, 0)(sparse)))
 
 
-def test_slice_shifted_sparse(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_sparse_fields
+def test_slice_shifted_sparse(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
 
@@ -355,8 +357,8 @@ def lift_stencil(inp):
     return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
 
 
-def test_lift(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+def test_lift(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = vertex_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(np.asarray(range(9)))
@@ -378,8 +380,9 @@ def sparse_shifted_stencil(inp):
     return list_get(2, list_get(0, neighbors(V2V, inp)))
 
 
-def test_shift_sparse_input_field(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_sparse_fields
+def test_shift_sparse_input_field(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = gtx.np_as_located_field(Vertex, V2VDim)(v2v_arr)
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], dtype=inp.dtype))
     ref = np.asarray(np.asarray(range(9)))
@@ -407,8 +410,9 @@ def shift_sparse_stencil2(inp):
     return list_get(1, list_get(3, neighbors(V2E, inp)))
 
 
-def test_shift_sparse_input_field2(program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_sparse_fields
+def test_shift_sparse_input_field2(program_processor, lift_mode):
+    program_processor, validate = program_processor
     if program_processor in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
@@ -457,7 +461,7 @@ def sparse_shifted_stencil_reduce(inp):
     return reduce(sum_, 0)(neighbors(V2V, lift(lambda x: reduce(sum_, 0)(deref(x)))(inp)))
 
 
-@pytest.mark.uses_lift_expressions
+@pytest.mark.uses_sparse_fields
 def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode):
     program_processor, validate = program_processor_no_gtfn_exec
     if program_processor == gtfn.format_sourcecode:

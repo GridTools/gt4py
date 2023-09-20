@@ -41,9 +41,9 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
-optional_processors = []
+OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    optional_processors.append(dace_iterator.run_dace_iterator)
+    OPTIONAL_PROCESSORS.append(dace_iterator.run_dace_iterator)
 
 
 @pytest.fixture(
@@ -53,7 +53,7 @@ if dace_iterator:
         gtfn_cpu.run_gtfn_imperative,
         gtfn_cpu.run_gtfn_with_temporaries,
     ]
-    + optional_processors,
+    + OPTIONAL_PROCESSORS,
     ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
