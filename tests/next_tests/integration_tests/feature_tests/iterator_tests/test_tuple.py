@@ -19,11 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
 
-from next_tests.unit_tests.conftest import (
-    program_processor,
-    program_processor_no_gtfn_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 IDim = gtx.Dimension("IDim")
@@ -260,8 +256,8 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
     "stencil",
     [tuple_output1, tuple_output2],
 )
-def test_field_of_extra_dim_output(program_processor_no_gtfn_exec, stencil):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_field_of_extra_dim_output(program_processor, stencil):
+    program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -393,8 +389,8 @@ def test_tuple_of_tuple_of_field_input(program_processor):
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
-def test_field_of_2_extra_dim_input(program_processor_no_gtfn_exec):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_field_of_2_extra_dim_input(program_processor):
+    program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

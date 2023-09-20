@@ -86,15 +86,6 @@ def test_floordiv(cartesian_case):
 
 @pytest.mark.uses_negative_modulo
 def test_mod(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail(
-            "Modulo not properly supported for negative numbers."
-        )  # see https://github.com/GridTools/gt4py/issues/1219
-
     @gtx.field_operator
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2

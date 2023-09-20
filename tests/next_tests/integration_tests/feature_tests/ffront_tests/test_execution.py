@@ -266,15 +266,8 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
-@pytest.mark.uses_tuple_args
+@pytest.mark.uses_scan_in_field_operator
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Scalar tuple arguments are not supported in gtfn yet.")
-
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
         state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
@@ -423,7 +416,7 @@ def test_nested_tuple_return(cartesian_case):
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
-@pytest.mark.uses_lift_expressions
+@pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField) -> cases.EField:
