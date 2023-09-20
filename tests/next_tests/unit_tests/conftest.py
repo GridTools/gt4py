@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 
 import pytest
@@ -25,21 +24,16 @@ from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runti
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
 from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
+from tests.next_tests import exclusion_matrices
 
 
 try:
-    import dace
-
-    # import dace_iterator only if dace is available
     from gt4py.next.program_processors.runners import dace_iterator
 except ModuleNotFoundError as e:
     if "dace" in str(e):
         dace_iterator = None
     else:
         raise e
-finally:
-    if dace_iterator:
-        del dace
 
 import next_tests
 
@@ -97,10 +91,9 @@ def program_processor(request):
     backend, _ = request.param
     backend_id = next_tests.get_processor_id(backend)
 
-    if skip_cases := next_tests.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
-        for marker, skip_mark, msg in skip_cases:
-            if request.node.get_closest_marker(marker):
-                skip_mark(msg.format(marker=marker, backend=backend_id))
+    for marker, skip_mark, msg in exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
+        if request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=backend_id))
 
     return request.param
 
