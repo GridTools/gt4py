@@ -25,8 +25,8 @@ BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings
 # Processors
 DACE = "dace_iterator.run_dace_iterator"
 GTFN_CPU = "otf_compile_executor.run_gtfn"
-GTFN_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
-GTFN_CPU_WITH_TEMP = "otf_compile_executor.run_gtfn_with_temporaries"
+GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
+GTFN_CPU_WITH_TEMPORARIES = "otf_compile_executor.run_gtfn_with_temporaries"
 
 # Test markers
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
@@ -74,8 +74,8 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
     GTFN_CPU: GTFN_SKIP_TEST_LIST,
-    GTFN_IMPERATIVE: GTFN_SKIP_TEST_LIST,
-    GTFN_CPU_WITH_TEMP: GTFN_SKIP_TEST_LIST
+    GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
+    GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
     + [
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
