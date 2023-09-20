@@ -267,9 +267,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 
 @pytest.mark.uses_tuple_args
-def test_tuple_scalar_scan(cartesian_case_no_dace_exec):  # noqa: F811 # fixtures
-    # Not supported in DaCe backend: tuple arguments
-    cartesian_case = cartesian_case_no_dace_exec
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
