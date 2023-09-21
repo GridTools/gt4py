@@ -134,7 +134,7 @@ def nabla(
     )
 
 
-@pytest.mark.uses_atlas_tables
+@pytest.mark.requires_atlas
 def test_compute_zavgS(program_processor, lift_mode):
     program_processor, validate = program_processor
     setup = nabla_setup()
@@ -193,7 +193,7 @@ def compute_zavgS2_fencil(
     )
 
 
-@pytest.mark.uses_atlas_tables
+@pytest.mark.requires_atlas
 def test_compute_zavgS2(program_processor, lift_mode):
     program_processor, validate = program_processor
     setup = nabla_setup()
@@ -230,7 +230,7 @@ def test_compute_zavgS2(program_processor, lift_mode):
         assert_close(1000788897.3202186, np.max(zavgS[1]))
 
 
-@pytest.mark.uses_atlas_tables
+@pytest.mark.requires_atlas
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:
@@ -290,7 +290,7 @@ def nabla2(
     )
 
 
-@pytest.mark.uses_atlas_tables
+@pytest.mark.requires_atlas
 def test_nabla2(program_processor, lift_mode):
     program_processor, validate = program_processor
     setup = nabla_setup()
@@ -370,7 +370,6 @@ def nabla_sign(n_nodes, out_MXX, out_MYY, pp, S_MXX, S_MYY, vol, node_index, is_
 
 
 @pytest.mark.requires_atlas
-@pytest.mark.uses_atlas_tables
 def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:

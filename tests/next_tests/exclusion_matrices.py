@@ -33,8 +33,8 @@ GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
 GTFN_CPU_WITH_TEMPORARIES = "otf_compile_executor.run_gtfn_with_temporaries"
 
 # Test markers
+REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
-USES_ATLAS_TABLES = "uses_atlas_tables"
 USES_CAN_DEREF = "uses_can_deref"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
@@ -53,8 +53,8 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 
 # Common list of feature markers to skip
 GTFN_SKIP_TEST_LIST = [
+    (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_ATLAS_TABLES, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
