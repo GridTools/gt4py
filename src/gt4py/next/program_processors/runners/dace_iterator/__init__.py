@@ -12,18 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-try:
-    import dace
-except ModuleNotFoundError:
-    import sys
-
-    if "pytest" in sys.modules:
-        raise
-    print("Error, module dace not found", file=sys.stderr)
-    exit()
-
 from typing import Any, Mapping, Sequence
 
+import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
