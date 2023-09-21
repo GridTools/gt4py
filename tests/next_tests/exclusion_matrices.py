@@ -14,6 +14,10 @@
 import pytest
 
 
+"""
+Contains definition of test-exclusion matrices, see ADR 15.
+"""
+
 # Skip definitions
 XFAIL = pytest.xfail
 SKIP = pytest.skip
@@ -22,7 +26,7 @@ SKIP = pytest.skip
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
 BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings"
 
-# Processors
+# Processor ids as returned by next_tests.get_processor_id()
 DACE = "dace_iterator.run_dace_iterator"
 GTFN_CPU = "otf_compile_executor.run_gtfn"
 GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
@@ -57,7 +61,10 @@ GTFN_SKIP_TEST_LIST = [
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
 ]
 
-# Skip matrix
+"""
+Skip matrix, contains for each backend processor a list of tuples with following fields:
+(<test_marker>, <skip_definition, <skip_message>)
+"""
 BACKEND_SKIP_TEST_MATRIX = {
     DACE: GTFN_SKIP_TEST_LIST
     + [

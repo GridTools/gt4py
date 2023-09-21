@@ -91,6 +91,7 @@ def program_processor(request):
     backend, _ = request.param
     backend_id = next_tests.get_processor_id(backend)
 
+    """See ADR 15."""
     for marker, skip_mark, msg in exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
