@@ -138,8 +138,6 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
-            assert isinstance(closure.output, itir.SymRef)
-
             # filter out arguments with scalar type, because they are passed as symbols
             input_names = [
                 str(inp.id)
@@ -147,7 +145,13 @@ class ItirToSDFG(eve.NodeVisitor):
                 if isinstance(self.storage_types[inp.id], ts.FieldType)
             ]
             connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-            output_names = [str(closure.output.id)]
+
+            if isinstance(closure.output, itir.SymRef):
+                output_names = [str(closure.output.id)]
+            else:
+                assert isinstance(closure.output, FunCall)
+                assert closure.output.fun.id == "make_tuple"
+                output_names = [str(arg.id) for arg in closure.output.args]
 
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg = self.visit(closure, array_table=program_sdfg.arrays)
@@ -204,14 +208,19 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
-        assert ItirToSDFG._check_no_lifts(node)
-        assert ItirToSDFG._check_shift_offsets_are_literals(node)
-        assert isinstance(node.output, itir.SymRef)
+        assert ItirToSDFG._check_no_lifts(node), "Lifts not supported"
+        assert ItirToSDFG._check_shift_offsets_are_literals(node), "Shift offsets must be literals"
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-        output_name = str(node.output.id)
+
+        if isinstance(node.output, itir.SymRef):
+            output_names = [str(node.output.id)]
+        else:
+            assert isinstance(node.output, FunCall)
+            assert node.output.fun.id == "make_tuple"
+            output_names = [str(arg.id) for arg in node.output.args]
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
@@ -219,8 +228,8 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
 
         # Add DaCe arrays for inputs, output and connectivities to closure SDFG.
-        for name in [*input_names, *conn_names, output_name]:
-            assert name not in closure_sdfg.arrays or (name in input_names and name == output_name)
+        for name in [*input_names, *conn_names, *output_names]:
+            assert name not in closure_sdfg.arrays or (name in input_names and name in output_names)
             if name in closure_sdfg.arrays:
                 # in/out parameter, container already added for in parameter
                 continue
@@ -264,16 +273,23 @@ class ItirToSDFG(eve.NodeVisitor):
         input_memlets = [
             create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_access_names
         ]
-        conn_memlet = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
+        conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
+        output_memlets = []
+        nsdfg_output_desc = {}
         transient_to_arg_name_mapping = {}
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
-        nsdfg_output_name = unique_var_name()
-        output_descriptor = closure_sdfg.arrays[output_name]
-        transient_to_arg_name_mapping[nsdfg_output_name] = output_name
+        for name in output_names:
+            nsdfg_output_name = unique_var_name()
+            output_descriptor = closure_sdfg.arrays[name]
+            nsdfg_output_desc[nsdfg_output_name] = output_descriptor
+            transient_to_arg_name_mapping[nsdfg_output_name] = name
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
+            assert len(transient_to_arg_name_mapping) == 1, "Scan does not support multiple outputs"
+            nsdfg_output_name, output_name = next(iter(transient_to_arg_name_mapping.items()))
+
             nsdfg, map_domain, scan_dim_index = self._visit_scan_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain, nsdfg_output_name
             )
@@ -290,34 +306,37 @@ class ItirToSDFG(eve.NodeVisitor):
                 transient=True,
             )
 
-            output_memlet = create_memlet_at(
-                output_name,
-                tuple(
-                    f"i_{dim}"
-                    if f"i_{dim}" in map_domain
-                    else f"0:{output_descriptor.shape[scan_dim_index]}"
-                    for dim, _ in closure_domain
-                ),
-            )
+            output_memlets = [
+                create_memlet_at(
+                    output_name,
+                    tuple(
+                        f"i_{dim}"
+                        if f"i_{dim}" in map_domain
+                        else f"0:{output_descriptor.shape[scan_dim_index]}"
+                        for dim, _ in closure_domain
+                    ),
+                )
+            ]
         else:
             nsdfg, map_domain, results = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
             )
-            assert len(results) == 1
 
             output_subset = "0"
 
-            closure_sdfg.add_scalar(
-                nsdfg_output_name,
-                dtype=output_descriptor.dtype,
-                transient=True,
-            )
-
-            output_memlet = create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
+            for nsdfg_output_name, output_name in transient_to_arg_name_mapping.items():
+                closure_sdfg.add_scalar(
+                    nsdfg_output_name,
+                    dtype=nsdfg_output_desc[nsdfg_output_name].dtype,
+                    transient=True,
+                )
+                output_memlets.append(
+                    create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
+                )
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
-        output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, [output_memlet])}
-        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlet)}
+        output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, output_memlets)}
+        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlets)}
 
         array_mapping = {**input_mapping, **conn_mapping}
         symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, array_mapping)

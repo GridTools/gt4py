@@ -162,9 +162,6 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
 
 
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
-
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
@@ -421,9 +418,6 @@ def test_offset_field(cartesian_case):
 
 
 def test_nested_tuple_return(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
-
     @gtx.field_operator
     def pack_tuple(
         a: cases.IField, b: cases.IField
@@ -504,7 +498,7 @@ def test_tuple_return_2(unstructured_case):
 
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuples")
+        pytest.xfail("Not supported in DaCe backend: make_const_list")
 
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
