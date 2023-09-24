@@ -153,7 +153,7 @@ class TemporaryExtractionPredicate:
     """
     Construct a callable that determines if a lift expr can and should be extracted to a temporary.
 
-    The class optionally takes a heuristics that can restrict the extraction.
+    The class optionally takes a heuristic that can restrict the extraction.
     """
 
     heuristics: Optional[Callable[[ir.Expr], bool]] = None
