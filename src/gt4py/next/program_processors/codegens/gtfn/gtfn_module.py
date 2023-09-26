@@ -118,7 +118,7 @@ class GTFNTranslationStep(
 
         for name, connectivity in offset_provider.items():
             if isinstance(connectivity, Connectivity):
-                if connectivity.index_type not in [np.int32, np.int64]:
+                if connectivity.index_type not in [np.dtypes.Int64DType(), np.dtypes.Int32DType()]:
                     raise ValueError(
                         "Neighbor table indices must be of type `np.int32` or `np.int64`."
                     )
