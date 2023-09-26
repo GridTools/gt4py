@@ -23,7 +23,7 @@ from dace.transformation.dataflow import MapFusion
 from dace.transformation.passes.prune_symbols import RemoveUnusedSymbols
 
 import gt4py.eve.codegen
-from gt4py.next import Dimension, type_inference as next_typing
+from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda
@@ -702,18 +702,31 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         element = tail[1].value
         assert isinstance(element, int)
 
-        table: NeighborTableOffsetProvider = self.offset_provider[offset]
-        shifted_dim = table.origin_axis.value
-        target_dim = table.neighbor_axis.value
+        if isinstance(self.offset_provider[offset], NeighborTableOffsetProvider):
+            table = self.offset_provider[offset]
+            shifted_dim = table.origin_axis.value
+            target_dim = table.neighbor_axis.value
 
-        conn = self.context.state.add_access(connectivity_identifier(offset))
+            conn = self.context.state.add_access(connectivity_identifier(offset))
 
-        args = [
-            ValueExpr(conn, table.table.dtype),
-            ValueExpr(iterator.indices[shifted_dim], dace.int64),
-        ]
-        internals = [f"{arg.value.data}_v" for arg in args]
-        expr = f"{internals[0]}[{internals[1]}, {element}]"
+            args = [
+                ValueExpr(conn, table.table.dtype),
+                ValueExpr(iterator.indices[shifted_dim], dace.int64),
+            ]
+
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]}[{internals[1]}, {element}]"
+        else:
+            offset_provider = self.offset_provider[offset]
+            assert isinstance(offset_provider, StridedNeighborOffsetProvider)
+
+            shifted_dim = offset_provider.origin_axis.value
+            target_dim = offset_provider.neighbor_axis.value
+            offset_value = iterator.indices[shifted_dim]
+            args = [ValueExpr(offset_value, dace.int64)]
+            internals = [f"{offset_value.data}_v"]
+            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {element}"
+
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"
         )[0].value
