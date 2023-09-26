@@ -15,8 +15,6 @@
 import numpy as np
 import pytest
 
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
-
 
 pytest.importorskip("atlas4py")
 
@@ -136,15 +134,9 @@ def nabla(
     )
 
 
+@pytest.mark.requires_atlas
 def test_compute_zavgS(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-        run_dace_iterator,
-    ]:
-        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
@@ -201,15 +193,9 @@ def compute_zavgS2_fencil(
     )
 
 
+@pytest.mark.requires_atlas
 def test_compute_zavgS2(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-        run_dace_iterator,
-    ]:
-        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     pp = gtx.np_as_located_field(Vertex)(setup.input_field)
@@ -244,15 +230,9 @@ def test_compute_zavgS2(program_processor, lift_mode):
         assert_close(1000788897.3202186, np.max(zavgS[1]))
 
 
+@pytest.mark.requires_atlas
 def test_nabla(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-        run_dace_iterator,
-    ]:
-        pytest.xfail("TODO: bindings don't support Atlas tables")
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
     setup = nabla_setup()
@@ -310,15 +290,9 @@ def nabla2(
     )
 
 
+@pytest.mark.requires_atlas
 def test_nabla2(program_processor, lift_mode):
     program_processor, validate = program_processor
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-        run_dace_iterator,
-    ]:
-        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     sign = gtx.np_as_located_field(Vertex, V2EDim)(setup.sign_field)
@@ -400,13 +374,6 @@ def test_nabla_sign(program_processor, lift_mode):
     program_processor, validate = program_processor
     if lift_mode != LiftMode.FORCE_INLINE:
         pytest.xfail("test is broken due to bad lift semantics in iterator IR")
-    if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
-        run_dace_iterator,
-    ]:
-        pytest.xfail("TODO: bindings don't support Atlas tables")
     setup = nabla_setup()
 
     is_pole_edge = gtx.np_as_located_field(Edge)(setup.is_pole_edge_field)
