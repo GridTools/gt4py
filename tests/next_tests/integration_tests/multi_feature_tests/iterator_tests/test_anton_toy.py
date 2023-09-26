@@ -19,7 +19,6 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn_cpu
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
@@ -75,6 +74,7 @@ def naive_lap(inp):
     return out
 
 
+@pytest.mark.uses_origin
 def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
@@ -87,8 +87,6 @@ def test_anton_toy(program_processor, lift_mode):
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:
             pytest.xfail("TODO: issue with temporaries that crashes the application")
-    if program_processor == run_dace_iterator:
-        pytest.xfail("TODO: not supported in DaCe backend")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
