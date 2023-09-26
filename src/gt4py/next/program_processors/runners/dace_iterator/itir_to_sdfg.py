@@ -86,6 +86,16 @@ def get_scan_dim(
     )
 
 
+def get_output_names(closure: itir.StencilClosure):
+    if isinstance(closure.output, itir.SymRef):
+        return [str(closure.output.id)]
+    else:
+        assert isinstance(closure.output, FunCall)
+        assert isinstance(closure.output.fun, SymRef)
+        assert closure.output.fun.id == "make_tuple"
+        return [str(arg.id) for arg in closure.output.args if isinstance(arg, SymRef)]
+
+
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storage_types: dict[str, ts.TypeSpec]
@@ -145,13 +155,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 if isinstance(self.storage_types[inp.id], ts.FieldType)
             ]
             connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-
-            if isinstance(closure.output, itir.SymRef):
-                output_names = [str(closure.output.id)]
-            else:
-                assert isinstance(closure.output, FunCall)
-                assert closure.output.fun.id == "make_tuple"
-                output_names = [str(arg.id) for arg in closure.output.args]
+            output_names = get_output_names(closure)
 
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg = self.visit(closure, array_table=program_sdfg.arrays)
@@ -214,13 +218,7 @@ class ItirToSDFG(eve.NodeVisitor):
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-
-        if isinstance(node.output, itir.SymRef):
-            output_names = [str(node.output.id)]
-        else:
-            assert isinstance(node.output, FunCall)
-            assert node.output.fun.id == "make_tuple"
-            output_names = [str(arg.id) for arg in node.output.args]
+        output_names = get_output_names(node)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
@@ -280,11 +278,11 @@ class ItirToSDFG(eve.NodeVisitor):
         transient_to_arg_name_mapping = {}
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
-        for name in output_names:
+        for output_name in output_names:
             nsdfg_output_name = unique_var_name()
-            output_descriptor = closure_sdfg.arrays[name]
+            output_descriptor = closure_sdfg.arrays[output_name]
             nsdfg_output_desc[nsdfg_output_name] = output_descriptor
-            transient_to_arg_name_mapping[nsdfg_output_name] = name
+            transient_to_arg_name_mapping[nsdfg_output_name] = output_name
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
             assert len(transient_to_arg_name_mapping) == 1, "Scan does not support multiple outputs"
