@@ -209,7 +209,7 @@ def allocate_cpu(
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
-    return buffer.buffer, buffer.ndarray
+    return buffer.buffer, cast(np.ndarray, buffer.ndarray)
 
 
 def allocate_gpu(
@@ -219,7 +219,7 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-    device = core_defs.Device(
+    device = core_defs.Device(  # type: ignore[type-var]
         core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
     )
     buffer = allocators.allocate(
@@ -230,4 +230,4 @@ def allocate_gpu(
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
-    return buffer.buffer, buffer.ndarray
+    return buffer.buffer, cast("cp.ndarray", buffer.ndarray)

@@ -385,8 +385,31 @@ class DeviceType(enum.Enum):
     ROCM = 10
 
 
+CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
+CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
+CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
+OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
+VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
+MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
+VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
+ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+
+
+DeviceTypeT = TypeVar(
+    "DeviceTypeT",
+    CPUDeviceTyping,
+    CUDADeviceTyping,
+    CPUPinnedDeviceTyping,
+    OpenCLDeviceTyping,
+    VulkanDeviceTyping,
+    MetalDeviceTyping,
+    VPIDeviceTyping,
+    ROCMDeviceTyping,
+)
+
+
 @dataclasses.dataclass(frozen=True)
-class Device:
+class Device(Generic[DeviceTypeT]):
     """
     Representation of a computing device.
 
@@ -397,10 +420,10 @@ class Device:
     core number, for `DeviceType.CUDA` it could be the CUDA device number, etc.
     """
 
-    device_type: DeviceType
+    device_type: DeviceTypeT
     device_id: int
 
-    def __iter__(self) -> Iterator[DeviceType | int]:
+    def __iter__(self) -> Iterator[DeviceTypeT | int]:
         yield self.device_type
         yield self.device_id
 
@@ -409,7 +432,7 @@ class Device:
 SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
 
 
-class NDArrayObjectProto(Protocol):
+class NDArrayObject(Protocol):
     @property
     def ndim(self) -> int:
         ...
@@ -422,7 +445,7 @@ class NDArrayObjectProto(Protocol):
     def dtype(self) -> Any:
         ...
 
-    def __getitem__(self, item: SliceLike) -> NDArrayObject:
+    def __getitem__(self, item: Any) -> NDArrayObject:
         ...
 
     def __abs__(self) -> NDArrayObject:
@@ -434,38 +457,32 @@ class NDArrayObjectProto(Protocol):
     def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __radd__(self, other: Any) -> NDArrayObject:
         ...
 
     def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rsub__(self, other: Any) -> NDArrayObject:
         ...
 
     def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rmul__(self, other: Any) -> NDArrayObject:
         ...
 
     def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rfloordiv__(self, other: Any) -> NDArrayObject:
         ...
 
     def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rtruediv__(self, other: Any) -> NDArrayObject:
         ...
 
     def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
-
-
-NDArrayObject = Union[npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto]
-NDArrayObjectT = TypeVar(
-    "NDArrayObjectT", npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto, covariant=True
-)

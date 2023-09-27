@@ -12,7 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import cupy as cp
 import numpy as np
 
 from gt4py import next as gtx

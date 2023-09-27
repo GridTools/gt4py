@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
-from typing import Optional, Sequence
+from typing import Optional, Sequence, cast
 
 import numpy as np
 
@@ -71,14 +71,13 @@ class DefaultCPUAllocator(FieldAllocatorInterface):
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     ) -> core_defs.NDArrayObject:
         shape = domain.shape
-        device = core_defs.Device(core_defs.DeviceType.CPU, device_id)
         layout_map = _horizontal_first_layout_map(domain.dims)
         byte_alignment = 64  # TODO check
         assert aligned_index is None  # TODO
 
         return (
-            core_allocators.NumPyLikeArrayBufferAllocator(core_defs.DeviceType.CPU, np)
-            .allocate(shape, dtype, layout_map, device, byte_alignment, aligned_index)
+            core_allocators.NDArrayBufferAllocator(core_defs.DeviceType.CPU, np)
+            .allocate(shape, dtype, layout_map, device_id, byte_alignment, aligned_index)
             .ndarray
         )
 
@@ -96,13 +95,12 @@ class DefaultCUDAAllocator(FieldAllocatorInterface):
         except ImportError:
             raise RuntimeError("CuPy is not available.")
         shape = domain.shape
-        device = core_defs.Device(core_defs.DeviceType.CUDA, device_id)  # TODO ROCm
         layout_map = _horizontal_first_layout_map(domain.dims)
         byte_alignment = 128  # TODO double check
         assert aligned_index is None  # TODO
 
         return (
-            core_allocators.NumPyLikeArrayBufferAllocator(core_defs.DeviceType.CUDA, cp)
-            .allocate(shape, dtype, layout_map, device, byte_alignment, aligned_index)
+            core_allocators.NDArrayBufferAllocator(core_defs.DeviceType.CUDA, cp)
+            .allocate(shape, dtype, layout_map, device_id, byte_alignment, aligned_index)
             .ndarray
         )
