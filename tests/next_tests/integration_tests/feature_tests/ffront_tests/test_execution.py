@@ -68,7 +68,6 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
-@pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
@@ -457,7 +456,6 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -476,7 +474,7 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
-@pytest.mark.uses_const_fields
+@pytest.mark.uses_constant_fields
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -840,7 +838,6 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(
@@ -929,7 +926,6 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
@@ -943,7 +939,6 @@ def test_tuple_unpacking(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_unpacking_star_multi(cartesian_case):
     OutType = tuple[
         cases.IField,

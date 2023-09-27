@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional, cast
+from typing import Any, Optional, Sequence, cast
 
 import dace
 
@@ -86,9 +86,27 @@ def get_scan_dim(
     )
 
 
-def get_output_names(closure: itir.StencilClosure):
+def get_member_names(name: str, t: ts.TupleType) -> Sequence[str]:
+    members: list[str] = []
+    for idx, m_type in enumerate(t.types):
+        m_name = f"{name}_{idx}"
+        if isinstance(m_type, ts.TupleType):
+            members += get_member_names(m_name, m_type)
+        else:
+            members.append(m_name)
+    return members
+
+
+def get_output_names(
+    closure: itir.StencilClosure, storage_types: dict[str, ts.TypeSpec]
+) -> Sequence[str]:
     if isinstance(closure.output, itir.SymRef):
-        return [str(closure.output.id)]
+        name = str(closure.output.id)
+        storage_type = storage_types[name]
+        if isinstance(storage_type, ts.TupleType):
+            return get_member_names(name, storage_type)
+        else:
+            return [name]
     else:
         assert isinstance(closure.output, FunCall)
         assert isinstance(closure.output.fun, SymRef)
@@ -123,6 +141,9 @@ class ItirToSDFG(eve.NodeVisitor):
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
         elif isinstance(type_, ts.ScalarType):
             sdfg.add_symbol(name, as_dace_type(type_))
+        elif isinstance(type_, ts.TupleType):
+            for idx, ttype_ in enumerate(type_.types):
+                self.add_storage(sdfg, f"{name}_{idx}", ttype_)
         else:
             raise NotImplementedError()
         self.storage_types[name] = type_
@@ -155,7 +176,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 if isinstance(self.storage_types[inp.id], ts.FieldType)
             ]
             connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-            output_names = get_output_names(closure)
+            output_names = get_output_names(closure, self.storage_types)
 
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg = self.visit(closure, array_table=program_sdfg.arrays)
@@ -218,7 +239,7 @@ class ItirToSDFG(eve.NodeVisitor):
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
-        output_names = get_output_names(node)
+        output_names = get_output_names(node, self.storage_types)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
@@ -238,6 +259,8 @@ class ItirToSDFG(eve.NodeVisitor):
                     strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
                 )
+            else:
+                assert isinstance(self.storage_types[name], ts.ScalarType)
 
         # Get output domain of the closure
         program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}

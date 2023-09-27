@@ -50,7 +50,13 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
 
 
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
-    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
+    t = {}
+    for name, arg in zip(params, args):
+        if isinstance(arg, tuple):
+            t.update({f"{name.id}_{idx}": convert_arg(targ) for idx, targ in enumerate(arg)})
+        else:
+            t[name.id] = convert_arg(arg)
+    return t
 
 
 def get_connectivity_args(
@@ -103,7 +109,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
@@ -113,7 +119,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_stirdes,
+        **dace_conn_strides,
     }
     expected_args = {
         key: value
