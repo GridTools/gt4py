@@ -158,7 +158,6 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
@@ -399,7 +398,6 @@ def test_offset_field(cartesian_case):
     assert np.allclose(out, ref)
 
 
-@pytest.mark.uses_tuple_returns
 def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -594,7 +592,7 @@ def test_ternary_operator(cartesian_case, left, right):
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_expressions_with_tuples
 def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
@@ -651,7 +649,7 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_with_tuples
 def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")

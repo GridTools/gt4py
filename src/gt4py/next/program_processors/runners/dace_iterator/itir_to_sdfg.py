@@ -86,15 +86,30 @@ def get_scan_dim(
     )
 
 
-def get_member_names(name: str, t: ts.TupleType) -> Sequence[str]:
+def get_member_args(name: str, t: ts.TupleType) -> Sequence[str]:
     members: list[str] = []
     for idx, m_type in enumerate(t.types):
         m_name = f"{name}_{idx}"
         if isinstance(m_type, ts.TupleType):
-            members += get_member_names(m_name, m_type)
+            members += get_member_args(m_name, m_type)
         else:
             members.append(m_name)
     return members
+
+
+def unpack_tuple_members(fun_node: FunCall) -> Sequence[str]:
+    names = []
+    assert isinstance(fun_node.fun, SymRef)
+    assert fun_node.fun.id == "make_tuple"
+    for arg in fun_node.args:
+        if isinstance(arg, Literal):
+            names.append(arg.value)
+        elif isinstance(arg, SymRef):
+            names.append(str(arg.id))
+        else:
+            assert isinstance(arg, FunCall)
+            names += unpack_tuple_members(arg)
+    return names
 
 
 def get_output_names(
@@ -104,14 +119,12 @@ def get_output_names(
         name = str(closure.output.id)
         storage_type = storage_types[name]
         if isinstance(storage_type, ts.TupleType):
-            return get_member_names(name, storage_type)
+            return get_member_args(name, storage_type)
         else:
             return [name]
     else:
         assert isinstance(closure.output, FunCall)
-        assert isinstance(closure.output.fun, SymRef)
-        assert closure.output.fun.id == "make_tuple"
-        return [str(arg.id) for arg in closure.output.args if isinstance(arg, SymRef)]
+        return unpack_tuple_members(closure.output)
 
 
 class ItirToSDFG(eve.NodeVisitor):

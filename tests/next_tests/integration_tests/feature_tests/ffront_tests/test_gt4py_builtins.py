@@ -126,7 +126,7 @@ def test_reduction_with_common_expression(unstructured_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_expressions_with_tuples
 def test_conditional_nested_tuple(cartesian_case):
     @gtx.field_operator
     def conditional_nested_tuple(

@@ -211,7 +211,7 @@ def test_setup():
     return setup()
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_with_tuples
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     if fieldview_backend in [
         gtfn_cpu.run_gtfn,
@@ -232,7 +232,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_with_tuples
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
         pytest.xfail(
@@ -254,7 +254,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_with_tuples
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
@@ -271,7 +271,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
     assert np.allclose(test_setup.w_ref, test_setup.w)
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_with_tuples
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")

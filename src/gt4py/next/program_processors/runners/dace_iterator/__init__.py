@@ -49,13 +49,24 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
+def expand_tuple_arg(name: str, arg: tuple) -> dict[str, Any]:
+    t = {}
+    for idx, member_arg in enumerate(arg):
+        member_name = f"{name}_{idx}"
+        if isinstance(member_arg, tuple):
+            t.update(expand_tuple_arg(member_name, member_arg))
+        else:
+            t[member_name] = convert_arg(member_arg)
+    return t
+
+
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
     t = {}
-    for name, arg in zip(params, args):
+    for param, arg in zip(params, args):
         if isinstance(arg, tuple):
-            t.update({f"{name.id}_{idx}": convert_arg(targ) for idx, targ in enumerate(arg)})
+            t.update(expand_tuple_arg(param.id, arg))
         else:
-            t[name.id] = convert_arg(arg)
+            t[param.id] = convert_arg(arg)
     return t
 
 

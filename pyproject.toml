@@ -333,6 +333,7 @@ markers = [
   'uses_can_deref: tests that require backend support for can_deref',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
+  'uses_expressions_with_tuples: tests that requires expressions with tuple arguments',
   'uses_if_stmts: tests that require backend support for if-statements',
   'uses_index_fields: tests that require backend support for index fields',
   'uses_lift_expressions: tests that require backend support for lift expressions',
@@ -340,10 +341,10 @@ markers = [
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
+  'uses_scan_with_tuples: tests that require scan with tuple results',
   'uses_sparse_fields: tests that require backend support for sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
   'uses_tuple_args: tests that require backend support for tuple arguments',
-  'uses_tuple_returns: tests that require backend support for tuple results',
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

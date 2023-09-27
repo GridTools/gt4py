@@ -49,7 +49,6 @@ def tuple_output2(inp1, inp2):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-@pytest.mark.uses_tuple_returns
 def test_tuple_output(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -88,7 +87,6 @@ def tuple_of_tuple_output2(inp1, inp2, inp3, inp4):
     return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_of_tuple_of_field_output(program_processor):
     program_processor, validate = program_processor
 
@@ -148,7 +146,6 @@ def test_tuple_of_tuple_of_field_output(program_processor):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-@pytest.mark.uses_tuple_returns
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -194,7 +191,6 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
         assert np.allclose(inp2, out2)
 
 
-@pytest.mark.uses_tuple_returns
 def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
     program_processor, validate = program_processor
 
@@ -288,7 +284,7 @@ def tuple_input(inp):
     return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_tuple_field_input(program_processor):
     program_processor, validate = program_processor
 
@@ -348,7 +344,7 @@ def tuple_tuple_input(inp):
     )
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_tuple_of_tuple_of_field_input(program_processor):
     program_processor, validate = program_processor
 
