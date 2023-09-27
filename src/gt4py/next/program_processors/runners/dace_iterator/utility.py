@@ -163,7 +163,9 @@ def unique_var_name():
     return unique_name("__var")
 
 
-def flatten_list(node_list: list[Any]):
-    return itertools.chain.from_iterable(
-        [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+def flatten_list(node_list: list[Any]) -> list[Any]:
+    return list(
+        itertools.chain.from_iterable(
+            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+        )
     )
