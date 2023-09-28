@@ -333,7 +333,7 @@ markers = [
   'uses_can_deref: tests that require backend support for can_deref',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
-  'uses_expressions_with_tuples: tests that requires expressions with tuple arguments',
+  'uses_conditional_with_tuples: tests that require conditional expressions with tuple arguments',
   'uses_if_stmts: tests that require backend support for if-statements',
   'uses_index_fields: tests that require backend support for index fields',
   'uses_lift_expressions: tests that require backend support for lift expressions',

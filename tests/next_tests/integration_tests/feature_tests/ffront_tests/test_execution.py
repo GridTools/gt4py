@@ -592,7 +592,7 @@ def test_ternary_operator(cartesian_case, left, right):
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
-@pytest.mark.uses_expressions_with_tuples
+@pytest.mark.uses_conditional_with_tuples
 def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(

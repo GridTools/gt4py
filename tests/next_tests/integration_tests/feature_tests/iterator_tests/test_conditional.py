@@ -31,7 +31,7 @@ def stencil_conditional(inp):
     return tuple_get(0, tmp) + tuple_get(1, tmp)
 
 
-@pytest.mark.uses_expressions_with_tuples
+@pytest.mark.uses_conditional_with_tuples
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
 
