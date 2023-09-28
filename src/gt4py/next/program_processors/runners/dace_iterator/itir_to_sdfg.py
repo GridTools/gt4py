@@ -102,9 +102,7 @@ def unpack_tuple_members(fun_node: FunCall) -> Sequence[str]:
     assert isinstance(fun_node.fun, SymRef)
     assert fun_node.fun.id == "make_tuple"
     for arg in fun_node.args:
-        if isinstance(arg, Literal):
-            names.append(arg.value)
-        elif isinstance(arg, SymRef):
+        if isinstance(arg, SymRef):
             names.append(str(arg.id))
         else:
             assert isinstance(arg, FunCall)
@@ -310,31 +308,31 @@ class ItirToSDFG(eve.NodeVisitor):
         conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         output_memlets = []
-        nsdfg_output_desc = {}
-        transient_to_arg_name_mapping = {}
+        transient_to_args_mapping = {}
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
         for output_name in output_names:
-            nsdfg_output_name = unique_var_name()
-            output_descriptor = closure_sdfg.arrays[output_name]
-            nsdfg_output_desc[nsdfg_output_name] = output_descriptor
-            transient_to_arg_name_mapping[nsdfg_output_name] = output_name
+            transient_name = unique_var_name()
+            data_descriptor = closure_sdfg.arrays[output_name]
+            transient_to_args_mapping[transient_name] = (output_name, data_descriptor)
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
-            assert len(transient_to_arg_name_mapping) == 1, "Scan does not support multiple outputs"
-            nsdfg_output_name, output_name = next(iter(transient_to_arg_name_mapping.items()))
+            assert len(output_names) == 1, "Scan does not support multiple outputs"
+            transient_name, (output_name, data_descriptor) = next(
+                iter(transient_to_args_mapping.items())
+            )
 
             nsdfg, map_domain, scan_dim_index = self._visit_scan_stencil_closure(
-                node, closure_sdfg.arrays, closure_domain, nsdfg_output_name
+                node, closure_sdfg.arrays, closure_domain, transient_name
             )
-            results = [nsdfg_output_name]
+            results = [transient_name]
 
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value}:{scan_ub.value}"
 
             closure_sdfg.add_array(
-                nsdfg_output_name,
-                dtype=output_descriptor.dtype,
+                transient_name,
+                dtype=data_descriptor.dtype,
                 shape=(array_table[output_name].shape[scan_dim_index],),
                 strides=(array_table[output_name].strides[scan_dim_index],),
                 transient=True,
@@ -346,7 +344,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     tuple(
                         f"i_{dim}"
                         if f"i_{dim}" in map_domain
-                        else f"0:{output_descriptor.shape[scan_dim_index]}"
+                        else f"0:{data_descriptor.shape[scan_dim_index]}"
                         for dim, _ in closure_domain
                     ),
                 )
@@ -358,10 +356,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
             output_subset = "0"
 
-            for nsdfg_output_name, output_name in transient_to_arg_name_mapping.items():
+            for transient_name, (output_name, data_descriptor) in transient_to_args_mapping.items():
                 closure_sdfg.add_scalar(
-                    nsdfg_output_name,
-                    dtype=nsdfg_output_desc[nsdfg_output_name].dtype,
+                    transient_name,
+                    dtype=data_descriptor.dtype,
                     transient=True,
                 )
                 output_memlets.append(
@@ -386,7 +384,7 @@ class ItirToSDFG(eve.NodeVisitor):
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):
             memlet = edge.data
-            if memlet.data not in transient_to_arg_name_mapping:
+            if memlet.data not in transient_to_args_mapping:
                 continue
             transient_access = closure_state.add_access(memlet.data)
             closure_state.add_edge(
@@ -401,7 +399,8 @@ class ItirToSDFG(eve.NodeVisitor):
             )
             closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
             closure_state.remove_edge(edge)
-            access_nodes[memlet.data].data = transient_to_arg_name_mapping[memlet.data]
+            _, data_descriptor = transient_to_args_mapping[memlet.data]
+            access_nodes[memlet.data].data = data_descriptor
 
         for _, (lb, ub) in closure_domain:
             for b in lb, ub:
