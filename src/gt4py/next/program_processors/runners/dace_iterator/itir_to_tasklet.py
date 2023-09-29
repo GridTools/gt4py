@@ -428,31 +428,33 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Translate the function's body
         results: list[ValueExpr] = []
-        for child_node in self.visit(node.expr):
-            expr_list: list[SymbolExpr | ValueExpr]
-            if isinstance(child_node, list):
-                expr_list = flatten_list(child_node)
+        """
+        Ideally, we would like the lambdas to be single-output expressions, which implies only one child node.
+        This would simplify SDFG-generation. For this, we need a transformation pass in ITIR preprocessor
+        to unpack tuple expressions into multiple single-output expressions.
+        The same applies to scan and conditional expressions with tuples. However, for lambda expressions
+        it is easy to unpack tuples in the for-loop below, after flattening the nested list of expressions.
+        Consider removing this loop once the ITIR transformation loop is in place.
+        """
+        for expr in flatten_list(self.visit(node.expr)):
+            if isinstance(expr, ValueExpr):
+                result_name = unique_var_name()
+                self.context.body.add_scalar(result_name, expr.dtype, transient=True)
+                result_access = self.context.state.add_access(result_name)
+                self.context.state.add_edge(
+                    expr.value,
+                    None,
+                    result_access,
+                    None,
+                    # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
+                    dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
+                )
+                result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
-                expr_list = [child_node]
-            for expr in expr_list:
-                if isinstance(expr, ValueExpr):
-                    result_name = unique_var_name()
-                    self.context.body.add_scalar(result_name, expr.dtype, transient=True)
-                    result_access = self.context.state.add_access(result_name)
-                    self.context.state.add_edge(
-                        expr.value,
-                        None,
-                        result_access,
-                        None,
-                        # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
-                        dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
-                    )
-                    result = ValueExpr(value=result_access, dtype=expr.dtype)
-                else:
-                    # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-                    result = self.add_expr_tasklet([], expr.value, expr.dtype, "forward")[0]
-                self.context.body.arrays[result.value.data].transient = False
-                results.append(result)
+                # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
+                result = self.add_expr_tasklet([], expr.value, expr.dtype, "forward")[0]
+            self.context.body.arrays[result.value.data].transient = False
+            results.append(result)
 
         self.context = prev_context
         for node in context.state.nodes():
