@@ -713,10 +713,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         element = tail[1].value
         assert isinstance(element, int)
 
-        assert isinstance(
-            self.offset_provider[offset], NeighborTableOffsetProvider
-        ), "StridedNeighborOffsetProvider not supported"
-        table = self.offset_provider[offset]
+        table: NeighborTableOffsetProvider = self.offset_provider[offset]
         shifted_dim = table.origin_axis.value
         target_dim = table.neighbor_axis.value
 

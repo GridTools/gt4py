@@ -244,8 +244,8 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> dace.SDFG:
-        assert ItirToSDFG._check_no_lifts(node), "Lifts not supported"
-        assert ItirToSDFG._check_shift_offsets_are_literals(node), "Shift offsets must be literals"
+        assert ItirToSDFG._check_no_lifts(node)
+        assert ItirToSDFG._check_shift_offsets_are_literals(node)
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
