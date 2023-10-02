@@ -65,25 +65,30 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
         self, closure_vars: list[foast.Symbol], location: SourceLocation
     ) -> list[foast.Symbol]:
         new_closure_vars: list[foast.Symbol] = []
+        existing_type_names: set[str] = set()
 
         for var in closure_vars:
             if self.is_type_alias(var.id):
                 actual_type_name = self.closure_vars[var.id].__name__
-                new_closure_vars.append(
-                    foast.Symbol(
-                        id=actual_type_name,
-                        type=ts.FunctionType(
-                                    pos_or_kw_args={},
-                                    kw_only_args={},
-                                    pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                    returns=from_type_hint(self.closure_vars[var.id]),
-                                ),
-                        namespace=dialect_ast_enums.Namespace.CLOSURE,
-                        location=location,
+                # Avoid multiple definitions of a type in closure_vars
+                if actual_type_name not in existing_type_names:
+                    new_closure_vars.append(
+                        foast.Symbol(
+                            id=actual_type_name,
+                            type=ts.FunctionType(
+                                        pos_or_kw_args={},
+                                        kw_only_args={},
+                                        pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                                        returns=from_type_hint(self.closure_vars[var.id]),
+                                    ),
+                            namespace=dialect_ast_enums.Namespace.CLOSURE,
+                            location=location,
+                        )
                     )
-                )
-            else:
+                    existing_type_names.add(actual_type_name)
+            elif var.id not in existing_type_names:
                 new_closure_vars.append(var)
+                existing_type_names.add(var.id)
 
         return new_closure_vars
 
