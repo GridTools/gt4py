@@ -400,8 +400,7 @@ class ItirToSDFG(eve.NodeVisitor):
             )
             closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
             closure_state.remove_edge(edge)
-            output_name = output_connectors_mapping[memlet.data]
-            access_nodes[memlet.data].data = closure_sdfg.arrays[output_name]
+            access_nodes[memlet.data].data = output_connectors_mapping[memlet.data]
 
         for _, (lb, ub) in closure_domain:
             if not isinstance(lb, SymbolExpr):
@@ -425,12 +424,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
         exit_state = closure_sdfg.add_state_after(closure_state, "closure_exit")
         for output_name, transient_name in transient_to_output_mapping.items():
-            exit_state.add_edge(
+            exit_state.add_nedge(
                 exit_state.add_access(transient_name),
-                None,
                 exit_state.add_access(output_name),
-                None,
-                create_memlet_full(transient_name, closure_sdfg.arrays[output_name]),
+                create_memlet_full(output_name, closure_sdfg.arrays[output_name]),
             )
 
         return closure_sdfg
