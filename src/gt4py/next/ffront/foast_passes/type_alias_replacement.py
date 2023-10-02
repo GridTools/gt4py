@@ -21,9 +21,7 @@ from gt4py.eve.concepts import SourceLocation, SymbolName, SymbolRef
 from gt4py.next.ffront import dialect_ast_enums
 from gt4py.next.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.type_system.type_translation import from_type_hint
-
-
+from gt4py.next.type_system.type_translation import get_scalar_kind
 
 
 @dataclass
@@ -48,7 +46,6 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 new_closure_vars[value.__name__] = closure_vars[key]
         return foast_node, new_closure_vars
 
-
     def is_type_alias(self, node_id: SymbolName | SymbolRef) -> bool:
         return (
             node_id in self.closure_vars
@@ -58,7 +55,9 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         if self.is_type_alias(node.id):
-            return foast.Name(id=self.closure_vars[node.id].__name__, location=node.location, type=node.type)
+            return foast.Name(
+                id=self.closure_vars[node.id].__name__, location=node.location, type=node.type
+            )
         return node
 
     def _update_closure_var_symbols(
@@ -76,11 +75,13 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         foast.Symbol(
                             id=actual_type_name,
                             type=ts.FunctionType(
-                                        pos_or_kw_args={},
-                                        kw_only_args={},
-                                        pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                        returns=from_type_hint(self.closure_vars[var.id]),
-                                    ),
+                                pos_or_kw_args={},
+                                kw_only_args={},
+                                pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
+                                returns=ts.ScalarType(
+                                    kind=get_scalar_kind(self.closure_vars[var.id])
+                                ),
+                            ),
                             namespace=dialect_ast_enums.Namespace.CLOSURE,
                             location=location,
                         )
