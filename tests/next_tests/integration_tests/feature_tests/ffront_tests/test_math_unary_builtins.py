@@ -37,7 +37,7 @@ from gt4py.next import (
     tanh,
     trunc,
 )
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -71,6 +71,7 @@ def test_floordiv(cartesian_case):
     if cartesian_case.backend in [
         gtfn_cpu.run_gtfn,
         gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
     ]:
         pytest.xfail(
             "FloorDiv not yet supported."
@@ -83,16 +84,8 @@ def test_floordiv(cartesian_case):
     cases.verify_with_default_data(cartesian_case, floorDiv, ref=lambda inp1: inp1 // 2)
 
 
+@pytest.mark.uses_negative_modulo
 def test_mod(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail(
-            "Modulo not properly supported for negative numbers."
-        )  # see https://github.com/GridTools/gt4py/issues/1219
-
     @gtx.field_operator
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
