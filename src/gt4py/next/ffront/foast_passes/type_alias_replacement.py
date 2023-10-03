@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py.eve import NodeTranslator, traits
@@ -21,7 +21,7 @@ from gt4py.eve.concepts import SourceLocation, SymbolName, SymbolRef
 from gt4py.next.ffront import dialect_ast_enums
 from gt4py.next.ffront.fbuiltins import TYPE_BUILTIN_NAMES
 from gt4py.next.type_system import type_specifications as ts
-from gt4py.next.type_system.type_translation import get_scalar_kind
+from gt4py.next.type_system.type_translation import from_type_hint
 
 
 @dataclass
@@ -78,8 +78,8 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                                 pos_or_kw_args={},
                                 kw_only_args={},
                                 pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                returns=ts.ScalarType(
-                                    kind=get_scalar_kind(self.closure_vars[var.id])
+                                returns=cast(
+                                    ts.DataType, from_type_hint(self.closure_vars[var.id])
                                 ),
                             ),
                             namespace=dialect_ast_enums.Namespace.CLOSURE,
