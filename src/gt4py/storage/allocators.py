@@ -53,7 +53,7 @@ _ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
 
 
 _NDBuffer: TypeAlias = Union[
-    # xtyping.Buffer,
+    # xtyping.Buffer,  # TODO: add once we update typing_extensions
     xtyping.ArrayInterface,
     xtyping.CUDAArrayInterface,
     xtyping.DLPackBuffer,
@@ -169,9 +169,9 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
         Args:
             shape: Tensor dimensions.
             dtype: Data type descriptor.
-            layout_map: layout of the dimensions in the buffer assuming C-layout.
-                layout_map[i] = j means that the i-th dimension of the tensor
-                corresponds to the j-th dimension of the buffer.
+            layout_map: layout of the dimensions in a buffer with C-layout (contiguous dimension is last).
+              layout_map[i] = j means that the i-th dimension of the tensor
+              corresponds to the j-th dimension of the buffer.
             device_id: Id of the device of `device_type` where the buffer is allocated.
             byte_alignment: Alignment (in bytes) of the first valid element.
             aligned_index: N-dimensional index of the first aligned element.
@@ -289,7 +289,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def array_ns(self) -> _NumPyLikeNamespace:
+    def array_ns(self) -> ValidNumPyLikeAllocationNS:
         pass
 
     @abc.abstractmethod
@@ -310,38 +310,60 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
         pass
 
 
-if TYPE_CHECKING:
+class ValidNumPyLikeAllocationNS(Protocol):
+    class _NumPyLibModule(Protocol):
+        class _NumPyLibStridesModule(Protocol):
+            @staticmethod
+            def as_strided(
+                ndarray: core_defs.NDArrayObject, **kwargs: Any
+            ) -> core_defs.NDArrayObject:
+                ...
 
-    class _NumPyLikeNamespace(Protocol):
-        class _NumPyLibModule(Protocol):
-            class _NumPyLibStridesModule(Protocol):
-                @staticmethod
-                def as_strided(
-                    ndarray: core_defs.NDArrayObject, **kwargs: Any
-                ) -> core_defs.NDArrayObject:
-                    ...
+        stride_tricks: _NumPyLibStridesModule
 
-            stride_tricks: _NumPyLibStridesModule
+    lib: _NumPyLibModule
 
-        lib: _NumPyLibModule
+    @staticmethod
+    def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer:
+        ...
 
-        @staticmethod
-        def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer:
-            ...
-
-        @staticmethod
-        def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]:
-            ...
+    @staticmethod
+    def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]:
+        ...
 
 
-@dataclasses.dataclass(frozen=True)
+def is_valid_nplike_allocation_ns(obj: Any) -> TypeGuard[ValidNumPyLikeAllocationNS]:
+    return (
+        bool({"empty", "byte_bounds", "lib"} & set(dir(np)))
+        and "stride_tricks" in dir(np.lib)
+        and "as_strided" in dir(np.lib.stride_tricks)
+    )
+
+
+if not TYPE_CHECKING:
+    is_valid_nplike_allocation_ns = functools.lru_cache(maxsize=None)(is_valid_nplike_allocation_ns)
+
+
+@dataclasses.dataclass(frozen=True, init=False)
 class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT]):
-    device_type: core_defs.DeviceTypeT
-    array_ns_obj: _NumPyLikeNamespace
+    _device_type: core_defs.DeviceTypeT
+    _array_ns: ValidNumPyLikeAllocationNS
+
+    def __init__(
+        self,
+        device_type: core_defs.DeviceTypeT,
+        array_ns: ValidNumPyLikeAllocationNS,
+    ):
+        object.__setattr__(self, "_device_type", device_type)
+        object.__setattr__(self, "_array_ns", array_ns)
 
     @property
-    def array_ns(self) -> _NumPyLikeNamespace:
-        return self.array_ns_obj
+    def device_type(self) -> core_defs.DeviceTypeT:
+        return self._device_type
+
+    @property
+    def array_ns(self) -> ValidNumPyLikeAllocationNS:
+        return self._array_ns
 
     def malloc(self, length: int, device_id: int) -> _NDBuffer:
         if self.device_type == core_defs.DeviceType.CPU and device_id != 0:
@@ -377,30 +399,33 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
 #: Registry of default allocators for each device type.
 device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
 
+assert is_valid_nplike_allocation_ns(np)
+
 device_allocators[core_defs.DeviceType.CPU] = NDArrayBufferAllocator(
     device_type=core_defs.DeviceType.CPU,
-    array_ns_obj=cast(_NumPyLikeNamespace, np),
+    array_ns=np,
 )
 
 if cp:
-    device_allocators[core_defs.DeviceType.CUDA] = NDArrayBufferAllocator(
-        device_type=core_defs.DeviceType.CUDA,
-        array_ns_obj=cast(_NumPyLikeNamespace, cp),
+    cp_device_type = (
+        core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA
     )
+
+    assert is_valid_nplike_allocation_ns(cp)
+
     device_allocators[core_defs.DeviceType.ROCM] = NDArrayBufferAllocator(
-        device_type=core_defs.DeviceType.ROCM,
-        array_ns_obj=cast(_NumPyLikeNamespace, cp),
+        device_type=cp_device_type, array_ns=cp
     )
 
 
 def allocate(
     shape: Sequence[core_defs.IntegralScalar],
     dtype: core_defs.DType[_ScalarT],
-    layout_map: BufferLayoutMap,
     *,
+    layout_map: BufferLayoutMap,
+    device: Optional[core_defs.Device] = None,
     byte_alignment: int,
     aligned_index: Optional[Sequence[int]] = None,
-    device: Optional[core_defs.Device] = None,
     allocator: Optional[BufferAllocator] = None,
 ) -> TensorBuffer:
     """

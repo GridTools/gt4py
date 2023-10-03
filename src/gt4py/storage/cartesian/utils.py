@@ -225,8 +225,8 @@ def allocate_gpu(
     buffer = allocators.allocate(
         shape,
         core_defs.dtype(dtype),
-        layout_map=layout_map,
         device=device,
+        layout_map=layout_map,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )

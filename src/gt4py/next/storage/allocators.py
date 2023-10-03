@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import abc
-from typing import Optional, Sequence, cast
+from typing import Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 
@@ -75,6 +75,9 @@ class DefaultCPUAllocator(FieldAllocatorInterface):
         byte_alignment = 64  # TODO check
         assert aligned_index is None  # TODO
 
+        if TYPE_CHECKING:
+            assert core_allocators.is_valid_nplike_allocation_ns(np)
+
         return (
             core_allocators.NDArrayBufferAllocator(core_defs.DeviceType.CPU, np)
             .allocate(shape, dtype, layout_map, device_id, byte_alignment, aligned_index)
@@ -92,8 +95,13 @@ class DefaultCUDAAllocator(FieldAllocatorInterface):
     ) -> core_defs.NDArrayObject:
         try:
             import cupy as cp
+
+            if TYPE_CHECKING:
+                assert core_allocators.is_valid_nplike_allocation_ns(cp)
+
         except ImportError:
             raise RuntimeError("CuPy is not available.")
+
         shape = domain.shape
         layout_map = _horizontal_first_layout_map(domain.dims)
         byte_alignment = 128  # TODO double check
