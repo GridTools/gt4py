@@ -50,12 +50,7 @@ from next_tests.toy_connectivity import (
     v2e_arr,
     v2v_arr,
 )
-from next_tests.unit_tests.conftest import (
-    lift_mode,
-    program_processor,
-    program_processor_no_gtfn_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 def edge_index_field():  # TODO replace by gtx.index_field once supported in bindings
@@ -138,8 +133,8 @@ def map_make_const_list(in_edges):
 
 
 @pytest.mark.uses_constant_fields
-def test_map_make_const_list(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
+def test_map_make_const_list(program_processor, lift_mode):
+    program_processor, validate = program_processor
     inp = edge_index_field()
     out = gtx.np_as_located_field(Vertex)(np.zeros([9], inp.dtype))
     ref = 2 * np.sum(v2e_arr, axis=1)
@@ -462,12 +457,9 @@ def sparse_shifted_stencil_reduce(inp):
 
 
 @pytest.mark.uses_sparse_fields
-def test_sparse_shifted_stencil_reduce(program_processor_no_gtfn_exec, lift_mode):
-    program_processor, validate = program_processor_no_gtfn_exec
-    if program_processor == gtfn.format_sourcecode:
-        pytest.xfail("We cannot unroll a reduction on a sparse field only.")
-        # With our current understanding, this iterator IR program is illegal, however we might want to fix it and therefore keep the test for now.
-
+@pytest.mark.uses_reduction_with_only_sparse_fields
+def test_sparse_shifted_stencil_reduce(program_processor, lift_mode):
+    program_processor, validate = program_processor
     if lift_mode != transforms.LiftMode.FORCE_INLINE:
         pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
