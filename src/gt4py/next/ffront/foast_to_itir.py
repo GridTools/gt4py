@@ -318,12 +318,22 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, dtype = node.args[0], node.args[1].id
-
-        # TODO check that we test astype that results in a itir.map_ operation
-        return self._map(
-            im.lambda_("it")(im.call("cast_")("it", str(dtype))),
-            obj,
-        )
+        if isinstance(obj, foast.TupleExpr):
+            casted_elements = []
+            for _, element in enumerate(obj.elts):
+                casted_element = self._map(
+                    im.lambda_("it")(im.call("cast_")("it", str(dtype))), element
+                )
+                casted_elements.append(casted_element)
+            args = [f"__arg{i}" for i in range(len(casted_elements))]
+            return im.lift(im.lambda_(*args)(im.make_tuple(*[im.deref(arg) for arg in args])))(
+                *casted_elements
+            )
+        else:
+            return self._map(
+                im.lambda_("it")(im.call("cast_")("it", str(dtype))),
+                obj,
+            )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map("if_", *node.args)
