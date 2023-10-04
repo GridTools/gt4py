@@ -24,7 +24,6 @@ from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runti
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
 from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
-from tests.next_tests import exclusion_matrices
 
 
 try:
@@ -88,26 +87,22 @@ if dace_iterator:
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
+    """
+    Fixture creating program processors on-demand for tests.
+
+    Notes:
+        Check ADR 15 for details on the test-exclusion matrices.
+    """
     backend, _ = request.param
     backend_id = next_tests.get_processor_id(backend)
 
-    """See ADR 15."""
-    for marker, skip_mark, msg in exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
+    ):
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
     return request.param
-
-
-@pytest.fixture
-def program_processor_no_gtfn_exec(program_processor):
-    if (
-        program_processor[0] == gtfn_cpu.run_gtfn
-        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
-        or program_processor[0] == gtfn_cpu.run_gtfn_with_temporaries
-    ):
-        pytest.xfail("gtfn backend not yet supported.")
-    return program_processor
 
 
 def run_processor(

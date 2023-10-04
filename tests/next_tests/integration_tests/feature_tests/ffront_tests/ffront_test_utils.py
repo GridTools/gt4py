@@ -23,7 +23,6 @@ import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
-from tests.next_tests import exclusion_matrices
 
 
 try:
@@ -58,11 +57,18 @@ if dace_iterator:
     ids=lambda p: next_tests.get_processor_id(p),
 )
 def fieldview_backend(request):
+    """
+    Fixture creating field-view operator backend on-demand for tests.
+
+    Notes:
+        Check ADR 15 for details on the test-exclusion matrices.
+    """
     backend = request.param
     backend_id = next_tests.get_processor_id(backend)
 
-    """See ADR 15."""
-    for marker, skip_mark, msg in exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
+    ):
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
