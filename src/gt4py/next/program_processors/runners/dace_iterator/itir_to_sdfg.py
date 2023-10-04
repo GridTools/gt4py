@@ -258,24 +258,10 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
 
         # Add DaCe arrays for inputs, outputs and connectivities to closure SDFG.
-        for name in [*input_names, *conn_names, *output_names]:
-            if name in closure_sdfg.arrays:
-                assert name in input_names and name in output_names
-            elif isinstance(self.storage_types[name], ts.FieldType):
-                closure_sdfg.add_array(
-                    name,
-                    shape=array_table[name].shape,
-                    strides=array_table[name].strides,
-                    dtype=array_table[name].dtype,
-                )
-            else:
-                assert isinstance(self.storage_types[name], ts.ScalarType)
-
-        # Create a copy of all input fields to transient arrays in order to be able to handle in/out fields,
-        # and let DaCe remove unnecessary data movements.
         input_transients_mapping = {}
-        for name in input_names:
-            if isinstance(self.storage_types[name], ts.FieldType):
+        for name in [*input_names, *conn_names, *output_names]:
+            assert name not in closure_sdfg.arrays or (name in input_names and name in output_names)
+            if name in closure_sdfg.arrays:
                 # in/out array, create transient for input read access to avoid race conditions
                 transient_name = unique_var_name()
                 closure_sdfg.add_array(
@@ -291,6 +277,15 @@ class ItirToSDFG(eve.NodeVisitor):
                     create_memlet_full(name, closure_sdfg.arrays[name]),
                 )
                 input_transients_mapping[name] = transient_name
+            elif isinstance(self.storage_types[name], ts.FieldType):
+                closure_sdfg.add_array(
+                    name,
+                    shape=array_table[name].shape,
+                    strides=array_table[name].strides,
+                    dtype=array_table[name].dtype,
+                )
+            else:
+                assert isinstance(self.storage_types[name], ts.ScalarType)
 
         # Get output domain of the closure
         program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
@@ -317,7 +312,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Map SDFG tasklet arguments to parameters
         input_access_names = [
             input_transients_mapping[input_name]
-            if input_name in input_transients_mapping
+            if input_name in output_names
             else input_name
             if isinstance(self.storage_types[input_name], ts.FieldType)
             else cast(ValueExpr, program_arg_syms[input_name]).value.data
@@ -328,10 +323,13 @@ class ItirToSDFG(eve.NodeVisitor):
         ]
         conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
+        output_memlets = []
         output_connectors_mapping = {}
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
-        output_connectors_mapping = {unique_var_name(): output_name for output_name in output_names}
+        for output_name in output_names:
+            transient_name = unique_var_name()
+            output_connectors_mapping[transient_name] = output_name
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
             assert len(output_connectors_mapping) == 1, "Scan does not support multiple outputs"
@@ -363,10 +361,10 @@ class ItirToSDFG(eve.NodeVisitor):
 
             output_subset = "0"
 
-            output_memlets = [
-                create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
-                for output_name in output_connectors_mapping.values()
-            ]
+            for output_name in output_connectors_mapping.values():
+                output_memlets.append(
+                    create_memlet_at(output_name, tuple(idx for idx in map_domain.keys()))
+                )
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, output_memlets)}
