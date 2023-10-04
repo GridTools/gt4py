@@ -260,23 +260,25 @@ class ItirToSDFG(eve.NodeVisitor):
         # Add DaCe arrays for inputs, outputs and connectivities to closure SDFG.
         input_transients_mapping = {}
         for name in [*input_names, *conn_names, *output_names]:
-            assert name not in closure_sdfg.arrays or (name in input_names and name in output_names)
             if name in closure_sdfg.arrays:
-                # in/out array, create transient for input read access to avoid race conditions
-                transient_name = unique_var_name()
-                closure_sdfg.add_array(
-                    transient_name,
-                    shape=array_table[name].shape,
-                    strides=array_table[name].strides,
-                    dtype=array_table[name].dtype,
-                    transient=True,
-                )
-                closure_init_state.add_nedge(
-                    closure_init_state.add_access(name),
-                    closure_init_state.add_access(transient_name),
-                    create_memlet_full(name, closure_sdfg.arrays[name]),
-                )
-                input_transients_mapping[name] = transient_name
+                assert name in input_names and name in output_names
+                # In case of in/out field in closure with multiple output fields (e.g. mo_solve_nonhydro_stencil_02),
+                # there is risk of race condition between read/write access nodes in the (asynchronous) map tasklet.
+                if len(output_names) > 1:
+                    transient_name = unique_var_name()
+                    closure_sdfg.add_array(
+                        transient_name,
+                        shape=array_table[name].shape,
+                        strides=array_table[name].strides,
+                        dtype=array_table[name].dtype,
+                        transient=True,
+                    )
+                    closure_init_state.add_nedge(
+                        closure_init_state.add_access(name),
+                        closure_init_state.add_access(transient_name),
+                        create_memlet_full(name, closure_sdfg.arrays[name]),
+                    )
+                    input_transients_mapping[name] = transient_name
             elif isinstance(self.storage_types[name], ts.FieldType):
                 closure_sdfg.add_array(
                     name,
@@ -312,7 +314,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Map SDFG tasklet arguments to parameters
         input_access_names = [
             input_transients_mapping[input_name]
-            if input_name in output_names
+            if input_name in input_transients_mapping
             else input_name
             if isinstance(self.storage_types[input_name], ts.FieldType)
             else cast(ValueExpr, program_arg_syms[input_name]).value.data
@@ -324,12 +326,9 @@ class ItirToSDFG(eve.NodeVisitor):
         conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         output_memlets = []
-        output_connectors_mapping = {}
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
-        for output_name in output_names:
-            transient_name = unique_var_name()
-            output_connectors_mapping[transient_name] = output_name
+        output_connectors_mapping = {unique_var_name(): output_name for output_name in output_names}
         # scan operator should always be the first function call in a closure
         if is_scan(node.stencil):
             assert len(output_connectors_mapping) == 1, "Scan does not support multiple outputs"
