@@ -11,8 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-from typing import Any
+from typing import Any, cast
 
 import dace
 
@@ -49,12 +48,14 @@ def connectivity_identifier(name: str):
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
     bounds = [(0, size) for size in source_array.shape]
     subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
-    return dace.Memlet(data=source_identifier, subset=subset)
+    return dace.Memlet.simple(source_identifier, subset)
 
 
-def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
+def create_memlet_at(source_identifier: str, storage_type: ts.TypeSpec, index: dict[str, str]):
+    field_type = cast(ts.FieldType, storage_type)
+    field_index = [index[dim.value] for dim in field_type.dims]
+    subset = ", ".join(field_index)
+    return dace.Memlet.simple(source_identifier, subset)
 
 
 def map_nested_sdfg_symbols(
