@@ -16,6 +16,7 @@
 
 Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 """
+# TODO(tehrengruber): add support for printing the types of itir.Sym, itir.Literal nodes
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence

@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -204,18 +204,21 @@ def test_setup():
         w = gtx.np_as_located_field(Cell, KDim)(
             np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q_ref, w_ref = reference(z_alpha, z_beta, z_q, w)
+        z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
         dummy = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
         z_q_out = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
 
     return setup()
 
 
+@pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if fieldview_backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("Needs implementation of scan projector.")
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
 
     solve_nonhydro_stencil_52_like_z_q.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -229,11 +232,15 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
 
 
+@pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail(
+            "Needs implementation of scan projector. Breaks in type inference as executed"
+            "again after CollapseTuple."
+        )
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuples, scans")
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -247,9 +254,10 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
     assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
 
 
+@pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: scans")
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     solve_nonhydro_stencil_52_like.with_backend(fieldview_backend)(
         test_setup.z_alpha,
         test_setup.z_beta,
@@ -263,11 +271,12 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
     assert np.allclose(test_setup.w_ref, test_setup.w)
 
 
+@pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
+    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
-    if fieldview_backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuples, scans")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
         test_setup.z_alpha,

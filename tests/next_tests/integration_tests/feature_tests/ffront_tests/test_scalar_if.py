@@ -19,7 +19,6 @@ import numpy as np
 import pytest
 
 from gt4py.next import Field, errors, field_operator, float64, index_field, np_as_located_field
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -46,14 +45,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_simple_if(condition, cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def simple_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -70,14 +63,8 @@ def test_simple_if(condition, cartesian_case):
 
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
+@pytest.mark.uses_if_stmts
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def simple_if(
         a: cases.IField,
@@ -105,19 +92,13 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
         condition1,
         condition2,
         out=out,
-        ref=(a if condition1 else b).array() + (0 if condition2 else 1),
+        ref=(a if condition1 else b) + (0 if condition2 else 1),
     )
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_local_if(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def local_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -135,14 +116,8 @@ def test_local_if(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_temporary_if(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def temporary_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -163,14 +138,8 @@ def test_temporary_if(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_if_return(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def temporary_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -191,14 +160,8 @@ def test_if_return(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_if_stmt_if_branch_returns(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def if_branch_returns(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -216,14 +179,8 @@ def test_if_stmt_if_branch_returns(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_if_stmt_else_branch_returns(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def else_branch_returns(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -243,14 +200,8 @@ def test_if_stmt_else_branch_returns(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_if_stmt_both_branches_return(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def both_branches_return(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -270,14 +221,8 @@ def test_if_stmt_both_branches_return(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
+@pytest.mark.uses_if_stmts
 def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def nested_if_conditional_return(
         inp: cases.IField, condition1: bool, condition2: bool
@@ -313,14 +258,8 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
 
 
 @pytest.mark.parametrize("condition", [True, False])
+@pytest.mark.uses_if_stmts
 def test_nested_if(cartesian_case, condition):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def nested_if(a: cases.IField, b: cases.IField, condition: bool) -> cases.IField:
         if condition:
@@ -354,14 +293,8 @@ def test_nested_if(cartesian_case, condition):
 
 
 @pytest.mark.parametrize("condition1, condition2", [[True, False], [True, False]])
+@pytest.mark.uses_if_stmts
 def test_if_without_else(cartesian_case, condition1, condition2):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail("If-stmts are not supported yet.")
-
     @field_operator
     def if_without_else(
         a: cases.IField, b: cases.IField, condition1: bool, condition2: bool

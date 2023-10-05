@@ -15,11 +15,13 @@
 from __future__ import annotations
 
 import abc
+import collections
 import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence, Set
+import types
+from collections.abc import Mapping, Sequence, Set
 from typing import overload
 
 import numpy as np
@@ -35,26 +37,27 @@ from gt4py.eve.extended_typing import (
     ParamSpec,
     Protocol,
     TypeAlias,
+    TypeGuard,
     TypeVar,
-    Union,
+    cast,
     extended_runtime_checkable,
-    final,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
 
 
-DimT = TypeVar("DimT", bound="Dimension")
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+DimsT = TypeVar(
+    "DimsT", covariant=True
+)  # bound to `Sequence[Dimension]` if instance of Dimension would be a type
 
 
 class Infinity(int):
     @classmethod
-    def positive(cls) -> "Infinity":
+    def positive(cls) -> Infinity:
         return cls(sys.maxsize)
 
     @classmethod
-    def negative(cls) -> "Infinity":
+    def negative(cls) -> Infinity:
         return cls(-sys.maxsize)
 
 
@@ -65,7 +68,7 @@ class DimensionKind(StrEnum):
     LOCAL = "local"
 
     def __str__(self):
-        return f"{type(self).__name__}.{self.name}"
+        return self.value
 
 
 @dataclasses.dataclass(frozen=True)
@@ -74,12 +77,7 @@ class Dimension:
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
     def __str__(self):
-        return f'Dimension(value="{self.value}", kind={self.kind})'
-
-
-DomainLike: TypeAlias = Union[
-    Sequence[Dimension], Dimension, str
-]  # TODO(havogt): revisit once embedded implementation is concluded
+        return f"{self.value}[{self.kind}]"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,6 +92,10 @@ class UnitRange(Sequence[int], Set[int]):
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
+
+    @classmethod
+    def infinity(cls) -> UnitRange:
+        return cls(Infinity.negative(), Infinity.positive())
 
     def __len__(self) -> int:
         if Infinity.positive() in (abs(self.start), abs(self.stop)):
@@ -136,16 +138,136 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
+    def __str__(self) -> str:
+        return f"({self.start}:{self.stop})"
 
+
+RangeLike: TypeAlias = UnitRange | range | tuple[int, int]
+
+
+def unit_range(r: RangeLike) -> UnitRange:
+    if isinstance(r, UnitRange):
+        return r
+    if isinstance(r, range):
+        if r.step != 1:
+            raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
+        return UnitRange(r.start, r.stop)
+    if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
+        return UnitRange(r[0], r[1])
+    raise ValueError(f"`{r}` cannot be interpreted as `UnitRange`.")
+
+
+IntIndex: TypeAlias = int | core_defs.IntegralScalar
+NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
+AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
+RelativeIndexSequence: TypeAlias = tuple[
+    slice | IntIndex | types.EllipsisType, ...
+]  # is a tuple but called Sequence for symmetry
+AnyIndexSequence: TypeAlias = RelativeIndexSequence | AbsoluteIndexSequence
+AnyIndexSpec: TypeAlias = AnyIndexElement | AnyIndexSequence
 
 
-@dataclasses.dataclass(frozen=True)
+def is_int_index(p: Any) -> TypeGuard[IntIndex]:
+    # should be replaced by isinstance(p, IntIndex), but mypy complains with
+    # `Argument 2 to "isinstance" has incompatible type "<typing special form>"; expected "_ClassInfo"  [arg-type]`
+    return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
+
+
+def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return (
+        isinstance(v, tuple)
+        and len(v) == 2
+        and isinstance(v[0], Dimension)
+        and isinstance(v[1], UnitRange)
+    )
+
+
+def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return (
+        isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
+    )
+
+
+def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
+    return (
+        is_int_index(v)
+        or is_named_range(v)
+        or is_named_index(v)
+        or isinstance(v, slice)
+        or v is Ellipsis
+    )
+
+
+def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
+    return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
+
+
+def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
+    return isinstance(v, tuple) and all(
+        isinstance(e, slice) or is_int_index(e) or e is Ellipsis for e in v
+    )
+
+
+def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
+    # `cast` because mypy/typing doesn't special case 1-element tuples, i.e. `tuple[A|B] != tuple[A]|tuple[B]`
+    return cast(
+        AnyIndexSequence,
+        (index,) if is_any_index_element(index) else index,
+    )
+
+
+def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
+    return (v[0], unit_range(v[1]))
+
+
+@dataclasses.dataclass(frozen=True, init=False)
 class Domain(Sequence[NamedRange]):
+    """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
+
     dims: tuple[Dimension, ...]
     ranges: tuple[UnitRange, ...]
 
-    def __post_init__(self):
+    def __init__(
+        self,
+        *args: NamedRange,
+        dims: Optional[tuple[Dimension, ...]] = None,
+        ranges: Optional[tuple[UnitRange, ...]] = None,
+    ) -> None:
+        if dims is not None or ranges is not None:
+            if dims is None and ranges is None:
+                raise ValueError("Either both none of `dims` and `ranges` must be specified.")
+            if len(args) > 0:
+                raise ValueError(
+                    "No extra `args` allowed when constructing fomr `dims` and `ranges`."
+                )
+
+            assert dims is not None and ranges is not None  # for mypy
+            if not all(isinstance(dim, Dimension) for dim in dims):
+                raise ValueError(
+                    f"`dims` argument needs to be a `tuple[Dimension, ...], got `{dims}`."
+                )
+            if not all(isinstance(rng, UnitRange) for rng in ranges):
+                raise ValueError(
+                    f"`ranges` argument needs to be a `tuple[UnitRange, ...], got `{ranges}`."
+                )
+            if len(dims) != len(ranges):
+                raise ValueError(
+                    f"Number of provided dimensions ({len(dims)}) does not match number of provided ranges ({len(ranges)})."
+                )
+
+            object.__setattr__(self, "dims", dims)
+            object.__setattr__(self, "ranges", ranges)
+        else:
+            if not all(is_named_range(arg) for arg in args):
+                raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
+            dims, ranges = zip(*args) if args else ((), ())
+            object.__setattr__(self, "dims", tuple(dims))
+            object.__setattr__(self, "ranges", tuple(ranges))
+
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
 
@@ -157,7 +279,7 @@ class Domain(Sequence[NamedRange]):
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> "Domain":
+    def __getitem__(self, index: slice) -> Domain:
         ...
 
     @overload
@@ -170,7 +292,7 @@ class Domain(Sequence[NamedRange]):
         elif isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
-            return Domain(dims_slice, ranges_slice)
+            return Domain(dims=dims_slice, ranges=ranges_slice)
         elif isinstance(index, Dimension):
             try:
                 index_pos = self.dims.index(index)
@@ -180,7 +302,21 @@ class Domain(Sequence[NamedRange]):
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
-    def __and__(self, other: "Domain") -> "Domain":
+    def __and__(self, other: Domain) -> Domain:
+        """
+        Intersect `Domain`s, missing `Dimension`s are considered infinite.
+
+        Examples:
+        ---------
+        >>> I = Dimension("I")
+        >>> J = Dimension("J")
+
+        >>> Domain((I, UnitRange(-1, 3))) & Domain((I, UnitRange(1, 6)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+
+        >>> Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4))) & Domain((I, UnitRange(1, 6)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+        """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
             rng1 & rng2
@@ -189,15 +325,49 @@ class Domain(Sequence[NamedRange]):
                 _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         )
-        return Domain(broadcast_dims, intersected_ranges)
+        return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+
+    def __str__(self) -> str:
+        return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+
+
+DomainLike: TypeAlias = (
+    Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
+)  # `Domain` is `Sequence[NamedRange]` and therefore a subset
+
+
+def domain(domain_like: DomainLike) -> Domain:
+    """
+    Construct `Domain` from `DomainLike` object.
+
+    Examples:
+    ---------
+    >>> I = Dimension("I")
+    >>> J = Dimension("J")
+
+    >>> domain(((I, (2, 4)), (J, (3, 5))))
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+
+    >>> domain({I: (2, 4), J: (3, 5)})
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+    """
+    if isinstance(domain_like, Domain):
+        return domain_like
+    if isinstance(domain_like, Sequence):
+        return Domain(*tuple(named_range(d) for d in domain_like))
+    if isinstance(domain_like, Mapping):
+        return Domain(
+            dims=tuple(domain_like.keys()),
+            ranges=tuple(unit_range(r) for r in domain_like.values()),
+        )
+    raise ValueError(f"`{domain_like}` is not `DomainLike`.")
 
 
 def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange(Infinity.negative(), Infinity.positive())
-        for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.infinity() for d in broadcast_dims
     )
 
 
@@ -213,8 +383,22 @@ if TYPE_CHECKING:
             ...
 
 
+class NextGTDimsInterface(Protocol):
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+
+    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
+    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    """
+
+    # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
+    @property
+    def __gt_dims__(self) -> tuple[Dimension, ...]:
+        ...
+
+
 @extended_runtime_checkable
-class Field(Protocol[DimsT, core_defs.ScalarT]):
+class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -226,23 +410,18 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
-        ...
-
-    @property
     def ndarray(self) -> core_defs.NDArrayObject:
         ...
 
     def __str__(self) -> str:
-        codomain = self.value_type.__name__
-        return f"⟨{self.domain!s} → {codomain}⟩"
+        return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
     def remap(self, index_field: Field) -> Field:
         ...
 
     @abc.abstractmethod
-    def restrict(self, item: "DomainLike") -> Field:
+    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
         ...
 
     # Operators
@@ -251,7 +430,7 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: "DomainLike") -> Field:
+    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
         ...
 
     @abc.abstractmethod
@@ -261,6 +440,10 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __neg__(self) -> Field:
         ...
+
+    @abc.abstractmethod
+    def __invert__(self) -> Field:
+        """Only defined for `Field` of value type `bool`."""
 
     @abc.abstractmethod
     def __add__(self, other: Field | core_defs.ScalarT) -> Field:
@@ -306,17 +489,44 @@ class Field(Protocol[DimsT, core_defs.ScalarT]):
     def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
+    @abc.abstractmethod
+    def __and__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
 
-class FieldABC(Field[DimsT, core_defs.ScalarT]):
-    """Abstract base class for implementations of the :class:`Field` protocol."""
+    @abc.abstractmethod
+    def __or__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
 
-    @final
-    def __setattr__(self, key, value) -> None:
-        raise TypeError("Immutable type")
+    @abc.abstractmethod
+    def __xor__(self, other: Field | core_defs.ScalarT) -> Field:
+        """Only defined for `Field` of value type `bool`."""
 
-    @final
-    def __setitem__(self, key, value) -> None:
-        raise TypeError("Immutable type")
+
+def is_field(
+    v: Any,
+) -> TypeGuard[Field]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
+    return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
+
+
+@extended_runtime_checkable
+class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
+    @abc.abstractmethod
+    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None:
+        ...
+
+
+def is_mutable_field(
+    v: Field,
+) -> TypeGuard[MutableField]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
+    return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 @functools.singledispatch
@@ -324,8 +534,8 @@ def field(
     definition: Any,
     /,
     *,
-    domain: Optional[Any] = None,  # TODO(havogt): provide domain_like to Domain conversion
-    value_type: Optional[type] = None,
+    domain: Optional[DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -445,3 +655,39 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         )
 
     return topologically_sorted_list
+
+
+class FieldBuiltinFuncRegistry:
+    """
+    Mixin for adding `fbuiltins` registry to a `Field`.
+
+    Subclasses of a `Field` with `FieldBuiltinFuncRegistry` get their own registry,
+    dispatching (via ChainMap) to its parent's registries.
+    """
+
+    _builtin_func_map: collections.ChainMap[
+        fbuiltins.BuiltInFunction, Callable
+    ] = collections.ChainMap()
+
+    def __init_subclass__(cls, **kwargs):
+        cls._builtin_func_map = collections.ChainMap(
+            {},  # New empty `dict`` for new registrations on this class
+            *[
+                c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
+                for c in cls.__mro__
+                if "_builtin_func_map" in c.__dict__
+            ],
+        )
+
+    @classmethod
+    def register_builtin_func(
+        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
+    ) -> Any:
+        assert op not in cls._builtin_func_map
+        if op_func is None:  # when used as a decorator
+            return functools.partial(cls.register_builtin_func, op)
+        return cls._builtin_func_map.setdefault(op, op_func)
+
+    @classmethod
+    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return cls._builtin_func_map.get(func, NotImplemented)

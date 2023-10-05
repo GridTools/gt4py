@@ -18,7 +18,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -46,9 +46,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-    if unstructured_case.backend in [gtfn_cpu.run_gtfn, gtfn_cpu.run_gtfn_imperative]:
+    if unstructured_case.backend in [
+        gtfn_cpu.run_gtfn,
+        gtfn_cpu.run_gtfn_imperative,
+        gtfn_cpu.run_gtfn_with_temporaries,
+    ]:
         pytest.xfail("`maxover` broken in gtfn, see #1289.")
 
     @gtx.field_operator
@@ -60,14 +62,11 @@ def test_maxover_execution_(unstructured_case, strategy):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    ref = np.max(inp[v2e_table], axis=1)
+    ref = np.max(inp.ndarray[v2e_table], axis=1)
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
 def test_minover_execution(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions")
-
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
@@ -95,12 +94,8 @@ def test_reduction_execution(unstructured_case):
     )
 
 
+@pytest.mark.uses_constant_fields
 def test_reduction_expression_in_call(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        # -edge_f(V2E) * tmp_nbh * 2 gets inlined with the neighbor_sum operation in the reduction in itir,
-        # so in addition to the skipped reason, currently itir is a lambda instead of the 'plus' operation
-        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
-
     @gtx.field_operator
     def reduce_expr(edge_f: cases.EField) -> cases.VField:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
@@ -120,9 +115,6 @@ def test_reduction_expression_in_call(unstructured_case):
 
 
 def test_reduction_with_common_expression(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.skip("Not supported in DaCe backend: Reductions not directly on a field.")
-
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
@@ -134,10 +126,8 @@ def test_reduction_with_common_expression(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_conditional_nested_tuple(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: tuple returns")
-
     @gtx.field_operator
     def conditional_nested_tuple(
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField

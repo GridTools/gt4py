@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import warnings
 from typing import Any, Final, Optional
 
 import numpy as np
@@ -25,6 +26,7 @@ from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
@@ -52,8 +54,10 @@ class GTFNTranslationStep(
     step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ):
     language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
-    enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
+    lift_mode: Optional[LiftMode] = None
     hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
 
     @staticmethod
@@ -190,6 +194,18 @@ class GTFNTranslationStep(
             inp.kwargs["offset_provider"]
         )
 
+        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
+        #  to the interface of all (or at least all of concern) backends, but instead should be
+        #  configured in the backend itself (like it is here), until then we respect the argument
+        #  here and warn the user if it differs from the one configured.
+        runtime_lift_mode = inp.kwargs.pop("lift_mode", None)
+        lift_mode = runtime_lift_mode or self.lift_mode
+        if runtime_lift_mode != self.lift_mode:
+            warnings.warn(
+                f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
+                "overriden to be {str(runtime_lift_mode)} at runtime."
+            )
+
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         backend_arg = self._get_backend_type()
@@ -204,6 +220,7 @@ class GTFNTranslationStep(
         stencil_src = gtfn_backend.generate(
             program,
             enable_itir_transforms=self.enable_itir_transforms,
+            lift_mode=lift_mode,
             imperative=self.use_imperative_backend,
             **inp.kwargs,
         )

@@ -18,6 +18,7 @@ import numpy.typing as npt
 
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
+from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
@@ -31,9 +32,9 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if hasattr(arg, "__array__") and hasattr(arg, "__gt_dims__"):
-        arr = arg.__array__()
-        origin = getattr(arg, "__gt_origin__", tuple([0] * arr.ndim))
+    if common.is_field(arg):
+        arr = arg.ndarray
+        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
     else:
         return arg
@@ -145,4 +146,11 @@ run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor(
 
 run_gtfn_gpu = otf_compile_executor.OTFCompileExecutor(
     name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
+)
+
+run_gtfn_with_temporaries = otf_compile_executor.OTFCompileExecutor(
+    name="run_gtfn_with_temporaries",
+    otf_workflow=run_gtfn.otf_workflow.replace(
+        translation=run_gtfn.otf_workflow.translation.replace(lift_mode=LiftMode.FORCE_TEMPORARIES),
+    ),
 )
