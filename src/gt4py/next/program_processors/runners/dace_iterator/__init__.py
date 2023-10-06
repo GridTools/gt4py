@@ -12,10 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Dict, Mapping, Sequence, Tuple
 
 import dace
 import numpy as np
+from dace.codegen.compiled_sdfg import CompiledSDFG
+from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
@@ -85,18 +87,47 @@ def get_stride_args(
     return stride_args
 
 
+# TODO implement some hash of the FencilDefinition node as cache key, currently using the 'id' string
+_build_cache: Dict[str, Tuple[dace.SDFG, CompiledSDFG]] = {}
+
+
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_on_gpu = kwargs.get("run_on_gpu", False)
+    auto_optimize = kwargs.get("auto_optimize", False)
+    use_build_cache = kwargs.get("use_build_cache", False)
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
-    program = preprocess_program(program, offset_provider)
-    arg_types = [type_translation.from_value(arg) for arg in args]
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
-    sdfg: dace.SDFG = sdfg_genenerator.visit(program)
-    sdfg.simplify()
+    if program.id in _build_cache:
+        sdfg, sdfg_func = _build_cache[program.id]
+    else:
+        program = preprocess_program(program, offset_provider)
+        arg_types = [type_translation.from_value(arg) for arg in args]
+        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+        sdfg = sdfg_genenerator.visit(program)
+        sdfg.simplify()
+
+        if run_on_gpu:
+            device = dace.DeviceType.GPU
+            sdfg._name = f"{sdfg.name}_gpu"
+            for _, _, array in sdfg.arrays_recursive():
+                if not array.transient:
+                    array.storage = dace.dtypes.StorageType.GPU_Global
+        else:
+            device = dace.DeviceType.CPU
+
+        if auto_optimize:
+            # TODO Investigate how symbol definitions improve autoopt transformations,
+            #      in which case the cache table should take the symbols map into account.
+            symbols: Dict[str, int] = {}
+            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
+
+        sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
+        sdfg_func = sdfg.compile(validate=False)
+        if use_build_cache:
+            _build_cache[program.id] = (sdfg, sdfg_func)
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
@@ -104,17 +135,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
-
-    sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
-
-    if run_on_gpu:
-        import cupy as cp
-
-        sdfg._name = f"{sdfg.name}_gpu"
-        for _, _, array in sdfg.arrays_recursive():
-            if not array.transient:
-                array.storage = dace.dtypes.StorageType.GPU_Global
+    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
 
     all_args = {
         **dace_args,
@@ -122,19 +143,27 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_stirdes,
+        **dace_conn_strides,
     }
     expected_args = {
-        key: value if np.isscalar(value) or not run_on_gpu else cp.array(value)
+        key: value
         for key, value in all_args.items()
         if key in sdfg.signature_arglist(with_types=False)
     }
+
+    if run_on_gpu:
+        import cupy as cp
+
+        sdfg._name = f"{sdfg.name}_gpu"
+        for _, _, array in sdfg.arrays_recursive():
+            if not array.transient:
+                host_array = dace_field_args[array.data]
+                expected_args[array.data] = cp.array(host_array)
+
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.config.Config.set("compiler", "build_type", value="Debug")
-        dace.config.Config.set("compiler", "cpu", "args", value="-O0")
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg(**expected_args)
+        sdfg_func(**expected_args)
 
     if run_on_gpu:
         for k, v in expected_args.items():
@@ -143,5 +172,15 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 @program_executor
+def run_dace_iterator_cached_on_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(program, *args, **kwargs, run_on_gpu=False, use_build_cache=True)
+
+
+@program_executor
 def run_dace_iterator_on_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(program, *args, **kwargs, run_on_gpu=True)
+
+
+@program_executor
+def run_dace_iterator_cached_on_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(program, *args, **kwargs, run_on_gpu=True, use_build_cache=True)
