@@ -82,6 +82,12 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 import pybind11
 
                 return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()} NO_DEFAULT_PATH)"
+            case "nanobind":
+                import nanobind
+
+                py = "find_package(Python COMPONENTS Interpreter Development REQUIRED)"
+                nb = f"find_package(nanobind CONFIG REQUIRED PATHS {nanobind.cmake_dir()} NO_DEFAULT_PATHS)"
+                return py + "\n" + nb
             case "gridtools":
                 import gridtools_cpp
 
@@ -93,13 +99,24 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         match dep.name:
             case "pybind11":
                 lib_name = "pybind11::module"
+            case "nanobind":
+                lib_name = "nanobind-static"
             case "gridtools":
                 lib_name = "GridTools::fn_naive"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
-        return "target_link_libraries({target} PUBLIC {lib})".format(
-            target=dep.target, lib=lib_name
-        )
+
+        cfg = ""
+        if dep.name == "nanobind":
+            cfg = "\n".join(
+                [
+                    "nanobind_build_library(nanobind-static)",
+                    f"nanobind_compile_options({dep.target})",
+                    f"nanobind_link_options({dep.target})",
+                ]
+            )
+        lnk = f"target_link_libraries({dep.target} PUBLIC {lib_name})"
+        return cfg + "\n" + lnk
 
 
 def generate_cmakelists_source(

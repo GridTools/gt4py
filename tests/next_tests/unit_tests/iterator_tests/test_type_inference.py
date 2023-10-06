@@ -16,7 +16,58 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
-from gt4py.next.iterator.runtime import CartesianAxis
+
+
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    # The type inference uses a set to store the constraints. Since the TypeVar indices use a
+    # global counter the constraint resolution order depends on previous runs of the inference.
+    # To avoid false positives we just ignore which way the constraints have been resolved.
+    # (The previous description has never been verified.)
+    expected_error = [
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='int32') ≡ Primitive(name='float32')"
+        ),
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='float32') ≡ Primitive(name='int32')"
+        ),
+    ]
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) in expected_error
+
+
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    # TODO(tehrengruber): For whatever reason the ordering in the error message is not
+    #  deterministic. Ignoring for now, as we want to refactor the type inference anyway.
+    expected_error = [
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='int32') ≡ Primitive(name='float32')"
+        ),
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='float32') ≡ Primitive(name='int32')"
+        ),
+    ]
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) in expected_error
 
 
 def test_sym_ref():
@@ -118,6 +169,14 @@ def test_plus():
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(T₀¹, T₀¹) → T₀¹"
+
+
+def test_power():
+    testee = im.call("power")(im.literal_from_value(1.0), im.literal_from_value(2))
+    expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float64"), size=ti.TypeVar(idx=0))
+    inferred = ti.infer(testee)
+    assert inferred == expected
+    assert ti.pformat(inferred) == "float64⁰"
 
 
 def test_eq():
@@ -514,7 +573,7 @@ def test_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"
@@ -540,7 +599,7 @@ def test_partial_shift_with_cartesian_offset_provider():
             defined_loc=ti.TypeVar(idx=3),
         ),
     )
-    offset_provider = {"i": CartesianAxis("IDim")}
+    offset_provider = {"i": gtx.Dimension("IDim")}
     inferred = ti.infer(testee, offset_provider=offset_provider)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₂, T₃, T₀¹]) → It[T₂, T₃, T₀¹]"

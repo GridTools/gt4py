@@ -29,9 +29,10 @@ from typing import Generator, Generic, TypeVar
 
 from devtools import debug
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.common import Dimension, DimensionKind, GridType, Scalar
+from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -51,6 +52,7 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -218,6 +220,40 @@ class Program:
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(self, grid_type=grid_type)
 
+    def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
+        """
+        Bind scalar, i.e. non field, program arguments.
+
+        Example (pseudo-code):
+
+        >>> import gt4py.next as gtx
+        >>> @gtx.program  # doctest: +SKIP
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
+        ...     sample_field_operator(condition, out=out)  # noqa: F821
+
+        Create a new program from `program` with the `condition` parameter set to `True`:
+
+        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
+
+        The resulting program is equivalent to
+
+        >>> @gtx.program  # doctest: +SKIP
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
+        ...     sample_field_operator(condition=True, out=out)  # noqa: F821
+
+        and can be executed without passing `condition`.
+
+        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
+        """
+        for key in kwargs.keys():
+            if all(key != param.id for param in self.past_node.params):
+                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
+
+        return ProgramWithBoundArgs(
+            bound_args=kwargs,
+            **{field.name: getattr(self, field.name) for field in dataclasses.fields(self)},
+        )
+
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
         return _get_closure_vars_recursively(self.closure_vars)
@@ -236,6 +272,12 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+        if (
+            self.backend is None and DEFAULT_BACKEND is None
+        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
+            self.definition(*args, **kwargs)
+            return
+
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if not self.backend:
@@ -349,6 +391,82 @@ class Program:
             )
 
         return iter(scanops_per_axis.keys()).__next__()
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramWithBoundArgs(Program):
+    bound_args: dict[str, typing.Union[float, int, bool]] = None
+
+    def _process_args(self, args: tuple, kwargs: dict):
+        type_ = self.past_node.type
+        new_type = ts_ffront.ProgramType(
+            definition=ts.FunctionType(
+                kw_only_args={
+                    k: v
+                    for k, v in type_.definition.kw_only_args.items()
+                    if k not in self.bound_args.keys()
+                },
+                pos_only_args=type_.definition.pos_only_args,
+                pos_or_kw_args={
+                    k: v
+                    for k, v in type_.definition.pos_or_kw_args.items()
+                    if k not in self.bound_args.keys()
+                },
+                returns=type_.definition.returns,
+            )
+        )
+
+        arg_types = [type_translation.from_value(arg) for arg in args]
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
+
+        try:
+            # This error is also catched using `accepts_args`, but we do it manually here to give
+            # a better error message.
+            for name in self.bound_args.keys():
+                if name in kwargs:
+                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
+
+            type_info.accepts_args(
+                new_type,
+                with_args=arg_types,
+                with_kwargs=kwarg_types,
+                raise_exception=True,
+            )
+        except ValueError as err:
+            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            raise TypeError(
+                f"Invalid argument types in call to program `{self.past_node.id}` with "
+                f"bound arguments {bound_arg_names}!"
+            ) from err
+
+        full_args = [*args]
+        for index, param in enumerate(self.past_node.params):
+            if param.id in self.bound_args.keys():
+                full_args.insert(index, self.bound_args[param.id])
+
+        return super()._process_args(tuple(full_args), kwargs)
+
+    @functools.cached_property
+    def itir(self):
+        new_itir = super().itir
+        for new_clos in new_itir.closures:
+            for key in self.bound_args.keys():
+                index = next(
+                    index
+                    for index, closure_input in enumerate(new_clos.inputs)
+                    if closure_input.id == key
+                )
+                new_clos.inputs.pop(index)
+            new_args = [ref(inp.id) for inp in new_clos.inputs]
+            params = [sym(inp.id) for inp in new_clos.inputs]
+            for value in self.bound_args.values():
+                new_args.append(promote_to_const_iterator(literal_from_value(value)))
+            expr = itir.FunCall(
+                fun=new_clos.stencil,
+                args=new_args,
+            )
+            new_clos.stencil = itir.Lambda(params=params, expr=expr)
+        return new_itir
 
 
 @typing.overload
@@ -552,23 +670,36 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def __call__(
         self,
         *args,
-        out,
-        offset_provider: dict[str, Dimension],
         **kwargs,
     ) -> None:
-        args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-        # TODO(tehrengruber): check all offset providers are given
-        # deduce argument types
-        arg_types = []
-        for arg in args:
-            arg_types.append(type_translation.from_value(arg))
-        kwarg_types = {}
-        for name, arg in kwargs.items():
-            kwarg_types[name] = type_translation.from_value(arg)
+        # TODO(havogt): Don't select mode based on existence of kwargs,
+        # because now we cannot provide nice error messages. E.g. set context var
+        # if we are reaching this from a program call.
+        if "out" in kwargs:
+            out = kwargs.pop("out")
+            if "offset_provider" in kwargs:
+                # "out" and "offset_provider" -> field_operator as program
+                offset_provider = kwargs.pop("offset_provider")
+                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+                # TODO(tehrengruber): check all offset providers are given
+                # deduce argument types
+                arg_types = []
+                for arg in args:
+                    arg_types.append(type_translation.from_value(arg))
+                kwarg_types = {}
+                for name, arg in kwargs.items():
+                    kwarg_types[name] = type_translation.from_value(arg)
 
-        return self.as_program(arg_types, kwarg_types)(
-            *args, out, offset_provider=offset_provider, **kwargs
-        )
+                return self.as_program(arg_types, kwarg_types)(
+                    *args, out, offset_provider=offset_provider, **kwargs
+                )
+            else:
+                # "out" -> field_operator called from program in embedded execution
+                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
+                return
+        else:
+            # field_operator called from other field_operator in embedded execution
+            return self.definition(*args, **kwargs)
 
 
 @typing.overload
@@ -614,7 +745,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> FieldOperator[foast.ScanOperator]:
     ...
@@ -625,7 +756,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool,
-    init: Scalar,
+    init: core_defs.Scalar,
     backend: Optional[str],
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
@@ -636,7 +767,7 @@ def scan_operator(
     *,
     axis: Dimension,
     forward: bool = True,
-    init: Scalar = 0.0,
+    init: core_defs.Scalar = 0.0,
     backend=None,
 ) -> (
     FieldOperator[foast.ScanOperator]

@@ -34,11 +34,12 @@ dependencies = [
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.0,==2.*',
+  'gridtools-cpp>=2.3.1,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
+  'nanobind>=1.4.0 ',
   'ninja>=1.10',
   'numpy>=1.21.2',
   'packaging>=20.0',
@@ -65,16 +66,9 @@ readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-cuda = ['cupy']
-cuda110 = ['cupy-cuda110']
-cuda111 = ['cupy-cuda111']
-cuda112 = ['cupy-cuda112']
-cuda113 = ['cupy-cuda113']
-cuda114 = ['cupy-cuda114']
-cuda115 = ['cupy-cuda115']
-cuda116 = ['cupy-cuda116']
-cuda117 = ['cupy-cuda117']
-cuda11x = ['cupy-cuda11x']
+cuda = ['cupy>=12.0']
+cuda11x = ['cupy-cuda11x>=12.0']
+cuda12x = ['cupy-cuda12x>=12.0']
 dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
 formatting = ['clang-format>=9.0']
 # Always add all extra packages to 'full' for a simple full gt4py installation
@@ -84,8 +78,10 @@ full = [
   'hypothesis>=6.0.0',
   'pytest>=7.0',
   'sympy>=1.7',
-  'scipy>=1.7.2'
+  'scipy>=1.7.2',
+  'jax[cpu]>=0.4.13'
 ]
+jax = ['jax[cpu]>=0.4.13']
 performance = ['scipy>=1.7.2']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
@@ -325,18 +321,30 @@ module = 'gt4py.next.type_system.type_translation'
 ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.iterator.transforms.global_tmps'
-
 # -- pytest --
 [tool.pytest]
 
 [tool.pytest.ini_options]
 markers = [
-  'requires_atlas',  # mark tests that require 'atlas4py' bindings package
-  'requires_dace',  # mark tests that require 'dace' package
-  'requires_gpu:'  # mark tests that require a NVidia GPU (assume 'cupy' and 'cudatoolkit' are installed)
+  'requires_atlas: tests that require `atlas4py` bindings package',
+  'requires_dace: tests that require `dace` package',
+  'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'uses_applied_shifts: tests that require backend support for applied-shifts',
+  'uses_can_deref: tests that require backend support for can_deref',
+  'uses_constant_fields: tests that require backend support for constant fields',
+  'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
+  'uses_if_stmts: tests that require backend support for if-statements',
+  'uses_index_fields: tests that require backend support for index fields',
+  'uses_lift_expressions: tests that require backend support for lift expressions',
+  'uses_negative_modulo: tests that require backend support for modulo on negative numbers',
+  'uses_origin: tests that require backend support for domain origin',
+  'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
+  'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
+  'uses_sparse_fields: tests that require backend support for sparse fields',
+  'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
+  'uses_tuple_args: tests that require backend support for tuple arguments',
+  'uses_tuple_returns: tests that require backend support for tuple results',
+  'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'

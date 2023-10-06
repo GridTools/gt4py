@@ -19,7 +19,6 @@ import gt4py.next as gtx
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor

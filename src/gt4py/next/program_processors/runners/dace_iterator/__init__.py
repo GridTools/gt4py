@@ -18,7 +18,8 @@ import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next.iterator.embedded import LocatedField, NeighborTableOffsetProvider
+from gt4py.next import common
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
@@ -29,11 +30,12 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 
 def convert_arg(arg: Any):
-    if isinstance(arg, LocatedField):
-        sorted_dims = sorted(enumerate(arg.axes), key=lambda v: v[1].value)
+    if common.is_field(arg):
+        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
         ndim = len(sorted_dims)
         dim_indices = [dim[0] for dim in sorted_dims]
-        return np.moveaxis(np.asarray(arg), range(ndim), dim_indices)
+        assert isinstance(arg.ndarray, np.ndarray)
+        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 

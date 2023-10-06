@@ -11,3 +11,16 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+
+from . import exclusion_matrices
+
+
+__all__ = ["exclusion_matrices", "get_processor_id"]
+
+
+def get_processor_id(processor):
+    if hasattr(processor, "__module__") and hasattr(processor, "__name__"):
+        module_path = processor.__module__.split(".")[-1]
+        name = processor.__name__
+        return f"{module_path}.{name}"
+    return repr(processor)

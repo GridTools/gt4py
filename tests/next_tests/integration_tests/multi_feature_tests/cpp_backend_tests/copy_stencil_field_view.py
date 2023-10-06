@@ -16,14 +16,14 @@ import sys
 
 from numpy import float64
 
+import gt4py.next as gtx
 from gt4py.next import Field, field_operator, program
-from gt4py.next.iterator.runtime import CartesianAxis
 from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
 
 
-IDim = CartesianAxis("IDim")
-JDim = CartesianAxis("JDim")
-KDim = CartesianAxis("KDim")
+IDim = gtx.Dimension("IDim")
+JDim = gtx.Dimension("JDim")
+KDim = gtx.Dimension("KDim")
 
 
 @field_operator
