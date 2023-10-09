@@ -169,10 +169,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         import cupy as cp
 
         sdfg._name = f"{sdfg.name}_gpu"
-        for _, _, array in sdfg.arrays_recursive():
+        for _, label, _ in sdfg.arrays_recursive():
             if not array.transient:
-                host_array = dace_field_args[array.data]
-                expected_args[array.data] = cp.array(host_array)
+                host_array = dace_field_args[label]
+                expected_args[label] = cp.array(host_array)
 
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
