@@ -31,6 +31,14 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables
 
 
+""" Default build configuration in DaCe backend """
+_build_type = "Release"
+# removing  -ffast-math from DaCe default compiler args in order to support isfinite/isinf/isnan built-ins
+_cpu_args = (
+    "-std=c++14 -fPIC -Wall -Wextra -O3 -march=native -Wno-unused-parameter -Wno-unused-label"
+)
+
+
 def convert_arg(arg: Any):
     if common.is_field(arg):
         sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
@@ -93,9 +101,12 @@ _build_cache: Dict[str, Tuple[dace.SDFG, CompiledSDFG]] = {}
 
 @program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_on_gpu = kwargs.get("run_on_gpu", False)
+    # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
+    build_type = kwargs.get("build_type", "RelWithDebInfo")
+    run_on_gpu = kwargs.get("run_on_gpu", False)
     use_build_cache = kwargs.get("use_build_cache", False)
+    # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     neighbor_tables = filter_neighbor_tables(offset_provider)
@@ -125,7 +136,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
             sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
 
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
-        sdfg_func = sdfg.compile(validate=False)
+        with dace.config.temporary_config():
+            dace.config.Config.set("compiler", "build_type", value=build_type)
+            dace.config.Config.set("compiler", "cpu", "args", value=_cpu_args)
+            sdfg_func = sdfg.compile(validate=False)
         if use_build_cache:
             _build_cache[program.id] = (sdfg, sdfg_func)
 
@@ -172,15 +186,24 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 @program_executor
-def run_dace_iterator_cached_on_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(program, *args, **kwargs, run_on_gpu=False, use_build_cache=True)
+def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(program, *args, **kwargs, build_type=_build_type, run_on_gpu=False)
 
 
 @program_executor
-def run_dace_iterator_on_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(program, *args, **kwargs, run_on_gpu=True)
+def run_dace_cpu_cached(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(
+        program, *args, **kwargs, build_type=_build_type, run_on_gpu=False, use_build_cache=True
+    )
 
 
 @program_executor
-def run_dace_iterator_cached_on_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(program, *args, **kwargs, run_on_gpu=True, use_build_cache=True)
+def run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(program, *args, **kwargs, build_type=_build_type, run_on_gpu=True)
+
+
+@program_executor
+def run_dace_gpu_cached(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_dace_iterator(
+        program, *args, **kwargs, build_type=_build_type, run_on_gpu=True, use_build_cache=True
+    )
