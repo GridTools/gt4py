@@ -47,7 +47,10 @@ def connectivity_identifier(name: str):
 
 
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    bounds = [(0, size) for size in source_array.shape]
+    bounds = [
+        (f"-{offset}", f"{size}-{offset}")
+        for offset, size in zip(source_array.offset, source_array.shape)
+    ]
     subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
     return dace.Memlet(data=source_identifier, subset=subset)
 
@@ -73,6 +76,10 @@ def map_nested_sdfg_symbols(
             for arg_stride, param_stride in zip(arg_array.strides, param_array.strides):
                 if isinstance(param_stride, dace.symbol):
                     symbol_mapping[str(param_stride)] = str(arg_stride)
+            assert len(arg_array.offset) == len(param_array.offset)
+            for arg_offset, param_offset in zip(arg_array.offset, param_array.offset):
+                if isinstance(param_offset, dace.symbol):
+                    symbol_mapping[str(param_offset)] = str(arg_offset)
         else:
             assert arg.subset.num_elements() == 1
     for sym in nested_sdfg.free_symbols:

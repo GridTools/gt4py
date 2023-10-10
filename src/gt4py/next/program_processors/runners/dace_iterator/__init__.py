@@ -69,6 +69,17 @@ def get_shape_args(
     }
 
 
+def get_offset_args(
+    arrays: Mapping[str, dace.data.Array], params: Sequence[itir.Sym], args: Sequence[Any]
+) -> Mapping[str, int]:
+    return {
+        str(sym): -drange.start
+        for param, arg in zip(params, args)
+        if common.is_field(arg)
+        for sym, drange in zip(arrays[param.id].offset, arg.domain.ranges)
+    }
+
+
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
@@ -103,7 +114,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_offsets = get_offset_args(sdfg.arrays, program.params, args)
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
@@ -113,7 +125,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_stirdes,
+        **dace_conn_strides,
+        **dace_offsets,
     }
     expected_args = {
         key: value
