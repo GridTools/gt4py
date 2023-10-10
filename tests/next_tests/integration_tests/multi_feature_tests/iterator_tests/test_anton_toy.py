@@ -18,7 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_range, shift
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
@@ -79,9 +79,9 @@ def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
     if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         from gt4py.next.iterator import transforms
 

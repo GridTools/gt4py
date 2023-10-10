@@ -16,7 +16,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator import embedded
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case  # noqa: F401
@@ -26,7 +26,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize("fieldview_backend", [gtfn_cpu.run_gtfn_gpu])
+@pytest.mark.parametrize("fieldview_backend", [gtfn.run_gtfn_gpu])
 def test_copy(cartesian_case, fieldview_backend):  # noqa: F811 # fixtures
     try:
         import cupy as cp

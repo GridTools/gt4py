@@ -20,22 +20,11 @@ import numpy as np
 import pytest
 
 from gt4py.next import errors
-from gt4py.next.common import Field
-from gt4py.next.errors.exceptions import TypeError_
 from gt4py.next.ffront.decorator import field_operator, program, scan_operator
-from gt4py.next.ffront.fbuiltins import broadcast, int32, int64
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.ffront.fbuiltins import broadcast, int32
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    IDim,
-    IField,
-    IJKField,
-    IJKFloatField,
-    JDim,
-    KDim,
-    cartesian_case,
-)
+from next_tests.integration_tests.cases import IDim, IField, IJKFloatField, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
 )
