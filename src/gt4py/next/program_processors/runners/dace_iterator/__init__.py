@@ -201,11 +201,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 @program_executor
 def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(program, *args, **kwargs, build_type=_build_type, run_on_gpu=False)
-
-
-@program_executor
-def run_dace_cpu_cached(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
         *args,
@@ -218,11 +213,6 @@ def run_dace_cpu_cached(program: itir.FencilDefinition, *args, **kwargs) -> None
 
 @program_executor
 def run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(program, *args, **kwargs, build_type=_build_type, run_on_gpu=True)
-
-
-@program_executor
-def run_dace_gpu_cached(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
         *args,
