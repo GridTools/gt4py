@@ -31,11 +31,7 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 def convert_arg(arg: Any):
     if common.is_field(arg):
-        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
-        ndim = len(sorted_dims)
-        dim_indices = [dim[0] for dim in sorted_dims]
-        assert isinstance(arg.ndarray, np.ndarray)
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        return arg.ndarray
     return arg
 
 
