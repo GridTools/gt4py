@@ -236,7 +236,6 @@ class ItirToSDFG(eve.NodeVisitor):
                     name,
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
-                    offset=array_table[name].offset,
                     dtype=array_table[name].dtype,
                 )
 
@@ -293,8 +292,8 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_sdfg.add_array(
                 nsdfg_output_name,
                 dtype=output_descriptor.dtype,
-                shape=(array_table[output_name].shape[scan_dim_index],),
-                strides=(array_table[output_name].strides[scan_dim_index],),
+                shape=(output_descriptor.shape[scan_dim_index],),
+                strides=(output_descriptor.strides[scan_dim_index],),
                 transient=True,
             )
 
@@ -441,7 +440,6 @@ class ItirToSDFG(eve.NodeVisitor):
                     name,
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
-                    offset=array_table[name].offset,
                     dtype=array_table[name].dtype,
                 )
             else:

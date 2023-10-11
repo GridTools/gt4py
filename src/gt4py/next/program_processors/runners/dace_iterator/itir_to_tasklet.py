@@ -987,12 +987,9 @@ def closure_to_tasklet_sdfg(
             stride = [
                 dace.symbol(f"{unique_var_name()}_strd{i}", dtype=dace.int64) for i in range(ndim)
             ]
-            offset = [
-                dace.symbol(f"{unique_var_name()}_offset{i}", dtype=dace.int64) for i in range(ndim)
-            ]
             dims = [dim.value for dim in ty.dims]
             dtype = as_dace_type(ty.dtype)
-            body.add_array(name, shape=shape, strides=stride, offset=offset, dtype=dtype)
+            body.add_array(name, shape=shape, strides=stride, dtype=dtype)
             field = state.add_access(name)
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
