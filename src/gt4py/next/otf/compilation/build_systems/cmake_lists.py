@@ -86,6 +86,9 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     )
 
     def visit_FindDependency(self, dep: FindDependency):
+        # TODO(ricoh): do not add more libraries here
+        #   and do not use this design in a new build system.
+        #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
             case "pybind11":
                 import pybind11
@@ -105,6 +108,9 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
     def visit_LinkDependency(self, dep: LinkDependency):
+        # TODO(ricoh): do not add more libraries here
+        #   and do not use this design in a new build system.
+        #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
             case "pybind11":
                 lib_name = "pybind11::module"
