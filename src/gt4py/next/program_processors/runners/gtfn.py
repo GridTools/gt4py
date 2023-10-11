@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy.typing as npt
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
 from gt4py.next.iterator.transforms import LiftMode
@@ -96,7 +97,7 @@ GTFN_DEFAULT_TRANSLATION_STEP: step_types.TranslationStep[
 ] = gtfn_module.GTFNTranslationStep(
     enable_itir_transforms=True,
     use_imperative_backend=False,
-    hardware_accelerator=gtfn_module.HardwareAccelerator.CPU,
+    device_type=core_defs.DeviceType.CPU,
 )
 
 GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
@@ -104,7 +105,7 @@ GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
 ] = gtfn_module.GTFNTranslationStep(
     enable_itir_transforms=True,
     use_imperative_backend=False,
-    hardware_accelerator=gtfn_module.HardwareAccelerator.GPU,
+    device_type=core_defs.DeviceType.CUDA,
 )
 
 GTFN_DEFAULT_COMPILE_STEP: step_types.CompilationStep = compiler.Compiler(

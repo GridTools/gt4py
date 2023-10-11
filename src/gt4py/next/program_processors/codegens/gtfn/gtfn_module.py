@@ -15,12 +15,12 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import warnings
 from typing import Any, Final, Optional
 
 import numpy as np
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import trees, utils
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
@@ -40,11 +40,6 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
     return interface.Parameter(name, type_translation.from_value(obj))
 
 
-class HardwareAccelerator(enum.IntEnum):
-    CPU = enum.auto()
-    GPU = enum.auto()
-
-
 @dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
@@ -58,20 +53,21 @@ class GTFNTranslationStep(
     enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
-    hardware_accelerator: HardwareAccelerator = HardwareAccelerator.CPU
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
 
-    @staticmethod
-    def _default_language_settings(
-        hardware_accelerator: HardwareAccelerator,
-    ) -> languages.LanguageWithHeaderFilesSettings:
-        if hardware_accelerator is HardwareAccelerator.GPU:
-            return languages.LanguageWithHeaderFilesSettings(
-                formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
-                formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
-                file_extension="cu",
-                header_extension="cuh",
-            )
-        return cpp_interface.CPP_DEFAULT
+    def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return languages.LanguageWithHeaderFilesSettings(
+                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
+                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
+                    file_extension="cu",
+                    header_extension="cuh",
+                )
+            case core_defs.DeviceType.CPU:
+                return cpp_interface.CPP_DEFAULT
+            case _:
+                raise self._not_implemented_for_device_type()
 
     def _process_regular_arguments(
         self,
@@ -208,7 +204,7 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        backend_arg = self._get_backend_type()
+        backend_arg = self._backend_type()
         args_expr: list[str] = [backend_arg, *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
@@ -224,20 +220,10 @@ class GTFNTranslationStep(
             imperative=self.use_imperative_backend,
             **inp.kwargs,
         )
-        language_settings = (
-            self.language_settings
-            if self.language_settings is not None
-            else self.__class__._default_language_settings(self.hardware_accelerator)
-        )
-        backend_header = (
-            "gridtools/fn/backend/gpu.hpp"
-            if self.hardware_accelerator is HardwareAccelerator.GPU
-            else "gridtools/fn/backend/naive.hpp"
-        )
         source_code = interface.format_source(
-            language_settings,
+            self._language_settings(),
             f"""
-                    #include <{backend_header}>
+                    #include <{self._backend_header()}>
                     #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
@@ -245,35 +231,69 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        language = (
-            languages.Cuda
-            if self.hardware_accelerator is HardwareAccelerator.GPU
-            else languages.Cpp
-        )
-        library_name = (
-            "gridtools_gpu"
-            if self.hardware_accelerator is HardwareAccelerator.GPU
-            else "gridtools_cpu"
-        )
         module: stages.ProgramSource[
             languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
         ] = stages.ProgramSource(
             entry_point=function,
-            library_deps=(interface.LibraryDependency(library_name, "master"),),
+            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            language=language,
-            language_settings=language_settings,
+            language=self._language(),
+            language_settings=self._language_settings(),
         )
         return module
 
-    def _get_backend_type(self):
-        if self.hardware_accelerator is HardwareAccelerator.GPU:
-            return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
-        return "gridtools::fn::backend::naive{}"
+    def _backend_header(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools/fn/backend/gpu.hpp"
+            case core_defs.DeviceType.CPU:
+                return "gridtools/fn/backend/naive.hpp"
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _backend_type(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
+            case core_defs.DeviceType.CPU:
+                return "gridtools::fn::backend::naive{}"
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _language(self) -> type[languages.NanobindSrcL]:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return languages.Cuda
+            case core_defs.DeviceType.CPU:
+                return languages.Cpp
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+        return (
+            self.language_settings
+            if self.language_settings is not None
+            else self._default_language_settings()
+        )
+
+    def _library_name(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools_gpu"
+            case core_defs.DeviceType.CPU:
+                return "gridtools_cpu"
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _not_implemented_for_device_type(self) -> NotImplementedError:
+        return NotImplementedError(
+            f"{self.__class__.__name__} is not implemented for "
+            f"device type {self.device_type.name}"
+        )
 
 
 translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
 
 translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
-    hardware_accelerator=HardwareAccelerator.GPU
+    device_type=core_defs.DeviceType.CUDA
 )
