@@ -290,21 +290,15 @@ class ItirToSDFG(eve.NodeVisitor):
             _, (scan_lb, scan_ub) = closure_domain[scan_dim_index]
             output_subset = f"{scan_lb.value}:{scan_ub.value}"
 
-            closure_sdfg.add_array(
-                nsdfg_output_name,
-                dtype=output_descriptor.dtype,
-                shape=(array_table[output_name].shape[scan_dim_index],),
-                strides=(array_table[output_name].strides[scan_dim_index],),
-                transient=True,
-            )
-
+            scan_offset = output_descriptor.offset[scan_dim_index]
+            scan_shape = output_descriptor.shape[scan_dim_index]
             output_memlet = create_memlet_at(
                 output_name,
                 self.storage_types[output_name],
                 {
                     dim: f"i_{dim}"
                     if f"i_{dim}" in map_ranges
-                    else f"0:{output_descriptor.shape[scan_dim_index]}"
+                    else f"{scan_offset}:{scan_offset}+{scan_shape}"
                     for dim, _ in closure_domain
                 },
             )
@@ -315,12 +309,6 @@ class ItirToSDFG(eve.NodeVisitor):
             assert len(results) == 1
 
             output_subset = "0"
-
-            closure_sdfg.add_scalar(
-                nsdfg_output_name,
-                dtype=output_descriptor.dtype,
-                transient=True,
-            )
 
             output_memlet = create_memlet_at(
                 output_name,
