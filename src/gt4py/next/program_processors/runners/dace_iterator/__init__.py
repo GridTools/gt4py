@@ -195,8 +195,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     if run_on_gpu:
         # copy result to host memory
         for k, v in expected_args.items():
-            if k in dace_args and not cp.isscalar(v):
-                np.copyto(dace_args[k], v.get())
+            if k in dace_field_args:
+                np.copyto(dace_field_args[k], v.get())
 
 
 @program_executor
