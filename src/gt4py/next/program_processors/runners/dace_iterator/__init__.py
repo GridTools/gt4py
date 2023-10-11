@@ -15,7 +15,6 @@
 from typing import Any, Mapping, Sequence
 
 import dace
-import numpy as np
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
@@ -31,8 +30,8 @@ from .utility import connectivity_identifier, filter_neighbor_tables
 
 def convert_arg(arg: Any):
     if common.is_field(arg):
-        return arg.ndarray
-    return arg
+        return (arg.ndarray, arg.domain)
+    return (arg, None)
 
 
 def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
@@ -45,8 +44,25 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
+def expand_tuple_arg(name: str, arg: tuple) -> dict[str, Any]:
+    t = {}
+    for idx, member_arg in enumerate(arg):
+        member_name = f"{name}_{idx}"
+        if isinstance(member_arg, tuple):
+            t.update(expand_tuple_arg(member_name, member_arg))
+        else:
+            t[member_name] = convert_arg(member_arg)
+    return t
+
+
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
-    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
+    t = {}
+    for param, arg in zip(params, args):
+        if isinstance(arg, tuple):
+            t.update(expand_tuple_arg(param.id, arg))
+        else:
+            t[param.id] = convert_arg(arg)
+    return t
 
 
 def get_connectivity_args(
@@ -66,13 +82,12 @@ def get_shape_args(
 
 
 def get_offset_args(
-    arrays: Mapping[str, dace.data.Array], params: Sequence[itir.Sym], args: Sequence[Any]
+    arrays: Mapping[str, dace.data.Array], field_domains: Mapping[str, Any]
 ) -> Mapping[str, int]:
     return {
         str(sym): -drange.start
-        for param, arg in zip(params, args)
-        if common.is_field(arg)
-        for sym, drange in zip(arrays[param.id].offset, arg.domain.ranges)
+        for name, domain in field_domains.items()
+        for sym, drange in zip(arrays[name].offset, domain.ranges)
     }
 
 
@@ -105,18 +120,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     sdfg.simplify()
 
     dace_args = get_args(program.params, args)
-    dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
+    # domain is only set for field arguments
+    dace_field_args = {n: v for n, (v, d) in dace_args.items() if d}
+    dace_field_domains = {n: d for n, (v, d) in dace_args.items() if d}
+    dace_scalar_args = {n: v for n, (v, d) in dace_args.items() if d is None}
     dace_conn_args = get_connectivity_args(neighbor_tables)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    dace_offsets = get_offset_args(sdfg.arrays, program.params, args)
+    dace_offsets = get_offset_args(sdfg.arrays, dace_field_domains)
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
     all_args = {
-        **dace_args,
+        **dace_field_args,
+        **dace_scalar_args,
         **dace_conn_args,
         **dace_shapes,
         **dace_conn_shapes,
