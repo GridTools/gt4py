@@ -90,10 +90,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
-            case "pybind11":
-                import pybind11
-
-                return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()} NO_DEFAULT_PATH)"
             case "nanobind":
                 import nanobind
 
@@ -112,8 +108,6 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
-            case "pybind11":
-                lib_name = "pybind11::module"
             case "nanobind":
                 lib_name = "nanobind-static"
             case "gridtools_cpu":
