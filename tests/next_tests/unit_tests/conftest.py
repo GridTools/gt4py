@@ -22,7 +22,7 @@ import gt4py.next as gtx
 from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.formatters import gtfn_formatters, lisp, type_check
+from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters, lisp, type_check
 from gt4py.next.program_processors.runners import double_roundtrip, gtfn, roundtrip
 
 
