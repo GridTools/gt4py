@@ -11,10 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, cast
+
+from typing import Any, Sequence, cast
 
 import dace
 
+from gt4py.next import Dimension
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
@@ -53,9 +55,13 @@ def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
 
 def create_memlet_at(source_identifier: str, storage_type: ts.TypeSpec, index: dict[str, str]):
     field_type = cast(ts.FieldType, storage_type)
-    field_index = [index[dim.value] for dim in field_type.dims]
-    subset = ", ".join(field_index)
+    sorted_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
+    subset = ", ".join(sorted_index)
     return dace.Memlet.simple(source_identifier, subset)
+
+
+def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
+    return sorted(enumerate(dims), key=lambda v: v[1].value)
 
 
 def map_nested_sdfg_symbols(

@@ -38,6 +38,7 @@ from .utility import (
     create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
+    get_sorted_dims,
     map_nested_sdfg_symbols,
     unique_var_name,
 )
@@ -79,9 +80,10 @@ def get_scan_dim(
             - scan_dim_dtype: data type along the scan dimension
     """
     output_type = cast(ts.FieldType, storage_types[output.id])
+    sorted_dims = [dim for _, dim in get_sorted_dims(output_type.dims)]
     return (
         column_axis.value,
-        output_type.dims.index(column_axis),
+        sorted_dims.index(column_axis),
         output_type.dtype,
     )
 

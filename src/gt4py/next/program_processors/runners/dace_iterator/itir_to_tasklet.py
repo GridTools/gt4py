@@ -596,7 +596,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # if dim is not found in iterator indices, we take the neighbor index over the reduction domain
             flat_index = [
                 f"{iterator.indices[dim].data}_v" if dim in iterator.indices else index_name
-                for dim in iterator.dimensions
+                for dim in sorted(iterator.dimensions)
             ]
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
                 ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.indices
@@ -629,8 +629,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             return [ValueExpr(value=result_access, dtype=iterator.dtype)]
 
         else:
+            sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
             flat_index = [
-                ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions
+                ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
             ]
             args = [ValueExpr(iterator.field, iterator.dtype), *flat_index]
             internals = [f"{arg.value.data}_v" for arg in args]
