@@ -18,7 +18,7 @@ import dace
 import numpy as np
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next import common
+from gt4py.next.common import Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
@@ -26,20 +26,16 @@ from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_neighbor_tables
+from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
-def get_sorted_dims(dims: Sequence[common.Dimension]) -> Sequence[tuple[int, common.Dimension]]:
-    return sorted(enumerate(dims), key=lambda v: v[1].value)
-
-
-def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.UnitRange]:
+def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
     sorted_dims = get_sorted_dims(domain.dims)
     return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
 
 
 def convert_arg(arg: Any):
-    if common.is_field(arg):
+    if is_field(arg):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -84,7 +80,7 @@ def get_offset_args(
     return {
         str(sym): -drange.start
         for param, arg in zip(params, args)
-        if common.is_field(arg)
+        if is_field(arg)
         for sym, drange in zip(arrays[param.id].offset, get_sorted_dim_ranges(arg.domain))
     }
 
