@@ -34,6 +34,7 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
+    create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
     map_nested_sdfg_symbols,
@@ -594,9 +595,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             # if dim is not found in iterator indices, we take the neighbor index over the reduction domain
-            flat_index = [
+            array_index = [
                 f"{iterator.indices[dim].data}_v" if dim in iterator.indices else index_name
-                for dim in iterator.dimensions
+                for dim in sorted(iterator.dimensions)
             ]
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
                 ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.indices
@@ -607,7 +608,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 name="deref",
                 inputs=set(internals),
                 outputs={"__result"},
-                code=f"__result = {args[0].value.data}_v[{', '.join(flat_index)}]",
+                code=f"__result = {args[0].value.data}_v[{', '.join(array_index)}]",
             )
 
             for arg, internal in zip(args, internals):
@@ -629,10 +630,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             return [ValueExpr(value=result_access, dtype=iterator.dtype)]
 
         else:
+            sorted_index = sorted(iterator.indices.items(), key=lambda x: x[0])
             flat_index = [
-                ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions
+                ValueExpr(x[1], iterator.dtype) for x in sorted_index if x[0] in iterator.dimensions
             ]
-            args = [ValueExpr(iterator.field, iterator.dtype), *flat_index]
+
+            args = [ValueExpr(iterator.field, int), *flat_index]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{', '.join(internals[1:])}]"
             return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
@@ -846,7 +849,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             p.apply_pass(lambda_context.body, {})
 
             input_memlets = [
-                dace.Memlet.simple(expr.value.data, "__idx") for arg, expr in zip(node.args, args)
+                create_memlet_at(expr.value.data, ("__idx",)) for arg, expr in zip(node.args, args)
             ]
             output_memlet = dace.Memlet.simple(result_name, "0")
 
@@ -925,7 +928,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 )
                 self.context.state.add_edge(arg.value, None, expr_tasklet, internal, memlet)
 
-        memlet = dace.Memlet.simple(result_access.data, "0")
+        memlet = create_memlet_at(result_access.data, ("0",))
         self.context.state.add_edge(expr_tasklet, "__result", result_access, None, memlet)
 
         return [ValueExpr(result_access, result_type)]
