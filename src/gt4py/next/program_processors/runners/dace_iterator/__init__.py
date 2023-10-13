@@ -99,8 +99,8 @@ _build_cache_cpu: Dict[int, CompiledSDFG] = {}
 _build_cache_gpu: Dict[int, CompiledSDFG] = {}
 
 
-def get_program_id(program: itir.FencilDefinition) -> int:
-    return hash(str(program))
+def get_cache_id(*cache_args) -> int:
+    return sum([hash(str(arg)) for arg in cache_args])
 
 
 @program_executor
@@ -113,17 +113,18 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
+
+    arg_types = [type_translation.from_value(arg) for arg in args]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
-    program_id = get_program_id(program)
-    if build_cache is not None and program_id in build_cache:
+    cache_id = get_cache_id(program, arg_types, column_axis)
+    if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
-        sdfg_program = build_cache[program_id]
+        sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
     else:
         # visit ITIR and generate SDFG
         program = preprocess_program(program, offset_provider)
-        arg_types = [type_translation.from_value(arg) for arg in args]
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()
@@ -154,7 +155,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
         # store SDFG program in build cache
         if build_cache is not None:
-            build_cache[program_id] = sdfg_program
+            build_cache[cache_id] = sdfg_program
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
@@ -178,25 +179,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if key in sdfg.signature_arglist(with_types=False)
     }
 
-    if run_on_gpu:
-        import cupy as cp
-
-        # copy input data to GPU memory
-        for label, array in sdfg.arrays.items():
-            if not array.transient:
-                host_array = expected_args[label]
-                expected_args[label] = cp.array(host_array)
-
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("frontend", "check_args", value=True)
         sdfg_program(**expected_args)
-
-    if run_on_gpu:
-        # copy result to host memory
-        for k, v in expected_args.items():
-            if k in dace_field_args:
-                np.copyto(dace_field_args[k], v.get())
 
 
 @program_executor
