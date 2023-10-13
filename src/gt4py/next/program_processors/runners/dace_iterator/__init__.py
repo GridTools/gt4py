@@ -29,11 +29,20 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables
 
 
+def get_sorted_dims(dims: Sequence[common.Dimension]) -> Sequence[tuple[int, common.Dimension]]:
+    return sorted(enumerate(dims), key=lambda v: v[1].value)
+
+
+def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.UnitRange]:
+    sorted_dims = get_sorted_dims(domain.dims)
+    return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
+
+
 def convert_arg(arg: Any):
     if common.is_field(arg):
-        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
+        sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
-        dim_indices = [dim[0] for dim in sorted_dims]
+        dim_indices = [dim_index for dim_index, _ in sorted_dims]
         assert isinstance(arg.ndarray, np.ndarray)
         return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
@@ -76,7 +85,7 @@ def get_offset_args(
         str(sym): -drange.start
         for param, arg in zip(params, args)
         if common.is_field(arg)
-        for sym, drange in zip(arrays[param.id].offset, arg.domain.ranges)
+        for sym, drange in zip(arrays[param.id].offset, get_sorted_dim_ranges(arg.domain))
     }
 
 

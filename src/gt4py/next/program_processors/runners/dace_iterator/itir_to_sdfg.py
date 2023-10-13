@@ -105,16 +105,14 @@ class ItirToSDFG(eve.NodeVisitor):
         self.offset_provider = offset_provider
         self.storage_types = {}
 
-    def add_storage(
-        self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, zero_offset: bool = False
-    ):
+    def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
             shape = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
             strides = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
             offset = (
-                None
-                if zero_offset
-                else [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
+                [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
+                if has_offset
+                else None
             )
             dtype = as_dace_type(type_.dtype)
             sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
@@ -141,7 +139,7 @@ class ItirToSDFG(eve.NodeVisitor):
             scalar_kind = type_translation.get_scalar_kind(table.table.dtype)
             local_dim = Dimension("ElementDim", kind=DimensionKind.LOCAL)
             type_ = ts.FieldType([table.origin_axis, local_dim], ts.ScalarType(scalar_kind))
-            self.add_storage(program_sdfg, connectivity_identifier(offset), type_, zero_offset=True)
+            self.add_storage(program_sdfg, connectivity_identifier(offset), type_, has_offset=False)
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
