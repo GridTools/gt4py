@@ -294,13 +294,12 @@ class ItirToSDFG(eve.NodeVisitor):
 
             output_memlet = create_memlet_at(
                 output_name,
-                self.storage_types[output_name],
-                {
-                    dim: f"i_{dim}"
+                tuple(
+                    f"i_{dim}"
                     if f"i_{dim}" in map_ranges
                     else f"0:{output_descriptor.shape[scan_dim_index]}"
                     for dim, _ in closure_domain
-                },
+                ),
             )
         else:
             nsdfg, map_ranges, results = self._visit_parallel_stencil_closure(
@@ -316,11 +315,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 transient=True,
             )
 
-            output_memlet = create_memlet_at(
-                output_name,
-                self.storage_types[output_name],
-                {dim: f"i_{dim}" for dim, _ in closure_domain},
-            )
+            output_memlet = create_memlet_at(output_name, tuple(idx for idx in map_ranges.keys()))
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, [output_memlet])}
@@ -503,8 +498,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # connect access nodes to lambda inputs
         for (inner_name, _), data_name in zip(lambda_inputs[1:], input_names):
             if isinstance(self.storage_types[data_name], ts.FieldType):
-                index = {dim: f"i_{dim}" for dim, _ in closure_domain}
-                memlet = create_memlet_at(data_name, self.storage_types[data_name], index)
+                memlet = create_memlet_at(data_name, tuple(f"i_{dim}" for dim, _ in closure_domain))
             else:
                 memlet = dace.Memlet.simple(data_name, "0")
             lambda_state.add_memlet_path(
@@ -613,7 +607,7 @@ class ItirToSDFG(eve.NodeVisitor):
             ub = translator.visit(upper_bound)[0]
             bounds.append((dimension.value, (lb, ub)))
 
-        return tuple(bounds)
+        return tuple(sorted(bounds, key=lambda item: item[0]))
 
     @staticmethod
     def _check_no_lifts(node: itir.StencilClosure):
