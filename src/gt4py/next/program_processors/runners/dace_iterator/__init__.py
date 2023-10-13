@@ -22,7 +22,7 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.iterator.ir as itir
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
+from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms, global_tmps
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -54,11 +54,13 @@ def convert_arg(arg: Any):
     return arg
 
 
-def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
+def preprocess_program(
+    program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
+):
     program = apply_common_transforms(
         program,
         offset_provider=offset_provider,
-        lift_mode=LiftMode.FORCE_INLINE,
+        lift_mode=lift_mode,
         common_subexpression_elimination=False,
     )
     return program
@@ -154,7 +156,23 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     arg_types = [type_translation.from_value(arg) for arg in args]
     neighbor_tables = filter_neighbor_tables(offset_provider)
+    program_itir_not_working = [
+        "calculate_horizontal_gradients_for_turbulence",
+        "calculate_nabla2_and_smag_coefficients_for_vn",
+        "calculate_nabla4",
+        "mo_advection_traj_btraj_compute_o1_dsl",
+        "mo_math_gradients_grad_green_gauss_cell_dsl",
+        "mo_solve_nonhydro_stencil_16_fused_btraj_traj_o1",
+        "mo_solve_nonhydro_stencil_20",
+        "mo_solve_nonhydro_stencil_21",
+        "mo_solve_nonhydro_stencil_30",
+        "mo_solve_nonhydro_stencil_41",
+        "mo_velocity_advection_stencil_19",
+        "temporary_fields_for_turbulence_diagnostics",
+        "truly_horizontal_diffusion_nabla_of_theta_over_steep_points",
+    ]
 
+    validate_after_simplify = True
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
@@ -162,10 +180,23 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg = sdfg_program.sdfg
     else:
         # visit ITIR and generate SDFG
-        program = preprocess_program(program, offset_provider)
-        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+        if (
+            any([ItirToSDFG._check_no_lifts(node) for node in program.closures])
+            and program.id not in program_itir_not_working
+        ):
+            program_with_tmps: global_tmps.FencilWithTemporaries = preprocess_program(
+                program, offset_provider, LiftMode.FORCE_TEMPORARIES
+            )
+            program = program_with_tmps.fencil
+            tmps = program_with_tmps.tmps
+            validate_after_simplify = False
+        else:
+            program = preprocess_program(program, offset_provider, LiftMode.FORCE_INLINE)
+            tmps = []
+
+        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
         sdfg = sdfg_genenerator.visit(program)
-        sdfg.simplify()
+        sdfg.simplify(validate=validate_after_simplify)
 
         # set array storage for GPU execution
         if run_on_gpu:

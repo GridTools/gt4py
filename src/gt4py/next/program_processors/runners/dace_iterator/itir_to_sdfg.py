@@ -20,6 +20,7 @@ from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, SymRef
+from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import (
@@ -34,6 +35,7 @@ from .itir_to_tasklet import (
 from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
+    as_scalar_type,
     connectivity_identifier,
     create_memlet_at,
     create_memlet_full,
@@ -100,12 +102,14 @@ class ItirToSDFG(eve.NodeVisitor):
         self,
         param_types: list[ts.TypeSpec],
         offset_provider: dict[str, NeighborTableOffsetProvider],
+        tmps: list[global_tmps.Temporary],
         column_axis: Optional[Dimension] = None,
     ):
         self.param_types = param_types
         self.column_axis = column_axis
         self.offset_provider = offset_provider
         self.storage_types = {}
+        self.tmps = tmps
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
@@ -124,9 +128,112 @@ class ItirToSDFG(eve.NodeVisitor):
             raise NotImplementedError()
         self.storage_types[name] = type_
 
-    def visit_FencilDefinition(self, node: itir.FencilDefinition):
+    def generate_temporaries(
+        self, node_params, defs_state: dace.SDFGState, program_sdfg: dace.SDFG
+    ) -> dict[str, IteratorExpr | ValueExpr | SymbolExpr]:
+        symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr] = {}
+        for sym in node_params:
+            if all([sym.id != tmp.id for tmp in self.tmps]) and sym.kind != "Iterator":
+                name_ = str(sym.id)
+                type_ = self.storage_types[name_]
+                assert isinstance(type_, ts.ScalarType)
+                symbol_map[name_] = SymbolExpr(name_, as_dace_type(type_))
+
+        symbol_dtype = dace.int64
+        tmp_symbols: dict[str, IteratorExpr | ValueExpr | SymbolExpr] = {}
+        for tmp in self.tmps:
+            tmp_name = str(tmp.id)
+            assert isinstance(tmp.domain, itir.FunCall)
+            self.node_types.update(itir_typing.infer_all(tmp.domain))
+            domain_ctx = Context(program_sdfg, defs_state, symbol_map)
+            tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
+            dims: list[Dimension] = []
+            for dim, _ in tmp_domain:
+                dims.append(
+                    Dimension(
+                        value=dim,
+                        kind=(
+                            DimensionKind.VERTICAL
+                            if self.column_axis is not None and self.column_axis.value == dim
+                            else DimensionKind.HORIZONTAL
+                        ),
+                    )
+                )
+            assert isinstance(tmp.dtype, str)
+            type_ = ts.FieldType(dims=dims, dtype=as_scalar_type(tmp.dtype))
+            self.add_storage(program_sdfg, tmp_name, type_)
+
+            tmp_array = program_sdfg.arrays[tmp_name]
+            tmp_array.transient = True
+
+            stride_var = unique_var_name()
+            program_sdfg.add_scalar(stride_var, symbol_dtype, transient=True)
+            stride_node = defs_state.add_access(stride_var)
+            defs_state.add_edge(
+                defs_state.add_tasklet(
+                    "stride",
+                    code="__result = 1",
+                    inputs={},
+                    outputs={"__result"},
+                ),
+                "__result",
+                stride_node,
+                None,
+                dace.Memlet.simple(stride_var, "0"),
+            )
+            for (_, (begin, end)), offset_sym, shape_sym, stride_sym in reversed(
+                list(
+                    zip(
+                        tmp_domain,
+                        tmp_array.offset,
+                        tmp_array.shape,
+                        tmp_array.strides,
+                    )
+                )
+            ):
+                offset_tasklet = defs_state.add_tasklet(
+                    "offset",
+                    code=f"__result = - {begin.value}",
+                    inputs={},
+                    outputs={"__result"},
+                )
+                offset_var = unique_var_name()
+                program_sdfg.add_scalar(offset_var, symbol_dtype, transient=True)
+                offset_node = defs_state.add_access(offset_var)
+                defs_state.add_edge(
+                    offset_tasklet,
+                    "__result",
+                    offset_node,
+                    None,
+                    dace.Memlet.simple(offset_var, "0"),
+                )
+
+                shape_tasklet = defs_state.add_tasklet(
+                    "shape",
+                    code=f"__result = {end.value} - {begin.value}",
+                    inputs={},
+                    outputs={"__result"},
+                )
+                shape_var = unique_var_name()
+                program_sdfg.add_scalar(shape_var, symbol_dtype, transient=True)
+                shape_node = defs_state.add_access(shape_var)
+                defs_state.add_edge(
+                    shape_tasklet,
+                    "__result",
+                    shape_node,
+                    None,
+                    dace.Memlet.simple(shape_var, "0"),
+                )
+
+                tmp_symbols[str(offset_sym)] = offset_var
+                tmp_symbols[str(stride_sym)] = stride_var
+                tmp_symbols[str(shape_sym)] = stride_var = shape_var
+
+        return tmp_symbols
+
+    def visit_FencilDefinition(self, node: itir.FencilDefinition, **kargs):
         program_sdfg = dace.SDFG(name=node.id)
-        last_state = program_sdfg.add_state("program_entry")
+        entry_state = program_sdfg.add_state("program_entry")
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
@@ -136,6 +243,9 @@ class ItirToSDFG(eve.NodeVisitor):
         for param, type_ in zip(node.params, self.param_types):
             self.add_storage(program_sdfg, str(param.id), type_)
 
+        if self.tmps:
+            tmp_symbols = self.generate_temporaries(node.params, entry_state, program_sdfg)
+
         # Add connectivities as SDFG storages.
         for offset, table in neighbor_tables:
             scalar_kind = type_translation.get_scalar_kind(table.table.dtype)
@@ -144,6 +254,7 @@ class ItirToSDFG(eve.NodeVisitor):
             self.add_storage(program_sdfg, connectivity_identifier(offset), type_, has_offset=False)
 
         # Create a nested SDFG for all stencil closures.
+        last_state = entry_state
         for closure in node.closures:
             assert isinstance(closure.output, itir.SymRef)
 
@@ -205,6 +316,11 @@ class ItirToSDFG(eve.NodeVisitor):
             for inner_name, memlet in output_mapping.items():
                 access_node = last_state.add_access(inner_name)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
+
+        if self.tmps:
+            inter_state_edge = program_sdfg.out_edges(entry_state)[0]
+            inter_state_edge.data.assignments.update(tmp_symbols)
+
         program_sdfg.validate()
         return program_sdfg
 
