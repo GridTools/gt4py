@@ -68,6 +68,7 @@ def test_copy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
+@pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
@@ -454,6 +455,7 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
     def testee(a: cases.EField, b: cases.EField) -> tuple[cases.VField, cases.VField]:
@@ -592,7 +594,7 @@ def test_ternary_operator(cartesian_case, left, right):
 
 
 @pytest.mark.parametrize("left, right", [(2, 3), (3, 2)])
-@pytest.mark.uses_conditional_with_tuples
+@pytest.mark.uses_tuple_returns
 def test_ternary_operator_tuple(cartesian_case, left, right):
     @gtx.field_operator
     def testee(
@@ -649,7 +651,7 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
-@pytest.mark.uses_scan_with_tuples
+@pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
@@ -924,6 +926,7 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
@@ -937,6 +940,7 @@ def test_tuple_unpacking(cartesian_case):
     )
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_unpacking_star_multi(cartesian_case):
     OutType = tuple[
         cases.IField,

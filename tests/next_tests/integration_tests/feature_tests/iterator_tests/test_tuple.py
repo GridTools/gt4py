@@ -49,6 +49,7 @@ def tuple_output2(inp1, inp2):
     "stencil",
     [tuple_output1, tuple_output2],
 )
+@pytest.mark.uses_tuple_returns
 def test_tuple_output(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -87,6 +88,7 @@ def tuple_of_tuple_output2(inp1, inp2, inp3, inp4):
     return make_tuple(deref(inp1), deref(inp2)), make_tuple(deref(inp3), deref(inp4))
 
 
+@pytest.mark.uses_tuple_returns
 def test_tuple_of_tuple_of_field_output(program_processor):
     program_processor, validate = program_processor
 

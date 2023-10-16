@@ -31,7 +31,6 @@ GTFN_FORMAT_SOURCECODE = "gtfn.format_sourcecode"
 REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CAN_DEREF = "uses_can_deref"
-USES_CONDITIONAL_WITH_TUPLES = "uses_conditional_with_tuples"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
 USES_IF_STMTS = "uses_if_stmts"
@@ -41,11 +40,11 @@ USES_NEGATIVE_MODULO = "uses_negative_modulo"
 USES_ORIGIN = "uses_origin"
 USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
-USES_SCAN_WITH_TUPLES = "uses_scan_with_tuples"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
+USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -71,7 +70,6 @@ BACKEND_SKIP_TEST_MATRIX = {
     DACE: GTFN_SKIP_TEST_LIST
     + [
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_CONDITIONAL_WITH_TUPLES, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_CONSTANT_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -80,7 +78,7 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_REDUCTION_OVER_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_SCAN_WITH_TUPLES, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
     GTFN_CPU: GTFN_SKIP_TEST_LIST,

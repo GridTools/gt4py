@@ -49,21 +49,8 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
-def flatten_tuple_args(
-    params: Sequence[itir.Sym], args: Sequence[Any]
-) -> list[tuple[itir.Sym, Any]]:
-    f = []
-    for name, arg in zip(params, args):
-        if isinstance(arg, tuple):
-            tuple_params = [itir.Sym(f"{name}_{idx}") for idx, _ in enumerate(arg)]
-            f += flatten_tuple_args(tuple_params, list(arg))
-        else:
-            f.append((name, arg))
-    return f
-
-
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
-    return {name.id: convert_arg(arg) for name, arg in flatten_tuple_args(params, args)}
+    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
 
 def get_connectivity_args(
@@ -105,9 +92,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     program = preprocess_program(program, offset_provider)
-    arg_types = [
-        type_translation.from_value(arg) for _, arg in flatten_tuple_args(program.params, args)
-    ]
+    arg_types = [type_translation.from_value(arg) for arg in args]
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     sdfg.simplify()
