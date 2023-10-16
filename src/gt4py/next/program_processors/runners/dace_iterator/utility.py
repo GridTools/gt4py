@@ -12,10 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any
+from typing import Any, Sequence
 
 import dace
 
+from gt4py.next import Dimension
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
@@ -49,12 +50,16 @@ def connectivity_identifier(name: str):
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
     bounds = [(0, size) for size in source_array.shape]
     subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
-    return dace.Memlet(data=source_identifier, subset=subset)
+    return dace.Memlet.simple(source_identifier, subset)
 
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
     return dace.Memlet(data=source_identifier, subset=subset)
+
+
+def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
+    return sorted(enumerate(dims), key=lambda v: v[1].value)
 
 
 def map_nested_sdfg_symbols(

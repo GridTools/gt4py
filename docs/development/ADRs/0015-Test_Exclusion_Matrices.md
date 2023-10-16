@@ -43,7 +43,7 @@ The test-exclusion matrix is a dictionary, where `key` is the backend name and e
 `(<marker[str]>, <skip_definition[SKIP,XFAIL]>, <skip_message(format keys: 'marker', 'backend')>)`
 
 The backend string, used both as dictionary key and as string formatter in the skip message, is retrieved
-by calling `tests.next_tests.get_processor_id()`, which returns the so-called processor name.
+by calling `next_tests.get_processor_id()`, which returns the so-called processor name.
 The following backend processors are defined:
 
 ```python
