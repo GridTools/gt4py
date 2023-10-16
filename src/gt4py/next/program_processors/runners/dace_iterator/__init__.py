@@ -20,7 +20,7 @@ from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next import common
+from gt4py.next.common import Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
@@ -28,7 +28,12 @@ from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_translation
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_neighbor_tables
+from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
+
+
+def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
+    sorted_dims = get_sorted_dims(domain.dims)
+    return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
 
 
 """ Default build configuration in DaCe backend """
@@ -40,10 +45,10 @@ _cpu_args = (
 
 
 def convert_arg(arg: Any):
-    if common.is_field(arg):
-        sorted_dims = sorted(enumerate(arg.__gt_dims__), key=lambda v: v[1].value)
+    if is_field(arg):
+        sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
-        dim_indices = [dim[0] for dim in sorted_dims]
+        dim_indices = [dim_index for dim_index, _ in sorted_dims]
         assert isinstance(arg.ndarray, np.ndarray)
         return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
@@ -76,6 +81,17 @@ def get_shape_args(
         str(sym): size
         for name, value in args.items()
         for sym, size in zip(arrays[name].shape, value.shape)
+    }
+
+
+def get_offset_args(
+    arrays: Mapping[str, dace.data.Array], params: Sequence[itir.Sym], args: Sequence[Any]
+) -> Mapping[str, int]:
+    return {
+        str(sym): -drange.start
+        for param, arg in zip(params, args)
+        if is_field(arg)
+        for sym, drange in zip(arrays[param.id].offset, get_sorted_dim_ranges(arg.domain))
     }
 
 
@@ -163,7 +179,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_offsets = get_offset_args(sdfg.arrays, program.params, args)
 
     all_args = {
         **dace_args,
@@ -171,7 +188,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_stirdes,
+        **dace_conn_strides,
+        **dace_offsets,
     }
     expected_args = {
         key: value
