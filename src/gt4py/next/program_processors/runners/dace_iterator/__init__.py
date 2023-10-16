@@ -11,8 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-from typing import Any, Mapping, Sequence
+import hashlib
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 import numpy as np
@@ -20,12 +20,12 @@ from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
-from gt4py.next.common import Domain, UnitRange, is_field
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import Dimension, Domain, UnitRange, is_field
+from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
@@ -111,12 +111,35 @@ def get_stride_args(
     return stride_args
 
 
-_build_cache_cpu: dict[int, CompiledSDFG] = {}
-_build_cache_gpu: dict[int, CompiledSDFG] = {}
+_build_cache_cpu: dict[str, CompiledSDFG] = {}
+_build_cache_gpu: dict[str, CompiledSDFG] = {}
 
 
-def get_cache_id(*cache_args) -> int:
-    return sum([hash(str(arg)) for arg in cache_args])
+def get_cache_id(
+    program: itir.FencilDefinition,
+    arg_types: Sequence[ts.TypeSpec],
+    column_axis: Optional[Dimension],
+    offset_provider: Mapping[str, Any],
+) -> str:
+    max_neighbors = [
+        (k, v.max_neighbors)
+        if isinstance(v, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider))
+        else (k, -1)
+        for k, v in offset_provider.items()
+    ]
+    cache_id_args = [
+        str(arg)
+        for arg in (
+            program,
+            *arg_types,
+            column_axis,
+            *max_neighbors,
+        )
+    ]
+    m = hashlib.sha256()
+    for s in cache_id_args:
+        m.update(s.encode())
+    return m.hexdigest()
 
 
 @program_executor
@@ -133,7 +156,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     arg_types = [type_translation.from_value(arg) for arg in args]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
-    cache_id = get_cache_id(program, *arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
