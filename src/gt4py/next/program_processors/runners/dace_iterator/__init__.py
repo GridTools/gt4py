@@ -49,25 +49,21 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
-def expand_tuple_arg(name: str, arg: tuple) -> dict[str, Any]:
-    t = {}
-    for idx, member_arg in enumerate(arg):
-        member_name = f"{name}_{idx}"
-        if isinstance(member_arg, tuple):
-            t.update(expand_tuple_arg(member_name, member_arg))
+def flatten_tuple_args(
+    params: Sequence[itir.Sym], args: Sequence[Any]
+) -> list[tuple[itir.Sym, Any]]:
+    f = []
+    for name, arg in zip(params, args):
+        if isinstance(arg, tuple):
+            tuple_params = [itir.Sym(f"{name}_{idx}") for idx, _ in enumerate(arg)]
+            f += flatten_tuple_args(tuple_params, list(arg))
         else:
-            t[member_name] = convert_arg(member_arg)
-    return t
+            f.append((name, arg))
+    return f
 
 
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
-    t = {}
-    for param, arg in zip(params, args):
-        if isinstance(arg, tuple):
-            t.update(expand_tuple_arg(param.id, arg))
-        else:
-            t[param.id] = convert_arg(arg)
-    return t
+    return {name.id: convert_arg(arg) for name, arg in flatten_tuple_args(params, args)}
 
 
 def get_connectivity_args(
@@ -109,7 +105,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     program = preprocess_program(program, offset_provider)
-    arg_types = [type_translation.from_value(arg) for arg in args]
+    arg_types = [
+        type_translation.from_value(arg) for _, arg in flatten_tuple_args(program.params, args)
+    ]
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     sdfg.simplify()
@@ -120,7 +118,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
     sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
 
@@ -130,7 +128,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_strides,
+        **dace_conn_stirdes,
     }
     expected_args = {
         key: value

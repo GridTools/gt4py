@@ -86,43 +86,27 @@ def get_scan_dim(
     )
 
 
-def get_member_args(name: str, t: ts.TupleType) -> Sequence[str]:
-    members: list[str] = []
-    for idx, m_type in enumerate(t.types):
-        m_name = f"{name}_{idx}"
-        if isinstance(m_type, ts.TupleType):
-            members += get_member_args(m_name, m_type)
-        else:
-            members.append(m_name)
-    return members
-
-
-def unpack_tuple_members(fun_node: FunCall) -> Sequence[str]:
-    names = []
-    assert isinstance(fun_node.fun, SymRef)
-    assert fun_node.fun.id == "make_tuple"
-    for arg in fun_node.args:
+def flatten_tuple_args(args: Sequence[Expr]) -> list[SymRef]:
+    symbols = []
+    for arg in args:
         if isinstance(arg, SymRef):
-            names.append(str(arg.id))
+            symbols.append(arg)
         else:
             assert isinstance(arg, FunCall)
-            names += unpack_tuple_members(arg)
-    return names
+            assert isinstance(arg.fun, SymRef)
+            assert arg.fun.id == "make_tuple"
+            symbols += flatten_tuple_args(arg.args)
+    return symbols
 
 
 def get_output_names(
     closure: itir.StencilClosure, storage_types: dict[str, ts.TypeSpec]
 ) -> Sequence[str]:
     if isinstance(closure.output, itir.SymRef):
-        name = str(closure.output.id)
-        storage_type = storage_types[name]
-        if isinstance(storage_type, ts.TupleType):
-            return get_member_args(name, storage_type)
-        else:
-            return [name]
+        return [str(closure.output.id)]
     else:
-        assert isinstance(closure.output, FunCall)
-        return unpack_tuple_members(closure.output)
+        tuple_args = flatten_tuple_args(closure.output.args)
+        return [str(arg.id) for arg in tuple_args]
 
 
 class ItirToSDFG(eve.NodeVisitor):
@@ -152,9 +136,6 @@ class ItirToSDFG(eve.NodeVisitor):
             sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
         elif isinstance(type_, ts.ScalarType):
             sdfg.add_symbol(name, as_dace_type(type_))
-        elif isinstance(type_, ts.TupleType):
-            for idx, ttype_ in enumerate(type_.types):
-                self.add_storage(sdfg, f"{name}_{idx}", ttype_)
         else:
             raise NotImplementedError()
         self.storage_types[name] = type_
