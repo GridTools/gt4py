@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import dace
 import numpy as np
@@ -95,8 +95,8 @@ def get_stride_args(
     return stride_args
 
 
-_build_cache_cpu: Dict[int, CompiledSDFG] = {}
-_build_cache_gpu: Dict[int, CompiledSDFG] = {}
+_build_cache_cpu: dict[int, CompiledSDFG] = {}
+_build_cache_gpu: dict[int, CompiledSDFG] = {}
 
 
 def get_cache_id(*cache_args) -> int:
@@ -117,7 +117,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     arg_types = [type_translation.from_value(arg) for arg in args]
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
-    cache_id = get_cache_id(program, arg_types, column_axis)
+    cache_id = get_cache_id(program, *arg_types, column_axis)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
@@ -143,7 +143,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if auto_optimize:
             # TODO Investigate how symbol definitions improve autoopt transformations,
             #      in which case the cache table should take the symbols map into account.
-            symbols: Dict[str, int] = {}
+            symbols: dict[str, int] = {}
             sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
 
         # compile SDFG and retrieve SDFG program
@@ -163,7 +163,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
-    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
+    dace_conn_stirdes = get_stride_args(sdfg.arrays, dace_conn_args)
 
     all_args = {
         **dace_args,
@@ -171,7 +171,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
-        **dace_conn_strides,
+        **dace_conn_stirdes,
     }
     expected_args = {
         key: value
