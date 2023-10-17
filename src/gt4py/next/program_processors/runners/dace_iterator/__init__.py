@@ -123,9 +123,8 @@ def get_cache_id(
 ) -> str:
     max_neighbors = [
         (k, v.max_neighbors)
-        if isinstance(v, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider))
-        else (k, -1)
         for k, v in offset_provider.items()
+        if isinstance(v, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider))
     ]
     cache_id_args = [
         str(arg)
