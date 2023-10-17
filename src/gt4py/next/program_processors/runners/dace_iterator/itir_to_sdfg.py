@@ -89,16 +89,16 @@ def get_scan_dim(
 
 
 def flatten_tuple_args(args: Sequence[Expr]) -> list[SymRef]:
-    symbols = []
+    flat_args = []
     for arg in args:
         if isinstance(arg, SymRef):
-            symbols.append(arg)
+            flat_args.append(arg)
         else:
             assert isinstance(arg, FunCall)
             assert isinstance(arg.fun, SymRef)
             assert arg.fun.id == "make_tuple"
-            symbols += flatten_tuple_args(arg.args)
-    return symbols
+            flat_args += flatten_tuple_args(arg.args)
+    return flat_args
 
 
 def get_output_names(
@@ -107,8 +107,8 @@ def get_output_names(
     if isinstance(closure.output, itir.SymRef):
         return [str(closure.output.id)]
     else:
-        tuple_args = flatten_tuple_args(closure.output.args)
-        return [str(arg.id) for arg in tuple_args]
+        flat_args = flatten_tuple_args(closure.output.args)
+        return [str(arg.id) for arg in flat_args]
 
 
 class ItirToSDFG(eve.NodeVisitor):
