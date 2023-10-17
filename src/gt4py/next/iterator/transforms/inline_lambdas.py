@@ -59,6 +59,12 @@ def inline_lambda(  # noqa: C901  # see todo above
             if is_applied_lift(arg) and len(arg.args) == 0:
                 eligible_params[i] = True
 
+    # TODO(tehrengruber): make configurable
+    if True:
+        for i, arg in enumerate(node.args):
+            if isinstance(arg, ir.Lambda):
+                eligible_params[i] = True
+
     if node.fun.params and not any(eligible_params):
         return node
 

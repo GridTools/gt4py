@@ -107,6 +107,7 @@ def apply_common_transforms(
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(inlined)
+        inlined = PropagateDeref.apply(inlined) # todo: document
 
         if inlined == ir:
             break
