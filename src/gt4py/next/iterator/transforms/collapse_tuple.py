@@ -183,6 +183,8 @@ class CollapseTuple(eve.NodeTranslator):
             self.flags & self.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
             and node.fun == ir.SymRef(id="make_tuple")
         ):
+            # `make_tuple(expr1, expr1)`
+            # -> `let((_tuple_el_1, expr1), (_tuple_el_2, expr2))(make_tuple(_tuple_el_1, _tuple_el_2))`
             bound_vars: dict[str, ir.Expr] = {}
             new_args: list[ir.Expr] = []
             for i, arg in enumerate(node.args):
@@ -199,12 +201,16 @@ class CollapseTuple(eve.NodeTranslator):
                     im.call(node.fun)(*new_args)))
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and _is_let(node):
+            # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(tup)`
+            #  -> `make_tuple(trivial_expr1, trivial_expr2)`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
                 return self.visit(inline_lambda(node, eligible_params=eligible_params))
 
         if self.flags & self.Flag.PROPAGATE_TO_IF_ON_TUPLES and not node.fun == im.ref("if_"):
-            # TODO: only do if type of branch value is a tuple
+            # TODO(tehrengruber): This significantly increases the size of the tree. Revisit.
+            # TODO(tehrengruber): Only inline if type of branch value is a tuple.
+            # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
             for i, arg in enumerate(node.args):
                 if _is_if_call(arg):
                     cond, true_branch, false_branch = arg.args
@@ -213,6 +219,7 @@ class CollapseTuple(eve.NodeTranslator):
                     return im.if_(cond, new_true_branch, new_false_branch)
 
         if self.flags & self.Flag.PROPAGATE_NESTED_LET and _is_let(node):
+            # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
             original_inner_expr = node.fun.expr
@@ -228,6 +235,7 @@ class CollapseTuple(eve.NodeTranslator):
                 node = self.visit(nlet(tuple(outer_vars.items()))(nlet(tuple(inner_vars.items()))(original_inner_expr)))
 
         if self.flags & self.Flag.INLINE_TRIVIAL_LET and _is_let(node) and isinstance(node.fun.expr, ir.SymRef):
+            # `let(a, 1)(a)` -> `1`
             for arg_sym, arg in zip(node.fun.params, node.args):
                 if node.fun.expr == im.ref(arg_sym.id):
                     return arg
