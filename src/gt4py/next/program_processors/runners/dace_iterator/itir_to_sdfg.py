@@ -256,7 +256,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create a nested SDFG for all stencil closures.
         last_state = entry_state
         for closure in node.closures:
-            assert isinstance(closure.output, itir.SymRef)
+            ItirToSDFG._replace_ssa_identifiers(closure)
 
             # filter out arguments with scalar type, because they are passed as symbols
             input_names = [
@@ -748,3 +748,27 @@ class ItirToSDFG(eve.NodeVisitor):
             if not all(isinstance(arg, (itir.Literal, itir.OffsetLiteral)) for arg in shift.args):
                 return False
         return True
+
+    @staticmethod
+    def _replace_ssa_identifiers(closure: itir.StencilClosure):
+        _UNIQUE_NAME_SEPARATOR = "ᐞ"
+
+        def __replace_in_expression(fun: itir.FunCall, p_old: str, p_new: str):
+            for arg in fun.args:
+                if isinstance(arg, itir.FunCall):
+                    __replace_in_expression(arg, p_old, p_new)
+                elif isinstance(arg, itir.SymRef) and arg.id == p_old:
+                    arg.id = eve.SymbolRef(p_new)
+
+        if isinstance(closure.stencil, itir.Lambda):
+            for p in closure.stencil.params:
+                p_new = ""
+                p_old = str(p.id)
+                match = p_old.split(_UNIQUE_NAME_SEPARATOR)
+                p_new += match[0]
+                for suffix in match[1:]:
+                    p_new += f"{len(p_new)}_{suffix}"
+                if p_new != p_old:
+                    assert isinstance(closure.stencil.expr, itir.FunCall)
+                    __replace_in_expression(closure.stencil.expr, p_old, p_new)
+                    p.id = eve.SymbolName(p_new)
