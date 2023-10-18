@@ -29,6 +29,7 @@ def inline_lambda(  # noqa: C901  # see todo above
     opcount_preserving=False,
     force_inline_lift_args=False,
     force_inline_trivial_lift_args=False,
+    force_inline_lambda_args=True,
     eligible_params: Optional[list[bool]] = None,
 ):
     assert isinstance(node.fun, ir.Lambda)
@@ -60,7 +61,7 @@ def inline_lambda(  # noqa: C901  # see todo above
                 eligible_params[i] = True
 
     # TODO(tehrengruber): make configurable
-    if True:
+    if force_inline_lambda_args:
         for i, arg in enumerate(node.args):
             if isinstance(arg, ir.Lambda):
                 eligible_params[i] = True
@@ -130,6 +131,8 @@ class InlineLambdas(NodeTranslator):
 
     force_inline_trivial_lift_args: bool
 
+    force_inline_lambda_args: bool
+
     @classmethod
     def apply(
         cls,
@@ -137,6 +140,7 @@ class InlineLambdas(NodeTranslator):
         opcount_preserving=False,
         force_inline_lift_args=False,
         force_inline_trivial_lift_args=False,
+        force_inline_lambda_args=True,
     ):
         """
         Inline lambda calls by substituting every argument by its value.
@@ -162,6 +166,7 @@ class InlineLambdas(NodeTranslator):
             opcount_preserving=opcount_preserving,
             force_inline_lift_args=force_inline_lift_args,
             force_inline_trivial_lift_args=force_inline_trivial_lift_args,
+            force_inline_lambda_args=force_inline_lambda_args,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -172,6 +177,7 @@ class InlineLambdas(NodeTranslator):
                 opcount_preserving=self.opcount_preserving,
                 force_inline_lift_args=self.force_inline_lift_args,
                 force_inline_trivial_lift_args=self.force_inline_trivial_lift_args,
+                force_inline_lambda_args=self.force_inline_lambda_args,
             )
 
         return node

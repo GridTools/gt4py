@@ -20,7 +20,7 @@ from gt4py import eve
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference, ir_makers as im
-from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
+from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda, InlineLambdas
 
 
 def _get_tuple_size(type_: type_inference.Type) -> int:
@@ -113,13 +113,27 @@ class CollapseTuple(eve.NodeTranslator):
         """
         it_type_inference.infer_all(node, save_to_annex=True)
 
-        return cls(
+        new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
             flags=flags or cls.flags
         ).visit(node)
 
+        # inline lambdas to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS
+        # TODO: test case for `scan(lambda carry: {1, 2})` (see solve_nonhydro_stencil_52_like_z_q_tup)
+        new_node = InlineLambdas.apply(new_node, opcount_preserving=True, force_inline_lambda_args=False)
+
+        # rerun with only some parts as LETIFY_MAKE_TUPLE_ELEMENTS might mess up the tree
+        #  see `test_solve_nonhydro_stencil_52_like`
+        new_node = cls(
+            ignore_tuple_size=ignore_tuple_size,
+            flags=(cls.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
+                 | cls.Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE) & (flags or cls.flags)
+        ).visit(node)
+
+        return new_node
+
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        node = self.generic_visit(node)
+        node = self.generic_visit(node, **kwargs)
 
         if (
             self.flags & self.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
@@ -224,10 +238,11 @@ class CollapseTuple(eve.NodeTranslator):
             inner_vars = {}
             original_inner_expr = node.fun.expr
             for arg_sym, arg in zip(node.fun.params, node.args):
+                assert arg_sym not in inner_vars  # TODO: fix collisions
                 if _is_let(arg):
                     for sym, val in zip(arg.fun.params, arg.args):
+                        assert sym not in outer_vars  # TODO: fix collisions
                         outer_vars[sym] = val
-                    assert arg_sym not in inner_vars  # TODO: fix collisions
                     inner_vars[arg_sym] = arg.fun.expr
                 else:
                     inner_vars[arg_sym] = arg
