@@ -222,23 +222,22 @@ class ItirToSDFG(eve.NodeVisitor):
         for name in [*input_names, *conn_names, *output_names]:
             if name in closure_sdfg.arrays:
                 assert name in input_names and name in output_names
-                # In case of in/out field in closure with multiple output fields (e.g. mo_solve_nonhydro_stencil_02),
-                # there is risk of race condition between read/write access nodes in the (asynchronous) map tasklet.
-                if len(output_names) > 1:
-                    transient_name = unique_var_name()
-                    closure_sdfg.add_array(
-                        transient_name,
-                        shape=array_table[name].shape,
-                        strides=array_table[name].strides,
-                        dtype=array_table[name].dtype,
-                        transient=True,
-                    )
-                    closure_init_state.add_nedge(
-                        closure_init_state.add_access(name),
-                        closure_init_state.add_access(transient_name),
-                        create_memlet_full(name, closure_sdfg.arrays[name]),
-                    )
-                    input_transients_mapping[name] = transient_name
+                # In case of closures with in/out fields, there is risk of race condition
+                # between read/write access nodes in the (asynchronous) map tasklet.
+                transient_name = unique_var_name()
+                closure_sdfg.add_array(
+                    transient_name,
+                    shape=array_table[name].shape,
+                    strides=array_table[name].strides,
+                    dtype=array_table[name].dtype,
+                    transient=True,
+                )
+                closure_init_state.add_nedge(
+                    closure_init_state.add_access(name),
+                    closure_init_state.add_access(transient_name),
+                    create_memlet_full(name, closure_sdfg.arrays[name]),
+                )
+                input_transients_mapping[name] = transient_name
             elif isinstance(self.storage_types[name], ts.FieldType):
                 closure_sdfg.add_array(
                     name,
