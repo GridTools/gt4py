@@ -172,7 +172,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         "truly_horizontal_diffusion_nabla_of_theta_over_steep_points",
     ]
 
-    validate_after_simplify = True
+    run_simplify = True
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
@@ -189,14 +189,15 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
             )
             program = program_with_tmps.fencil
             tmps = program_with_tmps.tmps
-            validate_after_simplify = False
+            # The inline_sdfgs pass does not update offset in array access
+            run_simplify = False
         else:
             program = preprocess_program(program, offset_provider, LiftMode.FORCE_INLINE)
             tmps = []
 
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
         sdfg = sdfg_genenerator.visit(program)
-        sdfg.simplify(validate=validate_after_simplify)
+        run_simplify and sdfg.simplify(validate_all=True)
 
         # set array storage for GPU execution
         if run_on_gpu:
