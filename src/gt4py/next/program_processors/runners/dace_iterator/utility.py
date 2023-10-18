@@ -48,7 +48,9 @@ def connectivity_identifier(name: str):
 
 
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    bounds = [(0, size) for size in source_array.shape]
+    bounds = [
+        (-offset, -offset + size) for offset, size in zip(source_array.offset, source_array.shape)
+    ]
     subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
     return dace.Memlet.simple(source_identifier, subset)
 
