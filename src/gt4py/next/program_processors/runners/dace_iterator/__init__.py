@@ -18,6 +18,7 @@ import dace
 import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
+from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.iterator.ir as itir
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
@@ -172,7 +173,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         "truly_horizontal_diffusion_nabla_of_theta_over_steep_points",
     ]
 
-    run_simplify = True
+    with_temporaries = False
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
@@ -189,15 +190,16 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
             )
             program = program_with_tmps.fencil
             tmps = program_with_tmps.tmps
-            # The inline_sdfgs pass does not update offset in array access
-            run_simplify = False
+            with_temporaries = True
         else:
             program = preprocess_program(program, offset_provider, LiftMode.FORCE_INLINE)
             tmps = []
 
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
         sdfg = sdfg_genenerator.visit(program)
-        run_simplify and sdfg.simplify(validate_all=True)
+        if with_temporaries:
+            sdfg.apply_transformations_repeated(RefineNestedAccess)
+        sdfg.simplify()
 
         # set array storage for GPU execution
         if run_on_gpu:
