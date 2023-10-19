@@ -425,14 +425,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Translate the function's body
         results: list[ValueExpr] = []
-        """
-        Ideally, we would like the lambdas to be single-output expressions, which implies only one child node.
-        This would simplify SDFG-generation. For this, we need a transformation pass in ITIR preprocessor
-        to unpack tuple expressions into multiple single-output expressions.
-        The same applies to scan and conditional expressions with tuples. However, for lambda expressions
-        it is easy to unpack tuples in the for-loop below, after flattening the nested list of expressions.
-        Consider removing this loop once the ITIR transformation loop is in place.
-        """
+        # We are flattening the returned list of value expressions because the multiple outputs of a lamda
+        # should be a list of nodes without tuple structure. Ideally, an ITIR transformation could do this.
         for expr in flatten_list(self.visit(node.expr)):
             if isinstance(expr, ValueExpr):
                 result_name = unique_var_name()

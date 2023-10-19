@@ -128,13 +128,9 @@ class ItirToSDFG(eve.NodeVisitor):
     def get_output_nodes(
         self, closure: itir.StencilClosure, context: Context
     ) -> dict[str, dace.nodes.AccessNode]:
-        if isinstance(closure.output, itir.SymRef):
-            name = str(closure.output.id)
-            return {name: context.state.add_access(name)}
-        else:
-            translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
-            output_nodes = flatten_list(translator.visit(closure.output))
-            return {node.value.data: node.value for node in output_nodes}
+        translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
+        output_nodes = flatten_list(translator.visit(closure.output))
+        return {node.value.data: node.value for node in output_nodes}
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
