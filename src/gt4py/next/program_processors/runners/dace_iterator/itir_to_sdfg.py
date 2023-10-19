@@ -257,6 +257,7 @@ class ItirToSDFG(eve.NodeVisitor):
         last_state = entry_state
         for closure in node.closures:
             ItirToSDFG._replace_ssa_identifiers(closure)
+            assert isinstance(closure.output, itir.SymRef)
 
             # filter out arguments with scalar type, because they are passed as symbols
             input_names = [
