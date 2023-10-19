@@ -1,0 +1,5 @@
+add to gridtools fn neighbortable:
+        template <class T, std::enable_if_t<std::is_invocable<T, int>::value, int> = 0>
+        GT_FUNCTION auto neighbor_table_neighbors(T&& fun, int index) {
+            return fun(index);
+        }

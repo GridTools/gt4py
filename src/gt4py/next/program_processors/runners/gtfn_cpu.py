@@ -61,11 +61,14 @@ def extract_connectivity_args(
     args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
     for name, conn in offset_provider.items():
         if isinstance(conn, common.Connectivity):
-            if not isinstance(conn, common.NeighborTable):
+            if hasattr(conn, "__gtfn_bindings__"):
+                _, _, data = conn.__gtfn_bindings__("")
+                if data is not None:
+                    args.append((data, tuple([0] * 2)))
+            else:
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append((conn.table, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
         else:
@@ -96,7 +99,7 @@ GTFN_DEFAULT_TRANSLATION_STEP = gtfn_module.GTFNTranslationStep(
 )
 
 GTFN_DEFAULT_COMPILE_STEP = compiler.Compiler(
-    cache_strategy=cache.Strategy.SESSION, builder_factory=compiledb.CompiledbFactory()
+    cache_strategy=cache.Strategy.PERSISTENT, builder_factory=compiledb.CompiledbFactory()
 )
 
 
