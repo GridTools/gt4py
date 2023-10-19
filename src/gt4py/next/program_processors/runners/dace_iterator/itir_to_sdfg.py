@@ -318,6 +318,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
         if self.tmps:
+            # on the first interstate edge define symbols for shape/stride/offsets of temporary arrays
             inter_state_edge = program_sdfg.out_edges(entry_state)[0]
             inter_state_edge.data.assignments.update(tmp_symbols)
 
