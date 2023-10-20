@@ -698,9 +698,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         offset = tail[0].value
         assert isinstance(offset, str)
 
-        assert isinstance(tail[1], itir.OffsetLiteral)
-        element = tail[1].value
-        assert isinstance(element, int)
+        if isinstance(tail[1], itir.OffsetLiteral):
+            element = tail[1].value
+            assert isinstance(element, int)
+            element_var = unique_var_name()
+            self.context.body.add_scalar(element_var, dace.dtypes.int64, transient=True)
+            element_node = self.context.state.add_access(element_var)
+            tlet_node = self.context.state.add_tasklet(
+                "get_element", {}, {"__out"}, f"__out = {element}"
+            )
+            self.context.state.add_edge(
+                tlet_node, "__out", element_node, None, dace.Memlet.simple(element_var, "0")
+            )
+        else:
+            element_node = self.visit(tail[1])[0]
 
         if isinstance(self.offset_provider[offset], NeighborTableOffsetProvider):
             table = self.offset_provider[offset]
@@ -712,20 +723,32 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             args = [
                 ValueExpr(conn, table.table.dtype),
                 ValueExpr(iterator.indices[shifted_dim], dace.int64),
+                ValueExpr(element_node, dace.int64),
             ]
 
             internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]}[{internals[1]}, {element}]"
-        else:
+            expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
+        elif isinstance(self.offset_provider[offset], StridedNeighborOffsetProvider):
             offset_provider = self.offset_provider[offset]
-            assert isinstance(offset_provider, StridedNeighborOffsetProvider)
 
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
             offset_value = iterator.indices[shifted_dim]
-            args = [ValueExpr(offset_value, dace.int64)]
-            internals = [f"{offset_value.data}_v"]
-            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {element}"
+            args = [
+                ValueExpr(offset_value, dace.int64),
+                ValueExpr(element_node, dace.int64),
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {internals[1]}"
+        else:
+            assert isinstance(self.offset_provider[offset], Dimension)
+            shifted_dim = target_dim = self.offset_provider[offset].value
+            args = [
+                ValueExpr(iterator.indices[shifted_dim], dace.int64),
+                element_node,
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]} + {internals[1]}"
 
         shifted_value = self.add_expr_tasklet(
             list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"

@@ -196,7 +196,6 @@ class ItirToSDFG(eve.NodeVisitor):
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> tuple[dace.SDFG, list[str], list[str]]:
         assert ItirToSDFG._check_no_lifts(node)
-        assert ItirToSDFG._check_shift_offsets_are_literals(node)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
