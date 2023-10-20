@@ -320,7 +320,7 @@ class FieldOperatorLowering(NodeTranslator):
         obj, dtype = node.args[0], node.args[1].id
         if isinstance(obj, foast.TupleExpr):
             casted_elements = []
-            for _, element in enumerate(obj.elts):
+            for element in obj.elts:
                 casted_element = self._map(
                     im.lambda_("it")(im.call("cast_")("it", str(dtype))), element
                 )
