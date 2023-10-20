@@ -840,6 +840,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if isinstance(value, foast.TupleExpr):
             element_types_new = []
             for element in value.elts:
+                assert isinstance(element.type, (ts.FieldType, ts.ScalarType))
                 element_types_new.append(
                     with_altered_scalar_kind(
                         element.type, getattr(ts.ScalarKind, new_type.id.upper())
