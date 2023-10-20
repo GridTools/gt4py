@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import itertools
 from typing import Any, Sequence
 
 import dace
@@ -166,3 +166,11 @@ def unique_name(prefix):
 
 def unique_var_name():
     return unique_name("__var")
+
+
+def flatten_list(node_list: list[Any]) -> list[Any]:
+    return list(
+        itertools.chain.from_iterable(
+            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+        )
+    )

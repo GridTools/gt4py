@@ -36,6 +36,7 @@ from .utility import (
     connectivity_identifier,
     create_memlet_full,
     filter_neighbor_tables,
+    flatten_list,
     map_nested_sdfg_symbols,
     unique_name,
     unique_var_name,
@@ -423,32 +424,36 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         # Translate the function's body
-        result: ValueExpr | SymbolExpr = self.visit(node.expr)[0]
-        # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-        if isinstance(result, ValueExpr):
-            result_name = unique_var_name()
-            self.context.body.add_scalar(result_name, result.dtype, transient=True)
-            result_access = self.context.state.add_access(result_name)
-            self.context.state.add_edge(
-                result.value,
-                None,
-                result_access,
-                None,
-                # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
-                dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
-            )
-            result = ValueExpr(value=result_access, dtype=result.dtype)
-        else:
-            result = self.add_expr_tasklet([], result.value, result.dtype, "forward")[0]
-        self.context.body.arrays[result.value.data].transient = False
-        self.context = prev_context
+        results: list[ValueExpr] = []
+        # We are flattening the returned list of value expressions because the multiple outputs of a lamda
+        # should be a list of nodes without tuple structure. Ideally, an ITIR transformation could do this.
+        for expr in flatten_list(self.visit(node.expr)):
+            if isinstance(expr, ValueExpr):
+                result_name = unique_var_name()
+                self.context.body.add_scalar(result_name, expr.dtype, transient=True)
+                result_access = self.context.state.add_access(result_name)
+                self.context.state.add_edge(
+                    expr.value,
+                    None,
+                    result_access,
+                    None,
+                    # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
+                    dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
+                )
+                result = ValueExpr(value=result_access, dtype=expr.dtype)
+            else:
+                # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
+                result = self.add_expr_tasklet([], expr.value, expr.dtype, "forward")[0]
+            self.context.body.arrays[result.value.data].transient = False
+            results.append(result)
 
+        self.context = prev_context
         for node in context.state.nodes():
             if isinstance(node, dace.nodes.AccessNode):
                 if context.state.out_degree(node) == 0 and context.state.in_degree(node) == 0:
                     context.state.remove_node(node)
 
-        return context, inputs, [result]
+        return context, inputs, results
 
     def visit_SymRef(self, node: itir.SymRef) -> list[ValueExpr | SymbolExpr] | IteratorExpr:
         if node.id not in self.context.symbol_map:

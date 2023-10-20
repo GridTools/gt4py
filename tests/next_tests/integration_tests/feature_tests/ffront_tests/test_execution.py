@@ -159,7 +159,6 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
@@ -400,7 +399,6 @@ def test_offset_field(cartesian_case):
     assert np.allclose(out, ref)
 
 
-@pytest.mark.uses_tuple_returns
 def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -476,7 +474,7 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_constant_fields
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -840,7 +838,6 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(
