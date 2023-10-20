@@ -327,6 +327,33 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
+def test_astype_on_tuples(cartesian_case):
+    @gtx.field_operator
+    def testee(
+        a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[gtx.Field[[IDim], int64], gtx.Field[[IDim], int64]]:
+        return astype((a, b), int64)
+
+    cases.verify_with_default_data(
+        cartesian_case, testee, ref=lambda a, b: (a.astype(int64), b.astype(int64))
+    )
+
+
+def test_astype_on_nested_tuples(cartesian_case):
+    @gtx.field_operator
+    def cast_nested_tuple(
+        a: cases.IField, b: cases.IField
+    ) -> tuple[gtx.Field[[IDim], int64], tuple[gtx.Field[[IDim], int64], gtx.Field[[IDim], int64]]]:
+        return astype((a, (a, b)), int64)
+
+    @gtx.field_operator
+    def combine(a: cases.IField, b: cases.IField) -> gtx.Field[[IDim], int64]:
+        nested_tuple = cast_nested_tuple(a, b)
+        return nested_tuple[0] + nested_tuple[1][0] + nested_tuple[1][1]
+
+    cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
+
+
 def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
