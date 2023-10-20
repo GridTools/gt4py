@@ -129,7 +129,6 @@ class ItirToSDFG(eve.NodeVisitor):
             raise NotImplementedError()
         self.storage_types[name] = type_
 
-
     def generate_temporaries(
         self, node_params, defs_state: dace.SDFGState, program_sdfg: dace.SDFG
     ) -> dict[str, IteratorExpr | ValueExpr | SymbolExpr]:
