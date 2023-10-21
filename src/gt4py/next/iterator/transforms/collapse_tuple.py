@@ -12,7 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import enum
+from collections import ChainMap
 from typing import Callable
+import hashlib
 
 import dataclasses
 
@@ -50,6 +52,49 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
 
 def nlet(bindings: list[tuple[ir.Sym, str], ir.Expr]):
     return im.let(*[el for tup in bindings for el in tup])
+
+def _short_hash(val: str) -> str:
+    return hashlib.sha1(val.encode('UTF-8')).hexdigest()[0:6]
+
+@dataclasses.dataclass(frozen=True)
+class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
+    """
+    Given an iterator expression cannonicalize all bound symbol names.
+
+    If two such expression are in the same scope and equal so are their values.
+
+    >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
+    >>> cannonicalized_testee1 = CannonicalizeBoundSymbolNames.apply(testee1)
+    >>> str(cannonicalized_testee1)
+    'λ(_csym_1) → _csym_1 + b'
+
+    >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
+    >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)
+    >>> assert cannonicalized_testee1 == cannonicalized_testee2
+    """
+    _uids: UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_csym")
+    )
+
+    @classmethod
+    def apply(cls, node: ir.Expr):
+        return cls().visit(node, sym_map=ChainMap({}))
+
+    def visit_Lambda(self, node: ir.Lambda, *, sym_map: ChainMap):
+        sym_map = sym_map.new_child()
+        for param in node.params:
+            sym_map[str(param.id)] = self._uids.sequential_id()
+
+        return im.lambda_(*sym_map.values())(self.visit(node.expr, sym_map=sym_map))
+
+    def visit_SymRef(self, node: ir.SymRef, *, sym_map: dict[str, str]):
+        return im.ref(sym_map[node.id]) if node.id in sym_map else node
+
+def _is_equal_value_heuristics(a: ir.Expr, b: ir.Expr):
+    """
+    Return true if, bot not only if, two expression (with equal scope) have the same value.
+    """
+    return a == b or (CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b))
 
 @dataclasses.dataclass(frozen=True)
 class CollapseTuple(eve.NodeTranslator):
@@ -118,17 +163,11 @@ class CollapseTuple(eve.NodeTranslator):
             flags=flags or cls.flags
         ).visit(node)
 
-        # inline lambdas to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS
+        # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
+        # as otherwise two equal expressions containing a tuple will not be equal anymore
+        # and the CSE pass can not remove them.
         # TODO: test case for `scan(lambda carry: {1, 2})` (see solve_nonhydro_stencil_52_like_z_q_tup)
         new_node = InlineLambdas.apply(new_node, opcount_preserving=True, force_inline_lambda_args=False)
-
-        # rerun with only some parts as LETIFY_MAKE_TUPLE_ELEMENTS might mess up the tree
-        #  see `test_solve_nonhydro_stencil_52_like`
-        new_node = cls(
-            ignore_tuple_size=ignore_tuple_size,
-            flags=(cls.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
-                 | cls.Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE) & (flags or cls.flags)
-        ).visit(node)
 
         return new_node
 
@@ -150,7 +189,7 @@ class CollapseTuple(eve.NodeTranslator):
             for i, v in enumerate(node.args):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
-                if not (int(v.args[0].value) == i and v.args[1] == first_expr):
+                if not (int(v.args[0].value) == i and _is_equal_value_heuristics(v.args[1], first_expr)):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
@@ -215,8 +254,8 @@ class CollapseTuple(eve.NodeTranslator):
                     im.call(node.fun)(*new_args)))
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and _is_let(node):
-            # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(tup)`
-            #  -> `make_tuple(trivial_expr1, trivial_expr2)`
+            # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
+            #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
             if any(eligible_params):
                 return self.visit(inline_lambda(node, eligible_params=eligible_params))
