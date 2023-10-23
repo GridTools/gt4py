@@ -16,9 +16,8 @@ import numpy as np
 
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
+from gt4py.next import allocators as next_allocators, common
 from gt4py.next.program_processors.runners import roundtrip
-from gt4py.next.storage import allocators as next_allocators
 
 
 I = gtx.Dimension("I")
@@ -41,7 +40,7 @@ def prog(
     add(a, b, out=out)
 
 
-a = gtx.field.ones(
+a = gtx.constructors.ones(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     dtype=core_defs.dtype(np.float32),
     allocator=prog,
@@ -49,14 +48,14 @@ a = gtx.field.ones(
 
 
 arr = np.full((10, 10), 42.0)
-b = gtx.field.asfield(
+b = gtx.constructors.asfield(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     arr,
     dtype=core_defs.dtype(np.float32),
     allocator=prog,
 )
 
-out = gtx.field.empty(
+out = gtx.constructors.empty(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     dtype=core_defs.dtype(np.float32),
     allocator=prog,

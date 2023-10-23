@@ -414,6 +414,19 @@ class NextGTDimsInterface(Protocol):
         ...
 
 
+class GTFieldInterface(Protocol):
+    """
+    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+
+    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
+    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    """
+
+    @property
+    def __gt_domain__(self) -> Domain:
+        ...
+
+
 @extended_runtime_checkable
 class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
@@ -688,7 +701,7 @@ class FieldBuiltinFuncRegistry:
 
     def __init_subclass__(cls, **kwargs):
         cls._builtin_func_map = collections.ChainMap(
-            {},  # New empty `dict`` for new registrations on this class
+            {},  # New empty `dict` for new registrations on this class
             *[
                 c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
                 for c in cls.__mro__

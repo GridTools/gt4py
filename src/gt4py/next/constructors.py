@@ -15,12 +15,11 @@
 from typing import Optional, Sequence
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
-from gt4py.next.storage import allocators as next_allocators
+from gt4py.next import allocators as next_allocators, common
+from gt4py.next.embedded import nd_array_field
 from gt4py.storage.cartesian import utils as storage_utils
 
 
-# Public interface
 def empty(
     domain: common.Domain,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
@@ -28,7 +27,7 @@ def empty(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.MutableField:
+) -> nd_array_field.NdArrayField:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
 
     !!!TODO!!!
@@ -65,9 +64,8 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     dtype = core_defs.dtype(dtype)
-    buffer = allocator.__gt_allocate__(domain, dtype, device_id, aligned_index)
-
-    res = common.field(buffer, domain=domain)
+    field_buffer = allocator.__gt_allocate__(domain, dtype, device_id, aligned_index)
+    res = common.field(field_buffer.tensor.ndarray, domain=domain)
     assert common.is_mutable_field(res)
     return res
 
@@ -79,7 +77,7 @@ def zeros(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.MutableField:
+) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype,
@@ -98,7 +96,7 @@ def ones(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.MutableField:
+) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype,
@@ -118,7 +116,7 @@ def full(
     *,
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-) -> common.MutableField:
+) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
@@ -139,7 +137,7 @@ def asfield(
     device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     # copy=False, TODO
-) -> common.MutableField:
+) -> nd_array_field.NdArrayField:
     # TODO make sure we don't reallocate if its in correct layout and device
     shape = storage_utils.asarray(data).shape
     if shape != domain.shape:

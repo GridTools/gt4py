@@ -41,6 +41,22 @@ except ImportError:
 
 FieldLike = Union["cp.ndarray", np.ndarray, ArrayInterface, CUDAArrayInterface]
 
+_CPUBufferAllocator = allocators.NDArrayBufferAllocator(
+    device_type=core_defs.DeviceType.CPU,
+    array_ns=np,
+)
+
+if cp:
+    cp_device_type = (
+        core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA
+    )
+
+    assert allocators.is_valid_nplike_allocation_ns(cp)
+
+    _GPUBufferAllocator = allocators.NDArrayBufferAllocator(device_type=cp_device_type, array_ns=cp)
+else:
+    _GPUBufferAllocator = None
+
 
 def _idx_from_order(order):
     return list(np.argsort(order))
@@ -201,11 +217,11 @@ def allocate_cpu(
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple[allocators._NDBuffer, np.ndarray]:
     device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-    buffer = allocators.allocate(
+    buffer = _CPUBufferAllocator.allocate(
         shape,
         core_defs.dtype(dtype),
+        device_id=device.id,
         layout_map=layout_map,
-        device=device,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
     )
@@ -219,13 +235,14 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
+    assert _GPUBufferAllocator is None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
         core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
     )
-    buffer = allocators.allocate(
+    buffer = _GPUBufferAllocator.allocate(
         shape,
         core_defs.dtype(dtype),
-        device=device,
+        device_id=device.id,
         layout_map=layout_map,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,

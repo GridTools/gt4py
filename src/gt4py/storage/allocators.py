@@ -35,6 +35,7 @@ from gt4py.eve.extended_typing import (
     Protocol,
     Sequence,
     Tuple,
+    Type,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -47,9 +48,6 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-
-
-_ScalarT = TypeVar("_ScalarT", bound=core_defs.Scalar)
 
 
 _NDBuffer: TypeAlias = Union[
@@ -73,7 +71,7 @@ def is_valid_layout_map(value: Sequence[Any]) -> TypeGuard[BufferLayoutMap]:
 
 
 @dataclasses.dataclass(frozen=True)
-class TensorBuffer(Generic[core_defs.DeviceTypeT, _ScalarT]):
+class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
     """
     N-dimensional (tensor-like) memory buffer.
 
@@ -102,7 +100,7 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, _ScalarT]):
     buffer: _NDBuffer = dataclasses.field(hash=False)
     memory_address: int
     device: core_defs.Device[core_defs.DeviceTypeT]
-    dtype: core_defs.DType[_ScalarT]
+    dtype: core_defs.DType[core_defs.ScalarT]
     shape: core_defs.TensorShape
     strides: Tuple[int, ...]
     layout_map: BufferLayoutMap
@@ -147,6 +145,13 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, _ScalarT]):
         return self.ndarray.__dlpack_device__()
 
 
+if TYPE_CHECKING:
+    # TensorBuffer should be compatible with all the expected buffer interfaces
+    __TensorBufferAsArrayInterfaceT: Type[xtyping.ArrayInterface] = TensorBuffer
+    __TensorBufferAsCUDAArrayInterfaceT: Type[xtyping.CUDAArrayInterface] = TensorBuffer
+    __TensorBufferAsDLPackBufferT: Type[xtyping.DLPackBuffer] = TensorBuffer
+
+
 class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
     """Protocol for buffer allocators."""
 
@@ -157,12 +162,12 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
     def allocate(
         self,
         shape: Sequence[core_defs.IntegralScalar],
-        dtype: core_defs.DType[_ScalarT],
-        layout_map: BufferLayoutMap,
+        dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int,
+        layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, _ScalarT]:
+    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         """
         Allocate a TensorBuffer with the given shape, layout and alignment settings.
 
@@ -191,12 +196,12 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
     def allocate(
         self,
         shape: Sequence[core_defs.IntegralScalar],
-        dtype: core_defs.DType[_ScalarT],
-        layout_map: BufferLayoutMap,
+        dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int,
+        layout_map: BufferLayoutMap,
         byte_alignment: int,
         aligned_index: Optional[Sequence[int]] = None,
-    ) -> TensorBuffer[core_defs.DeviceTypeT, _ScalarT]:
+    ) -> TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         if not core_defs.is_valid_tensor_shape(shape):
             raise ValueError(f"Invalid shape {shape}")
         ndim = len(shape)
@@ -300,7 +305,7 @@ class _BaseNDArrayBufferAllocator(abc.ABC, Generic[core_defs.DeviceTypeT]):
     def tensorize(
         self,
         buffer: _NDBuffer,
-        dtype: core_defs.DType[_ScalarT],
+        dtype: core_defs.DType[core_defs.ScalarT],
         shape: core_defs.TensorShape,
         allocated_shape: core_defs.TensorShape,
         item_size: int,
@@ -334,7 +339,7 @@ class ValidNumPyLikeAllocationNS(Protocol):
 
 def is_valid_nplike_allocation_ns(obj: Any) -> TypeGuard[ValidNumPyLikeAllocationNS]:
     return (
-        bool({"empty", "byte_bounds", "lib"} & set(dir(np)))
+        len(required_keys := {"empty", "byte_bounds", "lib"} & set(dir(np))) == len(required_keys)
         and "stride_tricks" in dir(np.lib)
         and "as_strided" in dir(np.lib.stride_tricks)
     )
@@ -377,7 +382,7 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
     def tensorize(
         self,
         buffer: _NDBuffer,
-        dtype: core_defs.DType[_ScalarT],
+        dtype: core_defs.DType[core_defs.ScalarT],
         shape: core_defs.TensorShape,
         allocated_shape: core_defs.TensorShape,
         item_size: int,
@@ -394,73 +399,3 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
             tensor_view = tensor_view[shape_slices]
 
         return tensor_view
-
-
-#: Registry of default allocators for each device type.
-device_allocators: dict[core_defs.DeviceType, BufferAllocator] = {}
-
-assert is_valid_nplike_allocation_ns(np)
-
-device_allocators[core_defs.DeviceType.CPU] = NDArrayBufferAllocator(
-    device_type=core_defs.DeviceType.CPU,
-    array_ns=np,
-)
-
-if cp:
-    cp_device_type = (
-        core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA
-    )
-
-    assert is_valid_nplike_allocation_ns(cp)
-
-    device_allocators[core_defs.DeviceType.ROCM] = NDArrayBufferAllocator(
-        device_type=cp_device_type, array_ns=cp
-    )
-
-
-def allocate(
-    shape: Sequence[core_defs.IntegralScalar],
-    dtype: core_defs.DType[_ScalarT],
-    *,
-    layout_map: BufferLayoutMap,
-    device: Optional[core_defs.Device] = None,
-    byte_alignment: int,
-    aligned_index: Optional[Sequence[int]] = None,
-    allocator: Optional[BufferAllocator] = None,
-) -> TensorBuffer:
-    """
-    Allocate a TensorBuffer with the given settings on the given device.
-
-    The arguments `device` and `allocator` are mutually exclusive.
-    If `device` is specified, the corresponding default allocator
-    (defined in :data:`device_allocators`) is used.
-
-    Args:
-        shape: Tensor dimensions as defined in :meth:`BufferAllocator.allocate`.
-        dtype: Data type descriptor as defined in :meth:`BufferAllocator.allocate`.
-        layout_map: layout of the dimensions in the buffer as defined in
-            :meth:`BufferAllocator.allocate`
-        device_id: device where the buffer should be allocated as defined in
-            :meth:`BufferAllocator.allocate`.
-        byte_alignment: Alignment (in bytes) as defined in :meth:`BufferAllocator.allocate`.
-        aligned_index: N-dimensional index of the first aligned element as defined
-            in :meth:`BufferAllocator.allocate`.
-    """
-    if device is None and allocator is None:
-        raise ValueError("No 'device' or 'allocator' specified")
-    if device is None:
-        assert allocator is not None  # for mypy
-        device = core_defs.Device(allocator.device_type, 0)
-    assert device is not None  # for mypy
-    allocator = allocator or device_allocators[device.device_type]
-    if device.device_type != allocator.device_type:
-        raise ValueError(f"Device {device} and allocator {allocator} are incompatible")
-
-    return allocator.allocate(
-        shape=shape,
-        dtype=dtype,
-        layout_map=layout_map,
-        device_id=device.device_id,
-        byte_alignment=byte_alignment,
-        aligned_index=aligned_index,
-    )

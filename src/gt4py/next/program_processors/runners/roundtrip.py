@@ -23,12 +23,11 @@ from typing import Any, Optional
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import common
+from gt4py.next import allocators as next_allocators, common
 from gt4py.next.iterator import embedded, ir as itir
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.storage import allocators as next_allocators
 
 
 def _create_tmp(axes, origin, shape, dtype):
