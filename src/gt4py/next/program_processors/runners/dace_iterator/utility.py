@@ -36,17 +36,11 @@ def as_dace_type(type_: ts.ScalarType):
 
 
 def as_scalar_type(dtype: str) -> ts.ScalarType:
-    if dtype == "bool":
-        return ts.ScalarType(kind=ts.ScalarKind.BOOL)
-    elif dtype == "float32":
-        return ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
-    elif dtype == "float64":
-        return ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
-    elif dtype == "int32":
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
-    elif dtype == "int64":
-        return ts.ScalarType(kind=ts.ScalarKind.INT64)
-    raise ValueError(f"data type {dtype} not supported")
+    try:
+        kind = getattr(ts.ScalarKind, dtype.upper())
+    except AttributeError:
+        raise ValueError(f"Data type {dtype} not supported.")
+    return ts.ScalarType(kind)
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
