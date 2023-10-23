@@ -277,7 +277,7 @@ class ForwardDescriptor(xtyping.NonDataDescriptor[_C, _V]):
     ) -> _V:
         ...
 
-    def __get__(
+    def __get__(  # noqa: F811  # redefinion of unused member
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
     ) -> _V | ForwardDescriptor[_C, _V]:
         assert self.attribute_name is not None

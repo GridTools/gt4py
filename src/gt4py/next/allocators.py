@@ -17,19 +17,14 @@ import dataclasses
 
 import numpy as np
 
-from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
-    Any,
     Callable,
-    Generic,
     Optional,
     Protocol,
     Sequence,
     TypeAlias,
-    cast,
 )
 from gt4py.next import common
 from gt4py.storage import allocators as core_allocators

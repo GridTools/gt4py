@@ -38,9 +38,7 @@ from gt4py.eve.extended_typing import (
     Type,
     TypeAlias,
     TypeGuard,
-    TypeVar,
     Union,
-    cast,
 )
 
 

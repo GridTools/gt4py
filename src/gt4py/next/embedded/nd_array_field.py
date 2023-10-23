@@ -17,16 +17,15 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, Sequence, TypeAlias, TypeVar
+from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
-from gt4py.storage.cartesian import utils as storage_utils
 
 
 try:
