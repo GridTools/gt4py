@@ -25,12 +25,7 @@ from gt4py.next.program_processors.formatters.gtfn import (
 from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import (
-    lift_mode,
-    program_processor,
-    program_processor_no_dace_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 @fundef
@@ -120,8 +115,9 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 
 
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
-def test_tridiag(fencil, tridiag_reference, program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
+@pytest.mark.uses_lift_expressions
+def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
+    program_processor, validate = program_processor
     if (
         program_processor
         in [
