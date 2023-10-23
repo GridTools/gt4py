@@ -28,10 +28,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 @pytest.mark.requires_gpu
 @pytest.mark.parametrize("fieldview_backend", [gtfn.run_gtfn_gpu])
 def test_copy(cartesian_case, fieldview_backend):  # noqa: F811 # fixtures
-    try:
-        import cupy as cp
-    except:
-        pytest.skip("cupy is not available on the system, cannot run GPU tests")
+    import cupy as cp  # TODO(ricoh): replace with storages solution when available
 
     @gtx.field_operator(backend=fieldview_backend)
     def testee(a: cases.IJKField) -> cases.IJKField:
