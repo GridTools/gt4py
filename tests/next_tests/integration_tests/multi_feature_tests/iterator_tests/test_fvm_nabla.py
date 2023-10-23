@@ -15,6 +15,9 @@
 import numpy as np
 import pytest
 
+
+pytest.importorskip("atlas4py")  # isort: skip
+
 import gt4py.next as gtx
 from gt4py.next.iterator import library
 from gt4py.next.iterator.atlas_utils import AtlasTable
@@ -40,9 +43,6 @@ from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_s
     nabla_setup,
 )
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
-
-
-pytest.importorskip("atlas4py")
 
 
 Vertex = gtx.Dimension("Vertex")
