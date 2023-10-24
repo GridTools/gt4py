@@ -20,7 +20,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Optional
+from typing import Optional, TypeVar
 
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
@@ -28,10 +28,13 @@ from gt4py.next.otf.compilation import build_data, cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, cmake_lists
 
 
+SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL)
+
+
 @dataclasses.dataclass
 class CompiledbFactory(
     compiler.BuildSystemProjectGenerator[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
+        SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
     ]
 ):
     """
@@ -48,7 +51,7 @@ class CompiledbFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            languages.Cpp,
+            SrcL,
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
@@ -66,6 +69,8 @@ class CompiledbFactory(
             deps=source.library_deps,
             build_type=self.cmake_build_type,
             cmake_flags=self.cmake_extra_flags or [],
+            language=source.program_source.language,
+            language_settings=source.program_source.language_settings,
         )
 
         if self.renew_compiledb or not (
@@ -92,9 +97,7 @@ class CompiledbFactory(
 
 @dataclasses.dataclass()
 class CompiledbProject(
-    stages.BuildSystemProject[
-        languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
-    ]
+    stages.BuildSystemProject[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]
 ):
     """
     Compiledb build system for gt4py programs.
@@ -113,18 +116,21 @@ class CompiledbProject(
     compile_commands_cache: pathlib.Path
     bindings_file_name: str
 
-    def build(self):
+    def build(self) -> None:
         self._write_files()
-        if build_data.read_data(self.root_path).status < build_data.BuildStatus.CONFIGURED:
+        current_data = build_data.read_data(self.root_path)
+        if current_data is None or current_data.status < build_data.BuildStatus.CONFIGURED:
             self._run_config()
+            current_data = build_data.read_data(self.root_path)  # update after config
         if (
-            build_data.BuildStatus.CONFIGURED
-            <= build_data.read_data(self.root_path).status
+            current_data is not None
+            and build_data.BuildStatus.CONFIGURED
+            <= current_data.status
             < build_data.BuildStatus.COMPILED
         ):
             self._run_build()
 
-    def _write_files(self):
+    def _write_files(self) -> None:
         def ignore_not_libraries(folder: str, children: list[str]) -> list[str]:
             pattern = r"((lib.*\.a)|(.*\.lib))"
             libraries = [child for child in children if re.match(pattern, child)]
@@ -151,7 +157,7 @@ class CompiledbProject(
             path=self.root_path,
         )
 
-    def _run_config(self):
+    def _run_config(self) -> None:
         compile_db = json.loads(self.compile_commands_cache.read_text())
 
         (self.root_path / "build").mkdir(exist_ok=True)
@@ -176,7 +182,7 @@ class CompiledbProject(
             self.root_path,
         )
 
-    def _run_build(self):
+    def _run_build(self) -> None:
         logfile = self.root_path / "log_build.txt"
         compile_db = json.loads((self.root_path / "compile_commands.json").read_text())
         assert compile_db
@@ -212,19 +218,16 @@ def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
     build_type: cmake.BuildType,
     cmake_flags: list[str],
+    language: type[SrcL],
+    language_settings: languages.LanguageWithHeaderFilesSettings,
 ) -> stages.ProgramSource:
     name = _cc_prototype_program_name(deps, build_type.value, cmake_flags)
     return stages.ProgramSource(
         entry_point=interface.Function(name=name, parameters=()),
         source_code="",
         library_deps=deps,
-        language=languages.Cpp,
-        language_settings=languages.LanguageWithHeaderFilesSettings(
-            formatter_key="",
-            formatter_style=None,
-            file_extension="",
-            header_extension="",
-        ),
+        language=language,
+        language_settings=language_settings,
     )
 
 
@@ -251,16 +254,26 @@ def _cc_create_compiledb(
         stages.CompilableSource(prototype_program_source, None), cache_strategy
     )
 
+    header_ext = prototype_program_source.language_settings.header_extension
+    src_ext = prototype_program_source.language_settings.file_extension
+    prog_src_name = f"{name}.{header_ext}"
+    binding_src_name = f"{name}.{src_ext}"
+    cmake_languages = [cmake_lists.Language(name="CXX")]
+    if prototype_program_source.language is languages.Cuda:
+        cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
+
     prototype_project = cmake.CMakeProject(
         generator_name="Ninja",
         build_type=build_type,
         extra_cmake_flags=cmake_flags,
         root_path=cache_path,
         source_files={
-            f"{name}.hpp": "",
-            f"{name}.cpp": "",
+            **{name: "" for name in [binding_src_name, prog_src_name]},
             "CMakeLists.txt": cmake_lists.generate_cmakelists_source(
-                name, prototype_program_source.library_deps, [f"{name}.hpp", f"{name}.cpp"]
+                name,
+                prototype_program_source.library_deps,
+                [binding_src_name, prog_src_name],
+                cmake_languages,
             ),
         },
         program_name=name,
@@ -290,21 +303,21 @@ def _cc_create_compiledb(
             entry["command"]
             .replace(f"CMakeFiles/{name}.dir", ".")
             .replace(str(cache_path), "$SRC_PATH")
-            .replace(f"{name}.cpp", "$BINDINGS_FILE")
-            .replace(f"{name}", "$NAME")
+            .replace(binding_src_name, "$BINDINGS_FILE")
+            .replace(name, "$NAME")
             .replace("-I$SRC_PATH/build/_deps", f"-I{cache_path}/build/_deps")
         )
         entry["file"] = (
             entry["file"]
             .replace(f"CMakeFiles/{name}.dir", ".")
             .replace(str(cache_path), "$SRC_PATH")
-            .replace(f"{name}.cpp", "$BINDINGS_FILE")
+            .replace(binding_src_name, "$BINDINGS_FILE")
         )
         entry["output"] = (
             entry["output"]
             .replace(f"CMakeFiles/{name}.dir", ".")
-            .replace(f"{name}.cpp", "$BINDINGS_FILE")
-            .replace(f"{name}", "$NAME")
+            .replace(binding_src_name, "$BINDINGS_FILE")
+            .replace(name, "$NAME")
         )
 
     compile_db_path = cache_path / "compile_commands.json"
