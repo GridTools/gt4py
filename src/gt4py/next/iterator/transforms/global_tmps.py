@@ -178,7 +178,7 @@ class TemporaryExtractionPredicate:
 
 @dataclasses.dataclass(frozen=True)
 class SimpleTemporaryExtractionHeuristics:
-    """Heuristic that extracts only if a lift expr is derefed in (at most) one position."""
+    """Heuristic that extracts only if a lift expr is derefed in one position."""
 
     closure: ir.StencilClosure
 
@@ -188,9 +188,13 @@ class SimpleTemporaryExtractionHeuristics:
 
     def __call__(self, expr: ir.Expr) -> bool:
         shifts = self.closure_shifts[id(expr)]
-        if len(shifts) <= 1:
-            return False
-        return True
+        # Lift expressions that are never dereferenced are not extracted as we can not deduce
+        # a domain for them (and thus can not generate a temporary). These expressions only occur
+        # in combination with the scan pass (as they are otherwise removed earlier by the lift
+        # and lambda inliner) and are removed later using the scan inliner.
+        if len(shifts) == 1:
+            return True
+        return False
 
 
 def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
@@ -492,7 +496,12 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
         if closure.domain == AUTO_DOMAIN:
             # every closure with auto domain should have a single out field
             assert isinstance(closure.output, ir.SymRef)
+
+            if closure.output.id not in domains:
+                raise NotImplementedError(f"Closure output {closure.output.id} is never used.")
+
             domain = domains[closure.output.id]
+
             closure = ir.StencilClosure(
                 domain=copy.deepcopy(domain),
                 stencil=closure.stencil,
@@ -503,14 +512,6 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             domain = closure.domain
 
         closures.append(closure)
-
-        if closure.stencil == ir.SymRef(id="deref"):
-            # all closure inputs inherit the domain
-            for input_arg in _tuple_constituents(closure.inputs[0]):
-                assert isinstance(input_arg, ir.SymRef)
-                assert domains.get(input_arg.id, domain) == domain
-                domains[input_arg.id] = domain
-            continue
 
         local_shifts = trace_shifts.TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
