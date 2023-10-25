@@ -56,7 +56,6 @@ from .extended_typing import (
     Callable,
     Collection,
     Dict,
-    Final,
     Generic,
     Iterable,
     Iterator,
