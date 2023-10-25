@@ -23,10 +23,10 @@ from gt4py.storage.cartesian import utils as storage_utils
 def empty(
     domain: common.Domain,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
-    allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
-    device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
 
@@ -64,7 +64,9 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     dtype = core_defs.dtype(dtype)
-    field_buffer = allocator.__gt_allocate__(domain, dtype, device_id, aligned_index)
+    field_buffer = next_allocators.allocate(
+        domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
+    )
     res = common.field(field_buffer.tensor.ndarray, domain=domain)
     assert common.is_mutable_field(res)
     return res
@@ -73,17 +75,17 @@ def empty(
 def zeros(
     domain: common.Domain,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
-    allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
-    device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype,
-        allocator=allocator,
-        device_id=device_id,
         aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
     field[...] = field.dtype.scalar_type(0)
     return field
@@ -92,17 +94,17 @@ def zeros(
 def ones(
     domain: common.Domain,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
-    allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
-    device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype,
-        allocator=allocator,
-        device_id=device_id,
         aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
     field[...] = field.dtype.scalar_type(1)
     return field
@@ -112,17 +114,17 @@ def full(
     domain: common.Domain,
     fill_value: core_defs.Scalar,
     dtype: Optional[core_defs.DTypeLike] = None,
-    allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
-    device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
         domain=domain,
         dtype=dtype if dtype is not None else core_defs.dtype(type(fill_value)),
-        allocator=allocator,
-        device_id=device_id,
         aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
     field[...] = field.dtype.scalar_type(fill_value)
     return field
@@ -132,10 +134,10 @@ def asfield(
     domain: common.Domain,
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DTypeLike] = None,
-    allocator: next_allocators.FieldAllocatorInterface = next_allocators.DefaultCPUAllocator(),
     *,
-    device_id: int = 0,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
+    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    device: Optional[core_defs.Device] = None,
     # copy=False, TODO
 ) -> nd_array_field.NdArrayField:
     # TODO make sure we don't reallocate if its in correct layout and device
@@ -149,9 +151,9 @@ def asfield(
     field = empty(
         domain=domain,
         dtype=dtype,
-        allocator=allocator,
-        device_id=device_id,
         aligned_index=aligned_index,
+        allocator=allocator,
+        device=device,
     )
 
     field[...] = field.array_ns.asarray(data)

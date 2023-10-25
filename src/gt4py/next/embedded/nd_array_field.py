@@ -165,7 +165,7 @@ class NdArrayField(
 
         new_buffer = self.ndarray[buffer_slice]
         if len(new_domain) == 0:
-            # assert core_defs.is_scalar_type(new_buffer), new_buffer
+            # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
             return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
             return self.__class__.from_array(new_buffer, domain=new_domain)

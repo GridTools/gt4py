@@ -21,6 +21,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Callable,
+    Final,
     Optional,
     Protocol,
     Sequence,
@@ -58,32 +59,20 @@ FieldLayoutMapper: TypeAlias = Callable[
 ]
 
 
-@dataclasses.dataclass(frozen=True, init=False)
+@dataclasses.dataclass(frozen=True)
 class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
     """Parametrizable FieldAllocator."""
 
-    _device_type: core_defs.DeviceTypeT
+    device_type: core_defs.DeviceTypeT
     array_ns: core_allocators.ValidNumPyLikeAllocationNS
     layout_mapper: FieldLayoutMapper
     byte_alignment: int
 
-    def __init__(
-        self,
-        device_type: core_defs.DeviceTypeT,
-        array_ns: core_allocators.ValidNumPyLikeAllocationNS,
-        layout_mapper: FieldLayoutMapper,
-        byte_alignment: int,
-    ):
-        object.__setattr__(self, "_device_type", device_type)
-        object.__setattr__(self, "array_ns", array_ns)
-        object.__setattr__(self, "layout_mapper", layout_mapper)
-        object.__setattr__(self, "byte_alignment", byte_alignment)
-
     @property
-    def device_type(self) -> core_defs.DeviceTypeT:
-        return self._device_type
+    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
+        return self.device_type
 
-    def __call__(
+    def __gt_allocate__(
         self,
         domain: common.Domain,
         dtype: core_defs.DType[core_defs.ScalarT],
@@ -94,11 +83,11 @@ class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
         layout_map = self.layout_mapper(domain.dims)
         assert aligned_index is None  # TODO
 
-        return core_allocators.NDArrayBufferAllocator(self._device_type, self.array_ns).allocate(
+        return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
             shape, dtype, layout_map, device_id, self.byte_alignment, aligned_index
         )
 
-    __gt_allocate__ = __call__
+    __call__ = __gt_allocate__
 
 
 if TYPE_CHECKING:
@@ -128,16 +117,17 @@ if TYPE_CHECKING:
 
 
 #: Registry of default allocators for each device type.
-device_allocators: dict[core_defs.DeviceType, FieldAllocator] = {}
+device_allocators: dict[core_defs.DeviceType, FieldAllocatorInterface] = {}
 
 assert core_allocators.is_valid_nplike_allocation_ns(np)
 
-device_allocators[core_defs.DeviceType.CPU] = FieldAllocator(
+DefaultCPUAllocator: Final[FieldAllocatorInterface] = FieldAllocator(
     device_type=core_defs.DeviceType.CPU,
     array_ns=np,
     layout_mapper=horizontal_first_layout_mapper,
     byte_alignment=64,
 )
+device_allocators[core_defs.DeviceType.CPU] = DefaultCPUAllocator
 
 if cp:
     cp_device_type = (
@@ -146,12 +136,16 @@ if cp:
 
     assert core_allocators.is_valid_nplike_allocation_ns(cp)
 
-    device_allocators[core_defs.DeviceType.ROCM] = FieldAllocator(
+    DefaultGPUAllocator: Final[FieldAllocatorInterface] = FieldAllocator(
         device_type=core_defs.DeviceType.CPU,
         array_ns=np,
         layout_mapper=horizontal_first_layout_mapper,
         byte_alignment=128,
     )
+
+    device_allocators[cp_device_type] = DefaultGPUAllocator
+else:
+    DefaultGPUAllocator: Final[Optional[FieldAllocatorInterface]] = None
 
 
 def allocate(
@@ -180,13 +174,13 @@ def allocate(
         raise ValueError("No 'device' or 'allocator' specified")
     if device is None:
         assert allocator is not None  # for mypy
-        device = core_defs.Device(allocator.device_type, 0)
+        device = core_defs.Device(allocator.__gt_device_type__, 0)
     assert device is not None  # for mypy
     allocator = allocator or device_allocators[device.device_type]
-    if device.device_type != allocator.device_type:
+    if device.device_type != allocator.__gt_device_type__:
         raise ValueError(f"Device {device} and allocator {allocator} are incompatible")
 
-    return allocator.allocate(
+    return allocator.__gt_allocate__(
         domain=domain,
         dtype=dtype,
         device_id=device.device_id,
