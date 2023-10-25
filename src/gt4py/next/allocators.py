@@ -84,7 +84,7 @@ class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
         assert aligned_index is None  # TODO
 
         return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
-            shape, dtype, layout_map, device_id, self.byte_alignment, aligned_index
+            shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
         )
 
     __call__ = __gt_allocate__
@@ -152,7 +152,7 @@ def allocate(
     domain: common.Domain,
     dtype: core_defs.DType[core_defs.ScalarT],
     *,
-    aligned_index: Optional[Sequence[int]] = None,
+    aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[FieldAllocatorInterface] = None,
     device: Optional[core_defs.Device] = None,
 ) -> core_allocators.TensorBuffer:
@@ -176,11 +176,11 @@ def allocate(
         assert allocator is not None  # for mypy
         device = core_defs.Device(allocator.__gt_device_type__, 0)
     assert device is not None  # for mypy
-    allocator = allocator or device_allocators[device.device_type]
-    if device.device_type != allocator.__gt_device_type__:
+    field_allocator = allocator or device_allocators[device.device_type]
+    if device.device_type != field_allocator.__gt_device_type__:
         raise ValueError(f"Device {device} and allocator {allocator} are incompatible")
 
-    return allocator.__gt_allocate__(
+    return field_allocator.__gt_allocate__(
         domain=domain,
         dtype=dtype,
         device_id=device.device_id,

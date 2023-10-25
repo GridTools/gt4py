@@ -64,11 +64,12 @@ def empty(
             If illegal or inconsistent arguments are specified.
     """
     dtype = core_defs.dtype(dtype)
-    field_buffer = next_allocators.allocate(
+    buffer = next_allocators.allocate(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
-    res = common.field(field_buffer.tensor.ndarray, domain=domain)
+    res = common.field(buffer.ndarray, domain=domain)
     assert common.is_mutable_field(res)
+    assert isinstance(res, nd_array_field.NdArrayField)
     return res
 
 
