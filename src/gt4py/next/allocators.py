@@ -121,13 +121,18 @@ device_allocators: dict[core_defs.DeviceType, FieldAllocatorInterface] = {}
 
 assert core_allocators.is_valid_nplike_allocation_ns(np)
 
-DefaultCPUAllocator: Final[FieldAllocatorInterface] = FieldAllocator(
-    device_type=core_defs.DeviceType.CPU,
-    array_ns=np,
-    layout_mapper=horizontal_first_layout_mapper,
-    byte_alignment=64,
-)
-device_allocators[core_defs.DeviceType.CPU] = DefaultCPUAllocator
+
+class DefaultCPUAllocator(FieldAllocator):
+    def __init__(self) -> None:
+        super().__init__(
+            device_type=core_defs.DeviceType.CPU,
+            array_ns=np,
+            layout_mapper=horizontal_first_layout_mapper,
+            byte_alignment=64,
+        )
+
+
+device_allocators[core_defs.DeviceType.CPU] = DefaultCPUAllocator()
 
 if cp:
     cp_device_type = (
@@ -136,14 +141,16 @@ if cp:
 
     assert core_allocators.is_valid_nplike_allocation_ns(cp)
 
-    DefaultGPUAllocator: Final[FieldAllocatorInterface] = FieldAllocator(
-        device_type=core_defs.DeviceType.CPU,
-        array_ns=np,
-        layout_mapper=horizontal_first_layout_mapper,
-        byte_alignment=128,
-    )
+    class DefaultGPUAllocator(FieldAllocator):
+        def __init__(self) -> None:
+            super().__init__(
+                device_type=core_defs.DeviceType.CPU,
+                array_ns=np,
+                layout_mapper=horizontal_first_layout_mapper,
+                byte_alignment=128,
+            )
 
-    device_allocators[cp_device_type] = DefaultGPUAllocator
+    device_allocators[cp_device_type] = DefaultGPUAllocator()
 else:
     DefaultGPUAllocator: Final[Optional[FieldAllocatorInterface]] = None
 
