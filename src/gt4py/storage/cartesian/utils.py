@@ -220,7 +220,7 @@ def allocate_cpu(
     buffer = _CPUBufferAllocator.allocate(
         shape,
         core_defs.dtype(dtype),
-        device_id=device.id,
+        device_id=device.device_id,
         layout_map=layout_map,
         byte_alignment=alignment_bytes,
         aligned_index=aligned_index,
@@ -235,7 +235,7 @@ def allocate_gpu(
     alignment_bytes: int,
     aligned_index: Optional[Sequence[int]],
 ) -> Tuple["cp.ndarray", "cp.ndarray"]:
-    assert _GPUBufferAllocator is None, "GPU allocation library or device not found"
+    assert _GPUBufferAllocator is not None, "GPU allocation library or device not found"
     device = core_defs.Device(  # type: ignore[type-var]
         core_defs.DeviceType.ROCM if gt_config.GT4PY_USE_HIP else core_defs.DeviceType.CUDA, 0
     )

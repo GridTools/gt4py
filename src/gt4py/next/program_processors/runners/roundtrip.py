@@ -216,9 +216,12 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-class RoundtripExecutor(ppi.ProgramExecutor, next_allocators.DefaultCPUAllocator):
+class RoundtripExecutor(ppi.ProgramExecutor):
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
+
+    __gt_device_type__ = next_allocators.DefaultCPUAllocator.__gt_device_type__
+    __gt_allocate__ = next_allocators.DefaultCPUAllocator.__gt_allocate__
 
 
 executor = RoundtripExecutor()
