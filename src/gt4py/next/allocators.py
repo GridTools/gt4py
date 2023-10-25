@@ -87,8 +87,6 @@ class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
         )
 
-    __call__ = __gt_allocate__
-
 
 if TYPE_CHECKING:
     __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[FieldAllocatorInterface] = FieldAllocator

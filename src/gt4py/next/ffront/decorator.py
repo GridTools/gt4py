@@ -32,6 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
+from gt4py.next import allocators as next_allocators
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -173,6 +174,9 @@ class Program:
     backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
+    __gt_device_type__: next_allocators.FieldAllocatorInterface.__gt_device_type__
+    __gt_allocate__: next_allocators.FieldAllocatorInterface.__gt_allocate__
+
     @classmethod
     def from_function(
         cls,
@@ -213,11 +217,13 @@ class Program:
             raise RuntimeError(
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
-        if self.backend is not None and hasattr(self.backend, "__gt_allocate__"):
-            object.__setattr__(self, "__gt_allocate__", self.backend.__gt_allocate__)
-
-    __gt_device_type__ = eve_utils.ForwardDescriptor("backend")
-    __gt_allocate__ = eve_utils.ForwardDescriptor("backend")
+        if self.backend is not None:
+            object.__setattr__(
+                self, "__gt_device_type__", getattr(self.backend, "__gt_device_type__", None)
+            )
+            object.__setattr__(
+                self, "__gt_allocate__", getattr(self.backend, "__gt_allocate__", None)
+            )
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
