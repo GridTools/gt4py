@@ -21,8 +21,8 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded, ir as itir
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:
@@ -49,9 +49,9 @@ if dace_iterator:
 @pytest.fixture(
     params=[
         roundtrip.executor,
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: next_tests.get_processor_id(p),

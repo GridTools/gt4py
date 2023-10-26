@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import dataclasses
 import warnings
-from typing import Any, Callable, Final, Optional, TypeVar
+from typing import Any, Callable, Final, Optional
 
 import numpy as np
 
+from gt4py._core import definitions as core_defs
 from gt4py.eve import trees, utils
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
@@ -32,8 +33,6 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-T = TypeVar("T")
-
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
 
 
@@ -45,17 +44,33 @@ def get_param_description(name: str, obj: Any) -> interface.Parameter:
 class GTFNTranslationStep(
     workflow.ChainableWorkflowMixin[
         stages.ProgramCall,
-        stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+        stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
     ],
-    step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
+    step_types.TranslationStep[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings],
 ):
-    language_settings: languages.LanguageWithHeaderFilesSettings = cpp_interface.CPP_DEFAULT
-    enable_itir_transforms: bool = True  # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    language_settings: Optional[languages.LanguageWithHeaderFilesSettings] = None
+    # TODO replace by more general mechanism, see https://github.com/GridTools/gt4py/issues/1135
+    enable_itir_transforms: bool = True
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
+    device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None
+
+    def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return languages.LanguageWithHeaderFilesSettings(
+                    formatter_key=cpp_interface.CPP_DEFAULT.formatter_key,
+                    formatter_style=cpp_interface.CPP_DEFAULT.formatter_style,
+                    file_extension="cu",
+                    header_extension="cuh",
+                )
+            case core_defs.DeviceType.CPU:
+                return cpp_interface.CPP_DEFAULT
+            case _:
+                raise self._not_implemented_for_device_type()
 
     def _process_regular_arguments(
         self,
@@ -101,7 +116,7 @@ class GTFNTranslationStep(
                         isinstance(
                             dim, fbuiltins.FieldOffset
                         )  # TODO(havogt): remove support for FieldOffset as Dimension
-                        or dim.kind == common.DimensionKind.LOCAL
+                        or dim.kind is common.DimensionKind.LOCAL
                     ):
                         # translate sparse dimensions to tuple dtype
                         dim_name = dim.value
@@ -162,7 +177,7 @@ class GTFNTranslationStep(
     def __call__(
         self,
         inp: stages.ProgramCall,
-    ) -> stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings]:
+    ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition = inp.program
 
@@ -192,7 +207,8 @@ class GTFNTranslationStep(
 
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
-        args_expr: list[str] = ["gridtools::fn::backend::naive{}", *regular_args_expr]
+        backend_arg = self._backend_type()
+        args_expr: list[str] = [backend_arg, *regular_args_expr]
 
         function = interface.Function(program.id, tuple(parameters))
         decl_body = (
@@ -209,9 +225,9 @@ class GTFNTranslationStep(
             **inp.kwargs,
         )
         source_code = interface.format_source(
-            self.language_settings,
+            self._language_settings(),
             f"""
-                    #include <gridtools/fn/backend/naive.hpp>
+                    #include <{self._backend_header()}>
                     #include <gridtools/stencil/global_parameter.hpp>
                     #include <gridtools/sid/dimension_to_tuple_like.hpp>
                     {stencil_src}
@@ -219,16 +235,69 @@ class GTFNTranslationStep(
                     """.strip(),
         )
 
-        module = stages.ProgramSource(
+        module: stages.ProgramSource[
+            languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
+        ] = stages.ProgramSource(
             entry_point=function,
-            library_deps=(interface.LibraryDependency("gridtools", "master"),),
+            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
             source_code=source_code,
-            language=languages.Cpp,
-            language_settings=self.language_settings,
+            language=self._language(),
+            language_settings=self._language_settings(),
         )
         return module
 
+    def _backend_header(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools/fn/backend/gpu.hpp"
+            case core_defs.DeviceType.CPU:
+                return "gridtools/fn/backend/naive.hpp"
+            case _:
+                raise self._not_implemented_for_device_type()
 
-translate_program: Final[
-    step_types.TranslationStep[languages.Cpp, languages.LanguageWithHeaderFilesSettings]
-] = GTFNTranslationStep()
+    def _backend_type(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools::fn::backend::gpu<generated::block_sizes_t>{}"
+            case core_defs.DeviceType.CPU:
+                return "gridtools::fn::backend::naive{}"
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _language(self) -> type[languages.NanobindSrcL]:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return languages.Cuda
+            case core_defs.DeviceType.CPU:
+                return languages.Cpp
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
+        return (
+            self.language_settings
+            if self.language_settings is not None
+            else self._default_language_settings()
+        )
+
+    def _library_name(self) -> str:
+        match self.device_type:
+            case core_defs.DeviceType.CUDA:
+                return "gridtools_gpu"
+            case core_defs.DeviceType.CPU:
+                return "gridtools_cpu"
+            case _:
+                raise self._not_implemented_for_device_type()
+
+    def _not_implemented_for_device_type(self) -> NotImplementedError:
+        return NotImplementedError(
+            f"{self.__class__.__name__} is not implemented for "
+            f"device type {self.device_type.name}"
+        )
+
+
+translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()
+
+translate_program_gpu: Final[step_types.TranslationStep] = GTFNTranslationStep(
+    device_type=core_defs.DeviceType.CUDA
+)

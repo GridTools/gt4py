@@ -14,7 +14,7 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim
 
@@ -37,7 +37,7 @@ def test_different_buffer_sizes():
     )
     out = gtx.np_as_located_field(IDim, JDim)(np.zeros((out_nx, out_ny), dtype=np.int32))
 
-    @gtx.field_operator(backend=gtfn_cpu.run_gtfn)
+    @gtx.field_operator(backend=gtfn.run_gtfn)
     def copy(inp: gtx.Field[[IDim, JDim], gtx.int32]) -> gtx.Field[[IDim, JDim], gtx.int32]:
         return inp
 
