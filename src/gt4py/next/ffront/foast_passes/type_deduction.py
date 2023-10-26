@@ -837,18 +837,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Invalid call to `astype`. Second argument must be a scalar type, but got {new_type}.",
             )
 
-        if isinstance(value, foast.TupleExpr):
-            return_type = type_info.apply_to_primitive_constituents(
-                value.type,
-                lambda primitive_type: with_altered_scalar_kind(
-                    primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
-                ),
-            )
-
-        else:
-            return_type = with_altered_scalar_kind(
-                value.type, getattr(ts.ScalarKind, new_type.id.upper())
-            )
+        return_type = type_info.apply_to_primitive_constituents(
+            value.type,
+            lambda primitive_type: with_altered_scalar_kind(
+                primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
+            ),
+        )
 
         return foast.Call(
             func=node.func,
