@@ -319,22 +319,7 @@ class FieldOperatorLowering(NodeTranslator):
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, dtype = node.args[0], node.args[1].id
 
-        def recursive_cast(obj, dtype):
-            if isinstance(obj, foast.TupleExpr):
-                casted_elements = []
-
-                for element in obj.elts:
-                    casted_element = recursive_cast(element, dtype)
-                    casted_elements.append(casted_element)
-
-                return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
-                    *casted_elements
-                )
-
-            else:
-                return self._map(im.lambda_("it")(im.call("cast_")("it", str(dtype))), obj)
-
-        return recursive_cast(obj, dtype)
+        return self._process_elements(obj, lambda x: im.call("cast_")(x, str(dtype)), **kwargs)
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map("if_", *node.args)
@@ -413,6 +398,33 @@ class FieldOperatorLowering(NodeTranslator):
             op = im.call("map_")(op)
 
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+
+    def _process_elements(self, obj, process_func, **kwargs):
+        """
+        Recursively applies a processing function to the elements of a structured object, preserving its structure.
+
+        Args:
+            obj: The structured object to be processed.
+            process_func: A function to apply to each element.
+            **kwargs: Additional keyword arguments for the processing function.
+
+        Example:
+            result = process_elements(obj, lambda x: im.call("cast_")(x, str(dtype)), **kwargs)
+
+        Returns:
+            Structured object with the processing function applied to its elements.
+        """
+        if isinstance(obj.type, ts.TupleType):
+            if isinstance(obj, foast.Name) or isinstance(obj, foast.Call):
+                return self.visit(obj)
+            processed_elements = [
+                self._process_elements(el, process_func, **kwargs) for el in obj.elts
+            ]
+            return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
+                *[el for el in processed_elements]
+            )
+        else:
+            return self._map(im.lambda_("it")(process_func("it")), obj)
 
 
 class FieldOperatorLoweringError(Exception):
