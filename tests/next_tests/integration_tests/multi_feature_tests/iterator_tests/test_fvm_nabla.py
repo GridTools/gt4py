@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 
-pytest.importorskip("atlas4py")
+pytest.importorskip("atlas4py")  # isort: skip
 
 import gt4py.next as gtx
 from gt4py.next.iterator import library
@@ -37,7 +37,6 @@ from gt4py.next.iterator.builtins import (
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
-from gt4py.next.program_processors.runners import gtfn_cpu
 
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_setup import (
     assert_close,

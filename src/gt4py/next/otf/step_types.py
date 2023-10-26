@@ -50,7 +50,10 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
         ...
 
 
-class CompilationStep(Protocol[SrcL, LS, TgtL]):
+class CompilationStep(
+    workflow.Workflow[stages.CompilableSource[SrcL, LS, TgtL], stages.CompiledProgram],
+    Protocol[SrcL, LS, TgtL],
+):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:

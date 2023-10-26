@@ -57,13 +57,13 @@ jobs:
       run: |
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
-        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}
-    #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
+        tox run -e next-py${pyversion_no_dot}-${{ matrix.tox-env-factor }}-cpu
+    #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
     # - name: Upload coverage.json artifact
     #   uses: actions/upload-artifact@v3
     #   with:
-    #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
-    #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}.json
+    #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
+    #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu.json
     # - name: Gather info
     #   run: |
     #     echo ${{ github.ref_type }} >> info.txt
@@ -76,5 +76,5 @@ jobs:
     # - name: Upload info artifact
     #   uses: actions/upload-artifact@v3
     #   with:
-    #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}
+    #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}-${{ matrix.tox-env-factor }}-cpu
     #     path: info.txt

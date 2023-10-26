@@ -52,7 +52,7 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import program_processor, run_processor

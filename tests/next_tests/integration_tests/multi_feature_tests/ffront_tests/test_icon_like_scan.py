@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
+from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -214,9 +214,9 @@ def test_setup():
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     if fieldview_backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("Needs implementation of scan projector.")
 
@@ -234,7 +234,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+    if fieldview_backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail(
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
@@ -256,7 +256,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+    if fieldview_backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     solve_nonhydro_stencil_52_like.with_backend(fieldview_backend)(
         test_setup.z_alpha,
@@ -273,7 +273,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
-    if fieldview_backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+    if fieldview_backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
     if fieldview_backend == roundtrip.executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")

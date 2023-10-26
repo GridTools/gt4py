@@ -149,7 +149,7 @@ def k_level_condition_upper_tuple(k_idx, k_level):
         ),
     ],
 )
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_function, ref_function):
     program_processor, validate = program_processor
 

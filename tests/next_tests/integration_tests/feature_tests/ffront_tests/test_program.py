@@ -128,7 +128,6 @@ def test_calling_fo_from_fo_execution(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -155,7 +154,6 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
     assert np.allclose((a, b), (out_a, out_b))
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -183,7 +181,6 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
     assert out_a[0] == 0 and out_b[0] == 0
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
