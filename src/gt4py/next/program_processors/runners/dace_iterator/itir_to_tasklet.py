@@ -698,7 +698,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             expr = f"{internals[0]} + {internals[1]}"
 
         shifted_value = self.add_expr_tasklet(
-            list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"
+            list(zip(args, internals)), expr, dace.dtypes.int64, "shift"
         )[0].value
 
         shifted_index = {dim: value for dim, value in iterator.indices.items()}
