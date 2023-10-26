@@ -162,15 +162,15 @@ class TemporaryExtractionPredicate:
         """Determine if `expr` is an applied lift that should be extracted as a temporary."""
         if not is_applied_lift(expr):
             return False
-        # do not extract when the result is a list as we can not create temporaries for
-        # these stencils
+        # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
+        # as we can not create temporaries for these stencils
         if isinstance(expr.annex.type.dtype, type_inference.List):
             return False
         if self.heuristics and not self.heuristics(expr):
             return False
         stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
-        used_symbols = collect_symbol_refs(stencil)
         # do not extract when the stencil is capturing
+        used_symbols = collect_symbol_refs(stencil)
         if used_symbols:
             return False
         return True
@@ -178,7 +178,7 @@ class TemporaryExtractionPredicate:
 
 @dataclasses.dataclass(frozen=True)
 class SimpleTemporaryExtractionHeuristics:
-    """Heuristic that extracts only if a lift expr is derefed in one position."""
+    """Heuristic that extracts only if a lift expr is derefed in more than one position."""
 
     closure: ir.StencilClosure
 
@@ -188,11 +188,7 @@ class SimpleTemporaryExtractionHeuristics:
 
     def __call__(self, expr: ir.Expr) -> bool:
         shifts = self.closure_shifts[id(expr)]
-        # Lift expressions that are never dereferenced are not extracted as we can not deduce
-        # a domain for them (and thus can not generate a temporary). These expressions only occur
-        # in combination with the scan pass (as they are otherwise removed earlier by the lift
-        # and lambda inliner) and are removed later using the scan inliner.
-        if len(shifts) == 1:
+        if len(shifts) > 1:
             return True
         return False
 
