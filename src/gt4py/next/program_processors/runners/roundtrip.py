@@ -216,7 +216,7 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-class RoundtripExecutor(ppi.ProgramExecutor, next_allocators.DefaultCPUAllocator):
+class RoundtripExecutor(ppi.ProgramExecutor, next_allocators.StandardCPUFieldAllocator):
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         execute_roundtrip(program, *args, **kwargs)
 

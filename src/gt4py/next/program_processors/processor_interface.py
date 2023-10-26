@@ -28,7 +28,9 @@ from __future__ import annotations
 
 from typing import Callable, Protocol, TypeGuard, TypeVar, cast
 
-from gt4py.next.iterator import ir as itir
+import gt4py._core.definitions as core_defs
+import gt4py.next.allocators as next_allocators
+import gt4py.next.iterator.ir as itir
 
 
 OutputT = TypeVar("OutputT", covariant=True)
@@ -70,7 +72,11 @@ def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
     return cast(ProgramProcessor[str, ProgramFormatter], func)
 
 
-class ProgramExecutor(ProgramProcessor[None, "ProgramExecutor"], Protocol):
+class ProgramExecutor(
+    ProgramProcessor[None, "ProgramExecutor"],
+    next_allocators.FieldAllocatorInterface[core_defs.DeviceTypeT],
+    Protocol,
+):
     @property
     def kind(self) -> type[ProgramExecutor]:
         return ProgramExecutor

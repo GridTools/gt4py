@@ -17,7 +17,9 @@ import dataclasses
 
 import numpy as np
 
-from gt4py._core import definitions as core_defs
+import gt4py._core.definitions as core_defs
+import gt4py.next.common as common
+import gt4py.storage.allocators as core_allocators
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Callable,
@@ -27,8 +29,6 @@ from gt4py.eve.extended_typing import (
     Sequence,
     TypeAlias,
 )
-from gt4py.next import common
-from gt4py.storage import allocators as core_allocators
 
 
 try:
@@ -60,8 +60,8 @@ FieldLayoutMapper: TypeAlias = Callable[
 
 
 @dataclasses.dataclass(frozen=True)
-class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
-    """Parametrizable FieldAllocator."""
+class BaseFieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
+    """Parametrizable field allocator base class."""
 
     device_type: core_defs.DeviceTypeT
     array_ns: core_allocators.ValidNumPyLikeAllocationNS
@@ -89,7 +89,9 @@ class FieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
 
 
 if TYPE_CHECKING:
-    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[FieldAllocatorInterface] = FieldAllocator
+    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[
+        FieldAllocatorInterface
+    ] = BaseFieldAllocator
 
 
 def horizontal_first_layout_mapper(
@@ -117,20 +119,22 @@ if TYPE_CHECKING:
 #: Registry of default allocators for each device type.
 device_allocators: dict[core_defs.DeviceType, FieldAllocatorInterface] = {}
 
+
 assert core_allocators.is_valid_nplike_allocation_ns(np)
+np_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = np  # Just for static type checking
 
 
-class DefaultCPUAllocator(FieldAllocator):
+class StandardCPUFieldAllocator(BaseFieldAllocator):
     def __init__(self) -> None:
         super().__init__(
             device_type=core_defs.DeviceType.CPU,
-            array_ns=np,
+            array_ns=np_alloc_ns,
             layout_mapper=horizontal_first_layout_mapper,
             byte_alignment=64,
         )
 
 
-device_allocators[core_defs.DeviceType.CPU] = DefaultCPUAllocator()
+device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldAllocator()
 
 if cp:
     cp_device_type = (
@@ -138,19 +142,20 @@ if cp:
     )
 
     assert core_allocators.is_valid_nplike_allocation_ns(cp)
+    cp_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = cp  # Just for static type checking
 
-    class DefaultGPUAllocator(FieldAllocator):
+    class StandardGPUFieldAllocator(BaseFieldAllocator):
         def __init__(self) -> None:
             super().__init__(
                 device_type=core_defs.DeviceType.CPU,
-                array_ns=np,
+                array_ns=cp_alloc_ns,
                 layout_mapper=horizontal_first_layout_mapper,
                 byte_alignment=128,
             )
 
-    device_allocators[cp_device_type] = DefaultGPUAllocator()
+    device_allocators[cp_device_type] = StandardGPUFieldAllocator()
 else:
-    DefaultGPUAllocator: Final[Optional[FieldAllocatorInterface]] = None
+    StandardGPUFieldAllocator: Final[Optional[FieldAllocatorInterface]] = None  # type[no-redef]
 
 
 def allocate(
