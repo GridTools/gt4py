@@ -44,13 +44,19 @@ _cpu_args = (
 )
 
 
-def convert_arg(arg: Any):
+def convert_arg(arg: Any, run_on_gpu: bool):
     if is_field(arg):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
-        assert isinstance(arg.ndarray, np.ndarray)
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        if run_on_gpu:
+            import cupy as cp
+
+            assert isinstance(arg.ndarray, cp.ndarray)
+            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        else:
+            assert isinstance(arg.ndarray, np.ndarray)
+            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 
@@ -64,8 +70,8 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
-def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
-    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
+def get_args(params: Sequence[itir.Sym], args: Sequence[Any], run_on_gpu: bool) -> dict[str, Any]:
+    return {name.id: convert_arg(arg, run_on_gpu) for name, arg in zip(params, args)}
 
 
 def get_connectivity_args(
@@ -195,7 +201,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if build_cache is not None:
             build_cache[cache_id] = sdfg_program
 
-    dace_args = get_args(program.params, args)
+    dace_args = get_args(program.params, args, run_on_gpu)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
