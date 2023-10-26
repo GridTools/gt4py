@@ -327,34 +327,59 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
-def test_astype_on_tuples(cartesian_case):
+@pytest.mark.uses_tuple_returns
+def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
+    @gtx.field_operator
+    def field_op_returning_a_tuple(
+        a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[gtx.Field[[IDim], float], gtx.Field[[IDim], float]]:
+        tup = (a, b)
+        return tup
+
     @gtx.field_operator
     def cast_tuple(
         a: cases.IFloatField, b: cases.IFloatField
-    ) -> tuple[gtx.Field[[IDim], int64], gtx.Field[[IDim], int64]]:
-        return astype((a, b), int64)
+    ) -> tuple[gtx.Field[[IDim], int32], gtx.Field[[IDim], int32]]:
+        return astype(field_op_returning_a_tuple(a, b), int32)
 
-    @gtx.field_operator
-    def combine(a: cases.IFloatField, b: cases.IFloatField) -> gtx.Field[[IDim], int64]:
-        packed_tuple = cast_tuple(a, b)
-        return packed_tuple[0] + packed_tuple[1]
-
-    cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + b)
-
-
-def test_astype_on_nested_tuples(cartesian_case):
     @gtx.field_operator
     def cast_nested_tuple(
-        a: cases.IField, b: cases.IField
-    ) -> tuple[gtx.Field[[IDim], int64], tuple[gtx.Field[[IDim], int64], gtx.Field[[IDim], int64]]]:
-        return astype((a, (a, b)), int64)
+        a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[gtx.Field[[IDim], int32], tuple[gtx.Field[[IDim], int32], gtx.Field[[IDim], int32]]]:
+        return astype((a, field_op_returning_a_tuple(a, b)), int32)
 
-    @gtx.field_operator
-    def combine(a: cases.IField, b: cases.IField) -> gtx.Field[[IDim], int64]:
-        nested_tuple = cast_nested_tuple(a, b)
-        return nested_tuple[0] + nested_tuple[1][0] + nested_tuple[1][1]
+    a = cases.allocate(cartesian_case, cast_tuple, "a")()
+    b = cases.allocate(cartesian_case, cast_tuple, "b")()
+    out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
+    out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
 
-    cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
+    def unpack_and_compare(ref, out):
+        if isinstance(ref, tuple) and isinstance(out, tuple):
+            return all(
+                unpack_and_compare(ref_item, out_item) for ref_item, out_item in zip(ref, out)
+            )
+        else:
+            return ref.dtype == out.dtype and np.array_equal(ref, out)
+
+    cases.verify(
+        cartesian_case,
+        cast_tuple,
+        a,
+        b,
+        out=out_tuple,
+        ref=(int32(a), int32(b)),
+        comparison=lambda ref, out: unpack_and_compare(ref, out),
+    )
+
+    cases.verify(
+        cartesian_case,
+        cast_nested_tuple,
+        a,
+        b,
+        out=out_nested_tuple,
+        ref=(int32(a), (int32(a), int32(b))),
+        comparison=lambda ref, out: unpack_and_compare(ref, out),
+    )
 
 
 def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
