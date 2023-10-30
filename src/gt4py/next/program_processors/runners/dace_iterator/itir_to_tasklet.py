@@ -653,17 +653,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             iterator = self.visit(node.args[0])
 
         assert isinstance(tail[0], itir.OffsetLiteral)
-        offset = tail[0].value
-        assert isinstance(offset, str)
+        offset_dim = tail[0].value
+        assert isinstance(offset_dim, str)
+        offset_node = self.visit(tail[1])[0]
 
-        if isinstance(tail[1], itir.OffsetLiteral):
-            offset_node = self.visit_OffsetLiteral(tail[1])
-        else:
-            offset_node = self.visit(tail[1])[0]
-
-        if isinstance(self.offset_provider[offset], NeighborTableOffsetProvider):
-            offset_provider = self.offset_provider[offset]
-            connectivity = self.context.state.add_access(connectivity_identifier(offset))
+        if isinstance(self.offset_provider[offset_dim], NeighborTableOffsetProvider):
+            offset_provider = self.offset_provider[offset_dim]
+            connectivity = self.context.state.add_access(connectivity_identifier(offset_dim))
 
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
@@ -674,8 +670,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
-        elif isinstance(self.offset_provider[offset], StridedNeighborOffsetProvider):
-            offset_provider = self.offset_provider[offset]
+        elif isinstance(self.offset_provider[offset_dim], StridedNeighborOffsetProvider):
+            offset_provider = self.offset_provider[offset_dim]
 
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
@@ -686,9 +682,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]} * {offset_provider.max_neighbors} + {internals[1]}"
         else:
-            assert isinstance(self.offset_provider[offset], Dimension)
+            assert isinstance(self.offset_provider[offset_dim], Dimension)
 
-            shifted_dim = self.offset_provider[offset].value
+            shifted_dim = self.offset_provider[offset_dim].value
             target_dim = shifted_dim
             args = [
                 ValueExpr(iterator.indices[shifted_dim], dace.int64),
@@ -707,7 +703,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
 
-    def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> ValueExpr:
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> list[ValueExpr]:
         offset = node.value
         assert isinstance(offset, int)
         offset_var = unique_var_name()
@@ -719,7 +715,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.context.state.add_edge(
             tasklet_node, "__out", offset_node, None, dace.Memlet.simple(offset_var, "0")
         )
-        return ValueExpr(offset_node, self.context.body.arrays[offset_var].dtype)
+        return [ValueExpr(offset_node, self.context.body.arrays[offset_var].dtype)]
 
     def _visit_reduce(self, node: itir.FunCall):
         result_name = unique_var_name()
