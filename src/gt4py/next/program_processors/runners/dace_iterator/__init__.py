@@ -31,6 +31,12 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
     sorted_dims = get_sorted_dims(domain.dims)
     return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
@@ -44,19 +50,16 @@ _cpu_args = (
 )
 
 
-def convert_arg(arg: Any, run_on_gpu: bool):
+def convert_arg(arg: Any):
     if is_field(arg):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
-        if run_on_gpu:
-            import cupy as cp
-
-            assert isinstance(arg.ndarray, cp.ndarray)
-            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
-        else:
-            assert isinstance(arg.ndarray, np.ndarray)
+        if isinstance(arg.ndarray, np.ndarray):
             return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        else:
+            assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
+            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 
@@ -70,8 +73,8 @@ def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[
     return program
 
 
-def get_args(params: Sequence[itir.Sym], args: Sequence[Any], run_on_gpu: bool) -> dict[str, Any]:
-    return {name.id: convert_arg(arg, run_on_gpu) for name, arg in zip(params, args)}
+def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
+    return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
 
 def get_connectivity_args(
@@ -201,7 +204,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if build_cache is not None:
             build_cache[cache_id] = sdfg_program
 
-    dace_args = get_args(program.params, args, run_on_gpu)
+    dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
@@ -232,24 +235,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 @program_executor
-def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def run_dace(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_on_gpu = any(not isinstance(arg.ndarray, np.ndarray) for arg in args if is_field(arg))
+    if run_on_gpu:
+        if cp is None:
+            raise RuntimeError(
+                f"Non-numpy field argument passed to program {program.id} but module cupy not installed"
+            )
+
+        if not all(isinstance(arg.ndarray, cp.ndarray) for arg in args if is_field(arg)):
+            raise RuntimeError("Execution on GPU requires all fields to be stored as cupy arrays")
+
     run_dace_iterator(
         program,
         *args,
         **kwargs,
-        build_cache=_build_cache_cpu,
+        build_cache=_build_cache_gpu if run_on_gpu else _build_cache_cpu,
         build_type=_build_type,
-        run_on_gpu=False,
-    )
-
-
-@program_executor
-def run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(
-        program,
-        *args,
-        **kwargs,
-        build_cache=_build_cache_gpu,
-        build_type=_build_type,
-        run_on_gpu=True,
+        run_on_gpu=run_on_gpu,
     )
