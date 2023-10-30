@@ -26,7 +26,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize("fieldview_backend", [dace_iterator.run_dace_gpu, gtfn.run_gtfn_gpu])
+@pytest.mark.parametrize("fieldview_backend", [dace_iterator.run_dace, gtfn.run_gtfn_gpu])
 def test_copy(cartesian_case, fieldview_backend):  # noqa: F811 # fixtures
     import cupy as cp  # TODO(ricoh): replace with storages solution when available
 
