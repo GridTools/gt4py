@@ -30,15 +30,13 @@ from gt4py.next.iterator.builtins import (
     shift,
 )
 from gt4py.next.iterator.runtime import fundef
-from gt4py.next.program_processors.formatters import gtfn
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.toy_connectivity import (
     C2E,
     E2V,
     V2E,
     V2V,
-    C2EDim,
     Cell,
     E2VDim,
     Edge,
@@ -409,9 +407,9 @@ def shift_sparse_stencil2(inp):
 def test_shift_sparse_input_field2(program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."

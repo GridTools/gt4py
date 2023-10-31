@@ -23,7 +23,7 @@ from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.step_types import LS, SrcL, TgtL
 
 
-SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.LanguageTag)
+SourceLanguageType = TypeVar("SourceLanguageType", bound=languages.NanobindSrcL)
 LanguageSettingsType = TypeVar("LanguageSettingsType", bound=languages.LanguageSettings)
 T = TypeVar("T")
 

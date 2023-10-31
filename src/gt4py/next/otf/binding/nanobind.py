@@ -17,13 +17,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence, Union
+from typing import Any, Sequence, TypeVar, Union
 
 import gt4py.eve as eve
 from gt4py.eve.codegen import JinjaTemplate as as_jinja, TemplatedGenerator
 from gt4py.next.otf import languages, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.type_system import type_info as ti, type_specifications as ts
+
+
+SrcL = TypeVar("SrcL", bound=languages.NanobindSrcL, covariant=True)
 
 
 class Expr(eve.Node):
@@ -191,8 +194,8 @@ def make_argument(name: str, type_: ts.TypeSpec) -> str | BufferSID | CompositeS
 
 
 def create_bindings(
-    program_source: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-) -> stages.BindingSource[languages.Cpp, languages.Python]:
+    program_source: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+) -> stages.BindingSource[SrcL, languages.Python]:
     """
     Generate Python bindings through which a C++ function can be called.
 
@@ -201,7 +204,7 @@ def create_bindings(
     program_source
         The program source for which the bindings are created
     """
-    if program_source.language is not languages.Cpp:
+    if program_source.language not in [languages.Cpp, languages.Cuda]:
         raise ValueError(
             f"Can only create bindings for C++ program sources, received {program_source.language}."
         )
@@ -221,7 +224,6 @@ def create_bindings(
             "gridtools/common/tuple_util.hpp",
             "gridtools/fn/unstructured.hpp",
             "gridtools/fn/cartesian.hpp",
-            "gridtools/fn/backend/naive.hpp",
             "gridtools/storage/adapter/nanobind_adapter.hpp",
         ],
         wrapper=WrapperFunction(
@@ -266,8 +268,6 @@ def create_bindings(
 
 @workflow.make_step
 def bind_source(
-    inp: stages.ProgramSource[languages.Cpp, languages.LanguageWithHeaderFilesSettings],
-) -> stages.CompilableSource[
-    languages.Cpp, languages.LanguageWithHeaderFilesSettings, languages.Python
-]:
+    inp: stages.ProgramSource[SrcL, languages.LanguageWithHeaderFilesSettings],
+) -> stages.CompilableSource[SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python]:
     return stages.CompilableSource(program_source=inp, binding_source=create_bindings(inp))

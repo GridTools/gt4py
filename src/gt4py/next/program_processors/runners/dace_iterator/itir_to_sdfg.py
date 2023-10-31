@@ -322,7 +322,6 @@ class ItirToSDFG(eve.NodeVisitor):
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> tuple[dace.SDFG, list[str], list[str]]:
         assert ItirToSDFG._check_no_lifts(node)
-        assert ItirToSDFG._check_shift_offsets_are_literals(node)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
@@ -385,9 +384,9 @@ class ItirToSDFG(eve.NodeVisitor):
         # Update symbol table and get output domain of the closure
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
+                dtype = as_dace_type(type_)
+                closure_sdfg.add_symbol(name, dtype)
                 if name in input_names:
-                    dtype = as_dace_type(type_)
-                    closure_sdfg.add_symbol(name, dtype)
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
                     out_tasklet = closure_init_state.add_tasklet(
@@ -399,7 +398,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     closure_init_state.add_edge(out_tasklet, "__result", access, None, memlet)
                     program_arg_syms[name] = value
                 else:
-                    program_arg_syms[name] = SymbolExpr(name, as_dace_type(type_))
+                    program_arg_syms[name] = SymbolExpr(name, dtype)
         closure_domain = self._visit_domain(node.domain, closure_ctx)
 
         # Map SDFG tasklet arguments to parameters

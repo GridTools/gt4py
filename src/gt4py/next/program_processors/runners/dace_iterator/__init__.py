@@ -32,6 +32,12 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
     sorted_dims = get_sorted_dims(domain.dims)
     return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
@@ -50,8 +56,11 @@ def convert_arg(arg: Any):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
-        assert isinstance(arg.ndarray, np.ndarray)
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        if isinstance(arg.ndarray, np.ndarray):
+            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        else:
+            assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
+            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 
@@ -241,24 +250,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 @program_executor
-def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def run_dace(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    run_on_gpu = any(not isinstance(arg.ndarray, np.ndarray) for arg in args if is_field(arg))
+    if run_on_gpu:
+        if cp is None:
+            raise RuntimeError(
+                f"Non-numpy field argument passed to program {program.id} but module cupy not installed"
+            )
+
+        if not all(isinstance(arg.ndarray, cp.ndarray) for arg in args if is_field(arg)):
+            raise RuntimeError("Execution on GPU requires all fields to be stored as cupy arrays")
+
     run_dace_iterator(
         program,
         *args,
         **kwargs,
-        build_cache=_build_cache_cpu,
+        build_cache=_build_cache_gpu if run_on_gpu else _build_cache_cpu,
         build_type=_build_type,
-        run_on_gpu=False,
-    )
-
-
-@program_executor
-def run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(
-        program,
-        *args,
-        **kwargs,
-        build_cache=_build_cache_gpu,
-        build_type=_build_type,
-        run_on_gpu=True,
+        run_on_gpu=run_on_gpu,
     )

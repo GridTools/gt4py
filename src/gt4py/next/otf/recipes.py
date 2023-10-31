@@ -14,27 +14,21 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic, TypeVar
 
-from gt4py.next.otf import languages, stages, step_types, workflow
-
-
-SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
-TgtL = TypeVar("TgtL", bound=languages.LanguageTag)
-LS = TypeVar("LS", bound=languages.LanguageSettings)
+from gt4py.next.otf import stages, step_types, workflow
 
 
 @dataclasses.dataclass(frozen=True)
-class OTFCompileWorkflow(workflow.NamedStepSequence, Generic[SrcL, LS, TgtL]):
+class OTFCompileWorkflow(workflow.NamedStepSequence):
     """The typical compiled backend steps composed into a workflow."""
 
-    translation: step_types.TranslationStep[SrcL, LS]
+    translation: step_types.TranslationStep
     bindings: workflow.Workflow[
-        stages.ProgramSource[SrcL, LS],
-        stages.CompilableSource[SrcL, LS, TgtL],
+        stages.ProgramSource,
+        stages.CompilableSource,
     ]
     compilation: workflow.Workflow[
-        stages.CompilableSource[SrcL, LS, TgtL],
+        stages.CompilableSource,
         stages.CompiledProgram,
     ]
     decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]
