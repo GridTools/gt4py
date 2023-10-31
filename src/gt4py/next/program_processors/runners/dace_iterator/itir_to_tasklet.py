@@ -34,6 +34,7 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
+    create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
     flatten_list,
@@ -199,7 +200,6 @@ def builtin_neighbors(
     result_access = state.add_access(result_name)
 
     table_name = connectivity_identifier(offset_dim)
-    table_array = sdfg.arrays[table_name]
 
     # generate unique map index name to avoid conflict with other maps inside same state
     index_name = unique_name("__neigh_idx")
@@ -225,14 +225,14 @@ def builtin_neighbors(
         state.add_access(table_name),
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=table_name, subset=",".join(f"0:{s}" for s in table_array.shape)),
+        memlet=create_memlet_full(table_name, sdfg.arrays[table_name]),
         dst_conn="__table",
     )
     state.add_memlet_path(
         iterator.indices[shifted_dim],
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0"),
+        memlet=dace.Memlet.simple(iterator.indices[shifted_dim].data, "0"),
         dst_conn="__idx",
     )
     state.add_edge(
@@ -240,28 +240,25 @@ def builtin_neighbors(
         "__result",
         data_access_tasklet,
         "__idx",
-        dace.Memlet(data=idx_name, subset="0"),
+        dace.Memlet.simple(idx_name, "0"),
     )
     # select full shape only in the neighbor-axis dimension
-    field_subset = [
+    field_subset = tuple(
         f"0:{shape}" if dim == table.neighbor_axis.value else f"i_{dim}"
         for dim, shape in zip(sorted(iterator.dimensions), sdfg.arrays[iterator.field.data].shape)
-    ]
+    )
     state.add_memlet_path(
         iterator.field,
         me,
         data_access_tasklet,
-        memlet=dace.Memlet(
-            data=iterator.field.data,
-            subset=",".join(field_subset),
-        ),
+        memlet=create_memlet_at(iterator.field.data, field_subset),
         dst_conn="__field",
     )
     state.add_memlet_path(
         data_access_tasklet,
         mx,
         result_access,
-        memlet=dace.Memlet(data=result_name, subset=index_name),
+        memlet=dace.Memlet.simple(result_name, index_name),
         src_conn="__result",
     )
 
@@ -438,7 +435,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     result_access,
                     None,
                     # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
-                    dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
+                    dace.Memlet.simple(result_access.data, "0", wcr_str=context.reduce_wcr),
                 )
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
@@ -616,7 +613,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 deref_tasklet,
                 mx,
                 result_access,
-                memlet=dace.Memlet(data=result_name, subset=index_name),
+                memlet=dace.Memlet.simple(result_name, index_name),
                 src_conn="__result",
             )
 
@@ -738,13 +735,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert isinstance(op_name, itir.SymRef)
             init = node.fun.args[1]
 
-            nreduce = self.context.body.arrays[neighbors_expr.value.data].shape[0]
+            reduce_array_desc = neighbors_expr.value.desc(self.context.body)
 
             self.context.body.add_scalar(result_name, result_dtype, transient=True)
             op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
             reduce_tasklet = self.context.state.add_tasklet(
                 "reduce",
-                code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
+                code=f"__result = {init}\nfor __idx in range({reduce_array_desc.shape[0]}):\n    __result = {op_str}",
                 inputs={"__values"},
                 outputs={"__result"},
             )
@@ -753,14 +750,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 None,
                 reduce_tasklet,
                 "__values",
-                dace.Memlet(data=neighbors_expr.value.data, subset=f"0:{nreduce}"),
+                create_memlet_full(neighbors_expr.value.data, reduce_array_desc),
             )
             self.context.state.add_edge(
                 reduce_tasklet,
                 "__result",
                 result_access,
                 None,
-                dace.Memlet(data=result_name, subset="0"),
+                dace.Memlet.simple(result_name, "0"),
             )
         else:
             assert isinstance(node.fun, itir.FunCall)
@@ -973,7 +970,7 @@ def closure_to_tasklet_sdfg(
         tasklet = state.add_tasklet(f"get_{dim}", set(), {"value"}, f"value = {idx}")
         access = state.add_access(name)
         idx_accesses[dim] = access
-        state.add_edge(tasklet, "value", access, None, dace.Memlet(data=name, subset="0"))
+        state.add_edge(tasklet, "value", access, None, dace.Memlet.simple(name, "0"))
     for name, ty in inputs:
         if isinstance(ty, ts.FieldType):
             ndim = len(ty.dims)
