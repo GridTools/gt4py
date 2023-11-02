@@ -66,14 +66,37 @@ def convert_arg(arg: Any):
 
 def preprocess_program(
     program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
-):
-    program = apply_common_transforms(
+) -> tuple[itir.FencilDefinition, list[global_tmps.Temporary]]:
+    node = apply_common_transforms(
         program,
-        offset_provider=offset_provider,
-        lift_mode=lift_mode,
         common_subexpression_elimination=False,
+        lift_mode=lift_mode,
+        offset_provider=offset_provider,
+        unroll_reduce=False,
     )
-    return program
+    if isinstance(node, global_tmps.FencilWithTemporaries):
+        fencil_definition = node.fencil
+        tmps = node.tmps
+    elif isinstance(node, itir.FencilDefinition):
+        # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
+        # In this case, just retry with unrolled reductions.
+        if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
+            fencil_definition = node
+        else:
+            fencil_definition = apply_common_transforms(
+                program,
+                common_subexpression_elimination=False,
+                lift_mode=lift_mode,
+                offset_provider=offset_provider,
+                unroll_reduce=True,
+            )
+        tmps = []
+    else:
+        raise TypeError(
+            f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(node).__name__}`."
+        )
+
+    return fencil_definition, tmps
 
 
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
@@ -157,11 +180,12 @@ def get_cache_id(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
+    build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
-    build_cache = kwargs.get("build_cache", None)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
+    lift_mode = kwargs.get("lift_mode", LiftMode.FORCE_INLINE)
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
@@ -173,20 +197,13 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
     else:
-        program = preprocess_program(program, offset_provider, LiftMode.FORCE_INLINE)
-        if all([ItirToSDFG._check_no_lifts(node) for node in program.closures]):
-            tmps = []
-        else:
-            program_with_tmps: global_tmps.FencilWithTemporaries = preprocess_program(
-                program, offset_provider, LiftMode.FORCE_TEMPORARIES
-            )
-            program = program_with_tmps.fencil
-            tmps = program_with_tmps.tmps
-
         # visit ITIR and generate SDFG
+        program, tmps = preprocess_program(program, offset_provider, lift_mode)
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
         sdfg = sdfg_genenerator.visit(program)
-        if tmps:
+        if sdfg is None:
+            raise RuntimeError(f"visit failed for program {program.id}")
+        elif tmps:
             # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
             sdfg.apply_transformations_repeated(RefineNestedAccess)
         sdfg.simplify()
