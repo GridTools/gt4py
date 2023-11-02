@@ -19,8 +19,14 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import Dimension, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, function_field as funcf
+
 from .test_common import get_infinite_domain, get_mixed_domain
-from .test_nd_array_field import binary_logical_op, binary_arithmetic_op, binary_reverse_arithmetic_op
+from .test_nd_array_field import (
+    binary_arithmetic_op,
+    binary_logical_op,
+    binary_reverse_arithmetic_op,
+)
+
 
 I = Dimension("I")
 J = Dimension("J")

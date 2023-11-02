@@ -19,11 +19,15 @@ import pytest
 
 from gt4py.next import Dimension, common
 from gt4py.next.common import Domain, UnitRange
-from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
-from gt4py.next.embedded import function_field as funcf
+from gt4py.next.embedded import (
+    exceptions as embedded_exceptions,
+    function_field as funcf,
+    nd_array_field,
+)
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
 from tests.next_tests.unit_tests.test_common import IDim, JDim
+
 
 IDim = Dimension("IDim")
 JDim = Dimension("JDim")
@@ -65,6 +69,7 @@ def unary_arithmetic_op(request):
 def unary_logical_op(request):
     yield request.param
 
+
 @pytest.fixture(
     params=[
         lambda x, y: operator.truediv(y, x),  # Reverse true division
@@ -98,14 +103,11 @@ def _make_function_field():
         ),
     )
 
+
 normal_dist = np.random.normal(3, 2.5, size=(10,))
 
-@pytest.fixture(
-    params=[
-        _make_base_ndarray_field(normal_dist, np),
-        _make_function_field()
-    ]
-)
+
+@pytest.fixture(params=[_make_base_ndarray_field(normal_dist, np), _make_function_field()])
 def all_field_types(request):
     yield request.param
 
@@ -123,7 +125,9 @@ def test_unary_builtins_for_all_fields(all_field_types, builtin_name):
     assert np.allclose(result, expected, equal_nan=True)
 
 
-def test_binary_arithmetic_ops(binary_arithmetic_op, binary_reverse_arithmetic_op, nd_array_implementation):
+def test_binary_arithmetic_ops(
+    binary_arithmetic_op, binary_reverse_arithmetic_op, nd_array_implementation
+):
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
     inputs = [inp_a, inp_b]
@@ -147,7 +151,9 @@ def test_binary_logical_ops(binary_logical_op, nd_array_implementation):
 
     expected = binary_logical_op(*[np.asarray(inp) for inp in inputs])
 
-    field_inputs = [_make_base_ndarray_field(inp, nd_array_implementation, dtype=bool) for inp in inputs]
+    field_inputs = [
+        _make_base_ndarray_field(inp, nd_array_implementation, dtype=bool) for inp in inputs
+    ]
 
     result = binary_logical_op(*field_inputs)
 

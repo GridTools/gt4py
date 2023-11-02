@@ -25,7 +25,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
-from gt4py.next.embedded.common import broadcast_domain, _compute_domain_slice
+from gt4py.next.embedded.common import _compute_domain_slice, broadcast_domain
 from gt4py.next.ffront import fbuiltins
 
 

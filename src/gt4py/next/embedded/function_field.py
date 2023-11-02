@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import operator
-from typing import Any, Callable, TypeGuard, overload, Optional
+from typing import Any, Callable, TypeGuard, overload
 
 import numpy as np
 
@@ -73,7 +73,7 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
         if __debug__:
             try:
                 self._trigger_func()
-            except Exception as e:
+            except Exception:
                 params = _get_params(self.func)
                 raise embedded_exceptions.FunctionFieldError(
                     self.__class__.__name__,
@@ -96,7 +96,6 @@ class FunctionField(common.Field[common.DimsT, core_defs.ScalarT], common.FieldB
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject | int | float:
-
         # handle case where we have a constant FunctionField where field.ndarray is a scalar
         if isinstance(self._trigger_func(), (int, float)) and not self.domain.is_finite():
             return np.full(tuple(1 for _ in self.domain.shape), self.func())
@@ -261,26 +260,38 @@ def _compose_function_field_with_builtin(builtin_name: str) -> Callable:
             return field
 
         builtin_func = getattr(np, builtin_name)
-        new_func = lambda *args: builtin_func(field.func(*args))
+
+        def new_func(*args):
+            return builtin_func(field.func(*args))
+
         new_field: FunctionField = FunctionField(new_func, field.domain)
         return new_field
+
     return _composed_function_field
+
 
 FunctionField.register_builtin_func(fbuiltins.broadcast, _broadcast)
 
-_UNARY_BUILTINS = fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+_UNARY_BUILTINS = (
+    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
+)
 
 for builtin_name in _UNARY_BUILTINS:
     if builtin_name in ["abs", "gamma"]:
         continue
-    FunctionField.register_builtin_func(getattr(fbuiltins, builtin_name), _compose_function_field_with_builtin(builtin_name))
+    FunctionField.register_builtin_func(
+        getattr(fbuiltins, builtin_name), _compose_function_field_with_builtin(builtin_name)
+    )
 
 FunctionField.register_builtin_func(fbuiltins.abs, FunctionField.__abs__)
+
 
 def _get_params(func: Callable) -> str:
     """Pretty print callable parameters."""
     signature = inspect.signature(func)
     parameters = signature.parameters
     param_strings = [f"{name}: {param}" for name, param in parameters.items()]
-    formatted_params = ', '.join(param_strings)
+    formatted_params = ", ".join(param_strings)
     return formatted_params
