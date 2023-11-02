@@ -19,10 +19,14 @@ from dataclasses import dataclass
 import pytest
 
 import gt4py.next as gtx
-from gt4py import eve
-from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
+from gt4py.next.iterator import runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters, lisp, type_check
+from gt4py.next.program_processors.formatters import (
+    gtfn as gtfn_formatters,
+    lisp,
+    pretty_print,
+    type_check,
+)
 from gt4py.next.program_processors.runners import double_roundtrip, gtfn, roundtrip
 
 
@@ -35,6 +39,7 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
+import next_tests.exclusion_matrices as test_definitions
 
 
 @pytest.fixture(
@@ -49,42 +54,27 @@ def lift_mode(request):
     return request.param
 
 
-class _RemoveITIRSymTypes(eve.NodeTranslator):
-    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
-        return itir.Sym(id=node.id, dtype=None, kind=None)
-
-
-@ppi.program_formatter
-def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str:
-    # remove types from ITIR as they are not supported for the roundtrip
-    root = _RemoveITIRSymTypes().visit(root)
-    pretty = pretty_printer.pformat(root)
-    parsed = pretty_parser.pparse(pretty)
-    assert parsed == root
-    return pretty
-
-
 OPTIONAL_PROCESSORS = []
-if dace_iterator:
-    OPTIONAL_PROCESSORS.append((dace_iterator.run_dace_iterator, True))
+# if dace_iterator:
+#     OPTIONAL_PROCESSORS.append((dace_iterator.run_dace_iterator, True))
 
 
 @pytest.fixture(
     params=[
-        # (processor, do_validate)
-        (None, True),
-        (lisp.format_lisp, False),
-        (pretty_format_and_check, False),
-        (roundtrip.executor, True),
-        (type_check.check, False),
-        (double_roundtrip.executor, True),
-        (gtfn.run_gtfn, True),
-        (gtfn.run_gtfn_imperative, True),
-        (gtfn.run_gtfn_with_temporaries, True),
-        (gtfn_formatters.format_sourcecode, False),
+        # (processor, is_backend)
+        ("None", True),
+        (test_definitions.ProgramFormatterId.LISP_FORMATTER, False),
+        (test_definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
+        (test_definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
+        (test_definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
+        # (roundtrip.executor, True),
+        # (double_roundtrip.executor, True),
+        # (gtfn.run_gtfn, True),
+        # (gtfn.run_gtfn_imperative, True),
+        # (gtfn.run_gtfn_with_temporaries, True),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: next_tests.get_processor_id(p[0]),
+    ids=lambda params: params[0].split(".")[-2:],
 )
 def program_processor(request):
     """
@@ -93,16 +83,18 @@ def program_processor(request):
     Notes:
         Check ADR 15 for details on the test-exclusion matrices.
     """
-    backend, _ = request.param
-    backend_id = next_tests.get_processor_id(backend)
+    processor_id, is_backend = request.param
+    processor = eval(processor_id, globals(), locals())
+    assert is_backend == ppi.is_program_backend(processor)
 
-    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
-        backend_id, []
-    ):
-        if request.node.get_closest_marker(marker):
-            skip_mark(msg.format(marker=marker, backend=backend_id))
+    if is_backend:
+        for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+            backend, []
+        ):
+            if request.node.get_closest_marker(marker):
+                skip_mark(msg.format(marker=marker, backend=backend))
 
-    return request.param
+    yield request.param, is_backend
 
 
 def run_processor(

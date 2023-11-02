@@ -26,7 +26,9 @@ For more information refer to
 """
 from __future__ import annotations
 
-from typing import Callable, Protocol, TypeGuard, TypeVar, cast
+import functools
+from collections.abc import Sequence
+from typing import Any, Callable, Literal, Optional, Protocol, TypeGuard, TypeVar, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -37,12 +39,12 @@ OutputT = TypeVar("OutputT", covariant=True)
 ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=True)
 
 
-class ProgramProcessorFunction(Protocol[OutputT]):
+class ProgramProcessorCallable(Protocol[OutputT]):
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
         ...
 
 
-class ProgramProcessor(ProgramProcessorFunction[OutputT], Protocol[OutputT, ProcessorKindT]):
+class ProgramProcessor(ProgramProcessorCallable[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
     def kind(self) -> type[ProcessorKindT]:
         ...
@@ -54,7 +56,51 @@ class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
         return ProgramFormatter
 
 
-def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
+def make_program_processor(
+    func: ProgramProcessorCallable[OutputT],
+    kind: type[ProcessorKindT],
+    *,
+    name: Optional[str] = None,
+    accept_args: None | int | Literal["all"] = "all",
+    accept_kwargs: Sequence[str] | None | Literal["all"] = "all",
+) -> ProgramProcessor[OutputT, ProcessorKindT]:
+    if not accept_args:
+        filtered_args = lambda args: ()
+    elif accept_args == "all":
+        filtered_args = lambda args: args
+    else:
+        filtered_args = lambda args: args[:accept_args]
+
+    if not accept_kwargs:
+        filtered_kwargs = lambda kwargs: {}
+    elif accept_kwargs == "all":
+        filtered_kwargs = lambda kwargs: kwargs
+    else:
+        filtered_kwargs = lambda kwargs: {
+            key: value for key, value in kwargs.items() if key in accept_kwargs
+        }
+
+    @functools.wraps(func)
+    def _wrapper(program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
+        return func(program, *filtered_args(args), **filtered_kwargs(kwargs))
+
+    if name is not None:
+        _wrapper.__name__ = name
+
+    # this operation effectively changes the type of the returned object,
+    # which is the intention here
+    _wrapper.kind = kind  # type: ignore[attr-defined]
+
+    return cast(ProgramProcessor[OutputT, ProcessorKindT], _wrapper)
+
+
+def program_formatter(
+    func: ProgramProcessorCallable[str],
+    *,
+    name: Optional[str] = None,
+    accept_args: None | int | Literal["all"] = "all",
+    accept_kwargs: Sequence[str] | None | Literal["all"] = "all",
+) -> ProgramFormatter:
     """
     Turn a function that formats a program as a string into a ProgramFormatter.
 
@@ -67,22 +113,25 @@ def program_formatter(func: ProgramProcessorFunction[str]) -> ProgramFormatter:
 
     >>> ensure_processor_kind(format_foo, ProgramFormatter)
     """
-    # this operation effectively changes the type of func and that is the intention here
-    func.kind = ProgramFormatter  # type: ignore[attr-defined]
-    return cast(ProgramProcessor[str, ProgramFormatter], func)
+
+    return make_program_processor(
+        func, ProgramFormatter, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
+    )
 
 
-class ProgramExecutor(
-    ProgramProcessor[None, "ProgramExecutor"],
-    next_allocators.FieldAllocatorInterface[core_defs.DeviceTypeT],
-    Protocol,
-):
+class ProgramExecutor(ProgramProcessor[None, "ProgramExecutor"]):
     @property
     def kind(self) -> type[ProgramExecutor]:
         return ProgramExecutor
 
 
-def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
+def program_executor(
+    func: ProgramProcessorCallable[None],
+    *,
+    name: Optional[str] = None,
+    accept_args: None | int | Literal["all"] = "all",
+    accept_kwargs: Sequence[str] | None | Literal["all"] = "all",
+) -> ProgramExecutor:
     """
     Turn a function that executes a program into a ``ProgramExecutor``.
 
@@ -95,9 +144,10 @@ def program_executor(func: ProgramProcessorFunction[None]) -> ProgramExecutor:
 
     >>> ensure_processor_kind(badly_execute, ProgramExecutor)
     """
-    # this operation effectively changes the type of func and that is the intention here
-    func.kind = ProgramExecutor  # type: ignore[attr-defined]
-    return cast(ProgramExecutor, func)
+
+    return make_program_processor(
+        func, ProgramExecutor, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
+    )
 
 
 def is_processor_kind(
@@ -111,3 +161,25 @@ def ensure_processor_kind(
 ) -> None:
     if not is_processor_kind(obj, kind):
         raise TypeError(f"{obj} is not a {kind.__name__}!")
+
+
+class ProgramBackend(
+    ProgramProcessor[None, "ProgramExecutor"],
+    next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT],
+    Protocol[core_defs.DeviceTypeT],
+):
+    ...
+
+
+def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
+    return is_processor_kind(obj, ProgramExecutor) and next_allocators.is_field_allocator_factory(
+        obj
+    )
+
+
+def is_program_backend_for(
+    obj: Callable, device: core_defs.DeviceTypeT
+) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
+    return is_processor_kind(
+        obj, ProgramExecutor
+    ) and next_allocators.is_field_allocator_factory_for(obj, device)

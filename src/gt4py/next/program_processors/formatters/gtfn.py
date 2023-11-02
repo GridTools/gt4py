@@ -20,5 +20,5 @@ from gt4py.next.program_processors.processor_interface import program_formatter
 
 
 @program_formatter
-def format_sourcecode(program: itir.FencilDefinition, *arg: Any, **kwargs: Any) -> str:
+def format_source(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     return generate(program, **kwargs)

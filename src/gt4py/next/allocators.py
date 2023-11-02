@@ -14,6 +14,7 @@
 
 import abc
 import dataclasses
+from typing import cast
 
 import numpy as np
 
@@ -22,12 +23,15 @@ import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
+    Any,
     Callable,
     Final,
     Optional,
     Protocol,
     Sequence,
     TypeAlias,
+    TypeGuard,
+    runtime_checkable,
 )
 
 
@@ -36,8 +40,12 @@ try:
 except ImportError:
     cp = None
 
+FieldLayoutMapper: TypeAlias = Callable[
+    [Sequence[common.Dimension]], core_allocators.BufferLayoutMap
+]
 
-class FieldAllocatorInterface(Protocol[core_defs.DeviceTypeT]):
+
+class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
     @property
     @abc.abstractmethod
     def __gt_device_type__(self) -> core_defs.DeviceTypeT:
@@ -54,13 +62,57 @@ class FieldAllocatorInterface(Protocol[core_defs.DeviceTypeT]):
         ...
 
 
-FieldLayoutMapper: TypeAlias = Callable[
-    [Sequence[common.Dimension]], core_allocators.BufferLayoutMap
-]
+def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
+    return hasattr(obj, "__gt_device_type__") and hasattr(obj, "__gt_allocate__")
+
+
+def is_field_allocator_for(
+    obj: Any, device: core_defs.DeviceTypeT
+) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+    return is_field_allocator(obj) and obj.__gt_device_type__ is device
+
+
+class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
+    @property
+    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        ...
+
+
+def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactoryProtocol]:
+    return hasattr(obj, "__gt_allocator__")
+
+
+def is_field_allocator_factory_for(
+    obj: Any, device: core_defs.DeviceTypeT
+) -> TypeGuard[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
+    return is_field_allocator_factory(obj) and obj.__gt_allocator__().__gt_device_type__ is device
+
+
+FieldBufferAllocationTool = (
+    FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+    | FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT]
+)
+
+
+def is_field_allocation_tool(obj: Any) -> TypeGuard[FieldBufferAllocationTool]:
+    return is_field_allocator(obj) or is_field_allocator_factory(obj)
+
+
+def get_allocator(
+    obj: FieldBufferAllocationTool, default: Optional[FieldBufferAllocatorProtocol] = None
+) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    if is_field_allocator(obj):
+        return obj
+    elif is_field_allocator_factory(obj):
+        return obj.__gt_allocator__
+    elif default is not None:
+        return default
+    else:
+        raise TypeError(f"Object {obj} is neither a field allocator nor a field allocator factory")
 
 
 @dataclasses.dataclass(frozen=True)
-class BaseFieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
+class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
     """Parametrizable field allocator base class."""
 
     device_type: core_defs.DeviceTypeT
@@ -90,8 +142,8 @@ class BaseFieldAllocator(FieldAllocatorInterface[core_defs.DeviceTypeT]):
 
 if TYPE_CHECKING:
     __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[
-        FieldAllocatorInterface
-    ] = BaseFieldAllocator
+        FieldBufferAllocatorProtocol
+    ] = BaseFieldBufferAllocator
 
 
 def horizontal_first_layout_mapper(
@@ -117,14 +169,14 @@ if TYPE_CHECKING:
 
 
 #: Registry of default allocators for each device type.
-device_allocators: dict[core_defs.DeviceType, FieldAllocatorInterface] = {}
+device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
 
 
 assert core_allocators.is_valid_nplike_allocation_ns(np)
 np_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = np  # Just for static type checking
 
 
-class StandardCPUFieldAllocator(BaseFieldAllocator):
+class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
     def __init__(self) -> None:
         super().__init__(
             device_type=core_defs.DeviceType.CPU,
@@ -134,17 +186,15 @@ class StandardCPUFieldAllocator(BaseFieldAllocator):
         )
 
 
-device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldAllocator()
+device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
+
+assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
 if cp:
-    cp_device_type = (
-        core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA
-    )
-
-    assert core_allocators.is_valid_nplike_allocation_ns(cp)
     cp_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = cp  # Just for static type checking
+    assert core_allocators.is_valid_nplike_allocation_ns(cp_alloc_ns)
 
-    class StandardGPUFieldAllocator(BaseFieldAllocator):
+    class StandardGPUFielBufferdAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
         def __init__(self) -> None:
             super().__init__(
                 device_type=core_defs.DeviceType.CPU,
@@ -153,9 +203,14 @@ if cp:
                 byte_alignment=128,
             )
 
-    device_allocators[cp_device_type] = StandardGPUFieldAllocator()
+    if cp.cuda.get_hipcc_path:
+        device_allocators[core_defs.DeviceType.ROCM] = StandardGPUFielBufferdAllocator()
+    else:
+        device_allocators[core_defs.DeviceType.CUDA] = StandardGPUFielBufferdAllocator()
 else:
-    StandardGPUFieldAllocator: Final[Optional[FieldAllocatorInterface]] = None  # type[no-redef]
+    StandardGPUFielBufferdAllocator: Final[
+        Optional[FieldBufferAllocatorProtocol]
+    ] = None  # type[no-redef]
 
 
 def allocate(
@@ -163,7 +218,7 @@ def allocate(
     dtype: core_defs.DType[core_defs.ScalarT],
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[FieldAllocatorInterface] = None,
+    allocator: Optional[FieldBufferAllocationTool] = None,
     device: Optional[core_defs.Device] = None,
 ) -> core_allocators.TensorBuffer:
     """
@@ -182,13 +237,14 @@ def allocate(
     """
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
+    actual_allocator = get_allocator(allocator, None)
     if device is None:
-        assert allocator is not None  # for mypy
-        device = core_defs.Device(allocator.__gt_device_type__, 0)
+        assert actual_allocator is not None  # for mypy
+        device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
     assert device is not None  # for mypy
-    field_allocator = allocator or device_allocators[device.device_type]
+    field_allocator = actual_allocator or device_allocators[device.device_type]
     if device.device_type != field_allocator.__gt_device_type__:
-        raise ValueError(f"Device {device} and allocator {allocator} are incompatible")
+        raise ValueError(f"Device {device} and allocator {actual_allocator} are incompatible")
 
     return field_allocator.__gt_allocate__(
         domain=domain,

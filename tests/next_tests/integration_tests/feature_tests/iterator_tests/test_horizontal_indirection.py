@@ -31,9 +31,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef, offset
 from gt4py.next.program_processors.formatters import type_check
-from gt4py.next.program_processors.formatters.gtfn import (
-    format_sourcecode as gtfn_format_sourcecode,
-)
+from gt4py.next.program_processors.formatters.gtfn import format_source as gtfn_format_sourcecode
 
 from next_tests.integration_tests.cases import IDim
 from next_tests.unit_tests.conftest import program_processor, run_processor

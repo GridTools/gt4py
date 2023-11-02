@@ -174,9 +174,6 @@ class Program:
     backend: Optional[ppi.ProgramExecutor] = None
     grid_type: Optional[GridType] = None
 
-    __gt_device_type__: ClassVar[next_allocators.FieldAllocatorInterface.__gt_device_type__]
-    __gt_allocate__: ClassVar[next_allocators.FieldAllocatorInterface.__gt_allocate__]
-
     @classmethod
     def from_function(
         cls,
@@ -217,13 +214,15 @@ class Program:
             raise RuntimeError(
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
-        if self.backend is not None:
-            object.__setattr__(
-                self, "__gt_device_type__", getattr(self.backend, "__gt_device_type__", None)
-            )
-            object.__setattr__(
-                self, "__gt_allocate__", getattr(self.backend, "__gt_allocate__", None)
-            )
+
+    @functools.cached_property
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        if self.backend:
+            return self.backend.__gt_allocator__
+        else:
+            raise RuntimeError(f"Program does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)

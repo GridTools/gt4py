@@ -31,7 +31,7 @@ def add(
     return a + b
 
 
-@gtx.program(backend=roundtrip.executor)
+@gtx.program(backend=roundtrip.backend)
 def prog(
     a: gtx.Field[[I, J], gtx.float32],
     b: gtx.Field[[I, J], gtx.float32],

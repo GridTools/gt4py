@@ -25,7 +25,7 @@ def empty(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationTool] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     """Allocate an array of uninitialized (undefined) values with performance-optimal strides and alignment.
@@ -78,7 +78,7 @@ def zeros(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
@@ -97,7 +97,7 @@ def ones(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
@@ -117,7 +117,7 @@ def full(
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
     field = empty(
@@ -137,7 +137,7 @@ def asfield(
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldAllocatorInterface] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
     # copy=False, TODO
 ) -> nd_array_field.NdArrayField:

@@ -122,7 +122,7 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
             gtfn.run_gtfn,
             gtfn.run_gtfn_imperative,
             gtfn.run_gtfn_with_temporaries,
-            gtfn_formatters.format_sourcecode,
+            gtfn_formatters.format_source,
         ]
         and lift_mode == LiftMode.FORCE_INLINE
     ):
