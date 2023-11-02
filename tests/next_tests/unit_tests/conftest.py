@@ -22,13 +22,17 @@ import gt4py.next as gtx
 from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
-from gt4py.next.program_processors.runners import (
-    dace_iterator,
-    double_roundtrip,
-    gtfn_cpu,
-    roundtrip,
-)
+from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters, lisp, type_check
+from gt4py.next.program_processors.runners import double_roundtrip, gtfn, roundtrip
+
+
+try:
+    from gt4py.next.program_processors.runners import dace_iterator
+except ModuleNotFoundError as e:
+    if "dace" in str(e):
+        dace_iterator = None
+    else:
+        raise e
 
 import next_tests
 
@@ -60,6 +64,11 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
     return pretty
 
 
+OPTIONAL_PROCESSORS = []
+if dace_iterator:
+    OPTIONAL_PROCESSORS.append((dace_iterator.run_dace_iterator, True))
+
+
 @pytest.fixture(
     params=[
         # (processor, do_validate)
@@ -69,32 +78,31 @@ def pretty_format_and_check(root: itir.FencilDefinition, *args, **kwargs) -> str
         (roundtrip.executor, True),
         (type_check.check, False),
         (double_roundtrip.executor, True),
-        (gtfn_cpu.run_gtfn, True),
-        (gtfn_cpu.run_gtfn_imperative, True),
-        (gtfn.format_sourcecode, False),
-        (dace_iterator.run_dace_iterator, True),
-    ],
+        (gtfn.run_gtfn, True),
+        (gtfn.run_gtfn_imperative, True),
+        (gtfn.run_gtfn_with_temporaries, True),
+        (gtfn_formatters.format_sourcecode, False),
+    ]
+    + OPTIONAL_PROCESSORS,
     ids=lambda p: next_tests.get_processor_id(p[0]),
 )
 def program_processor(request):
-    return request.param
+    """
+    Fixture creating program processors on-demand for tests.
 
+    Notes:
+        Check ADR 15 for details on the test-exclusion matrices.
+    """
+    backend, _ = request.param
+    backend_id = next_tests.get_processor_id(backend)
 
-@pytest.fixture
-def program_processor_no_dace_exec(program_processor):
-    if program_processor[0] == dace_iterator.run_dace_iterator:
-        pytest.xfail("DaCe backend not yet supported.")
-    return program_processor
-
-
-@pytest.fixture
-def program_processor_no_gtfn_exec(program_processor):
-    if (
-        program_processor[0] == gtfn_cpu.run_gtfn
-        or program_processor[0] == gtfn_cpu.run_gtfn_imperative
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
     ):
-        pytest.xfail("gtfn backend not yet supported.")
-    return program_processor
+        if request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=backend_id))
+
+    return request.param
 
 
 def run_processor(

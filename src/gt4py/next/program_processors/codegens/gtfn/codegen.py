@@ -220,11 +220,28 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return self.generic_visit(
             node,
             grid_type_str=self._grid_type_str[node.grid_type],
+            block_sizes=self._block_sizes(node.offset_definitions),
+            **kwargs,
+        )
+
+    def visit_TemporaryAllocation(self, node, **kwargs):
+        # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
+        #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
+        #  size and offset values, just to here convert back in order to obtain stop values again.
+        # TODO(tehrengruber): Fix memory alignment.
+        assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
+        tags = node.domain.tagged_offsets.tags
+        new_sizes = []
+        for size, offset in zip(node.domain.tagged_offsets.values, node.domain.tagged_sizes.values):
+            new_sizes.append(gtfn_ir.BinaryExpr(op="+", lhs=size, rhs=offset))
+        return self.generic_visit(
+            node,
+            tmp_sizes=self.visit(gtfn_ir.TaggedValues(tags=tags, values=new_sizes), **kwargs),
             **kwargs,
         )
 
     TemporaryAllocation = as_fmt(
-        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {domain}.sizes());"
+        "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
     )
 
     FencilDefinition = as_mako(
@@ -245,6 +262,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     ${'\\n'.join(offset_definitions)}
     ${'\\n'.join(function_definitions)}
 
+    ${block_sizes}
+
     inline auto ${id} = [](auto... connectivities__){
         return [connectivities__...](auto backend, ${','.join('auto&& ' + p for p in params)}){
             auto tmp_alloc__ = gtfn::backend::tmp_allocator(backend);
@@ -256,6 +275,18 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     }
     """
     )
+
+    def _block_sizes(self, offset_definitions: list[gtfn_ir.TagDefinition]) -> str:
+        block_dims = []
+        block_sizes = [32, 8] + [1] * (len(offset_definitions) - 2)
+        for i, tag in enumerate(offset_definitions):
+            if tag.alias is None:
+                block_dims.append(
+                    f"gridtools::meta::list<{tag.name.id}_t, "
+                    f"gridtools::integral_constant<int, {block_sizes[i]}>>"
+                )
+        sizes_str = ",\n".join(block_dims)
+        return f"using block_sizes_t = gridtools::meta::list<{sizes_str}>;"
 
     @classmethod
     def apply(cls, root: Any, **kwargs: Any) -> str:

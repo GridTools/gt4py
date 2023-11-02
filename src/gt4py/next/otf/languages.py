@@ -57,6 +57,14 @@ class Python(LanguageTag):
     ...
 
 
-class Cpp(LanguageTag):
+class NanobindSrcL(LanguageTag):
+    ...
+
+
+class Cpp(NanobindSrcL):
     settings_class = LanguageWithHeaderFilesSettings
     ...
+
+
+class Cuda(NanobindSrcL):
+    settings_class = LanguageWithHeaderFilesSettings
