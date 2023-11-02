@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
+import importlib
 
 import pytest
 
@@ -61,8 +62,7 @@ OPTIONAL_PROCESSORS = []
 
 @pytest.fixture(
     params=[
-        # (processor, is_backend)
-        ("None", True),
+        (None, True),
         (test_definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (test_definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (test_definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
@@ -74,9 +74,9 @@ OPTIONAL_PROCESSORS = []
         # (gtfn.run_gtfn_with_temporaries, True),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda params: params[0].split(".")[-2:],
+    ids=lambda p: test_definitions.make_processor_id(p[0].value) if p[0] is not None else "None",
 )
-def program_processor(request):
+def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     """
     Fixture creating program processors on-demand for tests.
 
@@ -84,17 +84,21 @@ def program_processor(request):
         Check ADR 15 for details on the test-exclusion matrices.
     """
     processor_id, is_backend = request.param
-    processor = eval(processor_id, globals(), locals())
+    if processor_id is None:
+        return None, is_backend
+
+    *mods, obj = processor_id.value.split(".")
+    globs = {"m": importlib.import_module(".".join(mods))}
+    processor = eval(f"m.{obj}", globs, globs)
     assert is_backend == ppi.is_program_backend(processor)
 
-    if is_backend:
-        for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
-            backend, []
-        ):
-            if request.node.get_closest_marker(marker):
-                skip_mark(msg.format(marker=marker, backend=backend))
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        processor_id, []
+    ):
+        if request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=processor_id))
 
-    yield request.param, is_backend
+    return processor, is_backend
 
 
 def run_processor(
@@ -111,7 +115,7 @@ def run_processor(
         raise TypeError(f"program processor kind not recognized: {processor}!")
 
 
-@dataclass
+@dataclasses.dataclass
 class DummyConnectivity:
     max_neighbors: int
     has_skip_values: int

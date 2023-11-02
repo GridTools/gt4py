@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -202,6 +203,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
+    #validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function

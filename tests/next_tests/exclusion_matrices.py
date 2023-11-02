@@ -50,11 +50,13 @@ class OptionalProgramExecutorId(str, enum.Enum):
 
 
 class ProgramFormatterId(str, enum.Enum):
-    GTFN_CPP_FORMATTER = "gt4py.next.program_processors.formatters.gtfn.format_source"
-    ITIR_PRETTY_PRINTER = "gt4py.next.program_processors.formatters.pretty_print.format_and_check"
-    ITIR_TYPE_CHECKER = "gt4py.next.program_processors.formatters.pretty_print.type_check.check"
+    GTFN_CPP_FORMATTER = "gt4py.next.program_processors.formatters.gtfn.format_cpp"
+    ITIR_PRETTY_PRINTER = "gt4py.next.program_processors.formatters.pretty_print.format_itir"
+    ITIR_TYPE_CHECKER = "gt4py.next.program_processors.formatters.type_check.check_type_inference"
     LISP_FORMATTER = "gt4py.next.program_processors.formatters.lisp.format_lisp"
 
+def make_processor_id(processor_id: str) -> str:
+    return ".".join(processor_id.split(".")[-2:])
 
 # Test markers
 REQUIRES_ATLAS = "requires_atlas"
