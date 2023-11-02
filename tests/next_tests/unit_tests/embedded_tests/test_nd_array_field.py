@@ -26,7 +26,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
-from tests.next_tests.unit_tests.test_common import IDim, JDim
 
 
 IDim = Dimension("IDim")
