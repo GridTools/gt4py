@@ -61,7 +61,7 @@ class FunctionFieldError(gt4py_exceptions.GT4PyError):
 
 
 class InfiniteRangeNdarrayError(gt4py_exceptions.GT4PyError):
-    cls_name: type
+    cls_name: str
     domain: common.Domain
 
     def __init__(self, cls_name: str, domain: common.Domain):
