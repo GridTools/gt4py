@@ -214,7 +214,7 @@ else:
 
 
 def allocate(
-    domain: common.Domain,
+    domain: common.DomainLike,
     dtype: core_defs.DType[core_defs.ScalarT],
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
@@ -237,7 +237,7 @@ def allocate(
     """
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
-    actual_allocator = get_allocator(allocator, None)
+    actual_allocator = get_allocator(allocator, None) if allocator is not None else None
     if device is None:
         assert actual_allocator is not None  # for mypy
         device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
@@ -247,7 +247,7 @@ def allocate(
         raise ValueError(f"Device {device} and allocator {actual_allocator} are incompatible")
 
     return field_allocator.__gt_allocate__(
-        domain=domain,
+        domain=common.domain(domain),
         dtype=dtype,
         device_id=device.device_id,
         aligned_index=aligned_index,

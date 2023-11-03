@@ -25,6 +25,7 @@ from typing import overload
 import numpy as np
 import numpy.typing as npt
 
+import gt4py.eve as eve
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -139,7 +140,7 @@ def is_valid_tensor_shape(
 
 
 # -- Data type descriptors --
-class DTypeKind(enum.Enum):
+class DTypeKind(eve.StrEnum):
     """
     Kind of a specific data type.
 
@@ -368,7 +369,7 @@ class GTOriginInterface(Protocol):
 
 
 # -- Device representation --
-class DeviceType(enum.Enum):
+class DeviceType(enum.IntEnum):
     """The type of the device where a memory buffer is allocated.
 
     Enum values taken from DLPack reference implementation at:

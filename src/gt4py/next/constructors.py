@@ -12,16 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional, Sequence
+from collections.abc import Sequence
+from typing import Optional
 
-from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators, common
-from gt4py.next.embedded import nd_array_field
-from gt4py.storage.cartesian import utils as storage_utils
+import gt4py._core.definitions as core_defs
+import gt4py.eve.extended_typing as xtyping
+import gt4py.next.allocators as next_allocators
+import gt4py.next.common as common
+import gt4py.next.embedded.nd_array_field as nd_array_field
+import gt4py.storage.cartesian.utils as storage_utils
 
 
 def empty(
-    domain: common.Domain,
+    domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
@@ -74,7 +77,7 @@ def empty(
 
 
 def zeros(
-    domain: common.Domain,
+    domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
@@ -93,7 +96,7 @@ def zeros(
 
 
 def ones(
-    domain: common.Domain,
+    domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
@@ -112,7 +115,7 @@ def ones(
 
 
 def full(
-    domain: common.Domain,
+    domain: common.DomainLike,
     fill_value: core_defs.Scalar,
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
@@ -132,7 +135,7 @@ def full(
 
 
 def asfield(
-    domain: common.Domain,
+    domain: common.DomainLike | Sequence[common.Dimension],
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
@@ -141,16 +144,29 @@ def asfield(
     device: Optional[core_defs.Device] = None,
     # copy=False, TODO
 ) -> nd_array_field.NdArrayField:
+    if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
+        if len(domain) != data.ndim:
+            raise ValueError(
+                f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
+            )
+        actual_domain = common.domain(tuple(zip(domain, data.shape)))
+    else:
+        actual_domain = common.domain(domain)
+
     # TODO make sure we don't reallocate if its in correct layout and device
     shape = storage_utils.asarray(data).shape
-    if shape != domain.shape:
+    if shape != actual_domain.shape:
         raise ValueError(f"Cannot construct `Field` from array of shape `{shape}` ")
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
+
+    if allocator is device is None and xtyping.supports_dlpack(data):
+        device = core_defs.Device(*data.__dlpack_device__())
+
     field = empty(
-        domain=domain,
+        domain=actual_domain,
         dtype=dtype,
         aligned_index=aligned_index,
         allocator=allocator,

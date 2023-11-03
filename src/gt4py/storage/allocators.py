@@ -120,14 +120,14 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
 
     @property
     def __array_interface__(self) -> dict[str, Any]:
-        if not xtyping.has_array_interface(self.ndarray):
+        if not xtyping.supports_array_interface(self.ndarray):
             raise TypeError("Cannot export tensor buffer to NumPy array interface.")
 
         return self.ndarray.__array_interface__
 
     @property
     def __cuda_array_interface__(self) -> dict[str, Any]:
-        if not xtyping.has_cuda_array_interface(self.ndarray):
+        if not xtyping.supports_cuda_array_interface(self.ndarray):
             raise TypeError("Cannot export tensor buffer to CUDA array interface.")
 
         return self.ndarray.__cuda_array_interface__

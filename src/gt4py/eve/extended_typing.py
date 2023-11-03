@@ -269,7 +269,7 @@ class StrictArrayInterface(Protocol):
         ...
 
 
-def has_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
+def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
     return hasattr(value, "__array_interface__")
 
 
@@ -296,7 +296,7 @@ class StrictCUDAArrayInterface(Protocol):
         ...
 
 
-def has_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
+def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
     return hasattr(value, "__cuda_array_interface__")
 
 
@@ -320,6 +320,12 @@ class SingleStreamDLPackBuffer(Protocol):
 
 
 DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
+
+
+def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
+    return callable(getattr(value, "__dlpack__", None)) and callable(
+        getattr(value, "__dlpack_device__", None)
+    )
 
 
 class DevToolsPrettyPrintable(Protocol):
