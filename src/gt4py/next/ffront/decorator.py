@@ -800,8 +800,8 @@ def scan_operator(
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
         >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> inp = gtx.as_field([KDim], np.ones((10,)))
+        >>> out = gtx.as_field([KDim], np.zeros((10,)))
         >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val

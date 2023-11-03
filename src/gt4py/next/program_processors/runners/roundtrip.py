@@ -37,7 +37,9 @@ def _create_tmp(axes, origin, shape, dtype):
     if isinstance(dtype, tuple):
         return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
     else:
-        return f"gtx.as_field([{axes}], np.empty({shape}, origin={origin}, dtype=np.dtype('{dtype}')))"
+        return (
+            f"gtx.as_field([{axes}], np.empty({shape}, origin={origin}, dtype=np.dtype('{dtype}')))"
+        )
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):

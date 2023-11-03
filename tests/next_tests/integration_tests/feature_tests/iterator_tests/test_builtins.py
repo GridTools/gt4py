@@ -256,8 +256,8 @@ def test_can_deref(program_processor, stencil):
 
     Node = gtx.Dimension("Node")
 
-    inp = gtx.np_as_located_field(Node)(np.ones((1,), dtype=np.int32))
-    out = gtx.np_as_located_field(Node)(np.asarray([0], dtype=inp.dtype))
+    inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
+    out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))
 
     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
     run_processor(
@@ -295,8 +295,8 @@ def test_can_deref(program_processor, stencil):
 #         shifted = shift(Neighbor, 0)(inp)
 #         return if_(can_deref(shifted), 1, -1)
 
-#     inp = gtx.np_as_located_field(Node)(np.zeros((1,)))
-#     out = gtx.np_as_located_field(Node)(np.asarray([0]))
+#     inp = gtx.as_field([Node], np.zeros((1,)))
+#     out = gtx.as_field([Node], np.asarray([0]))
 
 #     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](

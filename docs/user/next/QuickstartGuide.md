@@ -63,8 +63,8 @@ grid_shape = (num_cells, num_layers)
 
 a_value = 2.0
 b_value = 3.0
-a = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
-b = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
+a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
+b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
 ```
 
 _Note: The interface to construct fields is provisional only and will change soon._
@@ -87,7 +87,7 @@ def add(a: gtx.Field[[CellDim, KDim], float64],
 You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
 
 ```{code-cell} ipython3
-result = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 add(a, b, out=result, offset_provider={})
 
 print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
@@ -113,7 +113,7 @@ def run_add(a : gtx.Field[[CellDim, KDim], float64],
 You can execute the program by simply calling it:
 
 ```{code-cell} ipython3
-result = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 run_add(a, b, result, offset_provider={})
 
 print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.asarray(result)), np.std(np.asarray(result))))
@@ -200,8 +200,8 @@ cell_to_edge_table = np.array([
 Let's start by defining two fields: one over the cells and another one over the edges. The field over cells serves input for subsequent calculations and is therefore filled up with values, whereas the field over the edges stores the output of the calculations and is therefore left blank.
 
 ```{code-cell} ipython3
-cell_values = gtx.np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
-edge_values = gtx.np_as_located_field(EdgeDim)(np.zeros((12,)))
+cell_values = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
+edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
 | ![cell_values](connectivity_cell_field.svg) |
@@ -295,8 +295,8 @@ This function takes 3 input arguments:
   In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
 
 ```{code-cell} ipython3
-mask = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
-result_where = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+mask = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape, dtype=bool))
+result_where = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 b = 6.0
 
 @gtx.field_operator
@@ -313,8 +313,8 @@ print("where return: {}".format(np.asarray(result_where)))
 The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
 
 ```{code-cell} ipython3
-result_1 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_1 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
 def _conditional_tuple(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: float
@@ -338,13 +338,13 @@ The `where` builtin also allows for nesting of tuples. In this scenario, it will
 and then combine results to match the return type:
 
 ```{code-cell} ipython3
-a = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
-b = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
-c = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
-d = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
+a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
+b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
+c = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
+d = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
 
-result_1 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_1 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
 def _conditional_tuple_nested(
@@ -402,7 +402,7 @@ edge_weights = np.array([
     [0, -1, -1], # cell 5
 ], dtype=np.float64)
 
-edge_weight_field = gtx.np_as_located_field(CellDim, C2EDim)(edge_weights)
+edge_weight_field = gtx.as_field([CellDim, C2EDim], edge_weights)
 ```
 
 Now you have everything to implement the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
@@ -428,7 +428,7 @@ def run_pseudo_laplacian(cells : gtx.Field[[CellDim], float64],
                          out : gtx.Field[[CellDim], float64]):
     pseudo_lap(cells, edge_weights, out=out)
 
-result_pseudo_lap = gtx.np_as_located_field(CellDim)(np.zeros(shape=(6,)))
+result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
 
 run_pseudo_laplacian(cell_values,
                      edge_weight_field,

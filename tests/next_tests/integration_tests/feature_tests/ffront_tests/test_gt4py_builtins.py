@@ -267,7 +267,7 @@ def test_conditional_shifted(cartesian_case):
         conditional_shifted(mask, a, b, out=out)
 
     size = cartesian_case.default_sizes[IDim] + 1
-    mask = gtx.np_as_located_field(IDim)(np.random.choice(a=[False, True], size=(size)))
+    mask = gtx.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()
