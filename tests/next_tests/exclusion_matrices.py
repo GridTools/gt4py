@@ -15,6 +15,7 @@
 """Contains definition of test-exclusion matrices, see ADR 15."""
 
 import enum
+import importlib
 
 import pytest
 
@@ -25,19 +26,39 @@ SKIP = pytest.skip
 
 
 # Program processors
-class ProgramBackendId(str, enum.Enum):
-    GTFN_CPU = "gtfn.run_gtfn"
-    GTFN_CPU_IMPERATIVE = "gtfn.run_gtfn_imperative"
-    GTFN_CPU_WITH_TEMPORARIES = "gtfn.run_gtfn_with_temporaries"
-    ROUNDTRIP = "roundtrip.executor"
-    DOUBLE_ROUNDTRIP = "double_roundtrip.executor"
+class _PythonObjectIdMixin:
+    # Only useful for classes inheriting from (str, enum.Enum)
+    def __str__(self) -> str:
+        assert isinstance(self.value, str)
+        return self.value
+
+    def load(self) -> object:
+        *mods, obj = self.value.split(".")
+        globs = {"_m": importlib.import_module(".".join(mods))}
+        obj = eval(f"_m.{obj}", globs)
+        return obj
+
+    __invert__ = load
+
+    def short_id(self, num_components: int = 2) -> str:
+        return self.value.split(".")[-num_components:]
 
 
-class OptionalProgramBackendId(str, enum.Enum):
-    DACE_CPU = "dace_iterator.run_dace_cpu"
+class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
+    GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
+    GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
+    GTFN_CPU_WITH_TEMPORARIES = (
+        "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
+    )
+    ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
+    DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-class ProgramExecutorId(str, enum.Enum):
+class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
+    DACE_CPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_cpu"
+
+
+class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU_EXECUTOR = f"{ProgramBackendId.GTFN_CPU}.executor"
     GTFN_CPU_IMPERATIVE_EXECUTOR = f"{ProgramBackendId.GTFN_CPU_IMPERATIVE}.executor"
     GTFN_CPU_WITH_TEMPORARIES = f"{ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES}.executor"
@@ -45,18 +66,16 @@ class ProgramExecutorId(str, enum.Enum):
     DOUBLE_ROUNDTRIP = f"{ProgramBackendId.DOUBLE_ROUNDTRIP}.executor"
 
 
-class OptionalProgramExecutorId(str, enum.Enum):
+class OptionalProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU_EXECUTOR = f"{OptionalProgramBackendId.DACE_CPU}.executor"
 
 
-class ProgramFormatterId(str, enum.Enum):
+class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPP_FORMATTER = "gt4py.next.program_processors.formatters.gtfn.format_cpp"
     ITIR_PRETTY_PRINTER = "gt4py.next.program_processors.formatters.pretty_print.format_itir"
     ITIR_TYPE_CHECKER = "gt4py.next.program_processors.formatters.type_check.check_type_inference"
     LISP_FORMATTER = "gt4py.next.program_processors.formatters.lisp.format_lisp"
 
-def make_processor_id(processor_id: str) -> str:
-    return ".".join(processor_id.split(".")[-2:])
 
 # Test markers
 REQUIRES_ATLAS = "requires_atlas"

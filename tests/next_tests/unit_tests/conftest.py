@@ -15,20 +15,12 @@
 from __future__ import annotations
 
 import dataclasses
-import importlib
 
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator import runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.formatters import (
-    gtfn as gtfn_formatters,
-    lisp,
-    pretty_print,
-    type_check,
-)
-from gt4py.next.program_processors.runners import double_roundtrip, gtfn, roundtrip
 
 
 try:
@@ -40,7 +32,7 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
-import next_tests.exclusion_matrices as test_definitions
+import next_tests.exclusion_matrices as definitions
 
 
 @pytest.fixture(
@@ -56,25 +48,25 @@ def lift_mode(request):
 
 
 OPTIONAL_PROCESSORS = []
-# if dace_iterator:
-#     OPTIONAL_PROCESSORS.append((dace_iterator.run_dace_iterator, True))
+if dace_iterator:
+    OPTIONAL_PROCESSORS.append((definitions.OptionalProgramBackendId.DACE_CPU, True))
 
 
 @pytest.fixture(
     params=[
         (None, True),
-        (test_definitions.ProgramFormatterId.LISP_FORMATTER, False),
-        (test_definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (test_definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
-        (test_definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-        # (roundtrip.executor, True),
-        # (double_roundtrip.executor, True),
-        # (gtfn.run_gtfn, True),
-        # (gtfn.run_gtfn_imperative, True),
-        # (gtfn.run_gtfn_with_temporaries, True),
+        (definitions.ProgramBackendId.ROUNDTRIP, True),
+        (definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
+        (definitions.ProgramBackendId.GTFN_CPU, True),
+        (definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
+        (definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
+        (definitions.ProgramFormatterId.LISP_FORMATTER, False),
+        (definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
+        (definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
+        (definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: test_definitions.make_processor_id(p[0].value) if p[0] is not None else "None",
+    ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
 def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     """
@@ -87,9 +79,7 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     if processor_id is None:
         return None, is_backend
 
-    *mods, obj = processor_id.value.split(".")
-    globs = {"m": importlib.import_module(".".join(mods))}
-    processor = eval(f"m.{obj}", globs, globs)
+    processor = processor_id.load()
     assert is_backend == ppi.is_program_backend(processor)
 
     for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(

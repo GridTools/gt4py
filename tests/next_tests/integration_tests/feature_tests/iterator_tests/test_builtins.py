@@ -188,10 +188,13 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     inps = asfield(*asarray(*inputs))
     out = asfield((np.zeros_like(*asarray(expected))))[0]
 
+    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        run_gtfn,
-        otf_workflow=run_gtfn.otf_workflow.replace(
-            translation=run_gtfn.otf_workflow.translation.replace(enable_itir_transforms=False),
+        gtfn_executor,
+        otf_workflow=gtfn_executor.otf_workflow.replace(
+            translation=gtfn_executor.otf_workflow.translation.replace(
+                enable_itir_transforms=False
+            ),
         ),
     )  # avoid inlining the function
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
@@ -203,7 +206,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
-    #validate = ppi.is_program_backend(program_processor)
+    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function

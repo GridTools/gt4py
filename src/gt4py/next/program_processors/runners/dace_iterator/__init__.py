@@ -19,7 +19,9 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
 
+import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
+import gt4py.next.program_processors.otf_compile_executor as otf_exec
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
@@ -225,12 +227,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg_program(**expected_args)
 
 
-# otf_compile_executor.OTFBackend(
-#     executor=
-
-
 @program_executor
-def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
         *args,
@@ -239,6 +237,12 @@ def run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         build_type=_build_type,
         run_on_gpu=False,
     )
+
+
+run_dace_cpu = otf_exec.OTFBackend(
+    executor=_run_dace_cpu,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
 
 
 @program_executor

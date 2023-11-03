@@ -27,9 +27,7 @@ if TYPE_CHECKING:
 
 @ppi.program_executor
 def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    roundtrip.execute_roundtrip(
-        program, *args, dispatch_backend=roundtrip.execute_roundtrip, **kwargs
-    )
+    roundtrip.execute_roundtrip(program, *args, dispatch_backend=roundtrip.executor, **kwargs)
 
 
 backend = otf_compile_executor.OTFBackend(
