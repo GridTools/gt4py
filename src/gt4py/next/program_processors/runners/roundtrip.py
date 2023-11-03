@@ -38,7 +38,7 @@ def _create_tmp(axes, origin, shape, dtype):
         return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
     else:
         return (
-            f"gtx.as_field([{axes}], np.empty({shape}, origin={origin}, dtype=np.dtype('{dtype}')))"
+            f"gtx.as_field([{axes}], np.empty({shape}, dtype=np.dtype('{dtype}')), origin={origin})"
         )
 
 
