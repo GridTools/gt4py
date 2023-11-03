@@ -63,7 +63,7 @@ def test_simple_indirection(program_processor):
         )  # TODO fix test or generalize itir?
 
     shape = [8]
-    inp = gtx.np_as_located_field(IDim, origin={IDim: 1})(np.arange(0, shape[0] + 2))
+    inp = gtx.as_field([IDim], np.arange(0, shape[0] + 2), origin={IDim: 1})
     rng = np.random.default_rng()
     cond = gtx.as_field([IDim], rng.normal(size=shape))
     out = gtx.as_field([IDim], np.zeros(shape, dtype=inp.dtype))

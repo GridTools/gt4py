@@ -52,7 +52,7 @@ def test_trivial(program_processor, lift_mode):
     out = np.copy(inp)
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :, 0])
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :, 0], origin={IDim: 0, JDim: 0})
     out_s = gtx.as_field([IDim, JDim], np.zeros_like(inp[:, :, 0]))
 
     run_processor(
@@ -85,7 +85,7 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
     out[1:, :] = inp[:-1, :]
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :])
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :], origin={IDim: 0, JDim: 0})
     out_s = gtx.as_field([IDim, JDim], np.zeros_like(inp[:, :]))
 
     run_processor(

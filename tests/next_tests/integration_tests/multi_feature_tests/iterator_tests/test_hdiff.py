@@ -88,7 +88,7 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 2, JDim: 2})(inp[:, :, 0])
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :, 0], origin={IDim: 2, JDim: 2})
     coeff_s = gtx.as_field([IDim, JDim], coeff[:, :, 0])
     out_s = gtx.as_field([IDim, JDim], np.zeros_like(coeff[:, :, 0]))
 

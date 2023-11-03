@@ -63,8 +63,10 @@ def shift_stencil(inp):
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 2:],
-            lambda shape: gtx.np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
-                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
+            lambda shape: gtx.as_field(
+                [IDim, KDim],
+                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2]),
+                origin={IDim: 0, KDim: 1},
             ),
         ),
     ],
@@ -388,7 +390,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
 
     k_size = 10
     inp0 = gtx.as_field([KDim], np.arange(0, k_size))
-    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
+    inp1 = gtx.as_field([KDim], np.arange(0, k_size + 1), origin={KDim: 1})
     out = gtx.as_field([KDim], np.zeros(k_size, dtype=np.int64))
     ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
 
