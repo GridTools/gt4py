@@ -685,7 +685,7 @@ def _single_vertical_idx(
     indices: NamedFieldIndices, column_axis: Tag, column_index: common.IntIndex
 ) -> NamedFieldIndices:
     transformed = {
-        axis: (index if axis != column_axis else index.start + column_index)  # type: ignore[union-attr] # trust me, `index` is range in case of `column_axis`
+        axis: (index if axis != column_axis else index.start + column_index)  # type: ignore[union-attr] # trust me, `index` is range in case of `column_axis` # fmt: off
         for axis, index in indices.items()
     }
     return transformed
@@ -1050,7 +1050,7 @@ class IndexField(common.Field):
         return (0,)
 
     @classmethod
-    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype
+    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype # fmt: off
         raise NotImplementedError()
 
     @property
@@ -1070,7 +1070,7 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
-        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code
+        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
@@ -1156,7 +1156,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         return tuple()
 
     @classmethod
-    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype
+    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype # fmt: off
         raise NotImplementedError()
 
     @property

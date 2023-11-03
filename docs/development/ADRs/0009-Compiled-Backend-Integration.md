@@ -159,7 +159,7 @@ Compiled backends may generate code which depends on libraries and tools written
 
 1. can be installed with `pip` (from `PyPI` or another source) automatically.
 2. can not be installed with `pip` and not commonly found on HPC machines.
-3. libraries and tools which are left to the user to install and make discoverable: `pybind11`, C++ compilers
+3. libraries and tools which are left to the user to install and make discoverable: `boost`, C++ compilers
 
 Category 1 are made dependencies of `GT4Py`. Examples include `pybind11`, `cmake`, `ninja`.
 

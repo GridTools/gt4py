@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import itertools
 from typing import Any, Sequence
 
 import dace
@@ -48,14 +48,12 @@ def connectivity_identifier(name: str):
 
 
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    bounds = [(0, size) for size in source_array.shape]
-    subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
-    return dace.Memlet.simple(source_identifier, subset)
+    return dace.Memlet.from_array(source_identifier, source_array)
 
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
+    return dace.Memlet.simple(source_identifier, subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -166,3 +164,11 @@ def unique_name(prefix):
 
 def unique_var_name():
     return unique_name("__var")
+
+
+def flatten_list(node_list: list[Any]) -> list[Any]:
+    return list(
+        itertools.chain.from_iterable(
+            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+        )
+    )

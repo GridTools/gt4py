@@ -27,13 +27,12 @@ from gt4py.next import (
     float64,
     int32,
     int64,
-    maximum,
     minimum,
     neighbor_sum,
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -159,7 +158,6 @@ def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
-@pytest.mark.uses_tuple_returns
 def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
@@ -455,7 +453,6 @@ def test_offset_field(cartesian_case):
     assert np.allclose(out, ref)
 
 
-@pytest.mark.uses_tuple_returns
 def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
@@ -531,7 +528,7 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_constant_fields
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
     def reduce_tuple_element(e: cases.EField, v: cases.VField) -> cases.EField:
@@ -583,12 +580,12 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("Nested `scan`s requires creating temporaries.")
-    if cartesian_case.backend == gtfn_cpu.run_gtfn_with_temporaries:
+    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -687,7 +684,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -710,7 +707,7 @@ def test_ternary_scan(cartesian_case):
 @pytest.mark.parametrize("forward", [True, False])
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend in [gtfn_cpu.run_gtfn_with_temporaries]:
+    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     init = (1, (2, 3))
@@ -747,7 +744,9 @@ def test_scan_nested_tuple_input(cartesian_case):
     inp2 = gtx.np_as_located_field(KDim)(np.arange(0.0, k_size, 1))
     out = gtx.np_as_located_field(KDim)(np.zeros((k_size,)))
 
-    prev_levels_iterator = lambda i: range(i + 1)
+    def prev_levels_iterator(i):
+        return range(i + 1)
+
     expected = np.asarray(
         [
             reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
@@ -815,9 +814,9 @@ def test_domain(cartesian_case):
 
 def test_domain_input_bounds(cartesian_case):
     if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("FloorDiv not fully supported in gtfn.")
 
@@ -895,7 +894,6 @@ def test_domain_input_bounds_1(cartesian_case):
     )
 
 
-@pytest.mark.uses_tuple_returns
 def test_domain_tuple(cartesian_case):
     @gtx.field_operator
     def fieldop_domain_tuple(

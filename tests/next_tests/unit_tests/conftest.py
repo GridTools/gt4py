@@ -22,8 +22,8 @@ import gt4py.next as gtx
 from gt4py import eve
 from gt4py.next.iterator import ir as itir, pretty_parser, pretty_printer, runtime, transforms
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.formatters import gtfn, lisp, type_check
-from gt4py.next.program_processors.runners import double_roundtrip, gtfn_cpu, roundtrip
+from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters, lisp, type_check
+from gt4py.next.program_processors.runners import double_roundtrip, gtfn, roundtrip
 
 
 try:
@@ -78,10 +78,10 @@ if dace_iterator:
         (roundtrip.executor, True),
         (type_check.check, False),
         (double_roundtrip.executor, True),
-        (gtfn_cpu.run_gtfn, True),
-        (gtfn_cpu.run_gtfn_imperative, True),
-        (gtfn_cpu.run_gtfn_with_temporaries, True),
-        (gtfn.format_sourcecode, False),
+        (gtfn.run_gtfn, True),
+        (gtfn.run_gtfn_imperative, True),
+        (gtfn.run_gtfn_with_temporaries, True),
+        (gtfn_formatters.format_sourcecode, False),
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: next_tests.get_processor_id(p[0]),
