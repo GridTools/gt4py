@@ -82,7 +82,7 @@ def apply_common_transforms(
     unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
-        lift_mode = LiftMode.FORCE_INLINE
+        lift_mode = LiftMode.FORCE_TEMPORARIES
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
@@ -90,7 +90,7 @@ def apply_common_transforms(
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
-    for _ in range(10):
+    for i in range(10):
         inlined = ir
 
         inlined = _inline_lifts(inlined, lift_mode)
@@ -106,7 +106,10 @@ def apply_common_transforms(
         inlined = ConstantFolding.apply(inlined)
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        inlined = CollapseTuple.apply(inlined)
+        if i == 1:
+            inlined = CollapseTuple.apply(inlined, collapse_tuple_inference=True)
+        else:
+            inlined = CollapseTuple.apply(inlined, collapse_tuple_inference=False)
 
         if inlined == ir:
             break

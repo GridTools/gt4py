@@ -11,19 +11,20 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 from dataclasses import dataclass
+from typing import Optional
 
 from gt4py import eve
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
-def _get_tuple_size(type_: type_inference.Type) -> int:
-    assert isinstance(type_, it_type_inference.Val) and isinstance(
-        type_.dtype, it_type_inference.Tuple
+def _get_tuple_size(elem: type_inference.Type | ir.Node) -> int:
+    infered_type = it_type_inference.infer(elem) if isinstance(elem, ir.Node) else elem
+    assert isinstance(infered_type, it_type_inference.Val) and isinstance(
+        infered_type.dtype, it_type_inference.Tuple
     )
-    return len(type_.dtype)
+    return len(infered_type.dtype)
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,8 @@ class CollapseTuple(eve.NodeTranslator):
     ignore_tuple_size: bool
     collapse_make_tuple_tuple_get: bool
     collapse_tuple_get_make_tuple: bool
+    collapse_tuple_inference: bool
+    node_types: Optional[dict[int, type_inference.Type]] = None
 
     @classmethod
     def apply(
@@ -48,6 +51,7 @@ class CollapseTuple(eve.NodeTranslator):
         # the following options are mostly for allowing separate testing of the modes
         collapse_make_tuple_tuple_get: bool = True,
         collapse_tuple_get_make_tuple: bool = True,
+        collapse_tuple_inference: bool = False,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -55,8 +59,21 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
+        if collapse_tuple_inference:
+            node_types = it_type_inference.infer_all(node)
+            return cls(
+                ignore_tuple_size,
+                collapse_make_tuple_tuple_get,
+                collapse_tuple_get_make_tuple,
+                collapse_tuple_inference,
+                node_types,
+            ).visit(node)
+
         return cls(
-            ignore_tuple_size, collapse_make_tuple_tuple_get, collapse_tuple_get_make_tuple
+            ignore_tuple_size,
+            collapse_make_tuple_tuple_get,
+            collapse_tuple_get_make_tuple,
+            collapse_tuple_inference,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
@@ -79,7 +96,10 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
+            tuple_expr: type_inference.Type | ir.Node = (
+                self.node_types[id(first_expr)] if self.node_types is not None else first_expr
+            )
+            if self.ignore_tuple_size or _get_tuple_size(tuple_expr) == len(node.args):
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple
