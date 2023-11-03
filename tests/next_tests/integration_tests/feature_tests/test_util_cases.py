@@ -20,7 +20,10 @@ from gt4py.next import errors
 
 import next_tests.exclusion_matrices as definitions
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case  # noqa: F401 # fixtures
+from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
+    cartesian_case,
+    fieldview_backend,
+)
 
 
 @gtx.field_operator

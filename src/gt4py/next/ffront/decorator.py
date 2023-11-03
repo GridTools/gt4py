@@ -31,7 +31,7 @@ from devtools import debug
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
-from gt4py.eve.extended_typing import Any, ClassVar, Optional
+from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import allocators as next_allocators
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
@@ -222,7 +222,7 @@ class Program:
         if self.backend:
             return self.backend.__gt_allocator__
         else:
-            raise RuntimeError(f"Program does not have a backend set.")
+            raise RuntimeError(f"Program {self} does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)

@@ -14,7 +14,6 @@
 
 import abc
 import dataclasses
-from typing import cast
 
 import numpy as np
 
@@ -31,7 +30,6 @@ from gt4py.eve.extended_typing import (
     Sequence,
     TypeAlias,
     TypeGuard,
-    runtime_checkable,
 )
 
 
