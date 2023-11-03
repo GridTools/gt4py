@@ -134,11 +134,12 @@ def full(
     return field
 
 
-def asfield(
+def as_field(
     domain: common.DomainLike | Sequence[common.Dimension],
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
+    origin: Optional[dict[common.Dimension, int]] = None,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
@@ -149,8 +150,22 @@ def asfield(
             raise ValueError(
                 f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
             )
-        actual_domain = common.domain(tuple(zip(domain, data.shape)))
+        if origin:
+            if set(origin.keys()) - set(domain):
+                raise ValueError(
+                    f"Origin keys {set(origin.keys()) - set(domain)} not in domain {domain}"
+                )
+        else:
+            origin = {}
+        actual_domain = common.domain(
+            [
+                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+                for d, s in zip(domain, data.shape)
+            ]
+        )
     else:
+        if origin:
+            raise ValueError(f"Cannot specify origin for domain {domain}")
         actual_domain = common.domain(domain)
 
     # TODO make sure we don't reallocate if its in correct layout and device

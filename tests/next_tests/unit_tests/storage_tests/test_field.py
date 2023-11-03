@@ -48,7 +48,7 @@ a = gtx.constructors.ones(
 
 
 arr = np.full((10, 10), 42.0)
-b = gtx.constructors.asfield(
+b = gtx.constructors.as_field(
     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     arr,
     dtype=core_defs.dtype(np.float32),

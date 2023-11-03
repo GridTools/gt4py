@@ -167,7 +167,7 @@ class IndexInitializer(DataInitializer):
                 f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
             )
         n_data = list(sizes.values())[0]
-        return constructors.asfield(
+        return constructors.as_field(
             domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
         )
 
@@ -207,7 +207,7 @@ class UniqueInitializer(DataInitializer):
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return constructors.asfield(
+        return constructors.as_field(
             common.domain(sizes),
             np.arange(start, start + n_data, dtype=dtype).reshape(svals),
             allocator=backend,

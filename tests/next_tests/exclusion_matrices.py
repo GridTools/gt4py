@@ -41,7 +41,7 @@ class _PythonObjectIdMixin:
     __invert__ = load
 
     def short_id(self, num_components: int = 2) -> str:
-        return self.value.split(".")[-num_components:]
+        return ".".join(self.value.split(".")[-num_components:])
 
 
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
