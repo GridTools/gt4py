@@ -39,8 +39,6 @@ class CollapseTuple(eve.NodeTranslator):
     collapse_make_tuple_tuple_get: bool
     collapse_tuple_get_make_tuple: bool
 
-    _node_types: dict[int, type_inference.Type]
-
     @classmethod
     def apply(
         cls,
@@ -57,13 +55,8 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        node_types = it_type_inference.infer_all(node)
-
         return cls(
-            ignore_tuple_size,
-            collapse_make_tuple_tuple_get,
-            collapse_tuple_get_make_tuple,
-            node_types,
+            ignore_tuple_size, collapse_make_tuple_tuple_get, collapse_tuple_get_make_tuple
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
@@ -86,9 +79,7 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(self._node_types[id(first_expr)]) == len(
-                node.args
-            ):
+            if self.ignore_tuple_size or _get_tuple_size(first_expr) == len(node.args):
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple
