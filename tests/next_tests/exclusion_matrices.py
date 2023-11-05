@@ -30,7 +30,6 @@ GTFN_FORMAT_SOURCECODE = "gtfn.format_sourcecode"
 # Test markers
 REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
-USES_CAN_DEREF = "uses_can_deref"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
 USES_IF_STMTS = "uses_if_stmts"
@@ -68,7 +67,6 @@ GTFN_SKIP_TEST_LIST = [
 BACKEND_SKIP_TEST_MATRIX = {
     DACE: GTFN_SKIP_TEST_LIST
     + [
-        (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_CONSTANT_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
