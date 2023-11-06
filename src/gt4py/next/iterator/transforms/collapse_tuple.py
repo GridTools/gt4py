@@ -26,7 +26,7 @@ class UnknownLength:
 def _get_tuple_size(elem: ir.Node, node_types: Optional[dict] = None) -> int | type[UnknownLength]:
     if node_types:
         type_ = node_types[id(elem)]
-        # Global inference should always give a length, function should fail otherwise
+        # global inference should always give a length, function should fail otherwise
         assert isinstance(type_, it_type_inference.Val) and isinstance(
             type_.dtype, it_type_inference.Tuple
         )
