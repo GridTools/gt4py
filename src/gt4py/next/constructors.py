@@ -195,9 +195,6 @@ def as_field(
     return field
 
 
-as_field_from = functools.partial(as_field, origin=None)
-
-
 def as_field_with(
     domain: common.DomainLike | Sequence[common.Dimension] | eve.NOTHING = eve.NOTHING,
     *,
