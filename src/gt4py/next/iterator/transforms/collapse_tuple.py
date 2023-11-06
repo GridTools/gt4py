@@ -19,20 +19,20 @@ from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
-def _get_tuple_size(elem_or_type: type_inference.Type | ir.Node) -> int:
-    if isinstance(elem, ir.Node):
-        type_ = it_type_inference.infer(elem)  # use local type inference
+def _get_tuple_size(
+    elem_or_type: type_inference.Type | ir.Node, node_types: Optional[dict] = None
+) -> int:
+    if node_types:
+        type_ = node_types[id(elem_or_type)]
     else:
-        type_ = elem_or_type
+        # use local type inference if no global information is available
+        assert isinstance(elem_or_type, ir.Node)
+        type_ = it_type_inference.infer(elem_or_type)
+
     assert isinstance(type_, it_type_inference.Val) and isinstance(
         type_.dtype, it_type_inference.Tuple
     )
     return len(type_.dtype)
-    infered_type = it_type_inference.infer(elem) if isinstance(elem, ir.Node) else elem
-    assert isinstance(infered_type, it_type_inference.Val) and isinstance(
-        infered_type.dtype, it_type_inference.Tuple
-    )
-    return len(infered_type.dtype)
 
 
 @dataclass(frozen=True)
@@ -47,7 +47,7 @@ class CollapseTuple(eve.NodeTranslator):
     ignore_tuple_size: bool
     collapse_make_tuple_tuple_get: bool
     collapse_tuple_get_make_tuple: bool
-    collapse_tuple_inference: bool
+    use_global_type_inference: bool
     _node_types: Optional[dict[int, type_inference.Type]] = None
 
     @classmethod
@@ -59,7 +59,7 @@ class CollapseTuple(eve.NodeTranslator):
         # the following options are mostly for allowing separate testing of the modes
         collapse_make_tuple_tuple_get: bool = True,
         collapse_tuple_get_make_tuple: bool = True,
-        use_global_type_inferrence: bool = False,
+        use_global_type_inference: bool = False,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -67,20 +67,20 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        node_types = it_type_inference.infer_all(node) if use_global_type_inferrence else None
+        _node_types = it_type_inference.infer_all(node) if use_global_type_inference else None
         return cls(
             ignore_tuple_size,
             collapse_make_tuple_tuple_get,
             collapse_tuple_get_make_tuple,
-            collapse_tuple_inference,
-            node_types
+            use_global_type_inference,
+            _node_types,
         ).visit(node)
 
         return cls(
             ignore_tuple_size,
             collapse_make_tuple_tuple_get,
             collapse_tuple_get_make_tuple,
-            collapse_tuple_inference,
+            use_global_type_inference,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
@@ -103,7 +103,9 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(first_expr, self.node_types) == len(node.args):
+            if self.ignore_tuple_size or _get_tuple_size(first_expr, self._node_types) == len(
+                node.args
+            ):
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple
