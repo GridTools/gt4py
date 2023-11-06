@@ -12,10 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from collections.abc import Sequence
+import functools
+from collections.abc import Callable, Sequence
 from typing import Optional
 
 import gt4py._core.definitions as core_defs
+import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
@@ -191,3 +193,27 @@ def as_field(
     field[...] = field.array_ns.asarray(data)
 
     return field
+
+
+as_field_from = functools.partial(as_field, origin=None)
+
+
+def as_field_with(
+    domain: common.DomainLike | Sequence[common.Dimension] | eve.NOTHING = eve.NOTHING,
+    *,
+    origin: Optional[dict[common.Dimension, int]] | eve.NOTHING = eve.NOTHING,
+    aligned_index: Optional[Sequence[common.NamedIndex]] | eve.NOTHING = eve.NOTHING,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] | eve.NOTHING = eve.NOTHING,
+    device: Optional[core_defs.Device] | eve.NOTHING = eve.NOTHING,
+) -> Callable[..., nd_array_field.NdArrayField]:
+    args = (domain,) if domain is not eve.NOTHING else ()
+    loc = locals()
+    return functools.partial(
+        as_field,
+        *args,
+        **{
+            k: v
+            for k in ["origin", "aligned_index", "allocator", "device"]
+            if (v := loc[k]) is not eve.NOTHING
+        },
+    )

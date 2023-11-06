@@ -152,11 +152,15 @@ def unit_range(r: RangeLike) -> UnitRange:
         if r.step != 1:
             raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
         return UnitRange(r.start, r.stop)
-    if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
+    if (
+        isinstance(r, tuple)
+        and isinstance(r[0], core_defs.INTEGRAL_TYPES)
+        and isinstance(r[1], core_defs.INTEGRAL_TYPES)
+    ):
         return UnitRange(r[0], r[1])
     if isinstance(r, core_defs.INTEGRAL_TYPES):
         return UnitRange(0, r)
-    raise ValueError(f"`{r}` cannot be interpreted as `UnitRange`.")
+    raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar

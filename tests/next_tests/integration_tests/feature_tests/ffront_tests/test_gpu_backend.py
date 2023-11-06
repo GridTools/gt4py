@@ -15,7 +15,6 @@
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator import embedded
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
@@ -36,8 +35,8 @@ def test_copy(cartesian_case, fieldview_backend):  # noqa: F811 # fixtures
 
     inp_arr = cp.full(shape=(3, 4, 5), fill_value=3, dtype=cp.int32)
     outp_arr = cp.zeros_like(inp_arr)
-    inp = embedded.np_as_located_field(cases.IDim, cases.JDim, cases.KDim)(inp_arr)
-    outp = embedded.np_as_located_field(cases.IDim, cases.JDim, cases.KDim)(outp_arr)
+    inp = gtx.as_field([cases.IDim, cases.JDim, cases.KDim])(inp_arr)
+    outp = gtx.as_field([cases.IDim, cases.JDim, cases.KDim])(outp_arr)
 
     testee(inp, out=outp, offset_provider={})
     assert cp.allclose(inp_arr, outp_arr)

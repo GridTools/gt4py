@@ -1012,25 +1012,6 @@ def _shift_field_indices(
     )
 
 
-def np_as_located_field(
-    *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
-) -> Callable[[np.ndarray], common.Field]:
-    origin = origin or {}
-
-    def _maker(a) -> common.Field:
-        if a.ndim != len(axes):
-            raise TypeError("ndarray.ndim incompatible with number of given dimensions")
-        ranges = []
-        for d, s in zip(axes, a.shape):
-            offset = origin.get(d, 0)
-            ranges.append(common.UnitRange(-offset, s - offset))
-
-        res = common.field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
-        return res
-
-    return _maker
-
-
 @dataclasses.dataclass(frozen=True)
 class IndexField(common.Field):
     """

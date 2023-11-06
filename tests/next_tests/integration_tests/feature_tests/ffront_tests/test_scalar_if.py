@@ -18,7 +18,8 @@ from functools import reduce
 import numpy as np
 import pytest
 
-from gt4py.next import Field, errors, field_operator, float64, index_field, np_as_located_field
+import gt4py.next as gtx
+from gt4py.next import Field, errors, field_operator, float64, index_field
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (

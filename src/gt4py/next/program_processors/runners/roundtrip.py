@@ -19,7 +19,7 @@ import pathlib
 import tempfile
 import textwrap
 from collections.abc import Callable, Iterable
-from typing import Any, Optional, cast
+from typing import Any, Optional
 
 import gt4py.eve.codegen as codegen
 import gt4py.next.allocators as next_allocators

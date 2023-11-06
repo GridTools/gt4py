@@ -59,7 +59,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-def asarray(*lists):
+def array_maker(*lists):
     def _listify(val):
         if isinstance(val, Iterable):
             return val
@@ -73,8 +73,8 @@ def asarray(*lists):
 IDim = gtx.Dimension("IDim")
 
 
-def asfield(*arrays):
-    res = list(map(gtx.np_as_located_field(IDim), arrays))
+def field_maker(*arrays):
+    res = list(map(gtx.as_field_with([IDim]), arrays))
     return res
 
 
@@ -172,8 +172,8 @@ def arithmetic_and_logical_test_data():
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
     program_processor, validate = program_processor
 
-    inps = asfield(*asarray(*inputs))
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    inps = field_maker(*array_maker(*inputs))
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
     fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 
@@ -185,8 +185,8 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     if builtin == if_:
         pytest.skip("If cannot be used unapplied")
-    inps = asfield(*asarray(*inputs))
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    inps = field_maker(*array_maker(*inputs))
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
     gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
@@ -214,10 +214,10 @@ def test_math_function_builtins(program_processor, builtin_name, inputs, as_colu
     else:
         ref_impl: Callable = getattr(np, builtin_name)
 
-    inps = asfield(*asarray(*inputs))
+    inps = field_maker(*array_maker(*inputs))
     expected = ref_impl(*inputs)
 
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
     fencil(
         getattr(it_builtins, builtin_name),
@@ -329,7 +329,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     program_processor, validate = program_processor
     column_axis = IDim if as_column else None
 
-    inp = asfield(np.array([input_value]))[0]
+    inp = field_maker(np.array([input_value]))[0]
 
     casted_valued = np_dtype(input_value)
 
@@ -337,7 +337,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     def sten_cast(it, casted_valued):
         return eq(cast_(deref(it), dtype), deref(casted_valued))
 
-    out = asfield(np.zeros_like(inp, dtype=builtins.bool))[0]
+    out = field_maker(np.zeros_like(inp, dtype=builtins.bool))[0]
     run_processor(
         sten_cast[{IDim: range(1)}],
         program_processor,

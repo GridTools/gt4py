@@ -139,7 +139,7 @@ def test_compute_zavgS(program_processor, lift_mode):
     setup = nabla_setup()
 
     pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.np_as_located_field(Edge), setup.S_fields))
+    S_MXX, S_MYY = tuple(map(gtx.as_field_with([Edge]), setup.S_fields))
 
     zavgS = gtx.as_field([Edge], np.zeros((setup.edges_size)))
 
@@ -238,7 +238,7 @@ def test_nabla(program_processor, lift_mode):
 
     sign = gtx.as_field([Vertex, V2EDim], setup.sign_field)
     pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.np_as_located_field(Edge), setup.S_fields))
+    S_MXX, S_MYY = tuple(map(gtx.as_field_with([Edge]), setup.S_fields))
     vol = gtx.as_field([Vertex], setup.vol_field)
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
@@ -377,7 +377,7 @@ def test_nabla_sign(program_processor, lift_mode):
 
     is_pole_edge = gtx.as_field([Edge], setup.is_pole_edge_field)
     pp = gtx.as_field([Vertex], setup.input_field)
-    S_MXX, S_MYY = tuple(map(gtx.np_as_located_field(Edge), setup.S_fields))
+    S_MXX, S_MYY = tuple(map(gtx.as_field_with([Edge]), setup.S_fields))
     vol = gtx.as_field([Vertex], setup.vol_field)
 
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))

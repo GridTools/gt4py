@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Sequence
-from typing import Any, Callable, Literal, Optional, Protocol, TypeGuard, TypeVar, cast
+from typing import Callable, Literal, Optional, Protocol, TypeGuard, TypeVar, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -65,18 +65,20 @@ def make_program_processor(
     accept_kwargs: Sequence[str] | None | Literal["all"] = "all",
 ) -> ProgramProcessor[OutputT, ProcessorKindT]:
     if not accept_args:
-        filtered_args = lambda args: ()
+        filtered_args = lambda args: ()  # noqa: E731  # use def instead of named lambdas
     elif accept_args == "all":
-        filtered_args = lambda args: args
+        filtered_args = lambda args: args  # noqa: E731  # use def instead of named lambdas
     else:
-        filtered_args = lambda args: args[:accept_args]
+        filtered_args = lambda args: args[  # noqa: E731  # use def instead of named lambdas
+            :accept_args
+        ]
 
     if not accept_kwargs:
-        filtered_kwargs = lambda kwargs: {}
+        filtered_kwargs = lambda kwargs: {}  # noqa: E731  # use def instead of named lambdas
     elif accept_kwargs == "all":
-        filtered_kwargs = lambda kwargs: kwargs
+        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731  # use def instead of named lambdas
     else:
-        filtered_kwargs = lambda kwargs: {
+        filtered_kwargs = lambda kwargs: {  # noqa: E731  # use def instead of named lambdas
             key: value for key, value in kwargs.items() if key in accept_kwargs
         }
 
@@ -113,7 +115,6 @@ def program_formatter(
 
     >>> ensure_processor_kind(format_foo, ProgramFormatter)
     """
-
     return make_program_processor(
         func, ProgramFormatter, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
     )
@@ -144,7 +145,6 @@ def program_executor(
 
     >>> ensure_processor_kind(badly_execute, ProgramExecutor)
     """
-
     return make_program_processor(
         func, ProgramExecutor, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
     )
