@@ -103,10 +103,7 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            tuple_expr: type_inference.Type | ir.Node = (
-                self.node_types[id(first_expr)] if self.node_types is not None else first_expr
-            )
-            if self.ignore_tuple_size or _get_tuple_size(tuple_expr) == len(node.args):
+            if self.ignore_tuple_size or _get_tuple_size(first_expr, self.node_types) == len(node.args):
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple
