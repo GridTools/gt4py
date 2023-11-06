@@ -82,7 +82,7 @@ def apply_common_transforms(
     unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
-        lift_mode = LiftMode.FORCE_TEMPORARIES
+        lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
