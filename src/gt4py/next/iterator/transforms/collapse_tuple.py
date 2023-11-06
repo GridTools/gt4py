@@ -29,12 +29,10 @@ def _get_tuple_size(
         assert isinstance(elem_or_type, ir.Node)
         type_ = it_type_inference.infer(elem_or_type)
 
-    assert isinstance(type_, it_type_inference.Val)
-    if isinstance(type_.dtype, it_type_inference.Tuple):
-        return len(type_.dtype)
-    else:
-        assert isinstance(type_.size, type_inference.TypeVar)
-        return type_.size.idx
+    assert isinstance(type_, it_type_inference.Val) and isinstance(
+        type_.dtype, it_type_inference.Tuple
+    )
+    return len(type_.dtype)
 
 
 @dataclass(frozen=True)
