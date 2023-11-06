@@ -51,7 +51,7 @@ class CollapseTuple(eve.NodeTranslator):
         # the following options are mostly for allowing separate testing of the modes
         collapse_make_tuple_tuple_get: bool = True,
         collapse_tuple_get_make_tuple: bool = True,
-        collapse_tuple_inference: bool = False,
+        use_global_type_inferrence: bool = False,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
