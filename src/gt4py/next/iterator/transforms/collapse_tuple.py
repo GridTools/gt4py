@@ -33,8 +33,8 @@ def _get_tuple_size(
     if isinstance(type_.dtype, it_type_inference.Tuple):
         return len(type_.dtype)
     else:
-        # in case of TypeVar
-        return 1
+        assert isinstance(type_.size, type_inference.TypeVar)
+        return type_.size.idx
 
 
 @dataclass(frozen=True)
