@@ -106,10 +106,11 @@ def apply_common_transforms(
         inlined = ConstantFolding.apply(inlined)
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        if inlined == ir:
-            inlined = CollapseTuple.apply(inlined, use_global_type_inference=True)
-        else:
-            inlined = CollapseTuple.apply(inlined, use_global_type_inference=False)
+        inlined = CollapseTuple.apply(
+            inlined,
+            # to limit number of times global type inference is executed, only in the last iteration
+            use_global_type_inference=inlined == ir,
+        )
 
         if inlined == ir:
             break
