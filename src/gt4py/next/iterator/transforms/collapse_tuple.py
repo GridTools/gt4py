@@ -59,15 +59,14 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        if collapse_tuple_inference:
-            node_types = it_type_inference.infer_all(node)
-            return cls(
-                ignore_tuple_size,
-                collapse_make_tuple_tuple_get,
-                collapse_tuple_get_make_tuple,
-                collapse_tuple_inference,
-                node_types,
-            ).visit(node)
+        node_types = it_type_inference.infer_all(node) if use_global_type_inferrence else None
+        return cls(
+            ignore_tuple_size,
+            collapse_make_tuple_tuple_get,
+            collapse_tuple_get_make_tuple,
+            collapse_tuple_inference,
+            node_types
+        ).visit(node)
 
         return cls(
             ignore_tuple_size,
