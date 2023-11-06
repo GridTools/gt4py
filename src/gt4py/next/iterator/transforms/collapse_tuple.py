@@ -19,19 +19,28 @@ from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 
 
-def _get_tuple_size(
-    elem_or_type: type_inference.Type | ir.Node, node_types: Optional[dict] = None
-) -> int:
+class UnknownLength:
+    pass
+
+
+def _get_tuple_size(elem: ir.Node, node_types: Optional[dict] = None) -> int | type[UnknownLength]:
     if node_types:
-        type_ = node_types[id(elem_or_type)]
+        type_ = node_types[id(elem)]
+        # Global inference should always give a length, function should fail otherwise
+        assert isinstance(type_, it_type_inference.Val) and isinstance(
+            type_.dtype, it_type_inference.Tuple
+        )
     else:
         # use local type inference if no global information is available
-        assert isinstance(elem_or_type, ir.Node)
-        type_ = it_type_inference.infer(elem_or_type)
+        assert isinstance(elem, ir.Node)
+        type_ = it_type_inference.infer(elem)
 
-    assert isinstance(type_, it_type_inference.Val) and isinstance(
-        type_.dtype, it_type_inference.Tuple
-    )
+        if not (
+            isinstance(type_, it_type_inference.Val)
+            and isinstance(type_.dtype, it_type_inference.Tuple)
+        ):
+            return UnknownLength
+
     return len(type_.dtype)
 
 

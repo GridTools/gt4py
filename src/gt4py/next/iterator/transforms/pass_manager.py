@@ -90,7 +90,7 @@ def apply_common_transforms(
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
-    for i in range(10):
+    for _ in range(10):
         inlined = ir
 
         inlined = _inline_lifts(inlined, lift_mode)
@@ -106,7 +106,7 @@ def apply_common_transforms(
         inlined = ConstantFolding.apply(inlined)
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        if i == 0:
+        if inlined == ir:
             inlined = CollapseTuple.apply(inlined, use_global_type_inference=True)
         else:
             inlined = CollapseTuple.apply(inlined, use_global_type_inference=False)
