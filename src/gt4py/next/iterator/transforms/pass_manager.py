@@ -108,7 +108,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iteration
+            # to limit number of times global type inference is executed, only in the last iterations.
             use_global_type_inference=inlined == ir,
         )
 
