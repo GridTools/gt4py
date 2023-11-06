@@ -40,7 +40,7 @@ class CollapseTuple(eve.NodeTranslator):
     collapse_make_tuple_tuple_get: bool
     collapse_tuple_get_make_tuple: bool
     collapse_tuple_inference: bool
-    node_types: Optional[dict[int, type_inference.Type]] = None
+    _node_types: Optional[dict[int, type_inference.Type]] = None
 
     @classmethod
     def apply(
