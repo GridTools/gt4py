@@ -155,13 +155,14 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
     ) -> str:
         """Format C++ source code using clang-format."""
         assert isinstance(_CLANG_FORMAT_EXECUTABLE, str)
-        args = [_CLANG_FORMAT_EXECUTABLE]
+        args = [_CLANG_FORMAT_EXECUTABLE, "--assume-filename=_gt4py_generated_file.cpp"]
         if style:
             args.append(f"--style={style}")
         if fallback_style:
             args.append(f"--fallback-style={style}")
         if sort_includes:
             args.append("--sort-includes")
+            
 
         try:
             # use a timeout as clang-format used to deadlock on some sources

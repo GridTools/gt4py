@@ -33,6 +33,12 @@ from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
     sorted_dims = get_sorted_dims(domain.dims)
     return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
@@ -51,8 +57,11 @@ def convert_arg(arg: Any):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
-        assert isinstance(arg.ndarray, np.ndarray)
-        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        if isinstance(arg.ndarray, np.ndarray):
+            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        else:
+            assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
+            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 
@@ -244,14 +253,31 @@ run_dace_cpu = otf_exec.OTFBackend(
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
+if cp:
 
-@program_executor
-def run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_dace_iterator(
-        program,
-        *args,
-        **kwargs,
-        build_cache=_build_cache_gpu,
-        build_type=_build_type,
-        run_on_gpu=True,
+    @program_executor
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        run_dace_iterator(
+            program,
+            *args,
+            **kwargs,
+            build_cache=_build_cache_gpu,
+            build_type=_build_type,
+            run_on_gpu=True,
+        )
+
+    run_dace_gpu = otf_exec.OTFBackend(
+        executor=_run_dace_gpu,
+        allocator=next_allocators.StandardGPUFielBufferdAllocator(),
+    )
+
+else:
+
+    @program_executor
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+
+    run_dace_gpu = otf_exec.OTFBackend(
+        executor=_run_dace_gpu,
+        allocator=next_allocators.StandardGPUFielBufferdAllocator(),
     )

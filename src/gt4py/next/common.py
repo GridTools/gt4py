@@ -417,9 +417,9 @@ class NextGTDimsInterface(Protocol):
     def __gt_dims__(self) -> tuple[Dimension, ...]:
         ...
 
+
 ####### TODO-> Update cartsian gtdims
 class GTFieldInterface(Protocol):
-
     @property
     def __gt_domain__(self) -> Domain:
         ...
