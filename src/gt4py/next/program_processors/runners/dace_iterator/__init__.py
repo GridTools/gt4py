@@ -284,5 +284,6 @@ def run_dace(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **kwargs,
         build_cache=_build_cache_gpu if run_on_gpu else _build_cache_cpu,
         build_type=_build_type,
+        lift_mode=LiftMode.FORCE_TEMPORARIES,
         run_on_gpu=run_on_gpu,
     )
