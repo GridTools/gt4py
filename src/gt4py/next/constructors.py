@@ -195,6 +195,8 @@ def as_field(
     return field
 
 
+
+##### TODO: builder for everything
 def as_field_with(
     domain: common.DomainLike | Sequence[common.Dimension] | eve.NOTHING = eve.NOTHING,
     *,

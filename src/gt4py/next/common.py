@@ -417,14 +417,8 @@ class NextGTDimsInterface(Protocol):
     def __gt_dims__(self) -> tuple[Dimension, ...]:
         ...
 
-
+####### TODO-> Update cartsian gtdims
 class GTFieldInterface(Protocol):
-    """
-    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
-
-    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
-    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
-    """
 
     @property
     def __gt_domain__(self) -> Domain:
