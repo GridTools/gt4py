@@ -24,6 +24,7 @@ class InlineFundefs(NodeTranslator):
             return ir.Lambda(
                 params=self.generic_visit(symbol.params, symtable=symtable),
                 expr=self.generic_visit(symbol.expr, symtable=symtable),
+                location=node.location,
             )
         return self.generic_visit(node)
 

@@ -78,6 +78,7 @@ class FieldOperatorLowering(NodeTranslator):
             id=node.id,
             params=params,
             expr=self.visit_BlockStmt(node.body, inner_expr=None),
+            location=node.location,
         )  # `expr` is a lifted stencil
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
@@ -88,6 +89,7 @@ class FieldOperatorLowering(NodeTranslator):
             id=func_definition.id,
             params=func_definition.params,
             expr=new_body,
+            location=node.location,
         )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
@@ -119,6 +121,7 @@ class FieldOperatorLowering(NodeTranslator):
             id=node.id,
             params=definition.params[1:],
             expr=body,
+            location=node.location,
         )
 
     def visit_Stmt(self, node: foast.Stmt, **kwargs):
@@ -135,13 +138,14 @@ class FieldOperatorLowering(NodeTranslator):
         for stmt in reversed(node.stmts):
             inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
         assert inner_expr
+        inner_expr.location = node.location
         return inner_expr
 
     def visit_IfStmt(
         self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
-        #  from a scalar value (and not a field)
+        # from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
@@ -208,7 +212,7 @@ class FieldOperatorLowering(NodeTranslator):
             kind = "Iterator"
             dtype = node.type.dtype.kind.name.lower()
             is_list = type_info.is_local_field(node.type)
-            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
+            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list), location=node.location)
         return im.sym(node.id)
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:

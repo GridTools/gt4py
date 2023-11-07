@@ -134,6 +134,11 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
+        program_sdfg.debuginfo = dace.dtypes.DebugInfo(start_line=node.location.line,
+                                                       start_column=node.location.column,
+                                                       end_line=node.location.end_line,
+                                                       end_column=node.location.end_column,
+                                                       filename=node.location.filename)
         last_state = program_sdfg.add_state("program_entry")
         self.node_types = itir_typing.infer_all(node)
 
@@ -157,6 +162,11 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_sdfg, input_names, output_names = self.visit(
                 closure, array_table=program_sdfg.arrays
             )
+            closure_sdfg.debuginfo = dace.dtypes.DebugInfo(start_line=closure.location.line,
+                                                           start_column=closure.location.column,
+                                                           end_line=closure.location.end_line,
+                                                           end_column=closure.location.end_column,
+                                                           filename=closure.location.filename)
 
             # Create a new state for the closure.
             last_state = program_sdfg.add_state_after(last_state)
@@ -178,6 +188,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 inputs=set(input_names),
                 outputs=set(output_names),
                 symbol_mapping=symbol_mapping,
+                debuginfo=closure_sdfg.debuginfo,
             )
 
             # Add access nodes for the program parameters and connect them to the nested SDFG's inputs via edges.
@@ -201,6 +212,12 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_sdfg = dace.SDFG(name="closure")
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
+        di = dace.dtypes.DebugInfo(start_line=node.location.line,
+                                   start_column=node.location.column,
+                                   end_line=node.location.end_line,
+                                   end_column=node.location.end_column,
+                                   filename=node.location.filename)
+        closure_sdfg.debuginfo = di
 
         program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
         closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
@@ -343,6 +360,7 @@ class ItirToSDFG(eve.NodeVisitor):
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
             output_nodes=output_nodes,
+            debuginfo=di,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):

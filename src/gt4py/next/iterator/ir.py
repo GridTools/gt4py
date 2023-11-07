@@ -17,12 +17,15 @@ from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
+from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 
 
 @noninstantiable
 class Node(eve.Node):
+    location:Optional[SourceLocation] = None
+
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
 
@@ -61,7 +64,7 @@ class Sym(Node):  # helper
 
 @noninstantiable
 class Expr(Node):
-    ...
+    pass
 
 
 class Literal(Expr):

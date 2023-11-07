@@ -125,6 +125,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             function_definitions=function_definitions,
             params=params,
             closures=closures,
+            location=node.location,
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
@@ -151,6 +152,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             stencil=itir.SymRef(id=node.func.id),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
+            location=node.location,
         )
 
     def _visit_slice_bound(
@@ -186,6 +188,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
+                location=node.location,
             )
         else:
             raise ValueError(
@@ -237,6 +240,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                    location=out_field.location, 
                 )
             )
 
@@ -247,7 +251,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args, location=out_field.location)
 
     def _construct_itir_initialized_domain_arg(
         self,
@@ -343,12 +347,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
             typename = node.type.kind.name.lower()
-            return itir.Literal(value=str(node.value), type=typename)
+            return itir.Literal(value=str(node.value), type=typename, location=node.location)
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
     def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
-        return itir.SymRef(id=node.id)
+        return itir.SymRef(id=node.id, location=node.location)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
@@ -356,13 +360,14 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             kind = "Iterator"
             dtype = node.type.dtype.kind.name.lower()
             is_list = type_info.is_local_field(node.type)
-            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
-        return itir.Sym(id=node.id)
+            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list), location=node.location)
+        return itir.Sym(id=node.id, location=node.location)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
+            location=node.location,
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
@@ -370,6 +375,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
+                location=node.location,
             )
         else:
             raise AssertionError(
