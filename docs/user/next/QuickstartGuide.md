@@ -70,9 +70,10 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[41]))
+from gt4py._core import definitions as core_defs
+array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.constructors.ones(
-    common.Domain(dims=(CellDim, KDim), ranges=(common.UnitRange(0, grid_shape[0]), common.UnitRange(0, grid_shape[1]))),
+    gtx.common.Domain(dims=(CellDim, KDim), ranges=(gtx.common.UnitRange(0, grid_shape[0]), gtx.common.UnitRange(0, grid_shape[1]))),
     dtype=core_defs.dtype(np.float64),
     allocator=gtx.program_processors.runners.roundtrip.backend
 )
