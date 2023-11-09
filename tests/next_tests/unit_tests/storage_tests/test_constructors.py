@@ -82,6 +82,12 @@ def test_field_wrong_origin(cartesian_case):
     ):
         gtx.as_field("I", np.random.rand(default_sizes["J"]).astype(gtx.float32), origin={"J": 0})
 
+def test_aligned_index(cartesian_case):
+    with pytest.raises(
+        AssertionError,
+    ):
+        gtx.as_field([I], np.random.rand(default_sizes["I"]).astype(gtx.float32), aligned_index=[I, 0])
+
 
 def test_empty(cartesian_case):
     @gtx.field_operator
