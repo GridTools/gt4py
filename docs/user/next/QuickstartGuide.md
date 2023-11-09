@@ -67,6 +67,17 @@ a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=a_value, 
 b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
 ```
 
+Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
+
+```{code-cell} ipython3
+array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[41]))
+field_of_ones = gtx.constructors.ones(
+    common.Domain(dims=(CellDim, KDim), ranges=(common.UnitRange(0, grid_shape[0]), common.UnitRange(0, grid_shape[1]))),
+    dtype=core_defs.dtype(np.float64),
+    allocator=gtx.program_processors.runners.roundtrip.backend
+)
+```
+
 _Note: The interface to construct fields is provisional only and will change soon._
 
 +++

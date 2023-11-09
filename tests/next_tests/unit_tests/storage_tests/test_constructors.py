@@ -20,9 +20,10 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators, common, float32
 from gt4py.next.ffront.fbuiltins import astype, broadcast
 from gt4py.next.program_processors.runners import roundtrip
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
-from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
     reduction_setup,
 )
