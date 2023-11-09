@@ -51,7 +51,7 @@ from gt4py.next import float64, neighbor_sum, where
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _Cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 CellDim = gtx.Dimension("Cell")
