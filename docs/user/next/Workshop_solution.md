@@ -30,10 +30,10 @@ We will implement the examples in field view and execute the Iterator IR program
 ```{code-cell} ipython3
 import numpy as np
 
-from functional.ffront.decorator import program, scan_operator, field_operator
-from functional.iterator.embedded import MutableLocatedField, np_as_located_field, NeighborTableOffsetProvider
-from functional.ffront.fbuiltins import Field, FieldOffset, neighbor_sum
-from functional.common import Dimension, DimensionKind
+from gt4py.next.ffront.decorator import program, scan_operator, field_operator
+from gt4py.next.iterator.embedded import MutableLocatedField, np_as_located_field, NeighborTableOffsetProvider
+from gt4py.next.ffront.fbuiltins import Field, FieldOffset, neighbor_sum
+from gt4py.next.common import Dimension, DimensionKind
 ```
 
 ```{code-cell} ipython3
