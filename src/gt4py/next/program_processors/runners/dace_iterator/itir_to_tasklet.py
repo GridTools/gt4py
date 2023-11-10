@@ -277,7 +277,7 @@ def builtin_can_deref(
     assert shift_callable.fun.id == "shift"
     iterator = transformer._visit_shift(can_deref_callable)
 
-    # create tasklet to check that field indices are 0-based (-1 is invalid)
+    # create tasklet to check that field indices are non-negative (-1 is invalid)
     args = [ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions]
     internals = [f"{arg.value.data}_v" for arg in args]
     expr_code = " && ".join([f"{v} >= 0" for v in internals])

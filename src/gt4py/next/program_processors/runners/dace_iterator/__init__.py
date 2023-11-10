@@ -176,7 +176,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     column_axis = kwargs.get("column_axis", None)
     lift_mode = (
         LiftMode.FORCE_INLINE
-    )  # TODO(edopao): make it configurable once DaCe backend supports temporaries
+    )  # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
