@@ -73,7 +73,7 @@ Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, 
 from gt4py._core import definitions as core_defs
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.constructors.ones(
-    gtx.common.Domain(dims=(CellDim, KDim), ranges=(gtx.common.UnitRange(0, grid_shape[0]), gtx.common.UnitRange(0, grid_shape[1]))),
+    domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
     dtype=core_defs.dtype(np.float64),
     allocator=gtx.program_processors.runners.roundtrip.backend
 )

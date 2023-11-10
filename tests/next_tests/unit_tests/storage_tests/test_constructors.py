@@ -18,204 +18,152 @@ import pytest
 from gt4py import next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators, common, float32
-from gt4py.next.ffront.fbuiltins import astype, broadcast
 from gt4py.next.program_processors.runners import roundtrip
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import cartesian_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-    reduction_setup,
-)
 
 
 I = gtx.Dimension("I")
 J = gtx.Dimension("J")
 
-default_sizes = {"I": 10, "J": 10, "K": 10}
+sizes = {"I": 10, "J": 10, "K": 10}
 
 
-def test_add(cartesian_case):
-    @gtx.field_operator
-    def add(
-        a: gtx.Field[[I, J], gtx.float32], b: gtx.Field[[I, J], gtx.float32]
-    ) -> gtx.Field[[I, J], gtx.float32]:
-        return a + b
+def test_as_field():
+    a = np.random.rand(sizes["I"]).astype(gtx.float32)
+    ref = gtx.as_field([I], a)
+    assert np.allclose(ref.ndarray, a)
 
-    a = gtx.as_field(
-        [I, J], np.random.rand(default_sizes["I"], default_sizes["J"]).astype(gtx.float32)
+
+def test_as_field_domain():
+    a = np.random.rand(sizes["I"] - 1, sizes["J"] - 1).astype(gtx.float32)
+    domain = common.Domain(
+        dims=(I, J),
+        ranges=(common.UnitRange(0, sizes["I"] - 1), common.UnitRange(0, sizes["J"] - 1)),
     )
-    b = gtx.as_field(
-        [I, J], np.random.rand(default_sizes["I"], default_sizes["J"]).astype(gtx.float32)
-    )
-    out = gtx.as_field(
-        [I, J], np.zeros((default_sizes["I"], default_sizes["J"])).astype(gtx.float32)
-    )
-    cases.verify(
-        cartesian_case,
-        add,
-        a,
-        b,
-        out=out,
-        ref=(a.ndarray + b.ndarray),
-    )
+    ref = gtx.as_field(domain, a)
+    assert np.allclose(ref.ndarray, a)
 
 
-def test_field_wrong_dims(cartesian_case):
+def test_as_field_origin():
+    a = np.random.rand(sizes["I"], sizes["J"]).astype(gtx.float32)
+    ref = gtx.as_field([I, J], a, origin={I: 1, J: 2})
+    domain_range = [(val.start, val.stop) for val in ref.domain.ranges]
+    assert np.allclose(domain_range, [(-1, 9), (-2, 8)])
+
+
+# for as_field, check that the domain is correct depending on data origin and domain itself
+
+
+def test_field_wrong_dims():
     with pytest.raises(
         ValueError,
         match=(r"Cannot construct `Field` from array of shape"),
     ):
-        gtx.as_field([I, J], np.random.rand(default_sizes["I"]).astype(gtx.float32))
+        gtx.as_field([I, J], np.random.rand(sizes["I"]).astype(gtx.float32))
 
 
-def test_field_wrong_origin(cartesian_case):
+def test_field_wrong_domain():
+    with pytest.raises(
+        ValueError,
+        match=(r"Cannot construct `Field` from array of shape"),
+    ):
+        domain = common.Domain(
+            dims=(I, J),
+            ranges=(common.UnitRange(0, sizes["I"] - 1), common.UnitRange(0, sizes["J"] - 1)),
+        )
+        gtx.as_field(domain, np.random.rand(sizes["I"], sizes["J"]).astype(gtx.float32))
+
+
+def test_field_wrong_origin():
     with pytest.raises(
         ValueError,
         match=(r"Origin keys {'J'} not in domain"),
     ):
-        gtx.as_field([I], np.random.rand(default_sizes["I"]).astype(gtx.float32), origin={"J": 0})
+        gtx.as_field([I], np.random.rand(sizes["I"]).astype(gtx.float32), origin={"J": 0})
 
     with pytest.raises(
         ValueError,
         match=(r"Cannot specify origin for domain I"),
     ):
-        gtx.as_field("I", np.random.rand(default_sizes["J"]).astype(gtx.float32), origin={"J": 0})
+        gtx.as_field("I", np.random.rand(sizes["J"]).astype(gtx.float32), origin={"J": 0})
 
-def test_aligned_index(cartesian_case):
+
+def test_aligned_index():
     with pytest.raises(
         AssertionError,
     ):
-        gtx.as_field([I], np.random.rand(default_sizes["I"]).astype(gtx.float32), aligned_index=[I, 0])
+        gtx.as_field([I], np.random.rand(sizes["I"]).astype(gtx.float32), aligned_index=[I, 0])
 
 
-def test_empty(cartesian_case):
-    @gtx.field_operator
-    def empty_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.field_operator
-    def field_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.program(backend=roundtrip.backend)
-    def empty_prog(
-        a: gtx.Field[[I, J], gtx.float32],
-        out: gtx.Field[[I, J], gtx.float32],
-    ):
-        field_fo(a, out=out)
-
-    a = gtx.as_field([I, J], np.empty([default_sizes["I"], default_sizes["J"]]).astype(gtx.float32))
+@pytest.mark.parametrize(
+    "allocator, device",
+    [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
+)
+def test_empty(allocator, device):
+    a = np.empty([sizes["I"], sizes["J"]]).astype(gtx.float32)
     ref = gtx.constructors.empty(
-        common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+        domain={I: range(sizes["I"]), J: range(sizes["J"])},
         dtype=core_defs.dtype(np.float32),
-        allocator=empty_prog,
+        allocator=allocator,
+        device=device,
     )
-
-    cases.verify(
-        cartesian_case,
-        empty_fo,
-        a,
-        out=a,
-        ref=ref,
-    )
+    assert ref.shape, a.shape
+    assert np.allclose(ref.ndarray, a)
 
 
-def test_zeros(cartesian_case):
-    @gtx.field_operator
-    def zeros_fo() -> gtx.Field[[I, J], gtx.float32]:
-        return astype(broadcast(0.0, (I, J)), float32)
-
-    @gtx.field_operator
-    def field_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.program(backend=roundtrip.backend)
-    def zeros_prog(
-        a: gtx.Field[[I, J], gtx.float32],
-        out: gtx.Field[[I, J], gtx.float32],
-    ):
-        field_fo(a, out=out)
-
+@pytest.mark.parametrize(
+    "allocator, device",
+    [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
+)
+def test_zeros(allocator, device):
     ref = gtx.constructors.zeros(
-        common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+        common.Domain(
+            dims=(I, J), ranges=(common.UnitRange(0, sizes["I"]), common.UnitRange(0, sizes["J"]))
+        ),
         dtype=core_defs.dtype(np.float32),
-        allocator=zeros_prog,
+        allocator=allocator,
+        device=device,
     )
-    out = gtx.as_field(
-        [I, J], np.zeros((default_sizes["I"], default_sizes["J"])).astype(gtx.float32)
-    )
-    cases.verify(
-        cartesian_case,
-        zeros_fo,
-        out=out,
-        ref=ref,
-    )
+    a = np.zeros((sizes["I"], sizes["J"])).astype(gtx.float32)
+
+    assert np.allclose(ref.ndarray, a)
 
 
-def test_ones(cartesian_case):
-    @gtx.field_operator
-    def ones_fo() -> gtx.Field[[I, J], gtx.float32]:
-        return astype(broadcast(1.0, (I, J)), float32)
+# parametrize with gpu backend and compare with cupy array
 
-    @gtx.field_operator
-    def field_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
 
-    @gtx.program(backend=roundtrip.backend)
-    def ones_prog(
-        a: gtx.Field[[I, J], gtx.float32],
-        out: gtx.Field[[I, J], gtx.float32],
-    ):
-        field_fo(a, out=out)
-
+@pytest.mark.parametrize(
+    "allocator, device",
+    [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
+)
+def test_ones(allocator, device):
     ref = gtx.constructors.ones(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
         dtype=core_defs.dtype(np.float32),
-        allocator=ones_prog,
+        allocator=allocator,
+        device=device,
     )
-    out = gtx.as_field(
-        [I, J], np.zeros((default_sizes["I"], default_sizes["J"])).astype(gtx.float32)
-    )
-    cases.verify(
-        cartesian_case,
-        ones_fo,
-        out=out,
-        ref=ref,
-    )
+    a = np.ones((sizes["I"], sizes["J"])).astype(gtx.float32)
+
+    assert np.allclose(ref.ndarray, a)
 
 
-def test_full(cartesian_case):
-    @gtx.field_operator
-    def full_fo() -> gtx.Field[[I, J], gtx.float32]:
-        return astype(broadcast(42.0, (I, J)), float32)
-
-    @gtx.field_operator
-    def field_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.program(backend=roundtrip.backend)
-    def full_prog(
-        a: gtx.Field[[I, J], gtx.float32],
-        out: gtx.Field[[I, J], gtx.float32],
-    ):
-        field_fo(a, out=out)
-
+@pytest.mark.parametrize(
+    "allocator, device",
+    [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
+)
+def test_full(allocator, device):
     ref = gtx.constructors.full(
-        common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
+        domain={I: range(sizes["I"] - 2), J: (sizes["J"] - 2)},
         fill_value=42.0,
         dtype=core_defs.dtype(np.float32),
-        allocator=full_prog,
+        allocator=allocator,
+        device=device,
     )
-    out = gtx.as_field(
-        [I, J], np.zeros((default_sizes["I"], default_sizes["J"])).astype(gtx.float32)
-    )
-    cases.verify(
-        cartesian_case,
-        full_fo,
-        out=out,
-        ref=ref,
-    )
+    a = np.full((sizes["I"] - 2, sizes["J"] - 2), 42.0).astype(gtx.float32)
+
+    assert np.allclose(ref.ndarray, a)
 
 
 def test_as_field_with(cartesian_case):
@@ -234,16 +182,12 @@ def test_as_field_with(cartesian_case):
     ):
         field_fo(a, out=out)
 
-    a = gtx.as_field(
-        [I, J], np.random.rand(default_sizes["I"], default_sizes["J"]).astype(gtx.float32)
-    )
+    a = gtx.as_field([I, J], np.random.rand(sizes["I"], sizes["J"]).astype(gtx.float32))
     ref = gtx.constructors.as_field_with(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
     )
 
-    out = gtx.as_field(
-        [I, J], np.zeros((default_sizes["I"], default_sizes["J"])).astype(gtx.float32)
-    )
+    out = gtx.as_field([I, J], np.zeros((sizes["I"], sizes["J"])).astype(gtx.float32))
     cases.verify(
         cartesian_case,
         as_field_with_fo,
