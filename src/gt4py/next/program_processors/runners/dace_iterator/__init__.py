@@ -266,18 +266,14 @@ if cp:
             run_on_gpu=True,
         )
 
-    run_dace_gpu = otf_exec.OTFBackend(
-        executor=_run_dace_gpu,
-        allocator=next_allocators.StandardGPUFielBufferdAllocator(),
-    )
-
 else:
 
     @program_executor
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         raise RuntimeError("Missing `cupy` dependency for GPU execution.")
 
-    run_dace_gpu = otf_exec.OTFBackend(
-        executor=_run_dace_gpu,
-        allocator=next_allocators.StandardGPUFielBufferdAllocator(),
-    )
+
+run_dace_gpu = otf_exec.OTFBackend(
+    executor=_run_dace_gpu,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+)

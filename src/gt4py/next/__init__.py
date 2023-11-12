@@ -25,7 +25,7 @@ module in question is a submodule, defines `__all__` and exports many public API
 
 from . import common, ffront, iterator, program_processors, type_inference
 from .common import Dimension, DimensionKind, Field, GridType
-from .constructors import as_field, as_field_with, empty, full, ones, zeros
+from .constructors import as_field, empty, full, ones, zeros
 from .embedded import (  # Just for registering field implementations
     nd_array_field as _nd_array_field,
 )
@@ -68,5 +68,4 @@ __all__ = [
     "ones",
     "full",
     "as_field",
-    "as_field_with",
 ]

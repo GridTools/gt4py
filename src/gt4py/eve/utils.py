@@ -228,6 +228,61 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
 
 _P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+class fluid_partial(functools.partial):
+    """
+    A `functools.partial` subclass supporting multiple applications by calling `.partial()`.
+    """
+
+    def partial(self, *args, **kwargs) -> fluid_partial:
+        return fluid_partial(self, *args, **kwargs)
+
+
+@overload
+def with_fluid_partial(
+    func: Literal[None] = None, *args: Any, **kwargs: Any
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
+    ...
+
+
+@overload
+def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+    func: Callable[_P, _T], *args: Any, **kwargs: Any
+) -> Callable[_P, _T]:
+    ...
+
+
+def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+    func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
+) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
+    """
+    A decorator that adds a `partial` attribute to the decorated function.
+    The `partial` attribute is a function that behaves like `functools.partial`,
+    but also supports partial application of the decorated function.
+
+    Args:
+        func: The function to decorate.
+
+    Returns:
+        If `func` is not `None`, returns the decorated function.
+        Otherwise, returns a decorator that can be used to decorate a function.
+
+    Example:
+        >>> @with_fluid_partial
+        ... def add(a, b):
+        ...     return a + b
+        ...
+        >>> add.partial(1)(2)
+        3
+    """
+
+    def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        func.partial = fluid_partial(functools.partial, func, *args, **kwargs)
+        return func
+
+    return _decorator(func) if func is not None else _decorator
 
 
 @overload
@@ -316,9 +371,6 @@ def register_subclasses(*subclasses: Type) -> Callable[[Type], Type]:
         return base_cls
 
     return _decorator
-
-
-_T = TypeVar("_T")
 
 
 def noninstantiable(cls: Type[_T]) -> Type[_T]:

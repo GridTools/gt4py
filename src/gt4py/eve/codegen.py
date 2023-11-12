@@ -162,7 +162,6 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
             args.append(f"--fallback-style={style}")
         if sort_includes:
             args.append("--sort-includes")
-            
 
         try:
             # use a timeout as clang-format used to deadlock on some sources

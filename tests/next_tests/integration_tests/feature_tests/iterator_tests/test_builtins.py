@@ -74,7 +74,7 @@ IDim = gtx.Dimension("IDim")
 
 
 def field_maker(*arrays):
-    res = list(map(gtx.as_field_with([IDim]), arrays))
+    res = list(map(gtx.as_field.partial([IDim]), arrays))
     return res
 
 

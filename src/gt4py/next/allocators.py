@@ -25,6 +25,7 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Final,
+    Literal,
     Optional,
     Protocol,
     Sequence,
@@ -37,6 +38,14 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
+
+
+CUPY_DEVICE: Final[Literal[None, core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM]] = (
+    None
+    if not cp
+    else (core_defs.DeviceType.ROCM if cp.cuda.get_hipcc_path() else core_defs.DeviceType.CUDA)
+)
+
 
 FieldLayoutMapper: TypeAlias = Callable[
     [Sequence[common.Dimension]], core_allocators.BufferLayoutMap
@@ -188,27 +197,69 @@ device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
 
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
-if cp:
+
+@dataclasses.dataclass(frozen=True)
+class InvalidFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]):
+    device_type: core_defs.DeviceTypeT
+    exception: Exception
+
+    @property
+    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
+        return self.device_type
+
+    def __gt_allocate__(
+        self,
+        domain: common.Domain,
+        dtype: core_defs.DType[core_defs.ScalarT],
+        device_id: int = 0,
+        aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+        raise self.exception
+
+
+if CUPY_DEVICE is not None:
     cp_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = cp  # Just for static type checking
     assert core_allocators.is_valid_nplike_allocation_ns(cp_alloc_ns)
 
-    class StandardGPUFielBufferdAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
+    if CUPY_DEVICE is core_defs.DeviceType.CUDA:
+
+        class CUDAFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CUDADeviceTyping]):
+            def __init__(self) -> None:
+                super().__init__(
+                    device_type=core_defs.DeviceType.CUDA,
+                    array_ns=cp_alloc_ns,
+                    layout_mapper=horizontal_first_layout_mapper,
+                    byte_alignment=128,
+                )
+
+        device_allocators[core_defs.DeviceType.CUDA] = CUDAFieldBufferAllocator()
+
+    else:
+
+        class ROCMFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.ROCMDeviceTyping]):
+            def __init__(self) -> None:
+                super().__init__(
+                    device_type=core_defs.DeviceType.ROCM,
+                    array_ns=cp_alloc_ns,
+                    layout_mapper=horizontal_first_layout_mapper,
+                    byte_alignment=128,
+                )
+
+        device_allocators[core_defs.DeviceType.ROCM] = ROCMFieldBufferAllocator()
+
+else:
+
+    class InvalidGPUFielBufferAllocator(InvalidFieldBufferAllocator[core_defs.CUDADeviceTyping]):
         def __init__(self) -> None:
             super().__init__(
                 device_type=core_defs.DeviceType.CPU,
-                array_ns=cp_alloc_ns,
-                layout_mapper=horizontal_first_layout_mapper,
-                byte_alignment=128,
+                exception=RuntimeError("Missing `cupy` dependency for GPU allocation"),
             )
 
-    if cp.cuda.get_hipcc_path:
-        device_allocators[core_defs.DeviceType.ROCM] = StandardGPUFielBufferdAllocator()
-    else:
-        device_allocators[core_defs.DeviceType.CUDA] = StandardGPUFielBufferdAllocator()
-else:
-    StandardGPUFielBufferdAllocator: Final[
-        Optional[FieldBufferAllocatorProtocol]
-    ] = None  # type[no-redef]
+
+StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = (
+    device_allocators[CUPY_DEVICE] if cp else InvalidGPUFielBufferAllocator
+)
 
 
 def allocate(

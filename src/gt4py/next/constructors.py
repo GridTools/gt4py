@@ -12,8 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import functools
-from collections.abc import Callable, Sequence
+from __future__ import annotations
+
+from collections.abc import Sequence
 from typing import Optional
 
 import gt4py._core.definitions as core_defs
@@ -25,6 +26,7 @@ import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
 
 
+@eve.utils.with_fluid_partial
 def empty(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
@@ -78,6 +80,7 @@ def empty(
     return res
 
 
+@eve.utils.with_fluid_partial
 def zeros(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
@@ -97,6 +100,7 @@ def zeros(
     return field
 
 
+@eve.utils.with_fluid_partial
 def ones(
     domain: common.DomainLike,
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
@@ -116,6 +120,7 @@ def ones(
     return field
 
 
+@eve.utils.with_fluid_partial
 def full(
     domain: common.DomainLike,
     fill_value: core_defs.Scalar,
@@ -136,6 +141,7 @@ def full(
     return field
 
 
+@eve.utils.with_fluid_partial
 def as_field(
     domain: common.DomainLike | Sequence[common.Dimension],
     data: core_defs.NDArrayObject,
@@ -193,25 +199,3 @@ def as_field(
     field[...] = field.array_ns.asarray(data)
 
     return field
-
-
-##### TODO: builder for everything
-def as_field_with(
-    domain: common.DomainLike | Sequence[common.Dimension] | eve.NOTHING = eve.NOTHING,
-    *,
-    origin: Optional[dict[common.Dimension, int]] | eve.NOTHING = eve.NOTHING,
-    aligned_index: Optional[Sequence[common.NamedIndex]] | eve.NOTHING = eve.NOTHING,
-    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] | eve.NOTHING = eve.NOTHING,
-    device: Optional[core_defs.Device] | eve.NOTHING = eve.NOTHING,
-) -> Callable[..., nd_array_field.NdArrayField]:
-    args = (domain,) if domain is not eve.NOTHING else ()
-    loc = locals()
-    return functools.partial(
-        as_field,
-        *args,
-        **{
-            k: v
-            for k in ["origin", "aligned_index", "allocator", "device"]
-            if (v := loc[k]) is not eve.NOTHING
-        },
-    )
