@@ -142,7 +142,7 @@ class UnitRange(Sequence[int], Set[int]):
         return f"({self.start}:{self.stop})"
 
 
-RangeLike: TypeAlias = UnitRange | range | tuple[int, int] | int
+RangeLike: TypeAlias = UnitRange | range | tuple[core_defs.INTEGRAL_TYPES, core_defs.INTEGRAL_TYPES] | core_defs.INTEGRAL_TYPES
 
 
 def unit_range(r: RangeLike) -> UnitRange:
