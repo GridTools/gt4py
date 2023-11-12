@@ -259,15 +259,16 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """
     A decorator that adds a `partial` attribute to the decorated function.
+
     The `partial` attribute is a function that behaves like `functools.partial`,
-    but also supports partial application of the decorated function.
+    but also supports partial application of the decorated function. It can be
+    used both as a bare or a parameterized decorator.
 
     Args:
         func: The function to decorate.
 
     Returns:
-        If `func` is not `None`, returns the decorated function.
-        Otherwise, returns a decorator that can be used to decorate a function.
+        Returns the decorated function with an extra `.partial()` attribute.
 
     Example:
         >>> @with_fluid_partial
