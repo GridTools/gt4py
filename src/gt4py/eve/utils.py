@@ -264,7 +264,7 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
     but also supports partial application of the decorated function. It can be
     used both as a bare or a parameterized decorator.
 
-    Args:
+    Arguments:
         func: The function to decorate.
 
     Returns:
