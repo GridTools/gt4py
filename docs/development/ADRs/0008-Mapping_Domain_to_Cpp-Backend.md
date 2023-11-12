@@ -12,7 +12,7 @@ tags: []
 This document proposes a (temporary) solution for mapping domain dimensions to field dimensions.
 
 > [!NOTE]
-> This ADR was written before the integration of `gt4py.storage` into `gt4py.next`, so the example is using `np_as_located_field` (now deprecated) instead of `gtx.as_field_with`. The idea conveyed by the example remains unchanged.
+> This ADR was written before the integration of `gt4py.storage` into `gt4py.next`, so the example is using `np_as_located_field` (now deprecated) instead of `gtx.as_field.partial`. The idea conveyed by the example remains unchanged.
 
 ## Context
 
