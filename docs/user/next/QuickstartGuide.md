@@ -51,7 +51,7 @@ from gt4py.next import float64, neighbor_sum, where
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _Cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 CellDim = gtx.Dimension("Cell")
@@ -65,6 +65,18 @@ a_value = 2.0
 b_value = 3.0
 a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
 b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
+```
+
+Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
+
+```{code-cell} ipython3
+from gt4py._core import definitions as core_defs
+array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
+field_of_ones = gtx.constructors.ones(
+    domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
+    dtype=core_defs.dtype(np.float64),
+    allocator=gtx.program_processors.runners.roundtrip.backend
+)
 ```
 
 _Note: The interface to construct fields is provisional only and will change soon._
