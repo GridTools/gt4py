@@ -297,6 +297,7 @@ class StrictCUDAArrayInterface(Protocol):
 
 
 def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
+    """Check if the given value supports the CUDA Array Interface."""
     return hasattr(value, "__cuda_array_interface__")
 
 
@@ -323,6 +324,7 @@ DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffe
 
 
 def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
+    """Check if a given object supports the DLPack protocol."""
     return callable(getattr(value, "__dlpack__", None)) and callable(
         getattr(value, "__dlpack_device__", None)
     )
