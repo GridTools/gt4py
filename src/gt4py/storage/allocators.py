@@ -55,7 +55,9 @@ _NDBuffer: TypeAlias = Union[
     xtyping.DLPackBuffer,
 ]
 
-#: Tuple of positive integers encoding a permutation of the dimensions.
+#: Tuple of positive integers encoding a permutation of the dimensions, such that
+#: layout_map[i] = j means that the i-th dimension of the tensor corresponds
+#: to the j-th dimension in the (C-layout) buffer.
 BufferLayoutMap = NewType("BufferLayoutMap", Sequence[core_defs.PositiveIntegral])
 
 
@@ -85,9 +87,9 @@ class TensorBuffer(Generic[core_defs.DeviceTypeT, core_defs.ScalarT]):
         dtype: Data type descriptor.
         shape: Tuple with lengths of the corresponding tensor dimensions.
         strides: Tuple with sizes (in bytes) of the steps in each dimension.
-        layout_map: Tuple with the order of the dimensions in the buffer.
+        layout_map: Tuple with the order of the dimensions in the buffer
             layout_map[i] = j means that the i-th dimension of the tensor
-            corresponds to the j-th dimension in the buffer.
+            corresponds to the j-th dimension in the (C-layout) buffer.
         byte_offset: Offset (in bytes) from the beginning of the buffer to
             the first valid element.
         byte_alignment: Alignment (in bytes) of the first valid element.

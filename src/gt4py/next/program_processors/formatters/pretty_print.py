@@ -27,7 +27,7 @@ class _RemoveITIRSymTypes(eve.NodeTranslator):
 
 
 @ppi.program_formatter
-def format_itir(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+def format_itir_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     # remove types from ITIR as they are not supported for the roundtrip
     root = _RemoveITIRSymTypes().visit(program)
     pretty = pretty_printer.pformat(root)

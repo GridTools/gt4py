@@ -72,7 +72,9 @@ class OptionalProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPP_FORMATTER = "gt4py.next.program_processors.formatters.gtfn.format_cpp"
-    ITIR_PRETTY_PRINTER = "gt4py.next.program_processors.formatters.pretty_print.format_itir"
+    ITIR_PRETTY_PRINTER = (
+        "gt4py.next.program_processors.formatters.pretty_print.format_itir_and_check"
+    )
     ITIR_TYPE_CHECKER = "gt4py.next.program_processors.formatters.type_check.check_type_inference"
     LISP_FORMATTER = "gt4py.next.program_processors.formatters.lisp.format_lisp"
 

@@ -142,7 +142,12 @@ class UnitRange(Sequence[int], Set[int]):
         return f"({self.start}:{self.stop})"
 
 
-RangeLike: TypeAlias = UnitRange | range | tuple[core_defs.INTEGRAL_TYPES, core_defs.INTEGRAL_TYPES] | core_defs.INTEGRAL_TYPES
+RangeLike: TypeAlias = (
+    UnitRange
+    | range
+    | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
+    | core_defs.IntegralScalar
+)
 
 
 def unit_range(r: RangeLike) -> UnitRange:
@@ -404,22 +409,25 @@ if TYPE_CHECKING:
             ...
 
 
+# TODO(havogt): replace this protocol with the new `GTFieldInterface` protocol
 class NextGTDimsInterface(Protocol):
     """
-    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+    Protocol for objects providing the `__gt_dims__` property, naming :class:`Field` dimensions.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
-    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    The dimension names are objects of type :class:`Dimension`, in contrast to
+    :mod:`gt4py.cartesian`, where the labels are `str` s with implied semantics,
+    see :class:`~gt4py._core.definitions.GTDimsInterface` .
     """
 
-    # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:
         ...
 
 
-####### TODO-> Update cartsian gtdims
+# TODO(egparedes): add support for this new protocol in the cartesian module
 class GTFieldInterface(Protocol):
+    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
+
     @property
     def __gt_domain__(self) -> Domain:
         ...

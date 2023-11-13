@@ -232,9 +232,7 @@ _T = TypeVar("_T")
 
 
 class fluid_partial(functools.partial):
-    """
-    A `functools.partial` subclass supporting multiple applications by calling `.partial()`.
-    """
+    """Create a `functools.partial` with support for multiple applications calling `.partial()`."""
 
     def partial(self, *args, **kwargs) -> fluid_partial:
         return fluid_partial(self, *args, **kwargs)
@@ -257,8 +255,7 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
 def with_fluid_partial(  # noqa: F811  # redefinition of unused function
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
-    """
-    A decorator that adds a `partial` attribute to the decorated function.
+    """Add a `partial` attribute to the decorated function.
 
     The `partial` attribute is a function that behaves like `functools.partial`,
     but also supports partial application of the decorated function. It can be

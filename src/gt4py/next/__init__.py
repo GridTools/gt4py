@@ -57,7 +57,7 @@ __all__ = [
     "NeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",
     "index_field",
-    "np_as_located_field"
+    "np_as_located_field",
     # from ffront
     "FieldOffset",
     "field_operator",
