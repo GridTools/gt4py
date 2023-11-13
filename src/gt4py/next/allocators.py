@@ -306,7 +306,7 @@ def allocate(
     If `device` is specified, the corresponding default allocator
     (defined in :data:`device_allocators`) is used.
 
-    Args:
+    Arguments:
         domain: The domain which should be backed by the allocated tensor buffer.
         dtype: Data type.
         aligned_index: N-dimensional index of the first aligned element
@@ -320,15 +320,15 @@ def allocate(
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
     actual_allocator = get_allocator(allocator, default=None)
-    if device is None:
-        assert actual_allocator is not None  # for mypy
+    if actual_allocator is None:
+        assert device is not None  # for mypy
+        actual_allocator = device_allocators[device.device_type]
+    elif device is None:
         device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
-    assert device is not None  # for mypy
-    field_allocator = actual_allocator or device_allocators[device.device_type]
-    if device.device_type != field_allocator.__gt_device_type__:
+    elif device.device_type != actual_allocator.__gt_device_type__:
         raise ValueError(f"Device {device} and allocator {actual_allocator} are incompatible")
 
-    return field_allocator.__gt_allocate__(
+    return actual_allocator.__gt_allocate__(
         domain=common.domain(domain),
         dtype=dtype,
         device_id=device.device_id,

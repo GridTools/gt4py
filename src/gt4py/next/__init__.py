@@ -53,6 +53,12 @@ __all__ = [
     "DimensionKind",
     "Field",
     "GridType",
+    # from constructors
+    "empty",
+    "zeros",
+    "ones",
+    "full",
+    "as_field",
     # from iterator
     "NeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",
@@ -64,10 +70,4 @@ __all__ = [
     "program",
     "scan_operator",
     *fbuiltins.__all__,
-    # from storage
-    "empty",
-    "zeros",
-    "ones",
-    "full",
-    "as_field",
 ]
