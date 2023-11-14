@@ -235,7 +235,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
         )
-    if fieldview_backend == roundtrip.executor:
+    if fieldview_backend == roundtrip.backend:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
@@ -271,7 +271,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-    if fieldview_backend == roundtrip.executor:
+    if fieldview_backend == roundtrip.backend:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(
