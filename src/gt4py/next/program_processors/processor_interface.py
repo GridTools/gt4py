@@ -81,12 +81,12 @@ def make_program_processor(
     filtered_kwargs: Callable[[dict[str, Any]], dict[str, Any]]
     if accept_kwargs is None:
         filtered_kwargs = lambda kwargs: {}  # noqa: E731  # use def instead of named lambdas
+    elif accept_kwargs == "all":  # don't swap with 'isinstance(..., Sequence)'
+        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731
     elif isinstance(accept_kwargs, Sequence):
         filtered_kwargs = lambda kwargs: {  # noqa: E731
             key: value for key, value in kwargs.items() if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
         }
-    elif accept_kwargs == "all":
-        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731
     else:
         raise ValueError(f"Invalid ({accept_kwargs}) 'accept_kwargs' value")
 
