@@ -130,48 +130,52 @@ GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
 )
 
 
+gtfn_executor = otf_compile_executor.OTFCompileExecutor(
+    name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
+)
 run_gtfn = otf_compile_executor.OTFBackend(
-    executor=otf_compile_executor.OTFCompileExecutor(
-        name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
-    ),
+    executor=gtfn_executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
-run_gtfn_imperative = otf_compile_executor.OTFBackend(
-    executor=otf_compile_executor.OTFCompileExecutor(
-        name="run_gtfn_imperative",
-        otf_workflow=run_gtfn.executor.otf_workflow.replace(
-            translation=run_gtfn.executor.otf_workflow.translation.replace(
-                use_imperative_backend=True
-            ),
-        ),
+gtfn_imperative_executor = otf_compile_executor.OTFCompileExecutor(
+    name="run_gtfn_imperative",
+    otf_workflow=gtfn_executor.otf_workflow.replace(
+        translation=gtfn_executor.otf_workflow.translation.replace(use_imperative_backend=True),
     ),
+)
+run_gtfn_imperative = otf_compile_executor.OTFBackend(
+    executor=gtfn_imperative_executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
 # TODO(ricoh): add API for converting an executor to a cached version of itself and vice versa
-run_gtfn_cached = otf_compile_executor.OTFBackend(
-    executor=otf_compile_executor.CachedOTFCompileExecutor(
-        name="run_gtfn_cached",
-        otf_workflow=workflow.CachedStep(
-            step=run_gtfn.executor.otf_workflow, hash_function=compilation_hash
-        ),
+gtfn_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
+    name="run_gtfn_cached",
+    otf_workflow=workflow.CachedStep(
+        step=gtfn_executor.otf_workflow, hash_function=compilation_hash
     ),
+)
+run_gtfn_cached = otf_compile_executor.OTFBackend(
+    executor=gtfn_cached_executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
-run_gtfn_gpu = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
-)
 
 run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
     executor=otf_compile_executor.OTFCompileExecutor(
         name="run_gtfn_with_temporaries",
-        otf_workflow=run_gtfn.executor.otf_workflow.replace(
-            translation=run_gtfn.executor.otf_workflow.translation.replace(
+        otf_workflow=gtfn_executor.otf_workflow.replace(
+            translation=gtfn_executor.otf_workflow.translation.replace(
                 lift_mode=LiftMode.FORCE_TEMPORARIES
             ),
         ),
     ),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
+
+
+run_gtfn_gpu = otf_compile_executor.OTFBackend(
+    executor=gtfn_cached_executor,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )

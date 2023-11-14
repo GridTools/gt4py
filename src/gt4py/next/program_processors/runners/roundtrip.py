@@ -207,7 +207,7 @@ def execute_roundtrip(
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
     debug: bool = False,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
-    dispatch_backend: Optional[str] = None,
+    dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
     fencil = fencil_generator(
         ir,
@@ -227,6 +227,7 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
+assert ppi.is_processor_kind(execute_roundtrip, ppi.ProgramExecutor)
 executor = ppi.program_executor(execute_roundtrip)
 
 backend = otf_compile_executor.OTFBackend(

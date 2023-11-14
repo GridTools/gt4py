@@ -31,6 +31,7 @@ from gt4py.eve.extended_typing import (
     Sequence,
     TypeAlias,
     TypeGuard,
+    cast,
 )
 
 
@@ -291,8 +292,9 @@ else:
             )
 
 
-StandardGPUFieldBufferAllocator: Final[FieldBufferAllocatorProtocol] = (
-    device_allocators[CUPY_DEVICE] if CUPY_DEVICE else InvalidGPUFielBufferAllocator()
+StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = cast(
+    type[FieldBufferAllocatorProtocol],
+    type(device_allocators[CUPY_DEVICE]) if CUPY_DEVICE else InvalidGPUFielBufferAllocator,
 )
 
 

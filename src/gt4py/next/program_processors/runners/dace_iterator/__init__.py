@@ -275,5 +275,5 @@ else:
 
 run_dace_gpu = otf_exec.OTFBackend(
     executor=_run_dace_gpu,
-    allocator=next_allocators.StandardGPUFieldBufferAllocator,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )

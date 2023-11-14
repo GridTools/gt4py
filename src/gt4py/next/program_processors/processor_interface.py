@@ -64,6 +64,22 @@ def make_program_processor(
     accept_args: None | int | Literal["all"] = "all",
     accept_kwargs: None | Sequence[str] | Literal["all"] = "all",
 ) -> ProgramProcessor[OutputT, ProcessorKindT]:
+    """
+    Create a program processor from a callable function.
+
+    Args:
+        func: The callable function to be wrapped as a program processor.
+        kind: The type of the processor.
+        name: The name of the processor.
+        accept_args: The number of positional arguments to accept, or "all" to accept all.
+        accept_kwargs: The names of the keyword arguments to accept, or "all" to accept all.
+
+    Returns:
+        A program processor that wraps the given function.
+
+    Raises:
+        ValueError: If the value of `accept_args` or `accept_kwargs` is invalid.
+    """
     args_filter: Callable[[Sequence], Sequence]
     if accept_args is None:
         args_filter = lambda args: ()  # noqa: E731  # use def instead of named lambdas
