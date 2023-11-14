@@ -167,7 +167,8 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
     ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
-        assert aligned_index is None  # TODO
+        # TODO(egparedes): add support for non-empty aligned index values
+        assert aligned_index is None  
 
         return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index
