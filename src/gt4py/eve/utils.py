@@ -234,7 +234,7 @@ _T = TypeVar("_T")
 class fluid_partial(functools.partial):
     """Create a `functools.partial` with support for multiple applications calling `.partial()`."""
 
-    def partial(self, *args, **kwargs) -> fluid_partial:
+    def partial(self, *args: Any, **kwargs: Any) -> fluid_partial:
         return fluid_partial(self, *args, **kwargs)
 
 
@@ -277,7 +277,7 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
     """
 
     def _decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        func.partial = fluid_partial(functools.partial, func, *args, **kwargs)
+        func.partial = fluid_partial(functools.partial, func, *args, **kwargs)  # type: ignore[attr-defined]  # add attribute
         return func
 
     return _decorator(func) if func is not None else _decorator

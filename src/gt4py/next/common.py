@@ -80,15 +80,18 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, init=False)
 class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
     stop: int
 
-    def __post_init__(self):
-        if self.stop <= self.start:
+    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
+        if self.start < self.stop:
+            object.__setattr__(self, "start", int(start))
+            object.__setattr__(self, "stop", int(stop))
+        else:
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
@@ -157,6 +160,8 @@ def unit_range(r: RangeLike) -> UnitRange:
         if r.step != 1:
             raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
         return UnitRange(r.start, r.stop)
+    # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+    #   once the related mypy bug (#16358) gets fixed
     if (
         isinstance(r, tuple)
         and isinstance(r[0], core_defs.INTEGRAL_TYPES)
@@ -164,7 +169,7 @@ def unit_range(r: RangeLike) -> UnitRange:
     ):
         return UnitRange(r[0], r[1])
     if isinstance(r, core_defs.INTEGRAL_TYPES):
-        return UnitRange(0, r)
+        return UnitRange(0, cast(core_defs.IntegralScalar, r))
     raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
 
 
