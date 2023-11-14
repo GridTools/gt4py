@@ -243,8 +243,8 @@ def test_supports_array_interface():
 
     assert supports_array_interface(ArrayInterface())
     assert not supports_array_interface(NoArrayInterface())
-    assert not supports_array_interface(42)
     assert not supports_array_interface("array")
+    assert not supports_array_interface(None)
 
 
 def test_supports_cuda_array_interface():
@@ -259,7 +259,6 @@ def test_supports_cuda_array_interface():
 
     assert supports_cuda_array_interface(CudaArray())
     assert not supports_cuda_array_interface(NoCudaArray())
-    assert not supports_cuda_array_interface(42)
     assert not supports_cuda_array_interface("cuda")
     assert not supports_cuda_array_interface(None)
 

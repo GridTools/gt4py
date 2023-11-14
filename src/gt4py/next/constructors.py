@@ -32,66 +32,57 @@ def empty(
     dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
-    allocator: Optional[next_allocators.FieldBufferAllocationTool] = None,
+    allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
-    """Allocate Field of uninitialized (undefined) values with performance-optimal strides and alignment.
+    """Create a `Field` of uninitialized (undefined) values using the given (or device-default) allocator.
 
-    Parameters
-    ----------
-        domain : `DomainLike`
-            Mapping (or sequence of tuples) of `Dimension` to a range or range-like object.
-            Determines the shape of the resulting field buffer.
-        dtype : `DTypeLike`, optional
-            The dtype of the resulting field buffer. Defaults to float64.
+    This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
 
-    Keyword Arguments
-    -----------------
-        aligned_index : `Sequence` of `int`, optional
-            Indicate the index of the resulting array that most commonly corresponds to the origin of the compute
-            domain. If not passed, it is byte-aligned at the data origin.
-        allocator : `FieldBufferAllocationTool`
-            An allocator, which knows how to optimize the memory layout for a given device. Or an object, which can provide an allocator. A `gtx.program_processors.otf_compile_executor.OTFBackend` is the most convenient choice in most use cases.
-            Required if `device` is `None`. If both are valid, `allocator` will be chosen over the default device allocator.
-        device : `Device`
-            The device (CPU, type of accelerator) to optimize the memory layout for.
-            Required if `allocator` is `None` and will cause the default device allocator to be used in that case.
+    Arguments:
+        domain: Definition of the domain of the field (and consequently of the shape of the allocated field buffer).
+        dtype: Definition of the data type of the field. Defaults to `float64`.
 
-    Returns
-    -------
-        NumPy or CuPy ndarray
-            With uninitialized values, padded and aligned to provide optimal performance for the given `backend` and
-            `aligned_index`
+    Keyword Arguments:
+        aligned_index: Index in the definition domain which should be used as reference
+            point for memory aligment computations. It can be set to the most common origin
+            of computations in this domain (if known) for performance reasons.
+        allocator: The allocator or allocator factory (e.g. backend) used for memory buffer
+            allocation, which knows how to optimize the memory layout for a given device.
+            Required if `device` is `None`. If both are valid, `allocator` will be chosen over
+            the default device allocator.
+        device: The device (CPU, type of accelerator) to optimize the memory layout for.
+            Required if `allocator` is `None` and will cause the default device allocator
+            to be used in that case.
 
-    Raises
-    -------
-        TypeError
-            If arguments of an unexpected type are specified.
+    Returns:
+        A field, backed by a buffer with memory layout as specified by allocator and alignment requirements.
+
+    Raises:
         ValueError
             If illegal or inconsistent arguments are specified.
 
-    Examples
-    --------
-    Initialize a field in one dimension with a backend and a range domain:
+    Examples:
+        Initialize a field in one dimension with a backend and a range domain:
 
-    >>> from gt4py import next as gtx
-    >>> from gt4py.next.program_processors.runners import roundtrip
-    >>> IDim = gtx.Dimension("I")
-    >>> a = gtx.empty({IDim: range(3, 10)}, allocator=roundtrip.backend)
-    >>> a.shape
-    (7,)
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.program_processors.runners import roundtrip
+        >>> IDim = gtx.Dimension("I")
+        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=roundtrip.backend)
+        >>> a.shape
+        (7,)
 
-    Initialize with a device and an integer domain. It works like a shape with named dimensions:
+        Initialize with a device and an integer domain. It works like a shape with named dimensions:
 
-    >>> from gt4py._core import definitions as core_defs
-    >>> JDim = gtx.Dimension("J")
-    >>> b = gtx.empty({IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0))
-    >>> b.ndarray
-    array([[0, 0, 0],
-           [0, 0, 0],
-           [0, 0, 0]])
-    >>> b.shape
-    (3, 3)
+        >>> from gt4py._core import definitions as core_defs
+        >>> JDim = gtx.Dimension("J")
+        >>> b = gtx.empty({IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0))
+        >>> b.ndarray
+        array([[0, 0, 0],
+            [0, 0, 0],
+            [0, 0, 0]])
+        >>> b.shape
+        (3, 3)
     """
     dtype = core_defs.dtype(dtype)
     buffer = next_allocators.allocate(
@@ -112,19 +103,17 @@ def zeros(
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
-    """Create a Field containing all zeros with performance-optimal strides and alignment.
+    """Create a Field containing all zeros using the given (or device-default) allocator.
 
-    Parameters
-    ----------
-    Same as `empty`
+    This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
+    See :func:`empty` for further details about the meaning of the arguments.
 
-    Examples
-    --------
-    >>> from gt4py import next as gtx
-    >>> from gt4py.next.program_processors.runners import roundtrip
-    >>> IDim = gtx.Dimension("I")
-    >>> gtx.zeros({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
-    array([0., 0., 0., 0., 0., 0., 0.])
+    Examples:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.program_processors.runners import roundtrip
+        >>> IDim = gtx.Dimension("I")
+        >>> gtx.zeros({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        array([0., 0., 0., 0., 0., 0., 0.])
     """
     field = empty(
         domain=domain,
@@ -146,19 +135,17 @@ def ones(
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
-    """Create a Field containing all ones with performance-optimal strides and alignment.
+    """Create a Field containing all ones using the given (or device-default) allocator.
 
-    Parameters
-    ----------
-    Same as `empty`
+    This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
+    See :func:`empty` for further details about the meaning of the arguments.
 
-    Examples
-    --------
-    >>> from gt4py import next as gtx
-    >>> from gt4py.next.program_processors.runners import roundtrip
-    >>> IDim = gtx.Dimension("I")
-    >>> gtx.ones({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
-    array([1., 1., 1., 1., 1., 1., 1.])
+    Examples:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.program_processors.runners import roundtrip
+        >>> IDim = gtx.Dimension("I")
+        >>> gtx.ones({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        array([1., 1., 1., 1., 1., 1., 1.])
     """
     field = empty(
         domain=domain,
@@ -181,24 +168,22 @@ def full(
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
 ) -> nd_array_field.NdArrayField:
-    """Create a Field where all values are set to `fill_value` with performance-optimal strides and alignment.
+    """Create a Field where all values are set to `fill_value` using the given (or device-default) allocator.
 
-    Parameters
-    ----------
-        fill_value : `Scalar`
-            Each point in the field will be initialized to this value.
-        dtype : `DTypeLike`, optional
-            The dtype of the resulting field buffer. Defaults to the dtype of `fill_value`.
+    This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
+    See :func:`empty` for further details about the meaning of the arguments.
 
-    Refer to `empty` for the rest of the parameters.
+    Arguments:
+        domain: Definition of the domain of the field (and consequently of the shape of the allocated field buffer).
+        fill_value: Each point in the field will be initialized to this value.
+        dtype: Definition of the data type of the field. Defaults to the dtype of `fill_value`.
 
-    Examples
-    --------
-    >>> from gt4py import next as gtx
-    >>> from gt4py.next.program_processors.runners import roundtrip
-    >>> IDim = gtx.Dimension("I")
-    >>> gtx.full({IDim: 3}, 5, allocator=roundtrip.backend).ndarray
-    array([5, 5, 5])
+    Examples:
+        >>> from gt4py import next as gtx
+        >>> from gt4py.next.program_processors.runners import roundtrip
+        >>> IDim = gtx.Dimension("I")
+        >>> gtx.full({IDim: 3}, 5, allocator=roundtrip.backend).ndarray
+        array([5, 5, 5])
     """
     field = empty(
         domain=domain,
@@ -223,55 +208,48 @@ def as_field(
     device: Optional[core_defs.Device] = None,
     # copy=False, TODO
 ) -> nd_array_field.NdArrayField:
-    """Create a Field with performance-optimal strides and alignments from an array-like object.
+    """Create a Field from an array-like object using the given (or device-default) allocator.
 
-    Parameters
-    ----------
-        domain : `DomainLike` | `Sequence[Dimension]`
-            In addition to the values allowed in `empty`, can also just be a sequence of dimensions. By default, the sizes of each dimension will then be taken from the shape of `data`.
-        data : `NDArrayObject`
-            Array like data object to initialize the field with
-        dtype: `DTypeLike`, optional
-            The data type of the resulting field. Defaults to the same as `data`.
+    This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
+    See :func:`empty` for further details about the meaning of the extra keyword arguments.
 
-    Refer to `empty` for the rest of the parameters.
+    Parameters:
+        domain: Definition of the domain of the field (and consequently of the shape of the allocated field buffer).
+            In addition to the values allowed in `empty`, it can also just be a sequence of dimensions,
+            in which case the sizes of each dimension will then be taken from the shape of `data`.
+        data: Array like data object to initialize the field with
+        dtype: Definition of the data type of the field. Defaults to the same as `data`.
 
-    Keyword Arguments
-    -----------------
-        origin : `dict[Dimension, int]`, optional
-            Only allowed if `domain` is a sequence of dimensions. The indicated index in `data` will be the zero point of the resulting field.
-        allocator : `gtx.allocators.FieldBufferAllocationTool`, optional
-            Fully optional, in contrast to `empty`.
-        device : `Device`, optional
-            Fully optional, in contrast to `empty`, defaults to the same device as `data`.
+    Keyword Arguments:
+        origin: Only allowed if `domain` is a sequence of dimensions. The indicated index in `data`
+            will be the zero point of the resulting field.
+        allocator: Fully optional, in contrast to `empty`.
+        device: Fully optional, in contrast to `empty`, defaults to the same device as `data`.
 
-    Refer to `empty` for the rest of the keyword arguments.
+    Examples:
+        >>> import numpy as np
+        >>> from gt4py import next as gtx
+        >>> IDim = gtx.Dimension("I")
+        >>> xdata = np.array([1, 2, 3])
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> from gt4py import next as gtx
-    >>> IDim = gtx.Dimension("I")
-    >>> xdata = np.array([1, 2, 3])
+        Automatic domain from just dimensions:
 
-    Automatic domain from just dimensions:
+        >>> a = gtx.as_field([IDim], xdata)
+        >>> a.ndarray
+        array([1, 2, 3])
+        >>> a.domain.ranges[0]
+        UnitRange(0, 3)
 
-    >>> a = gtx.as_field([IDim], xdata)
-    >>> a.ndarray
-    array([1, 2, 3])
-    >>> a.domain.ranges[0]
-    UnitRange(0, 3)
+        Shifted domain using origin:
 
-    Shifted domain using origin:
+        >>> b = gtx.as_field([IDim], xdata, origin={IDim: 1})
+        >>> b.domain.ranges[0]
+        UnitRange(-1, 2)
 
-    >>> b = gtx.as_field([IDim], xdata, origin={IDim: 1})
-    >>> b.domain.ranges[0]
-    UnitRange(-1, 2)
+        Equivalent domain fully specified:
 
-    Equivalent domain fully specified:
-
-    >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
-    UnitRange(-1, 2)
+        >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
+        UnitRange(-1, 2)
     """
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
         if len(domain) != data.ndim:
@@ -296,7 +274,8 @@ def as_field(
             raise ValueError(f"Cannot specify origin for domain {domain}")
         actual_domain = common.domain(domain)
 
-    # TODO make sure we don't reallocate if its in correct layout and device
+    # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
+    #   already the correct layout and device.
     shape = storage_utils.asarray(data).shape
     if shape != actual_domain.shape:
         raise ValueError(f"Cannot construct `Field` from array of shape `{shape}` ")

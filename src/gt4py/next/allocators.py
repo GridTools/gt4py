@@ -316,6 +316,11 @@ def allocate(
 
     Returns:
         The allocated tensor buffer.
+
+    Raises:
+        ValueError
+            If illegal or inconsistent arguments are specified.
+
     """
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
