@@ -194,22 +194,16 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()
 
-        # set array storage for GPU execution
         if run_on_gpu:
-            device = dace.DeviceType.GPU
-            sdfg._name = f"{sdfg.name}_gpu"
-            for _, _, array in sdfg.arrays_recursive():
-                if not array.transient:
-                    array.storage = dace.dtypes.StorageType.GPU_Global
-        else:
-            device = dace.DeviceType.CPU
+            autoopt.apply_gpu_storage(sdfg)
 
         # run DaCe auto-optimization heuristics
         if auto_optimize:
             # TODO Investigate how symbol definitions improve autoopt transformations,
             #      in which case the cache table should take the symbols map into account.
             symbols: dict[str, int] = {}
-            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
+            device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
+            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
 
         # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
