@@ -40,7 +40,8 @@ def empty(
     This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
 
     Arguments:
-        domain: Definition of the domain of the field (and consequently of the shape of the allocated field buffer).
+        domain: Definition of the domain of the field (which fix the shape of the allocated field buffer).
+            See :class:`gt4py.next.common.Domain` for details.
         dtype: Definition of the data type of the field. Defaults to `float64`.
 
     Keyword Arguments:
