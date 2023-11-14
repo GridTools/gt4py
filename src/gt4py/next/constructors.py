@@ -14,8 +14,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Optional
+from collections.abc import Mapping, Sequence
+from typing import Optional, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
@@ -203,7 +203,7 @@ def as_field(
     data: core_defs.NDArrayObject,
     dtype: Optional[core_defs.DTypeLike] = None,
     *,
-    origin: Optional[dict[common.Dimension, int]] = None,
+    origin: Optional[Mapping[common.Dimension, int]] = None,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
@@ -253,15 +253,15 @@ def as_field(
         UnitRange(-1, 2)
     """
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
+        domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:
             raise ValueError(
                 f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
             )
         if origin:
-            if set(origin.keys()) - set(domain):
-                raise ValueError(
-                    f"Origin keys {set(origin.keys()) - set(domain)} not in domain {domain}"
-                )
+            domain_dims = set(domain)
+            if unknown_dims := set(origin.keys()) - domain_dims:
+                raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}")
         else:
             origin = {}
         actual_domain = common.domain(
@@ -273,7 +273,7 @@ def as_field(
     else:
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")
-        actual_domain = common.domain(domain)
+        actual_domain = common.domain(cast(common.DomainLike, domain))
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
     #   already the correct layout and device.
