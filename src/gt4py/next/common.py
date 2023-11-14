@@ -88,7 +88,7 @@ class UnitRange(Sequence[int], Set[int]):
     stop: int
 
     def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
-        if self.start < self.stop:
+        if start < stop:
             object.__setattr__(self, "start", int(start))
             object.__setattr__(self, "stop", int(stop))
         else:
