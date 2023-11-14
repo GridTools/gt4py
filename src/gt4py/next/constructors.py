@@ -78,10 +78,6 @@ def empty(
         >>> from gt4py._core import definitions as core_defs
         >>> JDim = gtx.Dimension("J")
         >>> b = gtx.empty({IDim: 3, JDim: 3}, int, device=core_defs.Device(core_defs.DeviceType.CPU, 0))
-        >>> b.ndarray
-        array([[0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]])
         >>> b.shape
         (3, 3)
     """
