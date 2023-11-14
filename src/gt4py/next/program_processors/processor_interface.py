@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Sequence
-from typing import Callable, Literal, Optional, Protocol, TypeGuard, TypeVar, cast
+from typing import Any, Callable, Literal, Optional, Protocol, TypeGuard, TypeVar, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -62,29 +62,37 @@ def make_program_processor(
     *,
     name: Optional[str] = None,
     accept_args: None | int | Literal["all"] = "all",
-    accept_kwargs: Sequence[str] | None | Literal["all"] = "all",
+    accept_kwargs: None | Sequence[str] | Literal["all"] = "all",
 ) -> ProgramProcessor[OutputT, ProcessorKindT]:
-    if not accept_args:
-        filtered_args = lambda args: ()  # noqa: E731  # use def instead of named lambdas
+    args_filter: Callable[[Sequence], Sequence]
+    if accept_args is None:
+        args_filter = lambda args: ()  # noqa: E731  # use def instead of named lambdas
+    elif isinstance(accept_args, int):
+        if accept_args < 0:
+            raise ValueError(
+                f"Number of accepted arguments cannot be a negative number ({accept_args})"
+            )
+        args_filter = lambda args: args[:accept_args]  # type: ignore[misc] # noqa: E731
     elif accept_args == "all":
-        filtered_args = lambda args: args  # noqa: E731  # use def instead of named lambdas
+        args_filter = lambda args: args  # noqa: E731
     else:
-        filtered_args = lambda args: args[  # noqa: E731  # use def instead of named lambdas
-            :accept_args
-        ]
+        raise ValueError(f"Invalid ({accept_args}) accept_args value")
 
-    if not accept_kwargs:
+    filtered_kwargs: Callable[[dict[str, Any]], dict[str, Any]]
+    if accept_kwargs is None:
         filtered_kwargs = lambda kwargs: {}  # noqa: E731  # use def instead of named lambdas
-    elif accept_kwargs == "all":
-        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731  # use def instead of named lambdas
-    else:
-        filtered_kwargs = lambda kwargs: {  # noqa: E731  # use def instead of named lambdas
-            key: value for key, value in kwargs.items() if key in accept_kwargs
+    elif isinstance(accept_kwargs, Sequence):
+        filtered_kwargs = lambda kwargs: {  # noqa: E731
+            key: value for key, value in kwargs.items() if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
         }
+    elif accept_kwargs == "all":
+        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731
+    else:
+        raise ValueError(f"Invalid ({accept_kwargs}) 'accept_kwargs' value")
 
     @functools.wraps(func)
     def _wrapper(program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
-        return func(program, *filtered_args(args), **filtered_kwargs(kwargs))
+        return func(program, *args_filter(args), **filtered_kwargs(kwargs))
 
     if name is not None:
         _wrapper.__name__ = name
@@ -107,16 +115,19 @@ def program_formatter(
     Turn a function that formats a program as a string into a ProgramFormatter.
 
     Examples:
-    ---------
-    >>> @program_formatter
-    ... def format_foo(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
-    ...     '''A very useless fencil formatter.'''
-    ...     return "foo"
+        >>> @program_formatter
+        ... def format_foo(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
+        ...     '''A very useless fencil formatter.'''
+        ...     return "foo"
 
-    >>> ensure_processor_kind(format_foo, ProgramFormatter)
+        >>> ensure_processor_kind(format_foo, ProgramFormatter)
     """
     return make_program_processor(
-        func, ProgramFormatter, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
+        func,
+        ProgramFormatter,  # type: ignore[type-abstract]  # ProgramFormatter is abstract
+        name=name,
+        accept_args=accept_args,
+        accept_kwargs=accept_kwargs,
     )
 
 
@@ -137,16 +148,22 @@ def program_executor(
     Turn a function that executes a program into a ``ProgramExecutor``.
 
     Examples:
-    ---------
-    >>> @program_executor
-    ... def badly_execute(fencil: itir.FencilDefinition, *args, **kwargs) -> None:
-    ...     '''A useless and incorrect fencil executor.'''
-    ...     pass
+        >>> @program_executor
+        ... def badly_execute(fencil: itir.FencilDefinition, *args, **kwargs) -> None:
+        ...     '''A useless and incorrect fencil executor.'''
+        ...     pass
 
-    >>> ensure_processor_kind(badly_execute, ProgramExecutor)
+        >>> ensure_processor_kind(badly_execute, ProgramExecutor)
     """
-    return make_program_processor(
-        func, ProgramExecutor, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
+    return cast(
+        ProgramExecutor,
+        make_program_processor(
+            func,
+            ProgramExecutor,
+            name=name,
+            accept_args=accept_args,
+            accept_kwargs=accept_kwargs,
+        ),
     )
 
 
@@ -172,14 +189,14 @@ class ProgramBackend(
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
-    return is_processor_kind(obj, ProgramExecutor) and next_allocators.is_field_allocator_factory(
-        obj
-    )
+    return is_processor_kind(
+        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+    ) and next_allocators.is_field_allocator_factory(obj)
 
 
 def is_program_backend_for(
     obj: Callable, device: core_defs.DeviceTypeT
 ) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
     return is_processor_kind(
-        obj, ProgramExecutor
+        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory_for(obj, device)

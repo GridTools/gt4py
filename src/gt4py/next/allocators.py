@@ -18,7 +18,6 @@ import dataclasses
 import numpy as np
 
 import gt4py._core.definitions as core_defs
-import gt4py.eve as eve
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
 from gt4py.eve.extended_typing import (
