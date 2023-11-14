@@ -112,8 +112,11 @@ def is_field_allocation_tool(obj: Any) -> TypeGuard[FieldBufferAllocationUtil]:
 
 
 def get_allocator(
-    obj: Any, *, default: FieldBufferAllocatorProtocol | eve.NothingType = eve.NOTHING
-) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    obj: Any,
+    *,
+    default: Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]] = None,
+    strict: bool = False,
+) -> Optional[FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]]:
     """
     Return a field-buffer-allocator from an object assumed to be an allocator or an allocator factory.
 
@@ -122,18 +125,21 @@ def get_allocator(
     Arguments:
         obj: The allocator or allocator factory.
         default: Fallback allocator.
+        strict: If `True`, raise an exception if there is no way to get a valid allocator
+            from `obj` or `default`.
 
     Returns:
         A field buffer allocator.
 
     Raises:
-        TypeError: If `obj` is neither a field allocator nor a field allocator factory and no default is provided.
+        TypeError: If `obj` is neither a field allocator nor a field allocator factory and no default
+            is provided in `strict` mode.
     """
     if is_field_allocator(obj):
         return obj
     elif is_field_allocator_factory(obj):
         return obj.__gt_allocator__
-    elif default is not eve.NOTHING:
+    elif not strict or is_field_allocator(default):
         return default
     else:
         raise TypeError(f"Object {obj} is neither a field allocator nor a field allocator factory")
@@ -281,13 +287,13 @@ else:
     class InvalidGPUFielBufferAllocator(InvalidFieldBufferAllocator[core_defs.CUDADeviceTyping]):
         def __init__(self) -> None:
             super().__init__(
-                device_type=core_defs.DeviceType.CPU,
+                device_type=core_defs.DeviceType.CUDA,
                 exception=RuntimeError("Missing `cupy` dependency for GPU allocation"),
             )
 
 
-StandardGPUFieldBufferAllocator: Final[type[FieldBufferAllocatorProtocol]] = (
-    device_allocators[CUPY_DEVICE] if cp else InvalidGPUFielBufferAllocator
+StandardGPUFieldBufferAllocator: Final[FieldBufferAllocatorProtocol] = (
+    device_allocators[CUPY_DEVICE] if CUPY_DEVICE else InvalidGPUFielBufferAllocator()
 )
 
 
@@ -324,7 +330,7 @@ def allocate(
     """
     if device is None and allocator is None:
         raise ValueError("No 'device' or 'allocator' specified")
-    actual_allocator = get_allocator(allocator, default=None)
+    actual_allocator = get_allocator(allocator)
     if actual_allocator is None:
         assert device is not None  # for mypy
         actual_allocator = device_allocators[device.device_type]
