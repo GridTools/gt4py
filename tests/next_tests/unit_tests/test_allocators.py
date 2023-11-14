@@ -104,11 +104,13 @@ def test_get_allocator():
 
     # Test with an invalid object and no default allocator
     invalid_obj = "not an allocator"
+    assert next_allocators.get_allocator(invalid_obj) is None
+
     with pytest.raises(
         TypeError,
         match=f"Object {invalid_obj} is neither a field allocator nor a field allocator factory",
     ):
-        next_allocators.get_allocator(invalid_obj)
+        next_allocators.get_allocator(invalid_obj, strict=True)
 
 
 def test_horizontal_first_layout_mapper():
