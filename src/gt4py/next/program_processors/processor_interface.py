@@ -83,14 +83,14 @@ def make_program_processor(
     args_filter: Callable[[Sequence], Sequence]
     if accept_args is None:
         args_filter = lambda args: ()  # noqa: E731  # use def instead of named lambdas
+    elif accept_args == "all":
+        args_filter = lambda args: args  # noqa: E731
     elif isinstance(accept_args, int):
         if accept_args < 0:
             raise ValueError(
                 f"Number of accepted arguments cannot be a negative number ({accept_args})"
             )
         args_filter = lambda args: args[:accept_args]  # type: ignore[misc] # noqa: E731
-    elif accept_args == "all":
-        args_filter = lambda args: args  # noqa: E731
     else:
         raise ValueError(f"Invalid ({accept_args}) accept_args value")
 
@@ -100,6 +100,8 @@ def make_program_processor(
     elif accept_kwargs == "all":  # don't swap with 'isinstance(..., Sequence)'
         filtered_kwargs = lambda kwargs: kwargs  # noqa: E731
     elif isinstance(accept_kwargs, Sequence):
+        if not all(isinstance(a, str) for a in accept_kwargs):
+            raise ValueError(f"Provided invalid list of keyword argument names ({accept_args})")
         filtered_kwargs = lambda kwargs: {  # noqa: E731
             key: value for key, value in kwargs.items() if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
         }

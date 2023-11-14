@@ -227,8 +227,7 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-assert ppi.is_processor_kind(execute_roundtrip, ppi.ProgramExecutor)
-executor = ppi.program_executor(execute_roundtrip)
+executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
 
 backend = otf_compile_executor.OTFBackend(
     executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
