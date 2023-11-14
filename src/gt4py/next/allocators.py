@@ -168,7 +168,7 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
         shape = domain.shape
         layout_map = self.layout_mapper(domain.dims)
         # TODO(egparedes): add support for non-empty aligned index values
-        assert aligned_index is None  
+        assert aligned_index is None
 
         return core_allocators.NDArrayBufferAllocator(self.device_type, self.array_ns).allocate(
             shape, dtype, device_id, layout_map, self.byte_alignment, aligned_index

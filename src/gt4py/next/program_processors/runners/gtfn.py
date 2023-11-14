@@ -174,8 +174,22 @@ run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
-
+gtfn_gpu_executor = otf_compile_executor.OTFCompileExecutor(
+    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
+)
 run_gtfn_gpu = otf_compile_executor.OTFBackend(
-    executor=gtfn_cached_executor,
+    executor=gtfn_gpu_executor,
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+)
+
+
+gtfn_gpu_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
+    name="run_gtfn_gpu_cached",
+    otf_workflow=workflow.CachedStep(
+        step=gtfn_gpu_executor.otf_workflow, hash_function=compilation_hash
+    ),
+)
+run_gtfn_gpu_cached = otf_compile_executor.OTFBackend(
+    executor=gtfn_gpu_cached_executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
