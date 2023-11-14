@@ -101,7 +101,7 @@ def test_aligned_index():
 )
 def test_empty(allocator, device):
     a = np.empty([sizes[I], sizes[J]]).astype(gtx.float32)
-    ref = gtx.constructors.empty(
+    ref = gtx.empty(
         domain={I: range(sizes[I]), J: range(sizes[J])},
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
@@ -115,7 +115,7 @@ def test_empty(allocator, device):
     [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
 )
 def test_zeros(allocator, device):
-    ref = gtx.constructors.zeros(
+    ref = gtx.zeros(
         common.Domain(
             dims=(I, J), ranges=(common.UnitRange(0, sizes[I]), common.UnitRange(0, sizes[J]))
         ),
@@ -136,7 +136,7 @@ def test_zeros(allocator, device):
     [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
 )
 def test_ones(allocator, device):
-    ref = gtx.constructors.ones(
+    ref = gtx.ones(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
@@ -152,7 +152,7 @@ def test_ones(allocator, device):
     [[roundtrip.backend, None], [None, core_defs.Device(core_defs.DeviceType.CPU, 0)]],
 )
 def test_full(allocator, device):
-    ref = gtx.constructors.full(
+    ref = gtx.full(
         domain={I: range(sizes[I] - 2), J: (sizes[J] - 2)},
         fill_value=42.0,
         dtype=core_defs.dtype(np.float32),
@@ -162,69 +162,3 @@ def test_full(allocator, device):
     a = np.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
 
     assert np.array_equal(ref.ndarray, a)
-
-
-def test_as_field_with(cartesian_case):
-    @gtx.field_operator
-    def as_field_with_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.field_operator
-    def field_fo(a: gtx.Field[[I, J], gtx.float32]) -> gtx.Field[[I, J], gtx.float32]:
-        return a
-
-    @gtx.program(backend=roundtrip.backend)
-    def as_field_with_prog(
-        a: gtx.Field[[I, J], gtx.float32],
-        out: gtx.Field[[I, J], gtx.float32],
-    ):
-        field_fo(a, out=out)
-
-    a = gtx.as_field([I, J], np.random.rand(sizes[I], sizes[J]).astype(gtx.float32))
-    ref = gtx.constructors.as_field_with(
-        common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
-    )
-
-    out = gtx.as_field([I, J], np.zeros((sizes[I], sizes[J])).astype(gtx.float32))
-    cases.verify(
-        cartesian_case,
-        as_field_with_fo,
-        a,
-        out=out,
-        ref=ref(a, allocator=as_field_with_prog),
-    )
-
-
-# @gtx.program(backend=roundtrip.backend)
-# def prog(
-#     a: gtx.Field[[I, J], gtx.float32],
-#     b: gtx.Field[[I, J], gtx.float32],
-#     out: gtx.Field[[I, J], gtx.float32],
-# ):
-#     add(a, b, out=out)
-#
-#
-# a = gtx.constructors.ones(
-#     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
-#     dtype=core_defs.dtype(np.float32),
-#     allocator=prog,
-# )
-#
-#
-# arr = np.full((10, 10), 42.0)
-# b = gtx.constructors.as_field(
-#     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
-#     arr,
-#     dtype=core_defs.dtype(np.float32),
-#     allocator=prog,
-# )
-#
-# out = gtx.constructors.empty(
-#     common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
-#     dtype=core_defs.dtype(np.float32),
-#     allocator=prog,
-# )
-#
-# prog(a, b, out, offset_provider={})
-#
-# print(out.ndarray)
