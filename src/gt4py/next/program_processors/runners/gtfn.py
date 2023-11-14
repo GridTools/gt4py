@@ -191,5 +191,5 @@ gtfn_gpu_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
 )
 run_gtfn_gpu_cached = otf_compile_executor.OTFBackend(
     executor=gtfn_gpu_cached_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )
