@@ -5,14 +5,12 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.1
+    jupytext_version: 1.15.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
   name: python3
 ---
-
-+++ {"tags": []}
 
 # Hands on Session of the GT4Py Workshop
 
@@ -30,17 +28,17 @@ We will implement the examples in field view and execute the Iterator IR program
 ```{code-cell} ipython3
 import numpy as np
 
-from gt4py.next.ffront.decorator import program, scan_operator, field_operator
-from gt4py.next.iterator.embedded import MutableLocatedField, np_as_located_field, NeighborTableOffsetProvider
-from gt4py.next.ffront.fbuiltins import Field, FieldOffset, neighbor_sum
-from gt4py.next.common import Dimension, DimensionKind
+import gt4py.next as gtx
+from gt4py.next.iterator.embedded import MutableLocatedField, np_as_located_field 
+from gt4py.next import neighbor_sum, where
+from gt4py.next import Dimension, DimensionKind, FieldOffset
 ```
 
 ```{code-cell} ipython3
 def random_field(
     sizes, *dims, low: float = -1.0, high: float = 1.0
 ) -> MutableLocatedField:
-    return np_as_located_field(*dims)(
+    return np_as_located_field(*dims)( 
         np.random.default_rng().uniform(
             low=low, high=high, size=sizes
         )
@@ -49,7 +47,7 @@ def random_field(
 def zero_field(
     sizes, *dims: Dimension, dtype=float
 ) -> MutableLocatedField:
-    return np_as_located_field(*dims)(
+    return np_as_located_field(*dims)( 
         np.zeros(shape=sizes, dtype=dtype)
     )
 ```
@@ -75,7 +73,7 @@ For simplicity we use a triangulated donut in the horizontal.
 0v       1v         2v        0v
 ```
 
-+++ {"tags": []}
++++
 
 ## Connectivities
 
@@ -374,8 +372,6 @@ c2e2c_table = np.asarray(
 )
 ```
 
-+++ {"tags": []}
-
 # Excercises
 
 ## 1. point wise stencil
@@ -418,13 +414,13 @@ K = Dimension("K")
 Next we implement the stencil and a numpy reference version, in order to verify them against each other.
 
 ```{code-cell} ipython3
-@field_operator
+@gtx.field_operator
 def mo_nh_diffusion_stencil_06_gt4py(
-    z_nabla2_e: Field[[E, K], float],
-    area_edge: Field[[E], float],
-    vn: Field[[E, K], float],
+    z_nabla2_e: gtx.Field[[E, K], float],
+    area_edge: gtx.Field[[E], float],
+    vn: gtx.Field[[E, K], float],
     fac_bdydiff_v: float,
-) -> Field[[E, K], float]:
+) -> gtx.Field[[E, K], float]:
     vn = vn + (z_nabla2_e * area_edge * fac_bdydiff_v)
     return vn
 ```
@@ -514,16 +510,16 @@ where `p_int%geofac_div` is set up as a constant field at ICON startup time and 
 ```
 
 ```{code-cell} ipython3
-C2EDim = Dimension("C2EDim", kind=DimensionKind.LOCAL)
+C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
 ```
 
 ```{code-cell} ipython3
-@field_operator
+@gtx.field_operator
 def mo_nh_diffusion_stencil_02_gt4py(
-    vn: Field[[E, K], float],
-    geofac_div: Field[[C, C2EDim], float],
-) -> Field[[C, K], float]:
+    vn: gtx.Field[[E, K], float],
+    geofac_div: gtx.Field[[C, C2EDim], float],
+) -> gtx.Field[[C, K], float]:
     div = neighbor_sum(vn(C2E) * geofac_div, axis=C2EDim)
     return div
 ```
@@ -552,7 +548,7 @@ def test_mo_nh_diffusion_stencil_02():
         np.asarray(geofac_div),
     )
 
-    c2e_connectivity = NeighborTableOffsetProvider(c2e_table, C, E, 3)
+    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
 
     div_gt4py = zero_field((n_cells, n_levels), C, K)
 
@@ -566,8 +562,6 @@ def test_mo_nh_diffusion_stencil_02():
 ```{code-cell} ipython3
 test_mo_nh_diffusion_stencil_02()
 ```
-
-+++ {"tags": []}
 
 ## 3. Neighbor access without reduction
 
@@ -635,45 +629,45 @@ def mo_nh_diffusion_stencil_04_numpy2(
 V = Dimension("V")
 E = Dimension("E")
 K = Dimension("K", kind=DimensionKind.VERTICAL)
-ECVDim = Dimension("ECVDim", kind=DimensionKind.LOCAL)
+ECVDim = Dimension("ECV", kind=DimensionKind.LOCAL)
 
 E2C2V = FieldOffset("E2C2V", source=V, target=[E, ECVDim])
 
-@field_operator
+@gtx.field_operator
 def nabv_tang(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return u_vert(E2C2V[0]) + v_vert(E2C2V[0]) + u_vert(E2C2V[1]) + v_vert(E2C2V[1])
               
-@field_operator
+@gtx.field_operator
 def nabv_norm(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return u_vert(E2C2V[2]) + v_vert(E2C2V[2]) + u_vert(E2C2V[3]) + v_vert(E2C2V[3])
 
-@field_operator
+@gtx.field_operator
 def z_nabla4_e2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float]
 ):
     return 4.0 * (
         (nabv_norm(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
         + (nabv_tang(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
     )
 
-@program
+@gtx.program
 def mo_nh_diffusion_stencil_04_gt4py(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float],
-    out: Field[[E,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float],
+    out: gtx.Field[[E,K], float]
 ):
     z_nabla4_e2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
 ```
@@ -686,47 +680,47 @@ def mo_nh_diffusion_stencil_04_gt4py(
 V = Dimension("V")
 E = Dimension("E")
 K = Dimension("K", kind=DimensionKind.VERTICAL)
-DCDim = Dimension("DCDim", kind=DimensionKind.LOCAL)
-DFDim = Dimension("DFDim", kind=DimensionKind.LOCAL)
+DCDim = Dimension("DC", kind=DimensionKind.LOCAL)
+DFDim = Dimension("DF", kind=DimensionKind.LOCAL)
 
 DiamondClose = FieldOffset("DiamondClose", source=V, target=[E, DCDim])
 DiamondFar = FieldOffset("DiamondFar", source=V, target=[E, DFDim])
 
-@field_operator
+@gtx.field_operator
 def nabv_tang_2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return neighbor_sum(u_vert(DiamondClose) + v_vert(DiamondClose), axis=DCDim)
               
-@field_operator
+@gtx.field_operator
 def nabv_norm_2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return neighbor_sum(u_vert(DiamondFar) + v_vert(DiamondFar), axis=DFDim)
 
-@field_operator
+@gtx.field_operator
 def z_nabla4_e2_2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float]
 ):
     return 4.0 * (
         (nabv_norm_2(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
         + (nabv_tang_2(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
     )
 
-@program
+@gtx.program
 def mo_nh_diffusion_stencil_04_gt4py2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float],
-    out: Field[[E,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float],
+    out: gtx.Field[[E,K], float]
 ):
     z_nabla4_e2_2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
 ```
@@ -734,8 +728,6 @@ def mo_nh_diffusion_stencil_04_gt4py2(
 ### Test setup
 
 ```{code-cell} ipython3
-:tags: []
-
 u_vert = np.random.rand(n_vertices, n_levels)
 v_vert = np.random.rand(n_vertices, n_levels)
 z_nabla2_e = np.random.rand(n_edges, n_levels)
@@ -765,7 +757,7 @@ inv_primal_edge_length_field = as_e_field(inv_primal_edge_length)
 
 z_nabla4_e2_gt4py_field = as_ek_field(z_nabla4_e2_gt4py)
 
-e2c2v_connectivity = NeighborTableOffsetProvider(e2c2v_table, E, V, 4)
+e2c2v_connectivity = gtx.NeighborTableOffsetProvider(e2c2v_table, E, V, 4)
 
 mo_nh_diffusion_stencil_04_gt4py(
     u_vert_field,
@@ -780,8 +772,8 @@ mo_nh_diffusion_stencil_04_gt4py(
 assert np.allclose(z_nabla4_e2_gt4py, z_nabla4_e2_numpy)
 
 z_nabla4_e2_gt4py_field2 = as_ek_field(z_nabla4_e2_gt4py2)
-close_conn = NeighborTableOffsetProvider(e2c2v_table[:,:2], E, V, 2)
-far_conn = NeighborTableOffsetProvider(e2c2v_table[:,2:], E, V, 2)
+close_conn = gtx.NeighborTableOffsetProvider(e2c2v_table[:,:2], E, V, 2)
+far_conn = gtx.NeighborTableOffsetProvider(e2c2v_table[:,2:], E, V, 2)
 
 mo_nh_diffusion_stencil_04_gt4py2(
     u_vert_field,
@@ -823,45 +815,45 @@ def mo_nh_diffusion_stencil_04_numpy(
 V = Dimension("V")
 E = Dimension("E")
 K = Dimension("K")
-ECVDim = Dimension("ECVDim", kind=DimensionKind.LOCAL)
+ECVDim = Dimension("ECV", kind=DimensionKind.LOCAL)
 
 E2C2V = FieldOffset("E2C2V", source=V, target=[E, ECVDim])
 
-@field_operator
+@gtx.field_operator
 def nabv_tang(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return u_vert(E2C2V[0]) + v_vert(E2C2V[0]) + u_vert(E2C2V[1]) + v_vert(E2C2V[1])
               
-@field_operator
+@gtx.field_operator
 def nabv_norm(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float]
 ):
     return u_vert(E2C2V[2]) + v_vert(E2C2V[2]) + u_vert(E2C2V[3]) + v_vert(E2C2V[3])
 
-@field_operator
+@gtx.field_operator
 def z_nabla4_e2(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float]
 ):
     return 4.0 * (
         (nabv_norm(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_vert_vert_length**2
         + (nabv_tang(u_vert, v_vert) - 2.0 * z_nabla2_e) * inv_primal_edge_length**2
     )
 
-@program
+@gtx.program
 def mo_nh_diffusion_stencil_04_gt4py(
-    u_vert: Field[[V,K], float],
-    v_vert: Field[[V,K], float],
-    z_nabla2_e: Field[[E,K], float],
-    inv_vert_vert_length: Field[[E], float],
-    inv_primal_edge_length: Field[[E], float],
-    out: Field[[E,K], float]
+    u_vert: gtx.Field[[V,K], float],
+    v_vert: gtx.Field[[V,K], float],
+    z_nabla2_e: gtx.Field[[E,K], float],
+    inv_vert_vert_length: gtx.Field[[E], float],
+    inv_primal_edge_length: gtx.Field[[E], float],
+    out: gtx.Field[[E,K], float]
 ):
     z_nabla4_e2(u_vert, v_vert, z_nabla2_e, inv_vert_vert_length, inv_primal_edge_length, out=out)
     
@@ -887,7 +879,7 @@ z_nabla4_e2_gt4py = np.zeros(shape=(n_edges, n_levels))
 ```{code-cell} ipython3
 %%script echo Skipping! Remove when working on this example.
 
-mo_nh_diffusion_stencil_04_gt4py(
+mo_nh_diffusion_stencil_04_gt4py()
     
 ```
 
@@ -1008,7 +1000,7 @@ When implementing the scheme, keep the following caveats in mind:
 - `If statements` are currently not supported, use ternary operator instead
 
 ```{code-cell} ipython3
-@scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
+@gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
 def _graupel_toy_scan(state_kMinus1: tuple[float, float, float], qc_in: float, qr_in: float):
 
     # Local config 
@@ -1040,13 +1032,13 @@ def _graupel_toy_scan(state_kMinus1: tuple[float, float, float], qc_in: float, q
 The `scan_operator` in embedded a `field_operator`. For now we do this, such that sedimentation flux is treated as a temporary, and deleted upon exit of the `field_operator`:
 
 ```{code-cell} ipython3
-@field_operator
-def graupel_toy_scan(qc: Field[[CellDim, KDim], float], qr: Field[[CellDim, KDim], float],
-    ) -> tuple[Field[[CellDim, KDim], float], Field[[CellDim, KDim], float], Field[[CellDim, KDim], float]]:
+@gtx.field_operator
+def graupel_toy_scan(qc: gtx.Field[[CellDim, KDim], float], qr: gtx.Field[[CellDim, KDim], float],
+    ) -> tuple[gtx.Field[[CellDim, KDim], float], gtx.Field[[CellDim, KDim], float], gtx.Field[[CellDim, KDim], float]]:
     
     qc, qr, _ = _graupel_toy_scan(qc, qr)
 
-    return qc, qr
+    return qc, qr, _
 ```
 
 ### Test
@@ -1057,6 +1049,7 @@ You can test your implementaion by executing the following test:
 # Initialize GT4Py fields to zero
 qc = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=1.0, dtype=np.float64))
 qr = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
+qd = np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=0.0, dtype=np.float64))
 
 #Initialize Numpy fields from GT4Py fields
 qc_numpy = np.asarray(qc).copy()
@@ -1066,7 +1059,7 @@ qr_numpy = np.asarray(qr).copy()
 toy_microphyiscs_numpy(qc_numpy, qr_numpy)
 
 #Execute the GT4Py version of scheme
-graupel_toy_scan(qc, qr, out=(qc, qr), offset_provider={})
+graupel_toy_scan(qc, qr, out=(qc, qr, qd), offset_provider={})
 
 # Compare results
 assert np.allclose(np.asarray(qc), qc_numpy)
