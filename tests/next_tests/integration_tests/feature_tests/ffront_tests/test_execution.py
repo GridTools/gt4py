@@ -32,6 +32,7 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
@@ -54,6 +55,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     fieldview_backend,
     reduction_setup,
 )
+
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
@@ -1022,4 +1025,27 @@ def test_constant_closure_vars(cartesian_case):
 
     cases.verify_with_default_data(
         cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+    )
+
+
+def test_temporaries_with_sizes(unstructured_case):
+    # todo: select backend
+    # run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFCompileExecutor(
+    #     name="run_gtfn_with_temporaries_and_sizes",
+    #     otf_workflow=run_gtfn_with_temporaries.otf_workflow.replace(
+    #         translation=run_gtfn_with_temporaries.otf_workflow.translation.replace(
+    #         temporary_horizontal_domain_sizes={"Cell": "num_cells"},
+    #         ),
+    #     ),
+    # )
+
+    @gtx.field_operator
+    def testee(a: cases.VField) -> cases.EField:
+        amul = a * 2
+        return amul(E2V[0]) + amul(E2V[1])
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]],
     )
