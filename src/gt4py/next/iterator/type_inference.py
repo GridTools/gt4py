@@ -848,6 +848,8 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if isinstance(node.fun, ir.SymRef) and node.fun.id in ir.GRAMMAR_BUILTINS:
             # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
             return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
+        elif isinstance(node.fun, ir.SymRef) and node.fun.id in ir.TYPEBUILTINS:
+            return Val(kind=Value(), dtype=Primitive(name=node.fun.id))
 
         fun = self.visit(node.fun, **kwargs)
         args = Tuple.from_elems(*self.visit(node.args, **kwargs))
@@ -911,6 +913,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                         size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
                         current_loc=ANYWHERE,
+                        # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
                         defined_loc=stencil_param.defined_loc,
                     ),
                 )

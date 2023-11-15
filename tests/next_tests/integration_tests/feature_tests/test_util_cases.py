@@ -17,8 +17,8 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import errors
-from gt4py.next.program_processors.runners import roundtrip
 
+import next_tests.exclusion_matrices as definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
@@ -41,36 +41,36 @@ def mixed_args(
 def test_allocate_default_unique(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, mixed_args, "a")()
 
-    assert np.min(a.array()) == 0
-    assert np.max(a.array()) == np.prod(tuple(cartesian_case.default_sizes.values())) - 1
+    assert np.min(a) == 0
+    assert np.max(a) == np.prod(tuple(cartesian_case.default_sizes.values())) - 1
 
     b = cases.allocate(cartesian_case, mixed_args, "b")()
 
-    assert b == np.max(a.array()) + 1
+    assert b == np.max(a) + 1
 
     c = cases.allocate(cartesian_case, mixed_args, "c")()
 
-    assert np.min(c.array()) == b + 1
-    assert np.max(c.array()) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2
+    assert np.min(c) == b + 1
+    assert np.max(c) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2
 
 
 def test_allocate_return_default_zeros(cartesian_case):  # noqa: F811 # fixtures
     a, (b, c) = cases.allocate(cartesian_case, mixed_args, cases.RETURN)()
 
-    assert np.all(a.array() == 0)
-    assert np.all(a.array() == b.array())
-    assert np.all(b.array() == c.array())
+    assert np.all(np.asarray(a) == 0)
+    assert np.all(np.asarray(a) == b)
+    assert np.all(np.asarray(b) == c)
 
 
 def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, mixed_args, "a").strategy(cases.ConstInitializer(42))()
-    assert np.all(a.array() == 42)
+    assert np.all(np.asarray(a) == 42)
 
     b = cases.allocate(cartesian_case, mixed_args, "b").strategy(cases.ConstInitializer(42))()
     assert b == 42.0
 
 
-@pytest.mark.parametrize("fieldview_backend", [roundtrip.executor])
+@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
 def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a")()
     b = cases.allocate(cartesian_case, addition, "b")()
@@ -81,17 +81,17 @@ def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixt
         cases.verify(cartesian_case, addition, a, b, out=out, ref=wrong_ref)
 
 
-@pytest.mark.parametrize("fieldview_backend", [roundtrip.executor])
+@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
 def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a").dtype(np.float32)()
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
 
     with pytest.raises(errors.DSLError):
-        cases.verify(cartesian_case, addition, a, b, out=out, ref=a.array() + b.array())
+        cases.verify(cartesian_case, addition, a, b, out=out, ref=a + b)
 
 
-@pytest.mark.parametrize("fieldview_backend", [roundtrip.executor])
+@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
 def test_verify_with_default_data_fails_with_wrong_reference(
     cartesian_case,  # noqa: F811 # fixtures
 ):

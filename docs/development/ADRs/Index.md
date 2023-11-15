@@ -45,15 +45,16 @@ _None_
 - [0006 - C++ Backend](0006-Cpp-Backend.md)
 - [0007 - Fencil Processors](0007-Fencil-Processors.md)
 - [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
+- [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
 
 ### Python Integration
 
 - [0011 - On The Fly Compilation](0011-On_The_Fly_Compilation.md)
 - [0012 - GridTools C++ OTF](0011-_GridTools_Cpp_OTF.md)
 
-### Miscellanea
+### Testing
 
-_None_
+- [0015 - Exclusion Matrices](0015-Test_Exclusion_Matrices.md)
 
 ### Superseded
 
