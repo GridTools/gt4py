@@ -39,6 +39,7 @@ from gt4py.cartesian.backend.module_generator import make_args_data_from_gtir
 from gt4py.cartesian.gtc import common, gtir
 from gt4py.cartesian.gtc.dace.nodes import StencilComputation
 from gt4py.cartesian.gtc.dace.oir_to_dace import OirSDFGBuilder
+from gt4py.cartesian.gtc.dace.partial_expansion import partially_expand
 from gt4py.cartesian.gtc.dace.transformations import (
     InlineThreadLocalTransients,
     NoEmptyEdgeTrivialMapElimination,
@@ -196,6 +197,17 @@ def _post_expand_trafos(sdfg: dace.SDFG):
     for sd in sdfg.all_sdfgs_recursive():
         sd.openmp_sections = False
 
+    # rename threadlocals with globally unique name as workaround for bug in dace v0.14.1
+    repldicts: Dict[int, Dict[str, str]] = {}
+    for sd, name, array in sdfg.arrays_recursive():
+        if array.transient and array.storage == dace.StorageType.CPU_ThreadLocal:
+            repldicts.setdefault(sd.sdfg_id, {})
+            repldicts[sd.sdfg_id][name] = f"LOCAL_{sd.sdfg_id}_{name}"
+            array.lifetime = dace.AllocationLifetime.Persistent
+    for sd in sdfg.all_sdfgs_recursive():
+        if sd.sdfg_id in repldicts:
+            sd.replace_dict(repldicts[sd.sdfg_id])
+
 
 def _sdfg_add_arrays_and_edges(
     field_info, wrapper_sdfg, state, inner_sdfg, nsdfg, inputs, outputs, origins
@@ -323,7 +335,7 @@ def freeze_origin_domain_sdfg(inner_sdfg, arg_names, field_info, *, origin, doma
     _sdfg_specialize_symbols(wrapper_sdfg, domain)
 
     for _, _, array in wrapper_sdfg.arrays_recursive():
-        if array.transient:
+        if array.transient and array.lifetime != dace.AllocationLifetime.Persistent:
             array.lifetime = dace.dtypes.AllocationLifetime.SDFG
 
     wrapper_sdfg.arg_names = arg_names
@@ -383,6 +395,8 @@ class SDFGManager:
 
     def _expanded_sdfg(self):
         sdfg = self._unexpanded_sdfg()
+
+        partially_expand(sdfg, "IJ")
         sdfg.expand_library_nodes()
         _post_expand_trafos(sdfg)
         return sdfg
@@ -462,46 +476,25 @@ class DaCeComputationCodegen:
     )
 
     def generate_tmp_allocs(self, sdfg):
-        global_fmt = (
-            "__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
-        )
-        threadlocal_fmt = (
-            "__{sdfg_id}_{name} = __full__{sdfg_id}_{name} + omp_get_thread_num() * ({local_size});"
-        )
-        res = []
-        for array_sdfg, name, array in sdfg.arrays_recursive():
-            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent:
-                if array.storage != dace.StorageType.CPU_ThreadLocal:
-                    fmt = "dace_handle." + global_fmt
-                    res.append(
-                        fmt.format(
-                            name=name,
-                            sdfg_id=array_sdfg.sdfg_id,
-                            dtype=array.dtype.ctype,
-                            size=array.total_size,
-                        )
-                    )
-                else:
-                    fmts = [
-                        "{dtype} *__full" + global_fmt,
-                        "#pragma omp parallel",
-                        "{{",
-                        threadlocal_fmt,
-                        "}}",
-                    ]
-                    res.extend(
-                        [
-                            fmt.format(
-                                name=name,
-                                sdfg_id=array_sdfg.sdfg_id,
-                                dtype=array.dtype.ctype,
-                                size=f"omp_max_threads * ({array.total_size})",
-                                local_size=array.total_size,
-                            )
-                            for fmt in fmts
-                        ]
-                    )
-        return res
+        global_fmt = "dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), {size})();"
+        threadlocal_fmt = """dace_handle.__{sdfg_id}_{name} = allocate(allocator, gt::meta::lazy::id<{dtype}>(), omp_max_threads * ({size}))();
+#pragma omp parallel
+{{
+{name} = dace_handle.__{sdfg_id}_{name} + omp_get_thread_num() * ({size});
+}}"""
+        res = [
+            (
+                global_fmt if array.storage != dace.StorageType.CPU_ThreadLocal else threadlocal_fmt
+            ).format(
+                name=name,
+                sdfg_id=array_sdfg.sdfg_id,
+                dtype=array.dtype.ctype,
+                size=array.total_size,
+            )
+            for array_sdfg, name, array in sdfg.arrays_recursive()
+            if array.transient and array.lifetime == dace.AllocationLifetime.Persistent
+        ]
+        return [line for r in res for line in r.split("\n")]
 
     @staticmethod
     def _postprocess_dace_code(code_objects, is_gpu, builder):
@@ -548,6 +541,7 @@ class DaCeComputationCodegen:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
+            sdfg.validate()
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
 
@@ -563,7 +557,7 @@ class DaCeComputationCodegen:
             omp_header = ""
         interface = cls.template.definition.render(
             name=sdfg.name,
-            backend_specifics=omp_threads,
+            backend_specifics="" if is_gpu else omp_threads,
             dace_args=self.generate_dace_args(stencil_ir, sdfg),
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),

@@ -24,8 +24,10 @@ import dace.subsets
 import numpy as np
 from dace import library
 
+from gt4py import eve
 from gt4py.cartesian.gtc import common, daceir as dcir, oir
 from gt4py.cartesian.gtc.dace.expansion.expansion import StencilComputationExpansion
+from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
 from gt4py.cartesian.gtc.definitions import Extent
 from gt4py.cartesian.gtc.oir import Decl, FieldDecl, VerticalLoop, VerticalLoopSection
 
@@ -82,16 +84,18 @@ class StencilComputation(library.LibraryNode):
 
     oir_node = PickledDataclassProperty(dtype=VerticalLoop, allow_none=True)
 
-    declarations = PickledDictProperty(key_type=str, value_type=Decl, allow_none=True)
+    declarations: Dict[eve.SymbolRef, Decl] = PickledDictProperty(
+        key_type=eve.SymbolRef, value_type=Decl, allow_none=True
+    )
     extents = PickledDictProperty(key_type=int, value_type=Extent, allow_none=False)
-    access_infos = PickledDictProperty(
-        key_type=str, value_type=dcir.FieldAccessInfo, allow_none=True
+    access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo] = PickledDictProperty(
+        key_type=eve.SymbolRef, value_type=dcir.FieldAccessInfo, allow_none=True
     )
 
     device = dace.properties.EnumProperty(
         dtype=dace.DeviceType, default=dace.DeviceType.CPU, allow_none=True
     )
-    expansion_specification = PickledListProperty(
+    expansion_specification: List[ExpansionItem] = PickledListProperty(
         element_type=ExpansionItem,
         allow_none=True,
         setter=_set_expansion_order,
@@ -123,8 +127,6 @@ class StencilComputation(library.LibraryNode):
     ):
         super().__init__(name=name, *args, **kwargs)
 
-        from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
-
         if oir_node is not None:
             assert extents is not None
             assert declarations is not None
@@ -150,7 +152,9 @@ class StencilComputation(library.LibraryNode):
                     for axis in dcir.Axis.dims_horizontal()
                 }
             )
-            self.access_infos = compute_dcir_access_infos(
+            self.access_infos: Dict[
+                eve.SymbolRef, dcir.FieldAccessInfo
+            ] = compute_dcir_access_infos(
                 oir_node,
                 oir_decls=declarations,
                 block_extents=self.get_extents,

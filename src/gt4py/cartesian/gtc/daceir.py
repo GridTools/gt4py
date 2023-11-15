@@ -415,6 +415,28 @@ class GridSubset(eve.Node):
     def overapproximated_shape(self):
         return tuple(interval.overapproximated_size for _, interval in self.items())
 
+    def to_mask_expr(self) -> str:
+        clauses: List[str] = []
+        for axis, interval in self.intervals.items():
+            it_sym, dom_sym = axis.iteration_symbol(), axis.domain_symbol()
+
+            min_val = get_axis_bound_str(interval.start, dom_sym)
+            max_val = get_axis_bound_str(interval.end, dom_sym)
+            if (
+                min_val
+                and max_val
+                and interval.start.level == interval.end.level
+                and interval.start.offset + 1 == interval.end.offset
+            ):
+                clauses.append(f"{it_sym} == {min_val}")
+            else:
+                if min_val:
+                    clauses.append(f"{it_sym} >= {min_val}")
+                if max_val:
+                    clauses.append(f"{it_sym} < {max_val}")
+
+        return " and ".join(clauses)
+
     def restricted_to_index(self, axis: Axis, extent=(0, 0)) -> "GridSubset":
         intervals = dict(self.intervals)
         intervals[axis] = IndexWithExtent.from_axis(axis, extent=extent)
@@ -521,7 +543,7 @@ class GridSubset(eve.Node):
         return GridSubset(intervals=res_intervals)
 
     def union(self, other):
-        assert list(self.axes()) == list(other.axes())
+        assert set(self.axes()) == set(other.axes())
         intervals = dict()
         for axis in self.axes():
             interval1 = self.intervals[axis]
@@ -888,11 +910,15 @@ class DomainLoop(IterationNode, ComputationNode):
     loop_states: List[Union[ComputationState, DomainLoop]]
 
 
+class SubdomainPredicate(IterationNode, ComputationNode):
+    branches: List[Tuple[GridSubset, List[Union[ComputationState, DomainLoop, SubdomainPredicate]]]]
+
+
 class NestedSDFG(ComputationNode, eve.SymbolTableTrait):
     label: eve.Coerced[eve.SymbolRef]
     field_decls: List[FieldDecl]
     symbol_decls: List[SymbolDecl]
-    states: List[Union[DomainLoop, ComputationState]]
+    states: List[Union[DomainLoop, ComputationState, SubdomainPredicate]]
 
 
 # There are circular type references with string placeholders. These statements let datamodels resolve those.

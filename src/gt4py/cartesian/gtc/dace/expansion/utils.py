@@ -117,19 +117,20 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
                 stmt.mask
             ):
                 continue
+            elif isinstance(stmt, oir.LocalScalar):
+                continue
             elif isinstance(stmt, oir.AssignStmt) and isinstance(stmt.left, oir.ScalarAccess):
                 continue
             return False
-
-        # If the regions are not disjoint, then the horizontal executions are not splittable.
-        regions: List[common.HorizontalMask] = []
-        for stmt in he.walk_values().if_isinstance(oir.HorizontalRestriction):
-            assert isinstance(stmt, oir.HorizontalRestriction)
+        regions: List[common.HorizontalMask] = list()
+        horizontal_restriction: oir.HorizontalRestriction
+        for horizontal_restriction in he.walk_values().if_isinstance(oir.HorizontalRestriction):
             for region in regions:
-                if region.i.overlaps(stmt.mask.i) and region.j.overlaps(stmt.mask.j):
+                if region.i.overlaps(horizontal_restriction.mask.i) and region.j.overlaps(
+                    horizontal_restriction.mask.j
+                ):
                     return False
-            regions.append(stmt.mask)
-
+            regions.append(horizontal_restriction.mask)
         return True
 
     def visit_HorizontalExecution(self, node: oir.HorizontalExecution, *, extents, library_node):
@@ -138,16 +139,19 @@ class HorizontalExecutionSplitter(eve.NodeTranslator):
             return node
 
         res_he_stmts = []
+        local_scalars = []
         scalar_writes = []
         for stmt in node.body:
-            if isinstance(stmt, oir.AssignStmt):
+            if isinstance(stmt, oir.LocalScalar):
+                local_scalars.append(stmt)
+            elif isinstance(stmt, oir.AssignStmt):
                 scalar_writes.append(stmt)
             else:
                 assert isinstance(stmt, oir.HorizontalRestriction)
                 new_he = oir.HorizontalRestriction(
                     mask=stmt.mask, body=[*scalar_writes, *stmt.body]
                 )
-                res_he_stmts.append([new_he])
+                res_he_stmts.append([*local_scalars, new_he])
 
         res_hes = []
         for stmts in res_he_stmts:

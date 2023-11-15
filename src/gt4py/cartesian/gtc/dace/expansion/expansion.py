@@ -42,9 +42,14 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
 
         # Collect equations and symbols from arguments and shapes
         for field, decl in field_decls.items():
-            inner_shape = [dace.symbolic.pystr_to_symbolic(s) for s in decl.shape]
+            info = decl.access_info
+            for axis in info.axes():
+                if axis in info.variable_offset_axes:
+                    info = info.clamp_full_axis(axis)
+            inner_shape = [dace.symbolic.pystr_to_symbolic(s) for s in info.overapproximated_shape]
             outer_shape = [
-                dace.symbolic.pystr_to_symbolic(s) for s in outer_subsets[field].bounding_box_size()
+                dace.symbolic.overapproximate(dace.symbolic.pystr_to_symbolic(s))
+                for s in outer_subsets[field].bounding_box_size()
             ]
 
             for inner_dim, outer_dim in zip(inner_shape, outer_shape):
@@ -80,26 +85,28 @@ class StencilComputationExpansion(dace.library.ExpandTransformation):
         * determine the domain size based on edges to StencilComputation
 
         """
+        in_edges = [edge for edge in parent_state.in_edges(node) if not edge.data.is_empty()]
+        out_edges = [edge for edge in parent_state.out_edges(node) if not edge.data.is_empty()]
         # change connector names
-        for in_edge in parent_state.in_edges(node):
+        for in_edge in in_edges:
             assert in_edge.dst_conn.startswith("__in_")
             in_edge.dst_conn = in_edge.dst_conn[len("__in_") :]
-        for out_edge in parent_state.out_edges(node):
+        for out_edge in out_edges:
             assert out_edge.src_conn.startswith("__out_")
             out_edge.src_conn = out_edge.src_conn[len("__out_") :]
 
         # union input and output subsets
         subsets = {}
-        for edge in parent_state.in_edges(node):
+        for edge in in_edges:
             subsets[edge.dst_conn] = edge.data.subset
-        for edge in parent_state.out_edges(node):
+        for edge in out_edges:
             subsets[edge.src_conn] = dace.subsets.union(
                 edge.data.subset, subsets.get(edge.src_conn, edge.data.subset)
             )
         # ensure single-use of input and output subset instances
-        for edge in parent_state.in_edges(node):
+        for edge in in_edges:
             edge.data.subset = copy.deepcopy(subsets[edge.dst_conn])
-        for edge in parent_state.out_edges(node):
+        for edge in out_edges:
             edge.data.subset = copy.deepcopy(subsets[edge.src_conn])
 
         # determine "__I", "__J" and "__K" values based on memlets to StencilComputation's shape

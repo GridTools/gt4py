@@ -90,11 +90,11 @@ class AccessInfoCollector(eve.NodeVisitor):
     @dataclass
     class Context:
         axes: Dict[str, List["dcir.Axis"]]
-        access_infos: Dict[str, "dcir.FieldAccessInfo"] = field(default_factory=dict)
+        access_infos: Dict[eve.SymbolRef, dcir.FieldAccessInfo] = field(default_factory=dict)
 
     def visit_VerticalLoop(
         self, node: oir.VerticalLoop, *, block_extents, ctx, **kwargs: Any
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[str, dcir.FieldAccessInfo]:
         for section in reversed(node.sections):
             self.visit(section, block_extents=block_extents, ctx=ctx, **kwargs)
         return ctx.access_infos
@@ -107,7 +107,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         ctx,
         grid_subset=None,
         **kwargs: Any,
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[str, dcir.FieldAccessInfo]:
         inner_ctx = self.Context(axes=ctx.axes)
 
         if grid_subset is None:
@@ -147,7 +147,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         k_interval,
         grid_subset=None,
         **kwargs,
-    ) -> Dict[str, "dcir.FieldAccessInfo"]:
+    ) -> Dict[eve.SymbolRef, dcir.FieldAccessInfo]:
         horizontal_extent = block_extents(node)
 
         inner_ctx = self.Context(axes=ctx.axes)
@@ -184,10 +184,16 @@ class AccessInfoCollector(eve.NodeVisitor):
         self.visit(node.left, is_write=True, **kwargs)
 
     def visit_HorizontalRestriction(
-        self, node: oir.HorizontalRestriction, *, is_conditional=False, **kwargs
+        self,
+        node: oir.HorizontalRestriction,
+        *,
+        ignore_regions=False,
+        is_conditional=False,
+        **kwargs,
     ):
+        region = None if ignore_regions else node.mask
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
-        self.visit(node.body, is_conditional=True, region=node.mask, **kwargs)
+        self.visit(node.body, is_conditional=True, region=region, **kwargs)
 
     def visit_MaskStmt(self, node: oir.MaskStmt, *, is_conditional=False, **kwargs):
         self.visit(node.mask, is_conditional=is_conditional, **kwargs)
@@ -237,7 +243,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         region,
         he_grid,
         grid_subset,
-    ) -> "dcir.FieldAccessInfo":
+    ) -> dcir.FieldAccessInfo:
         offset = [offset_node.to_dict()[k] for k in "ijk"]
         if isinstance(offset_node, oir.VariableKOffset):
             variable_offset_axes = [dcir.Axis.K]
@@ -312,8 +318,9 @@ def compute_dcir_access_infos(
     collect_read=True,
     collect_write=True,
     include_full_domain=False,
+    ignore_regions=False,
     **kwargs,
-) -> dace.properties.DictProperty:
+) -> Dict[eve.SymbolRef, dcir.FieldAccessInfo]:
     if block_extents is None:
         assert isinstance(oir_node, oir.Stencil)
         block_extents = compute_horizontal_block_extents(oir_node)
@@ -325,10 +332,10 @@ def compute_dcir_access_infos(
     }
     ctx = AccessInfoCollector.Context(axes=axes, access_infos=dict())
     AccessInfoCollector(collect_read=collect_read, collect_write=collect_write).visit(
-        oir_node, block_extents=block_extents, ctx=ctx, **kwargs
+        oir_node, block_extents=block_extents, ctx=ctx, ignore_regions=ignore_regions, **kwargs
     )
     if include_full_domain:
-        res = dict()
+        res: Dict[eve.SymbolRef, dcir.FieldAccessInfo] = dict()
         for name, access_info in ctx.access_infos.items():
             res[name] = access_info.union(
                 dcir.FieldAccessInfo(
@@ -343,8 +350,8 @@ def compute_dcir_access_infos(
 
 
 def make_dace_subset(
-    context_info: "dcir.FieldAccessInfo",
-    access_info: "dcir.FieldAccessInfo",
+    context_info: dcir.FieldAccessInfo,
+    access_info: dcir.FieldAccessInfo,
     data_dims: Tuple[int, ...],
 ) -> dace.subsets.Range:
     clamped_access_info = access_info
@@ -401,7 +408,7 @@ def _union_memlets(*memlets: "dcir.Memlet") -> List["dcir.Memlet"]:
     return list(res.values())
 
 
-def union_inout_memlets(nodes: List[eve.Node]):
+def union_inout_memlets(nodes: Sequence[eve.Node]):
     read_memlets: List[dcir.Memlet] = []
     write_memlets: List[dcir.Memlet] = []
     for node in collect_toplevel_computation_nodes(nodes):
@@ -419,7 +426,7 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 
 
 def collect_toplevel_computation_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[Sequence[eve.Node], eve.Node]
 ) -> List["dcir.ComputationNode"]:
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
