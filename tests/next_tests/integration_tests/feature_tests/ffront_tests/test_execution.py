@@ -506,7 +506,7 @@ def test_tuple_arg(cartesian_case):
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
-    out = gtx.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
+    out = cartesian_case.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
         expected = np.flip(expected)
@@ -526,6 +526,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [
         gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
     ]:
@@ -637,8 +638,8 @@ def test_ternary_scan(cartesian_case):
         return carry if carry > a else carry + 1.0
 
     k_size = cartesian_case.default_sizes[KDim]
-    a = gtx.as_field([KDim], 4.0 * np.ones((k_size,)))
-    out = gtx.as_field([KDim], np.zeros((k_size,)))
+    a = cartesian_case.as_field([KDim], 4.0 * np.ones((k_size,)))
+    out = cartesian_case.as_field([KDim], np.zeros((k_size,)))
 
     cases.verify(
         cartesian_case,
@@ -685,16 +686,19 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
-    inp1 = gtx.as_field([KDim], np.ones((k_size,)))
-    inp2 = gtx.as_field([KDim], np.arange(0.0, k_size, 1))
-    out = gtx.as_field([KDim], np.zeros((k_size,)))
+
+    inp1_np = np.ones((k_size,))
+    inp2_np = np.arange(0.0, k_size, 1)
+    inp1 = cartesian_case.as_field([KDim], inp1_np)
+    inp2 = cartesian_case.as_field([KDim], inp2_np)
+    out = cartesian_case.as_field([KDim], np.zeros((k_size,)))
 
     def prev_levels_iterator(i):
         return range(i + 1)
 
     expected = np.asarray(
         [
-            reduce(lambda prev, i: prev + inp1[i] + inp2[i], prev_levels_iterator(i), init)
+            reduce(lambda prev, i: prev + inp1_np[i] + inp2_np[i], prev_levels_iterator(i), init)
             for i in range(k_size)
         ]
     )
@@ -760,6 +764,7 @@ def test_domain(cartesian_case):
 def test_domain_input_bounds(cartesian_case):
     if cartesian_case.backend in [
         gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
     ]:

@@ -211,6 +211,7 @@ def test_setup():
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
     if fieldview_backend in [
         gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
     ]:

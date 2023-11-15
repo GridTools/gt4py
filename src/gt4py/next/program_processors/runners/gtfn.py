@@ -14,6 +14,7 @@
 
 from typing import Any
 
+import cupy as cp  # TODO
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
@@ -67,7 +68,9 @@ def extract_connectivity_args(
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append((conn.table, tuple([0] * 2)))
+            args.append(
+                (cp.asarray(conn.table), tuple([0] * 2))
+            )  # TODO where do we do the host<->device of neighbortables
         elif isinstance(conn, common.Dimension):
             pass
         else:

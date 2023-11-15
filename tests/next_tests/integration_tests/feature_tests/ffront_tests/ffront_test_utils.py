@@ -53,6 +53,7 @@ if dace_iterator:
         definitions.ProgramBackendId.GTFN_CPU,
         definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id() if p is not None else "None",

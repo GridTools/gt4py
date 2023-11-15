@@ -460,7 +460,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
+    ref_args = tuple(i.__array__() if common.is_field(i) else i for i in inps)
     verify(
         case,
         fieldop,
@@ -598,3 +598,7 @@ class Case:
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
+
+    @property
+    def as_field(self):
+        return constructors.as_field.partial(allocator=self.backend)

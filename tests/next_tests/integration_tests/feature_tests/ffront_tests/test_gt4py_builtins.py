@@ -47,6 +47,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 def test_maxover_execution_(unstructured_case, strategy):
     if unstructured_case.backend in [
         gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
     ]:

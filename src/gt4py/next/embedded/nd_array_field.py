@@ -121,7 +121,10 @@ class NdArrayField(
         return self._ndarray
 
     def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
-        return np.asarray(self._ndarray, dtype)
+        if self.array_ns == cp:
+            return np.asarray(cp.asnumpy(self._ndarray), dtype)
+        else:
+            return np.asarray(self._ndarray, dtype)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
