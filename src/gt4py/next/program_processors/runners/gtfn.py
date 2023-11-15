@@ -12,9 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
+import warnings
 from typing import Any
 
-import cupy as cp  # TODO
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
@@ -43,12 +44,12 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
+def convert_args(inp: stages.CompiledProgram, for_cp: bool = False) -> stages.CompiledProgram:
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
         converted_args = [convert_arg(arg) for arg in args]
-        conn_args = extract_connectivity_args(offset_provider)
+        conn_args = extract_connectivity_args(offset_provider, for_cp)
         return inp(
             *converted_args,
             *conn_args,
@@ -58,8 +59,10 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: dict[str, common.Connectivity | common.Dimension], for_cp: bool
 ) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
+    if for_cp:
+        import cupy as cp
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
     for name, conn in offset_provider.items():
@@ -68,9 +71,16 @@ def extract_connectivity_args(
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append(
-                (cp.asarray(conn.table), tuple([0] * 2))
-            )  # TODO where do we do the host<->device of neighbortables
+            conn_arg = conn.table
+            if (
+                for_cp
+            ):  # copying to device here is a fallback for easy testing and might be removed later
+                if not isinstance(conn_arg, cp.ndarray):
+                    conn_arg = cp.asarray(conn.table)
+                    warnings.warn(
+                        "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                    )
+            args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
         else:
@@ -129,7 +139,7 @@ GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
     translation=GTFN_GPU_TRANSLATION_STEP,
     bindings=nanobind.bind_source,
     compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=convert_args,
+    decoration=functools.partial(convert_args, for_cp=True),
 )
 
 
