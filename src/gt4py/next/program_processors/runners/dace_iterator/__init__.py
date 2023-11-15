@@ -22,11 +22,11 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.otf_compile_executor as otf_exec
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
@@ -152,7 +152,6 @@ def get_cache_id(
     return m.hexdigest()
 
 
-@program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
@@ -230,7 +229,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg_program(**expected_args)
 
 
-@program_executor
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
@@ -243,13 +241,12 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 run_dace_cpu = otf_exec.OTFBackend(
-    executor=_run_dace_cpu,
+    executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
 if cp:
 
-    @program_executor
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         run_dace_iterator(
             program,
@@ -262,12 +259,11 @@ if cp:
 
 else:
 
-    @program_executor
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         raise RuntimeError("Missing `cupy` dependency for GPU execution.")
 
 
 run_dace_gpu = otf_exec.OTFBackend(
-    executor=_run_dace_gpu,
+    executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )
