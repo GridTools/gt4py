@@ -39,14 +39,14 @@ sizes = {I: 10, J: 10, K: 10}
     ],
 )
 def test_empty(allocator, device):
-    a = np.empty([sizes[I], sizes[J]]).astype(gtx.float32)
-    ref = gtx.empty(
+    ref = np.empty([sizes[I], sizes[J]]).astype(gtx.float32)
+    a = gtx.empty(
         domain={I: range(sizes[I]), J: range(sizes[J])},
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
-    assert ref.shape, a.shape
+    assert a.shape == ref.shape
 
 
 # TODO: parametrize with gpu backend and compare with cupy array
@@ -58,7 +58,7 @@ def test_empty(allocator, device):
     ],
 )
 def test_zeros(allocator, device):
-    ref = gtx.zeros(
+    a = gtx.zeros(
         common.Domain(
             dims=(I, J), ranges=(common.UnitRange(0, sizes[I]), common.UnitRange(0, sizes[J]))
         ),
@@ -66,9 +66,9 @@ def test_zeros(allocator, device):
         allocator=allocator,
         device=device,
     )
-    a = np.zeros((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = np.zeros((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(ref.ndarray, a)
+    assert np.array_equal(a.ndarray, ref)
 
 
 # TODO: parametrize with gpu backend and compare with cupy array
@@ -80,15 +80,15 @@ def test_zeros(allocator, device):
     ],
 )
 def test_ones(allocator, device):
-    ref = gtx.ones(
+    a = gtx.ones(
         common.Domain(dims=(I, J), ranges=(common.UnitRange(0, 10), common.UnitRange(0, 10))),
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
-    a = np.ones((sizes[I], sizes[J])).astype(gtx.float32)
+    ref = np.ones((sizes[I], sizes[J])).astype(gtx.float32)
 
-    assert np.array_equal(ref.ndarray, a)
+    assert np.array_equal(a.ndarray, ref)
 
 
 # TODO: parametrize with gpu backend and compare with cupy array
@@ -100,38 +100,38 @@ def test_ones(allocator, device):
     ],
 )
 def test_full(allocator, device):
-    ref = gtx.full(
+    a = gtx.full(
         domain={I: range(sizes[I] - 2), J: (sizes[J] - 2)},
         fill_value=42.0,
         dtype=core_defs.dtype(np.float32),
         allocator=allocator,
         device=device,
     )
-    a = np.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
+    ref = np.full((sizes[I] - 2, sizes[J] - 2), 42.0).astype(gtx.float32)
 
-    assert np.array_equal(ref.ndarray, a)
+    assert np.array_equal(a.ndarray, ref)
 
 
 def test_as_field():
-    a = np.random.rand(sizes[I]).astype(gtx.float32)
-    ref = gtx.as_field([I], a)
-    assert np.allclose(ref.ndarray, a)
+    ref = np.random.rand(sizes[I]).astype(gtx.float32)
+    a = gtx.as_field([I], ref)
+    assert np.array_equal(a.ndarray, ref)
 
 
 def test_as_field_domain():
-    a = np.random.rand(sizes[I] - 1, sizes[J] - 1).astype(gtx.float32)
+    ref = np.random.rand(sizes[I] - 1, sizes[J] - 1).astype(gtx.float32)
     domain = common.Domain(
         dims=(I, J),
         ranges=(common.UnitRange(0, sizes[I] - 1), common.UnitRange(0, sizes[J] - 1)),
     )
-    ref = gtx.as_field(domain, a)
-    assert np.allclose(ref.ndarray, a)
+    a = gtx.as_field(domain, ref)
+    assert np.array_equal(a.ndarray, ref)
 
 
 def test_as_field_origin():
-    a = np.random.rand(sizes[I], sizes[J]).astype(gtx.float32)
-    ref = gtx.as_field([I, J], a, origin={I: 1, J: 2})
-    domain_range = [(val.start, val.stop) for val in ref.domain.ranges]
+    data = np.random.rand(sizes[I], sizes[J]).astype(gtx.float32)
+    a = gtx.as_field([I, J], data, origin={I: 1, J: 2})
+    domain_range = [(val.start, val.stop) for val in a.domain.ranges]
     assert np.allclose(domain_range, [(-1, 9), (-2, 8)])
 
 
