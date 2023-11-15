@@ -23,4 +23,8 @@ def get_processor_id(processor):
         module_path = processor.__module__.split(".")[-1]
         name = processor.__name__
         return f"{module_path}.{name}"
+    elif hasattr(processor, "__module__") and hasattr(processor, "__class__"):
+        module_path = processor.__module__.split(".")[-1]
+        name = processor.__class__.__name__
+        return f"{module_path}.{name}"
     return repr(processor)

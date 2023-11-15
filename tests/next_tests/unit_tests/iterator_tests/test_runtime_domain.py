@@ -50,14 +50,15 @@ I = gtx.Dimension("I")
 def test_embedded_error_on_wrong_domain():
     dom = CartesianDomain([("I", range(1))])
 
-    out = gtx.np_as_located_field(I)(
+    out = gtx.as_field(
+        [I],
         np.zeros(
             1,
-        )
+        ),
     )
     with pytest.raises(RuntimeError, match="expected `UnstructuredDomain`"):
         foo[dom](
-            gtx.np_as_located_field(I)(np.zeros((1,))),
+            gtx.as_field([I], np.zeros((1,))),
             out=out,
             offset_provider={"bar": connectivity},
         )
