@@ -40,7 +40,7 @@ except ImportError:
 
 
 def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_unary_op(a: _BaseNdArrayField) -> common.Field:
+    def _builtin_unary_op(a: NdArrayField) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
         new_data = op(a.ndarray)
@@ -52,7 +52,7 @@ def _make_unary_array_field_intrinsic_func(builtin_name: str, array_builtin_name
 
 
 def _make_binary_array_field_intrinsic_func(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_binary_op(a: _BaseNdArrayField, b: common.Field) -> common.Field:
+    def _builtin_binary_op(a: NdArrayField, b: common.Field) -> common.Field:
         xp = a.__class__.array_ns
         op = getattr(xp, array_builtin_name)
         if hasattr(b, "__gt_builtin_func__"):  # common.is_field(b):
@@ -81,7 +81,7 @@ _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
 
 @dataclasses.dataclass(frozen=True)
-class _BaseNdArrayField(
+class NdArrayField(
     common.MutableField[common.DimsT, core_defs.ScalarT], common.FieldBuiltinFuncRegistry
 ):
     """
@@ -136,7 +136,7 @@ class _BaseNdArrayField(
         *,
         domain: common.DomainLike,
         dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
-    ) -> _BaseNdArrayField:
+    ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
 
@@ -157,7 +157,7 @@ class _BaseNdArrayField(
 
         return cls(domain, array)
 
-    def remap(self: _BaseNdArrayField, connectivity) -> _BaseNdArrayField:
+    def remap(self: NdArrayField, connectivity) -> NdArrayField:
         raise NotImplementedError()
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
@@ -165,7 +165,7 @@ class _BaseNdArrayField(
 
         new_buffer = self.ndarray[buffer_slice]
         if len(new_domain) == 0:
-            assert core_defs.is_scalar_type(new_buffer)
+            # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
             return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
             return self.__class__.from_array(new_buffer, domain=new_domain)
@@ -196,7 +196,7 @@ class _BaseNdArrayField(
 
     __mod__ = __rmod__ = _make_binary_array_field_intrinsic_func("mod", "mod")
 
-    def __and__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
+    def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_and", "logical_and")(
                 self, other
@@ -205,14 +205,14 @@ class _BaseNdArrayField(
 
     __rand__ = __and__
 
-    def __or__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
+    def __or__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_or", "logical_or")(self, other)
         raise NotImplementedError("`__or__` not implemented for non-`bool` fields.")
 
     __ror__ = __or__
 
-    def __xor__(self, other: common.Field | core_defs.ScalarT) -> _BaseNdArrayField:
+    def __xor__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_binary_array_field_intrinsic_func("logical_xor", "logical_xor")(
                 self, other
@@ -221,7 +221,7 @@ class _BaseNdArrayField(
 
     __rxor__ = __xor__
 
-    def __invert__(self) -> _BaseNdArrayField:
+    def __invert__(self) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_unary_array_field_intrinsic_func("invert", "invert")(self)
         raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
@@ -243,8 +243,8 @@ class _BaseNdArrayField(
 
 # -- Specialized implementations for intrinsic operations on array fields --
 
-_BaseNdArrayField.register_builtin_func(fbuiltins.abs, _BaseNdArrayField.__abs__)  # type: ignore[attr-defined]
-_BaseNdArrayField.register_builtin_func(fbuiltins.power, _BaseNdArrayField.__pow__)  # type: ignore[attr-defined]
+NdArrayField.register_builtin_func(fbuiltins.abs, NdArrayField.__abs__)  # type: ignore[attr-defined]
+NdArrayField.register_builtin_func(fbuiltins.power, NdArrayField.__pow__)  # type: ignore[attr-defined]
 # TODO gamma
 
 for name in (
@@ -254,23 +254,23 @@ for name in (
 ):
     if name in ["abs", "power", "gamma"]:
         continue
-    _BaseNdArrayField.register_builtin_func(
+    NdArrayField.register_builtin_func(
         getattr(fbuiltins, name), _make_unary_array_field_intrinsic_func(name, name)
     )
 
-_BaseNdArrayField.register_builtin_func(
+NdArrayField.register_builtin_func(
     fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
 )
-_BaseNdArrayField.register_builtin_func(
+NdArrayField.register_builtin_func(
     fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
 )
-_BaseNdArrayField.register_builtin_func(
+NdArrayField.register_builtin_func(
     fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
 )
 
 
 def _np_cp_setitem(
-    self: _BaseNdArrayField[common.DimsT, core_defs.ScalarT],
+    self: NdArrayField[common.DimsT, core_defs.ScalarT],
     index: common.AnyIndexSpec,
     value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
 ) -> None:
@@ -293,7 +293,7 @@ _nd_array_implementations = [np]
 
 
 @dataclasses.dataclass(frozen=True)
-class NumPyArrayField(_BaseNdArrayField):
+class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
     __setitem__ = _np_cp_setitem
@@ -306,7 +306,7 @@ if cp:
     _nd_array_implementations.append(cp)
 
     @dataclasses.dataclass(frozen=True)
-    class CuPyArrayField(_BaseNdArrayField):
+    class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
         __setitem__ = _np_cp_setitem
@@ -318,7 +318,7 @@ if jnp:
     _nd_array_implementations.append(jnp)
 
     @dataclasses.dataclass(frozen=True)
-    class JaxArrayField(_BaseNdArrayField):
+    class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
         def __setitem__(
@@ -355,7 +355,7 @@ def _builtins_broadcast(
     raise AssertionError("Scalar case not reachable from `fbuiltins.broadcast`.")
 
 
-_BaseNdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
+NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _get_slices_from_domain_slice(

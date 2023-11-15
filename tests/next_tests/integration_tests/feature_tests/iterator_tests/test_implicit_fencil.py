@@ -33,11 +33,11 @@ def dom():
 
 
 def a_field():
-    return gtx.np_as_located_field(I)(np.arange(0, _isize, dtype=np.float64))
+    return gtx.as_field([I], np.arange(0, _isize, dtype=np.float64))
 
 
 def out_field():
-    return gtx.np_as_located_field(I)(np.zeros(shape=(_isize,)))
+    return gtx.as_field([I], np.zeros(shape=(_isize,)))
 
 
 @fundef
