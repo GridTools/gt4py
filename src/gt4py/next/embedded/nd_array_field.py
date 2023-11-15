@@ -41,19 +41,19 @@ except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
-def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable:
-    def _builtin_op(*fields: common.Field) -> common.Field:
+def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., NdArrayField]:
+    def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         first = fields[0]
         assert isinstance(first, NdArrayField)
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
-        transformed = []
         domain_intersection = functools.reduce(
             operator.and_,
             [f.domain for f in fields if common.is_field(f)],
             common.Domain(dims=tuple(), ranges=tuple()),
         )
+        transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
             if common.is_field(f):
                 if f.domain == domain_intersection:
@@ -65,7 +65,7 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable:
                     )
                     transformed.append(xp.asarray(f_broadcasted.ndarray[f_slices]))
             else:
-                assert isinstance(f, core_defs.SCALAR_TYPES)
+                assert core_defs.is_scalar_type(f)
                 transformed.append(f)
 
         new_data = op(*transformed)
