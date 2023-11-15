@@ -37,8 +37,8 @@ def test_conditional_w_tuple(program_processor):
 
     shape = [5]
 
-    inp = gtx.np_as_located_field(IDim)(np.random.randint(0, 2, shape, dtype=np.int32))
-    out = gtx.np_as_located_field(IDim)(np.zeros(shape))
+    inp = gtx.as_field([IDim], np.random.randint(0, 2, shape, dtype=np.int32))
+    out = gtx.as_field([IDim], np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),

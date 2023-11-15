@@ -30,8 +30,9 @@ from typing import Generator, Generic, TypeVar
 from devtools import debug
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.eve.utils import UIDGenerator
+from gt4py.next import allocators as next_allocators
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -213,6 +214,15 @@ class Program:
             raise RuntimeError(
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
             )
+
+    @functools.cached_property
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        if self.backend:
+            return self.backend.__gt_allocator__
+        else:
+            raise RuntimeError(f"Program {self} does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -609,7 +619,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  with the out argument of the program we generate here.
 
         loc = self.foast_node.location
-        param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
+        param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
@@ -790,8 +800,8 @@ def scan_operator(
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
         >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> inp = gtx.as_field([KDim], np.ones((10,)))
+        >>> out = gtx.as_field([KDim], np.zeros((10,)))
         >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val

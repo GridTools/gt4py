@@ -232,6 +232,69 @@ class TestExtendedProtocol:
         assert issubclass(ConcreteClass, NoDataProto)
 
 
+def test_supports_array_interface():
+    from gt4py.eve.extended_typing import supports_array_interface
+
+    class ArrayInterface:
+        __array_interface__ = "interface"
+
+    class NoArrayInterface:
+        pass
+
+    assert supports_array_interface(ArrayInterface())
+    assert not supports_array_interface(NoArrayInterface())
+    assert not supports_array_interface("array")
+    assert not supports_array_interface(None)
+
+
+def test_supports_cuda_array_interface():
+    from gt4py.eve.extended_typing import supports_cuda_array_interface
+
+    class CudaArray:
+        def __cuda_array_interface__(self):
+            return {}
+
+    class NoCudaArray:
+        pass
+
+    assert supports_cuda_array_interface(CudaArray())
+    assert not supports_cuda_array_interface(NoCudaArray())
+    assert not supports_cuda_array_interface("cuda")
+    assert not supports_cuda_array_interface(None)
+
+
+def test_supports_dlpack():
+    from gt4py.eve.extended_typing import supports_dlpack
+
+    class DummyDLPackBuffer:
+        def __dlpack__(self):
+            pass
+
+        def __dlpack_device__(self):
+            pass
+
+    class DLPackBufferWithWrongBufferMethod:
+        __dlpack__ = "buffer"
+
+        def __dlpack_device__(self):
+            pass
+
+    class DLPackBufferWithoutDevice:
+        def __dlpack__(self):
+            pass
+
+    class DLPackBufferWithWrongDevice:
+        def __dlpack__(self):
+            pass
+
+        __dlpack_device__ = "device"
+
+    assert supports_dlpack(DummyDLPackBuffer())
+    assert not supports_dlpack(DLPackBufferWithWrongBufferMethod())
+    assert not supports_dlpack(DLPackBufferWithoutDevice())
+    assert not supports_dlpack(DLPackBufferWithWrongDevice())
+
+
 @pytest.mark.parametrize("t", (int, float, dict, tuple, frozenset, collections.abc.Mapping))
 def test_is_actual_valid_type(t):
     assert xtyping.is_actual_type(t)
