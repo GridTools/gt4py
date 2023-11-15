@@ -47,7 +47,7 @@ by calling `next_tests.get_processor_id()`, which returns the so-called processo
 The following backend processors are defined:
 
 ```python
-DACE = "dace_iterator.run_dace_iterator"
+DACE = "dace_iterator.run_dace_cpu"
 GTFN_CPU = "otf_compile_executor.run_gtfn"
 GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
 GTFN_CPU_WITH_TEMPORARIES = "otf_compile_executor.run_gtfn_with_temporaries"
