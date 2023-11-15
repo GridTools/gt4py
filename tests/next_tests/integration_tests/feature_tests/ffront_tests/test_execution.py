@@ -29,7 +29,7 @@ from gt4py.next import (
     int64,
     minimum,
     neighbor_sum,
-    where, NeighborTableOffsetProvider,
+    where, NeighborTableOffsetProvider, common,
 )
 from gt4py.next.common import Domain, UnitRange, Dimension, DimensionKind, GridType
 from gt4py.next.ffront.experimental import as_offset
@@ -58,7 +58,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
-from tests.next_tests.toy_connectivity import Edge
+from tests.next_tests.integration_tests.cases import Case
+from tests.next_tests.toy_connectivity import Edge, Cell
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
@@ -1040,26 +1041,27 @@ def test_temporaries_with_sizes(reduction_setup):
     #     ),
     # )
 
+    # TODO: find cleaner solution
+    unstructured_case = Case(
+        run_gtfn_with_temporaries,  # todo: select custom backend
+        offset_provider=reduction_setup.offset_provider,
+        default_sizes={
+            Vertex: reduction_setup.num_vertices,
+            Edge: reduction_setup.num_edges,
+            Cell: reduction_setup.num_cells,
+            KDim: reduction_setup.k_levels,
+        },
+        grid_type=common.GridType.UNSTRUCTURED,
+    )
+
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         amul = a * 2
         return amul(E2V[0]) + amul(E2V[1])
 
-    @gtx.program(grid_type=GridType.UNSTRUCTURED)
-    def testee_program(a: cases.VField, out: cases.EField) -> cases.EField:
-        testee(a=a, out=out, )
-
-    a = gtx.as_field(domain=Domain(dims=(Vertex,), ranges=(UnitRange(0, 9),)), data=np.arange(0,9), dtype=int32)
-    out = gtx.as_field(domain=Domain(dims=(Edge,), ranges=(UnitRange(0, 18),)), data=np.zeros(18), dtype=int32)
-
-    e2v_offset_provider = NeighborTableOffsetProvider(table=reduction_setup.e2v_table, origin_axis=Edge, neighbor_axis=Vertex, max_neighbors=2)
-
-    testee_program.with_backend(run_gtfn_with_temporaries)(  # todo: select modified backend
-        a=a, out=out,
-        offset_provider={"E2V": e2v_offset_provider},
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + (a * 2)[
+            unstructured_case.offset_provider["E2V"].table[:, 1]],
     )
-
-    def reference(a):
-        return (a * 2)[e2v_offset_provider.table[:, 0]] + (a * 2)[e2v_offset_provider.table[:, 1]]
-
-    assert np.allclose(reference(a), out)
