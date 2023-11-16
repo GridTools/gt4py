@@ -19,6 +19,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.eve import SymbolRef
 from gt4py.next import (
     astype,
     broadcast,
@@ -31,12 +32,8 @@ from gt4py.next import (
     neighbor_sum,
     where,
     NeighborTableOffsetProvider,
-    common,
 )
-from gt4py.next.common import Domain, UnitRange, Dimension, DimensionKind, GridType
 from gt4py.next.ffront.experimental import as_offset
-from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
@@ -60,7 +57,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     reduction_setup,
 )
 
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries, gtfn_executor
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
 from tests.next_tests.integration_tests.cases import Case
 from tests.next_tests.toy_connectivity import Edge, Cell
 
@@ -1035,30 +1032,6 @@ def test_constant_closure_vars(cartesian_case):
 
 
 def test_temporaries_with_sizes(reduction_setup):
-    run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFBackend(
-        executor=otf_compile_executor.OTFCompileExecutor(
-            name="run_gtfn_with_temporaries_and_sizes",
-            otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
-                translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
-                    symbolic_domain_sizes={"Cell": "num_cells", "Edge": "num_edges", "Vertex": "num_vertices"},
-                ),
-            ),
-        ),
-        allocator=run_gtfn_with_temporaries.allocator,
-    )
-
-    unstructured_case = Case(
-        run_gtfn_with_temporaries_and_sizes,
-        offset_provider=reduction_setup.offset_provider,
-        default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
-        },
-        grid_type=common.GridType.UNSTRUCTURED,
-    )
-
     @gtx.field_operator
     def testee_op(a: cases.VField) -> cases.EField:
         amul = a * 2
@@ -1068,18 +1041,18 @@ def test_temporaries_with_sizes(reduction_setup):
     def testee(a: cases.VField, out: cases.EField, num_vertices: int):
         testee_op(a, out=out)
 
-    ir = testee.itir
-    e2v_offset_provider = {"E2V": NeighborTableOffsetProvider(table=reduction_setup.e2v_table, origin_axis=Edge,
-                                                      neighbor_axis=Vertex, max_neighbors=2)}
+    e2v_offset_provider = {
+        "E2V": NeighborTableOffsetProvider(
+            table=reduction_setup.e2v_table, origin_axis=Edge, neighbor_axis=Vertex, max_neighbors=2
+        )
+    }
 
-    ir_with_tmp = run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(testee.itir, e2v_offset_provider, False)
+    ir_with_tmp = (
+        run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(
+            testee.itir, e2v_offset_provider, False
+        )
+    )
+    sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
 
-
-    # todo: check that symbols are in itir
-
-    # cases.verify_with_default_data(
-    #     unstructured_case,
-    #     testee,
-    #     ref=lambda a: (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]]
-    #     + (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]],
-    # )
+    assert sym == "num_vertices"
+    assert isinstance(sym, SymbolRef)

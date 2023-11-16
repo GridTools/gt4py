@@ -174,6 +174,23 @@ run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
+# todo: remove, used temporarily for temporaries in blue icon4py
+run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFBackend(
+    executor=otf_compile_executor.OTFCompileExecutor(
+        name="run_gtfn_with_temporaries_and_sizes",
+        otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
+            translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
+                symbolic_domain_sizes={
+                    "Cell": "num_cells",
+                    "Edge": "num_edges",
+                    "Vertex": "num_vertices",
+                },
+            ),
+        ),
+    ),
+    allocator=run_gtfn_with_temporaries.allocator,
+)
+
 gtfn_gpu_executor = otf_compile_executor.OTFCompileExecutor(
     name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
 )

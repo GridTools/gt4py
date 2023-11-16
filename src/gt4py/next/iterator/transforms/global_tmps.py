@@ -191,9 +191,7 @@ def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> Non
     assert not (set(used_symbol_refs) - {param.id for param in whitelist})
 
 
-def split_closures(
-    node: ir.FencilDefinition, offset_provider, symbolic_sizes
-) -> FencilWithTemporaries:
+def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemporaries:
     """Split closures on lifted function calls and introduce new temporary buffers for return values.
 
     Newly introduced temporaries will have the symbolic size of `AUTO_DOMAIN`. A symbol with the
@@ -438,7 +436,7 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
+def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
     closures: list[ir.StencilClosure] = []
@@ -489,7 +487,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         assert new_axis not in consumed_domain.ranges
                         consumed_domain.ranges[new_axis] = SymbolicRange(
                             im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                            im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
+                            symbolic_sizes[new_axis],
                         )
                     else:
                         raise NotImplementedError
@@ -578,7 +576,7 @@ class CreateGlobalTmps(NodeTranslator):
         symbolic_sizes: dict[str, str],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
-        res = split_closures(node, offset_provider=offset_provider, symbolic_sizes=symbolic_sizes)
+        res = split_closures(node, offset_provider=offset_provider)
         # Prune unreferences closure inputs introduced in the previous step
         res = PruneClosureInputs().visit(res)
         # Prune unused temporaries possibly introduced in the previous step
@@ -586,6 +584,6 @@ class CreateGlobalTmps(NodeTranslator):
         # Perform an eta-reduction which should put all calls at the highest level of a closure
         res = EtaReduction().visit(res)
         # Perform a naive extent analysis to compute domain sizes of closures and temporaries
-        res = update_domains(res, offset_provider)
+        res = update_domains(res, offset_provider, symbolic_sizes)
         # Use type inference to determine the data type of the temporaries
         return collect_tmps_info(res, offset_provider=offset_provider)
