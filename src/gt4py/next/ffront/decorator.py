@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators
+from gt4py.next import allocators as next_allocators, common
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -171,7 +171,9 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: None | eve_utils.NOTHING | ppi.ProgramExecutor = (
+        eve_utils.NOTHING
+    )  # TODO(havogt): temporary change, remove once `None` is default backend
     grid_type: Optional[GridType] = None
 
     @classmethod
@@ -282,21 +284,20 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        if (
-            self.backend is None and DEFAULT_BACKEND is None
-        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
+        if self.backend is None:
             self.definition(*args, **kwargs)
             return
 
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if not self.backend:
+        backend = self.backend
+        if self.backend is eve_utils.NOTHING:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
                 )
             )
-        backend = self.backend or DEFAULT_BACKEND
+            backend = DEFAULT_BACKEND
 
         ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
@@ -687,7 +688,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # if we are reaching this from a program call.
         if "out" in kwargs:
             out = kwargs.pop("out")
-            if "offset_provider" in kwargs:
+            if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
                 offset_provider = kwargs.pop("offset_provider")
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
@@ -705,11 +706,26 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
+
+                res = self.definition(*args)  # TODO put offset_provider in contextvar
+                _tuple_assign_field(out, res)
                 return
         else:
             # field_operator called from other field_operator in embedded execution
             return self.definition(*args, **kwargs)
+
+
+def _tuple_assign_field(
+    tgt: tuple[common.Field | tuple, ...] | common.Field,
+    src: tuple[common.Field | tuple, ...] | common.Field,
+):
+    if isinstance(tgt, tuple):
+        if not isinstance(src, tuple):
+            raise RuntimeError(f"Cannot assign {src} to {tgt}.")
+        for t, s in zip(tgt, src):
+            _tuple_assign_field(t, s)
+    else:
+        tgt.ndarray[...] = src.ndarray[...]  # TODO
 
 
 @typing.overload

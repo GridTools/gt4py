@@ -344,7 +344,9 @@ markers = [
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
   'uses_tuple_args: tests that require backend support for tuple arguments',
   'uses_tuple_returns: tests that require backend support for tuple results',
-  'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields'
+  'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
+  'uses_cartesian_shift: tests that use a Cartesian connectivity',
+  'uses_unstructured_shift: tests that use a unstructured connectivity'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'

@@ -331,7 +331,7 @@ def allocate(
 
     """
     if device is None and allocator is None:
-        raise ValueError("No 'device' or 'allocator' specified")
+        allocator = StandardCPUFieldBufferAllocator()
     actual_allocator = get_allocator(allocator)
     if actual_allocator is None:
         assert device is not None  # for mypy

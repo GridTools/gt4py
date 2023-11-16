@@ -76,6 +76,7 @@ def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
+@pytest.mark.uses_cartesian_shift
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
@@ -87,6 +88,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
 
 
+@pytest.mark.uses_unstructured_shift
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
@@ -99,6 +101,7 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_composed_unstructured_shift(unstructured_case):
     @gtx.field_operator
     def composed_shift_unstructured_flat(inp: cases.VField) -> cases.CField:
@@ -143,6 +146,7 @@ def test_composed_unstructured_shift(unstructured_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
