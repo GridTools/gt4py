@@ -173,12 +173,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     else:
         # visit ITIR and generate SDFG
         program = preprocess_program(program, offset_provider)
-        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()
-
-        if run_on_gpu:
-            autoopt.apply_gpu_storage(sdfg)
 
         # run DaCe auto-optimization heuristics
         if auto_optimize:
