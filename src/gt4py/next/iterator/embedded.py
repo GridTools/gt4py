@@ -51,7 +51,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.iterator import builtins, runtime
 
@@ -60,7 +60,7 @@ EMBEDDED = "embedded"
 
 
 # Atoms
-Tag: TypeAlias = str
+Tag: TypeAlias = common.Tag
 
 ArrayIndex: TypeAlias = slice | common.IntIndex
 ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
@@ -129,8 +129,8 @@ class StridedNeighborOffsetProvider:
 # Offsets
 OffsetPart: TypeAlias = Tag | common.IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]
-OffsetProviderElem: TypeAlias = common.Dimension | common.Connectivity
-OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
+OffsetProviderElem: TypeAlias = common.OffsetProviderElem
+OffsetProvider: TypeAlias = common.OffsetProvider
 
 # Positions
 SparsePositionEntry = list[int]
@@ -195,9 +195,9 @@ class MutableLocatedField(LocatedField, Protocol):
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
-column_range_cvar: cvars.ContextVar[range] = cvars.ContextVar("column_range")
+column_range_cvar: cvars.ContextVar[range] = next_embedded.context.closure_column_range
 #: Offset provider dict in the current closure execution context.
-offset_provider_cvar: cvars.ContextVar[OffsetProvider] = cvars.ContextVar("offset_provider")
+offset_provider_cvar: cvars.ContextVar[OffsetProvider] = next_embedded.context.offset_provider
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):

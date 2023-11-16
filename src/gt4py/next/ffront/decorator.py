@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -285,9 +285,8 @@ class Program:
         if (
             self.backend is None  # and DEFAULT_BACKEND is None
         ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
-            common.offset_provider = offset_provider
-            self.definition(*args, **kwargs)
-            common.offset_provider = None
+            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                ctx.run(self.definition, *args, **kwargs)
             return
 
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)

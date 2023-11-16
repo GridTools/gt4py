@@ -124,6 +124,10 @@ class NdArrayField(
         return np.asarray(self._ndarray, dtype)
 
     @property
+    def value_type(self) -> common.ValueType:
+        return None
+
+    @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
         return core_defs.dtype(self._ndarray.dtype.type)
 
@@ -135,16 +139,16 @@ class NdArrayField(
         /,
         *,
         domain: common.DomainLike,
-        dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
+        dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
 
-        xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
 
-        if dtype_like is not None:
-            assert array.dtype.type == core_defs.dtype(dtype_like).scalar_type
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
@@ -164,7 +168,7 @@ class NdArrayField(
                 return i
         return None
 
-    def _compute_idx_array(self, r: common.UnitRange, connectivity) -> definitions.NDArrayObject:
+    def _compute_idx_array(self, r: common.UnitRange, connectivity) -> core_defs.NDArrayObject:
         if hasattr(connectivity, "ndarray") and connectivity.ndarray is not None:
             return NotImplemented  # TODO
         else:
@@ -208,7 +212,7 @@ class NdArrayField(
 
         new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
         # print(new_buffer)
-        return self.__class__.from_array(new_buffer, domain=new_domain, value_type=self.value_type)
+        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
         # dim_idx = self.domain.tag_index(restricted_connectivity.value_type.tag)
         # new_domain = self._domain.replace_at(dim_idx, restricted_connectivity.domain)

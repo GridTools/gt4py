@@ -50,7 +50,6 @@ from gt4py.eve.type_definitions import StrEnum
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
-ValueT = TypeVar("ValueT", bound=Union[core_defs.Scalar, "Dimension"])
 
 
 class Infinity(int):
@@ -61,6 +60,9 @@ class Infinity(int):
     @classmethod
     def negative(cls) -> Infinity:
         return cls(-sys.maxsize)
+
+
+Tag: TypeAlias = str
 
 
 @enum.unique
@@ -442,10 +444,11 @@ class GTFieldInterface(Protocol):
         ...
 
 
+ValueType: TypeAlias = core_defs.ScalarT | Dimension
+
+
 @extended_runtime_checkable
-class Field(
-    NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT, ValueT]
-):
+class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -453,7 +456,7 @@ class Field(
         ...
 
     @property
-    def value_type(self) -> type[ValueT]:
+    def value_type(self) -> ValueType:
         ...
 
     @property
@@ -610,6 +613,9 @@ class ConnectivityField(Field[DimsT, DimT], Hashable):
     def __neg__(self) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
+    def __invert__(self) -> Field:
+        raise TypeError("ConnectivityField does not support this operation")
+
     def __add__(self, other: Field | DimT) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
@@ -641,6 +647,15 @@ class ConnectivityField(Field[DimsT, DimT], Hashable):
         raise TypeError("ConnectivityField does not support this operation")
 
     def __pow__(self, other: Field | DimT) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __and__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __or__(self, other: Field | core_defs.ScalarT) -> Field:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __xor__(self, other: Field | core_defs.ScalarT) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
 
@@ -688,6 +703,10 @@ class Connectivity(Protocol):
 @runtime_checkable
 class NeighborTable(Connectivity, Protocol):
     table: npt.NDArray
+
+
+OffsetProviderElem: TypeAlias = Dimension | Connectivity
+OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
