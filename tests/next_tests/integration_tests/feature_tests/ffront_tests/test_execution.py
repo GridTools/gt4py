@@ -33,6 +33,7 @@ from gt4py.next import (
 )
 from gt4py.next.common import Domain, UnitRange, Dimension, DimensionKind, GridType
 from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners import gtfn
 
@@ -57,7 +58,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     reduction_setup,
 )
 
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries, gtfn_executor
 from tests.next_tests.integration_tests.cases import Case
 from tests.next_tests.toy_connectivity import Edge, Cell
 
@@ -1032,18 +1033,17 @@ def test_constant_closure_vars(cartesian_case):
 
 
 def test_temporaries_with_sizes(reduction_setup):
-    # run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFCompileExecutor(
-    #     name="run_gtfn_with_temporaries_and_sizes",
-    #     otf_workflow=run_gtfn_with_temporaries.otf_workflow.replace(
-    #         translation=run_gtfn_with_temporaries.otf_workflow.translation.replace(
-    #         temporary_horizontal_domain_sizes={"Cell": "num_cells"},
-    #         ),
-    #     ),
-    # )
+    run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFCompileExecutor(
+        name="run_gtfn_with_temporaries",
+        otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
+            translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
+                symbolic_domain_sizes={"Cell": "num_cells"},
+            ),
+        ),
+    )
 
-    # TODO: find cleaner solution
     unstructured_case = Case(
-        run_gtfn_with_temporaries,  # todo: select custom backend
+        run_gtfn_with_temporaries_and_sizes,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,

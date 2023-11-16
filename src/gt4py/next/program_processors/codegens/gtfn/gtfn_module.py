@@ -54,6 +54,7 @@ class GTFNTranslationStep(
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    symbolic_domain_sizes = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -218,6 +219,7 @@ class GTFNTranslationStep(
             enable_itir_transforms=self.enable_itir_transforms,
             lift_mode=lift_mode,
             imperative=self.use_imperative_backend,
+            symbolic_domain_sizes=self.symbolic_domain_sizes,
             **inp.kwargs,
         )
         source_code = interface.format_source(

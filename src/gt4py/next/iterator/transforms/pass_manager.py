@@ -80,6 +80,7 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     unconditionally_collapse_tuples=False,
+    symbolic_domain_sizes=None
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -146,7 +147,7 @@ def apply_common_transforms(
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
+        ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider, symbolic_sizes=symbolic_domain_sizes)
         ir = InlineLifts().visit(ir)
         # If after creating temporaries, the scan is not at the top, we inline.
         # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
