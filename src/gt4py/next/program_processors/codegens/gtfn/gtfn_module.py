@@ -26,7 +26,7 @@ from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode
+from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
@@ -171,6 +171,18 @@ class GTFNTranslationStep(
                 )
 
         return parameters, arg_exprs
+
+    # TODO: remove: this is just a temporary solution to get the tests working
+    def _preprocess_itir(self, program: itir.FencilDefinition, offset_provider, do_unroll: bool):
+        return apply_common_transforms(
+            program,
+            lift_mode=self.lift_mode,
+            offset_provider=offset_provider,
+            unroll_reduce=do_unroll,
+            unconditionally_collapse_tuples=True,
+            # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
+            symbolic_domain_sizes=self.symbolic_domain_sizes,
+        )
 
     def __call__(
         self,
