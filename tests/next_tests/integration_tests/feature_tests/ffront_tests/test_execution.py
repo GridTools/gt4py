@@ -31,7 +31,7 @@ from gt4py.next import (
     minimum,
     neighbor_sum,
     where,
-    NeighborTableOffsetProvider,
+    NeighborTableOffsetProvider, common,
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
@@ -58,7 +58,8 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
-from tests.next_tests.toy_connectivity import Edge
+from tests.next_tests.integration_tests.cases import Case
+from tests.next_tests.toy_connectivity import Edge, Cell
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
@@ -1030,28 +1031,62 @@ def test_constant_closure_vars(cartesian_case):
     )
 
 
-def test_temporaries_with_sizes(reduction_setup):
-    @gtx.field_operator
-    def testee_op(a: cases.VField) -> cases.EField:
-        amul = a * 2
-        return amul(E2V[0]) + amul(E2V[1])
+class TestTemporariesWithSizes:
+    def test_verification(self, reduction_setup):
+        unstructured_case, a, out, prog = self.prepare_testee(reduction_setup)
 
-    @gtx.program
-    def testee(a: cases.VField, out: cases.EField, num_vertices: int):
-        testee_op(a, out=out)
+        ref = (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + \
+              (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]]
 
-    e2v_offset_provider = {
-        "E2V": NeighborTableOffsetProvider(
-            table=reduction_setup.e2v_table, origin_axis=Edge, neighbor_axis=Vertex, max_neighbors=2
+        cases.verify(unstructured_case, prog, a, out, reduction_setup.num_vertices,
+                     reduction_setup.num_edges, reduction_setup.num_cells, inout=out, ref=ref)
+
+    def test_temporary_symbols(self, reduction_setup):
+        unstructured_case, a, out, prog = self.prepare_testee(reduction_setup)
+
+        e2v_offset_provider = {
+            "E2V": NeighborTableOffsetProvider(
+                table=reduction_setup.e2v_table, origin_axis=Edge, neighbor_axis=Vertex, max_neighbors=2
+            )
+        }
+
+        ir_with_tmp = (
+            run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(
+                prog.itir, e2v_offset_provider, False
+            )
         )
-    }
+        sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
 
-    ir_with_tmp = (
-        run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(
-            testee.itir, e2v_offset_provider, False
+        params = ["num_vertices", "num_edges", "num_cells"]
+        for param in params:
+            assert any([param == str(p) for p in ir_with_tmp.fencil.params])
+
+        assert sym == "num_vertices"
+        assert isinstance(sym, SymbolRef)
+
+    def prepare_testee(self, reduction_setup):
+        @gtx.field_operator
+        def testee_op(a: cases.VField) -> cases.EField:
+            amul = a * 2
+            return amul(E2V[0]) + amul(E2V[1])
+
+        @gtx.program
+        def prog(a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int64, num_cells: int32):
+            testee_op(a, out=out)
+
+        unstructured_case = Case(
+            run_gtfn_with_temporaries_and_sizes,
+            offset_provider=reduction_setup.offset_provider,
+            default_sizes={
+                Vertex: reduction_setup.num_vertices,
+                Edge: reduction_setup.num_edges,
+                Cell: reduction_setup.num_cells,
+                KDim: reduction_setup.k_levels,
+            },
+            grid_type=common.GridType.UNSTRUCTURED,
         )
-    )
-    sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
 
-    assert sym == "num_vertices"
-    assert isinstance(sym, SymbolRef)
+        a = cases.allocate(unstructured_case, prog, "a")()
+        out = cases.allocate(unstructured_case, prog, "out")()
+
+        return unstructured_case, a, out, prog
