@@ -192,21 +192,17 @@ def test_setup():
     class setup:
         cell_size = 14
         k_size = 10
-        z_alpha = gtx.np_as_located_field(Cell, KDim)(
-            np.random.default_rng().uniform(size=(cell_size, k_size + 1))
+        z_alpha = gtx.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size + 1))
         )
-        z_beta = gtx.np_as_located_field(Cell, KDim)(
-            np.random.default_rng().uniform(size=(cell_size, k_size))
+        z_beta = gtx.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q = gtx.np_as_located_field(Cell, KDim)(
-            np.random.default_rng().uniform(size=(cell_size, k_size))
-        )
-        w = gtx.np_as_located_field(Cell, KDim)(
-            np.random.default_rng().uniform(size=(cell_size, k_size))
-        )
+        z_q = gtx.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
+        w = gtx.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
         z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
-        dummy = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = gtx.np_as_located_field(Cell, KDim)(np.zeros((cell_size, k_size)))
+        dummy = gtx.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = gtx.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
 
     return setup()
 
@@ -239,7 +235,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
         )
-    if fieldview_backend == roundtrip.executor:
+    if fieldview_backend == roundtrip.backend:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_z_q_tup.with_backend(fieldview_backend)(
@@ -275,7 +271,7 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldview_backend):
     if fieldview_backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-    if fieldview_backend == roundtrip.executor:
+    if fieldview_backend == roundtrip.backend:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge.with_backend(fieldview_backend)(

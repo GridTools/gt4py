@@ -580,7 +580,7 @@ def test_tuple_arg(cartesian_case):
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
     expected = np.arange(init + 1.0, init + 1.0 + cartesian_case.default_sizes[IDim], 1)
-    out = gtx.np_as_located_field(KDim)(np.zeros((cartesian_case.default_sizes[KDim],)))
+    out = gtx.as_field([KDim], np.zeros((cartesian_case.default_sizes[KDim],)))
 
     if not forward:
         expected = np.flip(expected)
@@ -711,8 +711,8 @@ def test_ternary_scan(cartesian_case):
         return carry if carry > a else carry + 1.0
 
     k_size = cartesian_case.default_sizes[KDim]
-    a = gtx.np_as_located_field(KDim)(4.0 * np.ones((k_size,)))
-    out = gtx.np_as_located_field(KDim)(np.zeros((k_size,)))
+    a = gtx.as_field([KDim], 4.0 * np.ones((k_size,)))
+    out = gtx.as_field([KDim], np.zeros((k_size,)))
 
     cases.verify(
         cartesian_case,
@@ -759,9 +759,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
-    inp1 = gtx.np_as_located_field(KDim)(np.ones((k_size,)))
-    inp2 = gtx.np_as_located_field(KDim)(np.arange(0.0, k_size, 1))
-    out = gtx.np_as_located_field(KDim)(np.zeros((k_size,)))
+    inp1 = gtx.as_field([KDim], np.ones((k_size,)))
+    inp2 = gtx.as_field([KDim], np.arange(0.0, k_size, 1))
+    out = gtx.as_field([KDim], np.zeros((k_size,)))
 
     def prev_levels_iterator(i):
         return range(i + 1)

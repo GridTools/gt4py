@@ -15,7 +15,7 @@
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator import embedded
+from gt4py.next import common
 from gt4py.next.program_processors.runners import dace_iterator, gtfn
 
 from next_tests.integration_tests import cases
@@ -26,18 +26,20 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize("fieldview_backend", [dace_iterator.run_dace, gtfn.run_gtfn_gpu])
-def test_copy(cartesian_case, fieldview_backend):  # noqa: F811 # fixtures
-    import cupy as cp  # TODO(ricoh): replace with storages solution when available
+@pytest.mark.parametrize("fieldview_backend", [dace_iterator.run_dace_gpu, gtfn.run_gtfn_gpu])
+def test_copy(fieldview_backend):  # noqa: F811 # fixtures
+    import cupy as cp
 
     @gtx.field_operator(backend=fieldview_backend)
     def testee(a: cases.IJKField) -> cases.IJKField:
         return a
 
-    inp_arr = cp.full(shape=(3, 4, 5), fill_value=3, dtype=cp.int32)
-    outp_arr = cp.zeros_like(inp_arr)
-    inp = embedded.np_as_located_field(cases.IDim, cases.JDim, cases.KDim)(inp_arr)
-    outp = embedded.np_as_located_field(cases.IDim, cases.JDim, cases.KDim)(outp_arr)
-
-    testee(inp, out=outp, offset_provider={})
-    assert cp.allclose(inp_arr, outp_arr)
+    domain = {
+        cases.IDim: common.unit_range(3),
+        cases.JDim: common.unit_range(4),
+        cases.KDim: common.unit_range(5),
+    }
+    inp_field = gtx.full(domain, fill_value=3, allocator=fieldview_backend, dtype=cp.int32)
+    out_field = gtx.zeros(domain, allocator=fieldview_backend, dtype=cp.int32)
+    testee(inp_field, out=out_field, offset_provider={})
+    assert cp.allclose(inp_field.ndarray, out_field.ndarray)
