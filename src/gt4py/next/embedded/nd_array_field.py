@@ -191,6 +191,10 @@ class NdArrayField(
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
 
+    __ne__ = _make_builtin("not_equal", "not_equal")
+
+    __eq__ = _make_builtin("equal", "equal")
+
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_builtin("logical_and", "logical_and")(self, other)

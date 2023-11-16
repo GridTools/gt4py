@@ -236,6 +236,9 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 def _make_unary_math_builtin(name):
     def impl(value: Field | core_defs.ScalarT, /) -> Field | core_defs.ScalarT:
+        # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
+        # assert core_defs.is_scalar_type(value) # noqa: E800 # commented code
+        # return getattr(math, name)(value)# noqa: E800 # commented code
         raise NotImplementedError()
 
     impl.__name__ = name

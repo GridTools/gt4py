@@ -494,6 +494,14 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         """Only defined for `Field` of value type `bool`."""
 
     @abc.abstractmethod
+    def __eq__(self, other: Any) -> Field:
+        ...
+
+    @abc.abstractmethod
+    def __neq__(self, other: Any) -> Field:
+        ...
+
+    @abc.abstractmethod
     def __add__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 

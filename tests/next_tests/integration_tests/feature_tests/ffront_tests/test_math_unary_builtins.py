@@ -173,17 +173,14 @@ def test_unary_invert(cartesian_case):
 
 
 def test_unary_not(cartesian_case):
-    @gtx.field_operator
-    def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
-        return not inp1
+    pytest.xfail(
+        "We accidentally supported `not` on fields. This is wrong, we should raise an error."
+    )
+    with pytest.raises:  # TODO `not` on a field should be illegal
 
-    size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    inp1 = cases.allocate(cartesian_case, not_fieldop, "inp1").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
-    out = cases.allocate(cartesian_case, not_fieldop, cases.RETURN)()
-    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1)
+        @gtx.field_operator
+        def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
+            return not inp1
 
 
 # Trig builtins

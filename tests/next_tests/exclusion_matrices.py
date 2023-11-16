@@ -101,6 +101,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_SCAN = "uses_scan"
+CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -122,6 +123,7 @@ EMBEDDED_SKIP_LIST = [
     (USES_UNSTRUCTURED_SHIFT, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
