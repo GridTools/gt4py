@@ -330,7 +330,6 @@ markers = [
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
-  'uses_can_deref: tests that require backend support for can_deref',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
   'uses_if_stmts: tests that require backend support for if-statements',
