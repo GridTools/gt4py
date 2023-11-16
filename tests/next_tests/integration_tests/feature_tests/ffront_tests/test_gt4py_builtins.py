@@ -157,8 +157,8 @@ def test_conditional_nested_tuple(cartesian_case):
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
         ref=np.where(
-            mask,
-            ((a, b), (b, a)),
+            mask.asnumpy(),
+            ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
             ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
         ),
     )
@@ -224,7 +224,15 @@ def test_conditional(cartesian_case):
     b = cases.allocate(cartesian_case, conditional, "b")()
     out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
 
-    cases.verify(cartesian_case, conditional, mask, a, b, out=out, ref=np.where(mask, a, b))
+    cases.verify(
+        cartesian_case,
+        conditional,
+        mask,
+        a,
+        b,
+        out=out,
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy()),
+    )
 
 
 def test_conditional_promotion(cartesian_case):
