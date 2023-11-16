@@ -72,6 +72,7 @@ def test_floordiv(cartesian_case):
         gtfn.run_gtfn,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
+        gtfn.run_gtfn_gpu,
     ]:
         pytest.xfail(
             "FloorDiv not yet supported."
