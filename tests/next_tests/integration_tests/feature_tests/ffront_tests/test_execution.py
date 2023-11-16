@@ -21,8 +21,10 @@ import pytest
 import gt4py.next as gtx
 from gt4py.eve import SymbolRef
 from gt4py.next import (
+    NeighborTableOffsetProvider,
     astype,
     broadcast,
+    common,
     errors,
     float32,
     float64,
@@ -31,10 +33,12 @@ from gt4py.next import (
     minimum,
     neighbor_sum,
     where,
-    NeighborTableOffsetProvider, common,
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
+from tests.next_tests.integration_tests.cases import Case
+from tests.next_tests.toy_connectivity import Cell, Edge
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -56,10 +60,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     fieldview_backend,
     reduction_setup,
 )
-
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
-from tests.next_tests.integration_tests.cases import Case
-from tests.next_tests.toy_connectivity import Edge, Cell
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
@@ -1035,25 +1035,36 @@ class TestTemporariesWithSizes:
     def test_verification(self, reduction_setup):
         unstructured_case, a, out, prog = self.prepare_testee(reduction_setup)
 
-        ref = (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + \
-              (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]]
+        ref = (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + (
+            a.ndarray * 2
+        )[unstructured_case.offset_provider["E2V"].table[:, 1]]
 
-        cases.verify(unstructured_case, prog, a, out, reduction_setup.num_vertices,
-                     reduction_setup.num_edges, reduction_setup.num_cells, inout=out, ref=ref)
+        cases.verify(
+            unstructured_case,
+            prog,
+            a,
+            out,
+            reduction_setup.num_vertices,
+            reduction_setup.num_edges,
+            reduction_setup.num_cells,
+            inout=out,
+            ref=ref,
+        )
 
     def test_temporary_symbols(self, reduction_setup):
         unstructured_case, a, out, prog = self.prepare_testee(reduction_setup)
 
         e2v_offset_provider = {
             "E2V": NeighborTableOffsetProvider(
-                table=reduction_setup.e2v_table, origin_axis=Edge, neighbor_axis=Vertex, max_neighbors=2
+                table=reduction_setup.e2v_table,
+                origin_axis=Edge,
+                neighbor_axis=Vertex,
+                max_neighbors=2,
             )
         }
 
-        ir_with_tmp = (
-            run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_program(
-                prog.itir, e2v_offset_provider
-            )
+        ir_with_tmp = run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_program(
+            prog.itir, e2v_offset_provider
         )
         sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
 
@@ -1071,7 +1082,13 @@ class TestTemporariesWithSizes:
             return amul(E2V[0]) + amul(E2V[1])
 
         @gtx.program
-        def prog(a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int64, num_cells: int32):
+        def prog(
+            a: cases.VField,
+            out: cases.EField,
+            num_vertices: int32,
+            num_edges: int64,
+            num_cells: int32,
+        ):
             testee_op(a, out=out)
 
         unstructured_case = Case(
