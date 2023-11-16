@@ -36,6 +36,7 @@ from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners import gtfn
+import gt4py.next.allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -1033,13 +1034,17 @@ def test_constant_closure_vars(cartesian_case):
 
 
 def test_temporaries_with_sizes(reduction_setup):
-    run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFCompileExecutor(
-        name="run_gtfn_with_temporaries_and_sizes",
-        otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
-            translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
-                symbolic_domain_sizes={"Cell": "num_cells"},
+    run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFBackend(
+        executor=otf_compile_executor.OTFCompileExecutor(
+            name="run_gtfn_with_temporaries",
+            otf_workflow=gtfn_executor.otf_workflow.replace(
+                translation=gtfn_executor.otf_workflow.translation.replace(
+                    lift_mode=LiftMode.FORCE_TEMPORARIES,
+                    symbolic_domain_sizes={"Cell": "num_cells"},
+                ),
             ),
         ),
+        allocator=next_allocators.StandardCPUFieldBufferAllocator(),
     )
 
     unstructured_case = Case(
