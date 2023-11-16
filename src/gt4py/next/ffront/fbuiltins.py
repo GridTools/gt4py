@@ -28,10 +28,12 @@ from typing import (
     cast,
 )
 
+import numpy as np
 from numpy import float32, float64, int32, int64
 
-from gt4py._core import definitions as gt4py_defs
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py._core import definitions as core_defs
+from gt4py.next import common
+from gt4py.next.common import Dimension, DimensionKind, Field  # TODO fix import style
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -58,7 +60,7 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is Dimension:
         return ts.DimensionType
-    elif t is gt4py_defs.ScalarT:
+    elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
         return (
@@ -128,12 +130,8 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
-    return BuiltInFunction(fun)
-
-
 MaskT = TypeVar("MaskT", bound=Field)
-FieldT = TypeVar("FieldT", bound=Union[Field, gt4py_defs.Scalar, Tuple])
+FieldT = TypeVar("FieldT", bound=Union[Field, core_defs.Scalar, Tuple])
 
 
 class WhereBuiltinFunction(
@@ -153,7 +151,7 @@ class WhereBuiltinFunction(
         return super().__call__(mask, true_field, false_field)
 
 
-@builtin_function
+@BuiltInFunction
 def neighbor_sum(
     field: Field,
     /,
@@ -162,7 +160,7 @@ def neighbor_sum(
     raise NotImplementedError()
 
 
-@builtin_function
+@BuiltInFunction
 def max_over(
     field: Field,
     /,
@@ -171,7 +169,7 @@ def max_over(
     raise NotImplementedError()
 
 
-@builtin_function
+@BuiltInFunction
 def min_over(
     field: Field,
     /,
@@ -180,23 +178,29 @@ def min_over(
     raise NotImplementedError()
 
 
-@builtin_function
-def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /) -> Field:
-    raise NotImplementedError()
+@BuiltInFunction
+def broadcast(field: Field | core_defs.ScalarT, dims: tuple[Dimension, ...], /) -> Field:
+    assert core_defs.is_scalar_type(field)
+    return common.field(
+        np.asarray(field)[
+            tuple([np.newaxis] * len(dims))
+        ],  # TODO(havogt) use FunctionField once available
+        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.infinity()] * len(dims))),
+    )
 
 
 @WhereBuiltinFunction
 def where(
     mask: Field,
-    true_field: Field | gt4py_defs.ScalarT | Tuple,
-    false_field: Field | gt4py_defs.ScalarT | Tuple,
+    true_field: Field | core_defs.ScalarT | Tuple,
+    false_field: Field | core_defs.ScalarT | Tuple,
     /,
 ) -> Field | Tuple:
     raise NotImplementedError()
 
 
-@builtin_function
-def astype(field: Field | gt4py_defs.ScalarT, type_: type, /) -> Field:
+@BuiltInFunction
+def astype(field: Field | core_defs.ScalarT, type_: type, /) -> Field:
     raise NotImplementedError()
 
 
@@ -229,11 +233,11 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name):
-    def impl(value: Field | gt4py_defs.ScalarT, /) -> Field | gt4py_defs.ScalarT:
+    def impl(value: Field | core_defs.ScalarT, /) -> Field | core_defs.ScalarT:
         raise NotImplementedError()
 
     impl.__name__ = name
-    globals()[name] = builtin_function(impl)
+    globals()[name] = BuiltInFunction(impl)
 
 
 for f in (
@@ -248,14 +252,14 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 def _make_binary_math_builtin(name):
     def impl(
-        lhs: Field | gt4py_defs.ScalarT,
-        rhs: Field | gt4py_defs.ScalarT,
+        lhs: Field | core_defs.ScalarT,
+        rhs: Field | core_defs.ScalarT,
         /,
-    ) -> Field | gt4py_defs.ScalarT:
+    ) -> Field | core_defs.ScalarT:
         raise NotImplementedError()
 
     impl.__name__ = name
-    globals()[name] = builtin_function(impl)
+    globals()[name] = BuiltInFunction(impl)
 
 
 for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:

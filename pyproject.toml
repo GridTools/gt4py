@@ -346,7 +346,8 @@ markers = [
   'uses_tuple_returns: tests that require backend support for tuple results',
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
-  'uses_unstructured_shift: tests that use a unstructured connectivity'
+  'uses_unstructured_shift: tests that use a unstructured connectivity',
+  'uses_scan: tests that uses scan'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'

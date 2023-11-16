@@ -100,6 +100,7 @@ USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
+USES_SCAN = "uses_scan"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -119,6 +120,7 @@ GTFN_SKIP_TEST_LIST = [
 EMBEDDED_SKIP_LIST = [
     (USES_CARTESIAN_SHIFT, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_UNSTRUCTURED_SHIFT, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
