@@ -248,4 +248,4 @@ def test_dimensions_domain(cartesian_case):
         ValueError,
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
-        empty_domain_program(a, out_field, offset_provider={})
+        cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})
