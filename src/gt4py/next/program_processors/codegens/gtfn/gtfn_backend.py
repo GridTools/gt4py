@@ -24,7 +24,11 @@ from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_low
 
 
 def _lower(
-    program: itir.FencilDefinition, enable_itir_transforms: bool, do_unroll: bool, symbolic_domain_sizes: dict[str, str], **kwargs: Any
+    program: itir.FencilDefinition,
+    enable_itir_transforms: bool,
+    do_unroll: bool,
+    symbolic_domain_sizes: dict[str, str],
+    **kwargs: Any,
 ):
     offset_provider = kwargs.get("offset_provider")
     assert isinstance(offset_provider, dict)

@@ -191,7 +191,9 @@ def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> Non
     assert not (set(used_symbol_refs) - {param.id for param in whitelist})
 
 
-def split_closures(node: ir.FencilDefinition, offset_provider, symbolic_sizes) -> FencilWithTemporaries:
+def split_closures(
+    node: ir.FencilDefinition, offset_provider, symbolic_sizes
+) -> FencilWithTemporaries:
     """Split closures on lifted function calls and introduce new temporary buffers for return values.
 
     Newly introduced temporaries will have the symbolic size of `AUTO_DOMAIN`. A symbol with the
@@ -569,7 +571,11 @@ class CreateGlobalTmps(NodeTranslator):
     """
 
     def visit_FencilDefinition(
-        self, node: ir.FencilDefinition, *, offset_provider: Mapping[str, Any], symbolic_sizes: dict[str, str]
+        self,
+        node: ir.FencilDefinition,
+        *,
+        offset_provider: Mapping[str, Any],
+        symbolic_sizes: dict[str, str],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node, offset_provider=offset_provider, symbolic_sizes=symbolic_sizes)
