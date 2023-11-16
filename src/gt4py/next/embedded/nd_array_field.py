@@ -120,8 +120,8 @@ class NdArrayField(
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
-    def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
-        return np.asarray(self._ndarray, dtype)
+    def asnumpy(self) -> np.ndarray:
+        return np.asarray(self._ndarray)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:

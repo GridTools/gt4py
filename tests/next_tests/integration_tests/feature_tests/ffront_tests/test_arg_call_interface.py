@@ -63,9 +63,9 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) * 2 * np.asarray(args["b"]) - np.asarray(args["c"])
+    expected = args["a"] * 2 * args["b"] - args["c"]
 
-    assert np.allclose(out, expected)
+    assert np.allclose(out.asnumpy(), expected.asnumpy())
 
 
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "out")))
@@ -89,9 +89,9 @@ def test_call_program_from_python(cartesian_case, arg_spec):
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) + 2 * np.asarray(args["b"])
+    expected = args["a"] + 2 * args["b"]
 
-    assert np.allclose(args["out"], expected)
+    assert np.allclose(args["out"].asnumpy(), expected.asnumpy())
 
 
 def test_call_field_operator_from_field_operator(cartesian_case):

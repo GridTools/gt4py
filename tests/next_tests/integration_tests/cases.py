@@ -377,6 +377,13 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
+def _asndarray(fields: tuple[common.Field | np.ndarray | tuple]) -> tuple[np.ndarray | tuple]:
+    if isinstance(fields, tuple):
+        return tuple(_asndarray(f) for f in fields)
+    else:
+        return fields.asnumpy() if hasattr(fields, "asnumpy") else fields
+
+
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -427,14 +434,13 @@ def verify(
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
     out_comp = out or inout
-    out_comp_str = str(out_comp)
     assert out_comp is not None
-    if hasattr(out_comp, "ndarray"):
-        out_comp_str = str(out_comp.ndarray)
-    assert comparison(ref, out_comp), (
+    out_comp_ndarray = _asndarray(out_comp)
+    ref_ndarray = _asndarray(ref)
+    assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref}\n\tout = {out_comp_str}"
+        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
     )
 
 
@@ -460,7 +466,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
+    ref_args = tuple(i.asnumpy() if hasattr(i, "asnumpy") else i for i in inps)
     verify(
         case,
         fieldop,
