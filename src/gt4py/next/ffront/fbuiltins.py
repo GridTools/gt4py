@@ -39,7 +39,6 @@ IndexType: TypeAlias = int32
 
 TYPE_ALIAS_NAMES = ["IndexType"]
 
-
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -123,6 +122,27 @@ def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
     return BuiltInFunction(fun)
 
 
+MaskT = TypeVar("MaskT", bound=Field)
+FieldT = TypeVar("FieldT", bound=Union[Field, gt4py_defs.Scalar, Tuple])
+
+
+class WhereBuiltinFunction(
+    BuiltInFunction[_R, [MaskT, FieldT, FieldT]], Generic[_R, MaskT, FieldT]
+):
+    def __call__(self, mask: MaskT, true_field: FieldT, false_field: FieldT) -> _R:
+        if isinstance(true_field, tuple) or isinstance(false_field, tuple):
+            if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
+                raise ValueError(
+                    f"Either both or none can be tuple in {true_field=} and {false_field=}."  # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                )
+            if len(true_field) != len(false_field):
+                raise ValueError(
+                    "Tuple of different size not allowed."
+                )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
+            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+        return super().__call__(mask, true_field, false_field)
+
+
 @builtin_function
 def neighbor_sum(
     field: Field,
@@ -155,7 +175,7 @@ def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /)
     raise NotImplementedError()
 
 
-@builtin_function
+@WhereBuiltinFunction
 def where(
     mask: Field,
     true_field: Field | gt4py_defs.ScalarT | Tuple,
@@ -166,7 +186,7 @@ def where(
 
 
 @builtin_function
-def astype(field: Field, type_: type, /) -> Field:
+def astype(field: Field | gt4py_defs.ScalarT, type_: type, /) -> Field:
     raise NotImplementedError()
 
 
@@ -195,7 +215,6 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
     "trunc",
 ]
 
-
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
@@ -213,7 +232,6 @@ for f in (
     + UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
 ):
     _make_unary_math_builtin(f)
-
 
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 

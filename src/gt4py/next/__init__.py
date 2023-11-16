@@ -24,8 +24,11 @@ module in question is a submodule, defines `__all__` and exports many public API
 """
 
 from . import common, ffront, iterator, program_processors, type_inference
-from .common import Dimension, DimensionKind, Field, GridType, field
-from .embedded import nd_array_field
+from .common import Dimension, DimensionKind, Field, GridType
+from .constructors import as_field, empty, full, ones, zeros
+from .embedded import (  # Just for registering field implementations
+    nd_array_field as _nd_array_field,
+)
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here
@@ -49,8 +52,13 @@ __all__ = [
     "Dimension",
     "DimensionKind",
     "Field",
-    "field",
     "GridType",
+    # from constructors
+    "empty",
+    "zeros",
+    "ones",
+    "full",
+    "as_field",
     # from iterator
     "NeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",

@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import numbers
-from typing import Any, Optional, Protocol, Sequence, Tuple, Union
+from typing import Optional, Sequence, Union
 
 import numpy as np
 
@@ -33,20 +33,7 @@ try:
 except ImportError:
     dace = None
 
-if np.lib.NumpyVersion(np.__version__) >= "1.20.0":
-    from numpy.typing import ArrayLike, DTypeLike
-else:
-    ArrayLike = Any  # type: ignore[misc]  # assign multiple types in both branches
-    DTypeLike = Any  # type: ignore[misc]  # assign multiple types in both branches
-
-
-# Protocols
-class GTDimsInterface(Protocol):
-    __gt_dims__: Tuple[str, ...]
-
-
-class GTOriginInterface(Protocol):
-    __gt_origin__: Tuple[int, ...]
+from numpy.typing import ArrayLike, DTypeLike
 
 
 # Helper functions

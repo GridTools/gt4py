@@ -37,7 +37,7 @@ from gt4py.next import (
     tanh,
     trunc,
 )
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -60,9 +60,6 @@ def test_arithmetic(cartesian_case):
 
 
 def test_power(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def pow(inp1: cases.IField) -> cases.IField:
         return inp1**2
@@ -72,9 +69,9 @@ def test_power(cartesian_case):
 
 def test_floordiv(cartesian_case):
     if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail(
             "FloorDiv not yet supported."
@@ -87,24 +84,16 @@ def test_floordiv(cartesian_case):
     cases.verify_with_default_data(cartesian_case, floorDiv, ref=lambda inp1: inp1 // 2)
 
 
+@pytest.mark.uses_negative_modulo
 def test_mod(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        dace_iterator.run_dace_iterator,
-    ]:
-        pytest.xfail(
-            "Modulo not properly supported for negative numbers."
-        )  # see https://github.com/GridTools/gt4py/issues/1219
-
     @gtx.field_operator
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
 
-    inp1 = gtx.np_as_located_field(IDim)(np.asarray(range(10), dtype=int32) - 5)
+    inp1 = gtx.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
-    cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1.array() % 2)
+    cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
 
 
 def test_bit_xor(cartesian_case):
@@ -121,7 +110,7 @@ def test_bit_xor(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, binary_xor, cases.RETURN)()
-    cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1.array() ^ inp2.array())
+    cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1 ^ inp2)
 
 
 def test_bit_and(cartesian_case):
@@ -138,7 +127,7 @@ def test_bit_and(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, bit_and, cases.RETURN)()
-    cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1.array() & inp2.array())
+    cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1 & inp2)
 
 
 def test_bit_or(cartesian_case):
@@ -155,7 +144,7 @@ def test_bit_or(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, bit_or, cases.RETURN)()
-    cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1.array() | inp2.array())
+    cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1 | inp2)
 
 
 # Unary builtins
@@ -180,7 +169,7 @@ def test_unary_invert(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, tilde_fieldop, cases.RETURN)()
-    cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1.array())
+    cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1)
 
 
 def test_unary_not(cartesian_case):
@@ -194,16 +183,13 @@ def test_unary_not(cartesian_case):
         cases.ConstInitializer(bool_field)
     )()
     out = cases.allocate(cartesian_case, not_fieldop, cases.RETURN)()
-    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1.array())
+    cases.verify(cartesian_case, not_fieldop, inp1, out=out, ref=~inp1)
 
 
 # Trig builtins
 
 
 def test_basic_trig(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def basic_trig_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return sin(cos(inp1)) - sinh(cosh(inp2)) + tan(inp1) - tanh(inp2)
@@ -219,9 +205,6 @@ def test_basic_trig(cartesian_case):
 
 
 def test_exp_log(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def exp_log_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return log(inp1) - exp(inp2)
@@ -232,9 +215,6 @@ def test_exp_log(cartesian_case):
 
 
 def test_roots(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def roots_fieldop(inp1: cases.IFloatField, inp2: cases.IFloatField) -> cases.IFloatField:
         return sqrt(inp1) - cbrt(inp2)
@@ -245,9 +225,6 @@ def test_roots(cartesian_case):
 
 
 def test_is_values(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def is_isinf_fieldop(inp1: cases.IFloatField) -> cases.IBoolField:
         return isinf(inp1)
@@ -274,9 +251,6 @@ def test_is_values(cartesian_case):
 
 
 def test_rounding_funs(cartesian_case):
-    if cartesian_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Bug in type inference with math builtins, breaks dace backend.")
-
     @gtx.field_operator
     def rounding_funs_fieldop(
         inp1: cases.IFloatField, inp2: cases.IFloatField

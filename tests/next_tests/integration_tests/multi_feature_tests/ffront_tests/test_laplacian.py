@@ -69,8 +69,8 @@ def test_ffront_lap(cartesian_case):
         lap_program,
         in_field,
         out_field,
-        inout=out_field.array()[1:-1, 1:-1],
-        ref=lap_ref(np.asarray(in_field)),
+        inout=out_field[1:-1, 1:-1],
+        ref=lap_ref(in_field.ndarray),
     )
 
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
@@ -81,6 +81,6 @@ def test_ffront_lap(cartesian_case):
         laplap_program,
         in_field,
         out_field,
-        inout=out_field.array()[2:-2, 2:-2],
-        ref=lap_ref(lap_ref(np.asarray(in_field))),
+        inout=out_field[2:-2, 2:-2],
+        ref=lap_ref(lap_ref(np.asarray(in_field.ndarray))),
     )

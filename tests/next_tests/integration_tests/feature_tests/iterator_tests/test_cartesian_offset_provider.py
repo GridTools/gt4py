@@ -52,8 +52,8 @@ def fencil_swapped(output, input):
 
 
 def test_cartesian_offset_provider():
-    inp = gtx.np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
-    out = gtx.np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
+    inp = gtx.as_field([I_loc, J_loc], np.asarray([[0, 42], [1, 43]]))
+    out = gtx.as_field([I_loc, J_loc], np.asarray([[-1]]))
 
     fencil(out, inp)
     assert out[0][0] == 42
