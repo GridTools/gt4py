@@ -500,47 +500,47 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         """Only defined for `Field` of value type `bool`."""
 
     @abc.abstractmethod
-    def __add__(self, other: Field | ValueT) -> Field:
+    def __add__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | ValueT) -> Field:
+    def __radd__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | ValueT) -> Field:
+    def __sub__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | ValueT) -> Field:
+    def __rsub__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | ValueT) -> Field:
+    def __mul__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | ValueT) -> Field:
+    def __rmul__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | ValueT) -> Field:
+    def __floordiv__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | ValueT) -> Field:
+    def __rfloordiv__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | ValueT) -> Field:
+    def __truediv__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | ValueT) -> Field:
+    def __rtruediv__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | ValueT) -> Field:
+    def __pow__(self, other: Field | ValueType) -> Field:
         ...
 
     @abc.abstractmethod
