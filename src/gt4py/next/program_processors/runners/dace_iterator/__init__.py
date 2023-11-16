@@ -22,11 +22,11 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.otf_compile_executor as otf_exec
-import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
+from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
@@ -167,6 +167,7 @@ def get_cache_id(
     return m.hexdigest()
 
 
+@program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
@@ -195,16 +196,22 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()
 
+        # set array storage for GPU execution
         if run_on_gpu:
-            autoopt.apply_gpu_storage(sdfg)
+            device = dace.DeviceType.GPU
+            sdfg._name = f"{sdfg.name}_gpu"
+            for _, _, array in sdfg.arrays_recursive():
+                if not array.transient:
+                    array.storage = dace.dtypes.StorageType.GPU_Global
+        else:
+            device = dace.DeviceType.CPU
 
         # run DaCe auto-optimization heuristics
         if auto_optimize:
             # TODO Investigate how symbol definitions improve autoopt transformations,
             #      in which case the cache table should take the symbols map into account.
             symbols: dict[str, int] = {}
-            device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
-            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
+            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
 
         # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
@@ -247,6 +254,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg_program(**expected_args)
 
 
+@program_executor
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
@@ -259,12 +267,13 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 run_dace_cpu = otf_exec.OTFBackend(
-    executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
+    executor=_run_dace_cpu,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
 if cp:
 
+    @program_executor
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         run_dace_iterator(
             program,
@@ -277,11 +286,12 @@ if cp:
 
 else:
 
+    @program_executor
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         raise RuntimeError("Missing `cupy` dependency for GPU execution.")
 
 
 run_dace_gpu = otf_exec.OTFBackend(
-    executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
+    executor=_run_dace_gpu,
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )
