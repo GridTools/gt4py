@@ -110,6 +110,29 @@ def test_where_builtin(nd_array_implementation):
     assert np.allclose(result.ndarray, expected)
 
 
+def test_where_builtin_different_domain(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
+
+    cond_field = common.field(
+        nd_array_implementation.asarray(cond), domain=common.domain({JDim: 2})
+    )
+    true_field = common.field(
+        nd_array_implementation.asarray(true_),
+        domain=common.domain({IDim: common.UnitRange(0, 2), JDim: common.UnitRange(-1, 2)}),
+    )
+    false_field = common.field(
+        nd_array_implementation.asarray(false_),
+        domain=common.domain({JDim: common.UnitRange(-1, 3)}),
+    )
+
+    expected = np.where(cond[np.newaxis, :], true_[:, 1:], false_[np.newaxis, 1:-1])
+
+    result = fbuiltins.where(cond_field, true_field, false_field)
+    assert np.allclose(result.ndarray, expected)
+
+
 def test_where_builtin_with_tuple(nd_array_implementation):
     cond = np.asarray([True, False])
     true0 = np.asarray([1.0, 2.0], dtype=np.float32)

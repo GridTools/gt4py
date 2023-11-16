@@ -143,18 +143,14 @@ class WhereBuiltinFunction(
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
-                    f"Either both or none can be tuple in {true_field=} and {false_field=}."
+                    f"Either both or none can be tuple in {true_field=} and {false_field=}."  # TODO(havogt) find a strategy to unify parsing and embedded error messages
                 )
             if len(true_field) != len(false_field):
-                raise ValueError("Tuple of different size not allowed.")
+                raise ValueError(
+                    "Tuple of different size not allowed."
+                )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
             return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
-
-
-def where_builtin_function(
-    fun: Callable[[MaskT, FieldT, FieldT], _R]
-) -> WhereBuiltinFunction[_R, MaskT, FieldT]:
-    return WhereBuiltinFunction(fun)
 
 
 @builtin_function
@@ -189,7 +185,7 @@ def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /)
     raise NotImplementedError()
 
 
-@where_builtin_function
+@WhereBuiltinFunction
 def where(
     mask: Field,
     true_field: Field | gt4py_defs.ScalarT | Tuple,
