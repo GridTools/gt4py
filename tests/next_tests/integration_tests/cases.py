@@ -601,4 +601,4 @@ class Case:
 
     @property
     def as_field(self):
-        return constructors.as_field.partial(allocator=self.backend)
+        return constructors.as_field_with(allocator=self.backend)
