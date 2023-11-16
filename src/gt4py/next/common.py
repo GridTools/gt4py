@@ -20,9 +20,8 @@ import dataclasses
 import enum
 import functools
 import sys
-from collections.abc import Sequence, Set
-from types import EllipsisType
-from typing import TypeGuard, overload
+import types
+from collections.abc import Hashable, Mapping, Sequence, Set
 
 import numpy as np
 import numpy.typing as npt
@@ -40,7 +39,10 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
+    Union,
+    cast,
     extended_runtime_checkable,
+    overload,
     runtime_checkable,
 )
 from gt4py.eve.type_definitions import StrEnum
@@ -48,6 +50,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 DimT = TypeVar("DimT", bound="Dimension")
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+ValueT = TypeVar("ValueT", bound=Union[core_defs.Scalar, "Dimension"])
 
 
 class Infinity(int):
@@ -108,14 +111,14 @@ class UnitRange(Sequence[int], Set[int]):
         return f"UnitRange({self.start}, {self.stop})"
 
     @overload
-    def __getitem__(self, index: int) -> int:
+    def __getitem__(self, index: int) -> int: 
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:
+    def __getitem__(self, index: slice) -> UnitRange:# noqa: F811 # redefine unused 
         ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:
+    def __getitem__(self, index: int | slice) -> int | UnitRange: # noqa: F811 # redefine unused 
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             if step != 1:
@@ -294,18 +297,18 @@ class Domain(Sequence[NamedRange]):
         return tuple(len(r) for r in self.ranges)
 
     @overload
-    def __getitem__(self, index: int) -> NamedRange:
+    def __getitem__(self, index: int) -> NamedRange:  
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> Domain:
+    def __getitem__(self, index: slice) -> Domain:  # noqa: F811 # redefine unused 
         ...
 
     @overload
-    def __getitem__(self, index: Dimension) -> NamedRange:
+    def __getitem__(self, index: Dimension) -> NamedRange:  # noqa: F811 # redefine unused 
         ...
 
-    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain: # noqa: F811 # redefine unused 
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -452,7 +455,7 @@ class Field(
         ...
 
     @property
-    def value_type(self) -> type[core_defs.ScalarT]:
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
         ...
 
     @property
@@ -585,7 +588,7 @@ class DimensionIndex:  # (Generic[DimT]):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class ConnectivityField(FieldABC[DimsT, DimT], Hashable):
+class ConnectivityField(Field[DimsT, DimT], Hashable):
     _value_type: DimT
 
     @property
