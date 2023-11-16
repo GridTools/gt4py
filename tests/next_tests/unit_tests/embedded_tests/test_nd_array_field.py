@@ -98,6 +98,60 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
     assert np.allclose(result.ndarray, expected)
 
 
+def test_where_builtin(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true_ = np.asarray([1.0, 2.0], dtype=np.float32)
+    false_ = np.asarray([3.0, 4.0], dtype=np.float32)
+
+    field_inputs = [_make_field(inp, nd_array_implementation) for inp in [cond, true_, false_]]
+    expected = np.where(cond, true_, false_)
+
+    result = fbuiltins.where(*field_inputs)
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_where_builtin_different_domain(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
+    false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
+
+    cond_field = common.field(
+        nd_array_implementation.asarray(cond), domain=common.domain({JDim: 2})
+    )
+    true_field = common.field(
+        nd_array_implementation.asarray(true_),
+        domain=common.domain({IDim: common.UnitRange(0, 2), JDim: common.UnitRange(-1, 2)}),
+    )
+    false_field = common.field(
+        nd_array_implementation.asarray(false_),
+        domain=common.domain({JDim: common.UnitRange(-1, 3)}),
+    )
+
+    expected = np.where(cond[np.newaxis, :], true_[:, 1:], false_[np.newaxis, 1:-1])
+
+    result = fbuiltins.where(cond_field, true_field, false_field)
+    assert np.allclose(result.ndarray, expected)
+
+
+def test_where_builtin_with_tuple(nd_array_implementation):
+    cond = np.asarray([True, False])
+    true0 = np.asarray([1.0, 2.0], dtype=np.float32)
+    false0 = np.asarray([3.0, 4.0], dtype=np.float32)
+    true1 = np.asarray([11.0, 12.0], dtype=np.float32)
+    false1 = np.asarray([13.0, 14.0], dtype=np.float32)
+
+    expected0 = np.where(cond, true0, false0)
+    expected1 = np.where(cond, true1, false1)
+
+    cond_field = _make_field(cond, nd_array_implementation, dtype=bool)
+    field_true = tuple(_make_field(inp, nd_array_implementation) for inp in [true0, true1])
+    field_false = tuple(_make_field(inp, nd_array_implementation) for inp in [false0, false1])
+
+    result = fbuiltins.where(cond_field, field_true, field_false)
+    assert np.allclose(result[0].ndarray, expected0)
+    assert np.allclose(result[1].ndarray, expected1)
+
+
 def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation):
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
