@@ -27,11 +27,10 @@ from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms, pass_manager
+from gt4py.next.iterator.transforms import LiftMode, pass_manager
 from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
-from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNIMCodegen, GTFNCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
