@@ -135,16 +135,16 @@ class NdArrayField(
         /,
         *,
         domain: common.DomainLike,
-        dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
+        dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
 
-        xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
 
-        if dtype_like is not None:
-            assert array.dtype.type == core_defs.dtype(dtype_like).scalar_type
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
@@ -349,6 +349,13 @@ def _builtins_broadcast(
 
 
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
+
+
+def _astype(field: NdArrayField, type_: type) -> NdArrayField:
+    return field.__class__.from_array(field.ndarray, domain=field.domain, dtype=type_)
+
+
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
 
 
 def _get_slices_from_domain_slice(

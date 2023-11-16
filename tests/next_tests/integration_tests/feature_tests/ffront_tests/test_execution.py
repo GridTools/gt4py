@@ -421,6 +421,7 @@ def test_nested_tuple_return(cartesian_case):
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
@@ -442,6 +443,7 @@ def test_nested_reduction(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(unstructured_case):
     @gtx.field_operator
@@ -462,6 +464,7 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_tuple_returns
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
@@ -481,6 +484,7 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_constant_fields
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
@@ -510,6 +514,7 @@ def test_tuple_arg(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
@@ -530,6 +535,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
     cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [
@@ -618,6 +624,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
@@ -636,6 +643,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
     )
 
 
+@pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
@@ -658,6 +666,7 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
+@pytest.mark.uses_scan
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
@@ -690,6 +699,7 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_scan
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
@@ -880,6 +890,7 @@ def test_domain_tuple(cartesian_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator
     def fieldop_where_k_offset(

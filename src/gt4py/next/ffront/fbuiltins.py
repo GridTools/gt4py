@@ -201,7 +201,8 @@ def where(
 
 @BuiltInFunction
 def astype(field: Field | core_defs.ScalarT, type_: type, /) -> Field:
-    raise NotImplementedError()
+    assert core_defs.is_scalar_type(field)
+    return type_(field)
 
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
