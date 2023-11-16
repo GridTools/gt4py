@@ -15,21 +15,26 @@
 from __future__ import annotations
 
 import dataclasses
+import functools
 import warnings
 from typing import Any, Final, Optional
 
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import trees, utils
+from gt4py.eve import trees, utils, codegen
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
+from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms, pass_manager
+from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn import gtfn_backend
+from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNIMCodegen, GTFNCodegen
+from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
+from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
@@ -172,17 +177,48 @@ class GTFNTranslationStep(
 
         return parameters, arg_exprs
 
-    # TODO: remove: this is just a temporary solution to get the tests working
-    def _preprocess_itir(self, program: itir.FencilDefinition, offset_provider, do_unroll: bool):
-        return apply_common_transforms(
-            program,
+    def _preprocess_program(self, program: itir.FencilDefinition, offset_provider: dict[str, Connectivity | Dimension]) -> itir.FencilDefinition:
+        if not self.enable_itir_transforms:
+            return program
+
+        apply_common_transforms = functools.partial(pass_manager.apply_common_transforms,
             lift_mode=self.lift_mode,
             offset_provider=offset_provider,
-            unroll_reduce=do_unroll,
-            unconditionally_collapse_tuples=True,
+            unroll_reduce=self.use_imperative_backend,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
+            unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
+
+        program = apply_common_transforms(program, unroll_reduce=self.use_imperative_backend)
+
+        if self.use_imperative_backend and any(is_applied_lift(node) for node in program.pre_walk_values()):
+            # if we don't unroll, there may be lifts left in the itir which can't be lowered to
+            # gtfn. In this case, just retry with unrolled reductions.
+            program = apply_common_transforms(program, unroll_reduce=True)
+
+        return program
+
+    def _generate_stencil_source(
+            self,
+            program: itir.FencilDefinition,
+            offset_provider: dict[str, Connectivity | Dimension],
+            column_axis: Optional[common.Dimension]
+    ) -> str:
+        new_program = self._preprocess_program(program, offset_provider)
+        gtfn_ir = GTFN_lowering.apply(
+            new_program,
+            offset_provider=offset_provider,
+            column_axis=column_axis,
+        )
+
+        if self.use_imperative_backend:
+            gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir)
+            generated_code = GTFNIMCodegen.apply(gtfn_im_ir)
+        else:
+            generated_code = GTFNCodegen.apply(gtfn_ir)
+        return codegen.format_source("cpp", generated_code, style="LLVM")
+
 
     def __call__(
         self,
@@ -226,13 +262,10 @@ class GTFNTranslationStep(
             f"{', '.join(connectivity_args_expr)})({', '.join(args_expr)});"
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
-        stencil_src = gtfn_backend.generate(
+        stencil_src = self._generate_stencil_source(
             program,
-            enable_itir_transforms=self.enable_itir_transforms,
-            lift_mode=lift_mode,
-            imperative=self.use_imperative_backend,
-            symbolic_domain_sizes=self.symbolic_domain_sizes,
-            **inp.kwargs,
+            inp.kwargs["offset_provider"],
+            inp.kwargs["column_axis"]
         )
         source_code = interface.format_source(
             self._language_settings(),

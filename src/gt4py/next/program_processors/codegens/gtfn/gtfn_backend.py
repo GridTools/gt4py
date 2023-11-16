@@ -23,60 +23,21 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GT
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 
 
-def _lower(
-    program: itir.FencilDefinition,
-    enable_itir_transforms: bool,
-    do_unroll: bool,
-    symbolic_domain_sizes: dict[str, str],
-    **kwargs: Any,
-):
+def generate(
+    program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
+) -> str:
     offset_provider = kwargs.get("offset_provider")
     assert isinstance(offset_provider, dict)
-    if enable_itir_transforms:
-        program = apply_common_transforms(
-            program,
-            lift_mode=kwargs.get("lift_mode"),
-            offset_provider=offset_provider,
-            unroll_reduce=do_unroll,
-            unconditionally_collapse_tuples=True,  # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
-            symbolic_domain_sizes=kwargs.get("symbolic_domain_sizes"),
-        )
+
     gtfn_ir = GTFN_lowering.apply(
         program,
         offset_provider=offset_provider,
         column_axis=kwargs.get("column_axis"),
     )
-    return gtfn_ir
 
-
-def generate(
-    program: itir.FencilDefinition, enable_itir_transforms: bool = True, **kwargs: Any
-) -> str:
     if kwargs.get("imperative", False):
-        try:
-            gtfn_ir = _lower(
-                program=program,
-                enable_itir_transforms=enable_itir_transforms,
-                do_unroll=False,
-                **kwargs,
-            )
-        except EveValueError:
-            # if we don't unroll, there may be lifts left in the itir which can't be lowered to
-            # gtfn. In this case, just retry with unrolled reductions.
-            gtfn_ir = _lower(
-                program=program,
-                enable_itir_transforms=enable_itir_transforms,
-                do_unroll=True,
-                **kwargs,
-            )
         gtfn_im_ir = GTFN_IM_lowering().visit(node=gtfn_ir, **kwargs)
         generated_code = GTFNIMCodegen.apply(gtfn_im_ir, **kwargs)
     else:
-        gtfn_ir = _lower(
-            program=program,
-            enable_itir_transforms=enable_itir_transforms,
-            do_unroll=True,
-            **kwargs,
-        )
         generated_code = GTFNCodegen.apply(gtfn_ir, **kwargs)
     return codegen.format_source("cpp", generated_code, style="LLVM")

@@ -1047,8 +1047,8 @@ def test_temporaries_with_sizes(reduction_setup):
     }
 
     ir_with_tmp = (
-        run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(
-            testee.itir, e2v_offset_provider, False
+        run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_program(
+            testee.itir, e2v_offset_provider
         )
     )
     sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
