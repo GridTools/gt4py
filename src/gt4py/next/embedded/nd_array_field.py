@@ -191,9 +191,9 @@ class NdArrayField(
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
 
-    __ne__ = _make_builtin("not_equal", "not_equal")
+    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
 
-    __eq__ = _make_builtin("equal", "equal")
+    __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():

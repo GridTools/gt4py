@@ -494,11 +494,11 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         """Only defined for `Field` of value type `bool`."""
 
     @abc.abstractmethod
-    def __eq__(self, other: Any) -> Field:
+    def __eq__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
         ...
 
     @abc.abstractmethod
-    def __ne__(self, other: Any) -> Field:
+    def __ne__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
         ...
 
     @abc.abstractmethod

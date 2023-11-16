@@ -34,7 +34,7 @@ from numpy import float32, float64, int32, int64
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next import Dimension, Field  # direct import for TYPE_BUILTINS
+from gt4py.next.common import Dimension, Field  # direct import for TYPE_BUILTINS
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -188,7 +188,9 @@ def min_over(
 
 @BuiltInFunction
 def broadcast(
-    field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
+    field: common.Field | core_defs.ScalarT,
+    dims: tuple[common.Dimension, ...],
+    /,
 ) -> common.Field:
     assert core_defs.is_scalar_type(field)
     return common.field(
