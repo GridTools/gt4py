@@ -35,7 +35,7 @@ def _lower(
             offset_provider=offset_provider,
             unroll_reduce=do_unroll,
             unconditionally_collapse_tuples=True,  # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
-            symbolic_domain_sizes=symbolic_domain_sizes
+            symbolic_domain_sizes=kwargs.get("symbolic_domain_sizes"),
         )
     gtfn_ir = GTFN_lowering.apply(
         program,

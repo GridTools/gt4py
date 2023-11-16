@@ -54,7 +54,7 @@ class GTFNTranslationStep(
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes = None
+    symbolic_domain_sizes: dict[str, str] = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
