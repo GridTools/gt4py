@@ -498,7 +498,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def __neq__(self, other: Any) -> Field:
+    def __ne__(self, other: Any) -> Field:
         ...
 
     @abc.abstractmethod

@@ -1096,7 +1096,7 @@ class IndexField(common.Field):
     def __eq__(self, other: Any) -> common.Field:
         raise NotImplementedError()
 
-    def __neq__(self, other: Any) -> common.Field:
+    def __ne__(self, other: Any) -> common.Field:
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1203,7 +1203,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def __eq__(self, other: Any) -> common.Field:
         raise NotImplementedError()
 
-    def __neq__(self, other: Any) -> common.Field:
+    def __ne__(self, other: Any) -> common.Field:
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
