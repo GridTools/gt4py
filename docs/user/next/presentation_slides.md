@@ -145,10 +145,6 @@ run_add(a, b, result, offset_provider={})
 print("result array: \n {}".format(np.asarray(result)))
 ```
 
-The fields in the subsequent code snippets are 1-dimensional, either over the cells or over the edges. The corresponding named dimensions are thus the following:
-
-+++
-
 ### Offsets
 Fields can be offset by a predefined number of indices.
 
@@ -341,7 +337,7 @@ Note: domain needs both dimensions to be included with integer tuple values.
 ```{code-cell} ipython3
 # @gtx.field_operator
 # def add(a, b):
-#    return a + b
+#    return a + b   # 2.0 + 3.0
 
 @gtx.program
 def run_add_domain(a : gtx.Field[[CellDim, KDim], float64],
@@ -366,7 +362,7 @@ Scan operators work in a similar fashion to iterations in Python.
 ```{code-cell} ipython3
 x = np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0])
 def x_iteration(x):
-    for i, x_i in enumerate(x):
+    for i in range(len(x)):
         if i > 0:
             x[i] = x[i-1] + x[i]
     return x
