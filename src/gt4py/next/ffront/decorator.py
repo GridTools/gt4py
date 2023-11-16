@@ -284,11 +284,11 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        if self.backend is None:
-            self.definition(*args, **kwargs)
-            return
-
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+
+        if self.backend is None:
+            self.definition(*rewritten_args, **kwargs)
+            return
 
         backend = self.backend
         if self.backend is eve_utils.NOTHING:

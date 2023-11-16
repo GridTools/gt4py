@@ -14,6 +14,7 @@
 
 import dataclasses
 import inspect
+import math
 from builtins import bool, float, int, tuple
 from typing import (
     Any,
@@ -248,7 +249,13 @@ for f in (
 ):
     _make_unary_math_builtin(f)
 
-BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
+BINARY_MATH_NUMBER_BUILTIN_TO_PYTHON_SCALAR_FUNCTION = {
+    "minimum": min,
+    "maximum": max,
+    "fmod": math.fmod,
+    "power": pow,
+}
+BINARY_MATH_NUMBER_BUILTIN_NAMES = list(BINARY_MATH_NUMBER_BUILTIN_TO_PYTHON_SCALAR_FUNCTION.keys())
 
 
 def _make_binary_math_builtin(name):
@@ -257,7 +264,9 @@ def _make_binary_math_builtin(name):
         rhs: Field | core_defs.ScalarT,
         /,
     ) -> Field | core_defs.ScalarT:
-        raise NotImplementedError()
+        assert core_defs.is_scalar_type(lhs)
+        assert core_defs.is_scalar_type(rhs)
+        return BINARY_MATH_NUMBER_BUILTIN_TO_PYTHON_SCALAR_FUNCTION[name](lhs, rhs)  # type: ignore[operator] # Cannot call function of unknown type
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
