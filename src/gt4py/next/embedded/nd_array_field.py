@@ -194,7 +194,7 @@ class NdArrayField(
         if isinstance(connectivity, common.CartesianConnectivity):
             # shortcut for CartesianConnectivity: they don't change the array, only the domain
             return self.__class__.from_array(
-                self._ndarray, domain=restricted_domain, value_type=self._value_type
+                self._ndarray, domain=restricted_domain, dtype=self.dtype
             )
 
         # restricted_connectivity = (

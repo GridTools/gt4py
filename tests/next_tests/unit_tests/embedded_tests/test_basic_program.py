@@ -38,9 +38,10 @@ def prog(
 
 
 def test_basic():
-    a = gtx.field(np.asarray([0.0, 1.0, 2.0, 3.0]), domain=((IDim, gtx.common.UnitRange(1, 5)),))
-    b = gtx.field(np.asarray([0.0, 1.0, 2.0, 3.0]), domain=((IDim, gtx.common.UnitRange(0, 4)),))
-    out = gtx.field(np.asarray([0.0, 0.0, 0.0, 0.0]), domain=((IDim, gtx.common.UnitRange(0, 4)),))
+    a = gtx.as_field([(IDim, gtx.common.UnitRange(1, 5))], np.asarray([0.0, 1.0, 2.0, 3.0]))
+    b = gtx.as_field([(IDim, gtx.common.UnitRange(0, 4))], np.asarray([0.0, 1.0, 2.0, 3.0]))
+    out = gtx.as_field([(IDim, gtx.common.UnitRange(0, 4))], np.asarray([0.0, 0.0, 0.0, 0.0]))
 
     prog(a, b, out, offset_provider={"IOff": IDim})
-    assert False, "Add proper check"
+    assert out.domain == b.domain
+    assert np.allclose(out.ndarray, a.ndarray + b.ndarray)

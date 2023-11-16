@@ -27,9 +27,7 @@ import gt4py.next.common as common
 closure_column_range: cvars.ContextVar[range] = cvars.ContextVar("column_range")
 
 #: Offset provider dict in the current embedded execution context.
-offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
-    "offset_provider", default=types.MappingProxyType({})
-)
+offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar("offset_provider")
 
 
 @contextlib.contextmanager
@@ -40,11 +38,19 @@ def new_context(
 ):
     import gt4py.next.embedded.context as this_module
 
+    updates = []
+    if closure_column_range is not eve.NOTHING:
+        updates.append((this_module.closure_column_range, closure_column_range))
+    if offset_provider is not eve.NOTHING:
+        updates.append((this_module.offset_provider, offset_provider))
+
     # Create new context with provided values
     ctx = cvars.copy_context()
-    if closure_column_range is not eve.NOTHING:
-        this_module.closure_column_range.set(closure_column_range)
-    if offset_provider is not eve.NOTHING:
-        this_module.offset_provider.set(offset_provider)
+
+    def ctx_updater(*args):
+        for cvar, value in args:
+            cvar.set(value)
+
+    ctx.run(ctx_updater, *updates)
 
     yield ctx
