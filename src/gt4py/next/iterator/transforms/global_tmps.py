@@ -485,10 +485,17 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         new_axis = nbt_provider.neighbor_axis.value
                         consumed_domain.ranges.pop(old_axis)
                         assert new_axis not in consumed_domain.ranges
-                        consumed_domain.ranges[new_axis] = SymbolicRange(
-                            im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                            symbolic_sizes[new_axis],
-                        )
+
+                        if symbolic_sizes is not None:
+                            consumed_domain.ranges[new_axis] = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                symbolic_sizes[new_axis],
+                            )
+                        else:
+                            consumed_domain.ranges[new_axis] = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
+                            )
                     else:
                         raise NotImplementedError
                 consumed_domains.append(consumed_domain)

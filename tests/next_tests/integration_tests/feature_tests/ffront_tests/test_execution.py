@@ -58,8 +58,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
-from tests.next_tests.integration_tests.cases import Case
-from tests.next_tests.toy_connectivity import Edge, Cell
+from tests.next_tests.toy_connectivity import Edge
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures
