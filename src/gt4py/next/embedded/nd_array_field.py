@@ -150,10 +150,7 @@ class NdArrayField(
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
-        assert all(
-            len(r) == s or (s == 1 and r == common.UnitRange.infinity())
-            for r, s in zip(domain.ranges, array.shape)
-        )
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 

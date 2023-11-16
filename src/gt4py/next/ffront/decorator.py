@@ -688,9 +688,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # if we are reaching this from a program call.
         if "out" in kwargs:
             out = kwargs.pop("out")
+            offset_provider = kwargs.pop("offset_provider", None)
             if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
-                offset_provider = kwargs.pop("offset_provider")
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -706,9 +706,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-
-                res = self.definition(*args)  # TODO put offset_provider in contextvar
-                _tuple_assign_field(out, res)
+                # TODO put offset_provider in ctxt var
+                domain = kwargs.pop("domain", None)
+                res = self.definition(*args, **kwargs)
+                _tuple_assign_field(
+                    out, res, domain=None if domain is None else common.domain(domain)
+                )
                 return
         else:
             # field_operator called from other field_operator in embedded execution
@@ -718,14 +721,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 def _tuple_assign_field(
     tgt: tuple[common.Field | tuple, ...] | common.Field,
     src: tuple[common.Field | tuple, ...] | common.Field,
+    domain: common.Domain,
 ):
     if isinstance(tgt, tuple):
         if not isinstance(src, tuple):
             raise RuntimeError(f"Cannot assign {src} to {tgt}.")
         for t, s in zip(tgt, src):
-            _tuple_assign_field(t, s)
+            _tuple_assign_field(t, s, domain)
     else:
-        tgt.ndarray[...] = src.ndarray[...]  # TODO
+        domain = domain or tgt.domain
+        tgt[domain] = src[domain]
 
 
 @typing.overload

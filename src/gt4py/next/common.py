@@ -141,6 +141,13 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
+    def __le__(self, other: Set[Any]):
+        if isinstance(other, UnitRange):
+            # required for infinity comparison
+            return self.start >= other.start and self.stop <= other.stop
+        else:
+            return Set.__le__(self, other)
+
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
 
