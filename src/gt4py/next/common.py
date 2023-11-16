@@ -39,7 +39,6 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
-    Union,
     cast,
     extended_runtime_checkable,
     overload,
@@ -310,7 +309,7 @@ class Domain(Sequence[NamedRange]):
     def __getitem__(self, index: Dimension) -> NamedRange:  # noqa: F811 # redefine unused
         ...
 
-    def __getitem__(
+    def __getitem__(  # noqa: F811 # redefine unused
         self, index: int | slice | Dimension
     ) -> NamedRange | Domain:  # noqa: F811 # redefine unused
         if isinstance(index, int):
