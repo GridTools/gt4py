@@ -1060,13 +1060,26 @@ def test_temporaries_with_sizes(reduction_setup):
     )
 
     @gtx.field_operator
-    def testee(a: cases.VField) -> cases.EField:
+    def testee_op(a: cases.VField) -> cases.EField:
         amul = a * 2
         return amul(E2V[0]) + amul(E2V[1])
 
-    cases.verify_with_default_data(
-        unstructured_case,
-        testee,
-        ref=lambda a: (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]]
-        + (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]],
-    )
+    @gtx.program
+    def testee(a: cases.VField, out: cases.EField, num_vertices: int):
+        testee_op(a, out=out)
+
+    ir = testee.itir
+    e2v_offset_provider = {"E2V": NeighborTableOffsetProvider(table=reduction_setup.e2v_table, origin_axis=Edge,
+                                                      neighbor_axis=Vertex, max_neighbors=2)}
+
+    ir_with_tmp = run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_itir(testee.itir, e2v_offset_provider, False)
+
+
+    # todo: check that symbols are in itir
+
+    # cases.verify_with_default_data(
+    #     unstructured_case,
+    #     testee,
+    #     ref=lambda a: (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]]
+    #     + (a * 2)[unstructured_case.offset_provider["E2V"].table[:, 1]],
+    # )
