@@ -178,7 +178,7 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
     fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 
     if validate:
-        assert np.allclose(np.asarray(out), expected)
+        assert np.allclose(out.asnumpy(), expected)
 
 
 @pytest.mark.parametrize("builtin, inputs, expected", arithmetic_and_logical_test_data())
@@ -199,7 +199,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     )  # avoid inlining the function
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
 
-    assert np.allclose(np.asarray(out), expected)
+    assert np.allclose(out.asnumpy(), expected)
 
 
 @pytest.mark.parametrize("as_column", [False, True])
@@ -228,7 +228,7 @@ def test_math_function_builtins(program_processor, builtin_name, inputs, as_colu
     )
 
     if validate:
-        assert np.allclose(np.asarray(out), expected)
+        assert np.allclose(out.asnumpy(), expected)
 
 
 Neighbor = offset("Neighbor")
@@ -269,7 +269,7 @@ def test_can_deref(program_processor, stencil):
     )
 
     if validate:
-        assert np.allclose(np.asarray(out), -1.0)
+        assert np.allclose(out.asnumpy(), -1.0)
 
     a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
     run_processor(
@@ -281,7 +281,7 @@ def test_can_deref(program_processor, stencil):
     )
 
     if validate:
-        assert np.allclose(np.asarray(out), 1.0)
+        assert np.allclose(out.asnumpy(), 1.0)
 
 
 # def test_can_deref_lifted(program_processor):
@@ -337,7 +337,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     def sten_cast(it, casted_valued):
         return eq(cast_(deref(it), dtype), deref(casted_valued))
 
-    out = field_maker(np.zeros_like(inp, dtype=builtins.bool))[0]
+    out = field_maker(np.zeros_like(inp.asnumpy(), dtype=builtins.bool))[0]
     run_processor(
         sten_cast[{IDim: range(1)}],
         program_processor,
