@@ -133,6 +133,13 @@ class ConstInitializer(DataInitializer):
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
+        if hasattr(self.value, "__array__"):
+            return constructors.as_field(
+                common.domain(sizes),
+                np.full(sizes.values(), self.value),
+                dtype=dtype,
+                allocator=backend,
+            )
         return constructors.full(
             domain=common.domain(sizes),
             fill_value=self.value,

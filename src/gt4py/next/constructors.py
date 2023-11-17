@@ -189,10 +189,7 @@ def full(
         allocator=allocator,
         device=device,
     )
-    if hasattr(fill_value, "__array__"):
-        field[...] = field.array_ns.asarray(fill_value)
-    else:
-        field[...] = field.dtype.scalar_type(fill_value)
+    field[...] = field.dtype.scalar_type(fill_value)
     return field
 
 
