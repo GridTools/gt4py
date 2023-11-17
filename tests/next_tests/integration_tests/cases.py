@@ -25,6 +25,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common, constructors
@@ -73,7 +74,7 @@ V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
-ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
+ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
@@ -124,7 +125,7 @@ class ConstInitializer(DataInitializer):
     value: ScalarValue
 
     def __init__(self, value: ScalarValue):
-        if hasattr(value, "__array__") or hasattr(value, "__getitem__"):
+        if not core_defs.is_scalar_type(value):
             raise ValueError(
                 "`ConstInitializer` can not be used with non-scalars. Use `Case.as_field` instead."
             )
