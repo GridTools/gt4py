@@ -488,7 +488,7 @@ def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.Functi
 def program(
     definition=None,
     *,
-    backend=None,
+    backend=DEFAULT_BACKEND,
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -743,7 +743,7 @@ def field_operator(
     ...
 
 
-def field_operator(definition=None, *, backend=None, grid_type=None):
+def field_operator(definition=None, *, backend=DEFAULT_BACKEND, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -795,7 +795,7 @@ def scan_operator(
     axis: Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend=None,
+    backend=DEFAULT_BACKEND,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
