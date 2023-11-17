@@ -35,6 +35,11 @@ JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 
+@pytest.fixture(params=[Infinity.positive(), Infinity.negative()])
+def inf(request):
+    yield request.param
+
+
 @pytest.fixture
 def a_domain():
     return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
@@ -151,6 +156,20 @@ def test_mixed_infinity_range():
     assert len(mixed_inf_range) == Infinity.positive()
 
 
+def test_range_contains():
+    assert 1 in UnitRange(0, 2)
+    assert 1 not in UnitRange(0, 1)
+    assert 1 in UnitRange(0, Infinity.positive())
+    assert 1 in UnitRange(Infinity.negative(), 2)
+    assert 1 in UnitRange(Infinity.negative(), Infinity.positive())
+    assert "s" not in UnitRange(Infinity.negative(), Infinity.positive())
+
+
+def test_range_contains_infinity(inf):
+    with pytest.raises(ValueError):
+        inf in UnitRange(Infinity.negative(), Infinity.positive())
+
+
 @pytest.mark.parametrize(
     "op, rng1, rng2, expected",
     [
@@ -160,6 +179,32 @@ def test_mixed_infinity_range():
         (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
         (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
         (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+        (operator.ge, UnitRange(-2, 3), UnitRange(-1, 2), True),
+        (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2}, True),
+        (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2, 3}, False),
+        (operator.ge, UnitRange(Infinity.negative(), 3), UnitRange(Infinity.negative(), 2), True),
+        (operator.ge, UnitRange(Infinity.negative(), 3), {1, 2}, True),
+        (operator.lt, UnitRange(-1, 2), UnitRange(-2, 2), True),
+        (operator.lt, UnitRange(-2, 1), UnitRange(-2, 2), True),
+        (operator.lt, UnitRange(-2, 2), {-1, 0, 1, 2}, False),
+        (operator.lt, UnitRange(-2, 2), {-2, -1, 0, 1, 2}, True),
+        (operator.lt, UnitRange(-2, 2), {-3, -2, -1, 0, 1, 2}, True),
+        (operator.lt, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
+        (operator.lt, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+        (operator.gt, UnitRange(-2, 2), UnitRange(-1, 2), True),
+        (operator.gt, UnitRange(-2, 2), UnitRange(-2, 1), True),
+        (operator.gt, UnitRange(-2, 2), {-1, 0, 1}, True),
+        (operator.gt, UnitRange(-2, 2), {-2, -1, 0}, True),
+        (operator.gt, UnitRange(-2, 2), {-2, -1, 0, 1}, False),
+        (operator.gt, UnitRange(Infinity.negative(), 3), UnitRange(Infinity.negative(), 2), True),
+        (operator.gt, UnitRange(Infinity.negative(), 2), {0, 1}, True),
+        (operator.gt, UnitRange(Infinity.negative(), 2), {1, 2}, False),
+        (operator.eq, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 2), True),
+        (operator.eq, UnitRange(-2, 2), {-2, -1, 0, 1}, True),
+        (operator.eq, UnitRange(-2, 2), {-2, 1}, False),
+        (operator.ne, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
+        (operator.ne, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 2), False),
+        (operator.ne, UnitRange(-2, 2), {-2, -1, 0}, True),
     ],
 )
 def test_range_comparison(op, rng1, rng2, expected):

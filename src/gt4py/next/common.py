@@ -141,7 +141,15 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
-    def __le__(self, other: Set[int]):
+    def __contains__(self, value: Any) -> bool:
+        if not isinstance(value, core_defs.INTEGRAL_TYPES):
+            return False
+        if value == Infinity.positive() or value == Infinity.negative():
+            # raising error was an adhoc decision, feel free to improve
+            raise ValueError("Cannot check if Infinity is in UnitRange.")
+        return value >= self.start and value < self.stop
+
+    def __le__(self, other: Set[int]) -> bool:
         if isinstance(other, UnitRange):
             return self.start >= other.start and self.stop <= other.stop
         elif len(self) == Infinity.positive():
@@ -149,7 +157,52 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             return Set.__le__(self, other)
 
-    __ge__ = __lt__ = __gt__ = lambda self, other: NotImplemented
+    def __lt__(self, other: Set[int]) -> bool:
+        if isinstance(other, UnitRange):
+            return (self.start > other.start and self.stop <= other.stop) or (
+                self.start >= other.start and self.stop < other.stop
+            )
+        elif len(self) == Infinity.positive():
+            return False
+        else:
+            return Set.__lt__(self, other)
+
+    def __ge__(self, other: Set[int]) -> bool:
+        if isinstance(other, UnitRange):
+            return self.start <= other.start and self.stop >= other.stop
+        elif len(self) == Infinity.positive():
+            for v in other:
+                if v not in self:
+                    return False
+            return True
+        else:
+            return Set.__ge__(self, other)
+
+    def __gt__(self, other: Set[int]) -> bool:
+        if isinstance(other, UnitRange):
+            return (self.start < other.start and self.stop >= other.stop) or (
+                self.start <= other.start and self.stop > other.stop
+            )
+        elif len(self) == Infinity.positive():
+            for v in other:
+                if v not in self:
+                    return False
+            return True
+        else:
+            return Set.__gt__(self, other)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, UnitRange):
+            return self.start == other.start and self.stop == other.stop
+        elif len(self) == Infinity.positive():
+            return False
+        elif isinstance(other, Set):
+            return Set.__eq__(self, other)
+        else:
+            return False
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
