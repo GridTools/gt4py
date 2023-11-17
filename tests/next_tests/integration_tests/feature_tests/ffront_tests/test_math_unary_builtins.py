@@ -103,7 +103,9 @@ def test_bit_xor(cartesian_case):
         return inp1 ^ inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     inp1 = cases.allocate(cartesian_case, binary_xor, "inp1").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -120,7 +122,9 @@ def test_bit_and(cartesian_case):
         return inp1 & inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     inp1 = cases.allocate(cartesian_case, bit_and, "inp1").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -137,7 +141,9 @@ def test_bit_or(cartesian_case):
         return inp1 | inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     inp1 = cases.allocate(cartesian_case, bit_or, "inp1").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -165,7 +171,9 @@ def test_unary_invert(cartesian_case):
         return ~inp1
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     inp1 = cases.allocate(cartesian_case, tilde_fieldop, "inp1").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -179,7 +187,9 @@ def test_unary_not(cartesian_case):
         return not inp1
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     inp1 = cases.allocate(cartesian_case, not_fieldop, "inp1").strategy(
         cases.ConstInitializer(bool_field)
     )()

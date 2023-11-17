@@ -138,7 +138,9 @@ def test_conditional_nested_tuple(cartesian_case):
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     mask = cases.allocate(cartesian_case, conditional_nested_tuple, "mask").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -211,7 +213,9 @@ def test_conditional(cartesian_case):
         return where(mask, a, b)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     mask = cases.allocate(cartesian_case, conditional, "mask").strategy(
         cases.ConstInitializer(bool_field)
     )()
@@ -228,7 +232,9 @@ def test_conditional_promotion(cartesian_case):
         return where(mask, a, 10.0)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
+    bool_field = cartesian_case.backend.allocator.array_ns.asarray(
+        np.random.choice(a=[False, True], size=(size))
+    )
     mask = cases.allocate(cartesian_case, conditional_promotion, "mask").strategy(
         cases.ConstInitializer(bool_field)
     )()
