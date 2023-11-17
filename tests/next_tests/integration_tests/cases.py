@@ -117,11 +117,18 @@ class DataInitializer(Protocol):
         return self
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class ConstInitializer(DataInitializer):
     """Initialize with a given value across the coordinate space."""
 
     value: ScalarValue
+
+    def __init__(self, value: ScalarValue):
+        if hasattr(value, "__array__") or hasattr(value, "__getitem__"):
+            raise ValueError(
+                "`ConstInitializer` can not be used with non-scalars. Use `Case.as_field` instead."
+            )
+        self.value = value
 
     @property
     def scalar_value(self) -> ScalarValue:
