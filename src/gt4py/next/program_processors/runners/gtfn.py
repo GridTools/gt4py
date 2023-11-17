@@ -60,8 +60,10 @@ def convert_args(
     return decorated_program
 
 
-def _device_copy(connectivity_arg: npt.NDArray, device: core_defs.DeviceType) -> npt.NDArray:
-    if device not in [core_defs.DeviceType.CPU, core_defs.DeviceType.CPU_PINNED]:
+def _ensure_is_on_device(
+    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
+) -> npt.NDArray:
+    if device == core_defs.DeviceType.CUDA:
         import cupy as cp
 
         if not isinstance(connectivity_arg, cp.ndarray):
@@ -84,7 +86,7 @@ def extract_connectivity_args(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
             # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _device_copy(conn.table, device)
+            conn_arg = _ensure_is_on_device(conn.table, device)
             args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
