@@ -785,8 +785,8 @@ def test_astype_wrong_dtype():
 
 def test_astype_wrong_value_type():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use a tuple here but anything that is not a field or scalar works
-        return astype((1, 2), bool)
+        # we just use broadcast here but anything that is not a field, scalar or tuple thereof works
+        return astype(broadcast, bool)
 
     with pytest.raises(errors.DSLError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(simple_astype)
