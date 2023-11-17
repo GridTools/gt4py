@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
+import warnings
 from typing import Any, Mapping, Optional, Sequence
 
 import dace
@@ -94,10 +95,26 @@ def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
     return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
 
+def _ensure_is_on_device(
+    connectivity_arg: np.typing.NDArray, device: dace.dtypes.DeviceType
+) -> np.typing.NDArray:
+    if device == dace.dtypes.DeviceType.GPU:
+        if not isinstance(connectivity_arg, cp.ndarray):
+            warnings.warn(
+                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+            )
+            return cp.asarray(connectivity_arg)
+    return connectivity_arg
+
+
 def get_connectivity_args(
-    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]
+    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]],
+    device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
-    return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
+    return {
+        connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
+        for offset, table in neighbor_tables
+    }
 
 
 def get_shape_args(
@@ -181,6 +198,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
+    device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
@@ -200,7 +218,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
             # TODO Investigate how symbol definitions improve autoopt transformations,
             #      in which case the cache table should take the symbols map into account.
             symbols: dict[str, int] = {}
-            device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
             sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
 
         # compile SDFG and retrieve SDFG program
@@ -216,7 +233,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables)
+    dace_conn_args = get_connectivity_args(neighbor_tables, device)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
