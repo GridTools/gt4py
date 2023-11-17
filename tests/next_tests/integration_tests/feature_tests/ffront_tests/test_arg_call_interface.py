@@ -158,6 +158,7 @@ def test_call_field_operator_from_program(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
 def test_call_scan_operator_from_field_operator(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
@@ -183,6 +184,7 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
     cases.verify(cartesian_case, testee, a, b, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
 def test_call_scan_operator_from_program(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
@@ -222,6 +224,7 @@ def test_call_scan_operator_from_program(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
@@ -239,6 +242,7 @@ def test_scan_wrong_return_type(cartesian_case):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
+@pytest.mark.uses_scan
 def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,

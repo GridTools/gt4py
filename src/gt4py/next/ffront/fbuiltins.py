@@ -28,10 +28,12 @@ from typing import (
     cast,
 )
 
+import numpy as np
 from numpy import float32, float64, int32, int64
 
-from gt4py._core import definitions as gt4py_defs
-from gt4py.next.common import Dimension, DimensionKind, Field
+from gt4py._core import definitions as core_defs
+from gt4py.next import common
+from gt4py.next.common import Dimension, Field  # direct import for TYPE_BUILTINS
 from gt4py.next.ffront.experimental import as_offset  # noqa F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
@@ -40,7 +42,14 @@ from gt4py.next.type_system import type_specifications as ts
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
-TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
+TYPE_BUILTINS = [
+    Field,
+    Dimension,
+    int32,
+    int64,
+    float32,
+    float64,
+] + PYTHON_TYPE_BUILTINS
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 # Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
@@ -54,11 +63,11 @@ _R = TypeVar("_R")
 
 
 def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSpec], ...]:
-    if t is Field:
+    if t is common.Field:
         return ts.FieldType
-    elif t is Dimension:
+    elif t is common.Dimension:
         return ts.DimensionType
-    elif t is gt4py_defs.ScalarT:
+    elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
         return (
@@ -128,12 +137,8 @@ class BuiltInFunction(Generic[_R, _P]):
         )
 
 
-def builtin_function(fun: Callable[_P, _R]) -> BuiltInFunction[_R, _P]:
-    return BuiltInFunction(fun)
-
-
-MaskT = TypeVar("MaskT", bound=Field)
-FieldT = TypeVar("FieldT", bound=Union[Field, gt4py_defs.Scalar, Tuple])
+MaskT = TypeVar("MaskT", bound=common.Field)
+FieldT = TypeVar("FieldT", bound=Union[common.Field, core_defs.Scalar, Tuple])
 
 
 class WhereBuiltinFunction(
@@ -153,55 +158,71 @@ class WhereBuiltinFunction(
         return super().__call__(mask, true_field, false_field)
 
 
-@builtin_function
+@BuiltInFunction
 def neighbor_sum(
-    field: Field,
+    field: common.Field,
     /,
-    axis: Dimension,
-) -> Field:
+    axis: common.Dimension,
+) -> common.Field:
     raise NotImplementedError()
 
 
-@builtin_function
+@BuiltInFunction
 def max_over(
-    field: Field,
+    field: common.Field,
     /,
-    axis: Dimension,
-) -> Field:
+    axis: common.Dimension,
+) -> common.Field:
     raise NotImplementedError()
 
 
-@builtin_function
+@BuiltInFunction
 def min_over(
-    field: Field,
+    field: common.Field,
     /,
-    axis: Dimension,
-) -> Field:
+    axis: common.Dimension,
+) -> common.Field:
     raise NotImplementedError()
 
 
-@builtin_function
-def broadcast(field: Field | gt4py_defs.ScalarT, dims: Tuple[Dimension, ...], /) -> Field:
-    raise NotImplementedError()
+@BuiltInFunction
+def broadcast(
+    field: common.Field | core_defs.ScalarT,
+    dims: tuple[common.Dimension, ...],
+    /,
+) -> common.Field:
+    assert core_defs.is_scalar_type(
+        field
+    )  # default implementation for scalars, Fields are handled via dispatch
+    return common.field(
+        np.asarray(field)[
+            tuple([np.newaxis] * len(dims))
+        ],  # TODO(havogt) use FunctionField once available
+        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.infinity()] * len(dims))),
+    )
 
 
 @WhereBuiltinFunction
 def where(
-    mask: Field,
-    true_field: Field | gt4py_defs.ScalarT | Tuple,
-    false_field: Field | gt4py_defs.ScalarT | Tuple,
+    mask: common.Field,
+    true_field: common.Field | core_defs.ScalarT | Tuple,
+    false_field: common.Field | core_defs.ScalarT | Tuple,
     /,
-) -> Field | Tuple:
+) -> common.Field | Tuple:
     raise NotImplementedError()
 
 
-@builtin_function
+@BuiltInFunction
 def astype(
-    field: Field | gt4py_defs.ScalarT | Tuple[Field, ...],
+    value: Field | core_defs.ScalarT | Tuple,
     type_: type,
     /,
-) -> Field | Tuple[Field, ...]:
-    raise NotImplementedError()
+) -> Field | core_defs.ScalarT | Tuple:
+    if isinstance(value, tuple):
+        return tuple(astype(v, type_) for v in value)
+    # default implementation for scalars, Fields are handled via dispatch
+    assert core_defs.is_scalar_type(value)
+    return core_defs.dtype(type_).scalar_type(value)
 
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
@@ -233,11 +254,14 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name):
-    def impl(value: Field | gt4py_defs.ScalarT, /) -> Field | gt4py_defs.ScalarT:
+    def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
+        # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
+        # return getattr(math, name)(value)# noqa: E800 # commented code
         raise NotImplementedError()
 
     impl.__name__ = name
-    globals()[name] = builtin_function(impl)
+    globals()[name] = BuiltInFunction(impl)
 
 
 for f in (
@@ -252,14 +276,17 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 def _make_binary_math_builtin(name):
     def impl(
-        lhs: Field | gt4py_defs.ScalarT,
-        rhs: Field | gt4py_defs.ScalarT,
+        lhs: common.Field | core_defs.ScalarT,
+        rhs: common.Field | core_defs.ScalarT,
         /,
-    ) -> Field | gt4py_defs.ScalarT:
-        raise NotImplementedError()
+    ) -> common.Field | core_defs.ScalarT:
+        # default implementation for scalars, Fields are handled via dispatch
+        assert core_defs.is_scalar_type(lhs)
+        assert core_defs.is_scalar_type(rhs)
+        return getattr(np, name)(lhs, rhs)
 
     impl.__name__ = name
-    globals()[name] = builtin_function(impl)
+    globals()[name] = BuiltInFunction(impl)
 
 
 for f in BINARY_MATH_NUMBER_BUILTIN_NAMES:
@@ -295,12 +322,12 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 #  guidelines for decision.
 @dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
-    source: Dimension
-    target: tuple[Dimension] | tuple[Dimension, Dimension]
+    source: common.Dimension
+    target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
     connectivity: Optional[Any] = None  # TODO
 
     def __post_init__(self):
-        if len(self.target) == 2 and self.target[1].kind != DimensionKind.LOCAL:
+        if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):
