@@ -170,17 +170,8 @@ class NdArrayField(
 
         return cls(domain, array)
 
-    def _compute_idx_array(self, r: common.UnitRange, connectivity) -> core_defs.NDArrayObject:
-        if hasattr(connectivity, "ndarray") and connectivity.ndarray is not None:
-            return NotImplemented  # TODO
-        else:
-            new_idx_array = np.empty(len(r), dtype=int)
-            for i in r:
-                new_idx_array[i - r.start] = connectivity[i]
-            return new_idx_array
-
     def remap(self: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
-        # restrict index field
+        # Compute the new domain
         dim = connectivity.codomain
         dim_idx = self.domain.dim_index(dim)
         if dim_idx is None:
@@ -190,10 +181,12 @@ class NdArrayField(
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = self.domain.replace_at(dim_idx, *new_ranges)
 
+        # perform contramap
         if isinstance(connectivity, common.CartesianConnectivity):
-            # shortcut for CartesianConnectivity: they don't change the array, only the domain
+            # shortcut for CartesianConnectivity: don't change the array, only the domain
             return self.__class__.from_array(self._ndarray, domain=new_domain, dtype=self.dtype)
         else:
+            # General case: first restrict the connectivity to the new domain
             restricted_domain = common.Domain(*new_ranges)
             restricted_connectivity = (
                 connectivity.restrict(restricted_domain)
@@ -201,27 +194,13 @@ class NdArrayField(
                 else connectivity
             )
 
-        # current_range: common.UnitRange = self.domain[dim_idx][1]
-        # new_range = connectivity.inverse_image(current_range)
+            # then compute the index array
+            xp = self.array_ns
+            new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
+            # finally, take the new array
+            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-        # # perform contramap
-        # xp = self.array_ns
-        # applied_connectivity = connectivity.restrict(new_domain)
-        # new_idx_array = self._compute_idx_array(new_range, connectivity)
-        # new_idx_array -= current_range.start
-
-        # new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
-        # # print(new_buffer)
-        # return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
-
-        # dim_idx = self.domain.tag_index(restricted_connectivity.value_type.tag)
-        # new_domain = self._domain.replace_at(dim_idx, restricted_connectivity.domain)
-        # new_idx_array = (
-        #     xp.asarray(restricted_connectivity.ndarray) - self.domain[dim_idx].extent.start
-        # )
-        # new_data = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
-
-        # return self.__class__.from_array(new_data, domain=new_domain, value_type=self.value_type)
+            return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -338,10 +317,7 @@ class NdArrayConnectivityField(
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_dims := self._cache.get(cache_key, None)) is None:
-            if TYPE_CHECKING:
-                xp = np
-            else:
-                xp = self.array_ns
+            xp = self.array_ns
 
             if common.is_named_range(image_range):
                 if image_range[0] != self.codomain:
@@ -389,11 +365,20 @@ class NdArrayConnectivityField(
         return new_dims
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
-        cls = self.__class__
-        xp = cls.array_ns
-        new_domain, buffer_slice = self._slice(index)
-        new_buffer = xp.asarray(self.ndarray[buffer_slice])
-        return cls(new_domain, new_buffer, self.codomain)
+        cache_key = None
+        try:
+            cache_key = hash((id(self.ndarray), self.domain, index))
+            restricted_connectivity = self._cache.get[cache_key]
+        except (KeyError, TypeError):
+            cls = self.__class__
+            xp = cls.array_ns
+            new_domain, buffer_slice = self._slice(index)
+            new_buffer = xp.asarray(self.ndarray[buffer_slice])
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            if cache_key is not None:
+                self._cache[cache_key] = restricted_connectivity
+
+        return restricted_connectivity
 
     __getitem__ = restrict
 

@@ -282,37 +282,35 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-def test_rremap_implementation():
+def test_remap_implementation():
     V = Dimension("V")
     E = Dimension("E")
 
+    V_START, V_STOP = 2, 7
+    E_START, E_STOP = 0, 10
     v_field = common.field(
-        -0.1 * np.arange(0, 5), domain=common.Domain(dims=(V,), ranges=(UnitRange(2, 7),))
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
     e2v_conn = nd_array_field.NumPyArrayConnectivityField(
         common.Domain(
             dims=(E,),
             ranges=[
-                UnitRange(0, 10),
+                UnitRange(E_START, E_STOP),
             ],
         ),
-        np.arange(10, -1, -1),
+        np.arange(E_START, E_STOP),
         V,
     )
 
     result = v_field.remap(e2v_conn)
-    assert False
-    # expected = _make_field(
-    #     inp_lst,
-    #     np,
-    #     domain=(
-    #         (inp.domain[0][0], common.UnitRange(-1, 1)),
-    #         (inp.domain[1][0], common.UnitRange(0, 2)),
-    #     ),
-    # )
+    expected = common.field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
 
-    # assert result.domain == expected.domain
-    # assert np.allclose(result.ndarray, expected.ndarray)
+    assert result.domain == expected.domain
+    assert np.allclose(result.ndarray, expected.ndarray)
 
 
 def test_default_remap_implementation():
