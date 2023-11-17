@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import operator
 from typing import Optional, Pattern
 
 import pytest
@@ -148,6 +149,21 @@ def test_positive_infinity_range():
 def test_mixed_infinity_range():
     mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
     assert len(mixed_inf_range) == Infinity.positive()
+
+
+@pytest.mark.parametrize(
+    "op, rng1, rng2, expected",
+    [
+        (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
+        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
+        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
+        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
+        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
+        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+    ],
+)
+def test_range_comparison(op, rng1, rng2, expected):
+    assert op(rng1, rng2) == expected
 
 
 @pytest.mark.parametrize(

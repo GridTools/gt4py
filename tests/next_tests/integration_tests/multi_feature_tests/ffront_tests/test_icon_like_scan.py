@@ -28,6 +28,14 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+pytestmark = pytest.mark.uses_unstructured_shift
+
+
+Cell = gtx.Dimension("Cell")
+KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
+Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
+
+
 @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
     state: tuple[float, float, bool],

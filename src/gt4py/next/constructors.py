@@ -82,6 +82,8 @@ def empty(
         (3, 3)
     """
     dtype = core_defs.dtype(dtype)
+    if allocator is None and device is None:
+        device = core_defs.Device(core_defs.DeviceType.CPU, device_id=0)
     buffer = next_allocators.allocate(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )

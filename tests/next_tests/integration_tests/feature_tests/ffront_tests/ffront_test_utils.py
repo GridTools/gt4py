@@ -54,6 +54,7 @@ if dace_iterator:
         definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
         pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
+        None,
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id() if p is not None else "None",
@@ -66,19 +67,15 @@ def fieldview_backend(request):
         Check ADR 15 for details on the test-exclusion matrices.
     """
     backend_id = request.param
-    if backend_id is None:
-        backend = None
-    else:
-        backend = backend_id.load()
+    backend = None if backend_id is None else backend_id.load()
 
-        for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
-            backend_id, []
-        ):
-            if request.node.get_closest_marker(marker):
-                skip_mark(msg.format(marker=marker, backend=backend_id))
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
+    ):
+        if request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=backend_id))
 
-        backup_backend = decorator.DEFAULT_BACKEND
-
+    backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
     yield backend
     decorator.DEFAULT_BACKEND = backup_backend

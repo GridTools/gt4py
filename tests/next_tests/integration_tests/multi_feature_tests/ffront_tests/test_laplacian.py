@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+import pytest
 
 import gt4py.next as gtx
 
@@ -21,6 +22,9 @@ from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
 )
+
+
+pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator

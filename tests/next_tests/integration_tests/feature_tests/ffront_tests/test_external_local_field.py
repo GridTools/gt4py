@@ -26,6 +26,9 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+pytestmark = pytest.mark.uses_unstructured_shift
+
+
 def test_external_local_field(unstructured_case):
     @gtx.field_operator
     def testee(

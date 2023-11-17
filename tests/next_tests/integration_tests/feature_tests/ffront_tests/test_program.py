@@ -51,6 +51,7 @@ def test_identity_fo_execution(cartesian_case, identity_def):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_shift_by_one_execution(cartesian_case):
     @gtx.field_operator
     def shift_by_one(in_field: cases.IFloatField) -> cases.IFloatField:
@@ -230,6 +231,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
 
 
+@pytest.mark.checks_specific_error
 def test_dimensions_domain(cartesian_case):
     @gtx.field_operator
     def empty_domain_fieldop(a: cases.IJField):
@@ -246,4 +248,4 @@ def test_dimensions_domain(cartesian_case):
         ValueError,
         match=(r"Dimensions in out field and field domain are not equivalent"),
     ):
-        empty_domain_program(a, out_field, offset_provider={})
+        cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})

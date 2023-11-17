@@ -39,6 +39,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.parametrize(
     "strategy",
     [cases.UniqueInitializer(1), cases.UniqueInitializer(-100)],
@@ -66,6 +67,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
+@pytest.mark.uses_unstructured_shift
 def test_minover_execution(unstructured_case):
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
@@ -78,6 +80,7 @@ def test_minover_execution(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_reduction_execution(unstructured_case):
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
@@ -94,6 +97,7 @@ def test_reduction_execution(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_constant_fields
 def test_reduction_expression_in_call(unstructured_case):
     @gtx.field_operator
@@ -114,6 +118,7 @@ def test_reduction_expression_in_call(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_reduction_with_common_expression(unstructured_case):
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
@@ -189,6 +194,7 @@ def test_broadcast_two_fields(cartesian_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_broadcast_shifted(cartesian_case):
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
@@ -241,6 +247,7 @@ def test_conditional_compareop(cartesian_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_conditional_shifted(cartesian_case):
     @gtx.field_operator
     def conditional_shifted(
