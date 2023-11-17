@@ -315,10 +315,10 @@ def test_if_without_else(cartesian_case, condition1, condition2):
     out = cases.allocate(cartesian_case, if_without_else, cases.RETURN)()
 
     ref = {
-        (True, True): np.asarray(a) + 2,
-        (True, False): np.asarray(a),
-        (False, True): np.asarray(b) + 1,
-        (False, False): np.asarray(b) + 1,
+        (True, True): a.asnumpy() + 2,
+        (True, False): a.asnumpy(),
+        (False, True): b.asnumpy() + 1,
+        (False, False): b.asnumpy() + 1,
     }
 
     cases.verify(

@@ -102,7 +102,7 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -392,7 +392,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     inp0 = gtx.as_field([KDim], np.arange(0, k_size))
     inp1 = gtx.as_field([KDim], np.arange(0, k_size + 1), origin={KDim: 1})
     out = gtx.as_field([KDim], np.zeros(k_size, dtype=np.int64))
-    ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
+    ref = inp0.asnumpy() + inp1.asnumpy()[:-1]
 
     run_processor(
         sum_fencil,
@@ -405,7 +405,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
 
 
 # TODO(havogt) test tuple_get builtin on a Column

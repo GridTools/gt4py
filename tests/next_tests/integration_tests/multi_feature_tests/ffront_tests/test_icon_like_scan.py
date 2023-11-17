@@ -228,7 +228,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup, fieldview_backend):
         offset_provider={"Koff": KDim},
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
+    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -250,7 +250,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup, fieldview_backend):
         offset_provider={"Koff": KDim},
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
+    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -266,8 +266,8 @@ def test_solve_nonhydro_stencil_52_like(test_setup, fieldview_backend):
         offset_provider={"Koff": KDim},
     )
 
-    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-    assert np.allclose(test_setup.w_ref, test_setup.w)
+    assert np.allclose(test_setup.z_q_ref, test_setup.z_q.asnumpy())
+    assert np.allclose(test_setup.w_ref, test_setup.w.asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -285,5 +285,5 @@ def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup, fieldv
         offset_provider={"Koff": KDim},
     )
 
-    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-    assert np.allclose(test_setup.w_ref, test_setup.w)
+    assert np.allclose(test_setup.z_q_ref, test_setup.z_q.asnumpy())
+    assert np.allclose(test_setup.w_ref, test_setup.w.asnumpy())

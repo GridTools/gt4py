@@ -247,10 +247,9 @@ def test_conditional_promotion(cartesian_case):
     )()
     a = cases.allocate(cartesian_case, conditional_promotion, "a")()
     out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
+    ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
 
-    cases.verify(
-        cartesian_case, conditional_promotion, mask, a, out=out, ref=np.where(mask, a, 10.0)
-    )
+    cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
 
 
 def test_conditional_compareop(cartesian_case):

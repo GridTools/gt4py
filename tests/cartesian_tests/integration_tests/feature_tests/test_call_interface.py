@@ -186,7 +186,7 @@ def test_default_arguments(backend):
     arg3 = gt_storage.ones(
         backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
-    tmp = np.asarray(arg3)
+    tmp = arg3.asnumpy()
     tmp *= 2
 
     branch_true(arg1, None, arg3, par1=2.0)
@@ -208,7 +208,7 @@ def test_default_arguments(backend):
     arg3 = gt_storage.ones(
         backend=backend, dtype=np.float64, shape=(3, 3, 3), aligned_index=(0, 0, 0)
     )
-    tmp = np.asarray(arg3)
+    tmp = arg3.asnumpy()
     tmp *= 2
 
     branch_true(arg1, arg2=None, par1=2.0, par2=5.0, par3=3.0)

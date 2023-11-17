@@ -403,7 +403,7 @@ def test_offset_field(cartesian_case):
         comparison=lambda out, ref: np.all(out == ref),
     )
 
-    assert np.allclose(out, ref)
+    assert np.allclose(out.asnumpy(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):
@@ -920,7 +920,7 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), 2)
 
     cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
 
