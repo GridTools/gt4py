@@ -171,16 +171,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: None | eve_utils.NOTHING | ppi.ProgramExecutor = (
-        eve_utils.NOTHING
-    )  # TODO(havogt): temporary change, remove once `None` is default backend
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -287,23 +285,20 @@ class Program:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if self.backend is None:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+                )
+            )
+
             self.definition(*rewritten_args, **kwargs)
             return
 
-        backend = self.backend
-        if self.backend is eve_utils.NOTHING:
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
-                )
-            )
-            backend = DEFAULT_BACKEND
-
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
+        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
-        backend(
+        self.backend(
             self.itir,
             *rewritten_args,
             *size_args,
@@ -548,14 +543,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
