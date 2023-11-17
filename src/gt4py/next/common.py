@@ -443,9 +443,6 @@ class GTFieldInterface(Protocol):
         ...
 
 
-ValueType: TypeAlias = core_defs.ScalarT | Dimension
-
-
 @extended_runtime_checkable
 class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
@@ -455,7 +452,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @property
-    def value_type(self) -> ValueType:
+    def codomain(self) -> core_defs.DType[core_defs.ScalarT] | Dimension:
         ...
 
     @property
@@ -499,47 +496,47 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         """Only defined for `Field` of value type `bool`."""
 
     @abc.abstractmethod
-    def __add__(self, other: Field | ValueType) -> Field:
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | ValueType) -> Field:
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | ValueType) -> Field:
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | ValueType) -> Field:
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | ValueType) -> Field:
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | ValueType) -> Field:
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | ValueType) -> Field:
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | ValueType) -> Field:
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | ValueType) -> Field:
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | ValueType) -> Field:
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | ValueType) -> Field:
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
         ...
 
     @abc.abstractmethod
@@ -592,14 +589,12 @@ class DimensionIndex:  # (Generic[DimT]):
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class ConnectivityField(Field[DimsT, DimT], Hashable):
-    _value_type: DimT
+class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protocol[DimsT, DimT]):
+    _codomain: DimT
 
     @property
-    def value_type(
-        self,
-    ) -> DimT:  # TODO should be type[DimT], however then Dimension should be a metaclass
-        return self._value_type
+    def codomain(self) -> DimT:
+        return self._codomain
 
     @abc.abstractmethod
     def inverse_image(self, image_dim: UnitRange) -> UnitRange:
@@ -719,7 +714,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @property
     def domain(self) -> Domain:
-        return Domain((self._value_type,), (UnitRange(None, None),))
+        return Domain((self._codomain,), (UnitRange(None, None),))
 
     def remap(self, conn):
         raise NotImplementedError()

@@ -124,8 +124,8 @@ class NdArrayField(
         return np.asarray(self._ndarray, dtype)
 
     @property
-    def value_type(self) -> common.ValueType:
-        return None
+    def codomain(self) -> core_defs.DType[core_defs.ScalarT]:
+        return self.dtype
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -177,10 +177,10 @@ class NdArrayField(
                 new_idx_array[i - r.start] = connectivity[i]
             return new_idx_array
 
-    def remap(self: NdArrayField, connectivity) -> NdArrayField:
+    def remap(self: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
         # restrict index field
         # dim_idx = self.domain.tag_index(connectivity.value_type.tag)
-        dim = connectivity.value_type
+        dim = connectivity.codomain
         dim_idx = self._dim_index(dim)  # TODO move to `Domain`
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
