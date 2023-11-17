@@ -136,7 +136,7 @@ class ConstInitializer(DataInitializer):
         if hasattr(self.value, "__array__"):
             return constructors.as_field(
                 common.domain(sizes),
-                np.full(sizes.values(), self.value),
+                np.full(tuple(sizes.values()), self.value),
                 dtype=dtype,
                 allocator=backend,
             )
