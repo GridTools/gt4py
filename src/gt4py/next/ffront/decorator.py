@@ -701,7 +701,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-                # TODO put offset_provider in ctxt var
+                # TODO(egparedes) put offset_provider in ctxt var here when implementing remap
                 domain = kwargs.pop("domain", None)
                 res = self.definition(*args, **kwargs)
                 _tuple_assign_field(
