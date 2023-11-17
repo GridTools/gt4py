@@ -214,9 +214,16 @@ def where(
 
 
 @BuiltInFunction
-def astype(field: common.Field | core_defs.ScalarT, type_: type, /) -> common.Field:
-    assert core_defs.is_scalar_type(field)
-    return type_(field)
+def astype(
+    value: Field | core_defs.ScalarT | Tuple,
+    type_: type,
+    /,
+) -> Field | core_defs.ScalarT | Tuple:
+    if isinstance(value, tuple):
+        return tuple(astype(v, type_) for v in value)
+    # default implementation for scalars, Fields are handled via dispatch
+    assert core_defs.is_scalar_type(value)
+    return core_defs.dtype(type_).scalar_type(value)
 
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]

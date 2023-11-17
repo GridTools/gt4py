@@ -286,7 +286,7 @@ def _np_cp_setitem(
 _nd_array_implementations = [np]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
@@ -299,7 +299,7 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
@@ -311,7 +311,7 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 

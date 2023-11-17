@@ -333,6 +333,76 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
+@pytest.mark.uses_tuple_returns
+def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
+    @gtx.field_operator
+    def field_op_returning_a_tuple(
+        a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[gtx.Field[[IDim], float], gtx.Field[[IDim], float]]:
+        tup = (a, b)
+        return tup
+
+    @gtx.field_operator
+    def cast_tuple(
+        a: cases.IFloatField,
+        b: cases.IFloatField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
+    ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
+        result = astype(field_op_returning_a_tuple(a, b), int32)
+        return (
+            result[0] == a_asint,
+            result[1] == b_asint,
+        )
+
+    @gtx.field_operator
+    def cast_nested_tuple(
+        a: cases.IFloatField,
+        b: cases.IFloatField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
+    ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
+        result = astype((a, field_op_returning_a_tuple(a, b)), int32)
+        return (
+            result[0] == a_asint,
+            result[1][0] == a_asint,
+            result[1][1] == b_asint,
+        )
+
+    a = cases.allocate(cartesian_case, cast_tuple, "a")()
+    b = cases.allocate(cartesian_case, cast_tuple, "b")()
+    a_asint = gtx.as_field([IDim], np.asarray(a).astype(int32))
+    b_asint = gtx.as_field([IDim], np.asarray(b).astype(int32))
+    out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
+    out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        cast_tuple,
+        a,
+        b,
+        a_asint,
+        b_asint,
+        out=out_tuple,
+        ref=(np.full_like(a, True, dtype=bool), np.full_like(b, True, dtype=bool)),
+    )
+
+    cases.verify(
+        cartesian_case,
+        cast_nested_tuple,
+        a,
+        b,
+        a_asint,
+        b_asint,
+        out=out_nested_tuple,
+        ref=(
+            np.full_like(a, True, dtype=bool),
+            np.full_like(a, True, dtype=bool),
+            np.full_like(b, True, dtype=bool),
+        ),
+    )
+
+
 def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
