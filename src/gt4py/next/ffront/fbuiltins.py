@@ -192,7 +192,9 @@ def broadcast(
     dims: tuple[common.Dimension, ...],
     /,
 ) -> common.Field:
-    assert core_defs.is_scalar_type(field)
+    assert core_defs.is_scalar_type(
+        field
+    )  # default implementation for scalars, Fields are handled via dispatch
     return common.field(
         np.asarray(field)[
             tuple([np.newaxis] * len(dims))
@@ -248,7 +250,7 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 def _make_unary_math_builtin(name):
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # noqa: E800 # commented code
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
         # return getattr(math, name)(value)# noqa: E800 # commented code
         raise NotImplementedError()
 
@@ -278,6 +280,7 @@ def _make_binary_math_builtin(name):
         rhs: common.Field | core_defs.ScalarT,
         /,
     ) -> common.Field | core_defs.ScalarT:
+        # default implementation for scalars, Fields are handled via dispatch
         assert core_defs.is_scalar_type(lhs)
         assert core_defs.is_scalar_type(rhs)
         return BINARY_MATH_NUMBER_BUILTIN_TO_PYTHON_SCALAR_FUNCTION[name](lhs, rhs)  # type: ignore[operator] # Cannot call function of unknown type
