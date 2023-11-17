@@ -338,33 +338,33 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
     def cast_tuple(
         a: cases.IFloatField,
         b: cases.IFloatField,
-        a_casted_to_int_outside_of_gt4py: cases.IField,
-        b_casted_to_int_outside_of_gt4py: cases.IField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
     ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
         result = astype(field_op_returning_a_tuple(a, b), int32)
         return (
-            result[0] == a_casted_to_int_outside_of_gt4py,
-            result[1] == b_casted_to_int_outside_of_gt4py,
+            result[0] == a_asint,
+            result[1] == b_asint,
         )
 
     @gtx.field_operator
     def cast_nested_tuple(
         a: cases.IFloatField,
         b: cases.IFloatField,
-        a_casted_to_int_outside_of_gt4py: cases.IField,
-        b_casted_to_int_outside_of_gt4py: cases.IField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
     ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
         result = astype((a, field_op_returning_a_tuple(a, b)), int32)
         return (
-            result[0] == a_casted_to_int_outside_of_gt4py,
-            result[1][0] == a_casted_to_int_outside_of_gt4py,
-            result[1][1] == b_casted_to_int_outside_of_gt4py,
+            result[0] == a_asint,
+            result[1][0] == a_asint,
+            result[1][1] == b_asint,
         )
 
     a = cases.allocate(cartesian_case, cast_tuple, "a")()
     b = cases.allocate(cartesian_case, cast_tuple, "b")()
-    a_casted_to_int_outside_of_gt4py = gtx.np_as_located_field(IDim)(np.asarray(a).astype(int32))
-    b_casted_to_int_outside_of_gt4py = gtx.np_as_located_field(IDim)(np.asarray(b).astype(int32))
+    a_asint = gtx.np_as_located_field(IDim)(np.asarray(a).astype(int32))
+    b_asint = gtx.np_as_located_field(IDim)(np.asarray(b).astype(int32))
     out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
     out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
 
@@ -373,8 +373,8 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
         cast_tuple,
         a,
         b,
-        a_casted_to_int_outside_of_gt4py,
-        b_casted_to_int_outside_of_gt4py,
+        a_asint,
+        b_asint,
         out=out_tuple,
         ref=(np.full_like(a, True, dtype=bool), np.full_like(b, True, dtype=bool)),
     )
@@ -384,8 +384,8 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
         cast_nested_tuple,
         a,
         b,
-        a_casted_to_int_outside_of_gt4py,
-        b_casted_to_int_outside_of_gt4py,
+        a_asint,
+        b_asint,
         out=out_nested_tuple,
         ref=(
             np.full_like(a, True, dtype=bool),
