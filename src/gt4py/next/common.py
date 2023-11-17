@@ -136,13 +136,31 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: Set[Any]) -> UnitRange:
+    def __and__(self, other: Set[int]) -> UnitRange:
         if isinstance(other, UnitRange):
             start = max(self.start, other.start)
             stop = min(self.stop, other.stop)
             return UnitRange(start, stop)
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
+
+    def __add__(self, other: int | Set[int]) -> UnitRange:
+        if isinstance(other, int):
+            return UnitRange(self.start + other, self.stop + other)
+        if isinstance(other, UnitRange):
+            if self.stop != other.start:
+                raise ValueError(
+                    f"Cannot add UnitRanges with non-matching start and stop values: {self} + {other}"
+                )
+            return UnitRange(self.start, other.stop)
+        else:
+            raise NotImplementedError("Can only compute union with int or UnitRange instances.")
+
+    def __sub__(self, other: int) -> UnitRange:
+        if isinstance(other, int):
+            return UnitRange(self.start - other, self.stop - other)
+        else:
+            raise NotImplementedError("Can only compute substraction with int instances.")
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
@@ -177,8 +195,8 @@ def unit_range(r: RangeLike) -> UnitRange:
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
-NamedIndex: TypeAlias = tuple[Dimension, IntIndex]
-NamedRange: TypeAlias = tuple[Dimension, UnitRange]
+NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
+NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
@@ -253,8 +271,8 @@ class Domain(Sequence[NamedRange]):
     def __init__(
         self,
         *args: NamedRange,
-        dims: Optional[tuple[Dimension, ...]] = None,
-        ranges: Optional[tuple[UnitRange, ...]] = None,
+        dims: Optional[Sequence[Dimension]] = None,
+        ranges: Optional[Sequence[UnitRange]] = None,
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
@@ -278,8 +296,8 @@ class Domain(Sequence[NamedRange]):
                     f"Number of provided dimensions ({len(dims)}) does not match number of provided ranges ({len(ranges)})."
                 )
 
-            object.__setattr__(self, "dims", dims)
-            object.__setattr__(self, "ranges", ranges)
+            object.__setattr__(self, "dims", tuple(dims))
+            object.__setattr__(self, "ranges", tuple(ranges))
         else:
             if not all(is_named_range(arg) for arg in args):
                 raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
@@ -354,6 +372,17 @@ class Domain(Sequence[NamedRange]):
 
     def __str__(self) -> str:
         return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+
+    def dim_index(self, dim: Dimension) -> Optional[int]:
+        return self.dims.index(dim) if dim in self.dims else None
+
+    def replace_at(self, index: int, *named_ranges: NamedRange) -> Domain:
+        assert all(is_named_range(nr) for nr in named_ranges)
+        new_dims, new_ranges = zip(*named_ranges)
+        dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
+        ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
+
+        return Domain(dims=dims, ranges=ranges)
 
 
 DomainLike: TypeAlias = (
@@ -588,17 +617,15 @@ class DimensionIndex:  # (Generic[DimT]):
     #     cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protocol[DimsT, DimT]):
-    _codomain: DimT
-
     @property
+    @abc.abstractmethod
     def codomain(self) -> DimT:
-        return self._codomain
+        ...
 
     @abc.abstractmethod
-    def inverse_image(self, image_dim: UnitRange) -> UnitRange:
-        raise NotImplementedError()
+    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
+        ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -719,9 +746,16 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def remap(self, conn):
         raise NotImplementedError()
 
-    def inverse_image(self, image_dim_range: UnitRange) -> UnitRange:
-        return UnitRange(image_dim_range.start - self.offset, image_dim_range.stop - self.offset)
-        # return r - self.offset # TODO implement UnitRange.__add__
+    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
+        if is_named_range(image_range):
+            if image_range[0] != self.codomain:
+                raise ValueError(
+                    f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                )
+
+            image_range = image_range[1]
+
+        return ((self.codomain, image_range - self.offset),)
 
     def restrict(self, index) -> DimensionIndex:
         return index + self.offset

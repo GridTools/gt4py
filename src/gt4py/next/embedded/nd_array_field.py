@@ -19,12 +19,21 @@ import functools
 import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Never,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+)
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -161,13 +170,6 @@ class NdArrayField(
 
         return cls(domain, array)
 
-    def _dim_index(self, dim: common.Dimension):
-        for i, v in enumerate(self.domain):
-            d, _ = v
-            if d == dim:
-                return i
-        return None
-
     def _compute_idx_array(self, r: common.UnitRange, connectivity) -> core_defs.NDArrayObject:
         if hasattr(connectivity, "ndarray") and connectivity.ndarray is not None:
             return NotImplemented  # TODO
@@ -179,40 +181,38 @@ class NdArrayField(
 
     def remap(self: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
         # restrict index field
-        # dim_idx = self.domain.tag_index(connectivity.value_type.tag)
         dim = connectivity.codomain
-        dim_idx = self._dim_index(dim)  # TODO move to `Domain`
+        dim_idx = self.domain.dim_index(dim)
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
+
         current_range: common.UnitRange = self.domain[dim_idx][1]
-
-        new_range = connectivity.inverse_image(current_range)
-        # print(new_range)
-
-        restricted_domain = tuple((d, (r if d != dim else new_range)) for d, r in self.domain)
+        new_ranges = connectivity.inverse_image(current_range)
+        new_domain = self.domain.replace_at(dim_idx, *new_ranges)
 
         if isinstance(connectivity, common.CartesianConnectivity):
             # shortcut for CartesianConnectivity: they don't change the array, only the domain
-            return self.__class__.from_array(
-                self._ndarray, domain=restricted_domain, dtype=self.dtype
+            return self.__class__.from_array(self._ndarray, domain=new_domain, dtype=self.dtype)
+        else:
+            restricted_domain = common.Domain(*new_ranges)
+            restricted_connectivity = (
+                connectivity.restrict(restricted_domain)
+                if restricted_domain != connectivity.domain
+                else connectivity
             )
 
-        # restricted_connectivity = (
-        #     connectivity.restrict(restricted_domain)
-        #     if restricted_domain != connectivity.domain
-        #     else connectivity
-        # )
+        # current_range: common.UnitRange = self.domain[dim_idx][1]
+        # new_range = connectivity.inverse_image(current_range)
 
         # # perform contramap
-        xp = self.array_ns
-        new_domain = restricted_domain  # TODO
+        # xp = self.array_ns
+        # applied_connectivity = connectivity.restrict(new_domain)
+        # new_idx_array = self._compute_idx_array(new_range, connectivity)
+        # new_idx_array -= current_range.start
 
-        new_idx_array = self._compute_idx_array(new_range, connectivity)
-        new_idx_array -= current_range.start
-
-        new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
-        # print(new_buffer)
-        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+        # new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+        # # print(new_buffer)
+        # return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
         # dim_idx = self.domain.tag_index(restricted_connectivity.value_type.tag)
         # new_domain = self._domain.replace_at(dim_idx, restricted_connectivity.domain)
@@ -223,7 +223,7 @@ class NdArrayField(
 
         # return self.__class__.from_array(new_data, domain=new_domain, value_type=self.value_type)
 
-    __call__ = remap  # type: ignore[assignment]  # TODO: remap
+    __call__ = remap  # type: ignore[assignment]
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
@@ -236,6 +236,23 @@ class NdArrayField(
             return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
+
+    def __setitem__(
+        self: NdArrayField[common.DimsT, core_defs.ScalarT],
+        index: common.AnyIndexSpec,
+        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+    ) -> None:
+        target_domain, target_slice = self._slice(index)
+
+        if common.is_field(value):
+            if not value.domain == target_domain:
+                raise ValueError(
+                    f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+                )
+            value = value.ndarray
+
+        assert hasattr(self.ndarray, "__setitem__")
+        self._ndarray[target_slice] = value
 
     __abs__ = _make_builtin("abs", "abs")
 
@@ -298,6 +315,94 @@ class NdArrayField(
         return new_domain, slice_
 
 
+@dataclasses.dataclass(frozen=True)
+class NdArrayConnectivityField(
+    common.ConnectivityField[common.DimsT, common.DimT],
+    NdArrayField[common.DimsT, core_defs.IntegralScalar],
+):
+    _codomain: common.DimT = common.Dimension("undefined")
+    _cache: dict = dataclasses.field(
+        init=False, repr=False, hash=False, compare=False, default_factory=dict
+    )
+
+    def __gt_builtin_func__(self, _: fbuiltins.BuiltInFunction) -> Never:
+        raise NotImplementedError()
+
+    @property
+    def codomain(self) -> common.DimT:
+        return self._codomain
+
+    def inverse_image(
+        self, image_range: common.UnitRange | common.NamedRange
+    ) -> Sequence[common.NamedRange]:
+        cache_key = hash((id(self.ndarray), self.domain, image_range))
+
+        if (new_dims := self._cache.get(cache_key, None)) is None:
+            if TYPE_CHECKING:
+                xp = np
+            else:
+                xp = self.array_ns
+
+            if common.is_named_range(image_range):
+                if image_range[0] != self.codomain:
+                    raise ValueError(
+                        f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                    )
+
+                image_range = image_range[1]
+
+            restricted_mask = (self._ndarray >= image_range.start) & (
+                self._ndarray < image_range.stop
+            )
+            # indices of non-zero elements in each dimension
+            nnz: tuple[core_defs.NDArrayObject] = xp.nonzero(restricted_mask)
+
+            new_dims = []
+            non_contiguous_dims = []
+
+            for i, dim_nnz_indices in enumerate(nnz):
+                # Check if the indices are contiguous
+                first_data_index = dim_nnz_indices[0]
+                last_data_index = dim_nnz_indices[-1]
+                indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
+                if len(xp.unique(counts)) == 1 and (
+                    len(indices) == last_data_index - first_data_index + 1
+                ):
+                    dim_range = self._domain[i]
+                    idx_offset = dim_range[1].start
+                    new_dims.append(
+                        common.named_range(
+                            (
+                                dim_range[0],
+                                (idx_offset + first_data_index, idx_offset + last_data_index + 1),
+                            )
+                        )
+                    )
+                else:
+                    non_contiguous_dims.append(dim_range[0])
+
+            if non_contiguous_dims:
+                raise ValueError(
+                    f"Restriction generates non-contiguous dimensions {non_contiguous_dims}"
+                )
+
+        return new_dims
+
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+        cls = self.__class__
+        xp = cls.array_ns
+        new_domain, buffer_slice = self._slice(index)
+        new_buffer = xp.asarray(self.ndarray[buffer_slice])
+        return cls(new_domain, new_buffer, self.codomain)
+
+    __getitem__ = restrict
+
+
+@dataclasses.dataclass(frozen=True)
+class NumPyArrayConnectivityField(NdArrayConnectivityField):
+    array_ns: ClassVar[ModuleType] = np
+
+
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(fbuiltins.abs, NdArrayField.__abs__)  # type: ignore[attr-defined]
@@ -325,24 +430,6 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _np_cp_setitem(
-    self: NdArrayField[common.DimsT, core_defs.ScalarT],
-    index: common.AnyIndexSpec,
-    value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
-) -> None:
-    target_domain, target_slice = self._slice(index)
-
-    if common.is_field(value):
-        if not value.domain == target_domain:
-            raise ValueError(
-                f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
-            )
-        value = value.ndarray
-
-    assert hasattr(self.ndarray, "__setitem__")
-    self.ndarray[target_slice] = value
-
-
 # -- Concrete array implementations --
 # NumPy
 _nd_array_implementations = [np]
@@ -351,8 +438,6 @@ _nd_array_implementations = [np]
 @dataclasses.dataclass(frozen=True)
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
-
-    __setitem__ = _np_cp_setitem
 
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
@@ -364,8 +449,6 @@ if cp:
     @dataclasses.dataclass(frozen=True)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
-
-        __setitem__ = _np_cp_setitem
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
 

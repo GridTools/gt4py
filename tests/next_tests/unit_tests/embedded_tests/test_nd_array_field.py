@@ -282,23 +282,37 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-@dataclasses.dataclass(frozen=True)
-class DummyCartesianConnectivity(common.ConnectivityField[common.DimsT, common.DimT]):
-    offset: int = 0
+def test_rremap_implementation():
+    V = Dimension("V")
+    E = Dimension("E")
 
-    def remap(self, *args, **kwargs):
-        raise NotImplementedError()
+    v_field = common.field(
+        -0.1 * np.arange(0, 5), domain=common.Domain(dims=(V,), ranges=(UnitRange(2, 7),))
+    )
+    e2v_conn = nd_array_field.NumPyArrayConnectivityField(
+        common.Domain(
+            dims=(E,),
+            ranges=[
+                UnitRange(0, 10),
+            ],
+        ),
+        np.arange(10, -1, -1),
+        V,
+    )
 
-    def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
-        return common.UnitRange(r.start - self.offset, r.stop - self.offset)
-        # return r - self.offset # TODO implement UnitRange.__add__
+    result = v_field.remap(e2v_conn)
+    assert False
+    # expected = _make_field(
+    #     inp_lst,
+    #     np,
+    #     domain=(
+    #         (inp.domain[0][0], common.UnitRange(-1, 1)),
+    #         (inp.domain[1][0], common.UnitRange(0, 2)),
+    #     ),
+    # )
 
-    def restrict(self, index) -> common.DimensionIndex:
-        return index + self.offset
-
-    __getitem__ = restrict
-
-    __call__ = remap
+    # assert result.domain == expected.domain
+    # assert np.allclose(result.ndarray, expected.ndarray)
 
 
 def test_default_remap_implementation():
@@ -306,10 +320,29 @@ def test_default_remap_implementation():
     Checks that remap works via __getitem__ of a ConnectivityField.
     Any reasonable implementation should bypass for performance.
     """
+
+    @dataclasses.dataclass(frozen=True)
+    class DummyConnectivity(common.ConnectivityField[common.DimsT, common.DimT]):
+        offset: int = 0
+
+        def remap(self, *args, **kwargs):
+            raise NotImplementedError()
+
+        def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
+            return (common.UnitRange(r.start - self.offset, r.stop - self.offset),)
+            # return r - self.offset # TODO implement UnitRange.__add__
+
+        def restrict(self, index) -> common.DimensionIndex:
+            return index + self.offset
+
+        __getitem__ = restrict
+
+        __call__ = remap
+
     inp_lst = [[0, 1], [2, 3]]
     inp = _make_field(inp_lst, np)
 
-    result = inp.remap(DummyCartesianConnectivity(common.Dimension("D0"), 1))
+    result = inp.remap(DummyConnectivity(common.Dimension("D0"), 1))
 
     expected = _make_field(
         inp_lst,
