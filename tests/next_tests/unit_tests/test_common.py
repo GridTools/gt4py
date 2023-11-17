@@ -212,6 +212,21 @@ def test_range_comparison(op, rng1, rng2, expected):
 
 
 @pytest.mark.parametrize(
+    "op, rng1, rng2, expected",
+    [
+        (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
+        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
+        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
+        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
+        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
+        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+    ],
+)
+def test_range_comparison(op, rng1, rng2, expected):
+    assert op(rng1, rng2) == expected
+
+
+@pytest.mark.parametrize(
     "named_rng_like",
     [
         (IDim, (2, 4)),
