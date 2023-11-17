@@ -328,7 +328,7 @@ class FieldOffset(runtime.Offset):
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
-            raise ValueError("Second Dimension in offset must be a local Dimension.")
+            raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)

@@ -353,7 +353,7 @@ NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _astype(field: NdArrayField, type_: type) -> NdArrayField:
-    return field.__class__.from_array(field.ndarray, domain=field.domain, dtype=type_)
+    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
 
 
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field

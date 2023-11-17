@@ -710,22 +710,23 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 return
         else:
             # field_operator called from other field_operator in embedded execution
+            assert self.backend is None
             return self.definition(*args, **kwargs)
 
 
 def _tuple_assign_field(
-    tgt: tuple[common.Field | tuple, ...] | common.Field,
-    src: tuple[common.Field | tuple, ...] | common.Field,
-    domain: common.Domain,
+    target: tuple[common.Field | tuple, ...] | common.Field,
+    source: tuple[common.Field | tuple, ...] | common.Field,
+    domain: Optional[common.Domain],
 ):
-    if isinstance(tgt, tuple):
-        if not isinstance(src, tuple):
-            raise RuntimeError(f"Cannot assign {src} to {tgt}.")
-        for t, s in zip(tgt, src):
+    if isinstance(target, tuple):
+        if not isinstance(source, tuple):
+            raise RuntimeError(f"Cannot assign {source} to {target}.")
+        for t, s in zip(target, source):
             _tuple_assign_field(t, s, domain)
     else:
-        domain = domain or tgt.domain
-        tgt[domain] = src[domain]
+        domain = domain or target.domain
+        target[domain] = source[domain]
 
 
 @typing.overload
