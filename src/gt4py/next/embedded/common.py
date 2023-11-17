@@ -14,8 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, cast
-
+from gt4py.eve.extended_typing import TYPE_CHECKING, Any, Optional, Sequence, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 

@@ -312,6 +312,10 @@ class Domain(Sequence[NamedRange]):
         return len(self.ranges)
 
     @property
+    def ndim(self) -> int:
+        return len(self.dims)
+
+    @property
     def shape(self) -> tuple[int, ...]:
         return tuple(len(r) for r in self.ranges)
 
@@ -617,10 +621,21 @@ class DimensionIndex:  # (Generic[DimT]):
     #     cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
 
 
+class ConnectivityKind(enum.Flag):
+    MODIFY_DIMS = enum.auto()
+    MODIFY_RANK = enum.auto()
+    MODIFY_STRUCTURE = enum.auto()
+
+
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT:
+        ...
+
+    @property
+    @abc.abstractmethod
+    def kind(self) -> ConnectivityKind:
         ...
 
     @abc.abstractmethod
@@ -732,6 +747,7 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
+    dimension: Dimension
     offset: int = 0
 
     def __gt_builtin_func__(self, _: fbuiltins.BuiltInFunction) -> Never:
@@ -739,12 +755,17 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     ndarray = None
 
-    @property
+    @functools.cached_property
     def domain(self) -> Domain:
-        return Domain((self._codomain,), (UnitRange(None, None),))
+        return Domain((self.dimension,), (UnitRange(None, None),))
 
-    def remap(self, conn):
-        raise NotImplementedError()
+    @functools.cached_property
+    def codomain(self) -> DimT:
+        return self.dimension
+
+    @functools.cached_property
+    def kind(self) -> ConnectivityKind:
+        return ConnectivityKind(0)
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if is_named_range(image_range):
@@ -757,12 +778,17 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
         return ((self.codomain, image_range - self.offset),)
 
+    # TODO: implement this
+    def remap(self, conn):
+        raise NotImplementedError()
+
+    __call__ = remap
+
+    # TODO: implement this properly
     def restrict(self, index) -> DimensionIndex:
         return index + self.offset
 
     __getitem__ = restrict
-
-    __call__ = remap
 
 
 @enum.unique

@@ -20,7 +20,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common, constructors
+from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Domain, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
@@ -310,49 +310,29 @@ def test_remap_implementation():
     )
 
     assert result.domain == expected.domain
-    assert np.allclose(result.ndarray, expected.ndarray)
+    assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_default_remap_implementation():
-    """
-    Checks that remap works via __getitem__ of a ConnectivityField.
-    Any reasonable implementation should bypass for performance.
-    """
+def test_cartesian_remap_implementation():
+    V = Dimension("V")
+    E = Dimension("E")
 
-    @dataclasses.dataclass(frozen=True)
-    class DummyConnectivity(common.ConnectivityField[common.DimsT, common.DimT]):
-        offset: int = 0
+    V_START, V_STOP = 2, 7
+    OFFSET = 2
+    v_field = common.field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2_conn = common.CartesianConnectivity(V, OFFSET)
 
-        def remap(self, *args, **kwargs):
-            raise NotImplementedError()
-
-        def inverse_image(self, r: common.UnitRange) -> common.UnitRange:  # or takes domain?
-            return (common.UnitRange(r.start - self.offset, r.stop - self.offset),)
-            # return r - self.offset # TODO implement UnitRange.__add__
-
-        def restrict(self, index) -> common.DimensionIndex:
-            return index + self.offset
-
-        __getitem__ = restrict
-
-        __call__ = remap
-
-    inp_lst = [[0, 1], [2, 3]]
-    inp = _make_field(inp_lst, np)
-
-    result = inp.remap(DummyConnectivity(common.Dimension("D0"), 1))
-
-    expected = _make_field(
-        inp_lst,
-        np,
-        domain=(
-            (inp.domain[0][0], common.UnitRange(-1, 1)),
-            (inp.domain[1][0], common.UnitRange(0, 2)),
-        ),
+    result = v_field.remap(v2_conn)
+    expected = common.field(
+        v_field.ndarray,
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
     )
 
     assert result.domain == expected.domain
-    assert np.allclose(result.ndarray, expected.ndarray)
+    assert np.all(result.ndarray == expected.ndarray)
 
 
 @pytest.mark.parametrize(

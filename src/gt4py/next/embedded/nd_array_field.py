@@ -182,11 +182,11 @@ class NdArrayField(
         new_domain = self.domain.replace_at(dim_idx, *new_ranges)
 
         # perform contramap
-        if isinstance(connectivity, common.CartesianConnectivity):
-            # shortcut for CartesianConnectivity: don't change the array, only the domain
-            return self.__class__.from_array(self._ndarray, domain=new_domain, dtype=self.dtype)
+        if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
+            # shortcut for compact remap: don't change the array, only the domain
+            new_buffer = self._ndarray
         else:
-            # General case: first restrict the connectivity to the new domain
+            # general case: first restrict the connectivity to the new domain
             restricted_domain = common.Domain(*new_ranges)
             restricted_connectivity = (
                 connectivity.restrict(restricted_domain)
@@ -200,7 +200,7 @@ class NdArrayField(
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-            return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -310,6 +310,17 @@ class NdArrayConnectivityField(
     @property
     def codomain(self) -> common.DimT:
         return self._codomain
+
+    @functools.cached_property
+    def kind(self) -> common.ConnectivityKind:
+        kind = common.ConnectivityKind.MODIFY_STRUCTURE
+        if self.domain.ndim > 1:
+            kind |= common.ConnectivityKind.MODIFY_RANK
+            kind |= common.ConnectivityKind.MODIFY_DIMS
+        if self.domain.dim_index(self.codomain) is None:
+            kind |= common.ConnectivityKind.MODIFY_DIMS
+
+        return kind
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
