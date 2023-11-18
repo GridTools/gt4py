@@ -371,8 +371,8 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
 
     a = cases.allocate(cartesian_case, cast_tuple, "a")()
     b = cases.allocate(cartesian_case, cast_tuple, "b")()
-    a_asint = gtx.as_field([IDim], np.asarray(a).astype(int32))
-    b_asint = gtx.as_field([IDim], np.asarray(b).astype(int32))
+    a_asint = cartesian_case.as_field([IDim], np.asarray(a).astype(int32))
+    b_asint = cartesian_case.as_field([IDim], np.asarray(b).astype(int32))
     out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
     out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
 
