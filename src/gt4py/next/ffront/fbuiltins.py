@@ -33,7 +33,8 @@ from numpy import float32, float64, int32, int64
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
-from gt4py.next.ffront.experimental import as_offset  # noqa F401
+from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
+from gt4py.next.ffront.experimental import as_offset  # noqa: F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -213,10 +214,10 @@ def where(
 
 @BuiltInFunction
 def astype(
-    value: Field | core_defs.ScalarT | Tuple,
+    value: common.Field | core_defs.ScalarT | Tuple,
     type_: type,
     /,
-) -> Field | core_defs.ScalarT | Tuple:
+) -> common.Field | core_defs.ScalarT | Tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch

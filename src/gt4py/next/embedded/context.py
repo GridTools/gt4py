@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import contextlib
 import contextvars as cvars
-import types
 
 import gt4py.eve as eve
 import gt4py.next.common as common

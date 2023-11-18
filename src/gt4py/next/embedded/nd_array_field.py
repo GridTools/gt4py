@@ -24,16 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Never,
-    Optional,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-)
+from gt4py.eve.extended_typing import Any, ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins

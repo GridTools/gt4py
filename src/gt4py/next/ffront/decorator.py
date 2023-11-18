@@ -290,8 +290,8 @@ class Program:
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
                 )
             )
-
-            self.definition(*rewritten_args, **kwargs)
+            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                ctx.run(self.definition, *rewritten_args, **kwargs)
             return
 
         ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
@@ -701,7 +701,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-                # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
                 domain = kwargs.pop("domain", None)
                 res = self.definition(*args, **kwargs)
                 _tuple_assign_field(

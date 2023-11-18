@@ -652,9 +652,12 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protoc
         ...
 
     @property
-    @abc.abstractmethod
     def kind(self) -> ConnectivityKind:
-        ...
+        return (
+            ConnectivityKind.MODIFY_DIMS
+            | ConnectivityKind.MODIFY_RANK
+            | ConnectivityKind.MODIFY_STRUCTURE
+        )
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
@@ -807,6 +810,18 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         return index + self.offset
 
     __getitem__ = restrict
+
+    # TODO: implement this properly
+    def __eq__(self, other: Any) -> Field:  # type: ignore[override]
+        return (
+            isinstance(other, CartesianConnectivity)
+            and self.dimension == other.dimension
+            and self.offset == other.offset
+        )
+
+    # TODO: implement this properly
+    def __ne__(self, other: Any) -> Field:  # type: ignore[override]
+        return not self.__eq__(other)
 
 
 @enum.unique
