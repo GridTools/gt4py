@@ -314,6 +314,35 @@ class NdArrayConnectivityField(
 
         return kind
 
+    @classmethod
+    def from_array(
+        cls,
+        data: npt.ArrayLike | core_defs.NDArrayObject,
+        /,
+        codomain: common.Dimension,
+        *,
+        domain: common.DomainLike,
+        dtype: Optional[core_defs.DTypeLike] = None,
+    ) -> NdArrayConnectivityField:
+        domain = common.domain(domain)
+        xp = cls.array_ns
+
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
+        array = xp.asarray(data, dtype=xp_dtype)
+
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
+
+        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
+
+        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert len(domain) == array.ndim
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
+
+        assert isinstance(codomain, common.Dimension)
+
+        return cls(domain, array, codomain)
+
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
     ) -> Sequence[common.NamedRange]:
@@ -385,10 +414,8 @@ class NdArrayConnectivityField(
 
     __getitem__ = restrict
 
-
-@dataclasses.dataclass(frozen=True)
-class NumPyArrayConnectivityField(NdArrayConnectivityField):
-    array_ns: ClassVar[ModuleType] = np
+    __eq__ = NdArrayField.__eq__
+    __ne__ = NdArrayField.__ne__
 
 
 # -- Specialized implementations for builtin operations on array fields --
@@ -430,6 +457,14 @@ class NumPyArrayField(NdArrayField):
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
 
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class NumPyArrayConnectivityField(NdArrayConnectivityField):
+    array_ns: ClassVar[ModuleType] = np
+
+
+common.connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
+
 # CuPy
 if cp:
     _nd_array_implementations.append(cp)
@@ -439,6 +474,12 @@ if cp:
         array_ns: ClassVar[ModuleType] = cp
 
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
+
+    @dataclasses.dataclass(frozen=True, eq=False)
+    class CuPyArrayConnectivityField(NdArrayConnectivityField):
+        array_ns: ClassVar[ModuleType] = cp
+
+    common.connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
 # JAX
 if jnp:

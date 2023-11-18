@@ -19,6 +19,7 @@ import collections
 import dataclasses
 import enum
 import functools
+import numbers
 import sys
 import types
 from collections.abc import Hashable, Mapping, Sequence, Set
@@ -727,6 +728,18 @@ def field(
     raise NotImplementedError
 
 
+@functools.singledispatch
+def connectivity(
+    definition: Any,
+    /,
+    codomain: Dimension,
+    *,
+    domain: Optional[DomainLike] = None,
+    dtype: Optional[core_defs.DType] = None,
+) -> ConnectivityField:
+    raise NotImplementedError
+
+
 @dataclasses.dataclass(frozen=True)
 class GTInfo:
     definition: Any
@@ -788,6 +801,20 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def kind(self) -> ConnectivityKind:
         return ConnectivityKind(0)
 
+    @classmethod
+    def from_offset(
+        cls,
+        definition: int,
+        /,
+        codomain: Dimension,
+        *,
+        domain: DomainLike = None,
+        dtype: Optional[core_defs.DTypeLike] = None,
+    ) -> CartesianConnectivity:
+        assert domain is None
+        assert dtype is None
+        return cls(codomain, definition)
+
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if is_named_range(image_range):
             if image_range[0] != self.codomain:
@@ -822,6 +849,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     # TODO: implement this properly
     def __ne__(self, other: Any) -> Field:  # type: ignore[override]
         return not self.__eq__(other)
+
+
+connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique

@@ -292,15 +292,15 @@ def test_remap_implementation():
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    e2v_conn = nd_array_field.NumPyArrayConnectivityField(
-        common.Domain(
+    e2v_conn = common.connectivity(
+        np.arange(E_START, E_STOP),
+        domain=common.Domain(
             dims=(E,),
             ranges=[
                 UnitRange(E_START, E_STOP),
             ],
         ),
-        np.arange(E_START, E_STOP),
-        V,
+        codomain=V,
     )
 
     result = v_field.remap(e2v_conn)
@@ -323,7 +323,7 @@ def test_cartesian_remap_implementation():
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    v2_conn = common.CartesianConnectivity(V, OFFSET)
+    v2_conn = common.connectivity(OFFSET, V)
 
     result = v_field.remap(v2_conn)
     expected = common.field(
