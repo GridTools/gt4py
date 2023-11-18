@@ -846,7 +846,7 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = out.ndarray.copy()  # ensure we are not overwriting out outside of the domain
+    ref = np.asarray(out).copy()  # ensure we are not overwriting `out` outside of the domain
     ref[1:9] = a[1:9] * 2
 
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
@@ -881,7 +881,7 @@ def test_domain_input_bounds(cartesian_case):
     inp = cases.allocate(cartesian_case, program_domain, "inp")()
     out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
 
-    ref = out.ndarray.copy()
+    ref = np.asarray(out).copy()
     ref[lower_i : int(upper_i / 2)] = inp[lower_i : int(upper_i / 2)] * 2
 
     cases.verify(
@@ -924,7 +924,7 @@ def test_domain_input_bounds_1(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = out.ndarray.copy()
+    ref = np.asarray(out).copy()
     ref[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] = (
         a[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] * 2
     )
@@ -964,9 +964,9 @@ def test_domain_tuple(cartesian_case):
     out0 = cases.allocate(cartesian_case, program_domain_tuple, "out0")()
     out1 = cases.allocate(cartesian_case, program_domain_tuple, "out1")()
 
-    ref0 = out0.ndarray.copy()
+    ref0 = np.asarray(out0).copy()
     ref0[1:9, 4:6] = inp0[1:9, 4:6] + inp1[1:9, 4:6]
-    ref1 = out1.ndarray.copy()
+    ref1 = np.asarray(out1).copy()
     ref1[1:9, 4:6] = inp1[1:9, 4:6]
 
     cases.verify(
