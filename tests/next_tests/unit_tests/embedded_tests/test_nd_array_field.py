@@ -264,7 +264,7 @@ def test_mixed_fields(product_nd_array_implementation):
 
 
 def test_non_dispatched_function():
-    @fbuiltins.builtin_function
+    @fbuiltins.BuiltInFunction
     def fma(a: common.Field, b: common.Field, c: common.Field, /) -> common.Field:
         return a * b + c
 

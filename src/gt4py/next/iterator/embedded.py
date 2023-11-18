@@ -1093,6 +1093,12 @@ class IndexField(common.Field):
     def __invert__(self) -> common.Field:
         raise NotImplementedError()
 
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         raise NotImplementedError()
 
@@ -1192,6 +1198,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:

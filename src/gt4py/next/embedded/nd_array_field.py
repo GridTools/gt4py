@@ -163,10 +163,7 @@ class NdArrayField(
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
-        assert all(
-            len(r) == s or (s == 1 and r == common.UnitRange.infinity())
-            for r, s in zip(domain.ranges, array.shape)
-        )
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 
@@ -252,6 +249,10 @@ class NdArrayField(
     __pow__ = _make_builtin("pow", "power")
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
+
+    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
+
+    __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
@@ -431,7 +432,7 @@ NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "wher
 _nd_array_implementations = [np]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
@@ -442,7 +443,7 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
@@ -452,7 +453,7 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
@@ -491,6 +492,13 @@ def _builtins_broadcast(
 
 
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
+
+
+def _astype(field: NdArrayField, type_: type) -> NdArrayField:
+    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+
+
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
 
 
 def _get_slices_from_domain_slice(

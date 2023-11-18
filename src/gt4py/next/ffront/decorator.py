@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -171,14 +171,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -282,28 +282,23 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        if (
-            self.backend is None  # and DEFAULT_BACKEND is None
-        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
-            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                ctx.run(self.definition, *args, **kwargs)
-            return
-
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if not self.backend:
+        if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
+                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
                 )
             )
-        backend = self.backend or DEFAULT_BACKEND
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
+            self.definition(*rewritten_args, **kwargs)
+            return
+
+        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
-        backend(
+        self.backend(
             self.itir,
             *rewritten_args,
             *size_args,
@@ -548,14 +543,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -688,9 +683,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         # if we are reaching this from a program call.
         if "out" in kwargs:
             out = kwargs.pop("out")
-            if "offset_provider" in kwargs:
+            offset_provider = kwargs.pop("offset_provider", None)
+            if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
-                offset_provider = kwargs.pop("offset_provider")
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -706,11 +701,32 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
+                # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
+                domain = kwargs.pop("domain", None)
+                res = self.definition(*args, **kwargs)
+                _tuple_assign_field(
+                    out, res, domain=None if domain is None else common.domain(domain)
+                )
                 return
         else:
             # field_operator called from other field_operator in embedded execution
+            assert self.backend is None
             return self.definition(*args, **kwargs)
+
+
+def _tuple_assign_field(
+    target: tuple[common.Field | tuple, ...] | common.Field,
+    source: tuple[common.Field | tuple, ...] | common.Field,
+    domain: Optional[common.Domain],
+):
+    if isinstance(target, tuple):
+        if not isinstance(source, tuple):
+            raise RuntimeError(f"Cannot assign {source} to {target}.")
+        for t, s in zip(target, source):
+            _tuple_assign_field(t, s, domain)
+    else:
+        domain = domain or target.domain
+        target[domain] = source[domain]
 
 
 @typing.overload

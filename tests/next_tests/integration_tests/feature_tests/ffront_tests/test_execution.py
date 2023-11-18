@@ -76,6 +76,7 @@ def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
+@pytest.mark.uses_cartesian_shift
 def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
@@ -87,6 +88,7 @@ def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
 
 
+@pytest.mark.uses_unstructured_shift
 def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
@@ -99,6 +101,7 @@ def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_composed_unstructured_shift(unstructured_case):
     @gtx.field_operator
     def composed_shift_unstructured_flat(inp: cases.VField) -> cases.CField:
@@ -143,6 +146,7 @@ def test_composed_unstructured_shift(unstructured_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
@@ -206,6 +210,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
 
 @pytest.mark.uses_index_fields
+@pytest.mark.uses_cartesian_shift
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
@@ -246,6 +251,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixt
     )
 
 
+@pytest.mark.uses_scan
 def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
@@ -264,6 +270,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, qc, scalar, inout=qc, ref=expected)
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -285,6 +292,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_index_fields
 def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
@@ -322,6 +330,76 @@ def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
         testee,
         ref=lambda a: a.astype(int64),
         comparison=lambda a, b: np.all(a == b),
+    )
+
+
+@pytest.mark.uses_tuple_returns
+def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
+    @gtx.field_operator
+    def field_op_returning_a_tuple(
+        a: cases.IFloatField, b: cases.IFloatField
+    ) -> tuple[gtx.Field[[IDim], float], gtx.Field[[IDim], float]]:
+        tup = (a, b)
+        return tup
+
+    @gtx.field_operator
+    def cast_tuple(
+        a: cases.IFloatField,
+        b: cases.IFloatField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
+    ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
+        result = astype(field_op_returning_a_tuple(a, b), int32)
+        return (
+            result[0] == a_asint,
+            result[1] == b_asint,
+        )
+
+    @gtx.field_operator
+    def cast_nested_tuple(
+        a: cases.IFloatField,
+        b: cases.IFloatField,
+        a_asint: cases.IField,
+        b_asint: cases.IField,
+    ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
+        result = astype((a, field_op_returning_a_tuple(a, b)), int32)
+        return (
+            result[0] == a_asint,
+            result[1][0] == a_asint,
+            result[1][1] == b_asint,
+        )
+
+    a = cases.allocate(cartesian_case, cast_tuple, "a")()
+    b = cases.allocate(cartesian_case, cast_tuple, "b")()
+    a_asint = gtx.as_field([IDim], np.asarray(a).astype(int32))
+    b_asint = gtx.as_field([IDim], np.asarray(b).astype(int32))
+    out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
+    out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case,
+        cast_tuple,
+        a,
+        b,
+        a_asint,
+        b_asint,
+        out=out_tuple,
+        ref=(np.full_like(a, True, dtype=bool), np.full_like(b, True, dtype=bool)),
+    )
+
+    cases.verify(
+        cartesian_case,
+        cast_nested_tuple,
+        a,
+        b,
+        a_asint,
+        b_asint,
+        out=out_nested_tuple,
+        ref=(
+            np.full_like(a, True, dtype=bool),
+            np.full_like(a, True, dtype=bool),
+            np.full_like(b, True, dtype=bool),
+        ),
     )
 
 
@@ -413,6 +491,7 @@ def test_nested_tuple_return(cartesian_case):
     cases.verify_with_default_data(cartesian_case, combine, ref=lambda a, b: a + a + b)
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
@@ -434,6 +513,7 @@ def test_nested_reduction(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.xfail(reason="Not yet supported in lowering, requires `map_`ing of inner reduce op.")
 def test_nested_reduction_shift_first(unstructured_case):
     @gtx.field_operator
@@ -454,6 +534,7 @@ def test_nested_reduction_shift_first(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_tuple_returns
 def test_tuple_return_2(unstructured_case):
     @gtx.field_operator
@@ -473,6 +554,7 @@ def test_tuple_return_2(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_constant_fields
 def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
     @gtx.field_operator
@@ -502,6 +584,7 @@ def test_tuple_arg(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
@@ -522,6 +605,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
     cases.verify(cartesian_case, simple_scan_operator, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
 def test_solve_triag(cartesian_case):
     if cartesian_case.backend in [
@@ -610,6 +694,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
@@ -628,6 +713,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
     )
 
 
+@pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
@@ -650,6 +736,7 @@ def test_ternary_scan(cartesian_case):
 
 
 @pytest.mark.parametrize("forward", [True, False])
+@pytest.mark.uses_scan
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
@@ -675,13 +762,14 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(out[0] == ref[0])
-        and np.all(out[1][0] == ref[1][0])
-        and np.all(out[1][1] == ref[1][1]),
+        comparison=lambda ref, out: np.all(np.asarray(out[0]) == ref[0])
+        and np.all(np.asarray(out[1][0]) == ref[1][0])
+        and np.all(np.asarray(out[1][1]) == ref[1][1]),
     )
 
 
 @pytest.mark.uses_tuple_args
+@pytest.mark.uses_scan
 def test_scan_nested_tuple_input(cartesian_case):
     init = 1.0
     k_size = cartesian_case.default_sizes[KDim]
@@ -754,7 +842,10 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    cases.verify(cartesian_case, program_domain, a, out, inout=out[1:9], ref=a[1:9] * 2)
+    ref = out.ndarray.copy()  # ensure we are not overwriting out outside of the domain
+    ref[1:9] = a[1:9] * 2
+
+    cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
 
 
 def test_domain_input_bounds(cartesian_case):
@@ -785,6 +876,9 @@ def test_domain_input_bounds(cartesian_case):
     inp = cases.allocate(cartesian_case, program_domain, "inp")()
     out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
 
+    ref = out.ndarray.copy()
+    ref[lower_i : int(upper_i / 2)] = inp[lower_i : int(upper_i / 2)] * 2
+
     cases.verify(
         cartesian_case,
         program_domain,
@@ -792,8 +886,8 @@ def test_domain_input_bounds(cartesian_case):
         out,
         lower_i,
         upper_i,
-        inout=out[lower_i : int(upper_i / 2)],
-        ref=inp[lower_i : int(upper_i / 2)] * 2,
+        inout=out,
+        ref=ref,
     )
 
 
@@ -825,6 +919,11 @@ def test_domain_input_bounds_1(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
+    ref = out.ndarray.copy()
+    ref[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] = (
+        a[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] * 2
+    )
+
     cases.verify(
         cartesian_case,
         program_domain,
@@ -834,8 +933,8 @@ def test_domain_input_bounds_1(cartesian_case):
         upper_i,
         lower_j,
         upper_j,
-        inout=out[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j],
-        ref=a[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] * 2,
+        inout=out,
+        ref=ref,
     )
 
 
@@ -860,6 +959,11 @@ def test_domain_tuple(cartesian_case):
     out0 = cases.allocate(cartesian_case, program_domain_tuple, "out0")()
     out1 = cases.allocate(cartesian_case, program_domain_tuple, "out1")()
 
+    ref0 = out0.ndarray.copy()
+    ref0[1:9, 4:6] = inp0[1:9, 4:6] + inp1[1:9, 4:6]
+    ref1 = out1.ndarray.copy()
+    ref1[1:9, 4:6] = inp1[1:9, 4:6]
+
     cases.verify(
         cartesian_case,
         program_domain_tuple,
@@ -867,11 +971,12 @@ def test_domain_tuple(cartesian_case):
         inp1,
         out0,
         out1,
-        inout=(out0[1:9, 4:6], out1[1:9, 4:6]),
-        ref=(inp0[1:9, 4:6] + inp1[1:9, 4:6], inp1[1:9, 4:6]),
+        inout=(out0, out1),
+        ref=(ref0, ref1),
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator
     def fieldop_where_k_offset(
@@ -1009,6 +1114,13 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_constant_closure_vars(cartesian_case):
+    if cartesian_case.backend is None:
+        # >>> field = gtx.zeros(domain)
+        # >>> np.int32(1)*field # steals the buffer from the field
+        # array([0.])
+
+        # TODO(havogt): remove `__array__`` from `NdArrayField`
+        pytest.xfail("Bug: Binary operation between np datatype and Field returns ndarray.")
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(

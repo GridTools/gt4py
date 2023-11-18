@@ -446,6 +446,9 @@ class NDArrayObject(Protocol):
     def dtype(self) -> Any:
         ...
 
+    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject:
+        ...
+
     def __getitem__(self, item: Any) -> NDArrayObject:
         ...
 

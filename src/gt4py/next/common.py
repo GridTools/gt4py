@@ -144,6 +144,14 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
+    def __le__(self, other: Set[int]):
+        if isinstance(other, UnitRange):
+            return self.start >= other.start and self.stop <= other.stop
+        elif len(self) == Infinity.positive():
+            return False
+        else:
+            return Set.__le__(self, other)
+
     def __add__(self, other: int | Set[int]) -> UnitRange:
         if isinstance(other, int):
             return UnitRange(self.start + other, self.stop + other)
@@ -161,6 +169,8 @@ class UnitRange(Sequence[int], Set[int]):
             return UnitRange(self.start - other, self.stop - other)
         else:
             raise NotImplementedError("Can only compute substraction with int instances.")
+
+    __ge__ = __lt__ = __gt__ = lambda self, other: NotImplemented
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
@@ -527,6 +537,14 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
     @abc.abstractmethod
     def __invert__(self) -> Field:
         """Only defined for `Field` of value type `bool`."""
+
+    @abc.abstractmethod
+    def __eq__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
+        ...
+
+    @abc.abstractmethod
+    def __ne__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
+        ...
 
     @abc.abstractmethod
     def __add__(self, other: Field | core_defs.ScalarT) -> Field:
