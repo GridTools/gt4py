@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
+import operator
 from typing import Any, Optional, Sequence, cast
 
 from gt4py.next import common
@@ -87,6 +89,14 @@ def _absolute_sub_domain(
             named_ranges.append((dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
+
+
+def intersect_domains(domains: common.Domain) -> common.Domain:
+    return functools.reduce(
+        operator.and_,
+        domains,
+        common.Domain(dims=tuple(), ranges=tuple()),
+    )
 
 
 def _expand_ellipsis(

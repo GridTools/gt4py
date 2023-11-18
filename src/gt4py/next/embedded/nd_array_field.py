@@ -15,8 +15,6 @@
 from __future__ import annotations
 
 import dataclasses
-import functools
-import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
@@ -48,11 +46,10 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = functools.reduce(
-            operator.and_,
-            [f.domain for f in fields if common.is_field(f)],
-            common.Domain(dims=tuple(), ranges=tuple()),
+        domain_intersection = embedded_common.intersect_domains(
+            *[f.domain for f in fields if common.is_field(f)]
         )
+
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
             if common.is_field(f):
@@ -153,6 +150,9 @@ class NdArrayField(
         assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
+
+    def copy(self) -> NdArrayField:
+        return self.__class__(self._domain, self._ndarray.copy())
 
     def remap(self: NdArrayField, connectivity) -> NdArrayField:
         raise NotImplementedError()

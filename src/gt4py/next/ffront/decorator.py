@@ -34,6 +34,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import allocators as next_allocators, common
 from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -702,11 +703,44 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             else:
                 # "out" -> field_operator called from program in embedded execution
                 # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
+
                 domain = kwargs.pop("domain", None)
-                res = self.definition(*args, **kwargs)
-                _tuple_assign_field(
-                    out, res, domain=None if domain is None else common.domain(domain)
-                )
+                if isinstance(self.foast_node, foast.ScanOperator):
+                    scan_foast: foast.ScanOperator = self.foast_node
+                    domain_intersection = embedded_common.intersect_domains(
+                        f.domain for f in [*args, *kwargs.values()] if common.is_field(f)
+                    )
+                    scan_axis = scan_foast.axis.value
+                    non_scan_domain = common.Domain(
+                        *[nr for nr in domain_intersection if nr[0] != scan_axis]
+                    )
+
+                    # TODO derive the result structure from `init`, but we don't know
+                    # - type of field
+                    # - size of field in scan axis (it matters where we start...)
+                    #   - we cannot use intersection as (by broken definition) the domain (which might be set after) defines the scan range
+                    res = args[
+                        0
+                    ].copy()  # that doesn't make sense, we need to derive structure from init, but size from where?
+                    for i in next(iter(non_scan_domain))[1]:
+                        hpos = (next(iter(non_scan_domain))[0], i)
+                        acc = scan_foast.init.value
+                        for k in domain_intersection[scan_axis][1]:
+                            pos = (hpos, (scan_axis, k))
+                            new_args = [arg[pos] if common.is_field(arg) else arg for arg in args]
+                            print(new_args)
+                            acc = self.definition(acc, *new_args, **kwargs)  # TODO kwargs
+                            print(acc)
+                            res[pos] = acc
+                    _tuple_assign_field(
+                        out, res, domain=None if domain is None else common.domain(domain)
+                    )
+                    return res
+                else:
+                    res = self.definition(*args, **kwargs)
+                    _tuple_assign_field(
+                        out, res, domain=None if domain is None else common.domain(domain)
+                    )
                 return
         else:
             # field_operator called from other field_operator in embedded execution
