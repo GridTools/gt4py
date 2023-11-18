@@ -710,7 +710,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 return
         else:
             # field_operator called from other field_operator in embedded execution
-            assert self.backend is None
             return self.definition(*args, **kwargs)
 
 
