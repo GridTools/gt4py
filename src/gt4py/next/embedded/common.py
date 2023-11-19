@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
+import itertools
 import operator
 from typing import Any, Optional, Sequence, cast
 
@@ -97,6 +98,11 @@ def intersect_domains(domains: common.Domain) -> common.Domain:
         domains,
         common.Domain(dims=tuple(), ranges=tuple()),
     )
+
+
+def iterate_domain(domain: common.Domain):
+    for i in itertools.product(*[list(r) for r in domain.ranges]):
+        yield tuple(zip(domain.dims, i))
 
 
 def _expand_ellipsis(

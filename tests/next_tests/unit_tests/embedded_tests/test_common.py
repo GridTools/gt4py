@@ -19,7 +19,7 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
-from gt4py.next.embedded.common import _slice_range, sub_domain
+from gt4py.next.embedded.common import _slice_range, sub_domain, iterate_domain
 
 
 @pytest.mark.parametrize(
@@ -135,3 +135,15 @@ def test_sub_domain(domain, index, expected):
         expected = common.domain(expected)
         result = sub_domain(domain, index)
         assert result == expected
+
+
+def test_iterate_domain():
+    domain = common.domain({I: 2, J: 3})
+    ref = []
+    for i in domain[I][1]:
+        for j in domain[J][1]:
+            ref.append(((I, i), (J, j)))
+
+    testee = list(iterate_domain(domain))
+
+    assert testee == ref

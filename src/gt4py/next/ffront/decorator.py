@@ -23,6 +23,7 @@ import dataclasses
 import functools
 import types
 import typing
+import itertools
 import warnings
 from collections.abc import Callable, Iterable
 from typing import Generator, Generic, TypeVar
@@ -32,7 +33,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import allocators as next_allocators, common, constructors
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import (
@@ -706,32 +707,75 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
                 domain = kwargs.pop("domain", None)
                 if isinstance(self.foast_node, foast.ScanOperator):
+
+                    def get_domain(f: common.Field | tuple) -> common.Domain:
+                        if isinstance(f, tuple):
+                            return get_domain(
+                                f[0]
+                            )  # TODO we should have this function somewhere already...
+                        return f.domain
+
+                    def is_field_or_tuple(f: common.Field | tuple) -> bool:
+                        if isinstance(out, tuple):
+                            return is_field_or_tuple(
+                                f[0]
+                            )  # TODO we should have this function somewhere already...
+                        return common.is_field(f)
+
                     scan_foast: foast.ScanOperator = self.foast_node
+                    forward = scan_foast.forward.value
                     domain_intersection = embedded_common.intersect_domains(
-                        f.domain for f in [*args, *kwargs.values()] if common.is_field(f)
+                        get_domain(f) for f in [*args, *kwargs.values()] if is_field_or_tuple(f)
                     )
                     scan_axis = scan_foast.axis.value
                     non_scan_domain = common.Domain(
                         *[nr for nr in domain_intersection if nr[0] != scan_axis]
                     )
 
-                    # TODO derive the result structure from `init`, but we don't know
-                    # - type of field
-                    # - size of field in scan axis (it matters where we start...)
-                    #   - we cannot use intersection as (by broken definition) the domain (which might be set after) defines the scan range
-                    res = args[
-                        0
-                    ].copy()  # that doesn't make sense, we need to derive structure from init, but size from where?
-                    for i in next(iter(non_scan_domain))[1]:
-                        hpos = (next(iter(non_scan_domain))[0], i)
-                        acc = scan_foast.init.value
-                        for k in domain_intersection[scan_axis][1]:
-                            pos = (hpos, (scan_axis, k))
+                    scan_range = (
+                        domain[scan_axis] if domain is not None else get_domain(out)[scan_axis]
+                    )  # TODO from context var (if we don't have access to out or domain)
+
+                    res_domain = common.Domain(
+                        *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
+                    )
+                    if scan_axis not in res_domain.dims:
+                        res_domain = common.Domain(*res_domain, (scan_range))
+
+                    def _construct_scan_array(domain, init):
+                        if isinstance(init, tuple):
+                            return tuple(_construct_scan_array(domain, v) for v in init)
+                        return constructors.empty(domain, dtype=type(init))
+
+                    init = scan_foast.init.value
+                    res = _construct_scan_array(res_domain, init)
+
+                    def combine_pos(hpos, vpos):
+                        hpos_iter = iter(hpos)
+                        return tuple(
+                            vpos if d == scan_axis else next(hpos_iter) for d in res_domain.dims
+                        )
+
+                    def tuple_assign(target, source, pos):
+                        if isinstance(target, tuple):
+                            for t, s in zip(target, source):
+                                tuple_assign(t, s, pos)
+                        else:
+                            target[pos] = source
+
+                    def scan_loop(hpos):
+                        acc = init
+                        for k in scan_range[1] if forward else reversed(scan_range[1]):
+                            pos = combine_pos(hpos, (scan_axis, k))
                             new_args = [arg[pos] if common.is_field(arg) else arg for arg in args]
-                            print(new_args)
                             acc = self.definition(acc, *new_args, **kwargs)  # TODO kwargs
-                            print(acc)
-                            res[pos] = acc
+                            tuple_assign(res, acc, pos)
+
+                    for hpos in embedded_common.iterate_domain(non_scan_domain):
+                        scan_loop(hpos)
+                    if len(non_scan_domain) == 0:
+                        scan_loop(())
+
                     _tuple_assign_field(
                         out, res, domain=None if domain is None else common.domain(domain)
                     )
