@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, ClassVar, TypeGuard, TypeVar, Callable
+from typing import Any, Callable, ClassVar, TypeGuard, TypeVar
 
 
 class RecursionGuard:
@@ -65,11 +65,6 @@ def get_common_tuple_value(fun: Callable[[_T], _S], value: tuple[_T | tuple, ...
         assert all(v == all_res[0] for v in all_res)
         return all_res[0]
     return fun(value)
-
-    # def _construct_scan_array(domain, init):
-    #     if isinstance(init, tuple):
-    #         return tuple(_construct_scan_array(domain, v) for v in init)
-    #     return constructors.empty(domain, dtype=type(init))
 
 
 def apply_to_tuple_elems(fun, *args):

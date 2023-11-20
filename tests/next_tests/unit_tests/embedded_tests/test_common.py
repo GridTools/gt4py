@@ -19,7 +19,7 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
-from gt4py.next.embedded.common import _slice_range, sub_domain, iterate_domain
+from gt4py.next.embedded.common import _slice_range, iterate_domain, sub_domain
 
 
 @pytest.mark.parametrize(

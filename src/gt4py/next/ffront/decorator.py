@@ -769,6 +769,11 @@ def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
             utils.apply_to_tuple_elems, lambda target, source: target.__setitem__(pos, source)
         )
 
+    def _tuple_at(pos):
+        return functools.partial(
+            utils.apply_to_tuple_elems, lambda f: f[pos] if common.is_field(f) else f
+        )
+
     res = _construct_scan_array(res_domain)(init)
 
     def combine_pos(hpos, vpos):
@@ -779,8 +784,8 @@ def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
         acc = init
         for k in scan_range[1] if forward else reversed(scan_range[1]):
             pos = combine_pos(hpos, (scan_axis, k))
-            new_args = [arg[pos] if common.is_field(arg) else arg for arg in args]
-            new_kwargs = {k: v[pos] if common.is_field(v) else v for k, v in kwargs.items()}
+            new_args = [_tuple_at(pos)(arg) for arg in args]
+            new_kwargs = {k: _tuple_at(pos)(v) for k, v in kwargs.items()}
             acc = scan_op(acc, *new_args, **new_kwargs)
             _tuple_assign(pos)(res, acc)
 

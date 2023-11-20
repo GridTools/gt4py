@@ -292,6 +292,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
+@pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_scan
 @pytest.mark.uses_index_fields
 def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
