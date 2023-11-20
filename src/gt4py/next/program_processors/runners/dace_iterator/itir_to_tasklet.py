@@ -34,6 +34,7 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
+    create_memlet_at,
     create_memlet_full,
     filter_neighbor_tables,
     flatten_list,
@@ -199,7 +200,6 @@ def builtin_neighbors(
     result_access = state.add_access(result_name)
 
     table_name = connectivity_identifier(offset_dim)
-    table_array = sdfg.arrays[table_name]
 
     # generate unique map index name to avoid conflict with other maps inside same state
     index_name = unique_name("__neigh_idx")
@@ -225,14 +225,14 @@ def builtin_neighbors(
         state.add_access(table_name),
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=table_name, subset=",".join(f"0:{s}" for s in table_array.shape)),
+        memlet=create_memlet_full(table_name, sdfg.arrays[table_name]),
         dst_conn="__table",
     )
     state.add_memlet_path(
         iterator.indices[shifted_dim],
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0"),
+        memlet=dace.Memlet.simple(iterator.indices[shifted_dim].data, "0"),
         dst_conn="__idx",
     )
     state.add_edge(
@@ -240,32 +240,52 @@ def builtin_neighbors(
         "__result",
         data_access_tasklet,
         "__idx",
-        dace.Memlet(data=idx_name, subset="0"),
+        dace.Memlet.simple(idx_name, "0"),
     )
     # select full shape only in the neighbor-axis dimension
-    field_subset = [
+    field_subset = tuple(
         f"0:{shape}" if dim == table.neighbor_axis.value else f"i_{dim}"
         for dim, shape in zip(sorted(iterator.dimensions), sdfg.arrays[iterator.field.data].shape)
-    ]
+    )
     state.add_memlet_path(
         iterator.field,
         me,
         data_access_tasklet,
-        memlet=dace.Memlet(
-            data=iterator.field.data,
-            subset=",".join(field_subset),
-        ),
+        memlet=create_memlet_at(iterator.field.data, field_subset),
         dst_conn="__field",
     )
     state.add_memlet_path(
         data_access_tasklet,
         mx,
         result_access,
-        memlet=dace.Memlet(data=result_name, subset=index_name),
+        memlet=dace.Memlet.simple(result_name, index_name),
         src_conn="__result",
     )
 
     return [ValueExpr(result_access, iterator.dtype)]
+
+
+def builtin_can_deref(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    # first visit shift, to get set of indices for deref
+    can_deref_callable = node_args[0]
+    assert isinstance(can_deref_callable, itir.FunCall)
+    shift_callable = can_deref_callable.fun
+    assert isinstance(shift_callable, itir.FunCall)
+    assert isinstance(shift_callable.fun, itir.SymRef)
+    assert shift_callable.fun.id == "shift"
+    iterator = transformer._visit_shift(can_deref_callable)
+
+    # create tasklet to check that field indices are non-negative (-1 is invalid)
+    args = [ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions]
+    internals = [f"{arg.value.data}_v" for arg in args]
+    expr_code = " && ".join([f"{v} >= 0" for v in internals])
+
+    # TODO(edopao): select-memlet could maybe allow to efficiently translate can_deref to predicative execution
+    return transformer.add_expr_tasklet(
+        list(zip(args, internals)), expr_code, dace.dtypes.bool, "can_deref"
+    )
 
 
 def builtin_if(
@@ -321,11 +341,12 @@ def builtin_undefined(*args: Any) -> Any:
 _GENERAL_BUILTIN_MAPPING: dict[
     str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
-    "make_tuple": builtin_make_tuple,
-    "tuple_get": builtin_tuple_get,
-    "if_": builtin_if,
+    "can_deref": builtin_can_deref,
     "cast_": builtin_cast,
+    "if_": builtin_if,
+    "make_tuple": builtin_make_tuple,
     "neighbors": builtin_neighbors,
+    "tuple_get": builtin_tuple_get,
 }
 
 
@@ -438,7 +459,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     result_access,
                     None,
                     # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
-                    dace.Memlet(f"{result_access.data}[0]", wcr=context.reduce_wcr),
+                    dace.Memlet.simple(result_access.data, "0", wcr_str=context.reduce_wcr),
                 )
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
@@ -478,17 +499,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             return self._visit_deref(node)
         if isinstance(node.fun, itir.FunCall) and isinstance(node.fun.fun, itir.SymRef):
             if node.fun.fun.id == "shift":
-                offset = node.fun.args[0]
-                assert isinstance(offset, itir.OffsetLiteral)
-                offset_name = offset.value
-                assert isinstance(offset_name, str)
-                if offset_name not in self.offset_provider:
-                    raise ValueError(f"offset provider for `{offset_name}` is missing")
-                offset_provider = self.offset_provider[offset_name]
-                if isinstance(offset_provider, Dimension):
-                    return self._visit_direct_addressing(node)
-                else:
-                    return self._visit_indirect_addressing(node)
+                return self._visit_shift(node)
             elif node.fun.fun.id == "reduce":
                 return self._visit_reduce(node)
 
@@ -626,7 +637,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 deref_tasklet,
                 mx,
                 result_access,
-                memlet=dace.Memlet(data=result_name, subset=index_name),
+                memlet=dace.Memlet.simple(result_name, index_name),
                 src_conn="__result",
             )
 
@@ -653,39 +664,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=rest), args=[iterator]
         )
 
-    def _visit_direct_addressing(self, node: itir.FunCall) -> IteratorExpr:
-        assert isinstance(node.fun, itir.FunCall)
-        shift = node.fun
-        assert isinstance(shift, itir.FunCall)
-
-        tail, rest = self._split_shift_args(shift.args)
-        if rest:
-            iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
-        else:
-            iterator = self.visit(node.args[0])
-
-        assert isinstance(tail[0], itir.OffsetLiteral)
-        offset = tail[0].value
-        assert isinstance(offset, str)
-        shifted_dim = self.offset_provider[offset].value
-
-        assert isinstance(tail[1], itir.OffsetLiteral)
-        shift_amount = tail[1].value
-        assert isinstance(shift_amount, int)
-
-        args = [ValueExpr(iterator.indices[shifted_dim], dace.int64)]
-        internals = [f"{arg.value.data}_v" for arg in args]
-        expr = f"{internals[0]} + {shift_amount}"
-        shifted_value = self.add_expr_tasklet(
-            list(zip(args, internals)), expr, dace.dtypes.int64, "dir_addr"
-        )[0].value
-
-        shifted_index = {dim: value for dim, value in iterator.indices.items()}
-        shifted_index[shifted_dim] = shifted_value
-
-        return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
-
-    def _visit_indirect_addressing(self, node: itir.FunCall) -> IteratorExpr:
+    def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
         tail, rest = self._split_shift_args(shift.args)
@@ -695,40 +674,48 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             iterator = self.visit(node.args[0])
 
         assert isinstance(tail[0], itir.OffsetLiteral)
-        offset = tail[0].value
-        assert isinstance(offset, str)
+        offset_dim = tail[0].value
+        assert isinstance(offset_dim, str)
+        offset_node = self.visit(tail[1])[0]
 
-        assert isinstance(tail[1], itir.OffsetLiteral)
-        element = tail[1].value
-        assert isinstance(element, int)
-
-        if isinstance(self.offset_provider[offset], NeighborTableOffsetProvider):
-            table = self.offset_provider[offset]
-            shifted_dim = table.origin_axis.value
-            target_dim = table.neighbor_axis.value
-
-            conn = self.context.state.add_access(connectivity_identifier(offset))
-
-            args = [
-                ValueExpr(conn, table.table.dtype),
-                ValueExpr(iterator.indices[shifted_dim], dace.int64),
-            ]
-
-            internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]}[{internals[1]}, {element}]"
-        else:
-            offset_provider = self.offset_provider[offset]
-            assert isinstance(offset_provider, StridedNeighborOffsetProvider)
+        if isinstance(self.offset_provider[offset_dim], NeighborTableOffsetProvider):
+            offset_provider = self.offset_provider[offset_dim]
+            connectivity = self.context.state.add_access(connectivity_identifier(offset_dim))
 
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
-            offset_value = iterator.indices[shifted_dim]
-            args = [ValueExpr(offset_value, dace.int64)]
-            internals = [f"{offset_value.data}_v"]
-            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {element}"
+            args = [
+                ValueExpr(connectivity, offset_provider.table.dtype),
+                ValueExpr(iterator.indices[shifted_dim], dace.int64),
+                offset_node,
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
+        elif isinstance(self.offset_provider[offset_dim], StridedNeighborOffsetProvider):
+            offset_provider = self.offset_provider[offset_dim]
+
+            shifted_dim = offset_provider.origin_axis.value
+            target_dim = offset_provider.neighbor_axis.value
+            args = [
+                ValueExpr(iterator.indices[shifted_dim], dace.int64),
+                offset_node,
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {internals[1]}"
+        else:
+            assert isinstance(self.offset_provider[offset_dim], Dimension)
+
+            shifted_dim = self.offset_provider[offset_dim].value
+            target_dim = shifted_dim
+            args = [
+                ValueExpr(iterator.indices[shifted_dim], dace.int64),
+                offset_node,
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]} + {internals[1]}"
 
         shifted_value = self.add_expr_tasklet(
-            list(zip(args, internals)), expr, dace.dtypes.int64, "ind_addr"
+            list(zip(args, internals)), expr, dace.dtypes.int64, "shift"
         )[0].value
 
         shifted_index = {dim: value for dim, value in iterator.indices.items()}
@@ -736,6 +723,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         shifted_index[target_dim] = shifted_value
 
         return IteratorExpr(iterator.field, shifted_index, iterator.dtype, iterator.dimensions)
+
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral) -> list[ValueExpr]:
+        offset = node.value
+        assert isinstance(offset, int)
+        offset_var = unique_var_name()
+        self.context.body.add_scalar(offset_var, dace.dtypes.int64, transient=True)
+        offset_node = self.context.state.add_access(offset_var)
+        tasklet_node = self.context.state.add_tasklet(
+            "get_offset", {}, {"__out"}, f"__out = {offset}"
+        )
+        self.context.state.add_edge(
+            tasklet_node, "__out", offset_node, None, dace.Memlet.simple(offset_var, "0")
+        )
+        return [ValueExpr(offset_node, self.context.body.arrays[offset_var].dtype)]
 
     def _visit_reduce(self, node: itir.FunCall):
         result_name = unique_var_name()
@@ -758,13 +759,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert isinstance(op_name, itir.SymRef)
             init = node.fun.args[1]
 
-            nreduce = self.context.body.arrays[neighbors_expr.value.data].shape[0]
+            reduce_array_desc = neighbors_expr.value.desc(self.context.body)
 
             self.context.body.add_scalar(result_name, result_dtype, transient=True)
             op_str = _MATH_BUILTINS_MAPPING[str(op_name)].format("__result", "__values[__idx]")
             reduce_tasklet = self.context.state.add_tasklet(
                 "reduce",
-                code=f"__result = {init}\nfor __idx in range({nreduce}):\n    __result = {op_str}",
+                code=f"__result = {init}\nfor __idx in range({reduce_array_desc.shape[0]}):\n    __result = {op_str}",
                 inputs={"__values"},
                 outputs={"__result"},
             )
@@ -773,14 +774,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 None,
                 reduce_tasklet,
                 "__values",
-                dace.Memlet(data=neighbors_expr.value.data, subset=f"0:{nreduce}"),
+                create_memlet_full(neighbors_expr.value.data, reduce_array_desc),
             )
             self.context.state.add_edge(
                 reduce_tasklet,
                 "__result",
                 result_access,
                 None,
-                dace.Memlet(data=result_name, subset="0"),
+                dace.Memlet.simple(result_name, "0"),
             )
         else:
             assert isinstance(node.fun, itir.FunCall)
@@ -993,7 +994,7 @@ def closure_to_tasklet_sdfg(
         tasklet = state.add_tasklet(f"get_{dim}", set(), {"value"}, f"value = {idx}")
         access = state.add_access(name)
         idx_accesses[dim] = access
-        state.add_edge(tasklet, "value", access, None, dace.Memlet(data=name, subset="0"))
+        state.add_edge(tasklet, "value", access, None, dace.Memlet.simple(name, "0"))
     for name, ty in inputs:
         if isinstance(ty, ts.FieldType):
             ndim = len(ty.dims)

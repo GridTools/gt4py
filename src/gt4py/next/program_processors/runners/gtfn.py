@@ -12,11 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
+import warnings
 from typing import Any
 
 import numpy.typing as npt
 
-from gt4py._core import definitions as core_defs
+import gt4py._core.definitions as core_defs
+import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
 from gt4py.next.iterator.transforms import LiftMode, global_tmps
@@ -41,12 +44,14 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
+def convert_args(
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.CompiledProgram:
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
         converted_args = [convert_arg(arg) for arg in args]
-        conn_args = extract_connectivity_args(offset_provider)
+        conn_args = extract_connectivity_args(offset_provider, device)
         return inp(
             *converted_args,
             *conn_args,
@@ -55,8 +60,22 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
     return decorated_program
 
 
+def _ensure_is_on_device(
+    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
+) -> npt.NDArray:
+    if device == core_defs.DeviceType.CUDA:
+        import cupy as cp
+
+        if not isinstance(connectivity_arg, cp.ndarray):
+            warnings.warn(
+                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+            )
+            return cp.asarray(connectivity_arg)
+    return connectivity_arg
+
+
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
@@ -66,7 +85,9 @@ def extract_connectivity_args(
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append((conn.table, tuple([0] * 2)))
+            # copying to device here is a fallback for easy testing and might be removed later
+            conn_arg = _ensure_is_on_device(conn.table, device)
+            args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
         else:
@@ -125,36 +146,71 @@ GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
     translation=GTFN_GPU_TRANSLATION_STEP,
     bindings=nanobind.bind_source,
     compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=convert_args,
+    decoration=functools.partial(convert_args, device=core_defs.DeviceType.CUDA),
 )
 
 
-run_gtfn = otf_compile_executor.OTFCompileExecutor(
+gtfn_executor = otf_compile_executor.OTFCompileExecutor(
     name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
 )
+run_gtfn = otf_compile_executor.OTFBackend(
+    executor=gtfn_executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
 
-run_gtfn_imperative = otf_compile_executor.OTFCompileExecutor(
+gtfn_imperative_executor = otf_compile_executor.OTFCompileExecutor(
     name="run_gtfn_imperative",
-    otf_workflow=run_gtfn.otf_workflow.replace(
-        translation=run_gtfn.otf_workflow.translation.replace(use_imperative_backend=True),
+    otf_workflow=gtfn_executor.otf_workflow.replace(
+        translation=gtfn_executor.otf_workflow.translation.replace(use_imperative_backend=True),
     ),
 )
-
-run_gtfn_cached = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_cached",
-    otf_workflow=workflow.CachedStep(step=run_gtfn.otf_workflow, hash_function=compilation_hash),
-)  # todo(ricoh): add API for converting an executor to a cached version of itself and vice versa
-
-run_gtfn_gpu = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
+run_gtfn_imperative = otf_compile_executor.OTFBackend(
+    executor=gtfn_imperative_executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
 
-run_gtfn_with_temporaries = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_with_temporaries",
-    otf_workflow=run_gtfn.otf_workflow.replace(
-        translation=run_gtfn.otf_workflow.translation.replace(
-            lift_mode=LiftMode.FORCE_TEMPORARIES,
-            temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+# TODO(ricoh): add API for converting an executor to a cached version of itself and vice versa
+gtfn_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
+    name="run_gtfn_cached",
+    otf_workflow=workflow.CachedStep(
+        step=gtfn_executor.otf_workflow, hash_function=compilation_hash
+    ),
+)
+run_gtfn_cached = otf_compile_executor.OTFBackend(
+    executor=gtfn_cached_executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
+
+
+run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
+    executor=otf_compile_executor.OTFCompileExecutor(
+        name="run_gtfn_with_temporaries",
+        otf_workflow=gtfn_executor.otf_workflow.replace(
+            translation=gtfn_executor.otf_workflow.translation.replace(
+                lift_mode=LiftMode.FORCE_TEMPORARIES,
+                temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+            ),
         ),
     ),
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
+
+gtfn_gpu_executor = otf_compile_executor.OTFCompileExecutor(
+    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
+)
+run_gtfn_gpu = otf_compile_executor.OTFBackend(
+    executor=gtfn_gpu_executor,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+)
+
+
+gtfn_gpu_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
+    name="run_gtfn_gpu_cached",
+    otf_workflow=workflow.CachedStep(
+        step=gtfn_gpu_executor.otf_workflow, hash_function=compilation_hash
+    ),
+)
+run_gtfn_gpu_cached = otf_compile_executor.OTFBackend(
+    executor=gtfn_gpu_cached_executor,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )
