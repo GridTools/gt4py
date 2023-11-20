@@ -494,7 +494,9 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         else:
                             consumed_domain.ranges[new_axis] = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
+                                im.literal(
+                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                ),
                             )
                     else:
                         raise NotImplementedError

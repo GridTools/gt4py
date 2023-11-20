@@ -21,6 +21,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.eve import SymbolRef
 from gt4py.next import (
+    NeighborTableOffsetProvider,
     astype,
     broadcast,
     errors,
@@ -31,10 +32,11 @@ from gt4py.next import (
     minimum,
     neighbor_sum,
     where,
-    NeighborTableOffsetProvider,
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
+from tests.next_tests.toy_connectivity import Edge
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -56,9 +58,6 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     fieldview_backend,
     reduction_setup,
 )
-
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
-from tests.next_tests.toy_connectivity import Edge
 
 
 def test_copy(cartesian_case):  # noqa: F811 # fixtures

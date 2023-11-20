@@ -22,7 +22,7 @@ from typing import Any, Final, Optional
 import numpy as np
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import trees, utils, codegen
+from gt4py.eve import codegen, trees, utils
 from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
@@ -31,7 +31,7 @@ from gt4py.next.iterator.transforms import LiftMode, pass_manager
 from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
-from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNIMCodegen, GTFNCodegen
+from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -58,7 +58,7 @@ class GTFNTranslationStep(
     use_imperative_backend: bool = False
     lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-    symbolic_domain_sizes: dict[str, str] = None
+    symbolic_domain_sizes: Optional[dict[str, str]] = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -176,12 +176,29 @@ class GTFNTranslationStep(
 
         return parameters, arg_exprs
 
-    def _preprocess_program(self, program: itir.FencilDefinition, offset_provider: dict[str, Connectivity | Dimension]) -> itir.FencilDefinition:
+    def _preprocess_program(
+        self,
+        program: itir.FencilDefinition,
+        offset_provider: dict[str, Connectivity | Dimension],
+        runtime_lift_mode: Optional[LiftMode] = None,
+    ) -> itir.FencilDefinition:
+        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
+        #  to the interface of all (or at least all of concern) backends, but instead should be
+        #  configured in the backend itself (like it is here), until then we respect the argument
+        #  here and warn the user if it differs from the one configured.
+        lift_mode = runtime_lift_mode or self.lift_mode
+        if lift_mode != self.lift_mode:
+            warnings.warn(
+                f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
+                f"overriden to be {str(runtime_lift_mode)} at runtime."
+            )
+
         if not self.enable_itir_transforms:
             return program
 
-        apply_common_transforms = functools.partial(pass_manager.apply_common_transforms,
-            lift_mode=self.lift_mode,
+        apply_common_transforms = functools.partial(
+            pass_manager.apply_common_transforms,
+            lift_mode=lift_mode,
             offset_provider=offset_provider,
             unroll_reduce=self.use_imperative_backend,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
@@ -189,22 +206,25 @@ class GTFNTranslationStep(
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
 
-        program = apply_common_transforms(program, unroll_reduce=self.use_imperative_backend)
+        program = apply_common_transforms(program, unroll_reduce=not self.use_imperative_backend)
 
-        if self.use_imperative_backend and any(is_applied_lift(node) for node in program.pre_walk_values()):
+        if self.use_imperative_backend and any(
+            is_applied_lift(node) for node in program.pre_walk_values()
+        ):
             # if we don't unroll, there may be lifts left in the itir which can't be lowered to
             # gtfn. In this case, just retry with unrolled reductions.
             program = apply_common_transforms(program, unroll_reduce=True)
 
         return program
 
-    def _generate_stencil_source(
-            self,
-            program: itir.FencilDefinition,
-            offset_provider: dict[str, Connectivity | Dimension],
-            column_axis: Optional[common.Dimension]
+    def generate_stencil_source(
+        self,
+        program: itir.FencilDefinition,
+        offset_provider: dict[str, Connectivity | Dimension],
+        column_axis: Optional[common.Dimension],
+        runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
-        new_program = self._preprocess_program(program, offset_provider)
+        new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
         gtfn_ir = GTFN_lowering.apply(
             new_program,
             offset_provider=offset_provider,
@@ -217,7 +237,6 @@ class GTFNTranslationStep(
         else:
             generated_code = GTFNCodegen.apply(gtfn_ir)
         return codegen.format_source("cpp", generated_code, style="LLVM")
-
 
     def __call__(
         self,
@@ -238,18 +257,6 @@ class GTFNTranslationStep(
             inp.kwargs["offset_provider"]
         )
 
-        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
-        #  to the interface of all (or at least all of concern) backends, but instead should be
-        #  configured in the backend itself (like it is here), until then we respect the argument
-        #  here and warn the user if it differs from the one configured.
-        runtime_lift_mode = inp.kwargs.pop("lift_mode", None)
-        lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode != self.lift_mode:
-            warnings.warn(
-                f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
-                "overriden to be {str(runtime_lift_mode)} at runtime."
-            )
-
         # combine into a format that is aligned with what the backend expects
         parameters: list[interface.Parameter] = regular_parameters + connectivity_parameters
         backend_arg = self._backend_type()
@@ -261,10 +268,11 @@ class GTFNTranslationStep(
             f"{', '.join(connectivity_args_expr)})({', '.join(args_expr)});"
         )
         decl_src = cpp_interface.render_function_declaration(function, body=decl_body)
-        stencil_src = self._generate_stencil_source(
+        stencil_src = self.generate_stencil_source(
             program,
             inp.kwargs["offset_provider"],
-            inp.kwargs["column_axis"]
+            inp.kwargs.get("column_axis", None),
+            inp.kwargs.get("lift_mode", None),
         )
         source_code = interface.format_source(
             self._language_settings(),

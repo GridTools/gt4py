@@ -133,7 +133,7 @@ def _pre_walk_items(
         yield from _pre_walk_items(child, __key__=key)
 
 
-def _pre_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _pre_walk_values(node: TreeLike) -> Iterable:
     """Create a pre-order tree traversal iterator of values."""
     yield node
     for child in iter_children_values(node):
