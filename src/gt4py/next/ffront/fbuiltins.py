@@ -31,6 +31,7 @@ from typing import (
 import numpy as np
 from numpy import float32, float64, int32, int64
 
+import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
@@ -324,7 +325,9 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 class FieldOffset(runtime.Offset):
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-    connectivity: Optional[Any] = None  # TODO
+    _cache: dict = dataclasses.field(
+        init=False, repr=False, hash=False, compare=False, default_factory=dict
+    )
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
@@ -339,7 +342,27 @@ class FieldOffset(runtime.Offset):
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
-        if isinstance(conn := current_offset_provider[self.value], common.Dimension):
-            return common.CartesianConnectivity(conn, offset)
-        else:
-            raise NotImplementedError()
+
+        offset_definition = current_offset_provider[self.value]
+        cache_key = (id(offset_definition), offset)
+        if (connectivity := self._cache.get(cache_key, None)) is None:
+            if isinstance(offset_definition, common.Dimension):
+                connectivity = common.CartesianConnectivity(offset_definition, offset)
+            elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
+                assert isinstance(self.target, tuple)
+                assert not offset_definition.has_skip_values
+                named_index = (self.target[-1], offset)
+                connectivity = gtx.as_connectivity(
+                    domain=self.target,
+                    codomain=self.source,
+                    data=offset_definition.table,
+                    dtype=offset_definition.index_type,
+                )[named_index]
+            elif isinstance(offset_definition, common.Connectivity):
+                connectivity = offset_definition
+            else:
+                raise NotImplementedError()
+
+            self._cache[cache_key] = connectivity
+
+        return connectivity

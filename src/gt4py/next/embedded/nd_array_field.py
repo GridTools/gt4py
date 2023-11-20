@@ -371,7 +371,7 @@ class NdArrayConnectivityField(
                 self._ndarray < image_range.stop
             )
             # indices of non-zero elements in each dimension
-            nnz: tuple[core_defs.NDArrayObject] = xp.nonzero(restricted_mask)
+            nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
 
             new_dims = []
             non_contiguous_dims = []
@@ -408,7 +408,7 @@ class NdArrayConnectivityField(
         cache_key = None
         try:
             cache_key = hash((id(self.ndarray), self.domain, index))
-            restricted_connectivity = self._cache.get[cache_key]
+            restricted_connectivity = self._cache[cache_key]
         except (KeyError, TypeError):
             cls = self.__class__
             xp = cls.array_ns

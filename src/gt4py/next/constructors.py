@@ -355,8 +355,11 @@ def as_connectivity(
 
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
-    buffer = next_allocators.allocate(domain, dtype, allocator=allocator, device=device)
-    connectivity_field = common.connectivity(buffer.ndarray, codomain=codomain, domain=domain)
+    buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
+    buffer.ndarray[...] = storage_utils.asarray(data)
+    connectivity_field = common.connectivity(
+        buffer.ndarray, codomain=codomain, domain=actual_domain
+    )
     assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
     return connectivity_field

@@ -33,10 +33,6 @@ offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
 )
 
 
-def within_context() -> bool:
-    return offset_provider.get() is not _undefined_offset_provider
-
-
 @contextlib.contextmanager
 def new_context(
     *,
@@ -61,3 +57,7 @@ def new_context(
     ctx.run(ctx_updater, *updates)
 
     yield ctx
+
+
+def within_context() -> bool:
+    return offset_provider.get() is not _undefined_offset_provider
