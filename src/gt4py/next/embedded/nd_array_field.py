@@ -154,7 +154,7 @@ class NdArrayField(
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
-        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
+        assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 
@@ -244,6 +244,14 @@ class NdArrayField(
     __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
 
     __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
+
+    __gt__ = _make_builtin("greater", "greater")
+
+    __ge__ = _make_builtin("greater_equal", "greater_equal")
+
+    __lt__ = _make_builtin("less", "less")
+
+    __le__ = _make_builtin("less_equal", "less_equal")
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():

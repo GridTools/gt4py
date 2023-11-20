@@ -686,6 +686,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             offset_provider = kwargs.pop("offset_provider", None)
             if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
+                # When backend is None, we are in embedded execution and for now
+                # we disable the program generation since it would involve generating
+                # Python source code from a PAST node.
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -700,9 +703,20 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
             else:
-                # "out" -> field_operator called from program in embedded execution
+                # "out" -> field_operator called from program in embedded execution or
+                # field_operator called directly from Python in embedded execution
                 domain = kwargs.pop("domain", None)
-                res = self.definition(*args, **kwargs)
+                if not next_embedded.context.within_context():
+                    # field_operator from Python in embedded execution
+                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                        res = ctx.run(self.definition, *args, **kwargs)
+                else:
+                    # field_operator from program in embedded execution (offset_provicer is already set)
+                    assert (
+                        offset_provider is None
+                        or next_embedded.context.offset_provider.get() is offset_provider
+                    )
+                    res = self.definition(*args, **kwargs)
                 _tuple_assign_field(
                     out, res, domain=None if domain is None else common.domain(domain)
                 )

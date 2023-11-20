@@ -100,6 +100,7 @@ class UnitRange(Sequence[int], Set[int]):
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
+    # TODO: the whole infinity idea and implementation is broken and should be replaced
     @classmethod
     def infinity(cls) -> UnitRange:
         return cls(Infinity.negative(), Infinity.positive())
@@ -155,19 +156,27 @@ class UnitRange(Sequence[int], Set[int]):
 
     def __add__(self, other: int | Set[int]) -> UnitRange:
         if isinstance(other, int):
-            return UnitRange(self.start + other, self.stop + other)
-        if isinstance(other, UnitRange):
-            if self.stop != other.start:
-                raise ValueError(
-                    f"Cannot add UnitRanges with non-matching start and stop values: {self} + {other}"
+            if other == Infinity.positive():
+                return UnitRange.infinity()
+            elif other == Infinity.negative():
+                return UnitRange(0, 0)
+            return UnitRange(
+                *(
+                    s if s in [Infinity.negative(), Infinity.positive()] else s + other
+                    for s in (self.start, self.stop)
                 )
-            return UnitRange(self.start, other.stop)
+            )
         else:
-            raise NotImplementedError("Can only compute union with int or UnitRange instances.")
+            raise NotImplementedError("Can only compute union with int instances.")
 
     def __sub__(self, other: int) -> UnitRange:
         if isinstance(other, int):
-            return UnitRange(self.start - other, self.stop - other)
+            if other == Infinity.negative():
+                return self + Infinity.positive()
+            elif other == Infinity.positive():
+                return self + Infinity.negative()
+            else:
+                return self + (-other)
         else:
             raise NotImplementedError("Can only compute substraction with int instances.")
 

@@ -14,8 +14,9 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Mapping, Sequence
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
@@ -212,7 +213,7 @@ def as_field(
     This function supports partial binding of arguments, see :class:`eve.utils.partial` for details.
     See :func:`empty` for further details about the meaning of the extra keyword arguments.
 
-    Parameters:
+    Arguments:
         domain: Definition of the domain of the field (and consequently of the shape of the allocated field buffer).
             In addition to the values allowed in `empty`, it can also just be a sequence of dimensions,
             in which case the sizes of each dimension will then be taken from the shape of `data`.
@@ -283,7 +284,7 @@ def as_field(
     dtype = core_defs.dtype(dtype)
     assert dtype.tensor_shape == ()  # TODO
 
-    if allocator is device is None and xtyping.supports_dlpack(data):
+    if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
 
     field = empty(
@@ -297,3 +298,66 @@ def as_field(
     field[...] = field.array_ns.asarray(data)
 
     return field
+
+
+@eve.utils.with_fluid_partial
+def as_connectivity(
+    domain: common.DomainLike | Sequence[common.Dimension],
+    codomain: common.Dimension,
+    data: core_defs.NDArrayObject,
+    dtype: Optional[core_defs.DType] = None,
+    *,
+    allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
+    device: Optional[core_defs.Device] = None,
+    # copy=False, TODO
+) -> common.ConnectivityField:
+    """
+    Constructs a connectivity field from the given domain, codomain, and data.
+
+    Arguments:
+        domain: The domain of the connectivity field. It can be either a `common.DomainLike` object or a
+            sequence of `common.Dimension` objects.
+        codomain: The codomain dimension of the connectivity field.
+        data: The data used to construct the connectivity field.
+        dtype: The data type of the connectivity field. If not provided, it will be inferred from the data.
+        allocator: The allocator used to allocate the buffer for the connectivity field. If not provided,
+            a default allocator will be used.
+        device: The device on which the connectivity field will be allocated. If not provided, the default
+            device will be used.
+
+    Returns:
+        The constructed connectivity field.
+
+    Raises:
+        ValueError: If the domain or codomain is invalid, or if the shape of the data does not match the domain shape.
+    """
+    if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
+        domain = cast(Sequence[common.Dimension], domain)
+        if len(domain) != data.ndim:
+            raise ValueError(
+                f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
+            )
+        actual_domain = common.domain([(d, (0, s)) for d, s in zip(domain, data.shape)])
+    else:
+        actual_domain = common.domain(cast(common.DomainLike, domain))
+
+    if not isinstance(codomain, common.Dimension):
+        raise ValueError(f"Invalid codomain dimension `{codomain}`")
+
+    # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
+    #   already the correct layout and device.
+    shape = storage_utils.asarray(data).shape
+    if shape != actual_domain.shape:
+        raise ValueError(f"Cannot construct `Field` from array of shape `{shape}` ")
+    if dtype is None:
+        dtype = storage_utils.asarray(data).dtype
+    dtype = core_defs.dtype(dtype)
+    assert dtype.tensor_shape == ()  # TODO
+
+    if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
+        device = core_defs.Device(*data.__dlpack_device__())
+    buffer = next_allocators.allocate(domain, dtype, allocator=allocator, device=device)
+    connectivity_field = common.connectivity(buffer.ndarray, codomain=codomain, domain=domain)
+    assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
+
+    return connectivity_field

@@ -25,9 +25,15 @@ import gt4py.next.common as common
 #: closure execution context.
 closure_column_range: cvars.ContextVar[range] = cvars.ContextVar("column_range")
 
-#: Offset provider dict in the current embedded execution context.
-offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar("offset_provider")
+_undefined_offset_provider = {}
 
+#: Offset provider dict in the current embedded execution context.
+offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
+    "offset_provider", default=_undefined_offset_provider
+)
+
+def within_context():
+    return offset_provider.get() is not _undefined_offset_provider
 
 @contextlib.contextmanager
 def new_context(
