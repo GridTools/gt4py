@@ -20,6 +20,7 @@ from typing import Any, Optional, Sequence, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
+
 out_domain = None  # TODO merge with the other context vars
 
 
@@ -94,7 +95,7 @@ def _absolute_sub_domain(
     return common.Domain(*named_ranges)
 
 
-def intersect_domains(domains: common.Domain) -> common.Domain:
+def intersect_domains(*domains: common.Domain) -> common.Domain:
     return functools.reduce(
         operator.and_,
         domains,

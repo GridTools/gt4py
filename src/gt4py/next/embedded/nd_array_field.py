@@ -151,9 +151,6 @@ class NdArrayField(
 
         return cls(domain, array)
 
-    def copy(self) -> NdArrayField:
-        return self.__class__(self._domain, self._ndarray.copy())
-
     def remap(self: NdArrayField, connectivity) -> NdArrayField:
         raise NotImplementedError()
 

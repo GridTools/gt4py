@@ -23,7 +23,6 @@ import dataclasses
 import functools
 import types
 import typing
-import itertools
 import warnings
 from collections.abc import Callable, Iterable
 from typing import Generator, Generic, TypeVar
@@ -33,8 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, constructors
-from gt4py.next import utils
+from gt4py.next import allocators as next_allocators, common, constructors, utils
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import (
@@ -745,13 +743,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 return self.definition(*args, **kwargs)
 
 
-get_domain = functools.partial(utils.get_common_tuple_value, lambda f: getattr(f, "domain"))
+get_domain = functools.partial(utils.get_common_tuple_value, lambda f: f.domain)
 is_field_or_tuple = functools.partial(utils.get_common_tuple_value, lambda f: common.is_field(f))
 
 
 def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
     domain_intersection = embedded_common.intersect_domains(
-        get_domain(f) for f in [*args, *kwargs.values()] if is_field_or_tuple(f)
+        *[get_domain(f) for f in [*args, *kwargs.values()] if is_field_or_tuple(f)]
     )
     non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
@@ -761,12 +759,15 @@ def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
     if scan_axis not in res_domain.dims:
         res_domain = common.Domain(*res_domain, (scan_range))
 
-    _construct_scan_array = lambda domain: functools.partial(
-        utils.apply_to_tuple_elems, lambda init: constructors.empty(domain, dtype=type(init))
-    )
-    _tuple_assign = lambda pos: functools.partial(
-        utils.apply_to_tuple_elems, lambda target, source: target.__setitem__(pos, source)
-    )
+    def _construct_scan_array(domain):
+        return functools.partial(
+            utils.apply_to_tuple_elems, lambda init: constructors.empty(domain, dtype=type(init))
+        )
+
+    def _tuple_assign(pos):
+        return functools.partial(
+            utils.apply_to_tuple_elems, lambda target, source: target.__setitem__(pos, source)
+        )
 
     res = _construct_scan_array(res_domain)(init)
 
@@ -779,7 +780,8 @@ def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
         for k in scan_range[1] if forward else reversed(scan_range[1]):
             pos = combine_pos(hpos, (scan_axis, k))
             new_args = [arg[pos] if common.is_field(arg) else arg for arg in args]
-            acc = scan_op(acc, *new_args, **kwargs)  # TODO kwargs
+            new_kwargs = {k: v[pos] if common.is_field(v) else v for k, v in kwargs.items()}
+            acc = scan_op(acc, *new_args, **new_kwargs)
             _tuple_assign(pos)(res, acc)
 
     for hpos in embedded_common.iterate_domain(non_scan_domain):
