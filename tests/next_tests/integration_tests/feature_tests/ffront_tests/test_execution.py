@@ -214,7 +214,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
-        tmp = b * a
+        tmp = a * b
         return tmp(Ioff[1])
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()
@@ -984,6 +984,10 @@ def test_where_k_offset(cartesian_case):
     ) -> cases.IKField:
         return where(k_index > 0, inp(Koff[-1]), 2)
 
+    @gtx.program
+    def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):
+        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, 10), KDim: (1, 10)})
+
     inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
     k_index = cases.allocate(
         cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
@@ -992,7 +996,7 @@ def test_where_k_offset(cartesian_case):
 
     ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
 
-    cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
+    cases.verify(cartesian_case, prog, inp, k_index, out=out[:, 1:], ref=ref[:, 1:])
 
 
 def test_undefined_symbols(cartesian_case):
