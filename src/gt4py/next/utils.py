@@ -63,7 +63,7 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 def apply_to_tuple_elems(fun, *args):  # TODO type annotations
     if isinstance(args[0], tuple):
-        assert all(isinstance(arg, tuple) for arg in args)
+        assert all(isinstance(arg, tuple) and len(args[0]) == len(arg) for arg in args)
         return tuple(apply_to_tuple_elems(fun, *arg) for arg in zip(*args))
     return fun(*args)
 
