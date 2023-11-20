@@ -133,7 +133,7 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: Set[Any]) -> UnitRange:
+    def __and__(self, other: Set[int]) -> UnitRange:
         if isinstance(other, UnitRange):
             start = max(self.start, other.start)
             stop = min(self.stop, other.stop)
@@ -141,12 +141,15 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
-    def __le__(self, other: Set[Any]):
+    def __le__(self, other: Set[int]):
         if isinstance(other, UnitRange):
-            # required for infinity comparison
             return self.start >= other.start and self.stop <= other.stop
+        elif len(self) == Infinity.positive():
+            return False
         else:
             return Set.__le__(self, other)
+
+    __ge__ = __lt__ = __gt__ = lambda self, other: NotImplemented
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"

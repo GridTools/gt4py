@@ -192,7 +192,9 @@ def broadcast(
     dims: tuple[common.Dimension, ...],
     /,
 ) -> common.Field:
-    assert core_defs.is_scalar_type(field)
+    assert core_defs.is_scalar_type(
+        field
+    )  # default implementation for scalars, Fields are handled via dispatch
     return common.field(
         np.asarray(field)[
             tuple([np.newaxis] * len(dims))
@@ -212,9 +214,16 @@ def where(
 
 
 @BuiltInFunction
-def astype(field: common.Field | core_defs.ScalarT, type_: type, /) -> common.Field:
-    assert core_defs.is_scalar_type(field)
-    return type_(field)
+def astype(
+    value: Field | core_defs.ScalarT | Tuple,
+    type_: type,
+    /,
+) -> Field | core_defs.ScalarT | Tuple:
+    if isinstance(value, tuple):
+        return tuple(astype(v, type_) for v in value)
+    # default implementation for scalars, Fields are handled via dispatch
+    assert core_defs.is_scalar_type(value)
+    return core_defs.dtype(type_).scalar_type(value)
 
 
 UNARY_MATH_NUMBER_BUILTIN_NAMES = ["abs"]
@@ -248,7 +257,7 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 def _make_unary_math_builtin(name):
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # noqa: E800 # commented code
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
         # return getattr(math, name)(value)# noqa: E800 # commented code
         raise NotImplementedError()
 
@@ -278,9 +287,10 @@ def _make_binary_math_builtin(name):
         rhs: common.Field | core_defs.ScalarT,
         /,
     ) -> common.Field | core_defs.ScalarT:
+        # default implementation for scalars, Fields are handled via dispatch
         assert core_defs.is_scalar_type(lhs)
         assert core_defs.is_scalar_type(rhs)
-        return BINARY_MATH_NUMBER_BUILTIN_TO_PYTHON_SCALAR_FUNCTION[name](lhs, rhs)  # type: ignore[operator] # Cannot call function of unknown type
+        return getattr(np, name)(lhs, rhs)
 
     impl.__name__ = name
     globals()[name] = BuiltInFunction(impl)
@@ -325,7 +335,7 @@ class FieldOffset(runtime.Offset):
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
-            raise ValueError("Second Dimension in offset must be a local Dimension.")
+            raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)

@@ -50,6 +50,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU_WITH_TEMPORARIES = (
         "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
     )
+    GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
@@ -145,6 +146,10 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
+    + [
+        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    ],
+    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],

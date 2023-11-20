@@ -171,16 +171,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: None | eve_utils.NOTHING | ppi.ProgramExecutor = (
-        eve_utils.NOTHING
-    )  # TODO(havogt): temporary change, remove once `None` is default backend
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -287,23 +285,16 @@ class Program:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
         if self.backend is None:
+            warnings.warn(
+                UserWarning(
+                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+                )
+            )
+
             self.definition(*rewritten_args, **kwargs)
             return
 
-        backend = self.backend
-        if self.backend is eve_utils.NOTHING:
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
-                )
-            )
-            backend = DEFAULT_BACKEND
-
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
-        if "debug" in kwargs:
-            debug(self.itir)
-
-        backend(
+        self.backend(
             self.itir,
             *rewritten_args,
             *size_args,
@@ -548,14 +539,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -706,7 +697,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 )
             else:
                 # "out" -> field_operator called from program in embedded execution
-                # TODO put offset_provider in ctxt var
+                # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
                 domain = kwargs.pop("domain", None)
                 res = self.definition(*args, **kwargs)
                 _tuple_assign_field(
@@ -715,22 +706,23 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 return
         else:
             # field_operator called from other field_operator in embedded execution
+            assert self.backend is None
             return self.definition(*args, **kwargs)
 
 
 def _tuple_assign_field(
-    tgt: tuple[common.Field | tuple, ...] | common.Field,
-    src: tuple[common.Field | tuple, ...] | common.Field,
-    domain: common.Domain,
+    target: tuple[common.Field | tuple, ...] | common.Field,
+    source: tuple[common.Field | tuple, ...] | common.Field,
+    domain: Optional[common.Domain],
 ):
-    if isinstance(tgt, tuple):
-        if not isinstance(src, tuple):
-            raise RuntimeError(f"Cannot assign {src} to {tgt}.")
-        for t, s in zip(tgt, src):
+    if isinstance(target, tuple):
+        if not isinstance(source, tuple):
+            raise RuntimeError(f"Cannot assign {source} to {target}.")
+        for t, s in zip(target, source):
             _tuple_assign_field(t, s, domain)
     else:
-        domain = domain or tgt.domain
-        tgt[domain] = src[domain]
+        domain = domain or target.domain
+        target[domain] = source[domain]
 
 
 @typing.overload

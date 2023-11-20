@@ -219,7 +219,7 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 def test_wrong_argument_type(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
-    inp = gtx.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
+    inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
     with pytest.raises(TypeError) as exc_info:

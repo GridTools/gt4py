@@ -121,7 +121,10 @@ class NdArrayField(
         return self._ndarray
 
     def asnumpy(self) -> np.ndarray:
-        return np.asarray(self._ndarray)
+        if self.array_ns == cp:
+            return cp.asnumpy(self._ndarray)
+        else:
+            return np.asarray(self._ndarray)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -286,7 +289,7 @@ def _np_cp_setitem(
 _nd_array_implementations = [np]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
@@ -299,7 +302,7 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
@@ -311,7 +314,7 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
@@ -353,7 +356,7 @@ NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _astype(field: NdArrayField, type_: type) -> NdArrayField:
-    return field.__class__.from_array(field.ndarray, domain=field.domain, dtype=type_)
+    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
 
 
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
