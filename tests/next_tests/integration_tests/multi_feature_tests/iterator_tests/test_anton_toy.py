@@ -90,10 +90,12 @@ def test_anton_toy(program_processor, lift_mode):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp = gtx.np_as_located_field(IDim, JDim, KDim, origin={IDim: 1, JDim: 1, KDim: 0})(
+    inp = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0] + 2, shape[1] + 2, shape[2])),
+        origin={IDim: 1, JDim: 1, KDim: 0},
     )
-    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
     ref = naive_lap(inp)
 
     run_processor(

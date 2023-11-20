@@ -23,6 +23,7 @@ import dataclasses
 import itertools
 import math
 import sys
+import warnings
 from typing import (
     Any,
     Callable,
@@ -1015,6 +1016,8 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], common.Field]:
+    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)
+
     origin = origin or {}
 
     def _maker(a) -> common.Field:
@@ -1063,7 +1066,7 @@ class IndexField(common.Field):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
@@ -1088,6 +1091,12 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1169,7 +1178,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
@@ -1189,6 +1198,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:

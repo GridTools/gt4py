@@ -80,15 +80,18 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, init=False)
 class UnitRange(Sequence[int], Set[int]):
     """Range from `start` to `stop` with step size one."""
 
     start: int
     stop: int
 
-    def __post_init__(self):
-        if self.stop <= self.start:
+    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
+        if start < stop:
+            object.__setattr__(self, "start", int(start))
+            object.__setattr__(self, "stop", int(stop))
+        else:
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
@@ -130,7 +133,7 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: Set[Any]) -> UnitRange:
+    def __and__(self, other: Set[int]) -> UnitRange:
         if isinstance(other, UnitRange):
             start = max(self.start, other.start)
             stop = min(self.stop, other.stop)
@@ -138,11 +141,26 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
+    def __le__(self, other: Set[int]):
+        if isinstance(other, UnitRange):
+            return self.start >= other.start and self.stop <= other.stop
+        elif len(self) == Infinity.positive():
+            return False
+        else:
+            return Set.__le__(self, other)
+
+    __ge__ = __lt__ = __gt__ = lambda self, other: NotImplemented
+
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
 
 
-RangeLike: TypeAlias = UnitRange | range | tuple[int, int]
+RangeLike: TypeAlias = (
+    UnitRange
+    | range
+    | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
+    | core_defs.IntegralScalar
+)
 
 
 def unit_range(r: RangeLike) -> UnitRange:
@@ -152,9 +170,17 @@ def unit_range(r: RangeLike) -> UnitRange:
         if r.step != 1:
             raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
         return UnitRange(r.start, r.stop)
-    if isinstance(r, tuple) and isinstance(r[0], int) and isinstance(r[1], int):
+    # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+    #   once the related mypy bug (#16358) gets fixed
+    if (
+        isinstance(r, tuple)
+        and isinstance(r[0], core_defs.INTEGRAL_TYPES)
+        and isinstance(r[1], core_defs.INTEGRAL_TYPES)
+    ):
         return UnitRange(r[0], r[1])
-    raise ValueError(f"`{r}` cannot be interpreted as `UnitRange`.")
+    if isinstance(r, core_defs.INTEGRAL_TYPES):
+        return UnitRange(0, cast(core_defs.IntegralScalar, r))
+    raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
@@ -274,6 +300,10 @@ class Domain(Sequence[NamedRange]):
     def __len__(self) -> int:
         return len(self.ranges)
 
+    @property
+    def shape(self) -> tuple[int, ...]:
+        return tuple(len(r) for r in self.ranges)
+
     @overload
     def __getitem__(self, index: int) -> NamedRange:
         ...
@@ -350,12 +380,23 @@ def domain(domain_like: DomainLike) -> Domain:
 
     >>> domain({I: (2, 4), J: (3, 5)})
     Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+
+    >>> domain(((I, 2), (J, 4)))
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+
+    >>> domain({I: 2, J: 4})
+    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
     if isinstance(domain_like, Sequence):
         return Domain(*tuple(named_range(d) for d in domain_like))
     if isinstance(domain_like, Mapping):
+        if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
+            return Domain(
+                dims=tuple(domain_like.keys()),
+                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),  # type: ignore[arg-type] # type of `s` is checked in condition
+            )
         return Domain(
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),
@@ -383,17 +424,27 @@ if TYPE_CHECKING:
             ...
 
 
+# TODO(havogt): replace this protocol with the new `GTFieldInterface` protocol
 class NextGTDimsInterface(Protocol):
     """
-    A `GTDimsInterface` is an object providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+    Protocol for objects providing the `__gt_dims__` property, naming :class:`Field` dimensions.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to :mod:`gt4py.cartesian`,
-    where the labels are `str` s with implied semantics, see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    The dimension names are objects of type :class:`Dimension`, in contrast to
+    :mod:`gt4py.cartesian`, where the labels are `str` s with implied semantics,
+    see :class:`~gt4py._core.definitions.GTDimsInterface` .
     """
 
-    # TODO(havogt): unify with GTDimsInterface, ideally in backward compatible way
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:
+        ...
+
+
+# TODO(egparedes): add support for this new protocol in the cartesian module
+class GTFieldInterface(Protocol):
+    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
+
+    @property
+    def __gt_domain__(self) -> Domain:
         ...
 
 
@@ -444,6 +495,14 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
     @abc.abstractmethod
     def __invert__(self) -> Field:
         """Only defined for `Field` of value type `bool`."""
+
+    @abc.abstractmethod
+    def __eq__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
+        ...
+
+    @abc.abstractmethod
+    def __ne__(self, other: Any) -> Field:  # type: ignore[override] # mypy wants return `bool`
+        ...
 
     @abc.abstractmethod
     def __add__(self, other: Field | core_defs.ScalarT) -> Field:
@@ -671,7 +730,7 @@ class FieldBuiltinFuncRegistry:
 
     def __init_subclass__(cls, **kwargs):
         cls._builtin_func_map = collections.ChainMap(
-            {},  # New empty `dict`` for new registrations on this class
+            {},  # New empty `dict` for new registrations on this class
             *[
                 c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
                 for c in cls.__mro__

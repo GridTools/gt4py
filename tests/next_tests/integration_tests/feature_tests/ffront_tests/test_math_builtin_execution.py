@@ -18,7 +18,7 @@ from typing import Callable
 import numpy as np
 import pytest
 
-from gt4py.next import np_as_located_field
+import gt4py.next as gtx
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -116,15 +116,18 @@ def make_builtin_field_operator(builtin_name: str):
 
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inputs):
+    if cartesian_case.backend is None:
+        # TODO(havogt) find a way that works for embedded
+        pytest.xfail("Test does not have a field view program.")
     if builtin_name == "gamma":
         # numpy has no gamma function
         ref_impl: Callable = np.vectorize(math.gamma)
     else:
         ref_impl: Callable = getattr(np, builtin_name)
 
-    inps = [np_as_located_field(IDim)(np.asarray(input)) for input in inputs]
+    inps = [cartesian_case.as_field([IDim], np.asarray(input)) for input in inputs]
     expected = ref_impl(*inputs)
-    out = np_as_located_field(IDim)(np.zeros_like(expected))
+    out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
     builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(
         cartesian_case.backend

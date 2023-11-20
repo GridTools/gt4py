@@ -32,10 +32,8 @@ def test_different_buffer_sizes():
     out_nx = 5
     out_ny = 5
 
-    inp = gtx.np_as_located_field(IDim, JDim)(
-        np.reshape(np.arange(nx * ny, dtype=np.int32), (nx, ny))
-    )
-    out = gtx.np_as_located_field(IDim, JDim)(np.zeros((out_nx, out_ny), dtype=np.int32))
+    inp = gtx.as_field([IDim, JDim], np.reshape(np.arange(nx * ny, dtype=np.int32), (nx, ny)))
+    out = gtx.as_field([IDim, JDim], np.zeros((out_nx, out_ny), dtype=np.int32))
 
     @gtx.field_operator(backend=gtfn.run_gtfn)
     def copy(inp: gtx.Field[[IDim, JDim], gtx.int32]) -> gtx.Field[[IDim, JDim], gtx.int32]:

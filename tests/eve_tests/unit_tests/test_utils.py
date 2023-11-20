@@ -137,6 +137,21 @@ def unique_data_items(request):
     ]
 
 
+def test_fluid_partial():
+    from gt4py.eve.utils import fluid_partial
+
+    def func(a, b, c):
+        return a + b + c
+
+    fp1 = fluid_partial(func, 1)
+    fp2 = fp1.partial(2)
+    fp3 = fp2.partial(3)
+
+    assert fp1(2, 3) == 6
+    assert fp2(3) == 6
+    assert fp3() == 6
+
+
 def test_noninstantiable_class():
     @eve.utils.noninstantiable
     class NonInstantiableClass(eve.datamodels.DataModel):
