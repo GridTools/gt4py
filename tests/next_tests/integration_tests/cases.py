@@ -28,7 +28,7 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common, constructors
+from gt4py.next import common, constructors, utils
 from gt4py.next.ffront import decorator
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -385,13 +385,6 @@ def run(
     fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
 
 
-def _asndarray(fields: tuple[common.Field | np.ndarray | tuple]) -> tuple[np.ndarray | tuple]:
-    if isinstance(fields, tuple):
-        return tuple(_asndarray(f) for f in fields)
-    else:
-        return fields.asnumpy() if hasattr(fields, "asnumpy") else fields
-
-
 def verify(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -443,8 +436,8 @@ def verify(
 
     out_comp = out or inout
     assert out_comp is not None
-    out_comp_ndarray = _asndarray(out_comp)
-    ref_ndarray = _asndarray(ref)
+    out_comp_ndarray = utils.asnumpy(out_comp)
+    ref_ndarray = utils.asnumpy(ref)
     assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"

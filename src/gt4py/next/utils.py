@@ -12,7 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
 from typing import Any, ClassVar, TypeGuard, TypeVar
+
+from gt4py.next import common
 
 
 class RecursionGuard:
@@ -56,3 +59,15 @@ _T = TypeVar("_T")
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
+
+
+def apply_to_tuple_elems(fun, *args):  # TODO type annotations
+    if isinstance(args[0], tuple):
+        assert all(isinstance(arg, tuple) for arg in args)
+        return tuple(apply_to_tuple_elems(fun, *arg) for arg in zip(*args))
+    return fun(*args)
+
+
+asnumpy = functools.partial(
+    apply_to_tuple_elems, lambda f: f.asnumpy() if common.is_field(f) else f
+)

@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import utils
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
@@ -89,7 +90,7 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     )
     out = gtx.as_field([IDim, KDim], np.zeros(shape))
 
-    ref = ref_fun(inp)
+    ref = ref_fun(inp.asnumpy())
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
@@ -157,7 +158,7 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
 
     k_size = 5
     inp = inp_function(k_size)
-    ref = ref_function(inp)
+    ref = ref_function(utils.asnumpy(inp))
 
     out = gtx.as_field([KDim], np.zeros((5,), dtype=np.int32))
 
@@ -173,7 +174,7 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
     )
 
     if validate:
-        np.allclose(ref, out)
+        np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -222,7 +223,7 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     )
 
     if validate:
-        assert np.allclose(reference, np.asarray(out))
+        assert np.allclose(reference, out.asnumpy())
 
 
 @fundef
@@ -260,7 +261,7 @@ def test_ksum_back_scan(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(ref, np.asarray(out))
+        assert np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -366,7 +367,7 @@ def test_different_vertical_sizes(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref[1:], out[1:])
+        assert np.allclose(ref[1:], out.asnumpy()[1:])
 
 
 @fundef
