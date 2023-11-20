@@ -423,6 +423,7 @@ class NdArrayConnectivityField(
     __getitem__ = restrict
 
     __eq__ = NdArrayField.__eq__
+
     __ne__ = NdArrayField.__ne__
 
 

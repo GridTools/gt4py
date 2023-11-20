@@ -14,9 +14,8 @@
 
 from __future__ import annotations
 
-import functools
 from collections.abc import Mapping, Sequence
-from typing import Any, Optional, cast
+from typing import Optional, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
@@ -312,7 +311,7 @@ def as_connectivity(
     # copy=False, TODO
 ) -> common.ConnectivityField:
     """
-    Constructs a connectivity field from the given domain, codomain, and data.
+    Construct a connectivity field from the given domain, codomain, and data.
 
     Arguments:
         domain: The domain of the connectivity field. It can be either a `common.DomainLike` object or a
