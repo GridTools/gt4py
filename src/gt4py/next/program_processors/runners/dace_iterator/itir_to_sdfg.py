@@ -24,6 +24,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import (
     Context,
+    GatherOutputSymbolsPass,
     IteratorExpr,
     PythonTaskletCodegen,
     SymbolExpr,
@@ -126,8 +127,11 @@ class ItirToSDFG(eve.NodeVisitor):
         self.storage_types[name] = type_
 
     def get_output_nodes(
-        self, closure: itir.StencilClosure, context: Context
+        self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
+        symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr] = {}
+        GatherOutputSymbolsPass(sdfg, state, self.node_types, symbol_map).visit(closure.output)
+        context = Context(sdfg, state, symbol_map)
         translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
@@ -202,19 +206,16 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
 
-        program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
-        closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
-
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
-        output_nodes = self.get_output_nodes(node, closure_ctx)
+        output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
         output_names = [k for k, _ in output_nodes.items()]
 
         # Add DaCe arrays for inputs, outputs and connectivities to closure SDFG.
         input_transients_mapping = {}
-        for name in [*input_names, *conn_names, *output_names]:
+        for name in [*input_names, *connectivity_names, *output_names]:
             if name in closure_sdfg.arrays:
                 assert name in input_names and name in output_names
                 # In case of closures with in/out fields, there is risk of race condition
@@ -256,6 +257,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # Update symbol table and get output domain of the closure
+        program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
@@ -273,6 +275,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     program_arg_syms[name] = value
                 else:
                     program_arg_syms[name] = SymbolExpr(name, dtype)
+        closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, closure_ctx)
 
         # Map SDFG tasklet arguments to parameters
@@ -287,7 +290,9 @@ class ItirToSDFG(eve.NodeVisitor):
         input_memlets = [
             create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_access_names
         ]
-        conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
+        connectivity_memlets = [
+            create_memlet_full(name, closure_sdfg.arrays[name]) for name in connectivity_names
+        ]
 
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
@@ -330,9 +335,11 @@ class ItirToSDFG(eve.NodeVisitor):
 
         input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
         output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, output_memlets)}
-        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlets)}
+        connectivity_mapping = {
+            param: arg for param, arg in zip(connectivity_names, connectivity_memlets)
+        }
 
-        array_mapping = {**input_mapping, **conn_mapping}
+        array_mapping = {**input_mapping, **connectivity_mapping}
         symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, array_mapping)
 
         nsdfg_node, map_entry, map_exit = add_mapped_nested_sdfg(
@@ -364,7 +371,7 @@ class ItirToSDFG(eve.NodeVisitor):
             closure_state.remove_edge(edge)
             access_nodes[memlet.data].data = output_connectors_mapping[memlet.data]
 
-        return closure_sdfg, input_field_names + conn_names, output_names
+        return closure_sdfg, input_field_names + connectivity_names, output_names
 
     def _visit_scan_stencil_closure(
         self,
