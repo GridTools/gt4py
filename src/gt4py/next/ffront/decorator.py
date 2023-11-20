@@ -32,9 +32,9 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, constructors, utils
+from gt4py.next import allocators as next_allocators, common, field_utils
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.embedded import common as embedded_common
+from gt4py.next.embedded import common as embedded_common, operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -705,7 +705,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
 
                 domain = kwargs.pop("domain", None)
-                embedded_common.out_domain = domain if domain is not None else get_domain(out)
+                embedded_common.out_domain = (
+                    domain if domain is not None else field_utils.get_domain(out)
+                )
                 if isinstance(self.foast_node, foast.ScanOperator):
                     scan_op = self.definition
                     scan_foast: foast.ScanOperator = self.foast_node
@@ -714,7 +716,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     axis = scan_foast.axis.value
                     scan_range = embedded_common.out_domain[axis]
 
-                    res = execute_scan(scan_op, forward, init, axis, scan_range, args, kwargs)
+                    res = embedded_operators.scan(
+                        scan_op, forward, init, axis, scan_range, args, kwargs
+                    )
 
                     _tuple_assign_field(
                         out, res, domain=None if domain is None else common.domain(domain)
@@ -738,63 +742,11 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
                 scan_range = embedded_common.out_domain[axis]
 
-                return execute_scan(scan_op, forward, init, axis, scan_range, args, kwargs)
+                return embedded_operators.scan(
+                    scan_op, forward, init, axis, scan_range, args, kwargs
+                )
             else:
                 return self.definition(*args, **kwargs)
-
-
-get_domain = functools.partial(utils.get_common_tuple_value, lambda f: f.domain)
-is_field_or_tuple = functools.partial(utils.get_common_tuple_value, lambda f: common.is_field(f))
-
-
-def execute_scan(scan_op, forward, init, scan_axis, scan_range, args, kwargs):
-    domain_intersection = embedded_common.intersect_domains(
-        *[get_domain(f) for f in [*args, *kwargs.values()] if is_field_or_tuple(f)]
-    )
-    non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
-
-    res_domain = common.Domain(
-        *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
-    )
-    if scan_axis not in res_domain.dims:
-        res_domain = common.Domain(*res_domain, (scan_range))
-
-    def _construct_scan_array(domain):
-        return functools.partial(
-            utils.apply_to_tuple_elems, lambda init: constructors.empty(domain, dtype=type(init))
-        )
-
-    def _tuple_assign(pos):
-        return functools.partial(
-            utils.apply_to_tuple_elems, lambda target, source: target.__setitem__(pos, source)
-        )
-
-    def _tuple_at(pos):
-        return functools.partial(
-            utils.apply_to_tuple_elems, lambda f: f[pos] if common.is_field(f) else f
-        )
-
-    res = _construct_scan_array(res_domain)(init)
-
-    def combine_pos(hpos, vpos):
-        hpos_iter = iter(hpos)
-        return tuple(vpos if d == scan_axis else next(hpos_iter) for d in res_domain.dims)
-
-    def scan_loop(hpos):
-        acc = init
-        for k in scan_range[1] if forward else reversed(scan_range[1]):
-            pos = combine_pos(hpos, (scan_axis, k))
-            new_args = [_tuple_at(pos)(arg) for arg in args]
-            new_kwargs = {k: _tuple_at(pos)(v) for k, v in kwargs.items()}
-            acc = scan_op(acc, *new_args, **new_kwargs)
-            _tuple_assign(pos)(res, acc)
-
-    for hpos in embedded_common.iterate_domain(non_scan_domain):
-        scan_loop(hpos)
-    if len(non_scan_domain) == 0:
-        scan_loop(())
-
-    return res
 
 
 def _tuple_assign_field(

@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, ClassVar, TypeGuard, TypeVar
+import functools
+from typing import Any, Callable, ClassVar, ParamSpec, TypeGuard, TypeVar, cast
 
 
 class RecursionGuard:
@@ -53,22 +54,42 @@ class RecursionGuard:
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
 
 
-def get_common_tuple_value(fun: Callable[[_T], _S], value: tuple[_T | tuple, ...] | _T) -> _S:
-    if isinstance(value, tuple):
-        all_res = tuple(get_common_tuple_value(fun, v) for v in value)
-        assert all(v == all_res[0] for v in all_res)
-        return all_res[0]
-    return fun(value)
+def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
+    @functools.wraps(fun)
+    def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
+        if isinstance(value, tuple):
+            all_res = tuple(impl(v) for v in value)
+            assert all(v == all_res[0] for v in all_res)
+            return all_res[0]
+        return fun(value)
+
+    return impl
 
 
-def apply_to_tuple_elems(fun, *args):
-    if isinstance(args[0], tuple):
-        assert all(isinstance(arg, tuple) for arg in args)
-        return tuple(apply_to_tuple_elems(fun, *arg) for arg in zip(*args))
-    return fun(*args)
+def apply_to_tuple_elements(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
+    """Apply `fun` to each entry of (possibly nested) tuples.
+
+    Examples:
+        >>> apply_to_tuple_elements(lambda x: x + 1)(((1, 2), 3))
+        ((2, 3), 4)
+        >>> apply_to_tuple_elements(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
+        ((5, 7), 9)
+    """
+
+    @functools.wraps(fun)
+    def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
+        if isinstance(args[0], tuple):
+            assert all(isinstance(arg, tuple) and len(args[0]) == len(arg) for arg in args)
+            return tuple(impl(*arg) for arg in zip(*args))
+
+        return fun(*cast(_P.args, args))
+
+    return impl
