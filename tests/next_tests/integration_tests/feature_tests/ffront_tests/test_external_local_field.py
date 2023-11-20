@@ -17,7 +17,6 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import int32, neighbor_sum
-from gt4py.next.program_processors.runners import dace_iterator, gtfn_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
@@ -27,10 +26,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_external_local_field(unstructured_case):
-    if unstructured_case.backend == dace_iterator.run_dace_iterator:
-        pytest.xfail("Not supported in DaCe backend: reductions over non-field expressions")
+pytestmark = pytest.mark.uses_unstructured_shift
 
+
+def test_external_local_field(unstructured_case):
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
@@ -39,7 +38,9 @@ def test_external_local_field(unstructured_case):
             inp * ones(V2E), axis=V2EDim
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
+    inp = unstructured_case.as_field(
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+    )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
     cases.verify(
@@ -60,7 +61,9 @@ def test_external_local_field_only(unstructured_case):
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(inp, axis=V2EDim)
 
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
+    inp = unstructured_case.as_field(
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+    )
 
     cases.verify(
         unstructured_case,
