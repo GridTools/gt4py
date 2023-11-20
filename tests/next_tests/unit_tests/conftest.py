@@ -50,11 +50,12 @@ def lift_mode(request):
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append((definitions.OptionalProgramBackendId.DACE_CPU, True))
-    OPTIONAL_PROCESSORS.append(
-        pytest.param(
-            (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
-        )
-    ),
+    # TODO(havogt): update tests to use proper allocation
+    # OPTIONAL_PROCESSORS.append(
+    #     pytest.param(
+    #         (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
+    #     )
+    # ),
 
 
 @pytest.fixture(
