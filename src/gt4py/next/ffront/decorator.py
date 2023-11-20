@@ -294,6 +294,10 @@ class Program:
             self.definition(*rewritten_args, **kwargs)
             return
 
+        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
+        if "debug" in kwargs:
+            debug(self.itir)
+
         self.backend(
             self.itir,
             *rewritten_args,
