@@ -25,6 +25,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
 from gt4py.next import common, constructors
@@ -73,7 +74,7 @@ V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
 C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
 
-ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
+ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
@@ -117,11 +118,18 @@ class DataInitializer(Protocol):
         return self
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class ConstInitializer(DataInitializer):
     """Initialize with a given value across the coordinate space."""
 
     value: ScalarValue
+
+    def __init__(self, value: ScalarValue):
+        if not core_defs.is_scalar_type(value):
+            raise ValueError(
+                "`ConstInitializer` can not be used with non-scalars. Use `Case.as_field` instead."
+            )
+        self.value = value
 
     @property
     def scalar_value(self) -> ScalarValue:
@@ -460,7 +468,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
+    ref_args = tuple(i.__array__() if common.is_field(i) else i for i in inps)
     verify(
         case,
         fieldop,
@@ -598,3 +606,7 @@ class Case:
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
+
+    @property
+    def as_field(self):
+        return constructors.as_field.partial(allocator=self.backend)

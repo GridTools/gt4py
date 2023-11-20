@@ -121,7 +121,10 @@ class NdArrayField(
         return self._ndarray
 
     def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
-        return np.asarray(self._ndarray, dtype)
+        if self.array_ns == cp:
+            return np.asarray(cp.asnumpy(self._ndarray), dtype)
+        else:
+            return np.asarray(self._ndarray, dtype)
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -135,25 +138,22 @@ class NdArrayField(
         /,
         *,
         domain: common.DomainLike,
-        dtype_like: Optional[core_defs.DType] = None,  # TODO define DTypeLike
+        dtype: Optional[core_defs.DTypeLike] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
 
-        xp_dtype = None if dtype_like is None else xp.dtype(core_defs.dtype(dtype_like).scalar_type)
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
 
-        if dtype_like is not None:
-            assert array.dtype.type == core_defs.dtype(dtype_like).scalar_type
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
         assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
-        assert all(
-            len(r) == s or (s == 1 and r == common.UnitRange.infinity())
-            for r, s in zip(domain.ranges, array.shape)
-        )
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 
@@ -193,6 +193,10 @@ class NdArrayField(
     __pow__ = _make_builtin("pow", "power")
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
+
+    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
+
+    __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
@@ -285,7 +289,7 @@ def _np_cp_setitem(
 _nd_array_implementations = [np]
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
@@ -298,7 +302,7 @@ common.field.register(np.ndarray, NumPyArrayField.from_array)
 if cp:
     _nd_array_implementations.append(cp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
@@ -310,7 +314,7 @@ if cp:
 if jnp:
     _nd_array_implementations.append(jnp)
 
-    @dataclasses.dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True, eq=False)
     class JaxArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = jnp
 
@@ -349,6 +353,13 @@ def _builtins_broadcast(
 
 
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
+
+
+def _astype(field: NdArrayField, type_: type) -> NdArrayField:
+    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+
+
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
 
 
 def _get_slices_from_domain_slice(
