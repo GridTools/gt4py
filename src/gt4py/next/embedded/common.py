@@ -21,6 +21,7 @@ from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
 scan_range = None  # TODO merge with the other context vars
+out_domain = None  # TODO keep one of the 2
 
 
 def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:

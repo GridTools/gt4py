@@ -707,30 +707,26 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
 
                 domain = kwargs.pop("domain", None)
+                embedded_common.out_domain = domain if domain is not None else get_domain(out)
                 if isinstance(self.foast_node, foast.ScanOperator):
                     scan_op = self.definition
                     scan_foast: foast.ScanOperator = self.foast_node
                     forward = scan_foast.forward.value
                     init = scan_foast.init.value
                     axis = scan_foast.axis.value
-                    scan_range = (
-                        domain[axis] if domain is not None else get_domain(out)[axis]
-                    )  # TODO from context var (if we don't have access to out or domain)
-
-                    embedded_common.scan_range = scan_range
+                    scan_range = embedded_common.out_domain[axis]
 
                     res = execute_scan(scan_op, forward, init, axis, scan_range, args, kwargs)
 
                     _tuple_assign_field(
                         out, res, domain=None if domain is None else common.domain(domain)
                     )
-                    embedded_common.scan_range = None
-
                 else:
                     res = self.definition(*args, **kwargs)
                     _tuple_assign_field(
                         out, res, domain=None if domain is None else common.domain(domain)
                     )
+                embedded_common.out_domain = None
                 return
         else:
             # field_operator called from other field_operator in embedded execution
@@ -742,7 +738,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 init = scan_foast.init.value
                 axis = scan_foast.axis.value
 
-                scan_range = embedded_common.scan_range
+                scan_range = embedded_common.out_domain[axis]
 
                 return execute_scan(scan_op, forward, init, axis, scan_range, args, kwargs)
             else:
