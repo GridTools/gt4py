@@ -1119,13 +1119,6 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_constant_closure_vars(cartesian_case):
-    if cartesian_case.backend is None:
-        # >>> field = gtx.zeros(domain)
-        # >>> np.int32(1)*field # steals the buffer from the field
-        # array([0.])
-
-        # TODO(havogt): remove `__array__`` from `NdArrayField`
-        pytest.xfail("Bug: Binary operation between np datatype and Field returns ndarray.")
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(
