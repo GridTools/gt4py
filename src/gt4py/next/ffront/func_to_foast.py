@@ -36,6 +36,7 @@ from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system_2 import inference as ti2
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -169,9 +170,12 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
             raise errors.DSLError(loc, "Function is expected to return a value.")
 
+        new_params = self.visit(node.args, **kwargs)
+
+
         return foast.FunctionDefinition(
             id=node.name,
-            params=self.visit(node.args, **kwargs),
+            params=new_params,
             body=new_body,
             closure_vars=closure_var_symbols,
             location=loc,
@@ -185,9 +189,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
         new_type = type_translation.from_type_hint(annotation)
+        new_type_2 = ti2.inferrer.from_annotation(annotation)
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
-        return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
+        return foast.DataSymbol(id=node.arg, location=loc, type=new_type, type_2=new_type_2)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes

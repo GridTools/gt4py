@@ -14,11 +14,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union, Optional
 
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
+from gt4py.next.type_system_2 import types as ts2
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.utils import RecursionGuard
@@ -26,6 +27,7 @@ from gt4py.next.utils import RecursionGuard
 
 class LocatedNode(Node):
     location: SourceLocation
+    type_2: Optional[ts2.Type] = None
 
     def __str__(self):
         from gt4py.next.ffront.foast_pretty_printer import pretty_format
