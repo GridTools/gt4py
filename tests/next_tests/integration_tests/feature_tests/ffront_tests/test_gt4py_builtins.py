@@ -286,7 +286,7 @@ def test_conditional_shifted(cartesian_case):
         b,
         out,
         inout=out,
-        ref=np.where(mask, a, b)[1:],
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy())[1:],
     )
 
 
