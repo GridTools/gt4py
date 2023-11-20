@@ -47,10 +47,12 @@ by calling `next_tests.get_processor_id()`, which returns the so-called processo
 The following backend processors are defined:
 
 ```python
-DACE = "dace_iterator.run_dace_cpu"
+DACE_CPU = "dace_iterator.run_dace_cpu"
+DACE_GPU = "dace_iterator.run_dace_gpu"
 GTFN_CPU = "otf_compile_executor.run_gtfn"
 GTFN_CPU_IMPERATIVE = "otf_compile_executor.run_gtfn_imperative"
 GTFN_CPU_WITH_TEMPORARIES = "otf_compile_executor.run_gtfn_with_temporaries"
+GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
 ```
 
 Following the previous example, the GTFN backend with temporaries does not support yet dynamic offsets in ITIR:
