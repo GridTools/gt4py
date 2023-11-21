@@ -25,7 +25,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-pytestmark = pytest.mark.uses_unstructured_shift
+pytestmark = [pytest.mark.uses_unstructured_shift, pytest.mark.uses_scan]
 
 
 Cell = gtx.Dimension("Cell")

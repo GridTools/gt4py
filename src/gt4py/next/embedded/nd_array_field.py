@@ -455,13 +455,33 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-@NdArrayField.register_builtin_func(fbuiltins.neighbor_sum)
-def _neighbor_sum(
-    field: NdArrayField[common.DimsT, core_defs.ScalarT],
-    axis: common.Dimension,
-) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
-    
-    return 
+def _make_reduction(
+    builtin_name: str, array_builtin_name: str
+) -> Callable[
+    [NdArrayField[common.DimsT, core_defs.ScalarT], common.Dimension],
+    NdArrayField[common.DimsT, core_defs.ScalarT],
+]:
+    def _builtin_op(
+        field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
+    ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
+        if not axis.kind == common.DimensionKind.LOCAL:
+            raise ValueError("Can only reduce local dimensions.")
+        if axis not in field.domain.dims:
+            raise ValueError(f"Field doesn't have dimension {axis}. Cannot reduce.")
+        reduce_dim_index = field.domain.dims.index(axis)
+        new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+        return field.__class__.from_array(
+            getattr(field.array_ns, array_builtin_name)(field.ndarray, axis=reduce_dim_index),
+            domain=new_domain,
+        )
+
+    _builtin_op.__name__ = builtin_name
+    return _builtin_op
+
+
+NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))
+NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))
+NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))
 
 
 # -- Concrete array implementations --
