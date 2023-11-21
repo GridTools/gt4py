@@ -421,7 +421,7 @@ class Domain(Sequence[NamedRange]):
             raise IndexError(f"Index {index} out of bounds for Domain of length {len(self.dims)}.")
         if index < 0:
             index += len(self.dims)
-        new_dims, new_ranges = zip(*named_ranges)
+        new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
         dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
         ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
 

@@ -320,6 +320,28 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
+def test_domain_dim_index():
+    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
+    domain = Domain(dims=dims, ranges=ranges)
+
+    domain.dim_index(Dimension("Y")) == 1
+
+    domain.dim_index(Dimension("Foo")) == None
+
+
+def test_domain_pop():
+    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
+    domain = Domain(dims=dims, ranges=ranges)
+
+    domain.pop(Dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
+
+    domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
+
+    domain.pop(-1) == Domain(dims=dims[:-1], ranges=ranges[:-1])
+
+
 @pytest.mark.parametrize(
     "index, named_ranges, domain, expected",
     [
