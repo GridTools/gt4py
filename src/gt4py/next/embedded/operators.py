@@ -23,28 +23,28 @@ def scan(
     scan_op: Callable,
     forward: bool,
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
-    scan_axis: common.Dimension,
     scan_range: common.NamedRange,
     args: tuple,
     kwargs: dict,
 ):
+    scan_axis = scan_range[0]
     domain_intersection = embedded_common.intersect_domains(
         *[field_utils.get_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
     )
     non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
-    res_domain = common.Domain(
+    out_domain = common.Domain(
         *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
     )
-    if scan_axis not in res_domain.dims:
+    if scan_axis not in out_domain.dims:
         # even if the scan dimension is not in the input, we can scan over it
-        res_domain = common.Domain(*res_domain, (scan_range))
+        out_domain = common.Domain(*out_domain, (scan_range))
 
-    res = _construct_scan_array(res_domain)(init)
+    res = _construct_scan_array(out_domain)(init)
 
     def combine_pos(hpos, vpos):
         hpos_iter = iter(hpos)
-        return tuple(vpos if d == scan_axis else next(hpos_iter) for d in res_domain.dims)
+        return tuple(vpos if d == scan_axis else next(hpos_iter) for d in out_domain.dims)
 
     def scan_loop(hpos):
         acc = init

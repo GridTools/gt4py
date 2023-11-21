@@ -34,7 +34,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import allocators as next_allocators, common, embedded as next_embedded, field_utils
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.embedded import common as embedded_common, operators as embedded_operators
+from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -679,17 +679,66 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *args,
         **kwargs,
     ) -> None:
-        # TODO(havogt): Don't select mode based on existence of kwargs,
-        # because now we cannot provide nice error messages. E.g. set context var
-        # if we are reaching this from a program call.
-        if "out" in kwargs:
-            out = kwargs.pop("out")
+        if next_embedded.context.within_context():
+            # field_operator called from program or other field_operator in embedded execution
+
+            if "out" in kwargs:
+                # field_operator called from program in embedded execution
+
+                offset_provider = kwargs.pop("offset_provider", None)
+                # offset_provider should already be set
+                assert (
+                    offset_provider is None
+                    or next_embedded.context.offset_provider.get() is offset_provider
+                )
+                out = kwargs.pop("out")
+                domain = kwargs.pop("domain", None)
+                out_domain = (
+                    common.domain(domain) if domain is not None else field_utils.get_domain(out)
+                )
+
+                vertical_range = _get_vertical_range(out_domain)
+
+                with next_embedded.context.new_context(closure_column_range=vertical_range) as ctx:
+                    res = ctx.run(_run_operator, self.definition, self.foast_node, args, kwargs)
+                    _tuple_assign_field(
+                        out,
+                        res,
+                        domain=out_domain,
+                    )
+
+            else:
+                # field_operator called form field_operator in embedded execution
+                return _run_operator(self.definition, self.foast_node, args, kwargs)
+
+        else:
+            # field_operator called directly
             offset_provider = kwargs.pop("offset_provider", None)
-            if self.backend is not None:
-                # "out" and "offset_provider" -> field_operator as program
-                # When backend is None, we are in embedded execution and for now
-                # we disable the program generation since it would involve generating
-                # Python source code from a PAST node.
+            out = kwargs.pop("out")
+            if self.backend is None:
+                domain = kwargs.pop("domain", None)
+
+                out_domain = (
+                    common.domain(domain) if domain is not None else field_utils.get_domain(out)
+                )
+                vertical_dim_filtered = [
+                    nr for nr in out_domain if nr[0].kind == common.DimensionKind.VERTICAL
+                ]
+                vertical_dim = vertical_dim_filtered[0] if vertical_dim_filtered else None
+
+                with next_embedded.context.new_context(
+                    offset_provider=offset_provider, closure_column_range=vertical_dim
+                ) as ctx:
+                    res = ctx.run(_run_operator, self.definition, self.foast_node, args, kwargs)
+                    _tuple_assign_field(
+                        out,
+                        res,
+                        domain=out_domain,
+                    )
+
+            else:
+                # non embedded execution
+
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -703,81 +752,27 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 return self.as_program(arg_types, kwarg_types)(
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
-            else:
-                # "out" -> field_operator called from program in embedded execution or
-                # field_operator called directly from Python in embedded execution
-                domain = kwargs.pop("domain", None)
-                embedded_common.out_domain = (
-                    domain if domain is not None else field_utils.get_domain(out)
-                )  # TODO via context
-                if not next_embedded.context.within_context():
-                    # field_operator from Python in embedded execution
-                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                        if isinstance(self.foast_node, foast.ScanOperator):
-                            scan_op = self.definition
-                            scan_foast: foast.ScanOperator = self.foast_node
-                            forward = scan_foast.forward.value
-                            init = scan_foast.init.value
-                            axis = scan_foast.axis.value
-                            scan_range = embedded_common.out_domain[axis]
 
-                            res = embedded_operators.scan(
-                                scan_op, forward, init, axis, scan_range, args, kwargs
-                            )
 
-                            _tuple_assign_field(
-                                out, res, domain=None if domain is None else common.domain(domain)
-                            )
-                        else:
-                            res = ctx.run(self.definition, *args, **kwargs)
-                            _tuple_assign_field(
-                                out, res, domain=None if domain is None else common.domain(domain)
-                            )
-                else:
-                    # field_operator from program in embedded execution (offset_provicer is already set)
-                    assert (
-                        offset_provider is None
-                        or next_embedded.context.offset_provider.get() is offset_provider
-                    )
-                    if isinstance(self.foast_node, foast.ScanOperator):
-                        scan_op = self.definition
-                        scan_foast: foast.ScanOperator = self.foast_node
-                        forward = scan_foast.forward.value
-                        init = scan_foast.init.value
-                        axis = scan_foast.axis.value
-                        scan_range = embedded_common.out_domain[axis]
+def _run_operator(op: Callable, foast_node: OperatorNodeT, args, kwargs):
+    if isinstance(foast_node, foast.ScanOperator):
+        scan_foast: foast.ScanOperator = foast_node
+        forward = scan_foast.forward.value
+        init = scan_foast.init.value
+        axis = scan_foast.axis.value
 
-                        res = embedded_operators.scan(
-                            scan_op, forward, init, axis, scan_range, args, kwargs
-                        )
+        scan_range = next_embedded.context.closure_column_range.get()
+        assert axis == scan_range[0]
 
-                        _tuple_assign_field(
-                            out, res, domain=None if domain is None else common.domain(domain)
-                        )
-                    else:
-                        res = self.definition(*args, **kwargs)
-                        _tuple_assign_field(
-                            out, res, domain=None if domain is None else common.domain(domain)
-                        )
-                embedded_common.out_domain = None
-                return
-        else:
-            # field_operator called from other field_operator in embedded execution
-            assert self.backend is None
-            if isinstance(self.foast_node, foast.ScanOperator):
-                scan_op = self.definition
-                scan_foast: foast.ScanOperator = self.foast_node
-                forward = scan_foast.forward.value
-                init = scan_foast.init.value
-                axis = scan_foast.axis.value
+        return embedded_operators.scan(op, forward, init, scan_range, args, kwargs)
+    else:
+        return op(*args, **kwargs)
 
-                scan_range = embedded_common.out_domain[axis]
 
-                return embedded_operators.scan(
-                    scan_op, forward, init, axis, scan_range, args, kwargs
-                )
-            else:
-                return self.definition(*args, **kwargs)
+def _get_vertical_range(domain: common.Domain) -> common.NamedRange:
+    vertical_dim_filtered = [nr for nr in domain if nr[0].kind == common.DimensionKind.VERTICAL]
+    assert len(vertical_dim_filtered) <= 1
+    return vertical_dim_filtered[0] if vertical_dim_filtered else None
 
 
 def _tuple_assign_field(
