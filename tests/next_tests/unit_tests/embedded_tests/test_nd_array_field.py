@@ -613,8 +613,8 @@ def test_setitem(index, value):
         domain=common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
 
-    expected = np.copy(field.ndarray)
-    expected[index] = value
+    expected = np.copy(field.asnumpy())
+    expected[index] = value.asnumpy() if common.is_field(value) else value
 
     field[index] = value
 

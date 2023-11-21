@@ -48,6 +48,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 def test_maxover_execution_(unstructured_case, strategy):
     if unstructured_case.backend in [
         gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
         gtfn.run_gtfn_imperative,
         gtfn.run_gtfn_with_temporaries,
     ]:
@@ -142,10 +143,7 @@ def test_conditional_nested_tuple(cartesian_case):
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional_nested_tuple, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=size))
     a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
     b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
 
@@ -157,8 +155,8 @@ def test_conditional_nested_tuple(cartesian_case):
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
         ref=np.where(
-            mask,
-            ((a, b), (b, a)),
+            mask.asnumpy(),
+            ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
             ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
         ),
     )
@@ -216,15 +214,20 @@ def test_conditional(cartesian_case):
         return where(mask, a, b)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional, "a")()
     b = cases.allocate(cartesian_case, conditional, "b")()
     out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
 
-    cases.verify(cartesian_case, conditional, mask, a, b, out=out, ref=np.where(mask, a, b))
+    cases.verify(
+        cartesian_case,
+        conditional,
+        mask,
+        a,
+        b,
+        out=out,
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy()),
+    )
 
 
 def test_conditional_promotion(cartesian_case):
@@ -233,16 +236,12 @@ def test_conditional_promotion(cartesian_case):
         return where(mask, a, 10.0)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional_promotion, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_promotion, "a")()
     out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
+    ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
 
-    cases.verify(
-        cartesian_case, conditional_promotion, mask, a, out=out, ref=np.where(mask, a, 10.0)
-    )
+    cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
 
 
 def test_conditional_compareop(cartesian_case):
@@ -274,7 +273,7 @@ def test_conditional_shifted(cartesian_case):
         conditional_shifted(mask, a, b, out=out)
 
     size = cartesian_case.default_sizes[IDim] + 1
-    mask = gtx.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()
@@ -287,7 +286,7 @@ def test_conditional_shifted(cartesian_case):
         b,
         out,
         inout=out,
-        ref=np.where(mask, a, b)[1:],
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy())[1:],
     )
 
 

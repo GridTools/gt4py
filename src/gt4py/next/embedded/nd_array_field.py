@@ -121,8 +121,11 @@ class NdArrayField(
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
-    def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
-        return np.asarray(self._ndarray, dtype)
+    def asnumpy(self) -> np.ndarray:
+        if self.array_ns == cp:
+            return cp.asnumpy(self._ndarray)
+        else:
+            return np.asarray(self._ndarray)
 
     @property
     def codomain(self) -> type[core_defs.ScalarT]:

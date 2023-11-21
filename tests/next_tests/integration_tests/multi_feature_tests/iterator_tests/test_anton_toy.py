@@ -103,4 +103,4 @@ def test_anton_toy(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)

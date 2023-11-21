@@ -520,6 +520,10 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
+    def asnumpy(self) -> np.ndarray:
+        ...
+
+    @abc.abstractmethod
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
         ...
 
@@ -807,6 +811,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @property
     def ndarray(self) -> Never:
+        raise NotImplementedError()
+
+    def asnumpy(self) -> Never:
         raise NotImplementedError()
 
     @functools.cached_property
