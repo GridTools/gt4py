@@ -655,6 +655,7 @@ class ConnectivityKind(enum.Flag):
     MODIFY_STRUCTURE = enum.auto()
 
 
+@extended_runtime_checkable
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -725,6 +726,14 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protoc
     def __xor__(self, other: Field | core_defs.ScalarT) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
+def is_connectivity_field(
+    v: Any,
+) -> TypeGuard[ConnectivityField]:
+    # This function is introduced to localize the `type: ignore` because
+    # extended_runtime_checkable does not make the protocol runtime_checkable
+    # for mypy.
+    # TODO(egparedes): remove it when extended_runtime_checkable is fixed
+    return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 @functools.singledispatch
 def field(

@@ -336,7 +336,7 @@ class FieldOffset(runtime.Offset):
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
 
-    def __getitem__(self, offset: int):
+    def __getitem__(self, offset: int) -> common.ConnectivityField:
         """Serve as a connectivity factory."""
         # TODO this is a temporary solution
         assert isinstance(self.value, str)
@@ -344,23 +344,40 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
-        cache_key = (id(offset_definition), offset)
+        if isinstance(offset_definition, common.Dimension):
+            connectivity = common.CartesianConnectivity(offset_definition, offset)
+        elif isinstance(
+            offset_definition, gtx.NeighborTableOffsetProvider
+        ) or common.is_connectivity_field(offset_definition):
+            unrestricted_connectivity = self.as_connectivity_field()
+            assert unrestricted_connectivity.domain.ndim > 1
+            named_index = (self.target[-1], offset)
+            connectivity = unrestricted_connectivity[named_index]
+        else:
+            raise NotImplementedError()
+
+        return connectivity
+
+    def as_connectivity_field(self):
+        """Convert to connectivity field using the offset providers in current embedded execution context."""
+        # TODO this is a temporary solution
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.offset_provider.get(None)
+        assert current_offset_provider is not None
+        offset_definition = current_offset_provider[self.value]
+
+        cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.Dimension):
-                connectivity = common.CartesianConnectivity(offset_definition, offset)
+            if common.is_connectivity_field(offset_definition):
+                connectivity = offset_definition
             elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
-                assert isinstance(self.target, tuple)
                 assert not offset_definition.has_skip_values
-                named_index = (self.target[-1], offset)
-                unrestricted_connectivity = gtx.as_connectivity(
+                connectivity = gtx.as_connectivity(
                     domain=self.target,
                     codomain=self.source,
                     data=offset_definition.table,
                     dtype=offset_definition.index_type,
                 )
-                connectivity = unrestricted_connectivity[named_index]
-            elif isinstance(offset_definition, common.Connectivity):
-                connectivity = offset_definition
             else:
                 raise NotImplementedError()
 

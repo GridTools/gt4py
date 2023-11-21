@@ -159,6 +159,10 @@ class NdArrayField(
         return cls(domain, array)
 
     def remap(self: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
+        # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
+        if not common.is_connectivity_field(connectivity):
+            connectivity = connectivity.as_connectivity_field()
+
         # Compute the new domain
         dim = connectivity.codomain
         dim_idx = self.domain.dim_index(dim)
@@ -449,6 +453,15 @@ NdArrayField.register_builtin_func(
     fbuiltins.fmod, _make_builtin("fmod", "fmod")  # type: ignore[attr-defined]
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
+
+
+@NdArrayField.register_builtin_func(fbuiltins.neighbor_sum)
+def _neighbor_sum(
+    field: NdArrayField[common.DimsT, core_defs.ScalarT],
+    axis: common.Dimension,
+) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
+    
+    return 
 
 
 # -- Concrete array implementations --
