@@ -180,7 +180,7 @@ class NdArrayField(
 
         current_range: common.UnitRange = self.domain[dim_idx][1]
         new_ranges = connectivity.inverse_image(current_range)
-        new_domain = self.domain.replace_at(dim_idx, *new_ranges)
+        new_domain = self.domain.replace(dim_idx, *new_ranges)
 
         # perform contramap
         if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
@@ -314,9 +314,10 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
-    _cache: dict = dataclasses.field(
-        init=False, repr=False, hash=False, compare=False, default_factory=dict
-    )
+
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]

@@ -400,8 +400,27 @@ class Domain(Sequence[NamedRange]):
     def dim_index(self, dim: Dimension) -> Optional[int]:
         return self.dims.index(dim) if dim in self.dims else None
 
-    def replace_at(self, index: int, *named_ranges: NamedRange) -> Domain:
+    def pop(self, index: int | Dimension = -1) -> Domain:
+        return self.replace(index)
+
+    def insert(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
+        if isinstance(index, int) and index == len(self.dims):
+            new_dims, new_ranges = zip(*named_ranges)
+            return Domain(dims=self.dims + new_dims, ranges=self.ranges + new_ranges)
+        else:
+            return self.replace(index, *named_ranges)
+
+    def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
         assert all(is_named_range(nr) for nr in named_ranges)
+        if isinstance(index, Dimension):
+            dim_index = self.dim_index(index)
+            if dim_index is None:
+                raise ValueError(f"Dimension {index} not found in Domain.")
+            index = dim_index
+        if not (-len(self.dims) <= index < len(self.dims)):
+            raise IndexError(f"Index {index} out of bounds for Domain of length {len(self.dims)}.")
+        if index < 0:
+            index += len(self.dims)
         new_dims, new_ranges = zip(*named_ranges)
         dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
         ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]

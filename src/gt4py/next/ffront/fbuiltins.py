@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import functools
 import inspect
 from builtins import bool, float, int, tuple
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
@@ -314,9 +315,10 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 class FieldOffset(runtime.Offset):
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-    _cache: dict = dataclasses.field(
-        init=False, repr=False, hash=False, compare=False, default_factory=dict
-    )
+
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:

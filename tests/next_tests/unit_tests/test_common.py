@@ -21,6 +21,7 @@ from gt4py.next.common import (
     DimensionKind,
     Domain,
     Infinity,
+    NamedRange,
     UnitRange,
     domain,
     named_range,
@@ -317,6 +318,112 @@ def test_domain_dims_ranges_length_mismatch():
         dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
+
+
+@pytest.mark.parametrize(
+    "index, named_ranges, domain, expected",
+    [
+        # Valid index and named ranges
+        (
+            0,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        (
+            1,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        (
+            -1,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+            ),
+        ),
+        (
+            Dimension("J"),
+            [(Dimension("X"), UnitRange(100, 110)), (Dimension("Z"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("Z"), UnitRange(100, 110)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        # Invalid indices
+        (
+            3,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            IndexError,
+        ),
+        (
+            -4,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            IndexError,
+        ),
+        (
+            Dimension("Foo"),
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            ValueError,
+        ),
+    ],
+)
+def test_domain_replace(index, named_ranges, domain, expected):
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            domain.replace(index, *named_ranges)
+    elif expected is IndexError:
+        with pytest.raises(IndexError):
+            domain.replace(index, *named_ranges)
+    else:
+        new_domain = domain.replace(index, *named_ranges)
+        assert new_domain == expected
 
 
 def dimension_promotion_cases() -> (
