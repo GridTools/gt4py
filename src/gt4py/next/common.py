@@ -48,7 +48,7 @@ from gt4py.eve.extended_typing import (
 from gt4py.eve.type_definitions import StrEnum
 
 
-DimT = TypeVar("DimT", bound="Dimension")
+DimT = TypeVar("DimT", bound="Dimension", covariant=True)
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 
@@ -681,49 +681,55 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protoc
     def __neg__(self) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __invert__(self) -> Field:
+    def __invert__(self) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __eq__(self, other: Any) -> Never:
+        raise TypeError("ConnectivityField does not support this operation")
+
+    def __ne__(self, other: Any) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("ConnectivityField does not support this operation")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("ConnectivityField does not support this operation")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("ConnectivityField does not support this operation")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("ConnectivityField does not support this operation")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("ConnectivityField does not support this operation")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __and__(self, other: Field | core_defs.IntegralScalar) -> Field:
+    def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __or__(self, other: Field | core_defs.IntegralScalar) -> Field:
+    def __or__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __xor__(self, other: Field | core_defs.IntegralScalar) -> Field:
+    def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
 
@@ -799,7 +805,7 @@ OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 
 
-@dataclasses.dataclass(frozen=True, eq=True)
+@dataclasses.dataclass(frozen=True, eq=False)
 class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     dimension: Dimension
     offset: int = 0
@@ -812,6 +818,14 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def domain(self) -> Domain:
         return Domain(dims=(self.dimension,), ranges=(UnitRange.infinity(),))
+
+    @property
+    def __gt_dims__(self) -> tuple[Dimension, ...]:
+        return self.domain.dims
+
+    @property
+    def __gt_origin__(self) -> Never:
+        raise TypeError("CartesianConnectivity does not support this operation")
 
     @functools.cached_property
     def codomain(self) -> DimT:
@@ -828,7 +842,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         /,
         codomain: Dimension,
         *,
-        domain: DomainLike = None,
+        domain: Optional[DomainLike] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
     ) -> CartesianConnectivity:
         assert domain is None
@@ -853,24 +867,12 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     __call__ = remap
 
-    # TODO: implement this properly
-    def restrict(self, index) -> DimensionIndex:
-        return index + self.offset
+    def restrict(self, index: AnyIndexSpec) -> core_defs.IntegralScalar:
+        if is_int_index(index):
+            return index + self.offset
+        raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
-
-    # TODO: implement this properly
-    # TODO possibly delete
-    def __eq__(self, other: Any) -> Field:  # type: ignore[override]
-        return (
-            isinstance(other, CartesianConnectivity)
-            and self.dimension == other.dimension
-            and self.offset == other.offset
-        )
-
-    # TODO: implement this properly
-    def __ne__(self, other: Any) -> Field:  # type: ignore[override]
-        return not self.__eq__(other)
 
 
 connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)

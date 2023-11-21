@@ -410,7 +410,7 @@ class NdArrayConnectivityField(
 
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.IntegralScalar:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
@@ -424,10 +424,6 @@ class NdArrayConnectivityField(
         return restricted_connectivity
 
     __getitem__ = restrict
-
-    __eq__ = NdArrayField.__eq__
-
-    __ne__ = NdArrayField.__ne__
 
 
 # -- Specialized implementations for builtin operations on array fields --
