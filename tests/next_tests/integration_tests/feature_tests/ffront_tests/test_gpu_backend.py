@@ -12,11 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import warnings
+
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common
-from gt4py.next.program_processors.runners import dace_iterator, gtfn
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case  # noqa: F401
@@ -25,8 +27,18 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+_GPU_BACKENDS = [gtfn.run_gtfn_gpu]
+
+try:
+    from gt4py.next.program_processors.runners import dace_iterator
+
+    _GPU_BACKENDS.append(dace_iterator.run_dace_gpu)
+except:
+    warnings.warn("Skipping dace backend because dace module is not installed.")
+
+
 @pytest.mark.requires_gpu
-@pytest.mark.parametrize("fieldview_backend", [dace_iterator.run_dace_gpu, gtfn.run_gtfn_gpu])
+@pytest.mark.parametrize("fieldview_backend", _GPU_BACKENDS)
 def test_copy(fieldview_backend):  # noqa: F811 # fixtures
     import cupy as cp
 
