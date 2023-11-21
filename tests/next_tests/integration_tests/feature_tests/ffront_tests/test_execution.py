@@ -214,7 +214,7 @@ def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
-        tmp = a * b
+        tmp = b * a
         return tmp(Ioff[1])
 
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1)})()

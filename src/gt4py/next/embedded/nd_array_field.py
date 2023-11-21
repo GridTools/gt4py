@@ -445,9 +445,6 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
-print(NdArrayConnectivityField.__mro__)
-print(NdArrayConnectivityField.__dataclass_fields__.keys())
-
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(fbuiltins.abs, NdArrayField.__abs__)  # type: ignore[attr-defined]
