@@ -71,7 +71,7 @@ E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
 C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
 FieldValue: TypeAlias = gtx.Field

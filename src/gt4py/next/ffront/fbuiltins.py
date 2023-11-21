@@ -342,8 +342,8 @@ class FieldOffset(runtime.Offset):
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
-
         offset_definition = current_offset_provider[self.value]
+
         cache_key = (id(offset_definition), offset)
         if (connectivity := self._cache.get(cache_key, None)) is None:
             if isinstance(offset_definition, common.Dimension):
@@ -352,12 +352,13 @@ class FieldOffset(runtime.Offset):
                 assert isinstance(self.target, tuple)
                 assert not offset_definition.has_skip_values
                 named_index = (self.target[-1], offset)
-                connectivity = gtx.as_connectivity(
+                unrestricted_connectivity = gtx.as_connectivity(
                     domain=self.target,
                     codomain=self.source,
                     data=offset_definition.table,
                     dtype=offset_definition.index_type,
-                )[named_index]
+                )
+                connectivity = unrestricted_connectivity[named_index]
             elif isinstance(offset_definition, common.Connectivity):
                 connectivity = offset_definition
             else:

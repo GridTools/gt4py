@@ -175,10 +175,10 @@ class NdArrayField(
             new_buffer = self._ndarray
         else:
             # general case: first restrict the connectivity to the new domain
-            restricted_domain = common.Domain(*new_ranges)
+            restricted_connectivity_domain = common.Domain(*new_ranges)
             restricted_connectivity = (
-                connectivity.restrict(restricted_domain)
-                if restricted_domain != connectivity.domain
+                connectivity.restrict(restricted_connectivity_domain)
+                if restricted_connectivity_domain != connectivity.domain
                 else connectivity
             )
 
@@ -405,18 +405,15 @@ class NdArrayConnectivityField(
         return new_dims
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
-        cache_key = None
-        try:
-            cache_key = hash((id(self.ndarray), self.domain, index))
-            restricted_connectivity = self._cache[cache_key]
-        except (KeyError, TypeError):
+        cache_key = (id(self.ndarray), self.domain, index)
+
+        if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
             cls = self.__class__
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
             restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
-            if cache_key is not None:
-                self._cache[cache_key] = restricted_connectivity
+            self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
 
