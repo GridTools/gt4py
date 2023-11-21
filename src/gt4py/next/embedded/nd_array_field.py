@@ -19,21 +19,13 @@ import functools
 import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
+from typing import ClassVar
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import (
-    Any,
-    ClassVar,
-    Never,
-    Optional,
-    ParamSpec,
-    TypeAlias,
-    TypeVar,
-    cast,
-)
+from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -260,9 +252,9 @@ class NdArrayField(
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
 
-    __ne__: Callable[[NdArrayField, common.Field | core_defs.ScalarT], common.Field | core_defs.ScalarT] = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore # mypy wants return `bool`
 
-    __eq__: Callable[[NdArrayField, common.Field | core_defs.ScalarT], common.Field | core_defs.ScalarT] = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __eq__ = _make_builtin("equal", "equal")  # type: ignore # mypy wants return `bool`
 
     __gt__ = _make_builtin("greater", "greater")
 
@@ -314,13 +306,11 @@ class NdArrayField(
 
 
 @dataclasses.dataclass(frozen=True)
-class NdArrayConnectivityField(
+class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     common.ConnectivityField[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
-    _codomain: common.DimT = cast(
-        common.DimT, common.Dimension("undefined")
-    )  # default, because there is a default previously
+    _codomain: common.DimT
     _cache: dict = dataclasses.field(
         init=False, repr=False, hash=False, compare=False, default_factory=dict
     )
@@ -371,7 +361,7 @@ class NdArrayConnectivityField(
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain)  # type: ignore[arg-type]
+        return cls(domain, array, codomain)
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -444,13 +434,16 @@ class NdArrayConnectivityField(
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)  # type: ignore[arg-type]
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
 
     __getitem__ = restrict
 
+
+print(NdArrayConnectivityField.__mro__)
+print(NdArrayConnectivityField.__dataclass_fields__.keys())
 
 # -- Specialized implementations for builtin operations on array fields --
 
