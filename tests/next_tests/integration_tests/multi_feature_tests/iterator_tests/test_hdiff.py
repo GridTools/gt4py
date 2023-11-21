@@ -97,4 +97,4 @@ def test_hdiff(hdiff_reference, program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out[:, :, 0], out_s)
+        assert np.allclose(out[:, :, 0], out_s.asnumpy())

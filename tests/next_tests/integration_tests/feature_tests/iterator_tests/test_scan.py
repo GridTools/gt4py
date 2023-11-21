@@ -60,4 +60,4 @@ def test_scan_in_stencil(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out[:, :-1], reference)
+        assert np.allclose(out[:, :-1].asnumpy(), reference)

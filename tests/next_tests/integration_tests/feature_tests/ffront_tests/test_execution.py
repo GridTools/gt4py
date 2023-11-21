@@ -371,8 +371,8 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
 
     a = cases.allocate(cartesian_case, cast_tuple, "a")()
     b = cases.allocate(cartesian_case, cast_tuple, "b")()
-    a_asint = cartesian_case.as_field([IDim], np.asarray(a).astype(int32))
-    b_asint = cartesian_case.as_field([IDim], np.asarray(b).astype(int32))
+    a_asint = cartesian_case.as_field([IDim], a.asnumpy().astype(int32))
+    b_asint = cartesian_case.as_field([IDim], b.asnumpy().astype(int32))
     out_tuple = cases.allocate(cartesian_case, cast_tuple, cases.RETURN)()
     out_nested_tuple = cases.allocate(cartesian_case, cast_nested_tuple, cases.RETURN)()
 
@@ -384,7 +384,10 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
         a_asint,
         b_asint,
         out=out_tuple,
-        ref=(np.full_like(a, True, dtype=bool), np.full_like(b, True, dtype=bool)),
+        ref=(
+            np.full_like(a.asnumpy(), True, dtype=bool),
+            np.full_like(b.asnumpy(), True, dtype=bool),
+        ),
     )
 
     cases.verify(
@@ -396,9 +399,9 @@ def test_astype_on_tuples(cartesian_case):  # noqa: F811 # fixtures
         b_asint,
         out=out_nested_tuple,
         ref=(
-            np.full_like(a, True, dtype=bool),
-            np.full_like(a, True, dtype=bool),
-            np.full_like(b, True, dtype=bool),
+            np.full_like(a.asnumpy(), True, dtype=bool),
+            np.full_like(a.asnumpy(), True, dtype=bool),
+            np.full_like(b.asnumpy(), True, dtype=bool),
         ),
     )
 
@@ -473,7 +476,7 @@ def test_offset_field(cartesian_case):
         comparison=lambda out, ref: np.all(out == ref),
     )
 
-    assert np.allclose(out, ref)
+    assert np.allclose(out.asnumpy(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):
@@ -846,8 +849,8 @@ def test_domain(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = np.asarray(out).copy()  # ensure we are not overwriting `out` outside of the domain
-    ref[1:9] = a[1:9] * 2
+    ref = out.asnumpy().copy()  # ensure we are not overwriting out outside of the domain
+    ref[1:9] = a.asnumpy()[1:9] * 2
 
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
 
@@ -881,8 +884,8 @@ def test_domain_input_bounds(cartesian_case):
     inp = cases.allocate(cartesian_case, program_domain, "inp")()
     out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
 
-    ref = np.asarray(out).copy()
-    ref[lower_i : int(upper_i / 2)] = inp[lower_i : int(upper_i / 2)] * 2
+    ref = out.asnumpy().copy()
+    ref[lower_i : int(upper_i / 2)] = inp.asnumpy()[lower_i : int(upper_i / 2)] * 2
 
     cases.verify(
         cartesian_case,
@@ -924,9 +927,9 @@ def test_domain_input_bounds_1(cartesian_case):
     a = cases.allocate(cartesian_case, program_domain, "a")()
     out = cases.allocate(cartesian_case, program_domain, "out")()
 
-    ref = np.asarray(out).copy()
+    ref = out.asnumpy().copy()
     ref[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] = (
-        a[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] * 2
+        a.asnumpy()[1 * lower_i : upper_i + 0, lower_j - 0 : upper_j] * 2
     )
 
     cases.verify(
@@ -964,10 +967,10 @@ def test_domain_tuple(cartesian_case):
     out0 = cases.allocate(cartesian_case, program_domain_tuple, "out0")()
     out1 = cases.allocate(cartesian_case, program_domain_tuple, "out1")()
 
-    ref0 = np.asarray(out0).copy()
-    ref0[1:9, 4:6] = inp0[1:9, 4:6] + inp1[1:9, 4:6]
-    ref1 = np.asarray(out1).copy()
-    ref1[1:9, 4:6] = inp1[1:9, 4:6]
+    ref0 = out0.asnumpy().copy()
+    ref0[1:9, 4:6] = inp0.asnumpy()[1:9, 4:6] + inp1.asnumpy()[1:9, 4:6]
+    ref1 = out1.asnumpy().copy()
+    ref1[1:9, 4:6] = inp1.asnumpy()[1:9, 4:6]
 
     cases.verify(
         cartesian_case,
@@ -995,7 +998,7 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(np.asarray(k_index) > 0, np.roll(inp, 1, axis=1), 2)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), 2)
 
     cases.verify(cartesian_case, fieldop_where_k_offset, inp, k_index, out=out, ref=ref)
 
@@ -1119,13 +1122,6 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
 
 
 def test_constant_closure_vars(cartesian_case):
-    if cartesian_case.backend is None:
-        # >>> field = gtx.zeros(domain)
-        # >>> np.int32(1)*field # steals the buffer from the field
-        # array([0.])
-
-        # TODO(havogt): remove `__array__`` from `NdArrayField`
-        pytest.xfail("Bug: Binary operation between np datatype and Field returns ndarray.")
     from gt4py.eve.utils import FrozenNamespace
 
     constants = FrozenNamespace(

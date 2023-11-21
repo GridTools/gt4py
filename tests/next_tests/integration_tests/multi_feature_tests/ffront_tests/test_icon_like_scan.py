@@ -244,7 +244,7 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
         comparison=lambda ref, a: np.allclose(ref[:, 1:], a[:, 1:]),
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:])
+    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -286,8 +286,8 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
         test_setup.dummy,
     )
 
-    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-    assert np.allclose(test_setup.w_ref, test_setup.w)
+    assert np.allclose(test_setup.z_q_ref, test_setup.z_q.asnumpy())
+    assert np.allclose(test_setup.w_ref, test_setup.w.asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -306,5 +306,5 @@ def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
         test_setup.w,
     )
 
-    assert np.allclose(test_setup.z_q_ref, test_setup.z_q)
-    assert np.allclose(test_setup.w_ref, test_setup.w)
+    assert np.allclose(test_setup.z_q_ref, test_setup.z_q.asnumpy())
+    assert np.allclose(test_setup.w_ref, test_setup.w.asnumpy())
