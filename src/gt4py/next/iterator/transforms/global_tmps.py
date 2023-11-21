@@ -436,7 +436,7 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes):
+def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes: dict[str, str]):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
     closures: list[ir.StencilClosure] = []
@@ -486,7 +486,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         consumed_domain.ranges.pop(old_axis)
                         assert new_axis not in consumed_domain.ranges
 
-                        if symbolic_sizes is not None:
+                        if symbolic_sizes:
                             consumed_domain.ranges[new_axis] = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 symbolic_sizes[new_axis],

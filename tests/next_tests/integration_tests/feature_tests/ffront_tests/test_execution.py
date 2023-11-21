@@ -35,8 +35,9 @@ from gt4py.next import (
     where,
 )
 from gt4py.next.ffront.experimental import as_offset
+from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners import gtfn
-from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries_and_sizes
+from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
 from tests.next_tests.integration_tests.cases import Case
 from tests.next_tests.toy_connectivity import Cell, Edge
 
@@ -1032,6 +1033,22 @@ def test_constant_closure_vars(cartesian_case):
 
 
 class TestTemporariesWithSizes:
+    run_gtfn_with_temporaries_and_sizes = otf_compile_executor.OTFBackend(
+        executor=otf_compile_executor.OTFCompileExecutor(
+            name="run_gtfn_with_temporaries_and_sizes",
+            otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
+                translation=run_gtfn_with_temporaries.executor.otf_workflow.translation.replace(
+                    symbolic_domain_sizes={
+                        "Cell": "num_cells",
+                        "Edge": "num_edges",
+                        "Vertex": "num_vertices",
+                    },
+                ),
+            ),
+        ),
+        allocator=run_gtfn_with_temporaries.allocator,
+    )
+
     def test_verification(self, reduction_setup):
         unstructured_case, a, out, prog = self.prepare_testee(reduction_setup)
 
@@ -1063,7 +1080,7 @@ class TestTemporariesWithSizes:
             )
         }
 
-        ir_with_tmp = run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_program(
+        ir_with_tmp = self.run_gtfn_with_temporaries_and_sizes.executor.otf_workflow.translation._preprocess_program(
             prog.itir, e2v_offset_provider
         )
         sym = ir_with_tmp.tmps[0].domain.args[0].args[2].args[0].id
@@ -1092,7 +1109,7 @@ class TestTemporariesWithSizes:
             testee_op(a, out=out)
 
         unstructured_case = Case(
-            run_gtfn_with_temporaries_and_sizes,
+            self.run_gtfn_with_temporaries_and_sizes,
             offset_provider=reduction_setup.offset_provider,
             default_sizes={
                 Vertex: reduction_setup.num_vertices,
