@@ -464,11 +464,12 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
     def ndarray(self) -> core_defs.NDArrayObject:
         ...
 
-    def asnumpy(self) -> np.ndarray:
-        return np.asarray(self.ndarray)
-
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
+
+    @abc.abstractmethod
+    def asnumpy(self) -> np.ndarray:
+        ...
 
     @abc.abstractmethod
     def remap(self, index_field: Field) -> Field:

@@ -1068,6 +1068,9 @@ class IndexField(common.Field):
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
+    def asnumpy(self) -> np.ndarray:
+        raise NotImplementedError()
+
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
@@ -1179,6 +1182,9 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
+
+    def asnumpy(self) -> np.ndarray:
+        raise NotImplementedError()
 
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)

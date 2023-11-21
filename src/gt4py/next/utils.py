@@ -66,14 +66,14 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
 
 
-def apply_to_tuple_elements(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
+def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
     """Apply `fun` to each entry of (possibly nested) tuples.
 
     Examples:
-        >>> apply_to_tuple_elements(lambda x: x + 1)(((1, 2), 3))
+        >>> tree_map(lambda x: x + 1)(((1, 2), 3))
         ((2, 3), 4)
 
-        >>> apply_to_tuple_elements(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
+        >>> tree_map(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
         ((5, 7), 9)
     """
 
@@ -89,6 +89,6 @@ def apply_to_tuple_elements(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_
 
 
 # TODO(havogt): consider moving to module like `field_utils`
-@apply_to_tuple_elements
+@tree_map
 def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
     return field.asnumpy() if common.is_field(field) else field  # type: ignore[return-value] # mypy doesn't understand the condition
