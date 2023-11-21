@@ -371,6 +371,8 @@ class NdArrayConnectivityField(
 
                 image_range = image_range[1]
 
+            assert isinstance(image_range, common.UnitRange)
+
             restricted_mask = (self._ndarray >= image_range.start) & (
                 self._ndarray < image_range.stop
             )

@@ -169,7 +169,7 @@ class UnitRange(Sequence[int], Set[int]):
         else:
             raise NotImplementedError("Can only compute union with int instances.")
 
-    def __sub__(self, other: int) -> UnitRange:
+    def __sub__(self, other: int | Set[int]) -> UnitRange:
         if isinstance(other, int):
             if other == Infinity.negative():
                 return self + Infinity.positive()
@@ -684,46 +684,46 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protoc
     def __invert__(self) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __add__(self, other: Field | DimT) -> Never:
+    def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __radd__(self, other: Field | DimT) -> Never:
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __sub__(self, other: Field | DimT) -> Never:
+    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rsub__(self, other: Field | DimT) -> Never:
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __mul__(self, other: Field | DimT) -> Never:
+    def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rmul__(self, other: Field | DimT) -> Never:
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __truediv__(self, other: Field | DimT) -> Never:
+    def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rtruediv__(self, other: Field | DimT) -> Never:
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __floordiv__(self, other: Field | DimT) -> Never:
+    def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __rfloordiv__(self, other: Field | DimT) -> Never:
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __pow__(self, other: Field | DimT) -> Never:
+    def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __and__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __and__(self, other: Field | core_defs.IntegralScalar) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __or__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __or__(self, other: Field | core_defs.IntegralScalar) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
-    def __xor__(self, other: Field | core_defs.ScalarT) -> Field:
+    def __xor__(self, other: Field | core_defs.IntegralScalar) -> Field:
         raise TypeError("ConnectivityField does not support this operation")
 
 
@@ -811,7 +811,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain((self.dimension,), (UnitRange(None, None),))
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinity(),))
 
     @functools.cached_property
     def codomain(self) -> DimT:
@@ -844,6 +844,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
             image_range = image_range[1]
 
+        assert isinstance(image_range, UnitRange)
         return ((self.codomain, image_range - self.offset),)
 
     # TODO: implement this
@@ -859,6 +860,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     __getitem__ = restrict
 
     # TODO: implement this properly
+    # TODO possibly delete
     def __eq__(self, other: Any) -> Field:  # type: ignore[override]
         return (
             isinstance(other, CartesianConnectivity)
