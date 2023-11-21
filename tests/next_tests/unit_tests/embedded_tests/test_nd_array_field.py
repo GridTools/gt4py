@@ -20,7 +20,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common, constructors
+from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Domain, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
@@ -70,12 +70,17 @@ def unary_logical_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation, *, dtype=None):
+def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=None):
     if not dtype:
         dtype = nd_array_implementation.float32
+    buffer = nd_array_implementation.asarray(lst, dtype=dtype)
+    if domain is None:
+        domain = tuple(
+            (common.Dimension(f"D{i}"), common.UnitRange(0, s)) for i, s in enumerate(buffer.shape)
+        )
     return common.field(
-        nd_array_implementation.asarray(lst, dtype=dtype),
-        domain={common.Dimension("foo"): (0, len(lst))},
+        buffer,
+        domain=domain,
     )
 
 
@@ -275,6 +280,59 @@ def test_non_dispatched_function():
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)
+
+
+def test_remap_implementation():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    V_START, V_STOP = 2, 7
+    E_START, E_STOP = 0, 10
+    v_field = common.field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    e2v_conn = common.connectivity(
+        np.arange(E_START, E_STOP),
+        domain=common.Domain(
+            dims=(E,),
+            ranges=[
+                UnitRange(E_START, E_STOP),
+            ],
+        ),
+        codomain=V,
+    )
+
+    result = v_field.remap(e2v_conn)
+    expected = common.field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_cartesian_remap_implementation():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    V_START, V_STOP = 2, 7
+    OFFSET = 2
+    v_field = common.field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    v2_conn = common.connectivity(OFFSET, V)
+
+    result = v_field.remap(v2_conn)
+    expected = common.field(
+        v_field.ndarray,
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
 
 
 @pytest.mark.parametrize(
