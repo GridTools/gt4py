@@ -42,14 +42,10 @@ def scan(
 
     res = _construct_scan_array(out_domain)(init)
 
-    def combine_pos(hpos, vpos):
-        hpos_iter = iter(hpos)
-        return tuple(vpos if d == scan_axis else next(hpos_iter) for d in out_domain.dims)
-
     def scan_loop(hpos):
         acc = init
         for k in scan_range[1] if forward else reversed(scan_range[1]):
-            pos = combine_pos(hpos, (scan_axis, k))
+            pos = (*hpos, (scan_axis, k))
             new_args = [_tuple_at(pos, arg) for arg in args]
             new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
             acc = scan_op(acc, *new_args, **new_kwargs)
