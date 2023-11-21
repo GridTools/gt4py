@@ -496,8 +496,11 @@ def test_laplacian():
     nx = random_field((n_edges), E)
     ny = random_field((n_edges), E)
     L = random_field((n_edges), E)
+    dualL = random_field((n_edges), E)
     A = random_field((n_cells), C)
-    edge_orientation = random_field((n_cells, 3), C, C2EDim)
+    dualA = random_field((n_vertices), V)
+    edge_orientation_vertex = random_field((n_cells, 6), V, V2EDim)
+    edge_orientation_cell = random_field((n_cells, 3), C, C2EDim)
 
     laplacian_ref = laplacian_numpy(
         c2e_table,
