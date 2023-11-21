@@ -35,8 +35,11 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.ffront.foast_passes.type_inference import TypeInferencePass, ClosureVarInferencePass
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-from gt4py.next.type_system_2 import inference as ti2
+from gt4py.next.type_system_2 import types as ts2
+from gt4py.next.ffront.type_system_2 import inference as ti2_f
+
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -96,9 +99,13 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         foast_node, closure_vars = TypeAliasReplacement.apply(foast_node, closure_vars)
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
+        typed_node = foast_node
         foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
         foast_node = FieldOperatorTypeDeduction.apply(foast_node)
         foast_node = UnpackedAssignPass.apply(foast_node)
+
+        typed_node = ClosureVarInferencePass(closure_vars).visit(typed_node)
+        typed_node = TypeInferencePass().visit(typed_node)
 
         # check deduced matches annotated return type
         if "return" in annotations:
@@ -172,6 +179,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         new_params = self.visit(node.args, **kwargs)
 
+        arg_types = [ts2.FunctionArgument(param.type_2, param.id, True, True) for param in new_params]
+        if "return" not in self.annotations:
+            raise errors.MissingParameterAnnotationError(loc, "return")
+        result_type = ti2_f.inferrer.from_annotation(self.annotations["return"])
+        ty = ts2.FunctionType(arg_types, result_type)
 
         return foast.FunctionDefinition(
             id=node.name,
@@ -179,6 +191,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             body=new_body,
             closure_vars=closure_var_symbols,
             location=loc,
+            type_2=ty,
         )
 
     def visit_arguments(self, node: ast.arguments) -> list[foast.DataSymbol]:
@@ -189,7 +202,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
         new_type = type_translation.from_type_hint(annotation)
-        new_type_2 = ti2.inferrer.from_annotation(annotation)
+        new_type_2 = ti2_f.inferrer.from_annotation(annotation)
         if not isinstance(new_type, ts.DataType):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type, type_2=new_type_2)

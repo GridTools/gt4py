@@ -56,6 +56,7 @@ class StructType(Type):
 
 @dataclasses.dataclass
 class FunctionArgument:
+    ty: Type
     name: str
     positional: bool
     keyword: bool

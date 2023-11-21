@@ -10,8 +10,8 @@ from typing import Any, Optional, Callable
 
 @dataclasses.dataclass
 class Pattern:
-    annotation: Callable[[TypeInferrer, Any], Optional[types.Type]]
-    instance: Callable[[TypeInferrer, Any], Optional[types.Type]]
+    annotation: Optional[Callable[[TypeInferrer, Any], Optional[types.Type]]]
+    instance: Optional[Callable[[TypeInferrer, Any], Optional[types.Type]]]
 
 
 @dataclasses.dataclass
@@ -23,21 +23,23 @@ class TypeInferrer:
             annotation: Any
     ) -> types.Type:
         for pattern in self.patterns:
-            maybe_type = pattern.annotation(self, annotation)
-            if maybe_type is not None:
-                return maybe_type
+            if pattern.annotation is not None:
+                maybe_type = pattern.annotation(self, annotation)
+                if maybe_type is not None:
+                    return maybe_type
 
     def from_instance(
             self,
             instance: Any,
     ) -> types.Type:
         for pattern in self.patterns:
-            maybe_type = pattern.instance(self, instance)
-            if maybe_type is not None:
-                return maybe_type
+            if pattern.instance is not None:
+                maybe_type = pattern.instance(self, instance)
+                if maybe_type is not None:
+                    return maybe_type
 
 
-def primitive_from_annotation(_: TypeInferrer, annotation: Any):
+def primitive_from_annotation(_: TypeInferrer, annotation: Any) -> Optional[types.Type]:
     try:
         dtype = np.dtype(annotation)
         if dtype.kind == 'i':
@@ -59,11 +61,11 @@ def primitive_from_annotation(_: TypeInferrer, annotation: Any):
     return None
 
 
-def primitive_from_instance(inferrer: TypeInferrer, instance: Any):
+def primitive_from_instance(inferrer: TypeInferrer, instance: Any) -> Optional[types.Type]:
     return primitive_from_annotation(inferrer, type(instance))
 
 
-def tuple_from_annotation(inferrer: TypeInferrer, annotation: Any):
+def tuple_from_annotation(inferrer: TypeInferrer, annotation: Any) -> Optional[types.TupleType]:
     if typing.get_origin(annotation) == tuple:
         elements = [inferrer.from_annotation(element) for element in typing.get_args(annotation)]
         if not all(elements):
@@ -71,7 +73,7 @@ def tuple_from_annotation(inferrer: TypeInferrer, annotation: Any):
         return types.TupleType(elements)
 
 
-def tuple_from_instance(inferrer: TypeInferrer, instance: Any):
+def tuple_from_instance(inferrer: TypeInferrer, instance: Any) -> Optional[types.TupleType]:
     if isinstance(instance, tuple):
         elements = [inferrer.from_instance(element) for element in instance]
         if not all(elements):

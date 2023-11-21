@@ -29,3 +29,12 @@ class ScanOperatorType(ts2.Type):
         self.carry = carry
         self.arguments = arguments
         self.result = result
+
+
+class FieldType(ts2.Type):
+    element_type: ts2.Type
+    dimensions: set[func_common.Dimension]
+
+    def __init__(self, element_type: ts2.Type, dimensions: set[func_common.Dimension]):
+        self.element_type = element_type
+        self.dimensions = dimensions

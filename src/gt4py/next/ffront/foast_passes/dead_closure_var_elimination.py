@@ -48,5 +48,6 @@ class DeadClosureVarElimination(NodeTranslator, traits.VisitorWithSymbolTableTra
             body=node.body,
             closure_vars=referenced_closure_vars,
             type=node.type,
+            type_2=node.type_2,
             location=node.location,
         )

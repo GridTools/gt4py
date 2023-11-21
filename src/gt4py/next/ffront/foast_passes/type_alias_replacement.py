@@ -101,5 +101,6 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
             params=node.params,
             body=self.visit(node.body, **kwargs),
             closure_vars=self._update_closure_var_symbols(node.closure_vars, node.location),
+            type_2=node.type_2,
             location=node.location,
         )
