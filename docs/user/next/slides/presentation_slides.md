@@ -12,6 +12,11 @@ kernelspec:
   name: python3
 ---
 
+<img src="logos/cscs_logo.jpeg" alt="cscs" style="width:270px;"/> <img src="logos/c2sm_logo.gif" alt="c2sm" style="width:220px;"/>
+<img src="logos/exclaim_logo.png" alt="exclaim" style="width:270px;"/> <img src="logos/mch_logo.svg" alt="mch" style="width:270px;"/>
+
++++
+
 # GT4Py workshop
 
 +++
@@ -28,21 +33,31 @@ GT4Py is part of the GridTools framework: a set of libraries and utilities to de
 
 GT4Py is a Python library for expressing computational motifs as found in weather and climate applications. 
 
-These computations are expressed in a domain specific language (GTScript) which is translated to high-performance implementations for CPUs and GPUs.
+These computations are expressed in a domain specific language which is translated to high-performance implementations for CPUs and GPUs.
 
-The DSL expresses computations on a 3-dimensional Cartesian grid. The horizontal axes are always computed in parallel, while the vertical can be iterated in sequential, forward or backward, order. 
+It allows to express physical computations without the need for extensive parameters handling and manual code optimization.
+
+The DSL expresses computations on a 3-dimensional grid. The horizontal axes are always computed in parallel, while the vertical can be iterated in sequential, forward or backward, order. 
 
 In addition, GT4Py provides functions to allocate arrays with memory layout suited for a particular backend.
 
 The following backends are supported:
 
-- `numpy`: Pure-Python backend
-- `gt:cpu_ifirst`: GridTools C++ CPU backend using `I`-first data ordering
-- `gt:cpu_kfirst`: GridTools C++ CPU backend using `K`-first data ordering
-- `gt:gpu`: GridTools backend for CUDA
+- `embedded`: Pure-Python backend
+- `gtfn`: 
+- `roundtrip`: generated Python code
 - `cuda`: CUDA backend minimally using utilities from GridTools
-- `dace:cpu`: Dace code-generated CPU backend
-- `dace:gpu`: Dace code-generated GPU backend
+- `dace`: Dace code-generated for GPU and CPU backend
+
+This workshop will use the `embedded` backend.
+
+## Current efforts
+
+GT4Py is being used to port the ICON model from FORTRAN. Currently the **dycore**, **diffusion**, and **microphysics** are complete. 
+
+The ultimate goal is to have a more flexible and modularized model that can be run on CSCS Alps infrastructure as well as other hardware.
+
+Other models ported using GT4Py are FVM (global and local area configuration) and FV3.
 
 +++
 
@@ -55,8 +70,8 @@ pip install --upgrade git+https://github.com/gridtools/gt4py.git
 ```
 
 ```{code-cell} ipython3
-import warnings
-warnings.filterwarnings('ignore')
+# import warnings
+# warnings.filterwarnings('ignore')
 ```
 
 ```{code-cell} ipython3
@@ -119,7 +134,7 @@ print("result array \n {}".format(np.asarray(result)))
 
 +++
 
-Programs are used to call field operators to mutate their arguments.
+Programs are used to call field operators to mutate the latter's output arguments.
 
 They are written as Python functions by using the `@program` decorator. 
 
@@ -158,13 +173,13 @@ print("a_off array: \n {}".format(np.asarray(a_off)))
 
 Visually, offsetting this field by 1 would result in the following:
 
-| ![Coff](simple_offset.png) |
+| ![Coff](../simple_offset.png) |
 | :------------------------: |
 |  _CellDim Offset (Coff)_   |
 
 +++
 
-Fields can be offeset by a predefined number of indices.
+Fields can be offset by a predefined number of indices.
 
 Take an array with values ranging from 0 to 5:
 
@@ -182,7 +197,7 @@ print("result array: \n {}".format(np.asarray(a_off)))
 ## Defining the mesh and its connectivities
 Take an unstructured mesh with numbered cells (in red) and edges (in blue).
 
-| ![grid_topo](connectivity_numbered_grid.svg) |
+| ![grid_topo](../connectivity_numbered_grid.svg) |
 | :------------------------------------------: |
 |         _The mesh with the indices_          |
 
@@ -191,7 +206,7 @@ CellDim = gtx.Dimension("Cell")
 EdgeDim = gtx.Dimension("Edge")
 ```
 
-Connectivityy among mesh elements is expressed through connectivity tables.
+Connectivity among mesh elements is expressed through connectivity tables.
 
 For example, `e2c_table` lists for each edge its adjacent rows. 
 
@@ -234,7 +249,7 @@ cell_field = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 edge_field = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
-| ![cell_values](connectivity_cell_field.svg) |
+| ![cell_values](../connectivity_cell_field.svg) |
 | :-----------------------------------------: |
 |                _Cell values_                |
 
@@ -273,7 +288,7 @@ print("0th adjacent cell's value: {}".format(np.asarray(edge_field)))
 
 Running the above snippet results in the following edge field:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](connectivity_edge_0th_cell.svg) |
+| ![nearest_cell_values](../connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](../connectivity_edge_0th_cell.svg) |
 | :----------------------------------------------------: | :-------: | :------------------------------------------: |
 |                    _Domain (edges)_                    |           |                _Edge values_                 |
 
@@ -299,7 +314,7 @@ print("sum of adjacent cells: {}".format(np.asarray(edge_field)))
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](connectivity_edge_cell_sum.svg) |
+| ![nearest_cell_values](../connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](../connectivity_edge_cell_sum.svg) |
 | :----------------------------------------------------: | :-------: | :--------------------------------------------: |
 |                    _Domain (edges)_                    |           |                 _Edge values_                  |
 
@@ -372,18 +387,18 @@ print("result array: \n {}".format(x_iteration(x)))
 
 Visually, this is what `x_iteration` is doing: 
 
-| ![scan_operator](scan_operator.png) |
+| ![scan_operator](../scan_operator.png) |
 | :---------------------------------: |
 |         _Iterative sum over K_      |
 
 +++
 
-`scan_operators` allow for the same computations and only require a return statement for the operation, for loops and indexing are handled in the background. The return state of the previous iteration is provided as its first argument.
+`scan_operators` allow for the same computations and only require a return statement for the operation, for loops and indexing are handled in the background. The return `state` of the previous iteration is provided as its first argument.
 
 This decorator takes 3 input arguments:
 - `axis`: vertical axis over which operations have to be performed
 - `forward`: True if order of operations is from bottom to top, False if from top to bottom
-- `init`: initialized decorator value with type float or tuple thereof
+- `init`: scalar value from which the iteration starts
 
 ```{code-cell} ipython3
 @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
