@@ -24,7 +24,16 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar
+from gt4py.eve.extended_typing import (
+    Any,
+    ClassVar,
+    Never,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+    cast,
+)
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -124,8 +133,8 @@ class NdArrayField(
         return np.asarray(self._ndarray, dtype)
 
     @property
-    def codomain(self) -> core_defs.DType[core_defs.ScalarT]:
-        return self.dtype
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -229,7 +238,7 @@ class NdArrayField(
             value = value.ndarray
 
         assert hasattr(self.ndarray, "__setitem__")
-        self._ndarray[target_slice] = value
+        self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
 
     __abs__ = _make_builtin("abs", "abs")
 
@@ -309,16 +318,19 @@ class NdArrayConnectivityField(
     common.ConnectivityField[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
-    _codomain: common.DimT = common.Dimension("undefined")
+    _codomain: common.DimT = cast(
+        common.DimT, common.Dimension("undefined")
+    )  # default, because there is a default previously
     _cache: dict = dataclasses.field(
         init=False, repr=False, hash=False, compare=False, default_factory=dict
     )
 
-    def __gt_builtin_func__(self, _: fbuiltins.BuiltInFunction) -> Never:
+    @classmethod
+    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
         raise NotImplementedError()
 
     @property
-    def codomain(self) -> common.DimT:
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
         return self._codomain
 
     @functools.cached_property
@@ -333,11 +345,11 @@ class NdArrayConnectivityField(
         return kind
 
     @classmethod
-    def from_array(
+    def from_array(  # type: ignore[override]
         cls,
         data: npt.ArrayLike | core_defs.NDArrayObject,
         /,
-        codomain: common.Dimension,
+        codomain: common.DimT,
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
@@ -359,7 +371,7 @@ class NdArrayConnectivityField(
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain)
+        return cls(domain, array, codomain)  # type: ignore[arg-type]
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -369,7 +381,9 @@ class NdArrayConnectivityField(
         if (new_dims := self._cache.get(cache_key, None)) is None:
             xp = self.array_ns
 
-            if common.is_named_range(image_range):
+            if not isinstance(
+                image_range, common.UnitRange
+            ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
                 if image_range[0] != self.codomain:
                     raise ValueError(
                         f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
@@ -426,7 +440,7 @@ class NdArrayConnectivityField(
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)  # type: ignore[arg-type]
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity

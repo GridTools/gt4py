@@ -37,8 +37,8 @@ offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
 @contextlib.contextmanager
 def new_context(
     *,
-    closure_column_range: range | eve.NOTHING = eve.NOTHING,
-    offset_provider: common.OffsetProvider | eve.NOTHING = eve.NOTHING,
+    closure_column_range: range | eve.NothingType = eve.NOTHING,
+    offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
 ):
     import gt4py.next.embedded.context as this_module
 

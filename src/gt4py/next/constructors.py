@@ -356,7 +356,7 @@ def as_connectivity(
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
     buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
-    buffer.ndarray[...] = storage_utils.asarray(data)
+    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index] # TODO(havogt): consider addin MutableNDArrayObject
     connectivity_field = common.connectivity(
         buffer.ndarray, codomain=codomain, domain=actual_domain
     )

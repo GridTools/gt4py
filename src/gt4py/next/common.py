@@ -22,7 +22,7 @@ import functools
 import numbers
 import sys
 import types
-from collections.abc import Hashable, Mapping, Sequence, Set
+from collections.abc import Mapping, Sequence, Set
 
 import numpy as np
 import numpy.typing as npt
@@ -48,7 +48,7 @@ from gt4py.eve.extended_typing import (
 from gt4py.eve.type_definitions import StrEnum
 
 
-DimT = TypeVar("DimT", bound="Dimension", covariant=True)
+DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 
@@ -505,7 +505,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @property
-    def codomain(self) -> core_defs.DType[core_defs.ScalarT] | Dimension:
+    def codomain(self) -> type[core_defs.ScalarT] | Dimension:
         ...
 
     @property
@@ -640,15 +640,6 @@ def is_mutable_field(
     return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
-@dataclasses.dataclass(frozen=True, order=True, slots=True)
-class DimensionIndex:  # (Generic[DimT]):
-    value: int
-    # dim: Dimension
-
-    # def __init_subclass__(cls) -> None:
-    #     cls.dim = get_args(cls.__orig_bases__[0])[0]  # type: ignore
-
-
 class ConnectivityKind(enum.Flag):
     MODIFY_DIMS = enum.auto()
     MODIFY_RANK = enum.auto()
@@ -656,7 +647,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Hashable, Protocol[DimsT, DimT]):
+class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):  # type: ignore[misc] # DimT should be covariant, but break in another place
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT:
@@ -807,13 +798,16 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
-    dimension: Dimension
+    dimension: DimT
     offset: int = 0
 
-    def __gt_builtin_func__(self, _: fbuiltins.BuiltInFunction) -> Never:
+    @classmethod
+    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
         raise NotImplementedError()
 
-    ndarray = None
+    @property
+    def ndarray(self) -> Never:
+        raise NotImplementedError()
 
     @functools.cached_property
     def domain(self) -> Domain:
@@ -826,6 +820,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @property
     def __gt_origin__(self) -> Never:
         raise TypeError("CartesianConnectivity does not support this operation")
+
+    @property
+    def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
+        return core_defs.Int32DType()  # type: ignore[return-value]
 
     @functools.cached_property
     def codomain(self) -> DimT:
@@ -840,7 +838,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         cls,
         definition: int,
         /,
-        codomain: Dimension,
+        codomain: DimT,
         *,
         domain: Optional[DomainLike] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
@@ -850,7 +848,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         return cls(codomain, definition)
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        if is_named_range(image_range):
+        if not isinstance(image_range, UnitRange):
             if image_range[0] != self.codomain:
                 raise ValueError(
                     f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"

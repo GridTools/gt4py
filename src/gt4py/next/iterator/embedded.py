@@ -1062,8 +1062,8 @@ class IndexField(common.Field):
         return common.Domain((self._dimension, common.UnitRange.infinity()))
 
     @property
-    def codomain(self) -> core_defs.Int32DType:
-        return self.dtype
+    def codomain(self) -> type[core_defs.int32]:
+        return core_defs.int32
 
     @property
     def dtype(self) -> core_defs.Int32DType:
@@ -1182,8 +1182,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         return core_defs.dtype(type(self._value))
 
     @property
-    def codomain(self) -> core_defs.DType[core_defs.ScalarT]:
-        return self.dtype
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
