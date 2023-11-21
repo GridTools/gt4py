@@ -16,7 +16,7 @@ kernelspec:
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator.embedded import MutableLocatedField, np_as_located_field 
+from gt4py.next.iterator.embedded import MutableLocatedField
 from gt4py.next import neighbor_sum, where
 from gt4py.next import Dimension, DimensionKind, FieldOffset
 ```
@@ -25,7 +25,7 @@ from gt4py.next import Dimension, DimensionKind, FieldOffset
 def random_field(
     sizes, *dims, low: float = -1.0, high: float = 1.0
 ) -> MutableLocatedField:
-    return np_as_located_field(*dims)( 
+    return gtx.as_field([*dims],
         np.random.default_rng().uniform(
             low=low, high=high, size=sizes
         )
@@ -34,7 +34,7 @@ def random_field(
 def zero_field(
     sizes, *dims: Dimension, dtype=float
 ) -> MutableLocatedField:
-    return np_as_located_field(*dims)( 
+    return gtx.as_field([*dims], 
         np.zeros(shape=sizes, dtype=dtype)
     )
 ```
