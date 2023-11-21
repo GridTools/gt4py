@@ -83,7 +83,9 @@ def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]
             assert all(isinstance(arg, tuple) and len(args[0]) == len(arg) for arg in args)
             return tuple(impl(*arg) for arg in zip(*args))
 
-        return fun(*cast(_P.args, args)) # mypy doesn't understand that `args` at this point is of type `_P.args`
+        return fun(
+            *cast(_P.args, args)
+        )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
     return impl
 
