@@ -53,6 +53,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 
 
@@ -1072,7 +1073,7 @@ class IndexField(common.Field):
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: common.ConnectivityField) -> common.Field:
+    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1188,7 +1189,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: common.ConnectivityField) -> common.Field:
+    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 

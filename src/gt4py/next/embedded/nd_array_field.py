@@ -391,7 +391,9 @@ class NdArrayConnectivityField(
             for i, dim_nnz_indices in enumerate(nnz):
                 # Check if the indices are contiguous
                 first_data_index = dim_nnz_indices[0]
+                assert isinstance(first_data_index, core_defs.INTEGRAL_TYPES)
                 last_data_index = dim_nnz_indices[-1]
+                assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
                 indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
                 if len(xp.unique(counts)) == 1 and (
                     len(indices) == last_data_index - first_data_index + 1
@@ -461,10 +463,7 @@ NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "wher
 
 def _make_reduction(
     builtin_name: str, array_builtin_name: str
-) -> Callable[
-    [NdArrayField[common.DimsT, core_defs.ScalarT], common.Dimension],
-    NdArrayField[common.DimsT, core_defs.ScalarT],
-]:
+) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:

@@ -529,7 +529,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: Field) -> Field:
+    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
         ...
 
     @abc.abstractmethod
