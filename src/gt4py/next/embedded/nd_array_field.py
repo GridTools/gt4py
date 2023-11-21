@@ -579,11 +579,13 @@ def _builtins_broadcast(
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
-def _astype(field: NdArrayField, type_: type) -> NdArrayField:
-    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdArrayField:
+    if isinstance(field, NdArrayField):
+        return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+    raise AssertionError("This is the NdArrayField implementation of `fbuiltins.astype`.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 
 def _get_slices_from_domain_slice(

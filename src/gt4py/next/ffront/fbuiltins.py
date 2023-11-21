@@ -15,17 +15,7 @@
 import dataclasses
 import inspect
 from builtins import bool, float, int, tuple
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    ParamSpec,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
 from numpy import float32, float64, int32, int64
