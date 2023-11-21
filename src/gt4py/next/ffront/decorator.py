@@ -755,7 +755,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 
 def _run_operator(op: Callable, foast_node: OperatorNodeT, args, kwargs):
-    if isinstance(foast_node, foast.ScanOperator):
+    if isinstance(
+        foast_node, foast.ScanOperator
+    ):  # TODO(havogt): we should not reconstruct this info from the foast_node
         scan_foast: foast.ScanOperator = foast_node
         forward = scan_foast.forward.value
         init = scan_foast.init.value

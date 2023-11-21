@@ -65,7 +65,7 @@ def scan(
 
 
 @utils.get_common_tuple_value
-def _is_field_or_tuple(field: common.Field | tuple[common.Field, ...]) -> bool:
+def _is_field_or_tuple(field: common.Field) -> bool:
     return common.is_field(field)
 
 
@@ -79,7 +79,13 @@ def _construct_scan_array(domain: common.Domain):
 
 def _tuple_assign(
     pos: Sequence[common.NamedIndex],
-) -> Callable[[common.MutableField | tuple[common.MutableField | tuple, ...]], None]:
+) -> Callable[
+    [
+        common.MutableField | tuple[common.MutableField | tuple, ...],
+        common.MutableField | tuple[common.MutableField | tuple, ...],
+    ],
+    None,
+]:
     @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar):
         target[pos] = source
