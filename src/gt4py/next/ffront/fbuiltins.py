@@ -329,7 +329,6 @@ class FieldOffset(runtime.Offset):
 
     def __getitem__(self, offset: int) -> common.ConnectivityField:
         """Serve as a connectivity factory."""
-        # TODO this is a temporary solution
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
@@ -352,7 +351,6 @@ class FieldOffset(runtime.Offset):
 
     def as_connectivity_field(self):
         """Convert to connectivity field using the offset providers in current embedded execution context."""
-        # TODO this is a temporary solution
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
         assert current_offset_provider is not None
