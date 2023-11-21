@@ -32,7 +32,13 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, embedded as next_embedded, field_utils
+from gt4py.next import (
+    allocators as next_allocators,
+    common,
+    embedded as next_embedded,
+    field_utils,
+    utils,
+)
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -778,18 +784,17 @@ def _get_vertical_range(domain: common.Domain) -> common.NamedRange:
 
 
 def _tuple_assign_field(
-    target: tuple[common.Field | tuple, ...] | common.Field,
+    target: tuple[common.MutableField | tuple, ...] | common.MutableField,
     source: tuple[common.Field | tuple, ...] | common.Field,
     domain: Optional[common.Domain],
 ):
-    if isinstance(target, tuple):
-        if not isinstance(source, tuple):
-            raise RuntimeError(f"Cannot assign {source} to {target}.")
-        for t, s in zip(target, source):
-            _tuple_assign_field(t, s, domain)
-    else:
-        domain = domain or target.domain
+    domain = domain or target.domain
+
+    @utils.tree_map
+    def impl(target: common.MutableField, source: common.Field):
         target[domain] = source[domain]
+
+    impl(target, source)
 
 
 @typing.overload

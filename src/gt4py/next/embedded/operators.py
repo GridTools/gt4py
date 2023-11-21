@@ -50,10 +50,10 @@ def scan(
         acc = init
         for k in scan_range[1] if forward else reversed(scan_range[1]):
             pos = combine_pos(hpos, (scan_axis, k))
-            new_args = [_tuple_at(pos)(arg) for arg in args]
-            new_kwargs = {k: _tuple_at(pos)(v) for k, v in kwargs.items()}
+            new_args = [_tuple_at(pos, arg) for arg in args]
+            new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
             acc = scan_op(acc, *new_args, **new_kwargs)
-            _tuple_assign(pos)(res, acc)
+            _tuple_assign(pos, res, acc)
 
     for hpos in embedded_common.iterate_domain(non_scan_domain):
         scan_loop(hpos)
@@ -79,30 +79,24 @@ def _construct_scan_array(domain: common.Domain):
 
 def _tuple_assign(
     pos: Sequence[common.NamedIndex],
-) -> Callable[
-    [
-        common.MutableField | tuple[common.MutableField | tuple, ...],
-        common.MutableField | tuple[common.MutableField | tuple, ...],
-    ],
-    None,
-]:
+    target: common.MutableField | tuple[common.MutableField | tuple, ...],
+    source: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
+) -> None:
     @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar):
         target[pos] = source
 
-    return impl  # type: ignore[return-value]
+    impl(target, source)
 
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-) -> Callable[
-    [common.Field | core_defs.Scalar | tuple[common.Field | core_defs.Scalar | tuple, ...]],
-    core_defs.Scalar,
-]:
+    field: common.Field | core_defs.Scalar | tuple[common.Field | core_defs.Scalar | tuple, ...],
+) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos] if common.is_field(field) else field
         assert core_defs.is_scalar_type(res)
         return res
 
-    return impl  # type: ignore[return-value]
+    return impl(field)  # type: ignore[return-value]
