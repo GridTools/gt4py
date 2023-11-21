@@ -63,6 +63,8 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 
 def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
+    """Extract data from elements of tuple. Requiring all elements result in the same value."""
+
     @functools.wraps(fun)
     def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
         if isinstance(value, tuple):
@@ -96,6 +98,3 @@ def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]
         )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
     return impl
-
-
-# TODO(havogt): consider moving to module like `field_utils`
