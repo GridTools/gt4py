@@ -33,7 +33,7 @@ try:
     from gt4py.next.program_processors.runners import dace_iterator
 
     _GPU_BACKENDS.append(dace_iterator.run_dace_gpu)
-except:
+except ImportError:
     warnings.warn("Skipping dace backend because dace module is not installed.")
 
 
