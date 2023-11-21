@@ -125,9 +125,9 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     else:
         ref_impl: Callable = getattr(np, builtin_name)
 
-    inps = [gtx.as_field([IDim], np.asarray(input)) for input in inputs]
+    inps = [cartesian_case.as_field([IDim], np.asarray(input)) for input in inputs]
     expected = ref_impl(*inputs)
-    out = gtx.as_field([IDim], np.zeros_like(expected))
+    out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
     builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(
         cartesian_case.backend
