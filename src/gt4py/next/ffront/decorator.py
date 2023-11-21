@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, field_utils
+from gt4py.next import allocators as next_allocators, common, embedded as next_embedded, field_utils
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import common as embedded_common, operators as embedded_operators
 from gt4py.next.ffront import (
@@ -291,8 +291,8 @@ class Program:
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
                 )
             )
-
-            self.definition(*rewritten_args, **kwargs)
+            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                ctx.run(self.definition, *rewritten_args, **kwargs)
             return
 
         ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
@@ -687,6 +687,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             offset_provider = kwargs.pop("offset_provider", None)
             if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
+                # When backend is None, we are in embedded execution and for now
+                # we disable the program generation since it would involve generating
+                # Python source code from a PAST node.
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -701,33 +704,61 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
             else:
-                # "out" -> field_operator called from program in embedded execution
-                # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
-
+                # "out" -> field_operator called from program in embedded execution or
+                # field_operator called directly from Python in embedded execution
                 domain = kwargs.pop("domain", None)
                 embedded_common.out_domain = (
                     domain if domain is not None else field_utils.get_domain(out)
-                )
-                if isinstance(self.foast_node, foast.ScanOperator):
-                    scan_op = self.definition
-                    scan_foast: foast.ScanOperator = self.foast_node
-                    forward = scan_foast.forward.value
-                    init = scan_foast.init.value
-                    axis = scan_foast.axis.value
-                    scan_range = embedded_common.out_domain[axis]
+                )  # TODO via context
+                if not next_embedded.context.within_context():
+                    # field_operator from Python in embedded execution
+                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                        if isinstance(self.foast_node, foast.ScanOperator):
+                            scan_op = self.definition
+                            scan_foast: foast.ScanOperator = self.foast_node
+                            forward = scan_foast.forward.value
+                            init = scan_foast.init.value
+                            axis = scan_foast.axis.value
+                            scan_range = embedded_common.out_domain[axis]
 
-                    res = embedded_operators.scan(
-                        scan_op, forward, init, axis, scan_range, args, kwargs
-                    )
+                            res = embedded_operators.scan(
+                                scan_op, forward, init, axis, scan_range, args, kwargs
+                            )
 
-                    _tuple_assign_field(
-                        out, res, domain=None if domain is None else common.domain(domain)
-                    )
+                            _tuple_assign_field(
+                                out, res, domain=None if domain is None else common.domain(domain)
+                            )
+                        else:
+                            res = ctx.run(self.definition, *args, **kwargs)
+                            _tuple_assign_field(
+                                out, res, domain=None if domain is None else common.domain(domain)
+                            )
                 else:
-                    res = self.definition(*args, **kwargs)
-                    _tuple_assign_field(
-                        out, res, domain=None if domain is None else common.domain(domain)
+                    # field_operator from program in embedded execution (offset_provicer is already set)
+                    assert (
+                        offset_provider is None
+                        or next_embedded.context.offset_provider.get() is offset_provider
                     )
+                    if isinstance(self.foast_node, foast.ScanOperator):
+                        scan_op = self.definition
+                        scan_foast: foast.ScanOperator = self.foast_node
+                        forward = scan_foast.forward.value
+                        init = scan_foast.init.value
+                        axis = scan_foast.axis.value
+                        scan_range = embedded_common.out_domain[axis]
+
+                        res = embedded_operators.scan(
+                            scan_op, forward, init, axis, scan_range, args, kwargs
+                        )
+
+                        _tuple_assign_field(
+                            out, res, domain=None if domain is None else common.domain(domain)
+                        )
+                    else:
+                        res = self.definition(*args, **kwargs)
+                        _tuple_assign_field(
+                            out, res, domain=None if domain is None else common.domain(domain)
+                        )
                 embedded_common.out_domain = None
                 return
         else:

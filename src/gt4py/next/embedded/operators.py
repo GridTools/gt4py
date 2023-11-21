@@ -70,7 +70,7 @@ def _is_field_or_tuple(field: common.Field | tuple[common.Field, ...]) -> bool:
 
 
 def _construct_scan_array(domain: common.Domain):
-    @utils.apply_to_tuple_elements
+    @utils.tree_map
     def impl(init: core_defs.Scalar) -> common.Field:
         return constructors.empty(domain, dtype=type(init))
 
@@ -80,7 +80,7 @@ def _construct_scan_array(domain: common.Domain):
 def _tuple_assign(
     pos: Sequence[common.NamedIndex],
 ) -> Callable[[common.MutableField | tuple[common.MutableField | tuple, ...]], None]:
-    @utils.apply_to_tuple_elements
+    @utils.tree_map
     def impl(target: common.MutableField, source: core_defs.Scalar):
         target[pos] = source
 
@@ -93,7 +93,7 @@ def _tuple_at(
     [common.Field | core_defs.Scalar | tuple[common.Field | core_defs.Scalar | tuple, ...]],
     core_defs.Scalar,
 ]:
-    @utils.apply_to_tuple_elements
+    @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos] if common.is_field(field) else field
         assert core_defs.is_scalar_type(res)

@@ -152,7 +152,7 @@ def test_tuple_program_return_constructed_inside(cartesian_case):
 
     cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
 
-    assert np.allclose((a, b), (out_a, out_b))
+    assert np.allclose((a.asnumpy(), b.asnumpy()), (out_a.asnumpy(), out_b.asnumpy()))
 
 
 def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
@@ -178,7 +178,9 @@ def test_tuple_program_return_constructed_inside_with_slicing(cartesian_case):
 
     cases.run(cartesian_case, prog, a, b, out_a, out_b, offset_provider={})
 
-    assert np.allclose((a[1:], b[1:]), (out_a[1:], out_b[1:]))
+    assert np.allclose(
+        (a[1:].asnumpy(), b[1:].asnumpy()), (out_a[1:].asnumpy(), out_b[1:].asnumpy())
+    )
     assert out_a[0] == 0 and out_b[0] == 0
 
 
@@ -209,13 +211,15 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 
     cases.run(cartesian_case, prog, a, b, c, out_a, out_b, out_c, offset_provider={})
 
-    assert np.allclose((a, b, c), (out_a, out_b, out_c))
+    assert np.allclose(
+        (a.asnumpy(), b.asnumpy(), c.asnumpy()), (out_a.asnumpy(), out_b.asnumpy(), out_c.asnumpy())
+    )
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
-    inp = gtx.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
+    inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
     with pytest.raises(TypeError) as exc_info:

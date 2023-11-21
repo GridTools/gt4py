@@ -63,9 +63,9 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) * 2 * np.asarray(args["b"]) - np.asarray(args["c"])
+    expected = args["a"] * 2 * args["b"] - args["c"]
 
-    assert np.allclose(out, expected)
+    assert np.allclose(out.asnumpy(), expected.asnumpy())
 
 
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "out")))
@@ -89,9 +89,9 @@ def test_call_program_from_python(cartesian_case, arg_spec):
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) + 2 * np.asarray(args["b"])
+    expected = args["a"] + 2 * args["b"]
 
-    assert np.allclose(args["out"], expected)
+    assert np.allclose(args["out"].asnumpy(), expected.asnumpy())
 
 
 def test_call_field_operator_from_field_operator(cartesian_case):
@@ -177,9 +177,7 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
     a, b, out = (
         cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", cases.RETURN)
     )
-    expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(
-        np.asarray(a) + 2.0 * np.asarray(b), axis=2
-    )
+    expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(a.asnumpy() + 2.0 * b.asnumpy(), axis=2)
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=expected)
 
@@ -210,7 +208,7 @@ def test_call_scan_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.add.accumulate(np.asarray(a) + 2 * np.asarray(b), axis=2)
+    ref = np.add.accumulate(a.asnumpy() + 2 * b.asnumpy(), axis=2)
 
     cases.verify(
         cartesian_case,

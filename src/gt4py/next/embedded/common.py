@@ -12,11 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from __future__ import annotations
+
 import functools
 import itertools
 import operator
-from typing import Any, Optional, Sequence, cast
 
+from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 

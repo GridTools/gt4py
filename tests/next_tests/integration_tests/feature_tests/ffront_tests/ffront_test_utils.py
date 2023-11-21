@@ -53,6 +53,7 @@ if dace_iterator:
         definitions.ProgramBackendId.GTFN_CPU,
         definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
         None,
     ]
     + OPTIONAL_PROCESSORS,
@@ -208,7 +209,7 @@ def reduction_setup():
         inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
         out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4, has_skip_values=False),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
             "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
             "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),

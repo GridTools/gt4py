@@ -50,6 +50,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU_WITH_TEMPORARIES = (
         "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
     )
+    GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
@@ -119,8 +120,6 @@ GTFN_SKIP_TEST_LIST = [
     (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
-    (USES_CARTESIAN_SHIFT, XFAIL, UNSUPPORTED_MESSAGE),
-    (USES_UNSTRUCTURED_SHIFT, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
@@ -144,6 +143,10 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
+    + [
+        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    ],
+    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
