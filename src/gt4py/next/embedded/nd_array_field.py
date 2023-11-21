@@ -414,11 +414,15 @@ class NdArrayConnectivityField(
                 ):
                     dim_range = self._domain[i]
                     idx_offset = dim_range[1].start
+                    start = idx_offset + first_data_index
+                    assert common.is_int_index(start)
+                    stop = idx_offset + last_data_index + 1
+                    assert common.is_int_index(stop)
                     new_dims.append(
                         common.named_range(
                             (
                                 dim_range[0],
-                                (idx_offset + first_data_index, idx_offset + last_data_index + 1),
+                                (start, stop),
                             )
                         )
                     )
