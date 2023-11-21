@@ -520,7 +520,7 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
-    def remap(self, index_field: Field) -> Field:
+    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
         ...
 
     @abc.abstractmethod

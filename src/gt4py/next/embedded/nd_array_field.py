@@ -158,10 +158,15 @@ class NdArrayField(
 
         return cls(domain, array)
 
-    def remap(self: NdArrayField, connectivity: common.ConnectivityField) -> NdArrayField:
+    def remap(
+        self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
+    ) -> NdArrayField:
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
+            assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
+
+        assert common.is_connectivity_field(connectivity)
 
         # Compute the new domain
         dim = connectivity.codomain
@@ -185,6 +190,7 @@ class NdArrayField(
                 if restricted_connectivity_domain != connectivity.domain
                 else connectivity
             )
+            assert common.is_connectivity_field(restricted_connectivity)
 
             # then compute the index array
             xp = self.array_ns
@@ -245,9 +251,9 @@ class NdArrayField(
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
 
-    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __ne__: Callable[[NdArrayField, common.Field | core_defs.ScalarT], common.Field | core_defs.ScalarT] = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
 
-    __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __eq__: Callable[[NdArrayField, common.Field | core_defs.ScalarT], common.Field | core_defs.ScalarT] = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
 
     __gt__ = _make_builtin("greater", "greater")
 

@@ -19,7 +19,6 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Optional,
     ParamSpec,
     Tuple,
     TypeAlias,
@@ -344,6 +343,7 @@ class FieldOffset(runtime.Offset):
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[self.value]
 
+        connectivity: common.ConnectivityField
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(
