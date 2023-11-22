@@ -1,3 +1,5 @@
+import typing
+
 from gt4py.next.ffront import field_operator_ast as foast
 from gt4py import eve
 from gt4py.next import errors
@@ -16,10 +18,14 @@ class ClosureVarInferencePass(eve.NodeTranslator, eve.traits.VisitorWithSymbolTa
         new_closure_vars: list[foast.Symbol] = []
         for sym in node.closure_vars:
             if not isinstance(self.closure_vars[sym.id], type):
+                ty = ti2_f.inferrer.from_instance(self.closure_vars[sym.id])
+                if ty is None:
+                    raise errors.DSLError(sym.location, f"could not infer captured variable '{sym.id}'s type")
                 new_symbol: foast.Symbol = foast.Symbol(
                     id=sym.id,
                     location=sym.location,
-                    type_2=ti2_f.inferrer.from_instance(self.closure_vars[sym.id]),
+                    type=sym.type,
+                    type_2=ty,
                 )
                 new_closure_vars.append(new_symbol)
             else:
@@ -37,22 +43,13 @@ class ClosureVarInferencePass(eve.NodeTranslator, eve.traits.VisitorWithSymbolTa
 class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     result: Optional[ts2.Type]
 
-    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs):
-        ty = node.type_2
-        assert isinstance(ty, ts2_f.FieldOperatorType)
-        self.result = ty.result
-        definition = self.visit(node.definition, **kwargs)
-        return foast.FieldOperator(
-            id=node.id,
-            definition=definition,
-            type_2=node.type_2,
-            location=node.location
-        )
+    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
+        assert False, "FieldOperator nodes are never actually processed"
 
-    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs):
-        raise NotImplementedError()
+    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
+        assert False, "FieldOperator nodes are never actually processed"
 
-    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs) -> foast.FunctionDefinition:
         ty = node.type_2
         assert isinstance(ty, ts2.FunctionType)
         self.result = ty.result
@@ -64,6 +61,34 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
             type_2=node.type_2,
             location=node.location,
         )
+
+    def visit_Call(self, node: foast.Call, **kwargs) -> foast.Call:
+        func: foast.Expr = self.visit(node.func, **kwargs)
+        positionals: list = self.visit(node.args, **kwargs)
+        keywords: dict = self.visit(node.kwargs, **kwargs)
+
+        func_t = func.type_2
+        args = [
+            *(traits.FunctionArgument(arg.type_2, idx) for idx, arg in enumerate(positionals)),
+            *(traits.FunctionArgument(arg.type_2, name) for name, arg in keywords.items())
+        ]
+
+        if isinstance(func_t, traits.CallableTrait):
+            is_callable, result_or_err = func_t.is_callable(args)
+            if not is_callable:
+                raise errors.DSLError(node.location, f"invalid arguments to call: {result_or_err}")
+            ty = result_or_err
+            return foast.Call(func=func, args=positionals, kwargs=keywords, type_2=ty, location=node.location)
+        raise errors.DSLError(func.location, f"object of type '{func_t}' is not callable")
+
+    def visit_Return(self, node: foast.Return, **kwargs) -> foast.Return:
+        value: foast.Expr = self.visit(node.value, **kwargs)
+        value_t = value.type_2
+        if value_t != self.result and not traits.is_implicitly_convertible(value_t, self.result):
+            message = f"no implicit conversion from '{value.type_2}' to function return type '{self.result}'"
+            supplement = ", use an explicit cast" if traits.is_convertible(value.type_2, self.result) else ""
+            raise errors.DSLError(node.location, message + supplement)
+        return foast.Return(value=value, type_2=value.type_2, location=node.location)
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> foast.Symbol:
         symtable = kwargs["symtable"]
@@ -84,23 +109,168 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         target.type_2 = value.type_2
         return foast.Assign(target=target, value=value, type_2=value.type_2, location=node.location)
 
-    def visit_Return(self, node: foast.Return, **kwargs) -> foast.Return:
-        value = self.visit(node.value, **kwargs)
-        if traits.is_convertible(value.type_2, self.result):
-            raise errors.DSLError(
-                node.location,
-                f"could not convert returned value of type '{value.type_2}' to {self.result}"
-            )
-        return foast.Return(value=value, type_2=value.type_2, location=node.location)
+    def visit_TupleTargetAssign(self, node: foast.TupleTargetAssign, **kwargs) -> foast.TupleTargetAssign:
+        targets = [self.visit(target, **kwargs) for target in node.targets]
+        value: foast.Expr = self.visit(node.value, **kwargs)
+        if not isinstance(value.type_2, ts2.TupleType):
+            raise errors.DSLError(value.location, "expected a tuple")
+
+        starred_indices = [idx for idx, tar in enumerate(targets) if isinstance(tar, foast.Starred)]
+        if len(starred_indices) > 1:
+            message = "expected at most one starred expression"
+            raise errors.DSLError(targets[starred_indices[1]], message)
+
+        tys = value.type_2.elements
+        last = len(tys)
+        starred_first = starred_indices[0] if starred_indices else last
+        starred_last = len(tys) - len(targets) + 1 + starred_first if starred_indices else last
+        if starred_last < starred_first:
+            raise errors.DSLError(node.location, "not enough values to unpack")
+        if not starred_indices and len(targets) != len(tys):
+            raise errors.DSLError(node.location, "too many values to unpack")
+
+        for target, ty in zip(targets[0:starred_first], tys[0:starred_first]):
+            target.type_2 = ty
+        for target, ty in zip(targets[starred_last:last], tys[starred_last:last]):
+            target.type_2 = ty
+        if starred_indices:
+            starred_symbol = typing.cast(foast.Starred, targets[starred_indices[0]])
+            starred_symbol.id.type_2 = ts2.TupleType(tys[starred_first:starred_last])
+            starred_symbol.type_2 = starred_symbol.id.type_2
+        return foast.TupleTargetAssign(targets=targets, value=value, type_2=value.type_2, location=node.location)
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:
         elements = self.visit(node.elts, **kwargs)
         ty = ts2.TupleType([element.type_2 for element in elements])
         return foast.TupleExpr(elts=elements, type_2=ty, location=node.location)
 
-    def visit_Subscript(self, node: foast.Subscript, **kwargs):
+    def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         value = self.visit(node.value, **kwargs)
         if isinstance(value.type_2, ts2.TupleType):
             ty = value.type_2.elements[node.index]
             return foast.Subscript(value=value, index=node.index, type_2=ty, location=node.location)
         raise errors.DSLError(node.location, f"expression of type '{value.type_2}' is not subscriptable")
+
+    def visit_IfStmt(self, node: foast.IfStmt, **kwargs) -> foast.IfStmt:
+        symtable = kwargs["symtable"]
+
+        condition = self.visit(node.condition, **kwargs)
+        true_branch = self.visit(node.true_branch, **kwargs)
+        false_branch = self.visit(node.false_branch, **kwargs)
+        result = foast.IfStmt(
+            condition=condition,
+            true_branch=true_branch,
+            false_branch=false_branch,
+            location=node.location,
+        )
+
+        if not traits.is_implicitly_convertible(condition.type_2, ts2.BoolType()):
+            message = "expected an expression implicitly convertible to boolean"
+            raise errors.DSLError(condition.location, message)
+
+        for sym in node.annex.propagated_symbols.keys():
+            true_branch_ty = true_branch.annex.symtable[sym].type_2
+            false_branch_ty = false_branch.annex.symtable[sym].type_2
+            if true_branch_ty != false_branch_ty:
+                message = "symbol '{sym}' has different types in the 'then' and 'else' branches of the if statement"
+                raise errors.DSLError(true_branch.annex.symtable[sym].location, message)
+            # TODO: properly patch symtable (new node?)
+            symtable[sym].type = result.annex.propagated_symbols[
+                sym
+            ].type = true_branch.annex.symtable[sym].type
+
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
+        from gt4py.next.ffront.dialect_ast_enums import UnaryOperator
+
+        operand: foast.Expr = self.visit(node.operand, **kwargs)
+        operand_t = operand.type_2
+        if node.op in [UnaryOperator.NOT, UnaryOperator.INVERT]:
+            message = "operand does not support bitwise operations"
+            if not isinstance(operand_t, traits.BitwiseTrait) or not operand_t.supports_bitwise():
+                raise errors.DSLError(operand.location, message)
+        elif node.op == UnaryOperator.USUB:
+            if isinstance(operand_t, ts2.IntegerType) and not operand_t.signed:
+                required_width = 2 * operand_t.width
+                if required_width > 64:
+                    message = "no integral type can represent the negative value"
+                    raise errors.DSLError(node.location, message)
+                operand_t = ts2.IntegerType(required_width, True)
+
+        return foast.UnaryOp(operand=operand, op=node.op, type_2=operand_t, location=node.location)
+
+    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> foast.BinOp:
+        from gt4py.next.ffront.dialect_ast_enums import BinaryOperator
+
+        bitwise_ops = [BinaryOperator.BIT_AND, BinaryOperator.BIT_OR, BinaryOperator.BIT_XOR]
+
+        lhs: foast.Expr = self.visit(node.left, **kwargs)
+        rhs: foast.Expr = self.visit(node.right, **kwargs)
+        lhs_t = lhs.type_2
+        rhs_t = rhs.type_2
+        if node.op in bitwise_ops:
+            message = "operand does not support bitwise operations"
+            if not isinstance(lhs_t, traits.BitwiseTrait) or not lhs_t.supports_bitwise():
+                raise errors.DSLError(lhs.location, message)
+            if not isinstance(rhs_t, traits.BitwiseTrait) or not rhs_t.supports_bitwise():
+                raise errors.DSLError(rhs.location, message)
+            ty = traits.common_bitwise_type(lhs_t, rhs_t)
+        else:
+            message = "operand does not support arithmetic operations"
+            if not isinstance(lhs_t, traits.ArithmeticTrait) or not lhs_t.supports_arithmetic():
+                raise errors.DSLError(lhs.location, message)
+            if not isinstance(rhs_t, traits.ArithmeticTrait) or not rhs_t.supports_arithmetic():
+                raise errors.DSLError(rhs.location, message)
+            ty = traits.common_arithmetic_type(lhs_t, rhs_t)
+        if ty is None:
+            message = f"incompatible operands for '{node.op}'"
+            raise errors.DSLError(node.location, message)
+
+        return foast.BinOp(left=lhs, right=rhs, op=node.op, type_2=ty, location=node.location)
+
+    def visit_Compare(self, node: foast.Compare, **kwargs) -> foast.Compare:
+        lhs: foast.Expr = self.visit(node.left, **kwargs)
+        rhs: foast.Expr = self.visit(node.right, **kwargs)
+        lhs_t = lhs.type_2
+        rhs_t = rhs.type_2
+
+        if not isinstance(lhs_t, traits.ArithmeticTrait) or not lhs_t.supports_arithmetic():
+            message = "operand does not support comparison operations"
+            raise errors.DSLError(lhs.location, message)
+        if not isinstance(rhs_t, traits.ArithmeticTrait) or not rhs_t.supports_arithmetic():
+            message = "operand does not support comparison operations"
+            raise errors.DSLError(rhs.location, message)
+        common_ty = traits.common_arithmetic_type(lhs_t, rhs_t)
+        if common_ty is None:
+            message = f"incompatible operands for '{node.op}'"
+            raise errors.DSLError(node.location, message)
+        if isinstance(common_ty, ts2_f.FieldType):
+            ty = ts2_f.FieldType(ts2.BoolType(), common_ty.dimensions)
+        else:
+            ty = ts2.BoolType()
+
+        return foast.Compare(left=lhs, right=rhs, op=node.op, type_2=ty, location=node.location)
+
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> foast.TernaryExpr:
+        condition: foast.Expr = self.visit(node.condition, **kwargs)
+        then_expr: foast.Expr = self.visit(node.true_expr, **kwargs)
+        else_expr: foast.Expr = self.visit(node.false_expr, **kwargs)
+        if not traits.is_implicitly_convertible(condition.type_2, ts2.BoolType()):
+            message = "expected an expression implicitly convertible to boolean"
+            raise errors.DSLError(condition.location, message)
+        ty = traits.common_type(then_expr.type_2, else_expr.type_2)
+        if ty is None:
+            message = "could not cast the 'then' and 'else' expressions to a common type"
+            raise errors.DSLError(node.location, message)
+        return foast.TernaryExpr(
+            condition=condition,
+            true_expr=then_expr,
+            false_expr=else_expr,
+            type_2=ty,
+            location=node.location,
+        )
+
+    def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
+        ty = ti2_f.inferrer.from_instance(node.value)
+        if ty is None:
+            raise errors.DSLError(node.location, "constant has invalid type")
+        return foast.Constant(value=node.value, location=node.location, type_2=ty)

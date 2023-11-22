@@ -179,7 +179,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         new_params = self.visit(node.args, **kwargs)
 
-        arg_types = [ts2.FunctionArgument(param.type_2, param.id, True, True) for param in new_params]
+        arg_types = [ts2.FunctionParameter(param.type_2, param.id, True, True) for param in new_params]
         if "return" not in self.annotations:
             raise errors.MissingParameterAnnotationError(loc, "return")
         result_type = ti2_f.inferrer.from_annotation(self.annotations["return"])

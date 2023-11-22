@@ -1,64 +1,115 @@
 from __future__ import annotations
-from typing import Any, Callable, Optional
+
+import abc
+from typing import Any, Optional
+from collections.abc import Sequence
+
+import dataclasses
 
 
 class Trait:
-    def satisfied_by(self, _: Trait) -> bool:
-        return False
+    ...
 
 
 class SignednessTrait(Trait):
-    t_signed: bool
-
-    def __init__(self, signed: bool):
-        self.t_signed = signed
-
-    def satisfied_by(self, other: Trait) -> bool:
-        return isinstance(other, SignednessTrait) and self.t_signed == other.t_signed
-
-
-class SignedTrait(SignednessTrait):
-    def __init__(self):
-        SignednessTrait.__init__(self, True)
-
-
-class UnsignedTrait(SignednessTrait):
-    def __init__(self):
-        SignednessTrait.__init__(self, False)
+    @abc.abstractmethod
+    def is_signed(self) -> bool:
+        ...
 
 
 class FromTrait(Trait):
-    ty: Any
-    is_convertible_from: Optional[Callable[[Any], bool]]
-
-    def __init__(self, ty: Any, is_convertible_from: Optional[Callable[[Any], bool]] = None):
-        self.ty = ty
-        self.is_convertible_from = is_convertible_from
-
-    def satisfied_by(self, other: Trait) -> bool:
-        if isinstance(other, FromTrait):
-            if other.is_convertible_from is not None:
-                return other.is_convertible_from(other.ty)
-        return False
+    @abc.abstractmethod
+    def is_constructible_from(self, ty: Any) -> bool:
+        ...
 
 
 class ToTrait(Trait):
+    @abc.abstractmethod
+    def is_convertible_to(self, ty: Any) -> bool:
+        ...
+
+
+class FromImplicitTrait(Trait):
+    @abc.abstractmethod
+    def is_implicitly_constructible_from(self, ty: Any) -> bool:
+        ...
+
+
+class ToImplicitTrait(Trait):
+    @abc.abstractmethod
+    def is_implicitly_convertible_to(self, ty: Any) -> bool:
+        ...
+
+
+class ArithmeticTrait(Trait):
+    def supports_arithmetic(self) -> bool:
+        return True
+
+    def common_arithmetic_type(self, other: Any) -> Optional[Any]:
+        return self if self == other else None
+
+
+class BitwiseTrait(Trait):
+    def supports_bitwise(self) -> bool:
+        return True
+
+    def common_bitwise_type(self, other: Any) -> Optional[Any]:
+        return self if self == other else None
+
+
+@dataclasses.dataclass
+class FunctionArgument:
     ty: Any
-    is_convertible_to: Optional[Callable[[Any], bool]]
+    location: int | str
 
-    def __init__(self, ty: Any, is_convertible_to: Optional[Callable[[Any], bool]] = None):
-        self.ty = ty
-        self.is_convertible_to = is_convertible_to
 
-    def satisfied_by(self, other: Trait) -> bool:
-        if isinstance(other, FromTrait):
-            if self.is_convertible_to is not None:
-                return self.is_convertible_to(other.ty)
+class CallableTrait(Trait):
+    @abc.abstractmethod
+    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        ...
+
+
+def is_convertible(from_: Any, to: Any) -> bool:
+    if isinstance(to, FromTrait):
+        return to.is_constructible_from(from_)
+    elif isinstance(from_, ToTrait):
+        return from_.is_convertible_to(to)
+    else:
         return False
 
 
-def is_convertible(from_: Any, to: Any):
-    if isinstance(to, FromTrait):
-        return to.satisfied_by(from_)
-    elif isinstance(from_, ToTrait):
-        return from_.satisfied_by(to)
+def is_implicitly_convertible(from_: Any, to: Any) -> bool:
+    if isinstance(to, FromImplicitTrait):
+        return to.is_implicitly_constructible_from(from_)
+    elif isinstance(from_, ToImplicitTrait):
+        return from_.is_implicitly_convertible_to(to)
+    else:
+        return False
+
+
+def common_type(lhs: Any, rhs: Any) -> Optional[Any]:
+    if is_implicitly_convertible(lhs, rhs):
+        return rhs
+    elif is_implicitly_convertible(rhs, lhs):
+        return lhs
+    return None
+
+
+def common_arithmetic_type(lhs: Any, rhs: Any) -> Optional[Any]:
+    if isinstance(lhs, ArithmeticTrait):
+        ty = lhs.common_arithmetic_type(rhs)
+        if ty is not None:
+            return ty
+    if isinstance(rhs, ArithmeticTrait):
+        return rhs.common_arithmetic_type(lhs)
+    return None
+
+
+def common_bitwise_type(lhs: Any, rhs: Any) -> Optional[Any]:
+    if isinstance(lhs, BitwiseTrait):
+        ty = lhs.common_bitwise_type(rhs)
+        if ty is not None:
+            return ty
+    if isinstance(rhs, BitwiseTrait):
+        return rhs.common_bitwise_type(lhs)
+    return None
