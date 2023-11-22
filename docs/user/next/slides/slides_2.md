@@ -140,11 +140,10 @@ $$ f_E: E \to \mathbb{R}, e \mapsto (f_C \circ c_{E \to C_0})(e) := f_c(c_{E \to
 
 
 We extend the connectivities to refer to more than just one neighbor
-- `E2C` is the local dimension of all cell neighbors of an edge
+- `E2CDim` is the local dimension of all cell neighbors of an edge
 
-$$ c_{E \to C}: E \times E2C \to C $$
-$$ f_E: E \to \mathbb{R}, e \mapsto \big(f_C \circ c_{E \to C}\big)(e, 0) $$
-$$ f_E(e, c) := f_C(c_{E \to C}(e, c)), e \in E, c \in \{0,1\} $$
+$$ c_{E \to C}: E \times E2CDim \to C $$
+$$ f_E(e, l) := f_C(c_{E \to C}(e, l)), e \in E, l \in \{0,1\} $$
 
 ```{code-cell} ipython3
 E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
