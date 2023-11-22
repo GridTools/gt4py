@@ -24,23 +24,20 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import gt4py.next as gtx
 from gt4py.next import float64, neighbor_sum, where
-from gt4py.next.common import DimensionKind
-from gt4py.next.program_processors.runners import roundtrip
 ```
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-KDim = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
-grid_shape = (5, 6)
+Cell = gtx.Dimension("Cell")
+K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 ```
 
 ## Offsets
-Fields can be offset by a predefined number of indices.
+Fields can be shifted with a (Cartesian) offset.
 
-Take an array with values ranging from 1 to 8:
+Take the following array:
 
 ```{code-cell} ipython3
-a_off = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
+a_off = gtx.as_field([K], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 
 print("a_off array: \n {}".format(a_off.asnumpy()))
 ```
@@ -51,21 +48,19 @@ Visually, offsetting this field by 1 would result in the following:
 | :------------------------: |
 |  _CellDim Offset (Coff)_   |
 
-+++
-
-Fields can be offset by a predefined number of indices.
-
-Take an array with values ranging from 0 to 5:
+In GT4Py we express this by
 
 ```{code-cell} ipython3
-Coff = gtx.FieldOffset("Coff", source=CellDim, target=(CellDim,))
+Koff = gtx.FieldOffset("Koff", source=K, target=(K,))
 
 @gtx.field_operator
-def a_offset(a_off: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
-    return a_off(Coff[1])
-    
-a_offset(a_off, out=a_off[:-1], offset_provider={"Coff": CellDim})
-print("result array: \n {}".format(a_off.asnumpy()))
+def a_offset(a_off: gtx.Field[[K], float64]) -> gtx.Field[[K], float64]:
+    return a_off(Koff[1])
+
+result = gtx.zeros(gtx.domain({K: 6}))
+
+a_offset(a_off, out=result[:-1], offset_provider={"Koff": K})
+print(f"result field: \n {result} \n {result.asnumpy()}")
 ```
 
 ## Defining the mesh and its connectivities
@@ -76,8 +71,8 @@ Take an unstructured mesh with numbered cells (in red) and edges (in blue).
 |         _The mesh with the indices_          |
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-EdgeDim = gtx.Dimension("Edge")
+Cell = gtx.Dimension("Cell")
+Edge = gtx.Dimension("Edge")
 ```
 
 Connectivity among mesh elements is expressed through connectivity tables.
@@ -119,8 +114,8 @@ c2e_table = np.array([
 Let's start by defining two fields: one over the cells and another one over the edges. The field over cells serves input as for subsequent calculations and is therefore filled up with values, whereas the field over the edges stores the output of the calculations and is therefore left blank.
 
 ```{code-cell} ipython3
-cell_field = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
-edge_field = gtx.as_field([EdgeDim], np.zeros((12,)))
+cell_field = gtx.as_field([Cell], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
+edge_field = gtx.as_field([Edge], np.zeros((12,)))
 ```
 
 | ![cell_values](../connectivity_cell_field.svg) |
@@ -147,20 +142,20 @@ $$ f_E(e, l) := f_C(c_{E \to C}(e, l)), e \in E, l \in \{0,1\} $$
 
 ```{code-cell} ipython3
 E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
-E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim, E2CDim))
+E2C = gtx.FieldOffset("E2C", source=Cell, target=(Edge, E2CDim))
 ```
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.NeighborTableOffsetProvider(e2c_table, EdgeDim, CellDim, 2)
+E2C_offset_provider = gtx.NeighborTableOffsetProvider(e2c_table, Edge, Cell, 2)
 ```
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def nearest_cell_to_edge(cell_field: gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
+def nearest_cell_to_edge(cell_field: gtx.Field[[Cell], float64]) -> gtx.Field[[Edge], float64]:
     return cell_field(E2C[0]) # 0th index to isolate edge dimension
 
-@gtx.program(backend=roundtrip.executor) # TODO uses skip_values, therefore cannot use embedded
-def run_nearest_cell_to_edge(cell_field: gtx.Field[[CellDim], float64], edge_field: gtx.Field[[EdgeDim], float64]):
+@gtx.program(backend=gtx.gtfn_cpu) # uses skip_values, therefore we cannot use embedded
+def run_nearest_cell_to_edge(cell_field: gtx.Field[[Cell], float64], edge_field: gtx.Field[[Edge], float64]):
     nearest_cell_to_edge(cell_field, out=edge_field)
 
 run_nearest_cell_to_edge(cell_field, edge_field, offset_provider={"E2C": E2C_offset_provider})
@@ -182,11 +177,11 @@ To sum up all the cells adjacent to an edge the `neighbor_sum` builtin function 
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def sum_adjacent_cells(cell_field : gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
+def sum_adjacent_cells(cell_field : gtx.Field[[Cell], float64]) -> gtx.Field[[Edge], float64]:
     return neighbor_sum(cell_field(E2C), axis=E2CDim)
 
-@gtx.program(backend=roundtrip.executor) # TODO uses skip_values, therefore cannot use embedded
-def run_sum_adjacent_cells(cell_field : gtx.Field[[CellDim], float64], edge_field: gtx.Field[[EdgeDim], float64]):
+@gtx.program(backend=gtx.gtfn_cpu) # uses skip_values, therefore we cannot use embedded
+def run_sum_adjacent_cells(cell_field : gtx.Field[[Cell], float64], edge_field: gtx.Field[[Edge], float64]):
     sum_adjacent_cells(cell_field, out=edge_field)
 
 run_sum_adjacent_cells(cell_field, edge_field, offset_provider={"E2C": E2C_offset_provider})
