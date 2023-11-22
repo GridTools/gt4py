@@ -18,6 +18,10 @@ kernelspec:
 import numpy as np
 
 import gt4py.next as gtx
+
+backend = None
+# backend = gtx.gtfn_cpu
+# backend = gtx.gtfn_gpu
 ```
 
 Next we implement the stencil and a numpy reference version, in order to verify them against each other.
@@ -34,7 +38,7 @@ def addition_numpy(a: np.array, b: np.array) -> np.array:
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator
+@gtx.field_operator(backend=backend)
 def addition(
     a: gtx.Field[[C], float], b: gtx.Field[[C], float]
 ) -> gtx.Field[[C], float]:
@@ -43,10 +47,6 @@ def addition(
 
 ```{code-cell} ipython3
 def test_addition():
-    backend = None
-    # backend = gtx.gtfn_cpu
-    # backend = gtx.gtfn_gpu
-
     domain = gtx.domain({C: n_cells})
 
     a = gtx.full(domain, 42., allocator=backend)

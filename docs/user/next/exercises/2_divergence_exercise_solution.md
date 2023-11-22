@@ -14,6 +14,10 @@ jupyter:
 
 ```python
 from helpers import *
+
+backend = None
+# backend = gtfn_cpu
+# backend = gtfn_gpu
 ```
 
 # 3. Divergence
@@ -58,7 +62,7 @@ def divergence_numpy(
 ```
 
 ```python
-@gtx.field_operator
+@gtx.field_operator(backend=backend)
 def divergence(
     u: gtx.Field[[E], float],
     v: gtx.Field[[E], float],
@@ -80,10 +84,6 @@ def divergence(
 
 ```python
 def test_divergence():
-    backend = None
-    # backend = gtfn_cpu
-    # backend = gtfn_gpu
-
     cell_domain = gtx.domain({C: n_cells})
     edge_domain = gtx.domain({E: n_edges})
 
