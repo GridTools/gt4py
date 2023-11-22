@@ -140,7 +140,7 @@ Edit the code below such that operations on field `a` are performed only up unti
 ```{code-cell} ipython3
 @gtx.field_operator
 def fieldop_domain_where(a: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
-    return where(a<13.0, a, a*10.0)
+    return where(a<13.0, a*10.0, a)
 
 @gtx.program
 def program_domain_where(a: gtx.Field[[CellDim], float64],
@@ -153,8 +153,8 @@ def test_domain_where():
     a = gtx.as_field([CellDim], np.arange(10.0))
     b = gtx.as_field([CellDim], np.zeros(shape=10))
     program_domain_where(a, b, offset_provider={})
-    
-    #assert np.allclose(a_np*10, b.asnumpy()[:10])
+
+    assert np.allclose(a_np*10, b.asnumpy()[:10])
 ```
 
 ```{code-cell} ipython3
