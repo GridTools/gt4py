@@ -25,11 +25,7 @@ def random_mask(
     return gtx.as_field([*dims], (arr))
 
 
-def random_field(sizes, *dims, low: float = -1.0, high: float = 1.0) -> MutableLocatedField:
-    return gtx.as_field([*dims], np.random.default_rng().uniform(low=low, high=high, size=sizes))
-
-
-def random_field_new(
+def random_field(
     domain: gtx.Domain, low: float = -1.0, high: float = 1.0, *, allocator=None
 ) -> MutableLocatedField:
     return gtx.as_field(
@@ -45,14 +41,6 @@ def random_sign(domain: gtx.Domain, allocator=None, dtype=float) -> MutableLocat
         np.asarray(np.random.randint(0, high=2, size=domain.shape) * 2 - 1, dtype=dtype),
         allocator=allocator,
     )
-
-
-def zero_field(sizes, *dims: Dimension, dtype=float) -> MutableLocatedField:
-    return gtx.as_field([*dims], np.zeros(shape=sizes, dtype=dtype))
-
-
-def constant_field(value, sizes, *dims, dtype=float) -> MutableLocatedField:
-    return gtx.as_field([*dims], value * np.ones(shape=sizes), dtype=dtype)
 
 
 def ripple_field(domain: gtx.Domain, *, allocator=None) -> MutableLocatedField:
