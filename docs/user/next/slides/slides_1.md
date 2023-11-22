@@ -35,19 +35,14 @@ GT4Py is a Python library for expressing computational motifs as found in weathe
 
 These computations are expressed in a domain specific language (DSL) which is translated to high-performance implementations for CPUs and GPUs.
 
-It allows to express physical computations without the need for extensive parameters handling and manual code optimization.
-
-The DSL expresses computations on a multi-dimensional grid. The horizontal axes are always computed in parallel, while the vertical axes can be iterated in sequential (forward or backward) order.
-
 In addition, GT4Py provides functions to allocate arrays with memory layout suited for a particular backend.
 
 The following backends are supported:
-- `embedded`: runs the DSL code directly via the Python interpreter
-- `gtfn`: transpiles the DSL to C++ code using the GridTools library
-- `roundtrip`: generates a lower-level Python implementation of the DSL
-- `dace`: uses the DaCe library to generate high performance machine code
+- `None` aka _embedded_: runs the DSL code directly via the Python interpreter (experimental)
+- `gtfn_cpu` and `gtfn_gpu`: transpiles the DSL to C++ code using the GridTools library
+- `dace`: uses the DaCe library to generate optimized code (experimental)
 
-This workshop will use the `embedded` backend.
+In this workshop we will mainly use the _embedded_ backend.
 
 ## Current efforts
 
@@ -55,16 +50,27 @@ GT4Py is being used to port the ICON model from FORTRAN. Currently the **dycore*
 
 The ultimate goal is to have a more flexible and modularized model that can be run on CSCS Alps infrastructure as well as other hardware.
 
-Other models ported using Cartesian GT4Py are ECMWF's FVM (global and local area configuration) and GFDL's FV3.
+Other models ported using GT4Py are ECMWF's FVM, in global (with `gt4py.next` and local area configuration (with `gt4py.cartesian`) and GFDL's FV3 (with `gt4py.cartesian`; original port by AI2).
 
 +++
 
 ## Installation
 
-You can install the library with pip
+After cloning the repository to $SCRATCH and setting a symlink to your home-directory
 
 ```
-pip install --upgrade git+https://github.com/gridtools/gt4py.git
+cd $SCRATCH
+git clone --branch gt4py-workshop https://github.com/GridTools/gt4py.git
+cd $HOME
+ln -s $SCRATCH/gt4py
+```
+
+you can install the library with pip.
+
+Make sure that GT4Py is in the expected location, remove `#` and run the cell)
+
+```{code-cell} ipython3
+#! pip install $HOME/gt4py
 ```
 
 ```{code-cell} ipython3
@@ -76,8 +82,6 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import gt4py.next as gtx
 from gt4py.next import float64, neighbor_sum, where
-from gt4py.next.common import DimensionKind
-from gt4py.next.program_processors.runners import roundtrip
 ```
 
 ## Key concepts and application structure
@@ -89,20 +93,36 @@ from gt4py.next.program_processors.runners import roundtrip
 +++
 
 ### Fields
-Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[[dimensions], dtype]`
+Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[[dimensions], dtype]`.
 
-The `as_field` builtin is used to define fields
+Fields can be constructed with the following functions, inspired by numpy:
+
+- `zeros`
+- `full` to fill with a given value
+- `as_field` to convert from numpy or cupy arrays
+
+The first argument is the domain of the field, which can be constructed from a mapping from `Dimension` to range.
+
+Optional we can pass
+- `dtype` the description of type of the field
+- `allocator` which describes how and where (e.g. GPU) the buffer is allocated.
+
+Note: `as_field` can also take a sequence of Dimensions and infer the shape
 
 ```{code-cell} ipython3
-CellDim = gtx.Dimension("Cell")
-KDim = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
-grid_shape = (5, 6)
-a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
-b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
+Cell = gtx.Dimension("Cell")
+K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+
+domain = gtx.domain({Cell: 5, K: 6})
+
+a = gtx.zeros(domain, dtype=float64)
+b = gtx.full(domain, fill_value=3.0, dtype=float64)
+c = gtx.as_field([Cell, K], np.fromfunction(lambda c, k: c*10+k, shape=domain.shape))
 
 print("a definition: \n {}".format(a))
 print("a array: \n {}".format(a.asnumpy()))
 print("b array: \n {}".format(b.asnumpy()))
+print("c array: \n {}".format(c.asnumpy()))
 ```
 
 ### Field operators
@@ -113,8 +133,8 @@ They are written as Python functions by using the `@field_operator` decorator.
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def add(a: gtx.Field[[CellDim, KDim], float64],
-        b: gtx.Field[[CellDim, KDim], float64]) -> gtx.Field[[CellDim, KDim], float64]:
+def add(a: gtx.Field[[Cell, K], float64],
+        b: gtx.Field[[Cell, K], float64]) -> gtx.Field[[Cell, K], float64]:
     return a + b
 ```
 
@@ -123,7 +143,7 @@ Direct calls to field operators require two additional arguments:
 - `offset_provider`: empty dict for now, explanation will follow
 
 ```{code-cell} ipython3
-result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result = gtx.zeros(domain)
 add(a, b, out=result, offset_provider={})
 
 print("result array \n {}".format(result.asnumpy()))
@@ -140,20 +160,16 @@ They are written as Python functions by using the `@program` decorator.
 This example below calls the `add` field operator twice:
 
 ```{code-cell} ipython3
-# @gtx.field_operator
-# def add(a, b):
-#    return a + b
-
 @gtx.program
-def run_add(a : gtx.Field[[CellDim, KDim], float64],
-            b : gtx.Field[[CellDim, KDim], float64],
-            result : gtx.Field[[CellDim, KDim], float64]):
-    add(a, b, out=result) # 2.0 + 3.0 = 5.0
-    add(b, result, out=result) # 5.0 + 3.0 = 8.0
+def run_add(a : gtx.Field[[Cell, K], float64],
+            b : gtx.Field[[Cell, K], float64],
+            result : gtx.Field[[Cell, K], float64]):
+    add(a, b, out=result)
+    add(b, result, out=result)
 ```
 
 ```{code-cell} ipython3
-result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result = gtx.zeros(domain, dtype=float64)
 run_add(a, b, result, offset_provider={})
 
 print("result array: \n {}".format(result.asnumpy()))
