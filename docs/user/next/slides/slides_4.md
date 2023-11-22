@@ -70,7 +70,7 @@ def add_scan(state: float, k_field: float) -> float:
 
 ```{code-cell} ipython3
 k_field = gtx.as_field([K], np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0]))
-result = gtx.zeros(domain=gtx.domain({K:7}))
+result = gtx.zeros(domain=gtx.domain({K: 7}))
 
 add_scan(k_field, out=result, offset_provider={})
 
