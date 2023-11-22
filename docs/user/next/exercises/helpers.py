@@ -55,6 +55,17 @@ def constant_field(value, sizes, *dims, dtype=float) -> MutableLocatedField:
     return gtx.as_field([*dims], value * np.ones(shape=sizes), dtype=dtype)
 
 
+def ripple_field(domain: gtx.Domain, *, allocator=None) -> MutableLocatedField:
+    assert domain.ndim == 2
+    nx, ny = domain.shape
+    x = np.linspace(0, 1, nx)
+    y = np.linspace(0, 1, ny)
+    xx, yy = np.meshgrid(x, y)
+    data = 5. + 8. * (2. + np.cos(np.pi * (xx + 1.5 * yy)) + np.sin(2 * np.pi * (xx + 1.5 * yy))) / 4.
+
+    return gtx.as_field(domain, data, allocator=allocator)
+
+
 # For simplicity we use a triangulated donut in the horizontal.
 
 # 0v---0e-- 1v---3e-- 2v---6e-- 0v
