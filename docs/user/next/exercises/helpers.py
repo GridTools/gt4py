@@ -61,7 +61,10 @@ def ripple_field(domain: gtx.Domain, *, allocator=None) -> MutableLocatedField:
     x = np.linspace(0, 1, nx)
     y = np.linspace(0, 1, ny)
     xx, yy = np.meshgrid(x, y)
-    data = 5. + 8. * (2. + np.cos(np.pi * (xx + 1.5 * yy)) + np.sin(2 * np.pi * (xx + 1.5 * yy))) / 4.
+    data = (
+        5.0
+        + 8.0 * (2.0 + np.cos(np.pi * (xx + 1.5 * yy)) + np.sin(2 * np.pi * (xx + 1.5 * yy))) / 4.0
+    )
 
     return gtx.as_field(domain, data, allocator=allocator)
 
@@ -391,4 +394,5 @@ C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
 V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
 V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
-Coff = gtx.FieldOffset("Coff", source=C, target=(C,))
+Coff = gtx.FieldOffset("Coff", source=C, target=(C,))  # delete this?
+Koff = gtx.FieldOffset("Koff", source=K, target=(K,))
