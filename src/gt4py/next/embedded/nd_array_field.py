@@ -19,12 +19,13 @@ import functools
 import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Optional, ParamSpec, TypeAlias, TypeVar
+from typing import ClassVar
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -120,11 +121,15 @@ class NdArrayField(
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
 
-    def __array__(self, dtype: npt.DTypeLike = None) -> np.ndarray:
+    def asnumpy(self) -> np.ndarray:
         if self.array_ns == cp:
-            return np.asarray(cp.asnumpy(self._ndarray), dtype)
+            return cp.asnumpy(self._ndarray)
         else:
-            return np.asarray(self._ndarray, dtype)
+            return np.asarray(self._ndarray)
+
+    @property
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
@@ -153,12 +158,53 @@ class NdArrayField(
 
         assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
         assert len(domain) == array.ndim
-        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
+        assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 
-    def remap(self: NdArrayField, connectivity) -> NdArrayField:
-        raise NotImplementedError()
+    def remap(
+        self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
+    ) -> NdArrayField:
+        # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
+        if not common.is_connectivity_field(connectivity):
+            assert isinstance(connectivity, fbuiltins.FieldOffset)
+            connectivity = connectivity.as_connectivity_field()
+
+        assert common.is_connectivity_field(connectivity)
+
+        # Compute the new domain
+        dim = connectivity.codomain
+        dim_idx = self.domain.dim_index(dim)
+        if dim_idx is None:
+            raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
+
+        current_range: common.UnitRange = self.domain[dim_idx][1]
+        new_ranges = connectivity.inverse_image(current_range)
+        new_domain = self.domain.replace(dim_idx, *new_ranges)
+
+        # perform contramap
+        if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
+            # shortcut for compact remap: don't change the array, only the domain
+            new_buffer = self._ndarray
+        else:
+            # general case: first restrict the connectivity to the new domain
+            restricted_connectivity_domain = common.Domain(*new_ranges)
+            restricted_connectivity = (
+                connectivity.restrict(restricted_connectivity_domain)
+                if restricted_connectivity_domain != connectivity.domain
+                else connectivity
+            )
+            assert common.is_connectivity_field(restricted_connectivity)
+
+            # then compute the index array
+            xp = self.array_ns
+            new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
+            # finally, take the new array
+            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+
+        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+
+    __call__ = remap  # type: ignore[assignment]
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
@@ -172,7 +218,22 @@ class NdArrayField(
 
     __getitem__ = restrict
 
-    __call__ = None  # type: ignore[assignment]  # TODO: remap
+    def __setitem__(
+        self: NdArrayField[common.DimsT, core_defs.ScalarT],
+        index: common.AnyIndexSpec,
+        value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
+    ) -> None:
+        target_domain, target_slice = self._slice(index)
+
+        if common.is_field(value):
+            if not value.domain == target_domain:
+                raise ValueError(
+                    f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+                )
+            value = value.ndarray
+
+        assert hasattr(self.ndarray, "__setitem__")
+        self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
 
     __abs__ = _make_builtin("abs", "abs")
 
@@ -194,9 +255,17 @@ class NdArrayField(
 
     __mod__ = __rmod__ = _make_builtin("mod", "mod")
 
-    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore # mypy wants return `bool`
 
-    __eq__ = _make_builtin("equal", "equal")  # type: ignore[assignment] # mypy wants return `bool`
+    __eq__ = _make_builtin("equal", "equal")  # type: ignore # mypy wants return `bool`
+
+    __gt__ = _make_builtin("greater", "greater")
+
+    __ge__ = _make_builtin("greater_equal", "greater_equal")
+
+    __lt__ = _make_builtin("less", "less")
+
+    __le__ = _make_builtin("less_equal", "less_equal")
 
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
@@ -239,6 +308,144 @@ class NdArrayField(
         return new_domain, slice_
 
 
+@dataclasses.dataclass(frozen=True)
+class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
+    common.ConnectivityField[common.DimsT, common.DimT],
+    NdArrayField[common.DimsT, core_defs.IntegralScalar],
+):
+    _codomain: common.DimT
+
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
+
+    @classmethod
+    def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
+        raise NotImplementedError()
+
+    @property
+    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+        return self._codomain
+
+    @functools.cached_property
+    def kind(self) -> common.ConnectivityKind:
+        kind = common.ConnectivityKind.MODIFY_STRUCTURE
+        if self.domain.ndim > 1:
+            kind |= common.ConnectivityKind.MODIFY_RANK
+            kind |= common.ConnectivityKind.MODIFY_DIMS
+        if self.domain.dim_index(self.codomain) is None:
+            kind |= common.ConnectivityKind.MODIFY_DIMS
+
+        return kind
+
+    @classmethod
+    def from_array(  # type: ignore[override]
+        cls,
+        data: npt.ArrayLike | core_defs.NDArrayObject,
+        /,
+        codomain: common.DimT,
+        *,
+        domain: common.DomainLike,
+        dtype: Optional[core_defs.DTypeLike] = None,
+    ) -> NdArrayConnectivityField:
+        domain = common.domain(domain)
+        xp = cls.array_ns
+
+        xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
+        array = xp.asarray(data, dtype=xp_dtype)
+
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
+
+        assert issubclass(array.dtype.type, core_defs.INTEGRAL_TYPES)
+
+        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert len(domain) == array.ndim
+        assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
+
+        assert isinstance(codomain, common.Dimension)
+
+        return cls(domain, array, codomain)
+
+    def inverse_image(
+        self, image_range: common.UnitRange | common.NamedRange
+    ) -> Sequence[common.NamedRange]:
+        cache_key = hash((id(self.ndarray), self.domain, image_range))
+
+        if (new_dims := self._cache.get(cache_key, None)) is None:
+            xp = self.array_ns
+
+            if not isinstance(
+                image_range, common.UnitRange
+            ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
+                if image_range[0] != self.codomain:
+                    raise ValueError(
+                        f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                    )
+
+                image_range = image_range[1]
+
+            assert isinstance(image_range, common.UnitRange)
+
+            restricted_mask = (self._ndarray >= image_range.start) & (
+                self._ndarray < image_range.stop
+            )
+            # indices of non-zero elements in each dimension
+            nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
+
+            new_dims = []
+            non_contiguous_dims = []
+
+            for i, dim_nnz_indices in enumerate(nnz):
+                # Check if the indices are contiguous
+                first_data_index = dim_nnz_indices[0]
+                assert isinstance(first_data_index, core_defs.INTEGRAL_TYPES)
+                last_data_index = dim_nnz_indices[-1]
+                assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
+                indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
+                if len(xp.unique(counts)) == 1 and (
+                    len(indices) == last_data_index - first_data_index + 1
+                ):
+                    dim_range = self._domain[i]
+                    idx_offset = dim_range[1].start
+                    start = idx_offset + first_data_index
+                    assert common.is_int_index(start)
+                    stop = idx_offset + last_data_index + 1
+                    assert common.is_int_index(stop)
+                    new_dims.append(
+                        common.named_range(
+                            (
+                                dim_range[0],
+                                (start, stop),
+                            )
+                        )
+                    )
+                else:
+                    non_contiguous_dims.append(dim_range[0])
+
+            if non_contiguous_dims:
+                raise ValueError(
+                    f"Restriction generates non-contiguous dimensions {non_contiguous_dims}"
+                )
+
+        return new_dims
+
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.IntegralScalar:
+        cache_key = (id(self.ndarray), self.domain, index)
+
+        if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
+            cls = self.__class__
+            xp = cls.array_ns
+            new_domain, buffer_slice = self._slice(index)
+            new_buffer = xp.asarray(self.ndarray[buffer_slice])
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            self._cache[cache_key] = restricted_connectivity
+
+        return restricted_connectivity
+
+    __getitem__ = restrict
+
+
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(fbuiltins.abs, NdArrayField.__abs__)  # type: ignore[attr-defined]
@@ -266,22 +473,30 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _np_cp_setitem(
-    self: NdArrayField[common.DimsT, core_defs.ScalarT],
-    index: common.AnyIndexSpec,
-    value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
-) -> None:
-    target_domain, target_slice = self._slice(index)
+def _make_reduction(
+    builtin_name: str, array_builtin_name: str
+) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
+    def _builtin_op(
+        field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
+    ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
+        if not axis.kind == common.DimensionKind.LOCAL:
+            raise ValueError("Can only reduce local dimensions.")
+        if axis not in field.domain.dims:
+            raise ValueError(f"Field doesn't have dimension {axis}. Cannot reduce.")
+        reduce_dim_index = field.domain.dims.index(axis)
+        new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+        return field.__class__.from_array(
+            getattr(field.array_ns, array_builtin_name)(field.ndarray, axis=reduce_dim_index),
+            domain=new_domain,
+        )
 
-    if common.is_field(value):
-        if not value.domain == target_domain:
-            raise ValueError(
-                f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
-            )
-        value = value.ndarray
+    _builtin_op.__name__ = builtin_name
+    return _builtin_op
 
-    assert hasattr(self.ndarray, "__setitem__")
-    self.ndarray[target_slice] = value
+
+NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))
+NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))
+NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))
 
 
 # -- Concrete array implementations --
@@ -293,10 +508,16 @@ _nd_array_implementations = [np]
 class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
-    __setitem__ = _np_cp_setitem
-
 
 common.field.register(np.ndarray, NumPyArrayField.from_array)
+
+
+@dataclasses.dataclass(frozen=True, eq=False)
+class NumPyArrayConnectivityField(NdArrayConnectivityField):
+    array_ns: ClassVar[ModuleType] = np
+
+
+common.connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
 
 # CuPy
 if cp:
@@ -306,9 +527,13 @@ if cp:
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
-        __setitem__ = _np_cp_setitem
-
     common.field.register(cp.ndarray, CuPyArrayField.from_array)
+
+    @dataclasses.dataclass(frozen=True, eq=False)
+    class CuPyArrayConnectivityField(NdArrayConnectivityField):
+        array_ns: ClassVar[ModuleType] = cp
+
+    common.connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
 # JAX
 if jnp:
@@ -355,11 +580,13 @@ def _builtins_broadcast(
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
-def _astype(field: NdArrayField, type_: type) -> NdArrayField:
-    return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdArrayField:
+    if isinstance(field, NdArrayField):
+        return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
+    raise AssertionError("This is the NdArrayField implementation of `fbuiltins.astype`.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[arg-type] # TODO(havogt) the registry should not be for any Field
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 
 def _get_slices_from_domain_slice(
