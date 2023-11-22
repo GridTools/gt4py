@@ -19,7 +19,7 @@ tasks:
   command: |
     source .venv/bin/activate
     wget https://raw.githubusercontent.com/mwouts/jupytext/main/binder/labconfig/default_setting_overrides.json -P  ~/.jupyter/labconfig/
-    jupyter lab --notebook-dir=/workspace/gt4py/docs/user/next --LabApp.token='' --ServerApp.allow_remote_access=True --NotebookApp.allow_origin=* --LabApp.default_url='lab/tree/Workshop.md'
+    jupyter lab --notebook-dir=/workspace/gt4py/docs/user/next --LabApp.token='' --ServerApp.allow_remote_access=True --NotebookApp.allow_origin=* --LabApp.default_url='lab/tree/slides/slides_1.md'
   env:
     PIP_SRC: _external_src
     PRE_COMMIT_HOME: /workspace/.caches/pre-commit
