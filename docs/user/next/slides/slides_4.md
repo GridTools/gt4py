@@ -32,7 +32,7 @@ K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 
 ## Scan algorithm
 
-All operations so far where map operations over the output domain. The only other algorithm that we currently support is _scanning_ a axis, one example of a scan is the partial sum as illustrated in the following code snippet.
+All operations so far where map operations over the output domain. The only other algorithm that we currently support is _scanning_ of an axis, one example of a scan is the partial sum as illustrated in the following code snippet.
 
 ```{code-cell} ipython3
 x = np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0])

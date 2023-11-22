@@ -37,7 +37,7 @@ grid_shape = (5, 6)
 ## Offsets
 Fields can be offset by a predefined number of indices.
 
-Take an array with values ranging from 0 to 5:
+Take an array with values ranging from 1 to 8:
 
 ```{code-cell} ipython3
 a_off = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
@@ -82,7 +82,7 @@ EdgeDim = gtx.Dimension("Edge")
 
 Connectivity among mesh elements is expressed through connectivity tables.
 
-For example, `e2c_table` lists for each edge its adjacent rows. 
+For example, `e2c_table` lists for each edge its adjacent cells. 
 
 Similarly, `c2e_table` lists the edges that are neighbors to a particular cell.
 
@@ -116,7 +116,7 @@ c2e_table = np.array([
 
 #### Using connectivities in field operators
 
-Let's start by defining two fields: one over the cells and another one over the edges. The field over cells serves input for subsequent calculations and is therefore filled up with values, whereas the field over the edges stores the output of the calculations and is therefore left blank.
+Let's start by defining two fields: one over the cells and another one over the edges. The field over cells serves input as for subsequent calculations and is therefore filled up with values, whereas the field over the edges stores the output of the calculations and is therefore left blank.
 
 ```{code-cell} ipython3
 cell_field = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
