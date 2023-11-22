@@ -12,23 +12,19 @@ kernelspec:
   name: python3
 ---
 
+# Where, Offset, and domain
+
+```{code-cell} ipython3
+from helpers import *
+```
+
 ```{code-cell} ipython3
 import warnings
 warnings.filterwarnings('ignore')
 ```
 
 ```{code-cell} ipython3
-import numpy as np
-
-import gt4py.next as gtx
-from gt4py.next.iterator.embedded import MutableLocatedField 
-from gt4py.next import float64, neighbor_sum, where
-from gt4py.next import Dimension, DimensionKind, FieldOffset
-```
-
-```{code-cell} ipython3
-CellDim = Dimension("C")
-Coff = gtx.FieldOffset("Coff", source=CellDim, target=(CellDim,))
+Coff = gtx.FieldOffset("Coff", source=C, target=(C,))
 ```
 
 ## Conditional: where
@@ -57,19 +53,19 @@ print("b_np array: {}".format(b_np))
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def fieldop_where(a: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
+def fieldop_where(a: gtx.Field[[C], float]) -> gtx.Field[[C], float]:
     return where(a < 6.0, a, a*10.0)
 
 @gtx.program
-def program_where(a: gtx.Field[[CellDim], float64],
-            b: gtx.Field[[CellDim], float64]):
+def program_where(a: gtx.Field[[C], float],
+            b: gtx.Field[[C], float]):
     fieldop_where(a, out=b) 
 ```
 
 ```{code-cell} ipython3
 def test_where():
-    a = gtx.as_field([CellDim], np.arange(10.0))
-    b = gtx.as_field([CellDim], np.zeros(shape=10))
+    a = gtx.as_field([C], np.arange(10.0))
+    b = gtx.as_field([C], np.zeros(shape=10))
     program_where(a, b, offset_provider={})
     
     assert np.allclose(b_np, b.asnumpy())
@@ -90,19 +86,19 @@ The same operation can be performed in gt4py by including the `domain` keyowrd a
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def fieldop_domain(a: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
+def fieldop_domain(a: gtx.Field[[C], float]) -> gtx.Field[[C], float]:
     return a*10.0
 
 @gtx.program
-def program_domain(a: gtx.Field[[CellDim], float64],
-            b: gtx.Field[[CellDim], float64]):
-    fieldop_domain(a, out=b, domain={CellDim: (6, 10)}) 
+def program_domain(a: gtx.Field[[C], float],
+            b: gtx.Field[[C], float]):
+    fieldop_domain(a, out=b, domain={C: (6, 10)}) 
 ```
 
 ```{code-cell} ipython3
 def test_domain():
-    a = gtx.as_field([CellDim], np.arange(10.0))
-    b = gtx.as_field([CellDim], np.arange(10.0))
+    a = gtx.as_field([C], np.arange(10.0))
+    b = gtx.as_field([C], np.arange(10.0))
     program_domain(a, b, offset_provider={})
 
     assert np.allclose(b_np, b.asnumpy())
@@ -117,7 +113,7 @@ print("Test successful")
 
 A combination of `where` and `domain` is useful in cases when an offset is used which exceeds the field size.
 
-e.g. a field `a: gtx.Field[[CellDim], float64]` with shape (10,) is applied an offset (`Coff`).
+e.g. a field `a: gtx.Field[[C], float]` with shape (10,) is applied an offset (`Coff`).
 
 +++
 
@@ -127,23 +123,37 @@ Edit the code below such that:
  1. operations on field `a` are performed only up until the 8th index
  2. the domain is properly set accound for the offset
 
++++
+
+#### Python reference
+
+```{code-cell} ipython3
+a_np_result = np.zeros(shape=10)
+for i in range(len(a_np)):
+    if a_np[i] < 8.0:
+        a_np_result[i] = a_np[i + 1] + a_np[i]
+    elif i < 9:
+        a_np_result[i] = a_np[i]
+print("a_np_result array: {}".format(a_np_result))
+```
+
 ```{code-cell} ipython3
 @gtx.field_operator
-def fieldop_domain_where(a: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
+def fieldop_domain_where(a: gtx.Field[[C], float]) -> gtx.Field[[C], float]:
     return where(a<8.0, a(Coff[1])+a, a)
 
 @gtx.program
-def program_domain_where(a: gtx.Field[[CellDim], float64], b: gtx.Field[[CellDim], float64]):
-    fieldop_domain_where(a, out=b, domain={CellDim: (0, 9)}) 
+def program_domain_where(a: gtx.Field[[C], float], b: gtx.Field[[C], float]):
+    fieldop_domain_where(a, out=b, domain={C: (0, 9)}) 
 ```
 
 ```{code-cell} ipython3
 def test_domain_where():
-    a = gtx.as_field([CellDim], np.arange(10.0))
-    b = gtx.as_field([CellDim], np.zeros(shape=10))
-    program_domain_where(a, b, offset_provider={"Coff": CellDim})
-
-    #assert np.allclose(a_np*10, b.asnumpy()[:10])
+    a = gtx.as_field([C], np.arange(10.0))
+    b = gtx.as_field([C], np.zeros(shape=10))
+    program_domain_where(a, b, offset_provider={"Coff": C})
+    
+    assert np.allclose(a_np_result, b.asnumpy())
 ```
 
 ```{code-cell} ipython3
