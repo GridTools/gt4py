@@ -570,6 +570,14 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                     )
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
+                elif axis.__class__.__name__ == "DummyConnectivity":
+                    assert (
+                        axis.origin_axis.kind
+                        == axis.neighbor_axis.kind
+                        == gtx.DimensionKind.HORIZONTAL
+                    )
+                    constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
+                    current_loc_out = Location(name=axis.neighbor_axis.value)
                 else:
                     raise NotImplementedError()
     elif not shift_args:
