@@ -12,18 +12,31 @@ kernelspec:
   name: python3
 ---
 
-```{code-cell}
+# 5. Curl
+
++++
+
+As the last example of the easier operations, we take a look at the curl of a vector field $\mathbf{v}$ defined at a vertex $\mathbf{N}$.
+To approximate this, we one again iterate over all of the direct neighboring edges of the vertex in the center and for each edge take the dot product of the vector field $\mathbf{v}_e$ with the edge normals $\mathbf{n}_f$ and multiply that by the dual edge length $\hat{L}_e$. The resulting neighbor sum is then divided by the dual area $\hat{A}_N$, which is the area of the Voronoi cell around the Vertex $\mathbf{N}$.
+
+
+![](../curl_picture.png "Divergence")
+
+
+![](../curl_formula.png "Divergence")
+
+```{code-cell} ipython3
 from helpers import *
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
 V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
 V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 def curl_numpy(
     v2e: np.array,
     u: np.array,
@@ -39,7 +52,7 @@ def curl_numpy(
     return uv_curl
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 @gtx.field_operator(backend=roundtrip.executor)
 def curl(
     u: gtx.Field[[E], float],
@@ -55,7 +68,7 @@ def curl(
     return uv_curl
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 def test_curl():
     u = random_field((n_edges), E)
     v = random_field((n_edges), E)
@@ -87,7 +100,7 @@ def test_curl():
     assert np.allclose(curl_gt4py, divergence_ref)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 test_curl()
 print("Test successful")
 ```

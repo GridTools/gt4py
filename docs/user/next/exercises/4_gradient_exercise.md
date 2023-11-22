@@ -12,6 +12,17 @@ kernelspec:
   name: python3
 ---
 
+# 4. Gradient
+
++++
+
+Another example is the gradient defined at the center of a Cell $\mathbf{P}$ of a scalar function $f$. We approximate this by taking the sum over the three edges and multiplying $f(e)$ with the edge normal $\mathbf{n}_e$ and the edge length $L_e$ and dividing the resulting sum with the cell area $A_P$.
+The result will be the two components of the gradient vector.
+
+![](../gradient_picture.png "Divergence")
+
+![](../gradient_formula.png "Divergence")
+
 ```{code-cell} ipython3
 from helpers import *
 ```
@@ -19,8 +30,6 @@ from helpers import *
 ```{code-cell} ipython3
 C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
-V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
 ```
 
 ```{code-cell} ipython3

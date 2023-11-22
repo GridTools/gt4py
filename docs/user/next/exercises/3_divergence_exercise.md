@@ -1,61 +1,43 @@
-## 2. reduction: gradient
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .md
+      format_name: markdown
+      format_version: '1.3'
+      jupytext_version: 1.15.2
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
 
-+++
+```python
+from helpers import *
+```
 
-Next we will translate a divergence stencil. The normal velocity of each edge is multipled with the edge length, the contributions from all three edges of a cell are summed up and then divided by the area of the cell. In the next pictures we can see a graphical representation of all of the quantities involved:
-![](../divergence.png "Divergence")
-The orientation of the edge plays a role for this operation in ICON, as we need to be aware if the normal vector of an edge points inwards or outwards of the cell we are currently looking at.
+# 3. Divergence
+
+
+Next we will translate a divergence stencil. We approximate the divergence of a vector field $\mathbf{v}$ at the middle point of a cell $\mathbf{P}$ in the following way: We take the dot product of the normal velocity $\mathbf{n}_e$ of each direct neighbor edge of $\mathbf{P}$  with $\mathbf{v}_e$ which is multipled with the edge length $L_e$. The contributions from all three edges of a cell are summed up and then divided by the area of the cell $A_P$. In the next pictures we can see a graphical representation of all of the quantities involved:
+
+![](../divergence_picture.png "Divergence")
+
+And the equation:
+
+![](../divergence_formula.png "Divergence")
+
+The orientation of the edge has to factor in, since we do not know, in general, if the normal of an edge is pointed inwards or outwards of any cell we are looking at. We cannot have only outwards pointing edge normals, because if we look at two neighboring cells, the normal of their shared edge has to point outwards for one of the cells, but inwards for the other.
+
 ![](../edge_orientation.png "Edge Orientation")
-One such divergence stencil is stencil 02 in diffusion:
 
-```fortran
-      DO jb = i_startblk,i_endblk
 
-        CALL get_indices_c(p_patch, jb, i_startblk, i_endblk, &
-                           i_startidx, i_endidx, rl_start, rl_end)
-        DO jk = 1, nlev
-          DO jc = i_startidx, i_endidx
-
-            div(jc,jk) = p_nh_prog%vn(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%geofac_div(jc,1,jb) + &
-                         p_nh_prog%vn(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%geofac_div(jc,2,jb) + &
-                         p_nh_prog%vn(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%geofac_div(jc,3,jb)
-          ENDDO
-        ENDDO
-      ENDDO
-```
-where `p_int%geofac_div` is set up as a constant field at ICON startup time and contains the geometrical factors for the divergence operator:
-```fortran
-    DO jb = i_startblk, i_endblk
-
-      CALL get_indices_c(ptr_patch, jb, i_startblk, i_endblk, &
-        & i_startidx, i_endidx, rl_start, rl_end)
-
-      DO je = 1, ptr_patch%geometry_info%cell_type
-        DO jc = i_startidx, i_endidx
-
-          ile = ptr_patch%cells%edge_idx(jc,jb,je)
-          ibe = ptr_patch%cells%edge_blk(jc,jb,je)
-
-          ptr_int%geofac_div(jc,je,jb) = &
-            & ptr_patch%edges%primal_edge_length(ile,ibe) * &
-            & ptr_patch%cells%edge_orientation(jc,jb,je)  / &
-            & ptr_patch%cells%area(jc,jb)
-
-        ENDDO !cell loop
-      ENDDO
-
-    END DO !block loop
-
-```
-
-```{code-cell} ipython3
+```python
 C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
 C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
-V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
 ```
 
-```{code-cell} ipython3
+```python
 def divergence_numpy(
     c2e: np.array,
     u: np.array,
@@ -70,7 +52,7 @@ def divergence_numpy(
     return uv_div
 ```
 
-```{code-cell} ipython3
+```python
 @gtx.field_operator(backend=roundtrip.executor)
 def divergence(
     u: gtx.Field[[E], float],
@@ -85,7 +67,7 @@ def divergence(
     return uv_div
 ```
 
-```{code-cell} ipython3
+```python
 def test_divergence():
     u = random_field((n_edges), E)
     v = random_field((n_edges), E)
@@ -117,7 +99,56 @@ def test_divergence():
     assert np.allclose(divergence_gt4py, divergence_ref)
 ```
 
-```{code-cell} ipython3
+```python
 test_divergence()
 print("Test successful")
+```
+
+## 3. Divergence in ICON
+
+
+In ICON we can find a divergence in diffusion which looks somewhat like this, but also quite a bit different:
+
+```fortran
+      DO jb = i_startblk,i_endblk
+
+        CALL get_indices_c(p_patch, jb, i_startblk, i_endblk, &
+                           i_startidx, i_endidx, rl_start, rl_end)
+        DO jk = 1, nlev
+          DO jc = i_startidx, i_endidx
+
+            div(jc,jk) = p_nh_prog%vn(ieidx(jc,jb,1),jk,ieblk(jc,jb,1))*p_int%geofac_div(jc,1,jb) + &
+                         p_nh_prog%vn(ieidx(jc,jb,2),jk,ieblk(jc,jb,2))*p_int%geofac_div(jc,2,jb) + &
+                         p_nh_prog%vn(ieidx(jc,jb,3),jk,ieblk(jc,jb,3))*p_int%geofac_div(jc,3,jb)
+          ENDDO
+        ENDDO
+      ENDDO
+```
+
+Two assumptions are necessary to derive the ICON version of the divergence starting from our version above:
+* Assume that the velocity components $u$ is always orthogonal and the velocity component $v$ is always parallel to the edge, in ICON these are called $vn$ and $vt$ where the n stands for normal and the t for tangential.
+* At ICON startup time merge all constants (such as cell area $A_P$ and edge length $L_e$) into one array of geometrical factors `p_int%geofac_div`, which are constant during time stepping:
+
+```fortran
+    DO jb = i_startblk, i_endblk
+
+      CALL get_indices_c(ptr_patch, jb, i_startblk, i_endblk, &
+        & i_startidx, i_endidx, rl_start, rl_end)
+
+      DO je = 1, ptr_patch%geometry_info%cell_type
+        DO jc = i_startidx, i_endidx
+
+          ile = ptr_patch%cells%edge_idx(jc,jb,je)
+          ibe = ptr_patch%cells%edge_blk(jc,jb,je)
+
+          ptr_int%geofac_div(jc,je,jb) = &
+            & ptr_patch%edges%primal_edge_length(ile,ibe) * &
+            & ptr_patch%cells%edge_orientation(jc,jb,je)  / &
+            & ptr_patch%cells%area(jc,jb)
+
+        ENDDO !cell loop
+      ENDDO
+
+    END DO !block loop
+
 ```
