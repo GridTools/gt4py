@@ -60,8 +60,8 @@ def gradient(
     edge_orientation: gtx.Field[[C, C2EDim], float], 
 ) -> gtx.tuple[gtx.Field[[C], float], gtx.Field[[C], float]]:
     
-    f_x = A
-    f_y = A
+    f_x = neighbor_sum(f(C2E) * nx(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
+    f_y = neighbor_sum(f(C2E) * ny(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
     return f_x, f_y
 ```
 

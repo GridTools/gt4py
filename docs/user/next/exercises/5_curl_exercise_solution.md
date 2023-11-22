@@ -63,7 +63,7 @@ def curl(
     dualA: gtx.Field[[V], float],
     edge_orientation: gtx.Field[[V, V2EDim], float],
 ) -> gtx.Field[[V], float]:
-    uv_curl = dualA
+    uv_curl = neighbor_sum((u(V2E)*nx(V2E) + v(V2E)*ny(V2E)) * dualL(V2E) * edge_orientation, axis=V2EDim) / dualA
     
     return uv_curl
 ```
