@@ -129,13 +129,22 @@ edge_field = gtx.as_field([EdgeDim], np.zeros((12,)))
 
 +++
 
-`field_offset` is used as an argument to transform fields over one domain to another domain.
+`field_offset` is used to remap fields over one domain to another domain, e.g. cells -> edges.
 
-For example, `E2C` can be used to shift a field over cells to edges with the following dimension transformation: 
+Field remappings are just composition of mappings
+- Field defined on cells: $f_C: C \to \mathbb{R}$
+- Connectivity from _edges to cells_: $c_{E \to C_0}$
+- We define a new field on edges composing both mappings
+$$ f_E: E \to \mathbb{R}, e \mapsto (f_C \circ c_{E \to C_0})(e) := f_c(c_{E \to C_0}(e)) $$
+- In point-free notation: $f_E = f_C(c_{E \to C_0}) \Rightarrow$ `f_c(E2C[0])`
 
-[CellDim] -> CellDim(E2C) -> [EdgeDim, E2CDim]
 
-A field with an offset dimension is called a sparse field
+We extend the connectivities to refer to more than just one neighbor
+- `E2C` is the local dimension of all cell neighbors of an edge
+
+$$ c_{E \to C}: E \times E2C \to C $$
+$$ f_E: E \to \mathbb{R}, e \mapsto \big(f_C \circ c_{E \to C}\big)(e, 0) $$
+$$ f_E(e, c) := f_C(c_{E \to C}(e, c)), e \in E, c \in \{0,1\} $$
 
 ```{code-cell} ipython3
 E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
