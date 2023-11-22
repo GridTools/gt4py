@@ -32,13 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import (
-    allocators as next_allocators,
-    common,
-    embedded as next_embedded,
-    field_utils,
-    utils,
-)
+from gt4py.next import allocators as next_allocators, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -685,116 +679,27 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *args,
         **kwargs,
     ) -> None:
-        if next_embedded.context.within_context():
-            # field_operator called from program or other field_operator in embedded execution
-
-            if "out" in kwargs:
-                # field_operator called from program in embedded execution
-
-                offset_provider = kwargs.pop("offset_provider", None)
-                # offset_provider should already be set
-                assert (
-                    offset_provider is None
-                    or next_embedded.context.offset_provider.get() is offset_provider
-                )
-                out = kwargs.pop("out")
-                domain = kwargs.pop("domain", None)
-                out_domain = (
-                    common.domain(domain) if domain is not None else field_utils.get_domain(out)
-                )
-
-                vertical_range = _get_vertical_range(out_domain)
-
-                with next_embedded.context.new_context(closure_column_range=vertical_range) as ctx:
-                    res = ctx.run(_run_operator, self.definition, self.foast_node, args, kwargs)
-                    _tuple_assign_field(
-                        out,
-                        res,
-                        domain=out_domain,
-                    )
-
-            else:
-                # field_operator called form field_operator in embedded execution
-                return _run_operator(self.definition, self.foast_node, args, kwargs)
-
-        else:
-            # field_operator called directly
+        if not next_embedded.context.within_context() and self.backend is not None:
+            # non embedded execution
             offset_provider = kwargs.pop("offset_provider", None)
             out = kwargs.pop("out")
-            if self.backend is None:
-                domain = kwargs.pop("domain", None)
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            # TODO(tehrengruber): check all offset providers are given
+            # deduce argument types
+            arg_types = []
+            for arg in args:
+                arg_types.append(type_translation.from_value(arg))
+            kwarg_types = {}
+            for name, arg in kwargs.items():
+                kwarg_types[name] = type_translation.from_value(arg)
 
-                out_domain = (
-                    common.domain(domain) if domain is not None else field_utils.get_domain(out)
-                )
-                vertical_dim_filtered = [
-                    nr for nr in out_domain if nr[0].kind == common.DimensionKind.VERTICAL
-                ]
-                vertical_dim = vertical_dim_filtered[0] if vertical_dim_filtered else None
-
-                with next_embedded.context.new_context(
-                    offset_provider=offset_provider, closure_column_range=vertical_dim
-                ) as ctx:
-                    res = ctx.run(_run_operator, self.definition, self.foast_node, args, kwargs)
-                    _tuple_assign_field(
-                        out,
-                        res,
-                        domain=out_domain,
-                    )
-
-            else:
-                # non embedded execution
-
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-                # TODO(tehrengruber): check all offset providers are given
-                # deduce argument types
-                arg_types = []
-                for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
-                kwarg_types = {}
-                for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
-
-                return self.as_program(arg_types, kwarg_types)(
-                    *args, out, offset_provider=offset_provider, **kwargs
-                )
-
-
-def _run_operator(op: Callable, foast_node: OperatorNodeT, args, kwargs):
-    if isinstance(
-        foast_node, foast.ScanOperator
-    ):  # TODO(havogt): we should not reconstruct this info from the foast_node
-        scan_foast: foast.ScanOperator = foast_node
-        forward = scan_foast.forward.value
-        init = scan_foast.init.value
-        axis = scan_foast.axis.value
-
-        scan_range = next_embedded.context.closure_column_range.get()
-        assert axis == scan_range[0]
-
-        return embedded_operators.scan(op, forward, init, scan_range, args, kwargs)
-    else:
-        return op(*args, **kwargs)
-
-
-def _get_vertical_range(domain: common.Domain) -> common.NamedRange:
-    vertical_dim_filtered = [nr for nr in domain if nr[0].kind == common.DimensionKind.VERTICAL]
-    assert len(vertical_dim_filtered) <= 1
-    return vertical_dim_filtered[0] if vertical_dim_filtered else None
-
-
-def _tuple_assign_field(
-    target: tuple[common.MutableField | tuple, ...] | common.MutableField,
-    source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: Optional[common.Domain],
-):
-    domain = domain or target.domain
-
-    @utils.tree_map
-    def impl(target: common.MutableField, source: common.Field):
-        target[domain] = source[domain]
-
-    impl(target, source)
+            return self.as_program(arg_types, kwarg_types)(
+                *args, out, offset_provider=offset_provider, **kwargs
+            )
+        else:
+            return embedded_operators.field_operator_call(
+                self.definition, self.foast_node, args, kwargs
+            )
 
 
 @typing.overload

@@ -12,11 +12,103 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable, Sequence
+from typing import Any, Callable, Sequence
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors, field_utils, utils
-from gt4py.next.embedded import common as embedded_common
+from gt4py.next.embedded import common as embedded_common, context as embedded_context
+from gt4py.next.ffront import field_operator_ast as foast
+
+
+def field_operator_call(
+    op: Callable, foast_node: foast.FieldOperator | foast.ScanOperator, args: Any, kwargs: Any
+):
+    # embedded execution
+    if embedded_context.within_context():
+        # field_operator called from program or other field_operator in embedded execution
+        if "out" in kwargs:
+            # field_operator called from program in embedded execution
+
+            offset_provider = kwargs.pop("offset_provider", None)
+            # offset_provider should already be set
+            assert (
+                offset_provider is None or embedded_context.offset_provider.get() is offset_provider
+            )
+            out = kwargs.pop("out")
+            domain = kwargs.pop("domain", None)
+            out_domain = (
+                common.domain(domain) if domain is not None else field_utils.get_domain(out)
+            )
+
+            vertical_range = _get_vertical_range(out_domain)
+
+            with embedded_context.new_context(closure_column_range=vertical_range) as ctx:
+                res = ctx.run(_run_operator, op, foast_node, args, kwargs)
+                _tuple_assign_field(
+                    out,
+                    res,
+                    domain=out_domain,
+                )
+
+        else:
+            # field_operator called form field_operator in embedded execution
+            return _run_operator(op, foast_node, args, kwargs)
+
+    else:
+        # field_operator called directly
+        offset_provider = kwargs.pop("offset_provider", None)
+        out = kwargs.pop("out")
+        domain = kwargs.pop("domain", None)
+
+        out_domain = common.domain(domain) if domain is not None else field_utils.get_domain(out)
+
+        with embedded_context.new_context(
+            offset_provider=offset_provider, closure_column_range=_get_vertical_range(out_domain)
+        ) as ctx:
+            res = ctx.run(_run_operator, op, foast_node, args, kwargs)
+            _tuple_assign_field(
+                out,
+                res,
+                domain=out_domain,
+            )
+
+
+def _run_operator(
+    op: Callable, foast_node: foast.ScanOperator | foast.FieldOperator, args: Any, kwargs: Any
+):
+    if isinstance(
+        foast_node, foast.ScanOperator
+    ):  # TODO(havogt): we should not reconstruct this info from the foast_node
+        scan_foast: foast.ScanOperator = foast_node
+        forward = scan_foast.forward.value
+        init = scan_foast.init.value
+        axis = scan_foast.axis.value
+
+        scan_range = embedded_context.closure_column_range.get()
+        assert axis == scan_range[0]
+
+        return scan(op, forward, init, scan_range, args, kwargs)
+    else:
+        return op(*args, **kwargs)
+
+
+def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
+    vertical_dim_filtered = [nr for nr in domain if nr[0].kind == common.DimensionKind.VERTICAL]
+    assert len(vertical_dim_filtered) <= 1
+    return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
+
+
+def _tuple_assign_field(
+    target: tuple[common.MutableField | tuple, ...] | common.MutableField,
+    source: tuple[common.Field | tuple, ...] | common.Field,
+    domain: common.Domain,
+):
+    @utils.tree_map
+    def impl(target: common.MutableField, source: common.Field):
+        target[domain] = source[domain]
+
+    impl(target, source)
 
 
 def scan(
@@ -49,7 +141,7 @@ def scan(
             new_args = [_tuple_at(pos, arg) for arg in args]
             new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
             acc = scan_op(acc, *new_args, **new_kwargs)
-            _tuple_assign(pos, res, acc)
+            _tuple_assign_value(pos, res, acc)
 
     for hpos in embedded_common.iterate_domain(non_scan_domain):
         scan_loop(hpos)
@@ -73,7 +165,7 @@ def _construct_scan_array(domain: common.Domain):
     return impl
 
 
-def _tuple_assign(
+def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
     target: common.MutableField | tuple[common.MutableField | tuple, ...],
     source: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
