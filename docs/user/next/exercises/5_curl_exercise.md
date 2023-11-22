@@ -17,7 +17,7 @@ kernelspec:
 +++
 
 As the last example of the easier operations, we take a look at the curl of a vector field $\mathbf{v}$ defined at a vertex $\mathbf{N}$.
-To approximate this, we one again iterate over all of the direct neighboring edges of the vertex in the center and for each edge take the dot product of the vector field $\mathbf{v}_e$ with the edge normals $\mathbf{n}_f$ and multiply that by the dual edge length $\hat{L}_e$. The resulting neighbor sum is then divided by the dual area $\hat{A}_N$, which is the area of the Voronoi cell around the Vertex $\mathbf{N}$.
+To approximate this, we once again iterate over all of the direct neighboring edges of the vertex in the center and for each edge take the dot product of the vector field $\mathbf{v}_e$ with the edge normals $\mathbf{n}_f$ and multiply that by the dual edge length $\hat{L}_e$. The resulting neighbor sum is then divided by the dual area $\hat{A}_N$, which is the area of the Voronoi cell around the Vertex $\mathbf{N}$.
 
 
 ![](../curl_picture.png "Divergence")
