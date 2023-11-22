@@ -80,13 +80,22 @@ def divergence(
 
 ```python
 def test_divergence():
-    u = random_field((n_edges), E)
-    v = random_field((n_edges), E)
-    nx = random_field((n_edges), E)
-    ny = random_field((n_edges), E)
-    L = random_field((n_edges), E)
-    A = random_field((n_cells), C)
-    edge_orientation = random_field((n_cells, 3), C, C2EDim)
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+
+    cell_domain = gtx.domain({C: n_cells})
+    edge_domain = gtx.domain({E: n_edges})
+
+    u = random_field_new(edge_domain, allocator=backend)
+    v = random_field_new(edge_domain, allocator=backend)
+    nx = random_field_new(edge_domain, allocator=backend)
+    ny = random_field_new(edge_domain, allocator=backend)
+    L = random_field_new(edge_domain, allocator=backend)
+    A = random_field_new(cell_domain, allocator=backend)
+    edge_orientation = random_field_new(
+        gtx.domain({C: n_cells, C2EDim: 3}), allocator=backend
+    )
 
     divergence_ref = divergence_numpy(
         c2e_table,
@@ -99,9 +108,11 @@ def test_divergence():
         edge_orientation.asnumpy(),
     )
 
-    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3, has_skip_values=False)
+    c2e_connectivity = gtx.NeighborTableOffsetProvider(
+        c2e_table, C, E, 3, has_skip_values=False
+    )
 
-    divergence_gt4py = zero_field((n_cells), C)
+    divergence_gt4py = gtx.zeros(cell_domain)
 
     divergence(
         u,
