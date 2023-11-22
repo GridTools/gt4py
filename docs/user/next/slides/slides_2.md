@@ -60,11 +60,11 @@ Take an array with values ranging from 0 to 5:
 ```{code-cell} ipython3
 Coff = gtx.FieldOffset("Coff", source=CellDim, target=(CellDim,))
 
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def a_offset(a_off: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
     return a_off(Coff[1])
     
-a_offset(a_off, out=a_off, offset_provider={"Coff": CellDim})
+a_offset(a_off, out=a_off[:-1], offset_provider={"Coff": CellDim})
 print("result array: \n {}".format(a_off.asnumpy()))
 ```
 
@@ -151,7 +151,7 @@ E2C_offset_provider = gtx.NeighborTableOffsetProvider(e2c_table, EdgeDim, CellDi
 def nearest_cell_to_edge(cell_field: gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
     return cell_field(E2C[0]) # 0th index to isolate edge dimension
 
-@gtx.program(backend=roundtrip.executor)
+@gtx.program(backend=roundtrip.executor) # TODO uses skip_values, therefore cannot use embedded
 def run_nearest_cell_to_edge(cell_field: gtx.Field[[CellDim], float64], edge_field: gtx.Field[[EdgeDim], float64]):
     nearest_cell_to_edge(cell_field, out=edge_field)
 
@@ -177,7 +177,7 @@ To sum up all the cells adjacent to an edge the `neighbor_sum` builtin function 
 def sum_adjacent_cells(cell_field : gtx.Field[[CellDim], float64]) -> gtx.Field[[EdgeDim], float64]:
     return neighbor_sum(cell_field(E2C), axis=E2CDim)
 
-@gtx.program(backend=roundtrip.executor)
+@gtx.program(backend=roundtrip.executor) # TODO uses skip_values, therefore cannot use embedded
 def run_sum_adjacent_cells(cell_field : gtx.Field[[CellDim], float64], edge_field: gtx.Field[[EdgeDim], float64]):
     sum_adjacent_cells(cell_field, out=edge_field)
 

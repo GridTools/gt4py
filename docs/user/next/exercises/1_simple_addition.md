@@ -29,7 +29,7 @@ def addition_numpy(
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def addition(
     a: gtx.Field[[C], float],
     b: gtx.Field[[C], float],
@@ -45,7 +45,7 @@ def test_mo_nh_diffusion_stencil_06():
     b = random_field((n_cells), C)
     
     c_numpy = addition_numpy(
-        np.asarray(a), np.asarray(b)
+        a.asnumpy(), b.asnumpy()
     )
 
     c = zero_field((n_cells), C)
@@ -54,7 +54,7 @@ def test_mo_nh_diffusion_stencil_06():
         a, b, out=c, offset_provider={}
     )
     
-    assert np.allclose(c, c_numpy)
+    assert np.allclose(c.asnumpy(), c_numpy)
 
     print("Test successful!")
 ```

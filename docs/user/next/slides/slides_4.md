@@ -63,7 +63,7 @@ This decorator takes 3 input arguments:
 - `init`: scalar value from which the iteration starts
 
 ```{code-cell} ipython3
-@gtx.scan_operator(axis=KDim, forward=True, init=0.0, backend=roundtrip.executor)
+@gtx.scan_operator(axis=KDim, forward=True, init=0.0)
 def add_scan(state: float, k_field: float) -> float:
     return state + k_field
 ```

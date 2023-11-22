@@ -53,7 +53,7 @@ def divergence_numpy(
 ```
 
 ```python
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def divergence(
     u: gtx.Field[[E], float],
     v: gtx.Field[[E], float],
@@ -79,13 +79,13 @@ def test_divergence():
 
     divergence_ref = divergence_numpy(
         c2e_table,
-        np.asarray(u),
-        np.asarray(v),
-        np.asarray(nx),
-        np.asarray(ny),
-        np.asarray(L),
-        np.asarray(A),
-        np.asarray(edge_orientation),
+        u.asnumpy(),
+        v.asnumpy(),
+        nx.asnumpy(),
+        ny.asnumpy(),
+        L.asnumpy(),
+        A.asnumpy(),
+        edge_orientation.asnumpy(),
     )
 
     c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
@@ -96,7 +96,7 @@ def test_divergence():
         u, v, nx, ny, L, A, edge_orientation, out = divergence_gt4py, offset_provider = {C2E.value: c2e_connectivity}
     )
     
-    assert np.allclose(divergence_gt4py, divergence_ref)
+    assert np.allclose(divergence_gt4py.asnumpy(), divergence_ref)
 ```
 
 ```python

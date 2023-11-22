@@ -76,12 +76,12 @@ def test_gradient():
 
     gradient_numpy_x, gradient_numpy_y = gradient_numpy(
         c2e_table,
-        np.asarray(f),
-        np.asarray(nx),
-        np.asarray(ny),
-        np.asarray(L),
-        np.asarray(A),
-        np.asarray(edge_orientation),
+        f.asnumpy(),
+        nx.asnumpy(),
+        ny.asnumpy(),
+        L.asnumpy(),
+        A.asnumpy(),
+        edge_orientation.asnumpy(),
     )
 
     c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
@@ -94,8 +94,8 @@ def test_gradient():
         f, nx, ny, L, A, edge_orientation, out = (gradient_gt4py_x, gradient_gt4py_y), offset_provider = {C2E.value: c2e_connectivity}
     )
     
-    assert np.allclose(gradient_gt4py_x, gradient_numpy_x)
-    assert np.allclose(gradient_gt4py_y, gradient_numpy_y)
+    assert np.allclose(gradient_gt4py_x.asnumpy(), gradient_numpy_x)
+    assert np.allclose(gradient_gt4py_y.asnumpy(), gradient_numpy_y)
 ```
 
 ```{code-cell} ipython3
