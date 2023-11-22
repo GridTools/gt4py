@@ -15,17 +15,16 @@ kernelspec:
 # 1. Simple Addition
 
 ```{code-cell} ipython3
-import gt4py.next as gtx
-
 import numpy as np
-from helpers import random_field_new, gtfn_cpu, gtfn_gpu
+
+import gt4py.next as gtx
 ```
 
 Next we implement the stencil and a numpy reference version, in order to verify them against each other.
 
 ```{code-cell} ipython3
 C = gtx.Dimension("C")
-n_cells = 42
+n_cells = 5
 ```
 
 ```{code-cell} ipython3
@@ -45,23 +44,27 @@ def addition(
 ```{code-cell} ipython3
 def test_addition():
     backend = None
-    # backend = gtfn_cpu
-    # backend = gtfn_gpu
+    # backend = gtx.gtfn_cpu
+    # backend = gtx.gtfn_gpu
 
-    domain = gtx.domain({C:n_cells})
-    
-    a = random_field_new(domain, allocator = backend)
-    b = random_field_new(domain, allocator = backend)
+    domain = gtx.domain({C: n_cells})
+
+    a = gtx.full(domain, 42., allocator=backend)
+    b = gtx.full(domain, 1., allocator=backend)
 
     c_numpy = addition_numpy(a.asnumpy(), b.asnumpy())
 
-    c = gtx.zeros(domain, allocator = backend)
+    c = gtx.zeros(domain, allocator=backend)
 
     addition(a, b, out=c, offset_provider={})
 
     assert np.allclose(c.asnumpy(), c_numpy)
 
-    print("Test successful!")
+    print("Result:")
+    print(c)
+    print(c.asnumpy())
+
+    print("\nTest successful!")
 ```
 
 ```{code-cell} ipython3
