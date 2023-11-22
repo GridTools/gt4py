@@ -49,7 +49,7 @@ def gradient_numpy(
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def gradient(
     f: gtx.Field[[E], float],
     nx: gtx.Field[[E], float],
@@ -58,8 +58,8 @@ def gradient(
     A: gtx.Field[[C], float],
     edge_orientation: gtx.Field[[C, C2EDim], float],
 ) -> gtx.tuple[gtx.Field[[C], float], gtx.Field[[C], float]]:
-    f_x = A
-    f_y = A
+    f_x = neighbor_sum(f(C2E) * nx(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
+    f_y = neighbor_sum(f(C2E) * ny(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
     return f_x, f_y
 ```
 
@@ -82,7 +82,7 @@ def test_gradient():
         edge_orientation.asnumpy(),
     )
 
-    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
+    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3, has_skip_values=False)
 
     gradient_gt4py_x = zero_field((n_cells), C)
     gradient_gt4py_y = zero_field((n_cells), C)

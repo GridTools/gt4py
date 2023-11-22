@@ -15,50 +15,51 @@ kernelspec:
 # 1. Simple Addition
 
 ```{code-cell} ipython3
-from helpers import *
+import gt4py.next as gtx
+
+import numpy as np
+from helpers import random_field_new
 ```
 
 Next we implement the stencil and a numpy reference version, in order to verify them against each other.
 
 ```{code-cell} ipython3
-def addition_numpy(
-    a: np.array, b: np.array,
-) -> np.array:
+C = gtx.Dimension("C")
+n_cells = 42
+```
+
+```{code-cell} ipython3
+def addition_numpy(a: np.array, b: np.array) -> np.array:
     c = a + b
     return c
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def addition(
-    a: gtx.Field[[C], float],
-    b: gtx.Field[[C], float],
+    a: gtx.Field[[C], float], b: gtx.Field[[C], float]
 ) -> gtx.Field[[C], float]:
-    c = a + b
-    return c
+    return a + b
 ```
 
 ```{code-cell} ipython3
-def test_mo_nh_diffusion_stencil_06():
+def test_addition():
+    domain = gtx.domain({C:n_cells})
     
-    a = random_field((n_cells), C)
-    b = random_field((n_cells), C)
-    
-    c_numpy = addition_numpy(
-        np.asarray(a), np.asarray(b)
-    )
+    a = random_field_new(domain)
+    b = random_field_new(domain)
 
-    c = zero_field((n_cells), C)
+    c_numpy = addition_numpy(a.asnumpy(), b.asnumpy())
 
-    addition(
-        a, b, out=c, offset_provider={}
-    )
-    
-    assert np.allclose(c, c_numpy)
+    c = gtx.zeros(domain)
+
+    addition(a, b, out=c, offset_provider={})
+
+    assert np.allclose(c.asnumpy(), c_numpy)
 
     print("Test successful!")
 ```
 
 ```{code-cell} ipython3
-test_mo_nh_diffusion_stencil_06()
+test_addition()
 ```
