@@ -29,7 +29,6 @@ from gt4py.next import neighbor_sum, where
 ```{code-cell} ipython3
 Cell = gtx.Dimension("Cell")
 K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-grid_shape = (5, 6)
 ```
 
 ## Using conditionals on fields
@@ -43,9 +42,11 @@ This function takes 3 input arguments:
 
 ```{code-cell} ipython3
 mask = gtx.as_field([Cell], np.asarray([True, False, True, True, False]))
-result = gtx.as_field([Cell], np.zeros(shape=grid_shape[0]))
+
 true_field = gtx.as_field([Cell], np.asarray([11.0, 12.0, 13.0, 14.0, 15.0]))
 false_field = gtx.as_field([Cell], np.asarray([21.0, 22.0, 23.0, 24.0, 25.0]))
+
+result = gtx.zeros(gtx.domain({Cell:5}))
 
 @gtx.field_operator
 def conditional(mask: gtx.Field[[Cell], bool], true_field: gtx.Field[[Cell], gtx.float64], false_field: gtx.Field[[Cell], gtx.float64]
@@ -77,9 +78,11 @@ def run_add_domain(a : gtx.Field[[Cell, K], gtx.float64],
 ```
 
 ```{code-cell} ipython3
-a = gtx.as_field([Cell, K], np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
-b = gtx.as_field([Cell, K], np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
-result = gtx.as_field([Cell, K], np.zeros(shape=grid_shape))
+domain = gtx.domain({Cell: 5, K: 6})
+
+a = gtx.full(domain, fill_value=2.0, dtype=np.float64)
+b = gtx.full(domain, fill_value=3.0, dtype=np.float64)
+result = gtx.zeros(domain)
 run_add_domain(a, b, result, offset_provider={})
 
 print("result array: \n {}".format(result.asnumpy()))
