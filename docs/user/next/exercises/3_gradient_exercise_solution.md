@@ -25,11 +25,9 @@ The result will be the two components of the gradient vector.
 
 ```{code-cell} ipython3
 from helpers import *
-```
 
-```{code-cell} ipython3
-C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
-C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
+
+import gt4py.next as gtx
 ```
 
 ```{code-cell} ipython3
@@ -65,12 +63,21 @@ def gradient(
 
 ```{code-cell} ipython3
 def test_gradient():
-    f = random_field((n_edges), E)
-    nx = random_field((n_edges), E)
-    ny = random_field((n_edges), E)
-    L = random_field((n_edges), E)
-    A = random_field((n_cells), C)
-    edge_orientation = random_field((n_cells, 3), C, C2EDim)
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+
+    cell_domain = gtx.domain({C: n_cells})
+    edge_domain = gtx.domain({E: n_edges})
+    
+    f = random_field_new(edge_domain, allocator=backend)
+    nx = random_field_new(edge_domain, allocator=backend)
+    ny = random_field_new(edge_domain, allocator=backend)
+    L = random_field_new(edge_domain, allocator=backend)
+    A = random_field_new(cell_domain, allocator=backend)
+    edge_orientation = random_sign(
+        gtx.domain({C: n_cells, C2EDim: 3}), allocator=backend
+    )
 
     gradient_numpy_x, gradient_numpy_y = gradient_numpy(
         c2e_table,
@@ -84,8 +91,8 @@ def test_gradient():
 
     c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3, has_skip_values=False)
 
-    gradient_gt4py_x = zero_field((n_cells), C)
-    gradient_gt4py_y = zero_field((n_cells), C)
+    gradient_gt4py_x = gtx.zeros(cell_domain, allocator=backend) 
+    gradient_gt4py_y = gtx.zeros(cell_domain, allocator=backend) 
 
     gradient(
         f,

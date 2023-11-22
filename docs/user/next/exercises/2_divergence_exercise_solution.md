@@ -12,10 +12,6 @@ jupyter:
     name: python3
 ---
 
-```python
-from helpers import *
-```
-
 # 3. Divergence
 
 
@@ -33,8 +29,7 @@ The orientation of the edge has to factor in, since we do not know, in general, 
 
 
 ```python
-C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
-C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
+from helpers import *
 ```
 
 ```python

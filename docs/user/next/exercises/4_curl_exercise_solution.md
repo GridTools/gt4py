@@ -27,13 +27,8 @@ To approximate this, we once again iterate over all of the direct neighboring ed
 
 ```{code-cell} ipython3
 from helpers import *
-```
 
-```{code-cell} ipython3
-C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
-C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
-V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
+import gt4py.next as gtx
 ```
 
 ```{code-cell} ipython3
@@ -82,13 +77,22 @@ def curl(
 
 ```{code-cell} ipython3
 def test_curl():
-    u = random_field((n_edges), E)
-    v = random_field((n_edges), E)
-    nx = random_field((n_edges), E)
-    ny = random_field((n_edges), E)
-    dualL = random_field((n_edges), E)
-    dualA = random_field((n_vertices), V)
-    edge_orientation = random_field((n_vertices, 6), V, V2EDim)
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+
+    edge_domain = gtx.domain({E: n_edges})
+    vertex_domain = gtx.domain({V: n_vertices})
+    
+    u = random_field_new(edge_domain, allocator=backend)
+    v = random_field_new(edge_domain, allocator=backend)
+    nx = random_field_new(edge_domain, allocator=backend)
+    ny = random_field_new(edge_domain, allocator=backend)
+    dualL = random_field_new(edge_domain, allocator=backend)
+    dualA = random_field_new(vertex_domain, allocator=backend)
+    edge_orientation = random_sign(
+        gtx.domain({V: n_vertices, V2EDim: 6}), allocator=backend
+    )
 
     divergence_ref = curl_numpy(
         v2e_table,
@@ -103,7 +107,7 @@ def test_curl():
 
     v2e_connectivity = gtx.NeighborTableOffsetProvider(v2e_table, V, E, 6, has_skip_values=False)
 
-    curl_gt4py = zero_field((n_vertices), V)
+    curl_gt4py = gtx.zeros(vertex_domain, allocator=backend)  
 
     curl(
         u, v, nx, ny, dualL, dualA, edge_orientation, out = curl_gt4py, offset_provider = {V2E.value: v2e_connectivity}

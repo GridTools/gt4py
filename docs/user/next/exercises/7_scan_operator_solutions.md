@@ -12,36 +12,6 @@ kernelspec:
   name: python3
 ---
 
-```{code-cell} ipython3
-import numpy as np
-
-import gt4py.next as gtx
-from gt4py.next import Dimension, DimensionKind, FieldOffset, neighbor_sum, where
-from gt4py.next.iterator.embedded import MutableLocatedField
-from gt4py.next.program_processors.runners import roundtrip
-```
-
-```{code-cell} ipython3
-def random_field(
-    sizes, *dims, low: float = -1.0, high: float = 1.0
-) -> MutableLocatedField:
-    return gtx.as_field(
-        [*dims], np.random.default_rng().uniform(low=low, high=high, size=sizes)
-    )
-```
-
-```{code-cell} ipython3
-n_edges = 27
-n_vertices = 9
-n_cells = 18
-n_levels = 10
-
-C = Dimension("C")
-V = Dimension("V")
-E = Dimension("E")
-K = Dimension("K")
-```
-
 ## 8. Scan operator
 
 +++
@@ -119,20 +89,9 @@ q_colsum = column_integral(qv, rho, dz)
 #### Exercise: port a toy cloud microphysics scheme from python/numpy using the tempate of a `scan_operator` below
 
 ```{code-cell} ipython3
-C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
-C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
-V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
-V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
-```
+from helpers import *
 
-```{code-cell} ipython3
-# Configuration: Single column
-CellDim = Dimension("Cell")
-KDim = Dimension("K", kind=DimensionKind.VERTICAL)
-
-num_cells = 1
-num_layers = 6
-grid_shape = (num_cells, num_layers)
+import gt4py.next as gtx
 ```
 
 ```{code-cell} ipython3
@@ -156,7 +115,7 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
 ```
 
 ```{code-cell} ipython3
-@gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
+@gtx.scan_operator(axis=K, forward=True, init=(0.0, 0.0, 0.0))
 def _graupel_toy_scan(
     state: tuple[float, float, float], qc_in: float, qr_in: float
 ) -> tuple[float, float, float]:
@@ -183,11 +142,11 @@ def _graupel_toy_scan(
 ```{code-cell} ipython3
 @gtx.field_operator(backend=roundtrip.executor)
 def graupel_toy_scan(
-    qc: gtx.Field[[CellDim, KDim], float], qr: gtx.Field[[CellDim, KDim], float]
+    qc: gtx.Field[[C, K], float], qr: gtx.Field[[C, K], float]
 ) -> tuple[
-    gtx.Field[[CellDim, KDim], float],
-    gtx.Field[[CellDim, KDim], float],
-    gtx.Field[[CellDim, KDim], float],
+    gtx.Field[[C, K], float],
+    gtx.Field[[C, K], float],
+    gtx.Field[[C, K], float],
 ]:
     qc, qr, _ = _graupel_toy_scan(qc, qr)
 
@@ -196,9 +155,15 @@ def graupel_toy_scan(
 
 ```{code-cell} ipython3
 def test_scan_operator():
-    qc = random_field((n_cells, n_levels), CellDim, KDim)
-    qr = random_field((n_cells, n_levels), CellDim, KDim)
-    qd = random_field((n_cells, n_levels), CellDim, KDim)
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+    
+    cell_k_domain = gtx.domain({C: n_cells, K: n_levels})
+    
+    qc = random_field_new(cell_k_domain, allocator=backend)
+    qr = random_field_new(cell_k_domain, allocator=backend)
+    qd = random_field_new(cell_k_domain, allocator=backend)
 
     # Initialize Numpy fields from GT4Py fields
     qc_numpy = qc.asnumpy().copy()

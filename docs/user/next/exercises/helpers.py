@@ -374,4 +374,10 @@ c2e2c_table = np.asarray(
 C = Dimension("C")
 V = Dimension("V")
 E = Dimension("E")
-K = Dimension("K")
+K = Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+
+C2EDim = Dimension("C2E", kind=DimensionKind.LOCAL)
+C2E = FieldOffset("C2E", source=E, target=(C, C2EDim))
+V2EDim = Dimension("V2E", kind=DimensionKind.LOCAL)
+V2E = FieldOffset("V2E", source=E, target=(V, V2EDim))
+Coff = gtx.FieldOffset("Coff", source=C, target=(C,))

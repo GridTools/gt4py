@@ -14,18 +14,7 @@ kernelspec:
 
 # Where, Offset, and domain
 
-```{code-cell} ipython3
-from helpers import *
-```
-
-```{code-cell} ipython3
-import warnings
-warnings.filterwarnings('ignore')
-```
-
-```{code-cell} ipython3
-Coff = gtx.FieldOffset("Coff", source=C, target=(C,))
-```
++++
 
 ## Conditional: where
 
@@ -43,6 +32,12 @@ Both require the same 3 input arguments:
 Take a simple numpy example, the `mask` here is a condition:
 
 ```{code-cell} ipython3
+from helpers import *
+
+import gt4py.next as gtx
+```
+
+```{code-cell} ipython3
 a_np = np.arange(10.0)
 b_np = np.where(a_np < 6.0, a_np, a_np*10.0)
 print("a_np array: {}".format(a_np))
@@ -57,15 +52,18 @@ def fieldop_where(a: gtx.Field[[C], float]) -> gtx.Field[[C], float]:
     return where(a < 6.0, a, a*10.0)
 
 @gtx.program
-def program_where(a: gtx.Field[[C], float],
-            b: gtx.Field[[C], float]):
+def program_where(a: gtx.Field[[C], float], b: gtx.Field[[C], float]):
     fieldop_where(a, out=b) 
 ```
 
 ```{code-cell} ipython3
 def test_where():
-    a = gtx.as_field([C], np.arange(10.0))
-    b = gtx.as_field([C], np.zeros(shape=10))
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+    
+    a = gtx.as_field([C], np.arange(10.0), allocator=backend)
+    b = gtx.as_field([C], np.zeros(shape=10), allocator=backend)
     program_where(a, b, offset_provider={})
     
     assert np.allclose(b_np, b.asnumpy())
@@ -97,8 +95,12 @@ def program_domain(a: gtx.Field[[C], float],
 
 ```{code-cell} ipython3
 def test_domain():
-    a = gtx.as_field([C], np.arange(10.0))
-    b = gtx.as_field([C], np.arange(10.0))
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+    
+    a = gtx.as_field([C], np.arange(10.0), allocator=backend)
+    b = gtx.as_field([C], np.arange(10.0), allocator=backend)
     program_domain(a, b, offset_provider={})
 
     assert np.allclose(b_np, b.asnumpy())
@@ -149,8 +151,12 @@ def program_domain_where(a: gtx.Field[[C], float], b: gtx.Field[[C], float]):
 
 ```{code-cell} ipython3
 def test_domain_where():
-    a = gtx.as_field([C], np.arange(10.0))
-    b = gtx.as_field([C], np.zeros(shape=10))
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+    
+    a = gtx.as_field([C], np.arange(10.0), allocator=backend)
+    b = gtx.as_field([C], np.zeros(shape=10), allocator=backend)
     program_domain_where(a, b, offset_provider={"Coff": C})
     
     assert np.allclose(a_np_result, b.asnumpy())
