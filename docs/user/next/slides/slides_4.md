@@ -24,30 +24,28 @@ warnings.filterwarnings('ignore')
 import numpy as np
 import gt4py.next as gtx
 from gt4py.next import float64, neighbor_sum, where
-from gt4py.next.common import DimensionKind
-from gt4py.next.program_processors.runners import roundtrip
 ```
 
 ```{code-cell} ipython3
-KDim = gtx.Dimension("K", kind=DimensionKind.VERTICAL)
+K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 ```
 
-## Scan operators
+## Scan algorithm
 
-Scan operators work in a similar fashion to iterations in Python.
+All operations so far where map operations over the output domain. The only other algorithm that we currently support is _scanning_ a axis, one example of a scan is the partial sum as illustrated in the following code snippet.
 
 ```{code-cell} ipython3
 x = np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0])
-def x_iteration(x):
+def partial_sum(x):
     for i in range(len(x)):
         if i > 0:
             x[i] = x[i-1] + x[i]
     return x
-    
-print("result array: \n {}".format(x_iteration(x)))
+print(f"input:\n {x}") 
+print(f"partial sum:\n {partial_sum(x)}")
 ```
 
-Visually, this is what `x_iteration` is doing: 
+Visually, this is what `partial_sum` is doing: 
 
 | ![scan_operator](../scan_operator.png) |
 | :---------------------------------: |
@@ -55,22 +53,24 @@ Visually, this is what `x_iteration` is doing:
 
 +++
 
-`scan_operators` allow for the same computations and only require a return statement for the operation, for loops and indexing are handled in the background. The return `state` of the previous iteration is provided as its first argument.
+In GT4Py the a scan pattern is implemented with the so-called `scan_operator` where the return statement expresses the computation at the current position in the scan direction. This value is additionally injected as the first argument to the next position, usually called `state` or `carry`.
 
-This decorator takes 3 input arguments:
-- `axis`: vertical axis over which operations have to be performed
+The `scan_operator` decorator takes 3 arguments:
+- `axis`: a `Dimension` that specifies the scan axis; note: the `Dimension` has to be of kind `VERTICAL`
 - `forward`: True if order of operations is from bottom to top, False if from top to bottom
-- `init`: scalar value from which the iteration starts
+- `init`: value that is injected as the `state` at the start
+
+Note: Unlike a `field_operator`, the `scan_operator` is actually a local, scalar operation. It is applied to all points in the dimensions orthogonal to the scan axis (a form of single-column-abstraction). That might change in the future or be extended with a field version.
 
 ```{code-cell} ipython3
-@gtx.scan_operator(axis=KDim, forward=True, init=0.0)
+@gtx.scan_operator(axis=K, forward=True, init=0.0)
 def add_scan(state: float, k_field: float) -> float:
     return state + k_field
 ```
 
 ```{code-cell} ipython3
-k_field = gtx.as_field([KDim], np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0]))
-result = gtx.as_field([KDim], np.zeros(shape=(7,)))
+k_field = gtx.as_field([K], np.asarray([1.0, 2.0, 4.0, 6.0, 0.0, 2.0, 5.0]))
+result = gtx.as_field([K], np.zeros(shape=(7,)))
 
 add_scan(k_field, out=result, offset_provider={})
 
