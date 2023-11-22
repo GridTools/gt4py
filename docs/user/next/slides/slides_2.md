@@ -44,7 +44,7 @@ print("a_off array: \n {}".format(a_off.asnumpy()))
 
 Visually, offsetting this field by 1 would result in the following:
 
-| ![Coff](../simple_offset.png) |
+| ![Coff](../images/simple_offset.png) |
 | :------------------------: |
 |  _CellDim Offset (Coff)_   |
 
@@ -66,7 +66,7 @@ print(f"result field: \n {result} \n {result.asnumpy()}")
 ## Defining the mesh and its connectivities
 Take an unstructured mesh with numbered cells (in red) and edges (in blue).
 
-| ![grid_topo](../connectivity_numbered_grid.svg) |
+| ![grid_topo](../images/connectivity_numbered_grid.svg) |
 | :------------------------------------------: |
 |         _The mesh with the indices_          |
 
@@ -118,13 +118,15 @@ cell_field = gtx.as_field([Cell], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 edge_field = gtx.as_field([Edge], np.zeros((12,)))
 ```
 
-| ![cell_values](../connectivity_cell_field.svg) |
+| ![cell_values](../images/connectivity_cell_field.svg) |
 | :-----------------------------------------: |
 |                _Cell values_                |
 
 +++
 
 `field_offset` is used to remap fields over one domain to another domain, e.g. cells -> edges.
+
++++
 
 Field remappings are just composition of mappings
 - Field defined on cells: $f_C: C \to \mathbb{R}$
@@ -165,9 +167,17 @@ print("0th adjacent cell's value: {}".format(edge_field.asnumpy()))
 
 Running the above snippet results in the following edge field:
 
-| ![nearest_cell_values](../connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](../connectivity_edge_0th_cell.svg) |
+| ![nearest_cell_values](../images/connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](../images/connectivity_edge_0th_cell.svg) |
 | :----------------------------------------------------: | :-------: | :------------------------------------------: |
 |                    _Domain (edges)_                    |           |                _Edge values_                 |
+
++++
+
+Another example: E2V
+
+| <div><img src="../images/remap-field.png" width="75%"/></div> |
+| :-----------------------------------------: |
+| <div><img src="../images/remap-field-code.png" width="50%"/></div> |
 
 +++
 
@@ -191,10 +201,6 @@ print("sum of adjacent cells: {}".format(edge_field.asnumpy()))
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
-| ![nearest_cell_values](../connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](../connectivity_edge_cell_sum.svg) |
+| ![nearest_cell_values](../images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](../images/connectivity_edge_cell_sum.svg) |
 | :----------------------------------------------------: | :-------: | :--------------------------------------------: |
 |                    _Domain (edges)_                    |           |                 _Edge values_                  |
-
-```{code-cell} ipython3
-
-```

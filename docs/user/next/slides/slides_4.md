@@ -47,7 +47,7 @@ print(f"partial sum:\n {partial_sum(x)}")
 
 Visually, this is what `partial_sum` is doing: 
 
-| ![scan_operator](../scan_operator.png) |
+| ![scan_operator](../images/scan_operator.png) |
 | :---------------------------------: |
 |         _Iterative sum over K_      |
 

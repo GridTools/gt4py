@@ -95,6 +95,12 @@ from gt4py.next import float64, neighbor_sum, where
 ### Fields
 Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[[dimensions], dtype]`.
 
+| <div><img src="../images/field.png" width="66%"/></div> |
+| :-----------------------------------------: |
+| <div><img src="../images/field-code.png" width="50%"/></div> |
+
++++
+
 Fields can be constructed with the following functions, inspired by numpy:
 
 - `zeros`
@@ -173,8 +179,4 @@ result = gtx.zeros(domain, dtype=float64)
 run_add(a, b, result, offset_provider={})
 
 print("result array: \n {}".format(result.asnumpy()))
-```
-
-```{code-cell} ipython3
-
 ```
