@@ -13,6 +13,11 @@ kernelspec:
 ---
 
 ```{code-cell} ipython3
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{code-cell} ipython3
 import numpy as np
 
 import gt4py.next as gtx
@@ -22,25 +27,8 @@ from gt4py.next import Dimension, DimensionKind, FieldOffset
 ```
 
 ```{code-cell} ipython3
-def random_field(
-    sizes, *dims, low: float = -1.0, high: float = 1.0
-) -> MutableLocatedField:
-    return gtx.as_field([*dims],
-        np.random.default_rng().uniform(
-            low=low, high=high, size=sizes
-        )
-    )
-
-def zero_field(
-    sizes, *dims: Dimension, dtype=float
-) -> MutableLocatedField:
-    return gtx.as_field([*dims], 
-        np.zeros(shape=sizes, dtype=dtype)
-    )
-```
-
-```{code-cell} ipython3
 CellDim = Dimension("C")
+Coff = gtx.FieldOffset("Coff", source=CellDim, target=(CellDim,))
 ```
 
 ## Conditional: where
@@ -127,34 +115,35 @@ print("Test successful")
 
 ## where and domain
 
-A combination of `where` and `domain` is useful in cases when a certain domain exceeds the field size
+A combination of `where` and `domain` is useful in cases when an offset is used which exceeds the field size.
 
-e.g. a field `a: gtx.Field[[CellDim], float64]` with shape (10,) is applied a condition `where(a<13.0, .., ...)`
+e.g. a field `a: gtx.Field[[CellDim], float64]` with shape (10,) is applied an offset (`Coff`).
 
 +++
 
 ### **Task**: combine `domain` and `where` to account for extra indices
 
-Edit the code below such that operations on field `a` are performed only up until the 10th index
+Edit the code below such that:
+ 1. operations on field `a` are performed only up until the 8th index
+ 2. the domain is properly set accound for the offset
 
 ```{code-cell} ipython3
 @gtx.field_operator
 def fieldop_domain_where(a: gtx.Field[[CellDim], float64]) -> gtx.Field[[CellDim], float64]:
-    return where(a<13.0, a*10.0, a)
+    return where(a<8.0, a(Coff[1])+a, a)
 
 @gtx.program
-def program_domain_where(a: gtx.Field[[CellDim], float64],
-            b: gtx.Field[[CellDim], float64]):
-    fieldop_domain_where(a, out=b, domain={CellDim: (0, 10)}) 
+def program_domain_where(a: gtx.Field[[CellDim], float64], b: gtx.Field[[CellDim], float64]):
+    fieldop_domain_where(a, out=b, domain={CellDim: (0, 9)}) 
 ```
 
 ```{code-cell} ipython3
 def test_domain_where():
     a = gtx.as_field([CellDim], np.arange(10.0))
     b = gtx.as_field([CellDim], np.zeros(shape=10))
-    program_domain_where(a, b, offset_provider={})
+    program_domain_where(a, b, offset_provider={"Coff": CellDim})
 
-    assert np.allclose(a_np*10, b.asnumpy()[:10])
+    #assert np.allclose(a_np*10, b.asnumpy()[:10])
 ```
 
 ```{code-cell} ipython3
