@@ -34,7 +34,7 @@ def addition(
     a: gtx.Field[[C], float],
     b: gtx.Field[[C], float],
 ) -> gtx.Field[[C], float]:
-    c = a
+    c = a + b
     return c
 ```
 
