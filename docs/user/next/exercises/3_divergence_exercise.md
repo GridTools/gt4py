@@ -48,7 +48,12 @@ def divergence_numpy(
     A: np.array,
     edge_orientation: np.array,
 ) -> np.array:
-    uv_div = np.sum((u[c2e]*nx[c2e] + v[c2e]*ny[c2e]) * L[c2e] * edge_orientation, axis=1) / A
+    uv_div = (
+        np.sum(
+            (u[c2e] * nx[c2e] + v[c2e] * ny[c2e]) * L[c2e] * edge_orientation, axis=1
+        )
+        / A
+    )
     return uv_div
 ```
 
@@ -63,7 +68,13 @@ def divergence(
     A: gtx.Field[[C], float],
     edge_orientation: gtx.Field[[C, C2EDim], float],
 ) -> gtx.Field[[C], float]:
-    uv_div = neighbor_sum((u(C2E)*nx(C2E) + v(C2E)*ny(C2E)) * L(C2E) * edge_orientation, axis=C2EDim) / A
+    uv_div = (
+        neighbor_sum(
+            (u(C2E) * nx(C2E) + v(C2E) * ny(C2E)) * L(C2E) * edge_orientation,
+            axis=C2EDim,
+        )
+        / A
+    )
     return uv_div
 ```
 
@@ -88,14 +99,22 @@ def test_divergence():
         edge_orientation.asnumpy(),
     )
 
-    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
+    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3, has_skip_values=False)
 
     divergence_gt4py = zero_field((n_cells), C)
 
     divergence(
-        u, v, nx, ny, L, A, edge_orientation, out = divergence_gt4py, offset_provider = {C2E.value: c2e_connectivity}
+        u,
+        v,
+        nx,
+        ny,
+        L,
+        A,
+        edge_orientation,
+        out=divergence_gt4py,
+        offset_provider={C2E.value: c2e_connectivity},
     )
-    
+
     assert np.allclose(divergence_gt4py.asnumpy(), divergence_ref)
 ```
 

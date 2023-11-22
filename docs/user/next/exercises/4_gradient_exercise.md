@@ -40,10 +40,9 @@ def gradient_numpy(
     ny: np.array,
     L: np.array,
     A: np.array,
-    edge_orientation: np.array, 
+    edge_orientation: np.array,
 ) -> gtx.tuple[np.array, np.array]:
-
-#    edge_orientation = np.expand_dims(edge_orientation, axis=-1)
+    # edge_orientation = np.expand_dims(edge_orientation, axis=-1)
     f_x = np.sum(f[c2e] * nx[c2e] * L[c2e] * edge_orientation, axis=1) / A
     f_y = np.sum(f[c2e] * ny[c2e] * L[c2e] * edge_orientation, axis=1) / A
     return f_x, f_y
@@ -57,9 +56,8 @@ def gradient(
     ny: gtx.Field[[E], float],
     L: gtx.Field[[E], float],
     A: gtx.Field[[C], float],
-    edge_orientation: gtx.Field[[C, C2EDim], float], 
+    edge_orientation: gtx.Field[[C, C2EDim], float],
 ) -> gtx.tuple[gtx.Field[[C], float], gtx.Field[[C], float]]:
-    
     f_x = A
     f_y = A
     return f_x, f_y
@@ -89,11 +87,17 @@ def test_gradient():
     gradient_gt4py_x = zero_field((n_cells), C)
     gradient_gt4py_y = zero_field((n_cells), C)
 
-
     gradient(
-        f, nx, ny, L, A, edge_orientation, out = (gradient_gt4py_x, gradient_gt4py_y), offset_provider = {C2E.value: c2e_connectivity}
+        f,
+        nx,
+        ny,
+        L,
+        A,
+        edge_orientation,
+        out=(gradient_gt4py_x, gradient_gt4py_y),
+        offset_provider={C2E.value: c2e_connectivity},
     )
-    
+
     assert np.allclose(gradient_gt4py_x.asnumpy(), gradient_numpy_x)
     assert np.allclose(gradient_gt4py_y.asnumpy(), gradient_numpy_y)
 ```

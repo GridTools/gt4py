@@ -16,9 +16,8 @@ kernelspec:
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator.embedded import MutableLocatedField 
-from gt4py.next import neighbor_sum, where
-from gt4py.next import Dimension, DimensionKind, FieldOffset
+from gt4py.next import Dimension, DimensionKind, FieldOffset, neighbor_sum, where
+from gt4py.next.iterator.embedded import MutableLocatedField
 from gt4py.next.program_processors.runners import roundtrip
 ```
 
@@ -26,10 +25,8 @@ from gt4py.next.program_processors.runners import roundtrip
 def random_field(
     sizes, *dims, low: float = -1.0, high: float = 1.0
 ) -> MutableLocatedField:
-    return gtx.as_field([*dims],
-        np.random.default_rng().uniform(
-            low=low, high=high, size=sizes
-        )
+    return gtx.as_field(
+        [*dims], np.random.default_rng().uniform(low=low, high=high, size=sizes)
     )
 ```
 
@@ -145,13 +142,12 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
     sedimentation_flux = 0.0
 
     for cell, k in np.ndindex(qc.shape):
-        
         # Autoconversion: Cloud Drops -> Rain Drops
         autoconversion_tendency = qc[cell, k] * autoconversion_rate
-        
+
         qc[cell, k] -= autoconversion_tendency
         qr[cell, k] += autoconversion_tendency
-        
+
         ## Apply sedimentation flux from level above
         qr[cell, k] += sedimentation_flux
 
@@ -161,8 +157,9 @@ def toy_microphyiscs_numpy(qc, qr, autoconversion_rate=0.1, sedimentaion_constan
 
 ```{code-cell} ipython3
 @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, 0.0))
-def _graupel_toy_scan(state: tuple[float, float, float], qc_in: float, qr_in: float) -> tuple[float, float, float]:
-
+def _graupel_toy_scan(
+    state: tuple[float, float, float], qc_in: float, qr_in: float
+) -> tuple[float, float, float]:
     autoconversion_rate = 0.1
     sedimentaion_constant = 0.05
 
@@ -173,7 +170,7 @@ def _graupel_toy_scan(state: tuple[float, float, float], qc_in: float, qr_in: fl
     autoconv_t = qc_in * autoconversion_rate
     qc = qc_in - autoconv_t
     qr = qr_in + autoconv_t
-    
+
     ## Add sedimentation flux from level above
     qr = qr + sedimentation_flux
 
@@ -185,9 +182,13 @@ def _graupel_toy_scan(state: tuple[float, float, float], qc_in: float, qr_in: fl
 
 ```{code-cell} ipython3
 @gtx.field_operator(backend=roundtrip.executor)
-def graupel_toy_scan(qc: gtx.Field[[CellDim, KDim], float], qr: gtx.Field[[CellDim, KDim], float]
-    ) -> tuple[gtx.Field[[CellDim, KDim], float], gtx.Field[[CellDim, KDim], float], gtx.Field[[CellDim, KDim], float]]:
-    
+def graupel_toy_scan(
+    qc: gtx.Field[[CellDim, KDim], float], qr: gtx.Field[[CellDim, KDim], float]
+) -> tuple[
+    gtx.Field[[CellDim, KDim], float],
+    gtx.Field[[CellDim, KDim], float],
+    gtx.Field[[CellDim, KDim], float],
+]:
     qc, qr, _ = _graupel_toy_scan(qc, qr)
 
     return qc, qr, _
@@ -198,17 +199,17 @@ def test_scan_operator():
     qc = random_field((n_cells, n_levels), CellDim, KDim)
     qr = random_field((n_cells, n_levels), CellDim, KDim)
     qd = random_field((n_cells, n_levels), CellDim, KDim)
-    
-    #Initialize Numpy fields from GT4Py fields
+
+    # Initialize Numpy fields from GT4Py fields
     qc_numpy = qc.asnumpy().copy()
     qr_numpy = qr.asnumpy().copy()
-    
-    #Execute the Numpy version of scheme
+
+    # Execute the Numpy version of scheme
     toy_microphyiscs_numpy(qc_numpy, qr_numpy)
-    
-    #Execute the GT4Py version of scheme
+
+    # Execute the GT4Py version of scheme
     graupel_toy_scan(qc, qr, out=(qc, qr, qd), offset_provider={})
-    
+
     # Compare results
     assert np.allclose(qc.asnumpy(), qc_numpy)
     assert np.allclose(qr.asnumpy(), qr_numpy)
