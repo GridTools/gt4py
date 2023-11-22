@@ -60,8 +60,8 @@ def gradient(
     edge_orientation: gtx.Field[[C, C2EDim], float], 
 ) -> gtx.tuple[gtx.Field[[C], float], gtx.Field[[C], float]]:
     
-    f_x = A
-    f_y = A
+    f_x = neighbor_sum(f(C2E) * nx(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
+    f_y = neighbor_sum(f(C2E) * ny(C2E) * L(C2E) * edge_orientation, axis=C2EDim) / A
     return f_x, f_y
 ```
 
@@ -76,12 +76,12 @@ def test_gradient():
 
     gradient_numpy_x, gradient_numpy_y = gradient_numpy(
         c2e_table,
-        f.asnumpy(),
-        nx.asnumpy(),
-        ny.asnumpy(),
-        L.asnumpy(),
-        A.asnumpy(),
-        edge_orientation.asnumpy(),
+        np.asarray(f),
+        np.asarray(nx),
+        np.asarray(ny),
+        np.asarray(L),
+        np.asarray(A),
+        np.asarray(edge_orientation),
     )
 
     c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
@@ -94,8 +94,8 @@ def test_gradient():
         f, nx, ny, L, A, edge_orientation, out = (gradient_gt4py_x, gradient_gt4py_y), offset_provider = {C2E.value: c2e_connectivity}
     )
     
-    assert np.allclose(gradient_gt4py_x.asnumpy(), gradient_numpy_x)
-    assert np.allclose(gradient_gt4py_y.asnumpy(), gradient_numpy_y)
+    assert np.allclose(gradient_gt4py_x, gradient_numpy_x)
+    assert np.allclose(gradient_gt4py_y, gradient_numpy_y)
 ```
 
 ```{code-cell} ipython3

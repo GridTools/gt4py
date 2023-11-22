@@ -63,7 +63,7 @@ def curl(
     dualA: gtx.Field[[V], float],
     edge_orientation: gtx.Field[[V, V2EDim], float],
 ) -> gtx.Field[[V], float]:
-    uv_curl = dualA
+    uv_curl = neighbor_sum((u(V2E)*nx(V2E) + v(V2E)*ny(V2E)) * dualL(V2E) * edge_orientation, axis=V2EDim) / dualA
     
     return uv_curl
 ```
@@ -80,13 +80,13 @@ def test_curl():
 
     divergence_ref = curl_numpy(
         v2e_table,
-        u.asnumpy(),
-        v.asnumpy(),
-        nx.asnumpy(),
-        ny.asnumpy(),
-        dualL.asnumpy(),
-        dualA.asnumpy(),
-        edge_orientation.asnumpy(),
+        np.asarray(u),
+        np.asarray(v),
+        np.asarray(nx),
+        np.asarray(ny),
+        np.asarray(dualL),
+        np.asarray(dualA),
+        np.asarray(edge_orientation),
     )
 
     v2e_connectivity = gtx.NeighborTableOffsetProvider(v2e_table, V, E, 6)
@@ -97,7 +97,7 @@ def test_curl():
         u, v, nx, ny, dualL, dualA, edge_orientation, out = curl_gt4py, offset_provider = {V2E.value: v2e_connectivity}
     )
     
-    assert np.allclose(curl_gt4py.asnumpy(), divergence_ref)
+    assert np.allclose(curl_gt4py, divergence_ref)
 ```
 
 ```{code-cell} ipython3
