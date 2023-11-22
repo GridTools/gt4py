@@ -29,7 +29,7 @@ def addition_numpy(
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator
+@gtx.field_operator(backend=roundtrip.executor)
 def addition(
     a: gtx.Field[[C], float],
     b: gtx.Field[[C], float],
