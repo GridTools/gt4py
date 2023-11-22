@@ -18,7 +18,7 @@ kernelspec:
 import gt4py.next as gtx
 
 import numpy as np
-from helpers import random_field_new
+from helpers import random_field_new, gtfn_cpu, gtfn_gpu
 ```
 
 Next we implement the stencil and a numpy reference version, in order to verify them against each other.
@@ -44,14 +44,18 @@ def addition(
 
 ```{code-cell} ipython3
 def test_addition():
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+
     domain = gtx.domain({C:n_cells})
     
-    a = random_field_new(domain)
-    b = random_field_new(domain)
+    a = random_field_new(domain, allocator = backend)
+    b = random_field_new(domain, allocator = backend)
 
     c_numpy = addition_numpy(a.asnumpy(), b.asnumpy())
 
-    c = gtx.zeros(domain)
+    c = gtx.zeros(domain, allocator = backend)
 
     addition(a, b, out=c, offset_provider={})
 

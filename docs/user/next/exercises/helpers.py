@@ -5,6 +5,10 @@ from gt4py.next.iterator.embedded import MutableLocatedField
 from gt4py.next import neighbor_sum, where
 from gt4py.next import Dimension, DimensionKind, FieldOffset
 from gt4py.next.program_processors.runners import roundtrip
+from gt4py.next.program_processors.runners.gtfn import (
+    run_gtfn_cached as gtfn_cpu,
+    run_gtfn_gpu as gtfn_gpu,
+)
 
 
 def random_mask(
@@ -26,10 +30,12 @@ def random_field(sizes, *dims, low: float = -1.0, high: float = 1.0) -> MutableL
 
 
 def random_field_new(
-    domain: gtx.Domain, low: float = -1.0, high: float = 1.0
+    domain: gtx.Domain, low: float = -1.0, high: float = 1.0, *, allocator=None
 ) -> MutableLocatedField:
     return gtx.as_field(
-        domain, np.random.default_rng().uniform(low=low, high=high, size=domain.shape)
+        domain,
+        np.random.default_rng().uniform(low=low, high=high, size=domain.shape),
+        allocator=allocator,
     )
 
 
