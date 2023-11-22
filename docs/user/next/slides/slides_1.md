@@ -61,9 +61,9 @@ Other models ported using Cartesian GT4Py are ECMWF's FVM (global and local area
 
 ## Installation
 
-You can install the library directly from GitHub using pip:
+You can install the library with pip
 
-```{code-cell} ipython3
+```
 pip install --upgrade git+https://github.com/gridtools/gt4py.git
 ```
 
