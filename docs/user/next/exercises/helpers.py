@@ -1,15 +1,20 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator.embedded import MutableLocatedField 
+from gt4py.next.iterator.embedded import MutableLocatedField
 from gt4py.next import neighbor_sum, where
 from gt4py.next import Dimension, DimensionKind, FieldOffset
 from gt4py.next.program_processors.runners import roundtrip
+from gt4py.next.program_processors.runners.gtfn import (
+    run_gtfn_cached as gtfn_cpu,
+    run_gtfn_gpu as gtfn_gpu,
+)
+
 
 def random_mask(
     sizes,
     *dims,
-    dtype = None,
+    dtype=None,
 ) -> MutableLocatedField:
     arr = np.full(shape=sizes, fill_value=False).flatten()
     arr[: int(arr.size * 0.5)] = True
@@ -19,27 +24,36 @@ def random_mask(
         arr = arr.astype(dtype)
     return gtx.as_field([*dims], (arr))
 
-def random_field(
-    sizes, *dims, low: float = -1.0, high: float = 1.0
+
+def random_field(sizes, *dims, low: float = -1.0, high: float = 1.0) -> MutableLocatedField:
+    return gtx.as_field([*dims], np.random.default_rng().uniform(low=low, high=high, size=sizes))
+
+
+def random_field_new(
+    domain: gtx.Domain, low: float = -1.0, high: float = 1.0, *, allocator=None
 ) -> MutableLocatedField:
-    return gtx.as_field([*dims],
-        np.random.default_rng().uniform(
-            low=low, high=high, size=sizes
-        )
+    return gtx.as_field(
+        domain,
+        np.random.default_rng().uniform(low=low, high=high, size=domain.shape),
+        allocator=allocator,
     )
 
-def zero_field(
-    sizes, *dims: Dimension, dtype=float
-) -> MutableLocatedField:
-    return gtx.as_field([*dims], 
-        np.zeros(shape=sizes, dtype=dtype)
+
+def random_sign(domain: gtx.Domain, allocator=None, dtype=float) -> MutableLocatedField:
+    return gtx.as_field(
+        domain,
+        np.asarray(np.random.randint(0, high=2, size=domain.shape) * 2 - 1, dtype=dtype),
+        allocator=allocator,
     )
 
-def constant_field(
-    value, sizes, *dims, dtype=float
-) -> MutableLocatedField:
-    return gtx.as_field([*dims], 
-        value * np.ones(shape=sizes), dtype=dtype)
+
+def zero_field(sizes, *dims: Dimension, dtype=float) -> MutableLocatedField:
+    return gtx.as_field([*dims], np.zeros(shape=sizes, dtype=dtype))
+
+
+def constant_field(value, sizes, *dims, dtype=float) -> MutableLocatedField:
+    return gtx.as_field([*dims], value * np.ones(shape=sizes), dtype=dtype)
+
 
 # For simplicity we use a triangulated donut in the horizontal.
 

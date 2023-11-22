@@ -48,7 +48,12 @@ def divergence_numpy(
     A: np.array,
     edge_orientation: np.array,
 ) -> np.array:
-    uv_div = np.sum((u[c2e]*nx[c2e] + v[c2e]*ny[c2e]) * L[c2e] * edge_orientation, axis=1) / A
+    uv_div = (
+        np.sum(
+            (u[c2e] * nx[c2e] + v[c2e] * ny[c2e]) * L[c2e] * edge_orientation, axis=1
+        )
+        / A
+    )
     return uv_div
 ```
 
@@ -63,19 +68,34 @@ def divergence(
     A: gtx.Field[[C], float],
     edge_orientation: gtx.Field[[C, C2EDim], float],
 ) -> gtx.Field[[C], float]:
-    uv_div = neighbor_sum((u(C2E)*nx(C2E) + v(C2E)*ny(C2E)) * L(C2E) * edge_orientation, axis=C2EDim) / A
+    uv_div = (
+        neighbor_sum(
+            (u(C2E) * nx(C2E) + v(C2E) * ny(C2E)) * L(C2E) * edge_orientation,
+            axis=C2EDim,
+        )
+        / A
+    )
     return uv_div
 ```
 
 ```python
 def test_divergence():
-    u = random_field((n_edges), E)
-    v = random_field((n_edges), E)
-    nx = random_field((n_edges), E)
-    ny = random_field((n_edges), E)
-    L = random_field((n_edges), E)
-    A = random_field((n_cells), C)
-    edge_orientation = random_field((n_cells, 3), C, C2EDim)
+    backend = None
+    # backend = gtfn_cpu
+    # backend = gtfn_gpu
+
+    cell_domain = gtx.domain({C: n_cells})
+    edge_domain = gtx.domain({E: n_edges})
+
+    u = random_field_new(edge_domain, allocator=backend)
+    v = random_field_new(edge_domain, allocator=backend)
+    nx = random_field_new(edge_domain, allocator=backend)
+    ny = random_field_new(edge_domain, allocator=backend)
+    L = random_field_new(edge_domain, allocator=backend)
+    A = random_field_new(cell_domain, allocator=backend)
+    edge_orientation = random_sign(
+        gtx.domain({C: n_cells, C2EDim: 3}), allocator=backend
+    )
 
     divergence_ref = divergence_numpy(
         c2e_table,
@@ -88,14 +108,24 @@ def test_divergence():
         edge_orientation.asnumpy(),
     )
 
-    c2e_connectivity = gtx.NeighborTableOffsetProvider(c2e_table, C, E, 3)
+    c2e_connectivity = gtx.NeighborTableOffsetProvider(
+        c2e_table, C, E, 3, has_skip_values=False
+    )
 
-    divergence_gt4py = zero_field((n_cells), C)
+    divergence_gt4py = gtx.zeros(cell_domain, allocator=backend)
 
     divergence(
-        u, v, nx, ny, L, A, edge_orientation, out = divergence_gt4py, offset_provider = {C2E.value: c2e_connectivity}
+        u,
+        v,
+        nx,
+        ny,
+        L,
+        A,
+        edge_orientation,
+        out=divergence_gt4py,
+        offset_provider={C2E.value: c2e_connectivity},
     )
-    
+
     assert np.allclose(divergence_gt4py.asnumpy(), divergence_ref)
 ```
 

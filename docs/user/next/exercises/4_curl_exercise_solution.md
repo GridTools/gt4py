@@ -47,13 +47,19 @@ def curl_numpy(
     dualA: np.array,
     edge_orientation: np.array,
 ) -> np.array:
-    uv_curl = np.sum((u[v2e]*nx[v2e] + v[v2e]*ny[v2e]) * dualL[v2e] * edge_orientation, axis=1) / dualA
+    uv_curl = (
+        np.sum(
+            (u[v2e] * nx[v2e] + v[v2e] * ny[v2e]) * dualL[v2e] * edge_orientation,
+            axis=1,
+        )
+        / dualA
+    )
 
     return uv_curl
 ```
 
 ```{code-cell} ipython3
-@gtx.field_operator(backend=roundtrip.executor)
+@gtx.field_operator
 def curl(
     u: gtx.Field[[E], float],
     v: gtx.Field[[E], float],
@@ -63,8 +69,14 @@ def curl(
     dualA: gtx.Field[[V], float],
     edge_orientation: gtx.Field[[V, V2EDim], float],
 ) -> gtx.Field[[V], float]:
-    uv_curl = neighbor_sum((u(V2E)*nx(V2E) + v(V2E)*ny(V2E)) * dualL(V2E) * edge_orientation, axis=V2EDim) / dualA
-    
+    uv_curl = (
+        neighbor_sum(
+            (u(V2E) * nx(V2E) + v(V2E) * ny(V2E)) * dualL(V2E) * edge_orientation,
+            axis=V2EDim,
+        )
+        / dualA
+    )
+
     return uv_curl
 ```
 
@@ -80,16 +92,16 @@ def test_curl():
 
     divergence_ref = curl_numpy(
         v2e_table,
-        np.asarray(u),
-        np.asarray(v),
-        np.asarray(nx),
-        np.asarray(ny),
-        np.asarray(dualL),
-        np.asarray(dualA),
-        np.asarray(edge_orientation),
+        u.asnumpy(),
+        v.asnumpy(),
+        nx.asnumpy(),
+        ny.asnumpy(),
+        dualL.asnumpy(),
+        dualA.asnumpy(),
+        edge_orientation.asnumpy(),
     )
 
-    v2e_connectivity = gtx.NeighborTableOffsetProvider(v2e_table, V, E, 6)
+    v2e_connectivity = gtx.NeighborTableOffsetProvider(v2e_table, V, E, 6, has_skip_values=False)
 
     curl_gt4py = zero_field((n_vertices), V)
 
@@ -97,7 +109,7 @@ def test_curl():
         u, v, nx, ny, dualL, dualA, edge_orientation, out = curl_gt4py, offset_provider = {V2E.value: v2e_connectivity}
     )
     
-    assert np.allclose(curl_gt4py, divergence_ref)
+    assert np.allclose(curl_gt4py.asnumpy(), divergence_ref)
 ```
 
 ```{code-cell} ipython3
