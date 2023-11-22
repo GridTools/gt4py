@@ -39,6 +39,14 @@ def random_field_new(
     )
 
 
+def random_sign(domain: gtx.Domain, allocator=None, dtype=float) -> MutableLocatedField:
+    return gtx.as_field(
+        domain,
+        np.asarray(np.random.randint(0, high=2, size=domain.shape) * 2 - 1, dtype=dtype),
+        allocator=allocator,
+    )
+
+
 def zero_field(sizes, *dims: Dimension, dtype=float) -> MutableLocatedField:
     return gtx.as_field([*dims], np.zeros(shape=sizes, dtype=dtype))
 

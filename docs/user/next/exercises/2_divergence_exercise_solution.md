@@ -93,7 +93,7 @@ def test_divergence():
     ny = random_field_new(edge_domain, allocator=backend)
     L = random_field_new(edge_domain, allocator=backend)
     A = random_field_new(cell_domain, allocator=backend)
-    edge_orientation = random_field_new(
+    edge_orientation = random_sign(
         gtx.domain({C: n_cells, C2EDim: 3}), allocator=backend
     )
 
@@ -112,7 +112,7 @@ def test_divergence():
         c2e_table, C, E, 3, has_skip_values=False
     )
 
-    divergence_gt4py = gtx.zeros(cell_domain)
+    divergence_gt4py = gtx.zeros(cell_domain, allocator=backend)
 
     divergence(
         u,
