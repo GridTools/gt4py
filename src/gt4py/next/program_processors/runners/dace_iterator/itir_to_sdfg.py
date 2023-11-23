@@ -98,6 +98,7 @@ class ItirToSDFG(eve.NodeVisitor):
     offset_provider: dict[str, Any]
     node_types: dict[int, next_typing.Type]
     unique_id: int
+    use_gpu_storage: bool
 
     def __init__(
         self,
@@ -105,12 +106,14 @@ class ItirToSDFG(eve.NodeVisitor):
         offset_provider: dict[str, NeighborTableOffsetProvider],
         tmps: list[global_tmps.Temporary],
         column_axis: Optional[Dimension] = None,
+        use_gpu_storage: bool = False,
     ):
         self.param_types = param_types
         self.column_axis = column_axis
         self.offset_provider = offset_provider
         self.storage_types = {}
         self.tmps = tmps
+        self.use_gpu_storage = use_gpu_storage
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
@@ -122,7 +125,14 @@ class ItirToSDFG(eve.NodeVisitor):
                 else None
             )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
+            storage = (
+                dace.dtypes.StorageType.GPU_Global
+                if self.use_gpu_storage
+                else dace.dtypes.StorageType.Default
+            )
+            sdfg.add_array(
+                name, shape=shape, strides=strides, offset=offset, dtype=dtype, storage=storage
+            )
         elif isinstance(type_, ts.ScalarType):
             sdfg.add_symbol(name, as_dace_type(type_))
         else:
@@ -351,6 +361,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
+                    storage=array_table[name].storage,
                     transient=True,
                 )
                 closure_init_state.add_nedge(
@@ -365,6 +376,7 @@ class ItirToSDFG(eve.NodeVisitor):
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
+                    storage=array_table[name].storage,
                 )
             else:
                 assert isinstance(self.storage_types[name], ts.ScalarType)
