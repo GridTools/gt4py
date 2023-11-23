@@ -30,9 +30,9 @@ def test_constant():
 
         return deref(inp) + deref(lift(constant_stencil)())
 
-    inp = gtx.np_as_located_field(IDim)(np.asarray([0, 42], dtype=np.int32))
-    res = gtx.np_as_located_field(IDim)(np.zeros_like(inp))
+    inp = gtx.as_field([IDim], np.asarray([0, 42], dtype=np.int32))
+    res = gtx.as_field([IDim], np.zeros_like(inp.asnumpy()))
 
     add_constant[{IDim: range(2)}](inp, out=res, offset_provider={}, backend=roundtrip.executor)
 
-    assert np.allclose(res, np.asarray([1, 43]))
+    assert np.allclose(res.asnumpy(), np.asarray([1, 43]))

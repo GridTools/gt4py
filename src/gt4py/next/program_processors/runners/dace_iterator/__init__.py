@@ -20,7 +20,9 @@ from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
 from dace.transformation.interstate import RefineNestedAccess
 
+import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
+import gt4py.next.program_processors.otf_compile_executor as otf_exec
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms, global_tmps
@@ -267,23 +269,43 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 @program_executor
-def run_dace(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_on_gpu = any(not isinstance(arg.ndarray, np.ndarray) for arg in args if is_field(arg))
-    if run_on_gpu:
-        if cp is None:
-            raise RuntimeError(
-                f"Non-numpy field argument passed to program {program.id} but module cupy not installed"
-            )
-
-        if not all(isinstance(arg.ndarray, cp.ndarray) for arg in args if is_field(arg)):
-            raise RuntimeError("Execution on GPU requires all fields to be stored as cupy arrays")
-
+def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
         *args,
         **kwargs,
-        build_cache=_build_cache_gpu if run_on_gpu else _build_cache_cpu,
+        build_cache=_build_cache_cpu,
         build_type=_build_type,
-        lift_mode=LiftMode.FORCE_TEMPORARIES,
-        run_on_gpu=run_on_gpu,
+        run_on_gpu=False,
     )
+
+
+run_dace_cpu = otf_exec.OTFBackend(
+    executor=_run_dace_cpu,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
+
+if cp:
+
+    @program_executor
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        run_dace_iterator(
+            program,
+            *args,
+            **kwargs,
+            build_cache=_build_cache_gpu,
+            build_type=_build_type,
+            run_on_gpu=True,
+        )
+
+else:
+
+    @program_executor
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+
+
+run_dace_gpu = otf_exec.OTFBackend(
+    executor=_run_dace_gpu,
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+)
