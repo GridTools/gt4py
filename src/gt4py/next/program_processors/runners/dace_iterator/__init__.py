@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, cast
 
 import dace
 import numpy as np
@@ -26,6 +26,7 @@ import gt4py.next.program_processors.otf_compile_executor as otf_exec
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms, global_tmps
+from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.otf.compilation import cache
 from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -69,33 +70,30 @@ def convert_arg(arg: Any):
 def preprocess_program(
     program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
 ) -> tuple[itir.FencilDefinition, list[global_tmps.Temporary]]:
-    node = apply_common_transforms(
+    program = apply_common_transforms(
         program,
         common_subexpression_elimination=False,
         lift_mode=lift_mode,
         offset_provider=offset_provider,
         unroll_reduce=False,
     )
-    if isinstance(node, global_tmps.FencilWithTemporaries):
-        fencil_definition = node.fencil
-        tmps = node.tmps
-    elif isinstance(node, itir.FencilDefinition):
-        # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
-        # In this case, just retry with unrolled reductions.
-        if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
-            fencil_definition = node
+    if isinstance(program, global_tmps.FencilWithTemporaries):
+        fencil_definition = program.fencil
+        tmps = program.tmps
+    elif isinstance(program, itir.FencilDefinition):
+        if any(
+            is_applied_lift(cast(itir.Node, node))
+            for node in program.pre_walk_values().if_isinstance(itir.Node).to_list()
+        ):
+            # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
+            # In this case, just retry with unrolled reductions.
+            fencil_definition = apply_common_transforms(program, unroll_reduce=True)
         else:
-            fencil_definition = apply_common_transforms(
-                program,
-                common_subexpression_elimination=False,
-                lift_mode=lift_mode,
-                offset_provider=offset_provider,
-                unroll_reduce=True,
-            )
+            fencil_definition = program
         tmps = []
     else:
         raise TypeError(
-            f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(node).__name__}`."
+            f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(program).__name__}`."
         )
 
     return fencil_definition, tmps
