@@ -86,6 +86,7 @@ REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
+USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
@@ -139,6 +140,8 @@ EMBEDDED_SKIP_LIST = [
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
+    (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
 ]
 
@@ -147,7 +150,11 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 BACKEND_SKIP_TEST_MATRIX = {
     None: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
+    + [
+        # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
+        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST,
