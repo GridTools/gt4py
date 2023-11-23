@@ -419,11 +419,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                         )
                     )
                 else:
-                    non_contiguous_dims.append(dim_range[0])
+                    non_contiguous_dims.append((self._domain[i][0], dim_nnz_indices))
 
             if non_contiguous_dims:
                 raise ValueError(
-                    f"Restriction generates non-contiguous dimensions {non_contiguous_dims}"
+                    f"Restriction generates non-contiguous dimensions at {non_contiguous_dims}"
                 )
 
         return new_dims
