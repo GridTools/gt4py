@@ -63,9 +63,9 @@ def test_strided_offset_provider(program_processor):
         ),
     )
     out = gtx.as_field([LocA], np.zeros((LocA_size,)))
-    ref = np.sum(np.asarray(inp).reshape(LocA_size, max_neighbors), axis=-1)
+    ref = np.sum(inp.asnumpy().reshape(LocA_size, max_neighbors), axis=-1)
 
     run_processor(fencil, program_processor, LocA_size, out, inp)
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)

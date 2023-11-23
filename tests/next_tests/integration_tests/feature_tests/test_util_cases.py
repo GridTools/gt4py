@@ -41,30 +41,30 @@ def mixed_args(
 def test_allocate_default_unique(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, mixed_args, "a")()
 
-    assert np.min(a) == 0
-    assert np.max(a) == np.prod(tuple(cartesian_case.default_sizes.values())) - 1
+    assert np.min(a.asnumpy()) == 0
+    assert np.max(a.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values())) - 1
 
     b = cases.allocate(cartesian_case, mixed_args, "b")()
 
-    assert b == np.max(a) + 1
+    assert b == np.max(a.asnumpy()) + 1
 
     c = cases.allocate(cartesian_case, mixed_args, "c")()
 
-    assert np.min(c) == b + 1
-    assert np.max(c) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2
+    assert np.min(c.asnumpy()) == b + 1
+    assert np.max(c.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2
 
 
 def test_allocate_return_default_zeros(cartesian_case):  # noqa: F811 # fixtures
     a, (b, c) = cases.allocate(cartesian_case, mixed_args, cases.RETURN)()
 
-    assert np.all(np.asarray(a) == 0)
-    assert np.all(np.asarray(a) == b)
-    assert np.all(np.asarray(b) == c)
+    assert np.all(a.asnumpy() == 0)
+    assert np.all(b.asnumpy() == 0)
+    assert np.all(c.asnumpy() == 0)
 
 
 def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, mixed_args, "a").strategy(cases.ConstInitializer(42))()
-    assert np.all(np.asarray(a) == 42)
+    assert np.all(a.asnumpy() == 42)
 
     b = cases.allocate(cartesian_case, mixed_args, "b").strategy(cases.ConstInitializer(42))()
     assert b == 42.0
