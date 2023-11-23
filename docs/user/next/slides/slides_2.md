@@ -173,11 +173,20 @@ Running the above snippet results in the following edge field:
 
 +++
 
-Another example: E2V
+### Another example: E2V
+
+Creating fields on edges from fields on vertices using an **E2V** connectivity:
 
 | <div><img src="../images/remap-field.png" width="75%"/></div> |
 | :-----------------------------------------: |
 | <div><img src="../images/remap-field-code.png" width="50%"/></div> |
+
+We can create two edge fields from the same vertex field, by taking the values from the start or from the end vertex, and then you can operate wi to the 
+| <div><img src="../images/e2v-add.png" width="75%"/></div> |
+| :-----------------------------------------: |
+| <div><img src="../images/e2v-add-code.png" width="50%"/></div> |
+
+
 
 +++
 
