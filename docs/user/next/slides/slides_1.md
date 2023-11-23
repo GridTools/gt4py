@@ -54,7 +54,9 @@ Other models ported using GT4Py are ECMWF's FVM, in global (with `gt4py.next` an
 
 +++
 
-## Installation
+## Installation and setup
+
+Get an account from https://docs.google.com/document/d/1SuMr2sEdsGHGcnSFczNLGdTVYvNuuXBpCqB-3zL1E9c/edit?usp=sharing and mark with your name.
 
 After cloning the repository to $SCRATCH and setting a symlink to your home-directory
 
