@@ -186,7 +186,7 @@ def get_cache_id(
 
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
-    auto_optimize = kwargs.get("auto_optimize", False)
+    auto_optimize = kwargs.get("auto_optimize", True)
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
@@ -211,7 +211,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         program = preprocess_program(program, offset_provider, lift_mode)
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
-        sdfg.simplify()
+        if run_on_gpu:
+            sdfg.apply_gpu_transformations(simplify=True)
+        else:
+            sdfg.simplify()
 
         # run DaCe auto-optimization heuristics
         if auto_optimize:
