@@ -148,11 +148,7 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 BACKEND_SKIP_TEST_MATRIX = {
     None: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
-    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
-    + [
-        # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
-        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    ],
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST,
