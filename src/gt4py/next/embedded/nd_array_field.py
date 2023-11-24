@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import operator
 from collections.abc import Callable, Sequence
 from types import ModuleType
 from typing import ClassVar
@@ -49,11 +48,10 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = functools.reduce(
-            operator.and_,
-            [f.domain for f in fields if common.is_field(f)],
-            common.Domain(dims=tuple(), ranges=tuple()),
+        domain_intersection = embedded_common.intersect_domains(
+            *[f.domain for f in fields if common.is_field(f)]
         )
+
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
             if common.is_field(f):
@@ -421,11 +419,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                         )
                     )
                 else:
-                    non_contiguous_dims.append(dim_range[0])
+                    non_contiguous_dims.append((self._domain[i][0], dim_nnz_indices))
 
             if non_contiguous_dims:
                 raise ValueError(
-                    f"Restriction generates non-contiguous dimensions {non_contiguous_dims}"
+                    f"Restriction generates non-contiguous dimensions at {non_contiguous_dims}"
                 )
 
         return new_dims

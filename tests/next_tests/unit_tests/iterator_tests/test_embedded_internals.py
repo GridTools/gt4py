@@ -19,13 +19,14 @@ from typing import Any, Callable, Optional
 import numpy as np
 import pytest
 
+from gt4py.next import common
 from gt4py.next.iterator import embedded
 
 
 def _run_within_context(
     func: Callable[[], Any],
     *,
-    column_range: Optional[range] = None,
+    column_range: Optional[common.NamedRange] = None,
     offset_provider: Optional[embedded.OffsetProvider] = None,
 ) -> Any:
     def wrapped_func():
@@ -59,7 +60,10 @@ def test_column_ufunc():
 
     # Setting an invalid column_range here shouldn't affect other contexts
     embedded.column_range_cvar.set(range(2, 999))
-    _run_within_context(lambda: test_func(2, 3), column_range=range(0, 3))
+    _run_within_context(
+        lambda: test_func(2, 3),
+        column_range=(common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)),
+    )
 
 
 def test_column_ufunc_with_scalar():

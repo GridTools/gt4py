@@ -15,10 +15,6 @@
 import functools
 from typing import Any, Callable, ClassVar, ParamSpec, TypeGuard, TypeVar, cast
 
-import numpy as np
-
-from gt4py.next import common
-
 
 class RecursionGuard:
     """
@@ -57,13 +53,27 @@ class RecursionGuard:
 
 
 _T = TypeVar("_T")
-
+_S = TypeVar("_S")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
 def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
+
+
+def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
+    """Extract data from elements of tuple. Requiring all elements result in the same value."""
+
+    @functools.wraps(fun)
+    def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
+        if isinstance(value, tuple):
+            all_res = tuple(impl(v) for v in value)
+            assert all(v == all_res[0] for v in all_res)
+            return all_res[0]
+        return fun(value)
+
+    return impl
 
 
 def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
@@ -88,9 +98,3 @@ def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]
         )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
     return impl
-
-
-# TODO(havogt): consider moving to module like `field_utils`
-@tree_map
-def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
-    return field.asnumpy() if common.is_field(field) else field  # type: ignore[return-value] # mypy doesn't understand the condition

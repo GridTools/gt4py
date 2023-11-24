@@ -39,9 +39,18 @@ from .iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from .program_processors import runners
+from .program_processors.runners import gtfn
+from .program_processors.runners.gtfn import (
+    run_gtfn_cached as gtfn_cpu,
+    run_gtfn_gpu as gtfn_gpu,
+)
 
 
 __all__ = [
+    # backends
+    "gtfn_cpu",
+    "gtfn_gpu",
     # submodules
     "common",
     "ffront",

@@ -32,8 +32,9 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -678,68 +679,27 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *args,
         **kwargs,
     ) -> None:
-        # TODO(havogt): Don't select mode based on existence of kwargs,
-        # because now we cannot provide nice error messages. E.g. set context var
-        # if we are reaching this from a program call.
-        if "out" in kwargs:
-            out = kwargs.pop("out")
+        if not next_embedded.context.within_context() and self.backend is not None:
+            # non embedded execution
             offset_provider = kwargs.pop("offset_provider", None)
-            if self.backend is not None:
-                # "out" and "offset_provider" -> field_operator as program
-                # When backend is None, we are in embedded execution and for now
-                # we disable the program generation since it would involve generating
-                # Python source code from a PAST node.
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-                # TODO(tehrengruber): check all offset providers are given
-                # deduce argument types
-                arg_types = []
-                for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
-                kwarg_types = {}
-                for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
+            out = kwargs.pop("out")
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            # TODO(tehrengruber): check all offset providers are given
+            # deduce argument types
+            arg_types = []
+            for arg in args:
+                arg_types.append(type_translation.from_value(arg))
+            kwarg_types = {}
+            for name, arg in kwargs.items():
+                kwarg_types[name] = type_translation.from_value(arg)
 
-                return self.as_program(arg_types, kwarg_types)(
-                    *args, out, offset_provider=offset_provider, **kwargs
-                )
-            else:
-                # "out" -> field_operator called from program in embedded execution or
-                # field_operator called directly from Python in embedded execution
-                domain = kwargs.pop("domain", None)
-                if not next_embedded.context.within_context():
-                    # field_operator from Python in embedded execution
-                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                        res = ctx.run(self.definition, *args, **kwargs)
-                else:
-                    # field_operator from program in embedded execution (offset_provicer is already set)
-                    assert (
-                        offset_provider is None
-                        or next_embedded.context.offset_provider.get() is offset_provider
-                    )
-                    res = self.definition(*args, **kwargs)
-                _tuple_assign_field(
-                    out, res, domain=None if domain is None else common.domain(domain)
-                )
-                return
+            return self.as_program(arg_types, kwarg_types)(
+                *args, out, offset_provider=offset_provider, **kwargs
+            )
         else:
-            # field_operator called from other field_operator in embedded execution
-            assert self.backend is None
-            return self.definition(*args, **kwargs)
-
-
-def _tuple_assign_field(
-    target: tuple[common.Field | tuple, ...] | common.Field,
-    source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: Optional[common.Domain],
-):
-    if isinstance(target, tuple):
-        if not isinstance(source, tuple):
-            raise RuntimeError(f"Cannot assign {source} to {target}.")
-        for t, s in zip(target, source):
-            _tuple_assign_field(t, s, domain)
-    else:
-        domain = domain or target.domain
-        target[domain] = source[domain]
+            return embedded_operators.field_operator_call(
+                self.definition, self.foast_node, args, kwargs
+            )
 
 
 @typing.overload

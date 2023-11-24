@@ -24,7 +24,7 @@ import gt4py.next.common as common
 
 #: Column range used in column mode (`column_axis != None`) in the current embedded iterator
 #: closure execution context.
-closure_column_range: cvars.ContextVar[range] = cvars.ContextVar("column_range")
+closure_column_range: cvars.ContextVar[common.NamedRange] = cvars.ContextVar("column_range")
 
 _undefined_offset_provider: common.OffsetProvider = {}
 
@@ -37,7 +37,7 @@ offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
 @contextlib.contextmanager
 def new_context(
     *,
-    closure_column_range: range | eve.NothingType = eve.NOTHING,
+    closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
 ):
     import gt4py.next.embedded.context as this_module

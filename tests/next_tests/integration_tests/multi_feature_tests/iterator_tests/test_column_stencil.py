@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import utils
+from gt4py.next import field_utils
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
@@ -158,7 +158,7 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
 
     k_size = 5
     inp = inp_function(k_size)
-    ref = ref_function(utils.asnumpy(inp))
+    ref = ref_function(field_utils.asnumpy(inp))
 
     out = gtx.as_field([KDim], np.zeros((5,), dtype=np.int32))
 
