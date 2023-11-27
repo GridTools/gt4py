@@ -13,28 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import functools
 import inspect
 from builtins import bool, float, int, tuple
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Optional,
-    ParamSpec,
-    Tuple,
-    TypeAlias,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
 from numpy import float32, float64, int32, int64
 
+import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.next import common
-from gt4py.next.common import Dimension, Field  # direct import for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa F401
+from gt4py.next import common, embedded
+from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
+from gt4py.next.ffront.experimental import as_offset  # noqa: F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -43,8 +34,8 @@ PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
 TYPE_BUILTINS = [
-    Field,
-    Dimension,
+    common.Field,
+    common.Dimension,
     int32,
     int64,
     float32,
@@ -214,10 +205,10 @@ def where(
 
 @BuiltInFunction
 def astype(
-    value: Field | core_defs.ScalarT | Tuple,
+    value: common.Field | core_defs.ScalarT | Tuple,
     type_: type,
     /,
-) -> Field | core_defs.ScalarT | Tuple:
+) -> common.Field | core_defs.ScalarT | Tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch
@@ -324,7 +315,10 @@ __all__ = [*((set(BUILTIN_NAMES) | set(TYPE_ALIAS_NAMES)) - {"Dimension", "Field
 class FieldOffset(runtime.Offset):
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-    connectivity: Optional[Any] = None  # TODO
+
+    @functools.cached_property
+    def _cache(self) -> dict:
+        return {}
 
     def __post_init__(self):
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
@@ -332,3 +326,51 @@ class FieldOffset(runtime.Offset):
 
     def __gt_type__(self):
         return ts.OffsetType(source=self.source, target=self.target)
+
+    def __getitem__(self, offset: int) -> common.ConnectivityField:
+        """Serve as a connectivity factory."""
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.offset_provider.get(None)
+        assert current_offset_provider is not None
+        offset_definition = current_offset_provider[self.value]
+
+        connectivity: common.ConnectivityField
+        if isinstance(offset_definition, common.Dimension):
+            connectivity = common.CartesianConnectivity(offset_definition, offset)
+        elif isinstance(
+            offset_definition, gtx.NeighborTableOffsetProvider
+        ) or common.is_connectivity_field(offset_definition):
+            unrestricted_connectivity = self.as_connectivity_field()
+            assert unrestricted_connectivity.domain.ndim > 1
+            named_index = (self.target[-1], offset)
+            connectivity = unrestricted_connectivity[named_index]
+        else:
+            raise NotImplementedError()
+
+        return connectivity
+
+    def as_connectivity_field(self):
+        """Convert to connectivity field using the offset providers in current embedded execution context."""
+        assert isinstance(self.value, str)
+        current_offset_provider = embedded.context.offset_provider.get(None)
+        assert current_offset_provider is not None
+        offset_definition = current_offset_provider[self.value]
+
+        cache_key = id(offset_definition)
+        if (connectivity := self._cache.get(cache_key, None)) is None:
+            if common.is_connectivity_field(offset_definition):
+                connectivity = offset_definition
+            elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
+                assert not offset_definition.has_skip_values
+                connectivity = gtx.as_connectivity(
+                    domain=self.target,
+                    codomain=self.source,
+                    data=offset_definition.table,
+                    dtype=offset_definition.index_type,
+                )
+            else:
+                raise NotImplementedError()
+
+            self._cache[cache_key] = connectivity
+
+        return connectivity

@@ -41,4 +41,4 @@ def test_different_buffer_sizes():
 
     copy(inp, out=out, offset_provider={})
 
-    assert np.allclose(inp[:out_nx, :out_ny], out)
+    assert np.allclose(inp[:out_nx, :out_ny].asnumpy(), out.asnumpy())

@@ -28,7 +28,7 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common, constructors
+from gt4py.next import common, constructors, utils
 from gt4py.next.ffront import decorator
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -72,7 +72,7 @@ E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
 C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
@@ -435,14 +435,13 @@ def verify(
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
     out_comp = out or inout
-    out_comp_str = str(out_comp)
     assert out_comp is not None
-    if hasattr(out_comp, "ndarray"):
-        out_comp_str = str(out_comp.ndarray)
-    assert comparison(ref, out_comp), (
+    out_comp_ndarray = utils.asnumpy(out_comp)
+    ref_ndarray = utils.asnumpy(ref)
+    assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref}\n\tout = {out_comp_str}"
+        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
     )
 
 
@@ -468,7 +467,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.__array__() if common.is_field(i) else i for i in inps)
+    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
     verify(
         case,
         fieldop,
