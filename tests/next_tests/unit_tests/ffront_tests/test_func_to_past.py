@@ -206,9 +206,7 @@ def test_domain_exception_3(identity_def):
     assert exc_info.match("Invalid call to `domain_format_3`")
 
     assert (
-        re.search(
-            r"Missing required keyword argument\(s\) `out`.", exc_info.value.__cause__.args[0]
-        )
+        re.search(r"Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
         is not None
     )
 
