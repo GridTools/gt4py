@@ -25,6 +25,7 @@ from typing import overload
 import numpy as np
 import numpy.typing as npt
 
+import gt4py.eve as eve
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -71,33 +72,33 @@ float32 = np.float32
 float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
-BoolT = TypeVar("BoolT", bound=Union[bool_, bool])
+BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
 
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
-IntT = TypeVar("IntT", bound=Union[int8, int16, int32, int64, int])
+IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
 
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
-UnsignedIntT = TypeVar("UnsignedIntT", bound=Union[uint8, uint16, uint32, uint64])
+UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
 UINT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
 
 
 IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
-IntegralT = TypeVar("IntegralT", bound=Union[IntScalar, UnsignedIntScalar])
+IntegralT = TypeVar("IntegralT", bound=IntegralScalar)
 INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 
 FloatingScalar: TypeAlias = Union[float32, float64, float]
-FloatingT = TypeVar("FloatingT", bound=Union[float32, float64, float])
+FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
 
 
 #: Type alias for all scalar types supported by GT4Py
 Scalar: TypeAlias = Union[BoolScalar, IntegralScalar, FloatingScalar]
-ScalarT = TypeVar("ScalarT", bound=Union[BoolScalar, IntegralScalar, FloatingScalar])
+ScalarT = TypeVar("ScalarT", bound=Scalar)
 SCALAR_TYPES: Final[tuple[type, ...]] = (*BOOL_TYPES, *INTEGRAL_TYPES, *FLOAT_TYPES)
 
 
@@ -139,7 +140,7 @@ def is_valid_tensor_shape(
 
 
 # -- Data type descriptors --
-class DTypeKind(enum.Enum):
+class DTypeKind(eve.StrEnum):
     """
     Kind of a specific data type.
 
@@ -368,7 +369,7 @@ class GTOriginInterface(Protocol):
 
 
 # -- Device representation --
-class DeviceType(enum.Enum):
+class DeviceType(enum.IntEnum):
     """The type of the device where a memory buffer is allocated.
 
     Enum values taken from DLPack reference implementation at:
@@ -385,8 +386,31 @@ class DeviceType(enum.Enum):
     ROCM = 10
 
 
+CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
+CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
+CPUPinnedDeviceTyping: TypeAlias = Literal[DeviceType.CPU_PINNED]
+OpenCLDeviceTyping: TypeAlias = Literal[DeviceType.OPENCL]
+VulkanDeviceTyping: TypeAlias = Literal[DeviceType.VULKAN]
+MetalDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
+VPIDeviceTyping: TypeAlias = Literal[DeviceType.VPI]
+ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+
+
+DeviceTypeT = TypeVar(
+    "DeviceTypeT",
+    CPUDeviceTyping,
+    CUDADeviceTyping,
+    CPUPinnedDeviceTyping,
+    OpenCLDeviceTyping,
+    VulkanDeviceTyping,
+    MetalDeviceTyping,
+    VPIDeviceTyping,
+    ROCMDeviceTyping,
+)
+
+
 @dataclasses.dataclass(frozen=True)
-class Device:
+class Device(Generic[DeviceTypeT]):
     """
     Representation of a computing device.
 
@@ -397,10 +421,10 @@ class Device:
     core number, for `DeviceType.CUDA` it could be the CUDA device number, etc.
     """
 
-    device_type: DeviceType
+    device_type: DeviceTypeT
     device_id: int
 
-    def __iter__(self) -> Iterator[DeviceType | int]:
+    def __iter__(self) -> Iterator[DeviceTypeT | int]:
         yield self.device_type
         yield self.device_id
 
@@ -409,7 +433,7 @@ class Device:
 SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
 
 
-class NDArrayObjectProto(Protocol):
+class NDArrayObject(Protocol):
     @property
     def ndim(self) -> int:
         ...
@@ -422,7 +446,10 @@ class NDArrayObjectProto(Protocol):
     def dtype(self) -> Any:
         ...
 
-    def __getitem__(self, item: SliceLike) -> NDArrayObject:
+    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject:
+        ...
+
+    def __getitem__(self, item: Any) -> NDArrayObject:
         ...
 
     def __abs__(self) -> NDArrayObject:
@@ -434,38 +461,59 @@ class NDArrayObjectProto(Protocol):
     def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __radd__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __radd__(self, other: Any) -> NDArrayObject:
         ...
 
     def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rsub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rsub__(self, other: Any) -> NDArrayObject:
         ...
 
     def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rmul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rmul__(self, other: Any) -> NDArrayObject:
         ...
 
     def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rfloordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rfloordiv__(self, other: Any) -> NDArrayObject:
         ...
 
     def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __rtruediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+    def __rtruediv__(self, other: Any) -> NDArrayObject:
         ...
 
     def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
+    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
+        ...
 
-NDArrayObject = Union[npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto]
-NDArrayObjectT = TypeVar(
-    "NDArrayObjectT", npt.NDArray, "CuPyNDArray", "JaxNDArray", NDArrayObjectProto, covariant=True
-)
+    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
+        ...
+
+    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+        ...
+
+    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+        ...
+
+    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+        ...
+
+    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+        ...
+
+    def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...
+
+    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject:
+        ...

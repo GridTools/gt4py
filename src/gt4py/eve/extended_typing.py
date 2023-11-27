@@ -36,6 +36,7 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
+import numpy.typing as npt
 import typing_extensions as _typing_extensions
 from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403
 
@@ -236,6 +237,21 @@ class HashlibAlgorithm(Protocol):
 
 
 # -- Third party protocols --
+class SupportsArray(Protocol):
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]:
+        ...
+
+
+def supports_array(value: Any) -> TypeGuard[SupportsArray]:
+    return hasattr(value, "__array__")
+
+
+class ArrayInterface(Protocol):
+    @property
+    def __array_interface__(self) -> Dict[str, Any]:
+        ...
+
+
 class ArrayInterfaceTypedDict(TypedDict):
     shape: Tuple[int, ...]
     typestr: str
@@ -248,11 +264,19 @@ class ArrayInterfaceTypedDict(TypedDict):
 
 
 class StrictArrayInterface(Protocol):
-    __array_interface__: ArrayInterfaceTypedDict
+    @property
+    def __array_interface__(self) -> ArrayInterfaceTypedDict:
+        ...
 
 
-class ArrayInterface(Protocol):
-    __array_interface__: Dict[str, Any]
+def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
+    return hasattr(value, "__array_interface__")
+
+
+class CUDAArrayInterface(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> Dict[str, Any]:
+        ...
 
 
 class CUDAArrayInterfaceTypedDict(TypedDict):
@@ -267,23 +291,43 @@ class CUDAArrayInterfaceTypedDict(TypedDict):
 
 
 class StrictCUDAArrayInterface(Protocol):
-    __cuda_array_interface__: CUDAArrayInterfaceTypedDict
+    @property
+    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict:
+        ...
 
 
-class CUDAArrayInterface(Protocol):
-    __cuda_array_interface__: Dict[str, Any]
+def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
+    """Check if the given value supports the CUDA Array Interface."""
+    return hasattr(value, "__cuda_array_interface__")
 
 
-PyCapsule = NewType("PyCapsule", object)
 DLPackDevice = Tuple[int, int]
 
 
-class DLPackBuffer(Protocol):
-    def __dlpack__(self, stream: Optional[int] = None) -> PyCapsule:
+class MultiStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: Optional[int] = None) -> Any:
         ...
 
     def __dlpack_device__(self) -> DLPackDevice:
         ...
+
+
+class SingleStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: None = None) -> Any:
+        ...
+
+    def __dlpack_device__(self) -> DLPackDevice:
+        ...
+
+
+DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
+
+
+def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
+    """Check if a given object supports the DLPack protocol."""
+    return callable(getattr(value, "__dlpack__", None)) and callable(
+        getattr(value, "__dlpack_device__", None)
+    )
 
 
 class DevToolsPrettyPrintable(Protocol):

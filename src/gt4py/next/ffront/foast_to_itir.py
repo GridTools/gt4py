@@ -321,12 +321,9 @@ class FieldOperatorLowering(NodeTranslator):
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
-        obj, dtype = node.args[0], node.args[1].id
-
-        # TODO check that we test astype that results in a itir.map_ operation
-        return self._map(
-            im.lambda_("it")(im.call("cast_")("it", str(dtype))),
-            obj,
+        obj, new_type = node.args[0], node.args[1].id
+        return self._process_elements(
+            lambda x: im.call("cast_")(x, str(new_type)), obj, obj.type, **kwargs
         )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -406,6 +403,32 @@ class FieldOperatorLowering(NodeTranslator):
             op = im.call("map_")(op)
 
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+
+    def _process_elements(
+        self,
+        process_func: Callable[[itir.Expr], itir.Expr],
+        obj: foast.Expr,
+        current_el_type: ts.TypeSpec,
+        current_el_expr: itir.Expr = im.ref("expr"),
+    ):
+        """Recursively applies a processing function to all primitive constituents of a tuple."""
+        if isinstance(current_el_type, ts.TupleType):
+            # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
+            return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
+                *[
+                    self._process_elements(
+                        process_func,
+                        obj,
+                        current_el_type.types[i],
+                        im.tuple_get(i, current_el_expr),
+                    )
+                    for i in range(len(current_el_type.types))
+                ]
+            )
+        elif type_info.contains_local_field(current_el_type):
+            raise NotImplementedError("Processing fields with local dimension is not implemented.")
+        else:
+            return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
 class FieldOperatorLoweringError(Exception):

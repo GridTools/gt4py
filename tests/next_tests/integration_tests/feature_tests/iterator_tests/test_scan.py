@@ -30,10 +30,11 @@ def test_scan_in_stencil(program_processor, lift_mode):
     isize = 1
     ksize = 3
     Koff = offset("Koff")
-    inp = gtx.np_as_located_field(IDim, KDim)(
-        np.copy(np.broadcast_to(np.arange(0, ksize, dtype=np.float64), (isize, ksize)))
+    inp = gtx.as_field(
+        [IDim, KDim],
+        np.copy(np.broadcast_to(np.arange(0, ksize, dtype=np.float64), (isize, ksize))),
     )
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros((isize, ksize)))
+    out = gtx.as_field([IDim, KDim], np.zeros((isize, ksize)))
 
     reference = np.zeros((isize, ksize - 1))
     reference[:, 0] = inp.ndarray[:, 0] + inp.ndarray[:, 1]
@@ -59,4 +60,4 @@ def test_scan_in_stencil(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out[:, :-1], reference)
+        assert np.allclose(out[:, :-1].asnumpy(), reference)

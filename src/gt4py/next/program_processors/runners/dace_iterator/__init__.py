@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
+import warnings
 from typing import Any, Mapping, Optional, Sequence
 
 import dace
@@ -19,12 +20,14 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.transformation.auto import auto_optimize as autoopt
 
+import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
+import gt4py.next.program_processors.otf_compile_executor as otf_exec
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.common import Dimension, Domain, UnitRange, is_field
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.otf.compilation import cache
-from gt4py.next.program_processors.processor_interface import program_executor
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
@@ -63,24 +66,55 @@ def convert_arg(arg: Any):
     return arg
 
 
-def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
-    program = apply_common_transforms(
+def preprocess_program(
+    program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
+):
+    node = apply_common_transforms(
         program,
-        offset_provider=offset_provider,
-        lift_mode=LiftMode.FORCE_INLINE,
         common_subexpression_elimination=False,
+        lift_mode=lift_mode,
+        offset_provider=offset_provider,
+        unroll_reduce=False,
     )
-    return program
+    # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
+    # In this case, just retry with unrolled reductions.
+    if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
+        fencil_definition = node
+    else:
+        fencil_definition = apply_common_transforms(
+            program,
+            common_subexpression_elimination=False,
+            lift_mode=lift_mode,
+            offset_provider=offset_provider,
+            unroll_reduce=True,
+        )
+    return fencil_definition
 
 
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
     return {name.id: convert_arg(arg) for name, arg in zip(params, args)}
 
 
+def _ensure_is_on_device(
+    connectivity_arg: np.typing.NDArray, device: dace.dtypes.DeviceType
+) -> np.typing.NDArray:
+    if device == dace.dtypes.DeviceType.GPU:
+        if not isinstance(connectivity_arg, cp.ndarray):
+            warnings.warn(
+                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+            )
+            return cp.asarray(connectivity_arg)
+    return connectivity_arg
+
+
 def get_connectivity_args(
-    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]
+    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]],
+    device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
-    return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
+    return {
+        connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
+        for offset, table in neighbor_tables
+    }
 
 
 def get_shape_args(
@@ -150,18 +184,21 @@ def get_cache_id(
     return m.hexdigest()
 
 
-@program_executor
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
+    build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
-    build_cache = kwargs.get("build_cache", None)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
+    lift_mode = (
+        LiftMode.FORCE_INLINE
+    )  # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
+    device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
@@ -171,27 +208,17 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg = sdfg_program.sdfg
     else:
         # visit ITIR and generate SDFG
-        program = preprocess_program(program, offset_provider)
-        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+        program = preprocess_program(program, offset_provider, lift_mode)
+        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()
-
-        # set array storage for GPU execution
-        if run_on_gpu:
-            device = dace.DeviceType.GPU
-            sdfg._name = f"{sdfg.name}_gpu"
-            for _, _, array in sdfg.arrays_recursive():
-                if not array.transient:
-                    array.storage = dace.dtypes.StorageType.GPU_Global
-        else:
-            device = dace.DeviceType.CPU
 
         # run DaCe auto-optimization heuristics
         if auto_optimize:
             # TODO Investigate how symbol definitions improve autoopt transformations,
             #      in which case the cache table should take the symbols map into account.
             symbols: dict[str, int] = {}
-            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols)
+            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
 
         # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
@@ -206,7 +233,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
     dace_args = get_args(program.params, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables)
+    dace_conn_args = get_connectivity_args(neighbor_tables, device)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
@@ -234,23 +261,41 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg_program(**expected_args)
 
 
-@program_executor
-def run_dace(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    run_on_gpu = any(not isinstance(arg.ndarray, np.ndarray) for arg in args if is_field(arg))
-    if run_on_gpu:
-        if cp is None:
-            raise RuntimeError(
-                f"Non-numpy field argument passed to program {program.id} but module cupy not installed"
-            )
-
-        if not all(isinstance(arg.ndarray, cp.ndarray) for arg in args if is_field(arg)):
-            raise RuntimeError("Execution on GPU requires all fields to be stored as cupy arrays")
-
+def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     run_dace_iterator(
         program,
         *args,
         **kwargs,
-        build_cache=_build_cache_gpu if run_on_gpu else _build_cache_cpu,
+        build_cache=_build_cache_cpu,
         build_type=_build_type,
-        run_on_gpu=run_on_gpu,
+        run_on_gpu=False,
     )
+
+
+run_dace_cpu = otf_exec.OTFBackend(
+    executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+)
+
+if cp:
+
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        run_dace_iterator(
+            program,
+            *args,
+            **kwargs,
+            build_cache=_build_cache_gpu,
+            build_type=_build_type,
+            run_on_gpu=True,
+        )
+
+else:
+
+    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+
+
+run_dace_gpu = otf_exec.OTFBackend(
+    executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
+    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+)

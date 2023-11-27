@@ -57,7 +57,7 @@ def fencil_example():
     )
     IDim = gtx.Dimension("I")
     params = [
-        gtx.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        gtx.as_field([IDim], np.empty((1,), dtype=np.float32)),
         np.float32(3.14),
     ]
     return fencil, params

@@ -266,6 +266,29 @@ def builtin_neighbors(
     return [ValueExpr(result_access, iterator.dtype)]
 
 
+def builtin_can_deref(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    # first visit shift, to get set of indices for deref
+    can_deref_callable = node_args[0]
+    assert isinstance(can_deref_callable, itir.FunCall)
+    shift_callable = can_deref_callable.fun
+    assert isinstance(shift_callable, itir.FunCall)
+    assert isinstance(shift_callable.fun, itir.SymRef)
+    assert shift_callable.fun.id == "shift"
+    iterator = transformer._visit_shift(can_deref_callable)
+
+    # create tasklet to check that field indices are non-negative (-1 is invalid)
+    args = [ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions]
+    internals = [f"{arg.value.data}_v" for arg in args]
+    expr_code = " && ".join([f"{v} >= 0" for v in internals])
+
+    # TODO(edopao): select-memlet could maybe allow to efficiently translate can_deref to predicative execution
+    return transformer.add_expr_tasklet(
+        list(zip(args, internals)), expr_code, dace.dtypes.bool, "can_deref"
+    )
+
+
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -319,11 +342,12 @@ def builtin_undefined(*args: Any) -> Any:
 _GENERAL_BUILTIN_MAPPING: dict[
     str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
-    "make_tuple": builtin_make_tuple,
-    "tuple_get": builtin_tuple_get,
-    "if_": builtin_if,
+    "can_deref": builtin_can_deref,
     "cast_": builtin_cast,
+    "if_": builtin_if,
+    "make_tuple": builtin_make_tuple,
     "neighbors": builtin_neighbors,
+    "tuple_get": builtin_tuple_get,
 }
 
 

@@ -155,7 +155,7 @@ if _CLANG_FORMAT_EXECUTABLE is not None:
     ) -> str:
         """Format C++ source code using clang-format."""
         assert isinstance(_CLANG_FORMAT_EXECUTABLE, str)
-        args = [_CLANG_FORMAT_EXECUTABLE]
+        args = [_CLANG_FORMAT_EXECUTABLE, "--assume-filename=_gt4py_generated_file.cpp"]
         if style:
             args.append(f"--style={style}")
         if fallback_style:
