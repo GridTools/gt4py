@@ -64,7 +64,7 @@ class Sym(Node):  # helper
 
 @noninstantiable
 class Expr(Node):
-    pass
+    ...
 
 
 class Literal(Expr):

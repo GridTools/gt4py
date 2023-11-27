@@ -181,7 +181,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
         if isinstance(node, past.Name):
-            return itir.SymRef(id=node.id)
+            return itir.SymRef(id=node.id, location=node.location)
         elif isinstance(node, past.Subscript):
             return self._construct_itir_out_arg(node.value)
         elif isinstance(node, past.TupleExpr):
