@@ -23,6 +23,7 @@ import dataclasses
 import itertools
 import math
 import sys
+import warnings
 from typing import (
     Any,
     Callable,
@@ -685,7 +686,7 @@ def _single_vertical_idx(
     indices: NamedFieldIndices, column_axis: Tag, column_index: common.IntIndex
 ) -> NamedFieldIndices:
     transformed = {
-        axis: (index if axis != column_axis else index.start + column_index)  # type: ignore[union-attr] # trust me, `index` is range in case of `column_axis`
+        axis: (index if axis != column_axis else index.start + column_index)  # type: ignore[union-attr] # trust me, `index` is range in case of `column_axis` # fmt: off
         for axis, index in indices.items()
     }
     return transformed
@@ -1015,6 +1016,8 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], common.Field]:
+    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)
+
     origin = origin or {}
 
     def _maker(a) -> common.Field:
@@ -1050,7 +1053,7 @@ class IndexField(common.Field):
         return (0,)
 
     @classmethod
-    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype
+    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype # fmt: off
         raise NotImplementedError()
 
     @property
@@ -1063,14 +1066,14 @@ class IndexField(common.Field):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
-        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code
+        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
@@ -1088,6 +1091,12 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1156,7 +1165,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         return tuple()
 
     @classmethod
-    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype
+    def __gt_builtin_func__(func: Callable, /) -> NoReturn:  # type: ignore[override] # Signature incompatible with supertype # fmt: off
         raise NotImplementedError()
 
     @property
@@ -1169,7 +1178,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        return AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
     def remap(self, index_field: common.Field) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
@@ -1189,6 +1198,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:

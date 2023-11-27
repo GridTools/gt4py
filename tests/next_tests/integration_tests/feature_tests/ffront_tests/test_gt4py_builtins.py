@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, float64, int32, int64, max_over, min_over, neighbor_sum, where
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next import broadcast, float64, int32, max_over, min_over, neighbor_sum, where
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -30,7 +30,6 @@ from next_tests.integration_tests.cases import (
     Joff,
     KDim,
     V2EDim,
-    Vertex,
     cartesian_case,
     unstructured_case,
 )
@@ -40,6 +39,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.parametrize(
     "strategy",
     [cases.UniqueInitializer(1), cases.UniqueInitializer(-100)],
@@ -47,9 +47,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 def test_maxover_execution_(unstructured_case, strategy):
     if unstructured_case.backend in [
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_gpu,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
     ]:
         pytest.xfail("`maxover` broken in gtfn, see #1289.")
 
@@ -66,6 +67,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
+@pytest.mark.uses_unstructured_shift
 def test_minover_execution(unstructured_case):
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
@@ -78,6 +80,7 @@ def test_minover_execution(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_reduction_execution(unstructured_case):
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
@@ -94,6 +97,7 @@ def test_reduction_execution(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_constant_fields
 def test_reduction_expression_in_call(unstructured_case):
     @gtx.field_operator
@@ -114,6 +118,7 @@ def test_reduction_expression_in_call(unstructured_case):
     )
 
 
+@pytest.mark.uses_unstructured_shift
 def test_reduction_with_common_expression(unstructured_case):
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
@@ -138,10 +143,7 @@ def test_conditional_nested_tuple(cartesian_case):
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional_nested_tuple, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=size))
     a = cases.allocate(cartesian_case, conditional_nested_tuple, "a")()
     b = cases.allocate(cartesian_case, conditional_nested_tuple, "b")()
 
@@ -192,6 +194,7 @@ def test_broadcast_two_fields(cartesian_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_broadcast_shifted(cartesian_case):
     @gtx.field_operator
     def simple_broadcast(inp: cases.IField) -> cases.IJField:
@@ -211,10 +214,7 @@ def test_conditional(cartesian_case):
         return where(mask, a, b)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional, "a")()
     b = cases.allocate(cartesian_case, conditional, "b")()
     out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
@@ -228,10 +228,7 @@ def test_conditional_promotion(cartesian_case):
         return where(mask, a, 10.0)
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    mask = cases.allocate(cartesian_case, conditional_promotion, "mask").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_promotion, "a")()
     out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
 
@@ -250,6 +247,7 @@ def test_conditional_compareop(cartesian_case):
     )
 
 
+@pytest.mark.uses_cartesian_shift
 def test_conditional_shifted(cartesian_case):
     @gtx.field_operator
     def conditional_shifted(
@@ -268,7 +266,7 @@ def test_conditional_shifted(cartesian_case):
         conditional_shifted(mask, a, b, out=out)
 
     size = cartesian_case.default_sizes[IDim] + 1
-    mask = gtx.np_as_located_field(IDim)(np.random.choice(a=[False, True], size=(size)))
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_program, "a").extend({IDim: (0, 1)})()
     b = cases.allocate(cartesian_case, conditional_program, "b").extend({IDim: (0, 1)})()
     out = cases.allocate(cartesian_case, conditional_shifted, cases.RETURN)()

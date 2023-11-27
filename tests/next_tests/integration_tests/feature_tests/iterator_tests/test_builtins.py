@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -52,13 +53,13 @@ from gt4py.next.iterator.builtins import (
     xor_,
 )
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
-def asarray(*lists):
+def array_maker(*lists):
     def _listify(val):
         if isinstance(val, Iterable):
             return val
@@ -72,8 +73,8 @@ def asarray(*lists):
 IDim = gtx.Dimension("IDim")
 
 
-def asfield(*arrays):
-    res = list(map(gtx.np_as_located_field(IDim), arrays))
+def field_maker(*arrays):
+    res = list(map(gtx.as_field.partial([IDim]), arrays))
     return res
 
 
@@ -171,8 +172,8 @@ def arithmetic_and_logical_test_data():
 def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, expected, as_column):
     program_processor, validate = program_processor
 
-    inps = asfield(*asarray(*inputs))
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    inps = field_maker(*array_maker(*inputs))
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
     fencil(builtin, out, *inps, processor=program_processor, as_column=as_column)
 
@@ -184,13 +185,16 @@ def test_arithmetic_and_logical_builtins(program_processor, builtin, inputs, exp
 def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     if builtin == if_:
         pytest.skip("If cannot be used unapplied")
-    inps = asfield(*asarray(*inputs))
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    inps = field_maker(*array_maker(*inputs))
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
+    gtfn_executor = run_gtfn.executor
     gtfn_without_transforms = dataclasses.replace(
-        run_gtfn,
-        otf_workflow=run_gtfn.otf_workflow.replace(
-            translation=run_gtfn.otf_workflow.translation.replace(enable_itir_transforms=False),
+        gtfn_executor,
+        otf_workflow=gtfn_executor.otf_workflow.replace(
+            translation=gtfn_executor.otf_workflow.translation.replace(
+                enable_itir_transforms=False
+            ),
         ),
     )  # avoid inlining the function
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)
@@ -202,6 +206,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
+    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -209,10 +214,10 @@ def test_math_function_builtins(program_processor, builtin_name, inputs, as_colu
     else:
         ref_impl: Callable = getattr(np, builtin_name)
 
-    inps = asfield(*asarray(*inputs))
+    inps = field_maker(*array_maker(*inputs))
     expected = ref_impl(*inputs)
 
-    out = asfield((np.zeros_like(*asarray(expected))))[0]
+    out = field_maker((np.zeros_like(*array_maker(expected))))[0]
 
     fencil(
         getattr(it_builtins, builtin_name),
@@ -245,14 +250,13 @@ def _can_deref_lifted(inp):
 
 
 @pytest.mark.parametrize("stencil", [_can_deref, _can_deref_lifted])
-@pytest.mark.uses_can_deref
 def test_can_deref(program_processor, stencil):
     program_processor, validate = program_processor
 
     Node = gtx.Dimension("Node")
 
-    inp = gtx.np_as_located_field(Node)(np.ones((1,), dtype=np.int32))
-    out = gtx.np_as_located_field(Node)(np.asarray([0], dtype=inp.dtype))
+    inp = gtx.as_field([Node], np.ones((1,), dtype=np.int32))
+    out = gtx.as_field([Node], np.asarray([0], dtype=inp.dtype))
 
     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[-1]]), Node, Node, 1)
     run_processor(
@@ -290,8 +294,8 @@ def test_can_deref(program_processor, stencil):
 #         shifted = shift(Neighbor, 0)(inp)
 #         return if_(can_deref(shifted), 1, -1)
 
-#     inp = gtx.np_as_located_field(Node)(np.zeros((1,)))
-#     out = gtx.np_as_located_field(Node)(np.asarray([0]))
+#     inp = gtx.as_field([Node], np.zeros((1,)))
+#     out = gtx.as_field([Node], np.asarray([0]))
 
 #     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
@@ -324,7 +328,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     program_processor, validate = program_processor
     column_axis = IDim if as_column else None
 
-    inp = asfield(np.array([input_value]))[0]
+    inp = field_maker(np.array([input_value]))[0]
 
     casted_valued = np_dtype(input_value)
 
@@ -332,7 +336,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     def sten_cast(it, casted_valued):
         return eq(cast_(deref(it), dtype), deref(casted_valued))
 
-    out = asfield(np.zeros_like(inp, dtype=builtins.bool))[0]
+    out = field_maker(np.zeros_like(inp, dtype=builtins.bool))[0]
     run_processor(
         sten_cast[{IDim: range(1)}],
         program_processor,

@@ -146,7 +146,7 @@ def test_propagate_to_if_on_tuples_with_let():
                                    im.make_tuple(3, 4)))
     actual = CollapseTuple.apply(
         testee,
-        #flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
     )
     assert actual == expected
 

@@ -30,22 +30,31 @@ class LinkDependency(eve.Node):
     target: str
 
 
+class Language(eve.Node):
+    name: str
+
+
 class CMakeListsFile(eve.Node):
     project_name: str
     find_deps: Sequence[FindDependency]
     link_deps: Sequence[LinkDependency]
     source_names: Sequence[str]
     bin_output_suffix: str
+    languages: Sequence[Language]
 
 
 class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     CMakeListsFile = as_jinja(
         """
-        project({{project_name}})
         cmake_minimum_required(VERSION 3.20.0)
 
+        project({{project_name}})
+
         # Languages
-        enable_language(CXX)
+        if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+            set(CMAKE_CUDA_ARCHITECTURES 60)
+        endif()
+        {{"\\n".join(languages)}}
 
         # Paths
         list(APPEND CMAKE_MODULE_PATH ${CMAKE_BINARY_DIR})
@@ -77,18 +86,17 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
     )
 
     def visit_FindDependency(self, dep: FindDependency):
+        # TODO(ricoh): do not add more libraries here
+        #   and do not use this design in a new build system.
+        #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
-            case "pybind11":
-                import pybind11
-
-                return f"find_package(pybind11 CONFIG REQUIRED PATHS {pybind11.get_cmake_dir()} NO_DEFAULT_PATH)"
             case "nanobind":
                 import nanobind
 
                 py = "find_package(Python COMPONENTS Interpreter Development REQUIRED)"
                 nb = f"find_package(nanobind CONFIG REQUIRED PATHS {nanobind.cmake_dir()} NO_DEFAULT_PATHS)"
                 return py + "\n" + nb
-            case "gridtools":
+            case "gridtools_cpu" | "gridtools_gpu":
                 import gridtools_cpp
 
                 return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
@@ -96,13 +104,16 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
     def visit_LinkDependency(self, dep: LinkDependency):
+        # TODO(ricoh): do not add more libraries here
+        #   and do not use this design in a new build system.
+        #   Instead, design this to be extensible (refer to ADR-0016).
         match dep.name:
-            case "pybind11":
-                lib_name = "pybind11::module"
             case "nanobind":
                 lib_name = "nanobind-static"
-            case "gridtools":
+            case "gridtools_cpu":
                 lib_name = "GridTools::fn_naive"
+            case "gridtools_gpu":
+                lib_name = "GridTools::fn_gpu"
             case _:
                 raise ValueError("Library {name} is not supported".format(name=dep.name))
 
@@ -118,11 +129,14 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         lnk = f"target_link_libraries({dep.target} PUBLIC {lib_name})"
         return cfg + "\n" + lnk
 
+    Language = as_jinja("enable_language({{name}})")
+
 
 def generate_cmakelists_source(
     project_name: str,
     dependencies: tuple[interface.LibraryDependency, ...],
     source_names: Sequence[str],
+    languages: Sequence[Language] = (Language(name="CXX"),),
 ) -> str:
     """
     Generate CMakeLists file contents.
@@ -135,5 +149,6 @@ def generate_cmakelists_source(
         link_deps=[LinkDependency(name=d.name, target=project_name) for d in dependencies],
         source_names=source_names,
         bin_output_suffix=common.python_module_suffix(),
+        languages=languages,
     )
     return CMakeListsGenerator.apply(cmakelists_file)

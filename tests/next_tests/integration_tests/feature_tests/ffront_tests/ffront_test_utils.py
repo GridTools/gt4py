@@ -21,9 +21,8 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
-from gt4py.next.iterator import embedded, ir as itir
-from gt4py.next.program_processors.runners import gtfn_cpu, roundtrip
-from tests.next_tests import exclusion_matrices
+from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:
@@ -35,6 +34,7 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
+import next_tests.exclusion_matrices as definitions
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -44,25 +44,34 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    OPTIONAL_PROCESSORS.append(dace_iterator.run_dace_iterator)
+    OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
 
 
 @pytest.fixture(
     params=[
-        roundtrip.executor,
-        gtfn_cpu.run_gtfn,
-        gtfn_cpu.run_gtfn_imperative,
-        gtfn_cpu.run_gtfn_with_temporaries,
+        definitions.ProgramBackendId.ROUNDTRIP,
+        definitions.ProgramBackendId.GTFN_CPU,
+        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
+        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
+        None,
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: next_tests.get_processor_id(p),
+    ids=lambda p: p.short_id() if p is not None else "None",
 )
 def fieldview_backend(request):
-    backend = request.param
-    backend_id = next_tests.get_processor_id(backend)
+    """
+    Fixture creating field-view operator backend on-demand for tests.
 
-    """See ADR 15."""
-    for marker, skip_mark, msg in exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(backend_id, []):
+    Notes:
+        Check ADR 15 for details on the test-exclusion matrices.
+    """
+    backend_id = request.param
+    backend = None if backend_id is None else backend_id.load()
+
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
+    ):
         if request.node.get_closest_marker(marker):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
@@ -197,8 +206,8 @@ def reduction_setup():
         C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
         C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
         # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
-        inp=gtx.np_as_located_field(Edge)(np.arange(num_edges, dtype=np.int32)),
-        out=gtx.np_as_located_field(Vertex)(np.zeros([num_vertices], dtype=np.int32)),
+        inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
+        out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
             "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),

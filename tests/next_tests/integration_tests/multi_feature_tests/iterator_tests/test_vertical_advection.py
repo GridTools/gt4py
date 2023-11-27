@@ -19,10 +19,8 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.program_processors.formatters.gtfn import (
-    format_sourcecode as gtfn_format_sourcecode,
-)
-from gt4py.next.program_processors.runners import gtfn_cpu
+from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
@@ -121,22 +119,22 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
     if (
         program_processor
         in [
-            gtfn_cpu.run_gtfn,
-            gtfn_cpu.run_gtfn_imperative,
-            gtfn_cpu.run_gtfn_with_temporaries,
-            gtfn_format_sourcecode,
+            gtfn.run_gtfn,
+            gtfn.run_gtfn_imperative,
+            gtfn.run_gtfn_with_temporaries,
+            gtfn_formatters.format_cpp,
         ]
         and lift_mode == LiftMode.FORCE_INLINE
     ):
         pytest.skip("gtfn does only support lifted scans when using temporaries")
     if (
-        program_processor == gtfn_cpu.run_gtfn_with_temporaries
+        program_processor == gtfn.run_gtfn_with_temporaries
         or lift_mode == LiftMode.FORCE_TEMPORARIES
     ):
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
-    as_3d_field = gtx.np_as_located_field(IDim, JDim, KDim)
+    as_3d_field = gtx.as_field.partial([IDim, JDim, KDim])
     a_s = as_3d_field(a)
     b_s = as_3d_field(b)
     c_s = as_3d_field(c)

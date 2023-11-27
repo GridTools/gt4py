@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import enum
 from collections import ChainMap
-from typing import Callable
+from typing import Callable, Optional
 import hashlib
 
 import dataclasses
@@ -25,10 +25,28 @@ from gt4py.next.iterator import ir, type_inference as it_type_inference, ir_make
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda, InlineLambdas
 
 
-def _get_tuple_size(type_: type_inference.Type) -> int:
-    assert isinstance(type_, it_type_inference.Val) and isinstance(
-        type_.dtype, it_type_inference.Tuple
-    )
+class UnknownLength:
+    pass
+
+
+def _get_tuple_size(elem: ir.Node, use_global_information: bool) -> int | type[UnknownLength]:
+    if use_global_information:
+        type_ = elem.annex.type
+        # global inference should always give a length, fail otherwise
+        assert isinstance(type_, it_type_inference.Val) and isinstance(
+            type_.dtype, it_type_inference.Tuple
+        )
+    else:
+        # use local type inference if no global information is available
+        assert isinstance(elem, ir.Node)
+        type_ = it_type_inference.infer(elem)
+
+        if not (
+            isinstance(type_, it_type_inference.Val)
+            and isinstance(type_.dtype, it_type_inference.Tuple)
+        ):
+            return UnknownLength
+
     return len(type_.dtype)
 
 def _is_let(node: ir.Node) -> bool:
@@ -124,14 +142,15 @@ class CollapseTuple(eve.NodeTranslator):
         INLINE_TRIVIAL_LET=128
 
     ignore_tuple_size: bool
+    use_global_type_inference: bool
     flags: int = (Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
-                 | Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE
-                 | Flag.PROPAGATE_TUPLE_GET
-                 | Flag.LETIFY_MAKE_TUPLE_ELEMENTS
-                 | Flag.INLINE_TRIVIAL_MAKE_TUPLE
-                 | Flag.PROPAGATE_TO_IF_ON_TUPLES
-                 | Flag.PROPAGATE_NESTED_LET
-                 | Flag.INLINE_TRIVIAL_LET)
+                  | Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE
+                  | Flag.PROPAGATE_TUPLE_GET
+                  | Flag.LETIFY_MAKE_TUPLE_ELEMENTS
+                  | Flag.INLINE_TRIVIAL_MAKE_TUPLE
+                  | Flag.PROPAGATE_TO_IF_ON_TUPLES
+                  | Flag.PROPAGATE_NESTED_LET
+                  | Flag.INLINE_TRIVIAL_LET)
 
     PRESERVED_ANNEX_ATTRS = ("type",)
 
@@ -141,12 +160,15 @@ class CollapseTuple(eve.NodeTranslator):
         init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_tuple_el")
     )
 
+    _node_types: Optional[dict[int, type_inference.Type]] = None
+
     @classmethod
     def apply(
         cls,
         node: ir.Node,
         *,
         ignore_tuple_size: bool = False,
+        use_global_type_inference: bool = False,
         # manually passing flags is mostly for allowing separate testing of the modes
         flags = None
     ) -> ir.Node:
@@ -156,18 +178,23 @@ class CollapseTuple(eve.NodeTranslator):
         If `ignore_tuple_size`, apply the transformation even if length of the inner tuple
         is greater than the length of the outer tuple.
         """
-        it_type_inference.infer_all(node, save_to_annex=True)
+        flags = flags or cls.flags
+        if use_global_type_inference:
+            it_type_inference.infer_all(node, save_to_annex=True)
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
-            flags=flags or cls.flags
+            use_global_type_inference=use_global_type_inference,
+            flags=flags
         ).visit(node)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
         # and the CSE pass can not remove them.
         # TODO: test case for `scan(lambda carry: {1, 2})` (see solve_nonhydro_stencil_52_like_z_q_tup)
-        new_node = InlineLambdas.apply(new_node, opcount_preserving=True, force_inline_lambda_args=False)
+        if flags & cls.Flag.LETIFY_MAKE_TUPLE_ELEMENTS:
+            new_node = InlineLambdas.apply(new_node, opcount_preserving=True,
+                                           force_inline_lambda_args=False)
 
         return new_node
 
@@ -193,7 +220,7 @@ class CollapseTuple(eve.NodeTranslator):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(first_expr.annex.type) == len(
+            if self.ignore_tuple_size or _get_tuple_size(first_expr, self.use_global_type_inference) == len(
                 node.args
             ):
                 return first_expr

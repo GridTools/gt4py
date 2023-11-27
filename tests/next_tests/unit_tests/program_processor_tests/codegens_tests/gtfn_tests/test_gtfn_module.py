@@ -57,7 +57,7 @@ def fencil_example():
     )
     IDim = gtx.Dimension("I")
     params = [
-        gtx.np_as_located_field(IDim)(np.empty((1,), dtype=np.float32)),
+        gtx.as_field([IDim], np.empty((1,), dtype=np.float32)),
         np.float32(3.14),
     ]
     return fencil, params
@@ -65,9 +65,9 @@ def fencil_example():
 
 def test_codegen(fencil_example):
     fencil, parameters = fencil_example
-    module = gtfn_module.translate_program(
+    module = gtfn_module.translate_program_cpu(
         stages.ProgramCall(fencil, parameters, {"offset_provider": {}})
     )
     assert module.entry_point.name == fencil.id
-    assert any(d.name == "gridtools" for d in module.library_deps)
+    assert any(d.name == "gridtools_cpu" for d in module.library_deps)
     assert module.language is languages.Cpp

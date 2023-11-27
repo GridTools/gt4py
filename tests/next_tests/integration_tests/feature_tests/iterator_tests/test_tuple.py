@@ -55,16 +55,18 @@ def test_tuple_output(program_processor, stencil):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out = (
-        gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-        gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+        gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
+        gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
     )
 
     dom = {
@@ -98,27 +100,31 @@ def test_tuple_of_tuple_of_field_output(program_processor):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp3 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp4 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp4 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out = (
         (
-            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
+            gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
         ),
         (
-            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
-            gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape)),
+            gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
+            gtx.as_field([IDim, JDim, KDim], np.zeros(shape)),
         ),
     )
 
@@ -148,7 +154,6 @@ def test_tuple_of_tuple_of_field_output(program_processor):
     "stencil",
     [tuple_output1, tuple_output2],
 )
-@pytest.mark.uses_tuple_returns
 def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
     program_processor, validate = program_processor
 
@@ -167,15 +172,17 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out1 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out2 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out1 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
+    out2 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     run_processor(
         fencil,
@@ -194,7 +201,6 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
         assert np.allclose(inp2, out2)
 
 
-@pytest.mark.uses_tuple_returns
 def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
     program_processor, validate = program_processor
 
@@ -217,19 +223,22 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp3 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out1 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out2 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
-    out3 = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out1 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
+    out2 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
+    out3 = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     run_processor(
         fencil,
@@ -261,15 +270,17 @@ def test_field_of_extra_dim_output(program_processor, stencil):
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
     out_np = np.zeros(shape + [2])
-    out = gtx.np_as_located_field(IDim, JDim, KDim, None)(out_np)
+    out = gtx.as_field([IDim, JDim, KDim, None], out_np)
 
     dom = {
         IDim: range(0, shape[0]),
@@ -288,20 +299,22 @@ def tuple_input(inp):
     return tuple_get(0, inp_deref) + tuple_get(1, inp_deref)
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_tuple_field_input(program_processor):
     program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp1 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
+    inp2 = gtx.as_field(
+        [IDim, JDim, KDim],
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -324,8 +337,8 @@ def test_field_of_extra_dim_input(program_processor):
     inp2 = rng.normal(size=(shape[0], shape[1], shape[2]))
     inp = np.stack((inp1, inp2), axis=-1)
 
-    inp = gtx.np_as_located_field(IDim, JDim, KDim, None)(inp)
-    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    inp = gtx.as_field([IDim, JDim, KDim, None], inp)
+    out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -348,27 +361,19 @@ def tuple_tuple_input(inp):
     )
 
 
-@pytest.mark.uses_tuple_returns
+@pytest.mark.uses_tuple_args
 def test_tuple_of_tuple_of_field_input(program_processor):
     program_processor, validate = program_processor
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp1 = gtx.np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2]))
-    )
-    inp2 = gtx.np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2]))
-    )
-    inp3 = gtx.np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2]))
-    )
-    inp4 = gtx.np_as_located_field(IDim, JDim, KDim)(
-        rng.normal(size=(shape[0], shape[1], shape[2]))
-    )
+    inp1 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp2 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp3 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
+    inp4 = gtx.as_field([IDim, JDim, KDim], rng.normal(size=(shape[0], shape[1], shape[2])))
 
-    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),
@@ -395,11 +400,11 @@ def test_field_of_2_extra_dim_input(program_processor):
     shape = [5, 7, 9]
     rng = np.random.default_rng()
 
-    inp = gtx.np_as_located_field(IDim, JDim, KDim, None, None)(
-        rng.normal(size=(shape[0], shape[1], shape[2], 2, 2))
+    inp = gtx.as_field(
+        [IDim, JDim, KDim, None, None], rng.normal(size=(shape[0], shape[1], shape[2], 2, 2))
     )
 
-    out = gtx.np_as_located_field(IDim, JDim, KDim)(np.zeros(shape))
+    out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
 
     dom = {
         IDim: range(0, shape[0]),

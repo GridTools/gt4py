@@ -52,8 +52,8 @@ def test_trivial(program_processor, lift_mode):
     out = np.copy(inp)
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :, 0])
-    out_s = gtx.np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :, 0]))
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :, 0], origin={IDim: 0, JDim: 0})
+    out_s = gtx.as_field([IDim, JDim], np.zeros_like(inp[:, :, 0]))
 
     run_processor(
         baz[cartesian_domain(named_range(IDim, 0, shape[0]), named_range(JDim, 0, shape[1]))],
@@ -85,8 +85,8 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
     out[1:, :] = inp[:-1, :]
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 0, JDim: 0})(inp[:, :])
-    out_s = gtx.np_as_located_field(IDim, JDim)(np.zeros_like(inp[:, :]))
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :], origin={IDim: 0, JDim: 0})
+    out_s = gtx.as_field([IDim, JDim], np.zeros_like(inp[:, :]))
 
     run_processor(
         stencil_shifted_arg_to_lift[
@@ -123,8 +123,8 @@ def test_direct_deref(program_processor, lift_mode):
     inp = rng.uniform(size=(5, 7))
     out = np.copy(inp)
 
-    inp_s = gtx.np_as_located_field(IDim, JDim)(inp)
-    out_s = gtx.np_as_located_field(IDim, JDim)(np.zeros_like(inp))
+    inp_s = gtx.as_field([IDim, JDim], inp)
+    out_s = gtx.as_field([IDim, JDim], np.zeros_like(inp))
 
     run_processor(
         fen_direct_deref,
@@ -153,8 +153,8 @@ def test_vertical_shift_unstructured(program_processor):
     rng = np.random.default_rng()
     inp = rng.uniform(size=(1, k_size))
 
-    inp_s = gtx.np_as_located_field(IDim, KDim)(inp)
-    out_s = gtx.np_as_located_field(IDim, KDim)(np.zeros_like(inp))
+    inp_s = gtx.as_field([IDim, KDim], inp)
+    out_s = gtx.as_field([IDim, KDim], np.zeros_like(inp))
 
     run_processor(
         vertical_shift[
