@@ -14,7 +14,7 @@
 import dataclasses
 import itertools
 from collections.abc import Sequence
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional, TypeAlias, cast
 
 import dace
 import numpy as np
@@ -151,11 +151,15 @@ class IteratorExpr:
     dimensions: list[str]
 
 
+# Union of possible expression types
+TaskletExpr: TypeAlias = IteratorExpr | SymbolExpr | ValueExpr
+
+
 @dataclasses.dataclass
 class Context:
     body: dace.SDFG
     state: dace.SDFGState
-    symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
+    symbol_map: dict[str, TaskletExpr]
     # if we encounter a reduction node, the reduction state needs to be pushed to child nodes
     reduce_limit: int
     reduce_wcr: Optional[str]
@@ -164,14 +168,15 @@ class Context:
         self,
         body: dace.SDFG,
         state: dace.SDFGState,
-        symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr],
-        **kwargs,
+        symbol_map: dict[str, TaskletExpr],
+        reduce_limit: int = 0,
+        reduce_wcr: Optional[str] = None,
     ):
         self.body = body
         self.state = state
         self.symbol_map = symbol_map
-        self.reduce_limit = kwargs.get("reduce_limit", 0)
-        self.reduce_wcr = kwargs.get("reduce_wcr", None)
+        self.reduce_limit = reduce_limit
+        self.reduce_wcr = reduce_wcr
 
 
 def builtin_neighbors(
@@ -354,19 +359,18 @@ _GENERAL_BUILTIN_MAPPING: dict[
 class GatherLambdaSymbolsPass(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
-    symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr]
-    parent_symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr]
+    symbol_map: dict[str, TaskletExpr]
+    parent_symbol_map: dict[str, TaskletExpr]
 
     def __init__(
         self,
         sdfg,
         state,
-        symbol_map,
         parent_symbol_map,
     ):
         self.sdfg = sdfg
         self.state = state
-        self.symbol_map = symbol_map
+        self.symbol_map = {}
         self.parent_symbol_map = parent_symbol_map
 
     def _add_symbol(self, param, arg):
@@ -404,11 +408,7 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             arg = self.parent_symbol_map[name]
             self._add_symbol(name, arg)
 
-    def visit_FunCall(self, node: itir.FunCall):
-        self.visit(node.args)
-        self.visit(node.fun)
-
-    def visit_Lambda(self, node: itir.Lambda, args=None):
+    def visit_Lambda(self, node: itir.Lambda, args: Optional[Sequence[TaskletExpr]] = None):
         if args is not None:
             assert len(node.params) == len(args)
             for param, arg in zip(node.params, args):
@@ -420,19 +420,18 @@ class GatherOutputSymbolsPass(eve.NodeVisitor):
     sdfg: dace.SDFG
     state: dace.SDFGState
     node_types: dict[int, next_typing.Type]
-    symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr]
+    symbol_map: dict[str, TaskletExpr]
 
     def __init__(
         self,
         sdfg,
         state,
         node_types,
-        symbol_map,
     ):
         self.sdfg = sdfg
         self.state = state
         self.node_types = node_types
-        self.symbol_map = symbol_map
+        self.symbol_map = {}
 
     def visit_SymRef(self, node: itir.SymRef):
         param = str(node.id)
@@ -443,10 +442,6 @@ class GatherOutputSymbolsPass(eve.NodeVisitor):
             self.symbol_map[param] = ValueExpr(
                 access_node, dtype=itir_type_as_dace_type(node_type.dtype)
             )
-
-    def visit_FunCall(self, node: itir.FunCall):
-        self.visit(node.args)
-        self.visit(node.fun)
 
 
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
@@ -468,7 +463,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         raise NotImplementedError()
 
     def visit_Lambda(
-        self, node: itir.Lambda, args: Sequence[SymbolExpr | IteratorExpr | ValueExpr]
+        self, node: itir.Lambda, args: Sequence[TaskletExpr]
     ) -> tuple[
         Context,
         list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]],
@@ -482,14 +477,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         lambda_sdfg = dace.SDFG(func_name)
         lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
 
-        lambda_symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr] = {}
-        GatherLambdaSymbolsPass(
-            lambda_sdfg, lambda_state, lambda_symbol_map, self.context.symbol_map
-        ).visit(node, args=args)
+        lambda_symbols_pass = GatherLambdaSymbolsPass(
+            lambda_sdfg, lambda_state, self.context.symbol_map
+        )
+        lambda_symbols_pass.visit(node, args=args)
 
         # Add for input nodes for lambda symbols
         inputs: list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]] = []
-        for sym, input_node in lambda_symbol_map.items():
+        for sym, input_node in lambda_symbols_pass.symbol_map.items():
             arg = next((arg for param, arg in zip(node.params, args) if param.id == sym), None)
             if arg:
                 outer_node = arg
@@ -523,7 +518,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         lambda_context = Context(
             lambda_sdfg,
             lambda_state,
-            lambda_symbol_map,
+            lambda_symbols_pass.symbol_map,
             reduce_limit=self.context.reduce_limit,
             reduce_wcr=self.context.reduce_wcr,
         )
@@ -1040,7 +1035,7 @@ def closure_to_tasklet_sdfg(
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
     state = body.add_state("tasklet_toplevel_entry")
-    symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
+    symbol_map: dict[str, TaskletExpr] = {}
 
     idx_accesses = {}
     for dim, idx in domain.items():

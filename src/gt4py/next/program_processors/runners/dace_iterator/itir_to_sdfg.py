@@ -25,9 +25,9 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 from .itir_to_tasklet import (
     Context,
     GatherOutputSymbolsPass,
-    IteratorExpr,
     PythonTaskletCodegen,
     SymbolExpr,
+    TaskletExpr,
     ValueExpr,
     closure_to_tasklet_sdfg,
     is_scan,
@@ -139,9 +139,9 @@ class ItirToSDFG(eve.NodeVisitor):
     def get_output_nodes(
         self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
-        symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr] = {}
-        GatherOutputSymbolsPass(sdfg, state, self.node_types, symbol_map).visit(closure.output)
-        context = Context(sdfg, state, symbol_map)
+        output_symbols_pass = GatherOutputSymbolsPass(sdfg, state, self.node_types)
+        output_symbols_pass.visit(closure.output)
+        context = Context(sdfg, state, output_symbols_pass.symbol_map)
         translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
@@ -269,7 +269,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # Update symbol table and get output domain of the closure
-        program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
+        program_arg_syms: dict[str, TaskletExpr] = {}
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
