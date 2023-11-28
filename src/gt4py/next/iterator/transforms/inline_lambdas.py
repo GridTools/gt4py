@@ -156,6 +156,8 @@ class InlineLambdas(NodeTranslator):
             opcount_preserving: Preserve the number of operations, i.e. only
                 inline lambda call if the resulting call has the same number of
                 operations.
+            force_inline_lambda_args: Inline all arguments that are lambda calls, i.e.
+                `(λ(p) → p(a, a))(λ(x, y) → x+y)`
             force_inline_lift_args: Inline all arguments that are applied lifts, i.e.
                 `lift(λ(...) → ...)(...)`.
             force_inline_trivial_lift_args: Inline all arguments that are trivial
