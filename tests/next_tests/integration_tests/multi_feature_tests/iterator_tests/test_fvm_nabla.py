@@ -159,8 +159,8 @@ def test_compute_zavgS(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-199755464.25741270, np.min(zavgS))
-        assert_close(388241977.58389181, np.max(zavgS))
+        assert_close(-199755464.25741270, np.min(zavgS.asnumpy()))
+        assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
     run_processor(
         compute_zavgS_fencil,
@@ -173,8 +173,8 @@ def test_compute_zavgS(program_processor, lift_mode):
         lift_mode=lift_mode,
     )
     if validate:
-        assert_close(-1000788897.3202186, np.min(zavgS))
-        assert_close(1000788897.3202186, np.max(zavgS))
+        assert_close(-1000788897.3202186, np.min(zavgS.asnumpy()))
+        assert_close(1000788897.3202186, np.max(zavgS.asnumpy()))
 
 
 @fendef
@@ -222,11 +222,11 @@ def test_compute_zavgS2(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-199755464.25741270, np.min(zavgS[0]))
-        assert_close(388241977.58389181, np.max(zavgS[0]))
+        assert_close(-199755464.25741270, np.min(zavgS[0].asnumpy()))
+        assert_close(388241977.58389181, np.max(zavgS[0].asnumpy()))
 
-        assert_close(-1000788897.3202186, np.min(zavgS[1]))
-        assert_close(1000788897.3202186, np.max(zavgS[1]))
+        assert_close(-1000788897.3202186, np.min(zavgS[1].asnumpy()))
+        assert_close(1000788897.3202186, np.max(zavgS[1].asnumpy()))
 
 
 @pytest.mark.requires_atlas
@@ -266,10 +266,10 @@ def test_nabla(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX.asnumpy()))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX.asnumpy()))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY.asnumpy()))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY.asnumpy()))
 
 
 @fendef
@@ -322,10 +322,10 @@ def test_nabla2(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX.asnumpy()))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX.asnumpy()))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY.asnumpy()))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY.asnumpy()))
 
 
 @fundef
@@ -407,7 +407,7 @@ def test_nabla_sign(program_processor, lift_mode):
     )
 
     if validate:
-        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX))
-        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX))
-        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY))
-        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY))
+        assert_close(-3.5455427772566003e-003, np.min(pnabla_MXX.asnumpy()))
+        assert_close(3.5455427772565435e-003, np.max(pnabla_MXX.asnumpy()))
+        assert_close(-3.3540113705465301e-003, np.min(pnabla_MYY.asnumpy()))
+        assert_close(3.3540113705465301e-003, np.max(pnabla_MYY.asnumpy()))

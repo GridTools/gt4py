@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common
+from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -290,8 +290,8 @@ class Program:
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
                 )
             )
-
-            self.definition(*rewritten_args, **kwargs)
+            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                ctx.run(self.definition, *rewritten_args, **kwargs)
             return
 
         ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
@@ -545,6 +545,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     definition: Optional[types.FunctionType] = None
     backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
+    _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -613,6 +614,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
+        hash_ = eve_utils.content_hash(
+            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
+        )
+        try:
+            return self._program_cache[hash_]
+        except KeyError:
+            pass
 
         loc = self.foast_node.location
         param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
@@ -666,12 +674,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        return Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+        return self._program_cache[hash_]
 
     def __call__(
         self,
@@ -686,6 +695,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             offset_provider = kwargs.pop("offset_provider", None)
             if self.backend is not None:
                 # "out" and "offset_provider" -> field_operator as program
+                # When backend is None, we are in embedded execution and for now
+                # we disable the program generation since it would involve generating
+                # Python source code from a PAST node.
                 args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
@@ -700,10 +712,20 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
             else:
-                # "out" -> field_operator called from program in embedded execution
-                # TODO(egparedes): put offset_provider in ctxt var here when implementing remap
+                # "out" -> field_operator called from program in embedded execution or
+                # field_operator called directly from Python in embedded execution
                 domain = kwargs.pop("domain", None)
-                res = self.definition(*args, **kwargs)
+                if not next_embedded.context.within_context():
+                    # field_operator from Python in embedded execution
+                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                        res = ctx.run(self.definition, *args, **kwargs)
+                else:
+                    # field_operator from program in embedded execution (offset_provicer is already set)
+                    assert (
+                        offset_provider is None
+                        or next_embedded.context.offset_provider.get() is offset_provider
+                    )
+                    res = self.definition(*args, **kwargs)
                 _tuple_assign_field(
                     out, res, domain=None if domain is None else common.domain(domain)
                 )

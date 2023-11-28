@@ -82,7 +82,7 @@ def test_simple_indirection(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -113,4 +113,4 @@ def test_direct_offset_for_indirection(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
