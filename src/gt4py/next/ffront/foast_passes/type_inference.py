@@ -1,12 +1,13 @@
 import typing
 
-from gt4py.next.ffront import field_operator_ast as foast
+from gt4py.next.ffront import field_operator_ast as foast, fbuiltins
 from gt4py import eve
 from gt4py.next import errors
 from gt4py.next.type_system_2 import types as ts2
 from gt4py.next.ffront.type_system_2 import types as ts2_f, inference as ti2_f
 from gt4py.next.type_system_2 import traits
 from typing import Optional, Any
+from gt4py.next import common as gtx_common
 import dataclasses
 
 
@@ -44,10 +45,41 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
     result: Optional[ts2.Type]
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> foast.FieldOperator:
-        assert False, "FieldOperator nodes are never actually processed"
+        definition: foast.FunctionDefinition = self.visit(node.definition)
+        definition_t = definition.type_2
+        assert isinstance(definition_t, ts2.FunctionType)
+        ty = ts2_f.FieldOperatorType(definition_t.parameters, definition_t.result)
+        return foast.FieldOperator(
+            id=node.id,
+            definition=definition,
+            type_2=ty,
+            location=node.location,
+        )
 
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> foast.ScanOperator:
-        assert False, "FieldOperator nodes are never actually processed"
+        definition: foast.FunctionDefinition = self.visit(node.definition)
+        axis: foast.Expr = self.visit(node.axis)
+        forward: foast.Expr = self.visit(node.forward)
+        init: foast.Expr = self.visit(node.init)
+        definition_t = definition.type_2
+        axis_t = axis.type_2
+        assert isinstance(definition_t, ts2.FunctionType)
+        assert isinstance(axis_t, ts2_f.DimensionType)
+        ty = ts2_f.ScanOperatorType(
+            axis_t.dimension,
+            definition_t.parameters[0].ty,
+            definition_t.parameters[1:],
+            definition_t.result
+        )
+        return foast.ScanOperator(
+            id=node.id,
+            definition=definition,
+            axis=axis,
+            forward=forward,
+            init=init,
+            type_2=ty,
+            location=node.location,
+        )
 
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs) -> foast.FunctionDefinition:
         ty = node.type_2
@@ -79,13 +111,13 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
                 raise errors.DSLError(node.location, f"invalid arguments to call: {result_or_err}")
             ty = result_or_err
             return foast.Call(func=func, args=positionals, kwargs=keywords, type_2=ty, location=node.location)
-        raise errors.DSLError(func.location, f"object of type '{func_t}' is not callable")
+        raise errors.DSLError(func.location, f"'{func_t}' is not callable")
 
     def visit_Return(self, node: foast.Return, **kwargs) -> foast.Return:
         value: foast.Expr = self.visit(node.value, **kwargs)
         value_t = value.type_2
         if value_t != self.result and not traits.is_implicitly_convertible(value_t, self.result):
-            message = f"no implicit conversion from '{value.type_2}' to function return type '{self.result}'"
+            message = f"could not implicitly convert '{value.type_2}' to function return type '{self.result}'"
             supplement = ", use an explicit cast" if traits.is_convertible(value.type_2, self.result) else ""
             raise errors.DSLError(node.location, message + supplement)
         return foast.Return(value=value, type_2=value.type_2, location=node.location)
@@ -146,10 +178,31 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> foast.Subscript:
         value = self.visit(node.value, **kwargs)
-        if isinstance(value.type_2, ts2.TupleType):
-            ty = value.type_2.elements[node.index]
+        value_t = value.type_2
+        if isinstance(value_t, ts2.TupleType):
+            ty = value_t.elements[node.index]
             return foast.Subscript(value=value, index=node.index, type_2=ty, location=node.location)
-        raise errors.DSLError(node.location, f"expression of type '{value.type_2}' is not subscriptable")
+        if isinstance(value_t, ts2_f.FieldOffsetType):
+            if len(value_t.field_offset.target) == 2:
+                if value_t.field_offset.target[1].kind != gtx_common.DimensionKind.LOCAL:
+                    message = "expected a local dimension for FieldOffset.target[1]"
+                    raise errors.DSLError(value.location, message)
+                name = value_t.field_offset.value
+                src = value_t.field_offset.source
+                tar = (value_t.field_offset.target[0],)
+                conn = value_t.field_offset.connectivity
+                fo = fbuiltins.FieldOffset(value=name, source=src, target=tar, connectivity=conn)
+                ty = ts2_f.FieldOffsetType(fo)
+            elif len(value_t.field_offset.target) == 1:
+                if value_t.field_offset.source != value_t.field_offset.target[0]:
+                    message = "expected source and target dimensions to be the same for cartesian offsets"
+                    raise errors.DSLError(value.location, message)
+                ty = value_t
+            else:
+                message = "invalid field offset"
+                raise errors.DSLError(value.location, message)
+            return foast.Subscript(value=value, index=node.index, type_2=ty, location=node.location)
+        raise errors.DSLError(node.location, f"'{value.type_2}' is not subscriptable")
 
     def visit_IfStmt(self, node: foast.IfStmt, **kwargs) -> foast.IfStmt:
         symtable = kwargs["symtable"]
@@ -165,14 +218,16 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         )
 
         if not traits.is_implicitly_convertible(condition.type_2, ts2.BoolType()):
-            message = "expected an expression implicitly convertible to boolean"
+            message = f"could not implicitly convert from '{condition.type_2}' to '{ts2.BoolType()}'"
             raise errors.DSLError(condition.location, message)
 
         for sym in node.annex.propagated_symbols.keys():
             true_branch_ty = true_branch.annex.symtable[sym].type_2
             false_branch_ty = false_branch.annex.symtable[sym].type_2
             if true_branch_ty != false_branch_ty:
-                message = "symbol '{sym}' has different types in the 'then' and 'else' branches of the if statement"
+                message = (f"'{sym}' has type '{true_branch_ty}' in the 'then' branch"
+                           f" but type {false_branch_ty} in the 'else' branch;"
+                           f" types must be the same")
                 raise errors.DSLError(true_branch.annex.symtable[sym].location, message)
             # TODO: properly patch symtable (new node?)
             symtable[sym].type = result.annex.propagated_symbols[
@@ -185,14 +240,14 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         operand: foast.Expr = self.visit(node.operand, **kwargs)
         operand_t = operand.type_2
         if node.op in [UnaryOperator.NOT, UnaryOperator.INVERT]:
-            message = "operand does not support bitwise operations"
+            message = f"'{operand_t}' does not support bitwise operations"
             if not isinstance(operand_t, traits.BitwiseTrait) or not operand_t.supports_bitwise():
                 raise errors.DSLError(operand.location, message)
         elif node.op == UnaryOperator.USUB:
             if isinstance(operand_t, ts2.IntegerType) and not operand_t.signed:
                 required_width = 2 * operand_t.width
                 if required_width > 64:
-                    message = "no integral type can represent the negative value"
+                    message = f"negating a value of type '{operand_t}' may overflow"
                     raise errors.DSLError(node.location, message)
                 operand_t = ts2.IntegerType(required_width, True)
 
@@ -208,21 +263,23 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         lhs_t = lhs.type_2
         rhs_t = rhs.type_2
         if node.op in bitwise_ops:
-            message = "operand does not support bitwise operations"
             if not isinstance(lhs_t, traits.BitwiseTrait) or not lhs_t.supports_bitwise():
+                message = f"'{lhs_t}' does not support bitwise operations"
                 raise errors.DSLError(lhs.location, message)
             if not isinstance(rhs_t, traits.BitwiseTrait) or not rhs_t.supports_bitwise():
+                message = f"'{rhs_t}' does not support bitwise operations"
                 raise errors.DSLError(rhs.location, message)
             ty = traits.common_bitwise_type(lhs_t, rhs_t)
         else:
-            message = "operand does not support arithmetic operations"
             if not isinstance(lhs_t, traits.ArithmeticTrait) or not lhs_t.supports_arithmetic():
+                message = f"'{lhs_t}' does not support arithmetic operations"
                 raise errors.DSLError(lhs.location, message)
             if not isinstance(rhs_t, traits.ArithmeticTrait) or not rhs_t.supports_arithmetic():
+                message = f"'{rhs_t}' does not support arithmetic operations"
                 raise errors.DSLError(rhs.location, message)
             ty = traits.common_arithmetic_type(lhs_t, rhs_t)
         if ty is None:
-            message = f"incompatible operands for '{node.op}'"
+            message = f"no matching operator '{node.op}' for operand types '{lhs_t}', '{rhs_t}'"
             raise errors.DSLError(node.location, message)
 
         return foast.BinOp(left=lhs, right=rhs, op=node.op, type_2=ty, location=node.location)
@@ -234,14 +291,14 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         rhs_t = rhs.type_2
 
         if not isinstance(lhs_t, traits.ArithmeticTrait) or not lhs_t.supports_arithmetic():
-            message = "operand does not support comparison operations"
+            message = f"'{lhs_t}' does not support comparison operations"
             raise errors.DSLError(lhs.location, message)
         if not isinstance(rhs_t, traits.ArithmeticTrait) or not rhs_t.supports_arithmetic():
-            message = "operand does not support comparison operations"
+            message = f"'{rhs_t}' does not support comparison operations"
             raise errors.DSLError(rhs.location, message)
         common_ty = traits.common_arithmetic_type(lhs_t, rhs_t)
         if common_ty is None:
-            message = f"incompatible operands for '{node.op}'"
+            message = f"no matching operator '{node.op}' for operand types '{lhs_t}', '{rhs_t}'"
             raise errors.DSLError(node.location, message)
         if isinstance(common_ty, ts2_f.FieldType):
             ty = ts2_f.FieldType(ts2.BoolType(), common_ty.dimensions)
@@ -255,11 +312,13 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         then_expr: foast.Expr = self.visit(node.true_expr, **kwargs)
         else_expr: foast.Expr = self.visit(node.false_expr, **kwargs)
         if not traits.is_implicitly_convertible(condition.type_2, ts2.BoolType()):
-            message = "expected an expression implicitly convertible to boolean"
+            message = f"could not implicitly convert from '{condition.type_2}' to '{ts2.BoolType()}'"
             raise errors.DSLError(condition.location, message)
         ty = traits.common_type(then_expr.type_2, else_expr.type_2)
         if ty is None:
-            message = "could not cast the 'then' and 'else' expressions to a common type"
+            message = (f"then expression has type {then_expr.type_2}"
+                       f" but else expression has type {else_expr.type_2};"
+                       f" could not find a common type")
             raise errors.DSLError(node.location, message)
         return foast.TernaryExpr(
             condition=condition,
@@ -272,5 +331,5 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
     def visit_Constant(self, node: foast.Constant, **kwargs) -> foast.Constant:
         ty = ti2_f.inferrer.from_instance(node.value)
         if ty is None:
-            raise errors.DSLError(node.location, "constant has invalid type")
+            raise errors.DSLError(node.location, "could not infer type of constant expression")
         return foast.Constant(value=node.value, location=node.location, type_2=ty)

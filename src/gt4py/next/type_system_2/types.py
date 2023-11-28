@@ -28,6 +28,10 @@ class IntegerType(
         self.width = width
         self.signed = signed
 
+    def __str__(self):
+        signed = "" if self.signed else "u"
+        return f"{signed}int{self.width}" if self.width > 1 else "bool"
+
     def is_signed(self) -> bool:
         return self.signed
 
@@ -72,6 +76,9 @@ class FloatType(
         assert (width in [16, 32, 64])
         self.width = width
 
+    def __str__(self):
+        return f"float{self.width}"
+
     def is_signed(self) -> bool:
         return True
 
@@ -96,11 +103,29 @@ class FloatType(
 
 
 @dataclasses.dataclass
-class TupleType(Type):
+class TupleType(Type, traits.FromTrait, traits.FromImplicitTrait):
     elements: list[Type]
 
     def __init__(self, elements: list[Type]):
         self.elements = elements
+
+    def __str__(self):
+        elements = ", ".join(str(element) for element in self.elements)
+        return f"tuple[{elements}]"
+
+    def is_constructible_from(self, ty: Type) -> bool:
+        if not isinstance(ty, TupleType):
+            return False
+        if len(self.elements) != len(ty.elements):
+            return False
+        return all(traits.is_convertible(oth_el, el) for el, oth_el in zip(self.elements, ty.elements))
+
+    def is_implicitly_constructible_from(self, ty: Type) -> bool:
+        if not isinstance(ty, TupleType):
+            return False
+        if len(self.elements) != len(ty.elements):
+            return False
+        return all(traits.is_implicitly_convertible(oth_el, el) for el, oth_el in zip(self.elements, ty.elements))
 
 
 @dataclasses.dataclass
@@ -109,6 +134,10 @@ class StructType(Type):
 
     def __init__(self, fields: list[tuple[str, Type]]):
         self.fields = fields
+
+    def __str__(self):
+        elements = ", ".join(f"{field[0]}: {str(field[1])}" for field in self.fields)
+        return f"struct[{elements}]"
 
 
 @dataclasses.dataclass
