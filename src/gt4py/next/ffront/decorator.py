@@ -53,7 +53,7 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
+from gt4py.next.iterator.ir_utils.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation

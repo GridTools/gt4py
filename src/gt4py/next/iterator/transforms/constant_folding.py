@@ -13,7 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve import NodeTranslator
-from gt4py.next.iterator import embedded, ir, ir_makers as im
+from gt4py.next.iterator import embedded, ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 class ConstantFolding(NodeTranslator):

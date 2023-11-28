@@ -12,16 +12,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import enum
-from collections import ChainMap
-from typing import Callable, Optional
-import hashlib
+from typing import Optional
 
 import dataclasses
 
 from gt4py import eve
-from gt4py.eve.utils import UIDGenerator
+import gt4py.eve.utils
 from gt4py.next import type_inference
-from gt4py.next.iterator import ir, type_inference as it_type_inference, ir_makers as im
+from gt4py.next.iterator import ir, type_inference as it_type_inference
+from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_let, is_if_call
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda, InlineLambdas
 
 
@@ -49,13 +49,9 @@ def _get_tuple_size(elem: ir.Node, use_global_information: bool) -> int | type[U
 
     return len(type_.dtype)
 
-def _is_let(node: ir.Node) -> bool:
-    return isinstance(node, ir.FunCall) and isinstance(node.fun, ir.Lambda)
-
-def _is_if_call(node: ir.Expr):
-    return isinstance(node, ir.FunCall) and node.fun == im.ref("if_")
 
 def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
+    """Given a itir.FunCall return a new call with one of its argument replaced."""
     return ir.FunCall(
         fun=node.fun,
         args=[arg if i != arg_idx else new_arg for i, arg in enumerate(node.args)]
@@ -71,48 +67,7 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
 def nlet(bindings: list[tuple[ir.Sym, str], ir.Expr]):
     return im.let(*[el for tup in bindings for el in tup])
 
-def _short_hash(val: str) -> str:
-    return hashlib.sha1(val.encode('UTF-8')).hexdigest()[0:6]
 
-@dataclasses.dataclass(frozen=True)
-class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
-    """
-    Given an iterator expression cannonicalize all bound symbol names.
-
-    If two such expression are in the same scope and equal so are their values.
-
-    >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
-    >>> cannonicalized_testee1 = CannonicalizeBoundSymbolNames.apply(testee1)
-    >>> str(cannonicalized_testee1)
-    'λ(_csym_1) → _csym_1 + b'
-
-    >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
-    >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)
-    >>> assert cannonicalized_testee1 == cannonicalized_testee2
-    """
-    _uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_csym")
-    )
-
-    @classmethod
-    def apply(cls, node: ir.Expr):
-        return cls().visit(node, sym_map=ChainMap({}))
-
-    def visit_Lambda(self, node: ir.Lambda, *, sym_map: ChainMap):
-        sym_map = sym_map.new_child()
-        for param in node.params:
-            sym_map[str(param.id)] = self._uids.sequential_id()
-
-        return im.lambda_(*sym_map.values())(self.visit(node.expr, sym_map=sym_map))
-
-    def visit_SymRef(self, node: ir.SymRef, *, sym_map: dict[str, str]):
-        return im.ref(sym_map[node.id]) if node.id in sym_map else node
-
-def _is_equal_value_heuristics(a: ir.Expr, b: ir.Expr):
-    """
-    Return true if, bot not only if, two expression (with equal scope) have the same value.
-    """
-    return a == b or (CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b))
 
 @dataclasses.dataclass(frozen=True)
 class CollapseTuple(eve.NodeTranslator):
@@ -156,8 +111,8 @@ class CollapseTuple(eve.NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    _letify_make_tuple_uids: UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: UIDGenerator(prefix="_tuple_el")
+    _letify_make_tuple_uids: eve.utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="_tuple_el")
     )
 
     _node_types: Optional[dict[int, type_inference.Type]] = None
@@ -247,7 +202,7 @@ class CollapseTuple(eve.NodeTranslator):
             and isinstance(node.args[0], ir.Literal)  # TODO: extend to general symbols as long as the tail call in the let does not capture
         ):
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if _is_let(node.args[1]):
+            if is_let(node.args[1]):
                 idx, let_expr = node.args
                 return self.visit(
                     im.call(im.lambda_(*let_expr.fun.params)(im.tuple_get(idx, let_expr.fun.expr)))(*let_expr.args)
@@ -280,7 +235,7 @@ class CollapseTuple(eve.NodeTranslator):
                 return self.visit(im.let(*(el for item in bound_vars.items() for el in item))(
                     im.call(node.fun)(*new_args)))
 
-        if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and _is_let(node):
+        if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
@@ -292,20 +247,20 @@ class CollapseTuple(eve.NodeTranslator):
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
             for i, arg in enumerate(node.args):
-                if _is_if_call(arg):
+                if is_if_call(arg):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.visit(_with_altered_arg(node, i, true_branch), **kwargs)
                     new_false_branch = self.visit(_with_altered_arg(node, i, false_branch), **kwargs)
                     return im.if_(cond, new_true_branch, new_false_branch)
 
-        if self.flags & self.Flag.PROPAGATE_NESTED_LET and _is_let(node):
+        if self.flags & self.Flag.PROPAGATE_NESTED_LET and is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
             original_inner_expr = node.fun.expr
             for arg_sym, arg in zip(node.fun.params, node.args):
                 assert arg_sym not in inner_vars  # TODO: fix collisions
-                if _is_let(arg):
+                if is_let(arg):
                     for sym, val in zip(arg.fun.params, arg.args):
                         assert sym not in outer_vars  # TODO: fix collisions
                         outer_vars[sym] = val
@@ -315,7 +270,7 @@ class CollapseTuple(eve.NodeTranslator):
             if outer_vars:
                 node = self.visit(nlet(tuple(outer_vars.items()))(nlet(tuple(inner_vars.items()))(original_inner_expr)))
 
-        if self.flags & self.Flag.INLINE_TRIVIAL_LET and _is_let(node) and isinstance(node.fun.expr, ir.SymRef):
+        if self.flags & self.Flag.INLINE_TRIVIAL_LET and is_let(node) and isinstance(node.fun.expr, ir.SymRef):
             # `let(a, 1)(a)` -> `1`
             for arg_sym, arg in zip(node.fun.params, node.args):
                 if node.fun.expr == im.ref(arg_sym.id):

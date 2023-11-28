@@ -16,8 +16,8 @@ from typing import Union
 
 from lark import lark, lexer as lark_lexer, visitors as lark_visitors
 
-from gt4py.next.iterator import ir, ir_makers as im
-
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 GRAMMAR = """
     start: fencil_definition

@@ -14,7 +14,8 @@
 
 from gt4py.eve import NodeTranslator
 from gt4py.eve.pattern_matching import ObjectPattern as P
-from gt4py.next.iterator import ir, ir_makers as im
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 # TODO(tehrengruber): This pass can be generalized to all builtins, e.g.
