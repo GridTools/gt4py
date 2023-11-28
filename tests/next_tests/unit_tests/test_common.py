@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import operator
 from typing import Optional, Pattern
 
 import pytest
@@ -20,6 +21,7 @@ from gt4py.next.common import (
     DimensionKind,
     Domain,
     Infinity,
+    NamedRange,
     UnitRange,
     domain,
     named_range,
@@ -148,6 +150,21 @@ def test_positive_infinity_range():
 def test_mixed_infinity_range():
     mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
     assert len(mixed_inf_range) == Infinity.positive()
+
+
+@pytest.mark.parametrize(
+    "op, rng1, rng2, expected",
+    [
+        (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
+        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
+        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
+        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
+        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
+        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+    ],
+)
+def test_range_comparison(op, rng1, rng2, expected):
+    assert op(rng1, rng2) == expected
 
 
 @pytest.mark.parametrize(
@@ -301,6 +318,134 @@ def test_domain_dims_ranges_length_mismatch():
         dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
+
+
+def test_domain_dim_index():
+    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
+    domain = Domain(dims=dims, ranges=ranges)
+
+    domain.dim_index(Dimension("Y")) == 1
+
+    domain.dim_index(Dimension("Foo")) == None
+
+
+def test_domain_pop():
+    dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
+    ranges = [UnitRange(0, 1), UnitRange(0, 1), UnitRange(0, 1)]
+    domain = Domain(dims=dims, ranges=ranges)
+
+    domain.pop(Dimension("X")) == Domain(dims=dims[1:], ranges=ranges[1:])
+
+    domain.pop(0) == Domain(dims=dims[1:], ranges=ranges[1:])
+
+    domain.pop(-1) == Domain(dims=dims[:-1], ranges=ranges[:-1])
+
+
+@pytest.mark.parametrize(
+    "index, named_ranges, domain, expected",
+    [
+        # Valid index and named ranges
+        (
+            0,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        (
+            1,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        (
+            -1,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+            ),
+        ),
+        (
+            Dimension("J"),
+            [(Dimension("X"), UnitRange(100, 110)), (Dimension("Z"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("X"), UnitRange(100, 110)),
+                (Dimension("Z"), UnitRange(100, 110)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+        ),
+        # Invalid indices
+        (
+            3,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            IndexError,
+        ),
+        (
+            -4,
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            IndexError,
+        ),
+        (
+            Dimension("Foo"),
+            [(Dimension("X"), UnitRange(100, 110))],
+            Domain(
+                (Dimension("I"), UnitRange(0, 10)),
+                (Dimension("J"), UnitRange(0, 10)),
+                (Dimension("K"), UnitRange(0, 10)),
+            ),
+            ValueError,
+        ),
+    ],
+)
+def test_domain_replace(index, named_ranges, domain, expected):
+    if expected is ValueError:
+        with pytest.raises(ValueError):
+            domain.replace(index, *named_ranges)
+    elif expected is IndexError:
+        with pytest.raises(IndexError):
+            domain.replace(index, *named_ranges)
+    else:
+        new_domain = domain.replace(index, *named_ranges)
+        assert new_domain == expected
 
 
 def dimension_promotion_cases() -> (

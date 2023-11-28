@@ -65,14 +65,29 @@ def convert_arg(arg: Any):
     return arg
 
 
-def preprocess_program(program: itir.FencilDefinition, offset_provider: Mapping[str, Any]):
-    program = apply_common_transforms(
+def preprocess_program(
+    program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
+):
+    node = apply_common_transforms(
         program,
-        offset_provider=offset_provider,
-        lift_mode=LiftMode.FORCE_INLINE,
         common_subexpression_elimination=False,
+        lift_mode=lift_mode,
+        offset_provider=offset_provider,
+        unroll_reduce=False,
     )
-    return program
+    # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
+    # In this case, just retry with unrolled reductions.
+    if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
+        fencil_definition = node
+    else:
+        fencil_definition = apply_common_transforms(
+            program,
+            common_subexpression_elimination=False,
+            lift_mode=lift_mode,
+            offset_provider=offset_provider,
+            unroll_reduce=True,
+        )
+    return fencil_definition
 
 
 def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
@@ -156,11 +171,14 @@ def get_cache_id(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
+    build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
-    build_cache = kwargs.get("build_cache", None)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
+    lift_mode = (
+        LiftMode.FORCE_INLINE
+    )  # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
@@ -173,7 +191,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         sdfg = sdfg_program.sdfg
     else:
         # visit ITIR and generate SDFG
-        program = preprocess_program(program, offset_provider)
+        program = preprocess_program(program, offset_provider, lift_mode)
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
         sdfg = sdfg_genenerator.visit(program)
         sdfg.simplify()

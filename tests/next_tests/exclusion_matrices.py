@@ -50,6 +50,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU_WITH_TEMPORARIES = (
         "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
     )
+    GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
@@ -98,6 +99,10 @@ USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
 USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
+USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
+USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
+USES_SCAN = "uses_scan"
+CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
 UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
@@ -114,10 +119,16 @@ GTFN_SKIP_TEST_LIST = [
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+EMBEDDED_SKIP_LIST = [
+    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+    (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
+]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
 #: (<test_marker>, <skip_definition, <skip_message>)
 BACKEND_SKIP_TEST_MATRIX = {
+    None: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: GTFN_SKIP_TEST_LIST
     + [
         (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
@@ -133,6 +144,10 @@ BACKEND_SKIP_TEST_MATRIX = {
         (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
+    + [
+        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    ],
+    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],

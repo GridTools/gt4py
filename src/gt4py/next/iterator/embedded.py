@@ -51,8 +51,9 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common
+from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 
 
@@ -60,7 +61,7 @@ EMBEDDED = "embedded"
 
 
 # Atoms
-Tag: TypeAlias = str
+Tag: TypeAlias = common.Tag
 
 ArrayIndex: TypeAlias = slice | common.IntIndex
 ArrayIndexOrIndices: TypeAlias = ArrayIndex | tuple[ArrayIndex, ...]
@@ -129,8 +130,8 @@ class StridedNeighborOffsetProvider:
 # Offsets
 OffsetPart: TypeAlias = Tag | common.IntIndex
 CompleteOffset: TypeAlias = tuple[Tag, common.IntIndex]
-OffsetProviderElem: TypeAlias = common.Dimension | common.Connectivity
-OffsetProvider: TypeAlias = dict[Tag, OffsetProviderElem]
+OffsetProviderElem: TypeAlias = common.OffsetProviderElem
+OffsetProvider: TypeAlias = common.OffsetProvider
 
 # Positions
 SparsePositionEntry = list[int]
@@ -195,9 +196,9 @@ class MutableLocatedField(LocatedField, Protocol):
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
-column_range_cvar: cvars.ContextVar[range] = cvars.ContextVar("column_range")
+column_range_cvar: cvars.ContextVar[range] = next_embedded.context.closure_column_range
 #: Offset provider dict in the current closure execution context.
-offset_provider_cvar: cvars.ContextVar[OffsetProvider] = cvars.ContextVar("offset_provider")
+offset_provider_cvar: cvars.ContextVar[OffsetProvider] = next_embedded.context.offset_provider
 
 
 class Column(np.lib.mixins.NDArrayOperatorsMixin):
@@ -1061,6 +1062,10 @@ class IndexField(common.Field):
         return common.Domain((self._dimension, common.UnitRange.infinity()))
 
     @property
+    def codomain(self) -> type[core_defs.int32]:
+        return core_defs.int32
+
+    @property
     def dtype(self) -> core_defs.Int32DType:
         return core_defs.Int32DType()
 
@@ -1068,7 +1073,10 @@ class IndexField(common.Field):
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: common.Field) -> common.Field:
+    def asnumpy(self) -> np.ndarray:
+        raise NotImplementedError()
+
+    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1091,6 +1099,12 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
@@ -1171,10 +1185,17 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         return core_defs.dtype(type(self._value))
 
     @property
+    def codomain(self) -> type[core_defs.ScalarT]:
+        return self.dtype.scalar_type
+
+    @property
     def ndarray(self) -> core_defs.NDArrayObject:
         raise AttributeError("Cannot get `ndarray` of an infinite Field.")
 
-    def remap(self, index_field: common.Field) -> common.Field:
+    def asnumpy(self) -> np.ndarray:
+        raise NotImplementedError()
+
+    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1192,6 +1213,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         raise NotImplementedError()
 
     def __invert__(self) -> common.Field:
+        raise NotImplementedError()
+
+    def __eq__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
+        raise NotImplementedError()
+
+    def __ne__(self, other: Any) -> common.Field:  # type: ignore[override] # mypy wants return `bool`
         raise NotImplementedError()
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
