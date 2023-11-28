@@ -187,6 +187,6 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     #    is not None
     # )
     assert (
-        re.search("Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
+        re.search(r"Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
         is not None
     )
