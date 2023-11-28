@@ -758,7 +758,7 @@ def is_connectivity_field(
 
 
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -769,7 +769,7 @@ def field(
 
 
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
@@ -898,7 +898,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     __getitem__ = restrict
 
 
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique

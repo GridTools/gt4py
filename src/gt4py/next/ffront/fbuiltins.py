@@ -185,7 +185,7 @@ def broadcast(
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    return common.field(
+    return common._field(
         np.asarray(field)[
             tuple([np.newaxis] * len(dims))
         ],  # TODO(havogt) use FunctionField once available
