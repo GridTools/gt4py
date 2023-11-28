@@ -451,7 +451,7 @@ class DaCeComputationCodegen:
                 const int __I = domain[0];
                 const int __J = domain[1];
                 const int __K = domain[2];
-                ${name}_{state_prefix} dace_handle;
+                ${name}_${state_prefix} dace_handle;
                 ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
