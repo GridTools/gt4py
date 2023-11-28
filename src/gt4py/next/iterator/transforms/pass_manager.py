@@ -164,7 +164,7 @@ def apply_common_transforms(
     ir = InlineLambdas.apply(
         ir,
         opcount_preserving=True,
-        force_inline_lambda_args=(lift_mode == LiftMode.FORCE_INLINE) and force_inline_lambda_args,
+        force_inline_lambda_args=force_inline_lambda_args,
     )
 
     return ir
