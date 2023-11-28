@@ -135,6 +135,7 @@ def test_propagate_to_if_on_tuples():
     )
     assert actual == expected
 
+
 def test_propagate_to_if_on_tuples_with_let():
     testee = im.let("val", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4)))(
         im.tuple_get(0, "val")
@@ -146,7 +147,7 @@ def test_propagate_to_if_on_tuples_with_let():
                                    im.make_tuple(3, 4)))
     actual = CollapseTuple.apply(
         testee,
-        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
     )
     assert actual == expected
 
