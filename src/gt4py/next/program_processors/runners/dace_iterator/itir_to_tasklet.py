@@ -357,10 +357,10 @@ _GENERAL_BUILTIN_MAPPING: dict[
 
 
 class GatherLambdaSymbolsPass(eve.NodeVisitor):
-    sdfg: dace.SDFG
-    state: dace.SDFGState
-    symbol_map: dict[str, TaskletExpr]
-    parent_symbol_map: dict[str, TaskletExpr]
+    _sdfg: dace.SDFG
+    _state: dace.SDFGState
+    _symbol_map: dict[str, TaskletExpr]
+    _parent_symbol_map: dict[str, TaskletExpr]
 
     def __init__(
         self,
@@ -368,17 +368,22 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
         state,
         parent_symbol_map,
     ):
-        self.sdfg = sdfg
-        self.state = state
-        self.symbol_map = {}
-        self.parent_symbol_map = parent_symbol_map
+        self._sdfg = sdfg
+        self._state = state
+        self._symbol_map = {}
+        self._parent_symbol_map = parent_symbol_map
+
+    @property
+    def symbol_refs(self):
+        """Dictionary of symbols referenced from the lambda expression."""
+        return self._symbol_map
 
     def _add_symbol(self, param, arg):
         if isinstance(arg, ValueExpr):
             # create storage in lambda sdfg
-            self.sdfg.add_scalar(param, dtype=arg.dtype)
+            self._sdfg.add_scalar(param, dtype=arg.dtype)
             # update table of lambda symbol
-            self.symbol_map[param] = ValueExpr(self.state.add_access(param), arg.dtype)
+            self._symbol_map[param] = ValueExpr(self._state.add_access(param), arg.dtype)
         elif isinstance(arg, IteratorExpr):
             # create storage in lambda sdfg
             ndims = len(arg.dimensions)
@@ -388,24 +393,24 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             strides = tuple(
                 dace.symbol(unique_var_name() + "__strd", dace.int64) for _ in range(ndims)
             )
-            self.sdfg.add_array(param, shape=shape, strides=strides, dtype=arg.dtype)
+            self._sdfg.add_array(param, shape=shape, strides=strides, dtype=arg.dtype)
             index_names = {dim: f"__{param}_i_{dim}" for dim in arg.indices.keys()}
             for _, index_name in index_names.items():
-                self.sdfg.add_scalar(index_name, dtype=dace.int64)
+                self._sdfg.add_scalar(index_name, dtype=dace.int64)
             # update table of lambda symbol
-            field = self.state.add_access(param)
+            field = self._state.add_access(param)
             indices = {
-                dim: self.state.add_access(index_arg) for dim, index_arg in index_names.items()
+                dim: self._state.add_access(index_arg) for dim, index_arg in index_names.items()
             }
-            self.symbol_map[param] = IteratorExpr(field, indices, arg.dtype, arg.dimensions)
+            self._symbol_map[param] = IteratorExpr(field, indices, arg.dtype, arg.dimensions)
         else:
             assert isinstance(arg, SymbolExpr)
-            self.symbol_map[param] = arg
+            self._symbol_map[param] = arg
 
     def visit_SymRef(self, node: itir.SymRef):
         name = str(node.id)
-        if name in self.parent_symbol_map and name not in self.symbol_map:
-            arg = self.parent_symbol_map[name]
+        if name in self._parent_symbol_map and name not in self._symbol_map:
+            arg = self._parent_symbol_map[name]
             self._add_symbol(name, arg)
 
     def visit_Lambda(self, node: itir.Lambda, args: Optional[Sequence[TaskletExpr]] = None):
@@ -417,10 +422,15 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
 
 
 class GatherOutputSymbolsPass(eve.NodeVisitor):
-    sdfg: dace.SDFG
-    state: dace.SDFGState
-    node_types: dict[int, next_typing.Type]
-    symbol_map: dict[str, TaskletExpr]
+    _sdfg: dace.SDFG
+    _state: dace.SDFGState
+    _node_types: dict[int, next_typing.Type]
+    _symbol_map: dict[str, TaskletExpr]
+
+    @property
+    def symbol_refs(self):
+        """Dictionary of symbols referenced from the output expression."""
+        return self._symbol_map
 
     def __init__(
         self,
@@ -428,18 +438,18 @@ class GatherOutputSymbolsPass(eve.NodeVisitor):
         state,
         node_types,
     ):
-        self.sdfg = sdfg
-        self.state = state
-        self.node_types = node_types
-        self.symbol_map = {}
+        self._sdfg = sdfg
+        self._state = state
+        self._node_types = node_types
+        self._symbol_map = {}
 
     def visit_SymRef(self, node: itir.SymRef):
         param = str(node.id)
-        if param not in _GENERAL_BUILTIN_MAPPING and param not in self.symbol_map:
-            node_type = self.node_types[id(node)]
+        if param not in _GENERAL_BUILTIN_MAPPING and param not in self._symbol_map:
+            node_type = self._node_types[id(node)]
             assert isinstance(node_type, Val)
-            access_node = self.state.add_access(param)
-            self.symbol_map[param] = ValueExpr(
+            access_node = self._state.add_access(param)
+            self._symbol_map[param] = ValueExpr(
                 access_node, dtype=itir_type_as_dace_type(node_type.dtype)
             )
 
@@ -484,7 +494,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Add for input nodes for lambda symbols
         inputs: list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]] = []
-        for sym, input_node in lambda_symbols_pass.symbol_map.items():
+        for sym, input_node in lambda_symbols_pass.symbol_refs.items():
             arg = next((arg for param, arg in zip(node.params, args) if param.id == sym), None)
             if arg:
                 outer_node = arg
@@ -518,7 +528,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         lambda_context = Context(
             lambda_sdfg,
             lambda_state,
-            lambda_symbols_pass.symbol_map,
+            lambda_symbols_pass.symbol_refs,
             reduce_limit=self.context.reduce_limit,
             reduce_wcr=self.context.reduce_wcr,
         )

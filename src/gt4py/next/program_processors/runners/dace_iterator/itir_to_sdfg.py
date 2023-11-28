@@ -139,9 +139,11 @@ class ItirToSDFG(eve.NodeVisitor):
     def get_output_nodes(
         self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
+        # Visit output node, which could be a `make_tuple` expression, to collect the required access nodes
         output_symbols_pass = GatherOutputSymbolsPass(sdfg, state, self.node_types)
         output_symbols_pass.visit(closure.output)
-        context = Context(sdfg, state, output_symbols_pass.symbol_map)
+        # Visit output node again to generate the corresponding tasklet
+        context = Context(sdfg, state, output_symbols_pass.symbol_refs)
         translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
