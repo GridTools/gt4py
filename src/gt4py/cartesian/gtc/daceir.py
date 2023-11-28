@@ -101,6 +101,7 @@ class MapSchedule(eve.IntEnum):
             dace.ScheduleType.Default: MapSchedule.Default,
             dace.ScheduleType.Sequential: MapSchedule.Sequential,
             dace.ScheduleType.CPU_Multicore: MapSchedule.CPU_Multicore,
+            dace.ScheduleType.GPU_Default: MapSchedule.GPU_Device,
             dace.ScheduleType.GPU_Device: MapSchedule.GPU_Device,
             dace.ScheduleType.GPU_ThreadBlock: MapSchedule.GPU_ThreadBlock,
         }[schedule]
