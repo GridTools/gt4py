@@ -21,7 +21,6 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
 from gt4py.next.iterator import builtins
-from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -35,6 +34,7 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications, type_translation
 
 

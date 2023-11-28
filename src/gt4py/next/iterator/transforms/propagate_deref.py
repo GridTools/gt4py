@@ -57,7 +57,11 @@ class PropagateDeref(NodeTranslator):
                 ),
                 args=lambda_args,
             )
-        elif node.fun == im.ref("deref") and isinstance(node.args[0], ir.FunCall) and node.args[0].fun == im.ref("if_"):
+        elif (
+            node.fun == im.ref("deref")
+            and isinstance(node.args[0], ir.FunCall)
+            and node.args[0].fun == im.ref("if_")
+        ):
             cond, true_branch, false_branch = node.args[0].args
             return im.if_(cond, im.deref(true_branch), im.deref(false_branch))
 

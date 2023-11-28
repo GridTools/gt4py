@@ -11,18 +11,17 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import dataclasses
 import enum
 from typing import Optional
 
-import dataclasses
-
-from gt4py import eve
 import gt4py.eve.utils
+from gt4py import eve
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_let, is_if_call
-from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda, InlineLambdas
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_if_call, is_let
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 
 
 class UnknownLength:
@@ -53,20 +52,23 @@ def _get_tuple_size(elem: ir.Node, use_global_information: bool) -> int | type[U
 def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
     """Given a itir.FunCall return a new call with one of its argument replaced."""
     return ir.FunCall(
-        fun=node.fun,
-        args=[arg if i != arg_idx else new_arg for i, arg in enumerate(node.args)]
+        fun=node.fun, args=[arg if i != arg_idx else new_arg for i, arg in enumerate(node.args)]
     )
+
 
 def _is_trivial_make_tuple_call(node: ir.Expr):
     if not (isinstance(node, ir.FunCall) and node.fun == im.ref("make_tuple")):
         return False
-    if not all(isinstance(arg, (ir.SymRef, ir.Literal)) or _is_trivial_make_tuple_call(arg) for arg in node.args):
+    if not all(
+        isinstance(arg, (ir.SymRef, ir.Literal)) or _is_trivial_make_tuple_call(arg)
+        for arg in node.args
+    ):
         return False
     return True
 
+
 def nlet(bindings: list[tuple[ir.Sym, str], ir.Expr]):
     return im.let(*[el for tup in bindings for el in tup])
-
 
 
 @dataclasses.dataclass(frozen=True)
@@ -92,20 +94,22 @@ class CollapseTuple(eve.NodeTranslator):
         #: TODO
         PROPAGATE_TO_IF_ON_TUPLES = 32
         #: TODO
-        PROPAGATE_NESTED_LET=64
+        PROPAGATE_NESTED_LET = 64
         #: TODO
-        INLINE_TRIVIAL_LET=128
+        INLINE_TRIVIAL_LET = 128
 
     ignore_tuple_size: bool
     use_global_type_inference: bool
-    flags: int = (Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
-                  | Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE
-                  | Flag.PROPAGATE_TUPLE_GET
-                  | Flag.LETIFY_MAKE_TUPLE_ELEMENTS
-                  | Flag.INLINE_TRIVIAL_MAKE_TUPLE
-                  | Flag.PROPAGATE_TO_IF_ON_TUPLES
-                  | Flag.PROPAGATE_NESTED_LET
-                  | Flag.INLINE_TRIVIAL_LET)
+    flags: int = (
+        Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
+        | Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE
+        | Flag.PROPAGATE_TUPLE_GET
+        | Flag.LETIFY_MAKE_TUPLE_ELEMENTS
+        | Flag.INLINE_TRIVIAL_MAKE_TUPLE
+        | Flag.PROPAGATE_TO_IF_ON_TUPLES
+        | Flag.PROPAGATE_NESTED_LET
+        | Flag.INLINE_TRIVIAL_LET
+    )
 
     PRESERVED_ANNEX_ATTRS = ("type",)
 
@@ -125,7 +129,7 @@ class CollapseTuple(eve.NodeTranslator):
         ignore_tuple_size: bool = False,
         use_global_type_inference: bool = False,
         # manually passing flags is mostly for allowing separate testing of the modes
-        flags = None
+        flags=None,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -140,7 +144,7 @@ class CollapseTuple(eve.NodeTranslator):
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
             use_global_type_inference=use_global_type_inference,
-            flags=flags
+            flags=flags,
         ).visit(node)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
@@ -148,8 +152,9 @@ class CollapseTuple(eve.NodeTranslator):
         # and the CSE pass can not remove them.
         # TODO: test case for `scan(lambda carry: {1, 2})` (see solve_nonhydro_stencil_52_like_z_q_tup)
         if flags & cls.Flag.LETIFY_MAKE_TUPLE_ELEMENTS:
-            new_node = InlineLambdas.apply(new_node, opcount_preserving=True,
-                                           force_inline_lambda_args=False)
+            new_node = InlineLambdas.apply(
+                new_node, opcount_preserving=True, force_inline_lambda_args=False
+            )
 
         return new_node
 
@@ -171,13 +176,15 @@ class CollapseTuple(eve.NodeTranslator):
             for i, v in enumerate(node.args):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
-                if not (int(v.args[0].value) == i and _is_equal_value_heuristics(v.args[1], first_expr)):
+                if not (
+                    int(v.args[0].value) == i and _is_equal_value_heuristics(v.args[1], first_expr)
+                ):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
 
-            if self.ignore_tuple_size or _get_tuple_size(first_expr, self.use_global_type_inference) == len(
-                node.args
-            ):
+            if self.ignore_tuple_size or _get_tuple_size(
+                first_expr, self.use_global_type_inference
+            ) == len(node.args):
                 return first_expr
 
         if (
@@ -199,32 +206,38 @@ class CollapseTuple(eve.NodeTranslator):
         if (
             self.flags & self.Flag.PROPAGATE_TUPLE_GET
             and node.fun == ir.SymRef(id="tuple_get")
-            and isinstance(node.args[0], ir.Literal)  # TODO: extend to general symbols as long as the tail call in the let does not capture
+            and isinstance(
+                node.args[0], ir.Literal
+            )  # TODO: extend to general symbols as long as the tail call in the let does not capture
         ):
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
             if is_let(node.args[1]):
                 idx, let_expr = node.args
                 return self.visit(
-                    im.call(im.lambda_(*let_expr.fun.params)(im.tuple_get(idx, let_expr.fun.expr)))(*let_expr.args)
+                    im.call(im.lambda_(*let_expr.fun.params)(im.tuple_get(idx, let_expr.fun.expr)))(
+                        *let_expr.args
+                    )
                 )
             elif isinstance(node.args[1], ir.FunCall) and node.args[1].fun == im.ref("if_"):
                 idx = node.args[0]
                 cond, true_branch, false_branch = node.args[1].args
                 return self.visit(
                     im.if_(cond, im.tuple_get(idx, true_branch), im.tuple_get(idx, false_branch))
-                ) # todo: check if visit needed
+                )  # todo: check if visit needed
 
-        if (
-            self.flags & self.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
-            and node.fun == ir.SymRef(id="make_tuple")
+        if self.flags & self.Flag.LETIFY_MAKE_TUPLE_ELEMENTS and node.fun == ir.SymRef(
+            id="make_tuple"
         ):
             # `make_tuple(expr1, expr1)`
             # -> `let((_tuple_el_1, expr1), (_tuple_el_2, expr2))(make_tuple(_tuple_el_1, _tuple_el_2))`
             bound_vars: dict[str, ir.Expr] = {}
             new_args: list[ir.Expr] = []
             for i, arg in enumerate(node.args):
-                if isinstance(node, ir.FunCall) and node.fun == im.ref(
-                        "make_tuple") and not _is_trivial_make_tuple_call(node):
+                if (
+                    isinstance(node, ir.FunCall)
+                    and node.fun == im.ref("make_tuple")
+                    and not _is_trivial_make_tuple_call(node)
+                ):
                     el_name = self._letify_make_tuple_uids.sequential_id()
                     new_args.append(im.ref(el_name))
                     bound_vars[el_name] = arg
@@ -232,8 +245,11 @@ class CollapseTuple(eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.visit(im.let(*(el for item in bound_vars.items() for el in item))(
-                    im.call(node.fun)(*new_args)))
+                return self.visit(
+                    im.let(*(el for item in bound_vars.items() for el in item))(
+                        im.call(node.fun)(*new_args)
+                    )
+                )
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
@@ -250,7 +266,9 @@ class CollapseTuple(eve.NodeTranslator):
                 if is_if_call(arg):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.visit(_with_altered_arg(node, i, true_branch), **kwargs)
-                    new_false_branch = self.visit(_with_altered_arg(node, i, false_branch), **kwargs)
+                    new_false_branch = self.visit(
+                        _with_altered_arg(node, i, false_branch), **kwargs
+                    )
                     return im.if_(cond, new_true_branch, new_false_branch)
 
         if self.flags & self.Flag.PROPAGATE_NESTED_LET and is_let(node):
@@ -268,9 +286,17 @@ class CollapseTuple(eve.NodeTranslator):
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
-                node = self.visit(nlet(tuple(outer_vars.items()))(nlet(tuple(inner_vars.items()))(original_inner_expr)))
+                node = self.visit(
+                    nlet(tuple(outer_vars.items()))(
+                        nlet(tuple(inner_vars.items()))(original_inner_expr)
+                    )
+                )
 
-        if self.flags & self.Flag.INLINE_TRIVIAL_LET and is_let(node) and isinstance(node.fun.expr, ir.SymRef):
+        if (
+            self.flags & self.Flag.INLINE_TRIVIAL_LET
+            and is_let(node)
+            and isinstance(node.fun.expr, ir.SymRef)
+        ):
             # `let(a, 1)(a)` -> `1`
             for arg_sym, arg in zip(node.fun.params, node.args):
                 if node.fun.expr == im.ref(arg_sym.id):

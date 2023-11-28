@@ -26,7 +26,7 @@ from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
-from gt4py.next.otf.compilation.build_systems import compiledb, cmake
+from gt4py.next.otf.compilation.build_systems import cmake, compiledb
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
@@ -130,8 +130,7 @@ GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
 )
 
 GTFN_DEFAULT_COMPILE_STEP: step_types.CompilationStep = compiler.Compiler(
-    cache_strategy=cache.Strategy.PERSISTENT,
-    builder_factory=cmake.CMakeFactory()
+    cache_strategy=cache.Strategy.PERSISTENT, builder_factory=cmake.CMakeFactory()
 )
 
 

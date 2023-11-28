@@ -62,7 +62,9 @@ def test_incompatible_size_make_tuple_tuple_get():
 
 def test_merged_with_smaller_outer_size_make_tuple_tuple_get():
     testee = im.make_tuple(im.tuple_get(0, im.make_tuple("first", "second")))
-    actual = CollapseTuple.apply(testee, ignore_tuple_size=True, flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET)
+    actual = CollapseTuple.apply(
+        testee, ignore_tuple_size=True, flags=CollapseTuple.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
+    )
     assert actual == im.make_tuple("first", "second")
 
 
@@ -72,14 +74,13 @@ def test_simple_tuple_get_make_tuple():
     actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE)
     assert expected == actual
 
+
 def test_propagate_tuple_get():
     expected = im.let("el1", 1, "el2", 2)(im.tuple_get(0, im.make_tuple("el1", "el2")))
     testee = im.tuple_get(0, im.let("el1", 1, "el2", 2)(im.make_tuple("el1", "el2")))
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.PROPAGATE_TUPLE_GET
-    )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.PROPAGATE_TUPLE_GET)
     assert expected == actual
+
 
 def test_letify_make_tuple_elements():
     opaque_call = im.call("opaque")()
@@ -88,49 +89,32 @@ def test_letify_make_tuple_elements():
         im.make_tuple("_tuple_el_1", "_tuple_el_2")
     )
 
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
-    )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS)
     assert actual == expected
 
 
 def test_letify_make_tuple_with_trivial_elements():
-    testee = im.let("a", 1, "b", 2)(
-        im.make_tuple("a", "b")
-    )
+    testee = im.let("a", 1, "b", 2)(im.make_tuple("a", "b"))
     expected = testee  # did nothing
 
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
-    )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS)
     assert actual == expected
+
 
 def test_inline_trivial_make_tuple():
     testee = im.let("tup", im.make_tuple("a", "b"))("tup")
     expected = im.make_tuple("a", "b")
 
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.INLINE_TRIVIAL_MAKE_TUPLE
-    )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.INLINE_TRIVIAL_MAKE_TUPLE)
     assert actual == expected
 
+
 def test_propagate_to_if_on_tuples():
-    testee = im.tuple_get(0,
-                          im.if_("cond",
-                                 im.make_tuple(1, 2),
-                                 im.make_tuple(3, 4)))
-    expected = im.if_("cond",
-                      im.tuple_get(0,
-                                  im.make_tuple(1, 2)),
-                      im.tuple_get(0,
-                                   im.make_tuple(3, 4)))
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+    testee = im.tuple_get(0, im.if_("cond", im.make_tuple(1, 2), im.make_tuple(3, 4)))
+    expected = im.if_(
+        "cond", im.tuple_get(0, im.make_tuple(1, 2)), im.tuple_get(0, im.make_tuple(3, 4))
     )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES)
     assert actual == expected
 
 
@@ -138,14 +122,13 @@ def test_propagate_to_if_on_tuples_with_let():
     testee = im.let("val", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4)))(
         im.tuple_get(0, "val")
     )
-    expected = im.if_("cond",
-                      im.tuple_get(0,
-                                  im.make_tuple(1, 2)),
-                      im.tuple_get(0,
-                                   im.make_tuple(3, 4)))
+    expected = im.if_(
+        "cond", im.tuple_get(0, im.make_tuple(1, 2)), im.tuple_get(0, im.make_tuple(3, 4))
+    )
     actual = CollapseTuple.apply(
         testee,
-        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
+        flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+        | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
     )
     assert actual == expected
 
@@ -153,10 +136,7 @@ def test_propagate_to_if_on_tuples_with_let():
 def test_propagate_nested_lift():
     testee = im.let("a", im.let("b", 1)("a_val"))("a")
     expected = im.let("b", 1)(im.let("a", "a_val")("a"))
-    actual = CollapseTuple.apply(
-        testee,
-        flags=CollapseTuple.Flag.PROPAGATE_NESTED_LET
-    )
+    actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.PROPAGATE_NESTED_LET)
     assert actual == expected
 
 
@@ -168,6 +148,6 @@ def test_collapse_complicated_():
     expected = im.if_("cond", 1, 3)
     actual = CollapseTuple.apply(
         testee,
-        #flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+        # flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
     )
     assert actual == expected

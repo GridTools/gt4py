@@ -1,3 +1,17 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import dataclasses
 from collections import ChainMap
 
@@ -23,6 +37,7 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
     >>> cannonicalized_testee2 = CannonicalizeBoundSymbolNames.apply(testee2)
     >>> assert cannonicalized_testee1 == cannonicalized_testee2
     """
+
     _uids: eve_utils.UIDGenerator = dataclasses.field(
         init=False, repr=False, default_factory=lambda: eve_utils.UIDGenerator(prefix="_csym")
     )
@@ -50,4 +65,6 @@ def is_equal_value_heuristics(a: itir.Expr, b: itir.Expr):
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
     >>> assert is_equal_value_heuristics(testee1, testee2)
     """
-    return a == b or (CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b))
+    return a == b or (
+        CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b)
+    )

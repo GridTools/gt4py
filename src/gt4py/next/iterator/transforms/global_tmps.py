@@ -24,9 +24,9 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.cse import extract_subexpression
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
