@@ -19,6 +19,8 @@ import importlib
 
 import pytest
 
+from gt4py.next import allocators as next_allocators
+
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -44,6 +46,11 @@ class _PythonObjectIdMixin:
         return ".".join(self.value.split(".")[-num_components:])
 
 
+class _PythonObjectIdMixinForAllocator(_PythonObjectIdMixin):
+    def short_id(self, num_components: int = 1) -> str:
+        return "None-" + super().short_id(num_components)
+
+
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
     GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
@@ -53,6 +60,15 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
+
+
+cpu_allocator = next_allocators.StandardCPUFieldBufferAllocator()
+gpu_allocator = next_allocators.StandardGPUFieldBufferAllocator()
+
+
+class AllocatorId(_PythonObjectIdMixinForAllocator, str, enum.Enum):
+    CPU_ALLOCATOR = "next_tests.exclusion_matrices.cpu_allocator"
+    GPU_ALLOCATOR = "next_tests.exclusion_matrices.gpu_allocator"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -146,7 +162,8 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
 #: (<test_marker>, <skip_definition, <skip_message>)
 BACKEND_SKIP_TEST_MATRIX = {
-    None: EMBEDDED_SKIP_LIST,
+    AllocatorId.CPU_ALLOCATOR: EMBEDDED_SKIP_LIST,
+    AllocatorId.GPU_ALLOCATOR: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [

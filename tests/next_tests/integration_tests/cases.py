@@ -28,7 +28,7 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common, constructors, utils
+from gt4py.next import allocators as next_allocators, common, constructors, utils
 from gt4py.next.ffront import decorator
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -103,7 +103,7 @@ class DataInitializer(Protocol):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -137,7 +137,7 @@ class ConstInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramExecutor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -145,7 +145,7 @@ class ConstInitializer(DataInitializer):
             domain=common.domain(sizes),
             fill_value=self.value,
             dtype=dtype,
-            allocator=backend,
+            allocator=allocator,
         )
 
 
@@ -166,7 +166,7 @@ class IndexInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramExecutor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -176,7 +176,7 @@ class IndexInitializer(DataInitializer):
             )
         n_data = list(sizes.values())[0]
         return constructors.as_field(
-            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
+            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=allocator
         )
 
     def from_case(
@@ -207,7 +207,7 @@ class UniqueInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
@@ -218,7 +218,7 @@ class UniqueInitializer(DataInitializer):
         return constructors.as_field(
             common.domain(sizes),
             np.arange(start, start + n_data, dtype=dtype).reshape(svals),
-            allocator=backend,
+            allocator=allocator,
         )
 
     def from_case(
@@ -482,10 +482,11 @@ def verify_with_default_data(
 @pytest.fixture
 def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
-        fieldview_backend,
+        fieldview_backend if isinstance(fieldview_backend, ppi.ProgramExecutor) else None,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
+        allocator=fieldview_backend,
     )
 
 
@@ -516,7 +517,7 @@ def _allocate_from_type(
     match arg_type:
         case ts.FieldType(dims=dims, dtype=arg_dtype):
             return strategy.field(
-                backend=case.backend,
+                allocator=case.allocator,
                 sizes={dim: sizes[dim] for dim in dims},
                 dtype=dtype or arg_dtype.kind.name.lower(),
             )
@@ -601,11 +602,12 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    backend: ppi.ProgramProcessor
+    backend: Optional[ppi.ProgramProcessor]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
+    allocator: next_allocators.FieldBufferAllocatorFactoryProtocol
 
     @property
     def as_field(self):
-        return constructors.as_field.partial(allocator=self.backend)
+        return constructors.as_field.partial(allocator=self.allocator)
