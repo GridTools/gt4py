@@ -133,7 +133,7 @@ class DimensionType(ts2.Type):
     dimension: gtx_common.Dimension
 
     def __str__(self):
-        return f"FieldOffset[{self.dimension.value}]"
+        return f"Dimension[{self.dimension.value}]"
 
 
 @dataclasses.dataclass

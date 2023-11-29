@@ -21,7 +21,7 @@ class ClosureVarInferencePass(eve.NodeTranslator, eve.traits.VisitorWithSymbolTa
             if not isinstance(self.closure_vars[sym.id], type):
                 ty = ti2_f.inferrer.from_instance(self.closure_vars[sym.id])
                 if ty is None:
-                    raise errors.DSLError(sym.location, f"could not infer captured variable '{sym.id}'s type")
+                    raise errors.DSLError(sym.location, f"could not infer type of captured variable '{sym.id}'")
                 new_symbol: foast.Symbol = foast.Symbol(
                     id=sym.id,
                     location=sym.location,
@@ -132,7 +132,7 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         if node.id not in symtable:
             raise errors.UndefinedSymbolError(node.location, node.id)
         symbol: foast.Symbol = symtable[node.id]
-        assert symbol.type_2 is not None
+        assert symbol.type_2 is not None, str(node.location)
         return foast.Name(id=node.id, type_2=symbol.type_2, location=node.location)
 
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
