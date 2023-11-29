@@ -177,7 +177,7 @@ class CollapseTuple(eve.NodeTranslator):
                 assert isinstance(v.args[0], ir.Literal)
                 if not (
                     int(v.args[0].value) == i
-                    and ir_misc.is_equal_value_heuristics(v.args[1], first_expr)
+                    and ir_misc.is_provable_equal(v.args[1], first_expr)
                 ):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)

@@ -57,13 +57,13 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
         return im.ref(sym_map[node.id]) if node.id in sym_map else node
 
 
-def is_equal_value_heuristics(a: itir.Expr, b: itir.Expr):
+def is_provable_equal(a: itir.Expr, b: itir.Expr):
     """
     Return true if, bot not only if, two expression (with equal scope) have the same value.
 
     >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
-    >>> assert is_equal_value_heuristics(testee1, testee2)
+    >>> assert is_provable_equal(testee1, testee2)
     """
     return a == b or (
         CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b)
