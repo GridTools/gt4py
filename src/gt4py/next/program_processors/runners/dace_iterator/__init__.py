@@ -185,12 +185,15 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Optional[dace.SDFG]:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
+    # Return parameter
+    return_sdfg = kwargs.get('return_sdfg', False)
+    run_sdfg    = kwargs.get('run_sdfg', True)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     lift_mode = (
@@ -267,10 +270,17 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if key in sdfg.signature_arglist(with_types=False)
     }
 
-    with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg_program(**expected_args)
+    if(run_sdfg):
+        with dace.config.temporary_config():
+            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+            dace.config.Config.set("frontend", "check_args", value=True)
+            sdfg_program(**expected_args)
+    #
+
+    if(return_sdfg):
+        return sdfg
+    return None
+#
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
