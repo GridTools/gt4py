@@ -28,10 +28,10 @@ def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
 
 
 def is_let(node: itir.Node) -> bool:
-    """Match expression of the form `(λ(...) → ...)(...)`"""
+    """Match expression of the form `(λ(...) → ...)(...)`."""
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 
 
 def is_if_call(node: itir.Expr):
-    """Match expression of the form `if_(cond, true_branch, false_branch)`"""
+    """Match expression of the form `if_(cond, true_branch, false_branch)`."""
     return isinstance(node, itir.FunCall) and node.fun == im.ref("if_")

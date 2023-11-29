@@ -15,8 +15,8 @@ import dataclasses
 import enum
 from typing import Optional
 
-import gt4py.eve.utils
 from gt4py import eve
+from gt4py.eve import utils as eve_utils
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
@@ -67,10 +67,6 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
     return True
 
 
-def nlet(bindings: list[tuple[ir.Sym, str], ir.Expr]):
-    return im.let(*[el for tup in bindings for el in tup])
-
-
 @dataclasses.dataclass(frozen=True)
 class CollapseTuple(eve.NodeTranslator):
     """
@@ -118,8 +114,8 @@ class CollapseTuple(eve.NodeTranslator):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    _letify_make_tuple_uids: eve.utils.UIDGenerator = dataclasses.field(
-        init=False, repr=False, default_factory=lambda: eve.utils.UIDGenerator(prefix="_tuple_el")
+    _letify_make_tuple_uids: eve_utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=lambda: eve_utils.UIDGenerator(prefix="_tuple_el")
     )
 
     _node_types: Optional[dict[int, type_inference.Type]] = None
@@ -236,7 +232,7 @@ class CollapseTuple(eve.NodeTranslator):
             # -> `let((_tuple_el_1, expr1), (_tuple_el_2, expr2))(make_tuple(_tuple_el_1, _tuple_el_2))`
             bound_vars: dict[str, ir.Expr] = {}
             new_args: list[ir.Expr] = []
-            for i, arg in enumerate(node.args):
+            for arg in node.args:
                 if (
                     isinstance(node, ir.FunCall)
                     and node.fun == im.ref("make_tuple")
@@ -249,11 +245,7 @@ class CollapseTuple(eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.visit(
-                    im.let(*(el for item in bound_vars.items() for el in item))(
-                        im.call(node.fun)(*new_args)
-                    )
-                )
+                return self.visit(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
@@ -291,9 +283,7 @@ class CollapseTuple(eve.NodeTranslator):
                     inner_vars[arg_sym] = arg
             if outer_vars:
                 node = self.visit(
-                    nlet(tuple(outer_vars.items()))(
-                        nlet(tuple(inner_vars.items()))(original_inner_expr)
-                    )
+                    im.let(*outer_vars.items())(im.let(*inner_vars.items())(original_inner_expr))
                 )
 
         if (

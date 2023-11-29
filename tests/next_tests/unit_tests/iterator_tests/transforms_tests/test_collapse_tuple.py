@@ -76,8 +76,8 @@ def test_simple_tuple_get_make_tuple():
 
 
 def test_propagate_tuple_get():
-    expected = im.let("el1", 1, "el2", 2)(im.tuple_get(0, im.make_tuple("el1", "el2")))
-    testee = im.tuple_get(0, im.let("el1", 1, "el2", 2)(im.make_tuple("el1", "el2")))
+    expected = im.let(("el1", 1), ("el2", 2))(im.tuple_get(0, im.make_tuple("el1", "el2")))
+    testee = im.tuple_get(0, im.let(("el1", 1), ("el2", 2))(im.make_tuple("el1", "el2")))
     actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.PROPAGATE_TUPLE_GET)
     assert expected == actual
 
@@ -85,7 +85,7 @@ def test_propagate_tuple_get():
 def test_letify_make_tuple_elements():
     opaque_call = im.call("opaque")()
     testee = im.make_tuple(opaque_call, opaque_call)
-    expected = im.let("_tuple_el_1", opaque_call, "_tuple_el_2", opaque_call)(
+    expected = im.let(("_tuple_el_1", opaque_call), ("_tuple_el_2", opaque_call))(
         im.make_tuple("_tuple_el_1", "_tuple_el_2")
     )
 
@@ -94,7 +94,7 @@ def test_letify_make_tuple_elements():
 
 
 def test_letify_make_tuple_with_trivial_elements():
-    testee = im.let("a", 1, "b", 2)(im.make_tuple("a", "b"))
+    testee = im.let(("a", 1), ("b", 2))(im.make_tuple("a", "b"))
     expected = testee  # did nothing
 
     actual = CollapseTuple.apply(testee, flags=CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS)
