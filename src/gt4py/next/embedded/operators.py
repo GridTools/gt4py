@@ -12,17 +12,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
-from gt4py.next.ffront import field_operator_ast as foast
 
 
 def field_operator_call(
-    op: Callable, foast_node: foast.FieldOperator | foast.ScanOperator, args: Any, kwargs: Any
+    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
 ):
     # embedded execution
     if embedded_context.within_context():
@@ -44,7 +43,7 @@ def field_operator_call(
             vertical_range = _get_vertical_range(out_domain)
 
             with embedded_context.new_context(closure_column_range=vertical_range) as ctx:
-                res = ctx.run(_run_operator, op, foast_node, args, kwargs)
+                res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
                 _tuple_assign_field(
                     out,
                     res,
@@ -53,7 +52,7 @@ def field_operator_call(
 
         else:
             # field_operator called form field_operator in embedded execution
-            return _run_operator(op, foast_node, args, kwargs)
+            return _run_operator(op, operator_attributes, args, kwargs)
 
     else:
         # field_operator called directly
@@ -66,7 +65,7 @@ def field_operator_call(
         with embedded_context.new_context(
             offset_provider=offset_provider, closure_column_range=_get_vertical_range(out_domain)
         ) as ctx:
-            res = ctx.run(_run_operator, op, foast_node, args, kwargs)
+            res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
             _tuple_assign_field(
                 out,
                 res,
@@ -75,15 +74,17 @@ def field_operator_call(
 
 
 def _run_operator(
-    op: Callable, foast_node: foast.ScanOperator | foast.FieldOperator, args: Any, kwargs: Any
+    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
 ):
-    if isinstance(
-        foast_node, foast.ScanOperator
-    ):  # TODO(havogt): we should not reconstruct this info from the foast_node
-        scan_foast: foast.ScanOperator = foast_node
-        forward = scan_foast.forward.value
-        init = scan_foast.init.value
-        axis = scan_foast.axis.value
+    if operator_attributes is not None and any(
+        has_scan_op_attribute := [
+            attribute in operator_attributes for attribute in ["init", "axis", "forward"]
+        ]
+    ):
+        assert all(has_scan_op_attribute)
+        forward = operator_attributes["forward"]
+        init = operator_attributes["init"]
+        axis = operator_attributes["axis"]
 
         scan_range = embedded_context.closure_column_range.get()
         assert axis == scan_range[0]

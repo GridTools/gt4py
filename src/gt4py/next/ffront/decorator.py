@@ -546,6 +546,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     definition: Optional[types.FunctionType] = None
     backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
+    operator_attributes: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_function(
@@ -581,6 +582,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
             backend=backend,
             grid_type=grid_type,
+            operator_attributes=operator_attributes,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -698,7 +700,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
         else:
             return embedded_operators.field_operator_call(
-                self.definition, self.foast_node, args, kwargs
+                self.definition, self.operator_attributes, args, kwargs
             )
 
 
