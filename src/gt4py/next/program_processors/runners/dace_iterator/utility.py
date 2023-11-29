@@ -119,11 +119,13 @@ def add_mapped_nested_sdfg(
 
     if input_nodes is None:
         input_nodes = {
-            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo) for name, memlet in inputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in inputs.items()
         }
     if output_nodes is None:
         output_nodes = {
-            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo) for name, memlet in outputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in outputs.items()
         }
     if not inputs:
         state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())

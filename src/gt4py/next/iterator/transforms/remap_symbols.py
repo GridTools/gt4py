@@ -47,14 +47,20 @@ class RenameSymbols(NodeTranslator):
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.Sym(id=name_map.get(node.id, node.id), location=node.location,)
+            return ir.Sym(
+                id=name_map.get(node.id, node.id),
+                location=node.location,
+            )
         return node
 
     def visit_SymRef(
         self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.SymRef(id=name_map.get(node.id, node.id), location=node.location,)
+            return ir.SymRef(
+                id=name_map.get(node.id, node.id),
+                location=node.location,
+            )
         return node
 
     def generic_visit(  # type: ignore[override]

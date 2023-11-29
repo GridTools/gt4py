@@ -56,7 +56,9 @@ class ScanEtaReduction(NodeTranslator):
                 ]
                 new_scanpass = ir.Lambda(params=new_scanpass_params, expr=original_scanpass.expr)
                 result = ir.FunCall(
-                    fun=ir.SymRef(id="scan"), args=[new_scanpass, *node.expr.fun.args[1:]], location=node.location,
+                    fun=ir.SymRef(id="scan"),
+                    args=[new_scanpass, *node.expr.fun.args[1:]],
+                    location=node.location,
                 )
                 return result
 

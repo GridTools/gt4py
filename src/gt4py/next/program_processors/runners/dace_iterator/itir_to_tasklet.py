@@ -315,7 +315,9 @@ def builtin_cast(
     node_type = transformer.node_types[id(node)]
     assert isinstance(node_type, itir_typing.Val)
     type_ = itir_type_as_dace_type(node_type.dtype)
-    return transformer.add_expr_tasklet(list(zip(args, internals)), expr, type_, "cast", location=node.location)
+    return transformer.add_expr_tasklet(
+        list(zip(args, internals)), expr, type_, "cast", location=node.location
+    )
 
 
 def builtin_make_tuple(
@@ -466,7 +468,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
                 # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-                result = self.add_expr_tasklet([], expr.value, expr.dtype, "forward", location=node.location)[0]
+                result = self.add_expr_tasklet(
+                    [], expr.value, expr.dtype, "forward", location=node.location
+                )[0]
             self.context.body.arrays[result.value.data].transient = False
             results.append(result)
 
@@ -545,11 +549,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
 
-        di = dace.dtypes.DebugInfo(start_line=node.location.line,
-                                   start_column=node.location.column,
-                                   end_line=node.location.end_line,
-                                   end_column=node.location.end_column,
-                                   filename=node.location.filename)
+        di = None
+        if node.location:
+            di = dace.dtypes.DebugInfo(
+                start_line=node.location.line,
+                start_column=node.location.column,
+                end_line=node.location.end_line,
+                end_column=node.location.end_column,
+                filename=node.location.filename,
+            )
 
         nsdfg_node = self.context.state.add_nested_sdfg(
             func_context.body,
@@ -658,7 +666,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{', '.join(internals[1:])}]"
-            return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref", location=node.location)
+            return self.add_expr_tasklet(
+                list(zip(args, internals)), expr, iterator.dtype, "deref", location=node.location
+            )
 
     def _split_shift_args(
         self, args: list[itir.Expr]
@@ -855,7 +865,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 if not args[i]:
                     args[i] = self.visit(node_arg)[0]
 
-            lambda_node = itir.Lambda(expr=fun_node.expr.args[1], params=fun_node.params[1:], location=node.location)
+            lambda_node = itir.Lambda(
+                expr=fun_node.expr.args[1], params=fun_node.params[1:], location=node.location
+            )
             lambda_context, inner_inputs, inner_outputs = self.visit(lambda_node, args=args)
 
             # clear context
@@ -903,7 +915,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
         for arg in node.args:
-            if hasattr(arg, 'location'):
+            if hasattr(arg, "location"):
                 arg.location = node.location
         args: list[SymbolExpr | ValueExpr] = list(
             itertools.chain(*[self.visit(arg) for arg in node.args])
@@ -926,7 +938,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         return expr_func(self, node, node.args)
 
     def add_expr_tasklet(
-        self, args: list[tuple[ValueExpr, str]], expr: str, result_type: Any, name: str, location: SourceLocation = None
+        self,
+        args: list[tuple[ValueExpr, str]],
+        expr: str,
+        result_type: Any,
+        name: str,
+        location: Optional[SourceLocation] = None,
     ) -> list[ValueExpr]:
         result_name = unique_var_name()
         self.context.body.add_scalar(result_name, result_type, transient=True)
@@ -934,18 +951,20 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         di = None
         if location:
-            di = dace.dtypes.DebugInfo(start_line=location.line,
-                                       start_column=location.column,
-                                       end_line=location.end_line,
-                                       end_column=location.end_column,
-                                       filename=location.filename)
+            di = dace.dtypes.DebugInfo(
+                start_line=location.line,
+                start_column=location.column,
+                end_line=location.end_line,
+                end_column=location.end_column,
+                filename=location.filename,
+            )
 
         expr_tasklet = self.context.state.add_tasklet(
             name=name,
             inputs={internal for _, internal in args},
             outputs={"__result"},
             code=f"__result = {expr}",
-            debuginfo=di
+            debuginfo=di,
         )
 
         for arg, internal in args:
@@ -1008,11 +1027,15 @@ def closure_to_tasklet_sdfg(
     state = body.add_state("tasklet_toplevel_entry")
     symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
 
-    di = dace.dtypes.DebugInfo(start_line=node.location.line,
-                                start_column=node.location.column,
-                                end_line=node.location.end_line,
-                                end_column=node.location.end_column,
-                                filename=node.location.filename)
+    di = None
+    if node.location:
+        di = dace.dtypes.DebugInfo(
+            start_line=node.location.line,
+            start_column=node.location.column,
+            end_line=node.location.end_line,
+            end_column=node.location.end_column,
+            filename=node.location.filename,
+        )
 
     idx_accesses = {}
     for dim, idx in domain.items():
@@ -1035,7 +1058,16 @@ def closure_to_tasklet_sdfg(
             dtype = as_dace_type(ty.dtype)
             body.add_array(name, shape=shape, strides=stride, dtype=dtype)
             anode_loc = node.inputs[i].location
-            field = state.add_access(name, dace.dtypes.DebugInfo(anode_loc.line, anode_loc.column, anode_loc.end_line, anode_loc.end_column, anode_loc.filename))
+            di = None
+            if anode_loc:
+                di = dace.dtypes.DebugInfo(
+                    anode_loc.line,
+                    anode_loc.column,
+                    anode_loc.end_line,
+                    anode_loc.end_column,
+                    anode_loc.filename,
+                )
+            field = state.add_access(name, di)
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
         else:

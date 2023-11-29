@@ -240,7 +240,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
-                    location=out_field.location, 
+                    location=out_field.location,
                 )
             )
 
@@ -251,7 +251,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args, location=out_field.location)
+        return itir.FunCall(
+            fun=itir.SymRef(id=domain_builtin), args=domain_args, location=out_field.location
+        )
 
     def _construct_itir_initialized_domain_arg(
         self,

@@ -112,7 +112,9 @@ class FieldOperatorLowering(NodeTranslator):
             func_definition.params[0].id,
             im.promote_to_const_iterator(func_definition.params[0].id),
         )(im.deref(new_body))
-        definition = itir.Lambda(params=func_definition.params, expr=new_body, location=node.location)
+        definition = itir.Lambda(
+            params=func_definition.params, expr=new_body, location=node.location
+        )
         body = im.call(im.call("scan")(definition, forward, init))(
             *(param.id for param in definition.params[1:])
         )
@@ -222,7 +224,7 @@ class FieldOperatorLowering(NodeTranslator):
             is_list = type_info.is_local_field(node.type)
             return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list), location=node.location)
         return_ = im.sym(node.id)
-        return_.location = return_
+        return_.location = node.location
         return return_
 
     def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
@@ -261,7 +263,9 @@ class FieldOperatorLowering(NodeTranslator):
         return self._map(node.op.value, node.left, node.right, location=node.location)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
-        return self._map("if_", node.condition, node.true_expr, node.false_expr, location=node.location)
+        return self._map(
+            "if_", node.condition, node.true_expr, node.false_expr, location=node.location
+        )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right, location=node.location)
@@ -334,7 +338,9 @@ class FieldOperatorLowering(NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
-            return_ = im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
+            return_ = im.call(self.visit(node.func, **kwargs))(
+                *lowered_args, *lowered_kwargs.values()
+            )
             return_.location = node.location
             return return_
 
@@ -427,7 +433,7 @@ class FieldOperatorLowering(NodeTranslator):
         raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
-        return_ =  self._make_literal(node.value, node.type)
+        return_ = self._make_literal(node.value, node.type)
         return_.location = node.location
         return return_
 
