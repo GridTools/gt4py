@@ -28,6 +28,7 @@ class EtaReduction(NodeTranslator):
                 for p, a in zip(node.params, node.expr.args)
             )
         ):
+            node.expr.fun.location = node.location
             return self.visit(node.expr.fun)
 
         return self.generic_visit(node)

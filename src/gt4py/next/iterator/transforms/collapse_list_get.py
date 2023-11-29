@@ -49,8 +49,10 @@ class CollapseListGet(eve.NodeTranslator):
                                 args=[it],
                             )
                         ],
+                        location=node.location,
                     )
                 if node.args[1].fun == ir.SymRef(id="make_const_list"):
+                    node.args[1].args[0].location = node.location
                     return node.args[1].args[0]
 
         return node

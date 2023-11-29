@@ -285,7 +285,7 @@ def builtin_can_deref(
 
     # TODO(edopao): select-memlet could maybe allow to efficiently translate can_deref to predicative execution
     return transformer.add_expr_tasklet(
-        list(zip(args, internals)), expr_code, dace.dtypes.bool, "can_deref"
+        list(zip(args, internals)), expr_code, dace.dtypes.bool, "can_deref", location=node.location
     )
 
 
@@ -935,10 +935,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         di = None
         if location:
             di = dace.dtypes.DebugInfo(start_line=location.line,
-                                        start_column=location.column,
-                                        end_line=location.end_line,
-                                        end_column=location.end_column,
-                                        filename=location.filename)
+                                       start_column=location.column,
+                                       end_line=location.end_line,
+                                       end_column=location.end_column,
+                                       filename=location.filename)
 
         expr_tasklet = self.context.state.add_tasklet(
             name=name,
@@ -1022,7 +1022,7 @@ def closure_to_tasklet_sdfg(
         access = state.add_access(name)
         idx_accesses[dim] = access
         state.add_edge(tasklet, "value", access, None, dace.Memlet.simple(name, "0"))
-    for name, ty in inputs:
+    for i, (name, ty) in enumerate(inputs):
         if isinstance(ty, ts.FieldType):
             ndim = len(ty.dims)
             shape = [
@@ -1034,7 +1034,8 @@ def closure_to_tasklet_sdfg(
             dims = [dim.value for dim in ty.dims]
             dtype = as_dace_type(ty.dtype)
             body.add_array(name, shape=shape, strides=stride, dtype=dtype)
-            field = state.add_access(name)
+            anode_loc = node.inputs[i].location
+            field = state.add_access(name, dace.dtypes.DebugInfo(anode_loc.line, anode_loc.column, anode_loc.end_line, anode_loc.end_column, anode_loc.filename))
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
         else:

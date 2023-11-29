@@ -97,6 +97,7 @@ def inline_lambda(  # noqa: C901  # see todo above
     new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
 
     if all(eligible_params):
+        new_expr.location = node.location
         return new_expr
     else:
         return ir.FunCall(
@@ -109,6 +110,7 @@ def inline_lambda(  # noqa: C901  # see todo above
                 expr=new_expr,
             ),
             args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
+            location=node.location,
         )
 
 

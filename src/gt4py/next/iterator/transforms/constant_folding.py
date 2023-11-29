@@ -46,4 +46,5 @@ class ConstantFolding(NodeTranslator):
                 arg_values = [getattr(embedded, str(arg.type))(arg.value) for arg in new_node.args]  # type: ignore[attr-defined] # arg type already established in if condition
                 new_node = im.literal_from_value(fun(*arg_values))
 
+        new_node.location = node.location
         return new_node

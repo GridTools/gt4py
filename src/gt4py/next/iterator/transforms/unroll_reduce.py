@@ -159,7 +159,8 @@ class UnrollReduce(NodeTranslator):
         for i in range(max_neighbors):
             expr = itir.FunCall(fun=step, args=[expr, itir.OffsetLiteral(value=i)])
         expr = itir.FunCall(
-            fun=itir.Lambda(params=[itir.Sym(id=step.id)], expr=expr), args=[step_fun]
+            fun=itir.Lambda(params=[itir.Sym(id=step.id)], expr=expr), args=[step_fun],
+            location=node.location,
         )
 
         return expr

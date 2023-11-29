@@ -55,5 +55,6 @@ class PropagateDeref(NodeTranslator):
                     expr=ir.FunCall(fun=builtin, args=[lambda_fun.expr]),
                 ),
                 args=lambda_args,
+                location=node.location,
             )
         return self.generic_visit(node)

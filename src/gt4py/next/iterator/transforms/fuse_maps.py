@@ -66,6 +66,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
+            location=fun.location,
         )
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -99,6 +100,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                                 ir.FunCall(
                                     fun=inner_op,
                                     args=[ir.SymRef(id=param.id) for param in inner_op.params],
+                                    location=node.location,
                                 )
                             )
                         )
@@ -123,10 +125,12 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="map_"), args=[new_op]),
                         args=new_args,
+                        location=node.location,
                     )
                 else:  # _is_reduce(node)
                     return ir.FunCall(
                         fun=ir.FunCall(fun=ir.SymRef(id="reduce"), args=[new_op, node.fun.args[1]]),
                         args=new_args,
+                        location=node.location,
                     )
         return node

@@ -202,12 +202,14 @@ class ItirToSDFG(eve.NodeVisitor):
             )
 
             # Add access nodes for the program parameters and connect them to the nested SDFG's inputs via edges.
-            for inner_name, memlet in input_mapping.items():
-                access_node = last_state.add_access(inner_name)
+            for i, (inner_name, memlet) in enumerate(input_mapping.items()):
+                anode_loc = closure.inputs[i].location
+                access_node = last_state.add_access(inner_name, dace.dtypes.DebugInfo(anode_loc.line, anode_loc.column, anode_loc.end_line, anode_loc.end_column, anode_loc.filename))
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, memlet)
 
+            anode_loc = closure.output.location
             for inner_name, memlet in output_mapping.items():
-                access_node = last_state.add_access(inner_name)
+                access_node = last_state.add_access(inner_name, dace.dtypes.DebugInfo(anode_loc.line, anode_loc.column, anode_loc.end_line, anode_loc.end_column, anode_loc.filename))
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
         program_sdfg.validate()

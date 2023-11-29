@@ -30,6 +30,7 @@ class RemapSymbolRefs(NodeTranslator):
         return ir.Lambda(
             params=node.params,
             expr=self.visit(node.expr, symbol_map=new_symbol_map),
+            location=node.location,
         )
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
@@ -46,14 +47,14 @@ class RenameSymbols(NodeTranslator):
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.Sym(id=name_map.get(node.id, node.id))
+            return ir.Sym(id=name_map.get(node.id, node.id), location=node.location,)
         return node
 
     def visit_SymRef(
         self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.SymRef(id=name_map.get(node.id, node.id))
+            return ir.SymRef(id=name_map.get(node.id, node.id), location=node.location,)
         return node
 
     def generic_visit(  # type: ignore[override]

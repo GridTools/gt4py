@@ -379,6 +379,7 @@ class CommonSubexpressionElimination(NodeTranslator):
         result = ir.FunCall(
             fun=ir.Lambda(params=list(extracted.keys()), expr=new_expr),
             args=list(extracted.values()),
+            location=node.location,
         )
 
         # if the node id is ignored (because its parent is eliminated), but it occurs

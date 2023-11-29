@@ -265,6 +265,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
                             inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            location=closure.location,
                         )
                     )
 
@@ -292,6 +293,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                         output=current_closure.output,
                         inputs=current_closure.inputs
                         + [ir.SymRef(id=sym.id) for sym in extracted_lifts.keys()],
+                        location=closure.location,
                     )
                 )
             else:
@@ -308,6 +310,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
         ),
         params=node.params,
         tmps=[Temporary(id=tmp.id) for tmp in tmps],
+        location=node.location,
     )
 
 
@@ -334,6 +337,7 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
         ),
         params=node.params,
         tmps=[tmp for tmp in node.tmps if tmp.id not in unused_tmps],
+        location=node.location,
     )
 
 
@@ -451,6 +455,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 stencil=closure.stencil,
                 output=closure.output,
                 inputs=closure.inputs,
+                location=closure.location,
             )
         else:
             domain = closure.domain
@@ -506,6 +511,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
         ),
         params=node.params,
         tmps=node.tmps,
+        location=node.location,
     )
 
 
@@ -556,6 +562,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
         tmps=[
             Temporary(id=tmp.id, domain=domains[tmp.id], dtype=types[tmp.id]) for tmp in node.tmps
         ],
+        location=node.location,
     )
 
 

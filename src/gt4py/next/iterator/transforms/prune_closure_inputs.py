@@ -37,6 +37,7 @@ class PruneClosureInputs(NodeTranslator):
             stencil=ir.Lambda(params=params, expr=expr),
             output=node.output,
             inputs=inputs,
+            location=node.location,
         )
 
     def visit_SymRef(self, node: ir.SymRef, *, unused: set[str], shadowed: set[str]) -> ir.SymRef:

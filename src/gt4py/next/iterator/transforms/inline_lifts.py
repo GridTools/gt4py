@@ -154,6 +154,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ir.FunCall(
                 fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **kwargs),
                 args=self.generic_visit(node.args, **kwargs),
+                location=node.location,
             )
             if recurse
             else node
@@ -167,7 +168,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 self.visit(ir.FunCall(fun=shift, args=[arg]), recurse=False, **kwargs)
                 for arg in lift_call.args  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             ]
-            result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
+            result = ir.FunCall(fun=lift_call.fun, args=new_args, location=node.location)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             return self.visit(result, recurse=False, **kwargs)
         elif self.flags & self.Flag.INLINE_DEREF_LIFT and node.fun == ir.SymRef(id="deref"):
             assert len(node.args) == 1
@@ -184,7 +185,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 assert len(node.args[0].fun.args) == 1
                 f = node.args[0].fun.args[0]
                 args = node.args[0].args
-                new_node = ir.FunCall(fun=f, args=args)
+                new_node = ir.FunCall(fun=f, args=args, location=node.location)
                 if isinstance(f, ir.Lambda):
                     new_node = inline_lambda(new_node, opcount_preserving=True)
                 return self.visit(new_node, **kwargs)
@@ -199,13 +200,14 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 assert len(node.args[0].fun.args) == 1
                 args = node.args[0].args
                 if len(args) == 0:
-                    return ir.Literal(value="True", type="bool")
+                    return ir.Literal(value="True", type="bool", location=node.location)
 
                 res = ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[args[0]])
                 for arg in args[1:]:
                     res = ir.FunCall(
                         fun=ir.SymRef(id="and_"),
                         args=[res, ir.FunCall(fun=ir.SymRef(id="can_deref"), args=[arg])],
+                        location=node.location,
                     )
                 return res
         elif (
@@ -253,6 +255,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
                 new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
+                new_stencil.location = node.location
                 return im.lift(new_stencil)(*new_arg_exprs.values())
 
         return node

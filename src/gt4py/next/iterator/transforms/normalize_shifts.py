@@ -36,5 +36,6 @@ class NormalizeShifts(NodeTranslator):
                     fun=ir.SymRef(id="shift"), args=node.args[0].fun.args + node.fun.args
                 ),
                 args=node.args[0].args,
+                location=node.location,
             )
         return node

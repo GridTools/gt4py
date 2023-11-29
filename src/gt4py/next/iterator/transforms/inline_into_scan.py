@@ -100,6 +100,6 @@ class InlineIntoScan(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             new_scan = ir.FunCall(
                 fun=ir.SymRef(id="scan"), args=[new_scanpass, *original_scan_call.args[1:]]
             )
-            result = ir.FunCall(fun=new_scan, args=[ir.SymRef(id=ref) for ref in refs_in_args])
+            result = ir.FunCall(fun=new_scan, args=[ir.SymRef(id=ref) for ref in refs_in_args], location=node.location)
             return result
         return self.generic_visit(node, **kwargs)

@@ -64,5 +64,6 @@ class MergeLet(eve.NodeTranslator):
                     params=outer_lambda.params + inner_lambda.params, expr=inner_lambda.expr
                 ),
                 args=outer_lambda_args + inner_lambda_args,
+                location=node.location,
             )
         return node

@@ -85,13 +85,6 @@ class CollapseTuple(eve.NodeTranslator):
             node_types,
         ).visit(node)
 
-        return cls(
-            ignore_tuple_size,
-            collapse_make_tuple_tuple_get,
-            collapse_tuple_get_make_tuple,
-            use_global_type_inference,
-        ).visit(node)
-
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
         if (
             self.collapse_make_tuple_tuple_get
@@ -115,6 +108,7 @@ class CollapseTuple(eve.NodeTranslator):
             if self.ignore_tuple_size or _get_tuple_size(first_expr, self._node_types) == len(
                 node.args
             ):
+                first_expr.location = node.location
                 return first_expr
         if (
             self.collapse_tuple_get_make_tuple
@@ -130,5 +124,6 @@ class CollapseTuple(eve.NodeTranslator):
             assert idx < len(
                 make_tuple_call.args
             ), f"Index {idx} is out of bounds for tuple of size {len(make_tuple_call.args)}"
+            node.args[1].args[idx].location = node.location
             return node.args[1].args[idx]
         return self.generic_visit(node)
