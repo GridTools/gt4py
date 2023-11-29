@@ -485,7 +485,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
-        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
+        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", is_start_block=True)
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
             lambda_sdfg, lambda_state, self.context.symbol_map
@@ -906,7 +906,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             # initialize the reduction result based on type of operation
             init_value = get_reduce_identity_value(op_name.id, result_dtype)
-            init_state = self.context.body.add_state_before(self.context.state, "init")
+            init_state = self.context.body.add_state_before(self.context.state, "init", True)
             init_tasklet = init_state.add_tasklet(
                 "init_reduce", {}, {"__out"}, f"__out = {init_value}"
             )
@@ -1044,7 +1044,7 @@ def closure_to_tasklet_sdfg(
     node_types: dict[int, next_typing.Type],
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
-    state = body.add_state("tasklet_toplevel_entry")
+    state = body.add_state("tasklet_toplevel_entry", is_start_block=True)
     symbol_map: dict[str, TaskletExpr] = {}
 
     idx_accesses = {}
