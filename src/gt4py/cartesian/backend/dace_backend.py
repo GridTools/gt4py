@@ -575,7 +575,7 @@ class DaCeComputationCodegen:
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
-            state_prefix=dace_state_suffix,
+            state_suffix=dace_state_suffix,
         )
         generated_code = textwrap.dedent(
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
