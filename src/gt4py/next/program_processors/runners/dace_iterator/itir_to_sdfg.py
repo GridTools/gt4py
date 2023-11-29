@@ -14,6 +14,7 @@
 from typing import Any, Optional, cast
 
 import dace
+from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
@@ -419,13 +420,30 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_sdfg = dace.SDFG(name="scan")
 
         # create a state machine for lambda call over the scan dimension
-        start_state = scan_sdfg.add_state("start", True)
-        lambda_state = scan_sdfg.add_state("lambda_compute")
-        end_state = scan_sdfg.add_state("end")
 
         # the carry value of the scan operator exists only in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
         scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
+
+        # create a loop region for lambda call over the scan dimension
+        scan_loop = LoopRegion(
+            label="scan",
+            condition_expr=f"i_{scan_dim} < {scan_ub_str}"
+            if is_forward
+            else f"i_{scan_dim} >= {scan_lb_str}",
+            loop_var=f"i_{scan_dim}",
+            initialize_expr=f"i_{scan_dim} = {scan_lb_str}" if is_forward else f"{scan_ub_str} - 1",
+            update_expr=f"i_{scan_dim} = i_{scan_dim} + 1" if is_forward else f"i_{scan_dim} - 1",
+            inverted=False,
+        )
+
+        lambda_state = scan_loop.add_state("lambda_compute", is_start_block=True)
+        lambda_update_state = scan_loop.add_state("lambda_update")
+        scan_loop.add_edge(lambda_state, lambda_update_state, dace.InterstateEdge())
+
+        start_state = scan_sdfg.add_state("start", is_start_block=True)
+        scan_sdfg.add_node(scan_loop)
+        scan_sdfg.add_edge(start_state, scan_loop, dace.InterstateEdge())
 
         # tasklet for initialization of carry
         carry_init_tasklet = start_state.add_tasklet(
@@ -437,19 +455,6 @@ class ItirToSDFG(eve.NodeVisitor):
             start_state.add_access(scan_carry_name),
             None,
             dace.Memlet.simple(scan_carry_name, "0"),
-        )
-
-        # TODO(edopao): replace state machine with dace loop construct
-        scan_sdfg.add_loop(
-            start_state,
-            lambda_state,
-            end_state,
-            loop_var=f"i_{scan_dim}",
-            initialize_expr=f"{scan_lb_str}" if is_forward else f"{scan_ub_str} - 1",
-            condition_expr=f"i_{scan_dim} < {scan_ub_str}"
-            if is_forward
-            else f"i_{scan_dim} >= {scan_lb_str}",
-            increment_expr=f"i_{scan_dim} + 1" if is_forward else f"i_{scan_dim} - 1",
         )
 
         # add storage to scan SDFG for inputs
@@ -533,6 +538,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # add state to scan SDFG to update the carry value at each loop iteration
         lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
+
         lambda_update_state.add_memlet_path(
             lambda_update_state.add_access(output_name),
             lambda_update_state.add_access(scan_carry_name),

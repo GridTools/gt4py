@@ -18,6 +18,7 @@ from typing import Any, Mapping, Optional, Sequence
 import dace
 import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
+from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.allocators as next_allocators
@@ -264,6 +265,9 @@ def build_sdfg_from_itir(
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
+    assert isinstance(sdfg, dace.SDFG)
+    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
+    sdutils.inline_loop_blocks(sdfg)
 
     # run DaCe transformations to simplify the SDFG
     sdfg.simplify()
