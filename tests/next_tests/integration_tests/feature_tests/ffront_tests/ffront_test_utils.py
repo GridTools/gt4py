@@ -45,6 +45,9 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(
+        pytest.param(definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu)
+    ),
 
 
 @pytest.fixture(

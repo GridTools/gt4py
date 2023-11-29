@@ -11,11 +11,10 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 import dataclasses
 import itertools
 from collections.abc import Sequence
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Optional, TypeAlias, cast
 
 import dace
 import numpy as np
@@ -23,6 +22,7 @@ from dace.transformation.dataflow import MapFusion
 from dace.transformation.passes.prune_symbols import RemoveUnusedSymbols
 
 import gt4py.eve.codegen
+from gt4py import eve
 from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
@@ -151,11 +151,15 @@ class IteratorExpr:
     dimensions: list[str]
 
 
+# Union of possible expression types
+TaskletExpr: TypeAlias = IteratorExpr | SymbolExpr | ValueExpr
+
+
 @dataclasses.dataclass
 class Context:
     body: dace.SDFG
     state: dace.SDFGState
-    symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr]
+    symbol_map: dict[str, TaskletExpr]
     # if we encounter a reduction node, the reduction state needs to be pushed to child nodes
     reduce_limit: int
     reduce_wcr: Optional[str]
@@ -164,13 +168,15 @@ class Context:
         self,
         body: dace.SDFG,
         state: dace.SDFGState,
-        symbol_map: dict[str, IteratorExpr | ValueExpr | SymbolExpr],
+        symbol_map: dict[str, TaskletExpr],
+        reduce_limit: int = 0,
+        reduce_wcr: Optional[str] = None,
     ):
         self.body = body
         self.state = state
         self.symbol_map = symbol_map
-        self.reduce_limit = 0
-        self.reduce_wcr = None
+        self.reduce_limit = reduce_limit
+        self.reduce_wcr = reduce_wcr
 
 
 def builtin_neighbors(
@@ -350,6 +356,104 @@ _GENERAL_BUILTIN_MAPPING: dict[
 }
 
 
+class GatherLambdaSymbolsPass(eve.NodeVisitor):
+    _sdfg: dace.SDFG
+    _state: dace.SDFGState
+    _symbol_map: dict[str, TaskletExpr]
+    _parent_symbol_map: dict[str, TaskletExpr]
+
+    def __init__(
+        self,
+        sdfg,
+        state,
+        parent_symbol_map,
+    ):
+        self._sdfg = sdfg
+        self._state = state
+        self._symbol_map = {}
+        self._parent_symbol_map = parent_symbol_map
+
+    @property
+    def symbol_refs(self):
+        """Dictionary of symbols referenced from the lambda expression."""
+        return self._symbol_map
+
+    def _add_symbol(self, param, arg):
+        if isinstance(arg, ValueExpr):
+            # create storage in lambda sdfg
+            self._sdfg.add_scalar(param, dtype=arg.dtype)
+            # update table of lambda symbol
+            self._symbol_map[param] = ValueExpr(self._state.add_access(param), arg.dtype)
+        elif isinstance(arg, IteratorExpr):
+            # create storage in lambda sdfg
+            ndims = len(arg.dimensions)
+            shape = tuple(
+                dace.symbol(unique_var_name() + "__shp", dace.int64) for _ in range(ndims)
+            )
+            strides = tuple(
+                dace.symbol(unique_var_name() + "__strd", dace.int64) for _ in range(ndims)
+            )
+            self._sdfg.add_array(param, shape=shape, strides=strides, dtype=arg.dtype)
+            index_names = {dim: f"__{param}_i_{dim}" for dim in arg.indices.keys()}
+            for _, index_name in index_names.items():
+                self._sdfg.add_scalar(index_name, dtype=dace.int64)
+            # update table of lambda symbol
+            field = self._state.add_access(param)
+            indices = {
+                dim: self._state.add_access(index_arg) for dim, index_arg in index_names.items()
+            }
+            self._symbol_map[param] = IteratorExpr(field, indices, arg.dtype, arg.dimensions)
+        else:
+            assert isinstance(arg, SymbolExpr)
+            self._symbol_map[param] = arg
+
+    def visit_SymRef(self, node: itir.SymRef):
+        name = str(node.id)
+        if name in self._parent_symbol_map and name not in self._symbol_map:
+            arg = self._parent_symbol_map[name]
+            self._add_symbol(name, arg)
+
+    def visit_Lambda(self, node: itir.Lambda, args: Optional[Sequence[TaskletExpr]] = None):
+        if args is not None:
+            assert len(node.params) == len(args)
+            for param, arg in zip(node.params, args):
+                self._add_symbol(str(param.id), arg)
+        self.visit(node.expr)
+
+
+class GatherOutputSymbolsPass(eve.NodeVisitor):
+    _sdfg: dace.SDFG
+    _state: dace.SDFGState
+    _node_types: dict[int, next_typing.Type]
+    _symbol_map: dict[str, TaskletExpr]
+
+    @property
+    def symbol_refs(self):
+        """Dictionary of symbols referenced from the output expression."""
+        return self._symbol_map
+
+    def __init__(
+        self,
+        sdfg,
+        state,
+        node_types,
+    ):
+        self._sdfg = sdfg
+        self._state = state
+        self._node_types = node_types
+        self._symbol_map = {}
+
+    def visit_SymRef(self, node: itir.SymRef):
+        param = str(node.id)
+        if param not in _GENERAL_BUILTIN_MAPPING and param not in self._symbol_map:
+            node_type = self._node_types[id(node)]
+            assert isinstance(node_type, Val)
+            access_node = self._state.add_access(param)
+            self._symbol_map[param] = ValueExpr(
+                access_node, dtype=itir_type_as_dace_type(node_type.dtype)
+            )
+
+
 class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
     context: Context
@@ -369,7 +473,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         raise NotImplementedError()
 
     def visit_Lambda(
-        self, node: itir.Lambda, args: Sequence[ValueExpr | SymbolExpr]
+        self, node: itir.Lambda, args: Sequence[TaskletExpr]
     ) -> tuple[
         Context,
         list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]],
@@ -377,62 +481,38 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
-        param_names = [str(p.id) for p in node.params]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
 
-        assert len(param_names) == len(args)
-        symbols = {
-            **{param: arg for param, arg in zip(param_names, args)},
-        }
+        # Create the SDFG for the lambda's body
+        lambda_sdfg = dace.SDFG(func_name)
+        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
 
-        # Create the SDFG for the function's body
-        prev_context = self.context
-        context_sdfg = dace.SDFG(func_name)
-        context_state = context_sdfg.add_state(f"{func_name}_entry", True)
-        symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
-        value: ValueExpr | IteratorExpr
-        for param, arg in symbols.items():
-            if isinstance(arg, ValueExpr):
-                value = ValueExpr(context_state.add_access(param), arg.dtype)
-            else:
-                assert isinstance(arg, IteratorExpr)
-                field = context_state.add_access(param)
-                indices = {
-                    dim: context_state.add_access(f"__{param}_i_{dim}")
-                    for dim in arg.indices.keys()
-                }
-                value = IteratorExpr(field, indices, arg.dtype, arg.dimensions)
-            symbol_map[param] = value
-        context = Context(context_sdfg, context_state, symbol_map)
-        context.reduce_limit = prev_context.reduce_limit
-        context.reduce_wcr = prev_context.reduce_wcr
-        self.context = context
+        lambda_symbols_pass = GatherLambdaSymbolsPass(
+            lambda_sdfg, lambda_state, self.context.symbol_map
+        )
+        lambda_symbols_pass.visit(node, args=args)
 
-        # Add input parameters as arrays
+        # Add for input nodes for lambda symbols
         inputs: list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]] = []
-        for name, arg in symbols.items():
-            if isinstance(arg, ValueExpr):
-                dtype = arg.dtype
-                context.body.add_scalar(name, dtype=dtype)
-                inputs.append((name, arg))
+        for sym, input_node in lambda_symbols_pass.symbol_refs.items():
+            arg = next((arg for param, arg in zip(node.params, args) if param.id == sym), None)
+            if arg:
+                outer_node = arg
             else:
-                assert isinstance(arg, IteratorExpr)
-                ndims = len(arg.dimensions)
-                shape = tuple(
-                    dace.symbol(unique_var_name() + "__shp", dace.int64) for _ in range(ndims)
-                )
-                strides = tuple(
-                    dace.symbol(unique_var_name() + "__strd", dace.int64) for _ in range(ndims)
-                )
-                dtype = arg.dtype
-                context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
-                index_names = {dim: f"__{name}_i_{dim}" for dim in arg.indices.keys()}
-                for _, index_name in index_names.items():
-                    context.body.add_scalar(index_name, dtype=dace.int64)
-                inputs.append(((name, index_names), arg))
+                # the symbol is not found among lambda arguments, then it is inherited from parent scope
+                outer_node = self.context.symbol_map[sym]
+            if isinstance(input_node, IteratorExpr):
+                assert isinstance(outer_node, IteratorExpr)
+                index_params = {
+                    dim: index_node.data for dim, index_node in input_node.indices.items()
+                }
+                inputs.append(((sym, index_params), outer_node))
+            elif isinstance(input_node, ValueExpr):
+                assert isinstance(outer_node, ValueExpr)
+                inputs.append((sym, outer_node))
 
         # Add connectivities as arrays
-        for name in conn_names:
+        for name in connectivity_names:
             shape = (
                 dace.symbol(unique_var_name() + "__shp", dace.int64),
                 dace.symbol(unique_var_name() + "__shp", dace.int64),
@@ -441,50 +521,53 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 dace.symbol(unique_var_name() + "__strd", dace.int64),
                 dace.symbol(unique_var_name() + "__strd", dace.int64),
             )
-            dtype = prev_context.body.arrays[name].dtype
-            context.body.add_array(name, shape=shape, strides=strides, dtype=dtype)
+            dtype = self.context.body.arrays[name].dtype
+            lambda_sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
-        # Translate the function's body
+        # Translate the lambda's body in its own context
+        lambda_context = Context(
+            lambda_sdfg,
+            lambda_state,
+            lambda_symbols_pass.symbol_refs,
+            reduce_limit=self.context.reduce_limit,
+            reduce_wcr=self.context.reduce_wcr,
+        )
+        lambda_taskgen = PythonTaskletCodegen(self.offset_provider, lambda_context, self.node_types)
+
         results: list[ValueExpr] = []
         # We are flattening the returned list of value expressions because the multiple outputs of a lamda
         # should be a list of nodes without tuple structure. Ideally, an ITIR transformation could do this.
-        for expr in flatten_list(self.visit(node.expr)):
+        for expr in flatten_list(lambda_taskgen.visit(node.expr)):
             if isinstance(expr, ValueExpr):
                 result_name = unique_var_name()
-                self.context.body.add_scalar(result_name, expr.dtype, transient=True)
-                result_access = self.context.state.add_access(result_name)
-                self.context.state.add_edge(
+                lambda_sdfg.add_scalar(result_name, expr.dtype, transient=True)
+                result_access = lambda_state.add_access(result_name)
+                lambda_state.add_edge(
                     expr.value,
                     None,
                     result_access,
                     None,
                     # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
-                    dace.Memlet.simple(result_access.data, "0", wcr_str=context.reduce_wcr),
+                    dace.Memlet.simple(result_access.data, "0", wcr_str=self.context.reduce_wcr),
                 )
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
                 # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-                result = self.add_expr_tasklet([], expr.value, expr.dtype, "forward")[0]
-            self.context.body.arrays[result.value.data].transient = False
+                result = lambda_taskgen.add_expr_tasklet([], expr.value, expr.dtype, "forward")[0]
+            lambda_sdfg.arrays[result.value.data].transient = False
             results.append(result)
 
-        self.context = prev_context
-        for node in context.state.nodes():
-            if isinstance(node, dace.nodes.AccessNode):
-                if context.state.out_degree(node) == 0 and context.state.in_degree(node) == 0:
-                    context.state.remove_node(node)
+        # remove isolated access nodes for connectivity arrays not consumed by lambda
+        for sub_node in lambda_state.nodes():
+            if isinstance(sub_node, dace.nodes.AccessNode):
+                if lambda_state.out_degree(sub_node) == 0 and lambda_state.in_degree(sub_node) == 0:
+                    lambda_state.remove_node(sub_node)
 
-        return context, inputs, results
+        return lambda_context, inputs, results
 
     def visit_SymRef(self, node: itir.SymRef) -> list[ValueExpr | SymbolExpr] | IteratorExpr:
-        if node.id not in self.context.symbol_map:
-            acc = self.context.state.add_access(node.id)
-            node_type = self.node_types[id(node)]
-            assert isinstance(node_type, Val)
-            self.context.symbol_map[node.id] = ValueExpr(
-                value=acc, dtype=itir_type_as_dace_type(node_type.dtype)
-            )
-        value = self.context.symbol_map[node.id]
+        param = str(node.id)
+        value = self.context.symbol_map[param]
         if isinstance(value, (ValueExpr, SymbolExpr)):
             return [value]
         return value
@@ -952,29 +1035,6 @@ def is_scan(node: itir.Node) -> bool:
     return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
 
-def _visit_scan_closure_callable(
-    node: itir.StencilClosure,
-    tlet_codegen: PythonTaskletCodegen,
-) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
-    stencil = cast(FunCall, node.stencil)
-    assert isinstance(stencil.args[0], Lambda)
-    fun_node = itir.Lambda(expr=stencil.args[0].expr, params=stencil.args[0].params)
-
-    args = list(itertools.chain(tlet_codegen.visit(node.output), *tlet_codegen.visit(node.inputs)))
-    return tlet_codegen.visit(fun_node, args=args)
-
-
-def _visit_closure_callable(
-    node: itir.StencilClosure,
-    tlet_codegen: PythonTaskletCodegen,
-    input_names: Sequence[str],
-) -> Sequence[ValueExpr]:
-    args = [itir.SymRef(id=name) for name in input_names]
-    fun_node = itir.FunCall(fun=node.stencil, args=args)
-
-    return tlet_codegen.visit(fun_node)
-
-
 def closure_to_tasklet_sdfg(
     node: itir.StencilClosure,
     offset_provider: dict[str, Any],
@@ -982,10 +1042,10 @@ def closure_to_tasklet_sdfg(
     inputs: Sequence[tuple[str, ts.TypeSpec]],
     connectivities: Sequence[tuple[dace.ndarray, str]],
     node_types: dict[int, next_typing.Type],
-) -> tuple[Context, Sequence[tuple[str, ValueExpr]], Sequence[ValueExpr]]:
+) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
     state = body.add_state("tasklet_toplevel_entry")
-    symbol_map: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
+    symbol_map: dict[str, TaskletExpr] = {}
 
     idx_accesses = {}
     for dim, idx in domain.items():
@@ -1023,16 +1083,17 @@ def closure_to_tasklet_sdfg(
     context = Context(body, state, symbol_map)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
 
+    args = [itir.SymRef(id=name) for name, _ in inputs]
     if is_scan(node.stencil):
-        context, inner_inputs, inner_outputs = _visit_scan_closure_callable(node, translator)
+        stencil = cast(FunCall, node.stencil)
+        assert isinstance(stencil.args[0], Lambda)
+        lambda_node = itir.Lambda(expr=stencil.args[0].expr, params=stencil.args[0].params)
+        fun_node = itir.FunCall(fun=lambda_node, args=args)
     else:
-        inner_inputs = []
-        inner_outputs = _visit_closure_callable(
-            node,
-            translator,
-            [name for name, _ in inputs],
-        )
-    for output in inner_outputs:
-        context.body.arrays[output.value.data].transient = False
+        fun_node = itir.FunCall(fun=node.stencil, args=args)
 
-    return context, inner_inputs, inner_outputs
+    results = translator.visit(fun_node)
+    for r in results:
+        context.body.arrays[r.value.data].transient = False
+
+    return context, results
