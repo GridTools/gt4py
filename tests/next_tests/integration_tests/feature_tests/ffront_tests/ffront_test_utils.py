@@ -34,7 +34,6 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
-import next_tests.exclusion_matrices as definitions
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -44,22 +43,26 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
     OPTIONAL_PROCESSORS.append(
-        pytest.param(definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu)
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
+        )
     ),
 
 
 @pytest.fixture(
     params=[
-        definitions.ProgramBackendId.ROUNDTRIP,
-        definitions.ProgramBackendId.GTFN_CPU,
-        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
-        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
+        next_tests.definitions.ProgramBackendId.ROUNDTRIP,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(
+            next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
+        ),
         # will use the default (embedded) execution, but input/output allocated with the provided allocator
-        definitions.AllocatorId.CPU_ALLOCATOR,
-        definitions.AllocatorId.GPU_ALLOCATOR,
+        next_tests.definitions.AllocatorId.CPU_ALLOCATOR,
+        next_tests.definitions.AllocatorId.GPU_ALLOCATOR,
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id() if p is not None else "None",
@@ -74,7 +77,7 @@ def fieldview_backend(request):
     backend_or_allocator_id = request.param
     backend_or_allocator = backend_or_allocator_id.load()
 
-    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_or_allocator_id, []
     ):
         if request.node.get_closest_marker(marker):

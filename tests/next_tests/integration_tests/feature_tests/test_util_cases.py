@@ -18,7 +18,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import errors
 
-import next_tests.exclusion_matrices as definitions
+from next_tests import definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,

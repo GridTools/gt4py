@@ -67,8 +67,8 @@ gpu_allocator = next_allocators.StandardGPUFieldBufferAllocator()
 
 
 class AllocatorId(_PythonObjectIdMixinForAllocator, str, enum.Enum):
-    CPU_ALLOCATOR = "next_tests.exclusion_matrices.cpu_allocator"
-    GPU_ALLOCATOR = "next_tests.exclusion_matrices.gpu_allocator"
+    CPU_ALLOCATOR = "next_tests.definitions.cpu_allocator"
+    GPU_ALLOCATOR = "next_tests.definitions.gpu_allocator"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):

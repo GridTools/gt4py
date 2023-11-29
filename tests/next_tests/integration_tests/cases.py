@@ -493,7 +493,7 @@ def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
 @pytest.fixture
 def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
     yield Case(
-        fieldview_backend,
+        fieldview_backend if isinstance(fieldview_backend, ppi.ProgramExecutor) else None,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
@@ -502,6 +502,7 @@ def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtu
             KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=fieldview_backend,
     )
 
 
