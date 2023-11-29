@@ -142,3 +142,42 @@ class FieldOffsetType(ts2.Type):
 
     def __str__(self):
         return f"FieldOffset[{self.field_offset.value}]"
+
+
+@dataclasses.dataclass
+class CastFunctionType(ts2.Type, traits.CallableTrait):
+    result: ts2.Type
+
+    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        if len(args) != 1:
+            return False, "expected exactly one argument"
+        if not traits.is_convertible(args[0].ty, self.result):
+            return False, f"could not convert '{args[0].ty}' to '{self.result}'"
+        return True, self.result
+
+    def __str__(self):
+        return f"(Any) -> {self.result}"
+
+
+@dataclasses.dataclass
+class BuiltinFunctionType(ts2.Type, traits.CallableTrait):
+    func: fbuiltins.BuiltInFunction
+
+    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        if self.func == fbuiltins.broadcast:
+            return self.is_callable_broadcast(args)
+        return False, f"'{self.func.function.__name__}' not implemented"
+
+    def is_callable_broadcast(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        args = sorted(args, key=lambda v: v.location)
+        if len(args) != 2:
+            return False, "expected exactly two arguments"
+        source, dims = args[0].ty, args[1].ty
+        element_ty = get_element_type(source)
+        source_dims = get_dimensions(source)
+        if not isinstance(dims, ts2.TupleType) or not all(isinstance(dim, DimensionType) for dim in dims.elements):
+            return False, "expected a tuple of dimensions for argument 2"
+        target_dims = set(dim.dimension for dim in dims.elements)
+        if not all(dim in target_dims for dim in source_dims):
+            return False, f"broadcasting '{source}' to dimensions '{dims}' would remove dimensions"
+        return True, FieldType(element_ty, target_dims)

@@ -166,7 +166,7 @@ def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
-        scalars = 1.3, float64(5.0), float64("3.4")
+        scalars = 1.3, float64(5.0), float64(3.4)
         return (inps[0] * scalars[0] + inps[1] * scalars[1]) * scalars[2]
 
     cases.verify_with_default_data(
@@ -179,7 +179,7 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 
     @gtx.field_operator
     def testee(a: int32) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+        return broadcast(a + int32(1), (Vertex,))
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -196,11 +196,11 @@ def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
 def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee_inner(a: int32) -> cases.VField:
-        return broadcast(a + 1, (Vertex,))
+        return broadcast(a + int32(1), (Vertex,))
 
     @gtx.field_operator
     def testee(a: int32) -> cases.VField:
-        return testee_inner(a + 1)
+        return testee_inner(a + int32(1))
 
     cases.verify_with_default_data(
         unstructured_case,
@@ -580,7 +580,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
 def test_tuple_arg(cartesian_case):
     @gtx.field_operator
     def testee(a: tuple[tuple[cases.IField, cases.IField], cases.IField]) -> cases.IField:
-        return 3 * a[0][0] + a[0][1] + a[1]
+        return int32(3) * a[0][0] + a[0][1] + a[1]
 
     cases.verify_with_default_data(
         cartesian_case, testee, ref=lambda a: 3 * a[0][0] + a[0][1] + a[1]
@@ -667,7 +667,7 @@ def test_ternary_operator(cartesian_case, left, right):
 
     @gtx.field_operator
     def testee(left: int32, right: int32) -> cases.IField:
-        return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
+        return broadcast(int32(3), (IDim,)) if left > right else broadcast(4, (IDim,))
 
     e = np.asarray(a) if left < right else np.asarray(b)
     cases.verify(
@@ -756,7 +756,7 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     def simple_scan_operator(
         carry: tuple[int32, tuple[int32, int32]]
     ) -> tuple[int32, tuple[int32, int32]]:
-        return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
+        return (carry[0] + int32(1), (carry[1][0] + int32(1), carry[1][1] + int32(1)))
 
     @gtx.program
     def testee(out: tuple[cases.KField, tuple[cases.KField, cases.KField]]):
@@ -821,7 +821,7 @@ def test_with_bound_args(cartesian_case):
     @gtx.field_operator
     def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:
         if not condition:
-            scalar = 0
+            scalar = int32(0)
         return a + a + scalar
 
     @gtx.program
@@ -1018,7 +1018,7 @@ def test_undefined_symbols(cartesian_case):
 @pytest.mark.uses_zero_dimensional_fields
 def test_zero_dims_fields(cartesian_case):
     @gtx.field_operator
-    def implicit_broadcast_scalar(inp: cases.EmptyField):
+    def implicit_broadcast_scalar(inp: cases.EmptyField) -> cases.EmptyField:
         return inp
 
     inp = cases.allocate(cartesian_case, implicit_broadcast_scalar, "inp")()
@@ -1050,7 +1050,7 @@ def test_tuple_unpacking(cartesian_case):
     def unpack(
         inp: cases.IField,
     ) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField,]:
-        a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
+        a, b, c, d = (inp + int32(2), inp + int32(3), inp + int32(5), inp + int32(7))
         return a, b, c, d
 
     cases.verify_with_default_data(
@@ -1079,9 +1079,9 @@ def test_tuple_unpacking_star_multi(cartesian_case):
     def unpack(
         inp: cases.IField,
     ) -> OutType:
-        *a, a2, a3 = (inp, inp + 1, inp + 2, inp + 3)
-        b1, *b, b3 = (inp + 4, inp + 5, inp + 6, inp + 7)
-        c1, c2, *c = (inp + 8, inp + 9, inp + 10, inp + 11)
+        *a, a2, a3 = (inp, inp + int32(1), inp + int32(2), inp + int32(3))
+        b1, *b, b3 = (inp + int32(4), inp + int32(5), inp + int32(6), inp + int32(7))
+        c1, c2, *c = (inp + int32(8), inp + int32(9), inp + int32(10), inp + int32(11))
         return (a[0], a[1], a2, a3, b1, b[0], b[1], b3, c1, c2, c[0], c[1])
 
     cases.verify_with_default_data(

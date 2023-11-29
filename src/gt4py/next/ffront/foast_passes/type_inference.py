@@ -18,19 +18,16 @@ class ClosureVarInferencePass(eve.NodeTranslator, eve.traits.VisitorWithSymbolTa
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs) -> foast.FunctionDefinition:
         new_closure_vars: list[foast.Symbol] = []
         for sym in node.closure_vars:
-            if not isinstance(self.closure_vars[sym.id], type):
-                ty = ti2_f.inferrer.from_instance(self.closure_vars[sym.id])
-                if ty is None:
-                    raise errors.DSLError(sym.location, f"could not infer type of captured variable '{sym.id}'")
-                new_symbol: foast.Symbol = foast.Symbol(
-                    id=sym.id,
-                    location=sym.location,
-                    type=sym.type,
-                    type_2=ty,
-                )
-                new_closure_vars.append(new_symbol)
-            else:
-                new_closure_vars.append(sym)
+            ty = ti2_f.inferrer.from_instance(self.closure_vars[sym.id])
+            if ty is None:
+                raise errors.DSLError(sym.location, f"could not infer type of captured variable '{sym.id}'")
+            new_symbol: foast.Symbol = foast.Symbol(
+                id=sym.id,
+                location=sym.location,
+                type=sym.type,
+                type_2=ty,
+            )
+            new_closure_vars.append(new_symbol)
         return foast.FunctionDefinition(
             id=node.id,
             params=node.params,
@@ -132,7 +129,7 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         if node.id not in symtable:
             raise errors.UndefinedSymbolError(node.location, node.id)
         symbol: foast.Symbol = symtable[node.id]
-        assert symbol.type_2 is not None, str(node.location)
+        assert symbol.type_2 is not None, f"{node.id}: {node.location}"
         return foast.Name(id=node.id, type_2=symbol.type_2, location=node.location)
 
     def visit_Assign(self, node: foast.Assign, **kwargs) -> foast.Assign:
@@ -153,22 +150,21 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
             raise errors.DSLError(targets[starred_indices[1]], message)
 
         tys = value.type_2.elements
-        last = len(tys)
-        starred_first = starred_indices[0] if starred_indices else last
-        starred_last = len(tys) - len(targets) + 1 + starred_first if starred_indices else last
-        if starred_last < starred_first:
+        starred_count = len(tys) - len(targets) + 1 if starred_indices else 0
+        if starred_count < 0:
             raise errors.DSLError(node.location, "not enough values to unpack")
         if not starred_indices and len(targets) != len(tys):
             raise errors.DSLError(node.location, "too many values to unpack")
 
-        for target, ty in zip(targets[0:starred_first], tys[0:starred_first]):
-            target.type_2 = ty
-        for target, ty in zip(targets[starred_last:last], tys[starred_last:last]):
-            target.type_2 = ty
-        if starred_indices:
-            starred_symbol = typing.cast(foast.Starred, targets[starred_indices[0]])
-            starred_symbol.id.type_2 = ts2.TupleType(tys[starred_first:starred_last])
-            starred_symbol.type_2 = starred_symbol.id.type_2
+        ty_idx = 0
+        for idx, target in enumerate(targets):
+            if starred_indices and idx == starred_indices[0]:
+                target.id.type_2 = ts2.TupleType(tys[ty_idx:ty_idx+starred_count])
+                target.type_2 = target.id.type_2
+                ty_idx += starred_count
+            else:
+                target.type_2 = tys[ty_idx]
+                ty_idx += 1
         return foast.TupleTargetAssign(targets=targets, value=value, type_2=value.type_2, location=node.location)
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> foast.TupleExpr:

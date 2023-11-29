@@ -5,6 +5,7 @@ from gt4py.next.type_system_2 import inference as ti2, types as ts2
 from gt4py.next.ffront.type_system_2 import types as ts2_f
 import gt4py.next as gtx
 from typing import Any
+from gt4py.next.ffront import fbuiltins
 
 
 def field_from_annotation(inferrer: ti2.TypeInferrer, annotation: Any):
@@ -33,11 +34,26 @@ def field_offset_from_instance(_: ti2.TypeInferrer, instance: Any):
         return ts2_f.FieldOffsetType(instance)
 
 
+def cast_function_from_instance(inferrer: ti2.TypeInferrer, instance: Any):
+    maybe_ty = inferrer.from_annotation(instance)
+    if maybe_ty is not None:
+        return ts2_f.CastFunctionType(maybe_ty)
+    return None
+
+
+def builtin_function_from_instance(_: ti2.TypeInferrer, instance: Any):
+    if isinstance(instance, fbuiltins.BuiltInFunction):
+        return ts2_f.BuiltinFunctionType(instance)
+    return None
+
+
 inferrer = ti2.TypeInferrer(
     [
         *ti2.inferrer.patterns,
         ti2.Pattern(field_from_annotation, None),
         ti2.Pattern(None, dimension_from_instance),
         ti2.Pattern(None, field_offset_from_instance),
+        ti2.Pattern(None, cast_function_from_instance),
+        ti2.Pattern(None, builtin_function_from_instance),
     ]
 )
