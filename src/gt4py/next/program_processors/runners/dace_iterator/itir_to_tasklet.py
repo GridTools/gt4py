@@ -18,6 +18,7 @@ from typing import Any, Callable, Optional, TypeAlias, cast
 
 import dace
 import numpy as np
+from dace import subsets
 from dace.transformation.dataflow import MapFusion
 from dace.transformation.passes.prune_symbols import RemoveUnusedSymbols
 
@@ -749,13 +750,88 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             return [ValueExpr(value=result_access, dtype=iterator.dtype)]
 
-        else:
+        elif all([dim in iterator.indices for dim in iterator.dimensions]):
+            # The deref iterator has index values on all dimensions: the result will be a scalar
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
                 ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{', '.join(internals[1:])}]"
             return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
+        else:
+            # Not all dimensions are included in the deref indexes:
+            # this means the ND-field will be sliced along one or more dimensions and the result will be an array
+            field_array = self.context.body.arrays[iterator.field.data]
+            result_shape = tuple(
+                dim_size
+                for dim, dim_size in zip(sorted_dims, field_array.shape)
+                if dim not in iterator.indices
+            )
+            result_name = unique_var_name()
+            self.context.body.add_array(result_name, result_shape, iterator.dtype, transient=True)
+            result_array = self.context.body.arrays[result_name]
+            result_node = self.context.state.add_access(result_name)
+
+            deref_connectors = ["_inp"] + [
+                f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
+            ]
+            deref_nodes = [iterator.field] + [
+                iterator.indices[dim] for dim in sorted_dims if dim in iterator.indices
+            ]
+            deref_memlets = [dace.Memlet.from_array(iterator.field.data, field_array)] + [
+                dace.Memlet.simple(node.data, "0") for node in deref_nodes[1:]
+            ]
+
+            # we create a nested sdfg in order to access the scalar deref indexes as symbols in a memlet subset
+            deref_sdfg = dace.SDFG("deref")
+            deref_sdfg.add_array(
+                "_inp", field_array.shape, iterator.dtype, strides=field_array.strides
+            )
+            for connector in deref_connectors[1:]:
+                deref_sdfg.add_scalar(connector, _INDEX_DTYPE)
+            deref_sdfg.add_array("_out", result_shape, iterator.dtype)
+            deref_init_state = deref_sdfg.add_state(is_start_block=True)
+            deref_access_state = deref_sdfg.add_state()
+            deref_sdfg.add_edge(
+                deref_init_state,
+                deref_access_state,
+                dace.InterstateEdge(
+                    assignments={f"_sym{inp}": inp for inp in deref_connectors[1:]}
+                ),
+            )
+            # we access the size in source field shape as symbols set on the nested sdfg
+            source_subset = tuple(
+                f"_sym_i_{dim}" if dim in iterator.indices else f"0:{size}"
+                for dim, size in zip(sorted_dims, field_array.shape)
+            )
+            deref_access_state.add_edge(
+                deref_access_state.add_access("_inp"),
+                None,
+                deref_access_state.add_access("_out"),
+                None,
+                dace.Memlet(
+                    data="_out",
+                    subset=subsets.Range.from_array(result_array),
+                    other_subset=",".join(source_subset),
+                ),
+            )
+
+            deref_node = self.context.state.add_nested_sdfg(
+                deref_sdfg,
+                self.context.body,
+                inputs=set(deref_connectors),
+                outputs={"_out"},
+            )
+            for connector, node, memlet in zip(deref_connectors, deref_nodes, deref_memlets):
+                self.context.state.add_edge(node, None, deref_node, connector, memlet)
+            self.context.state.add_edge(
+                deref_node,
+                "_out",
+                result_node,
+                None,
+                dace.Memlet.from_array(result_name, result_array),
+            )
+            return [ValueExpr(result_node, iterator.dtype)]
 
     def _split_shift_args(
         self, args: list[itir.Expr]
