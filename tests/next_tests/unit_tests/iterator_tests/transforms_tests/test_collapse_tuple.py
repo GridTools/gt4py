@@ -119,7 +119,7 @@ def test_propagate_to_if_on_tuples():
 
 
 def test_propagate_to_if_on_tuples_with_let():
-    testee = im.let("val", im.if_(True, im.make_tuple(1, 2), im.make_tuple(3, 4)))(
+    testee = im.let("val", im.if_("cond", im.make_tuple(1, 2), im.make_tuple(3, 4)))(
         im.tuple_get(0, "val")
     )
     expected = im.if_(
@@ -128,7 +128,8 @@ def test_propagate_to_if_on_tuples_with_let():
     actual = CollapseTuple.apply(
         testee,
         flags=CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
-        | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS,
+        | CollapseTuple.Flag.LETIFY_MAKE_TUPLE_ELEMENTS
+        | CollapseTuple.Flag.REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS,
     )
     assert actual == expected
 

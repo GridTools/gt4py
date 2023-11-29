@@ -19,7 +19,7 @@ import gt4py.eve.utils
 from gt4py import eve
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_if_call, is_let
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 
@@ -90,13 +90,15 @@ class CollapseTuple(eve.NodeTranslator):
         #: `{1, 2}` -> `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)`
         LETIFY_MAKE_TUPLE_ELEMENTS = 8
         #: TODO
-        INLINE_TRIVIAL_MAKE_TUPLE = 16
+        REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS = 16
         #: TODO
-        PROPAGATE_TO_IF_ON_TUPLES = 32
+        INLINE_TRIVIAL_MAKE_TUPLE = 32
         #: TODO
-        PROPAGATE_NESTED_LET = 64
+        PROPAGATE_TO_IF_ON_TUPLES = 64
         #: TODO
-        INLINE_TRIVIAL_LET = 128
+        PROPAGATE_NESTED_LET = 128
+        #: TODO
+        INLINE_TRIVIAL_LET = 256
 
     ignore_tuple_size: bool
     use_global_type_inference: bool
@@ -105,6 +107,7 @@ class CollapseTuple(eve.NodeTranslator):
         | Flag.COLLAPSE_TUPLE_GET_MAKE_TUPLE
         | Flag.PROPAGATE_TUPLE_GET
         | Flag.LETIFY_MAKE_TUPLE_ELEMENTS
+        | Flag.REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS
         | Flag.INLINE_TRIVIAL_MAKE_TUPLE
         | Flag.PROPAGATE_TO_IF_ON_TUPLES
         | Flag.PROPAGATE_NESTED_LET
@@ -151,7 +154,7 @@ class CollapseTuple(eve.NodeTranslator):
         # as otherwise two equal expressions containing a tuple will not be equal anymore
         # and the CSE pass can not remove them.
         # TODO: test case for `scan(lambda carry: {1, 2})` (see solve_nonhydro_stencil_52_like_z_q_tup)
-        if flags & cls.Flag.LETIFY_MAKE_TUPLE_ELEMENTS:
+        if flags & cls.Flag.REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS:
             new_node = InlineLambdas.apply(
                 new_node, opcount_preserving=True, force_inline_lambda_args=False
             )
@@ -177,7 +180,8 @@ class CollapseTuple(eve.NodeTranslator):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
                 if not (
-                    int(v.args[0].value) == i and _is_equal_value_heuristics(v.args[1], first_expr)
+                    int(v.args[0].value) == i
+                    and ir_misc.is_equal_value_heuristics(v.args[1], first_expr)
                 ):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)
