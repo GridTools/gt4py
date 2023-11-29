@@ -314,6 +314,26 @@ def builtin_if(
     return transformer.add_expr_tasklet(expr_args, expr, type_, "if")
 
 
+def builtin_list_get(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    args = list(itertools.chain(*transformer.visit(node_args)))
+    assert len(args) == 2
+    # index node
+    assert isinstance(args[0], (SymbolExpr, ValueExpr))
+    # 1D-array node
+    assert isinstance(args[1], ValueExpr)
+    # source node should be a 1D array
+    assert len(transformer.context.body.arrays[args[1].value.data].shape) == 1
+
+    expr_args = [(arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)]
+    internals = [
+        arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
+    ]
+    expr = f"{internals[1]}[{internals[0]}]"
+    return transformer.add_expr_tasklet(expr_args, expr, args[1].dtype, "list_get")
+
+
 def builtin_cast(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -345,16 +365,13 @@ def builtin_tuple_get(
     raise ValueError("Tuple can only be subscripted with compile-time constants")
 
 
-def builtin_undefined(*args: Any) -> Any:
-    raise NotImplementedError()
-
-
 _GENERAL_BUILTIN_MAPPING: dict[
     str, Callable[["PythonTaskletCodegen", itir.Expr, list[itir.Expr]], list[ValueExpr]]
 ] = {
     "can_deref": builtin_can_deref,
     "cast_": builtin_cast,
     "if_": builtin_if,
+    "list_get": builtin_list_get,
     "make_tuple": builtin_make_tuple,
     "neighbors": builtin_neighbors,
     "tuple_get": builtin_tuple_get,
@@ -592,12 +609,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 return self._visit_reduce(node)
 
         if isinstance(node.fun, itir.SymRef):
-            if str(node.fun.id) in _MATH_BUILTINS_MAPPING:
+            builtin_name = str(node.fun.id)
+            if builtin_name in _MATH_BUILTINS_MAPPING:
                 return self._visit_numeric_builtin(node)
-            elif str(node.fun.id) in _GENERAL_BUILTIN_MAPPING:
+            elif builtin_name in _GENERAL_BUILTIN_MAPPING:
                 return self._visit_general_builtin(node)
             else:
-                raise NotImplementedError()
+                raise NotImplementedError(f"{builtin_name} not implemented")
         return self._visit_call(node)
 
     def _visit_call(self, node: itir.FunCall):
