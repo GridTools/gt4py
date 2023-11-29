@@ -20,7 +20,7 @@ from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
 def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
