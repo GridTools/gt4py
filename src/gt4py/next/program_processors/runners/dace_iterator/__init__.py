@@ -59,10 +59,11 @@ def convert_arg(arg: Any):
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
         if isinstance(arg.ndarray, np.ndarray):
-            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+            ret = np.moveaxis(arg.ndarray, range(ndim), dim_indices)
         else:
             assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
-            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
+            ret = cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
+        return ret.copy()   # Ensure that the memory will always existsing and is continious.
     return arg
 
 
@@ -211,6 +212,17 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         program = preprocess_program(program, offset_provider, lift_mode)
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
+
+        # The argument list of the function consists off _all_ arguments.
+        #  First commes the aruments listed in `params` and then follows the
+        #  (implicit) arguments, their oder is determined by DaCe.
+        assert len(sdfg.arg_names) == 0
+        arg_list = [str(a)  for a in program.params]
+        sig_list = sdfg.signature_arglist(with_types=False)
+        implicit_args = set(sig_list) - set(arg_list)
+        call_params = arg_list + [ia  for ia in sig_list if ia in implicit_args]
+        sdfg.arg_names = call_params
+
         sdfg.simplify()
 
         # run DaCe auto-optimization heuristics
