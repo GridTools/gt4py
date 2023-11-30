@@ -16,7 +16,7 @@ from typing import Any, Callable, Optional, Sequence
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, field_utils, utils
+from gt4py.next import common, constructors, errors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
@@ -56,7 +56,11 @@ def field_operator_call(
 
     else:
         # field_operator called directly
+        if "offset_provider" not in kwargs:
+            raise errors.MissingArgumentError(None, "offset_provider", True)
         offset_provider = kwargs.pop("offset_provider", None)
+        if "out" not in kwargs:
+            raise errors.MissingArgumentError(None, "out", True)
         out = kwargs.pop("out")
         domain = kwargs.pop("domain", None)
 

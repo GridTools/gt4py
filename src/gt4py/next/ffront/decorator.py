@@ -33,7 +33,7 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -682,6 +682,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
+            definition=None,
             backend=self.backend,
             grid_type=self.grid_type,
         )
@@ -694,7 +695,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     ) -> None:
         if not next_embedded.context.within_context() and self.backend is not None:
             # non embedded execution
-            offset_provider = kwargs.pop("offset_provider", None)
+            if "offset_provider" not in kwargs:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
+            offset_provider = kwargs.pop("offset_provider")
+
+            if "out" not in kwargs:
+                raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
             args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
             # TODO(tehrengruber): check all offset providers are given

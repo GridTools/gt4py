@@ -15,6 +15,7 @@
 import pytest
 
 from gt4py import next as gtx
+from gt4py.next import errors
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 # fixtures
@@ -38,3 +39,19 @@ def test_default_backend_is_respected(cartesian_case):  # noqa: F811 # fixtures
         # due to `fieldview_backend` fixture (dependency of `cartesian_case`)
         # setting the default backend to something invalid.
         _ = copy(a, out=a, offset_provider={})
+
+
+def test_missing_arg(cartesian_case):  # noqa: F811 # fixtures
+    """Test that calling a field_operator without required args raises an error."""
+
+    @gtx.field_operator(backend=cartesian_case.backend)
+    def copy(a: IField) -> IField:
+        return a
+
+    a = cases.allocate(cartesian_case, copy, "a")()
+
+    with pytest.raises(errors.MissingArgumentError, match="'out'"):
+        _ = copy(a, offset_provider={})
+
+    with pytest.raises(errors.MissingArgumentError, match="'offset_provider'"):
+        _ = copy(a, out=a)
