@@ -133,7 +133,7 @@ _MATH_BUILTINS_MAPPING = {
 
 @dataclasses.dataclass
 class SymbolExpr:
-    value: str | dace.symbolic.sympy.Basic
+    value: dace.symbolic.SymbolicType
     dtype: dace.typeclass
 
 
@@ -282,6 +282,23 @@ def builtin_can_deref(
     assert isinstance(shift_callable.fun, itir.SymRef)
     assert shift_callable.fun.id == "shift"
     iterator = transformer._visit_shift(can_deref_callable)
+
+    # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
+    if not isinstance(iterator, IteratorExpr):
+        assert len(iterator) == 1 and isinstance(iterator[0], ValueExpr)
+        # We can always deref a value expression, therefore hard-code `can_deref` to True.
+        # Returning a SymbolExpr would be preferable, but it requires update to type-checking.
+        result_name = unique_var_name()
+        transformer.context.body.add_scalar(result_name, dace.dtypes.bool, transient=True)
+        result_node = transformer.context.state.add_access(result_name)
+        transformer.context.state.add_edge(
+            transformer.context.state.add_tasklet("can_always_deref", {}, {"_out"}, "_out = True"),
+            "_out",
+            result_node,
+            None,
+            dace.Memlet.simple(result_name, "0"),
+        )
+        return [ValueExpr(result_node, dace.dtypes.bool)]
 
     # create tasklet to check that field indices are non-negative (-1 is invalid)
     args = [ValueExpr(iterator.indices[dim], iterator.dtype) for dim in iterator.dimensions]
@@ -747,7 +764,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=rest), args=[iterator]
         )
 
-    def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
+    def _visit_shift(self, node: itir.FunCall) -> IteratorExpr | list[ValueExpr]:
         shift = node.fun
         assert isinstance(shift, itir.FunCall)
         tail, rest = self._split_shift_args(shift.args)
@@ -755,6 +772,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             iterator = self.visit(self._make_shift_for_rest(rest, node.args[0]))
         else:
             iterator = self.visit(node.args[0])
+        if not isinstance(iterator, IteratorExpr):
+            # shift cannot be applied because the argument is not iterable
+            # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
+            assert isinstance(iterator, list) and len(iterator) == 1
+            assert isinstance(iterator[0], ValueExpr)
+            return iterator
 
         assert isinstance(tail[0], itir.OffsetLiteral)
         offset_dim = tail[0].value
