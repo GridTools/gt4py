@@ -132,7 +132,9 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_Return(
         self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
-        return self.visit(node.value, **kwargs)
+        return_ = self.visit(node.value, **kwargs)
+        return_.location = node.location
+        return return_
 
     def visit_BlockStmt(
         self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs
@@ -361,7 +363,9 @@ class FieldOperatorLowering(NodeTranslator):
         return self._map("if_", *node.args, location=node.location)
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self.visit(node.args[0], **kwargs)
+        return_ = self.visit(node.args[0], **kwargs)
+        return_.location = node.location
+        return return_
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args, location=node.location)
