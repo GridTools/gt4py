@@ -154,8 +154,8 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, '_unique_id', 0)
-    setattr(unique_name, '_unique_id', unique_id + 1)
+    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
     return f"{prefix}_{unique_id}"
 
 

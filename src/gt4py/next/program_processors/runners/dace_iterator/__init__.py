@@ -191,8 +191,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
     # Return parameter
-    return_sdfg = kwargs.get('return_sdfg', False)
-    run_sdfg = kwargs.get('run_sdfg', True)
+    return_sdfg = kwargs.get("return_sdfg", False)
+    run_sdfg = kwargs.get("run_sdfg", True)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     lift_mode = (
