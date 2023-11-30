@@ -76,6 +76,17 @@ def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T |
     return impl
 
 
+def _flatten_tree(value: tuple[_S | tuple, ...]):
+    assert isinstance(value, tuple)
+    res = []
+    for v in value:
+        if isinstance(v, tuple):
+            res.extend(list(_flatten_tree(v)))
+        else:
+            res.append(v)
+    return tuple(res)
+
+
 def tree_reduce(*, init: _T):
     """
     Reduce (possibly nested) tuples using the binary function `fun`.
@@ -83,15 +94,14 @@ def tree_reduce(*, init: _T):
     Examples:
         >>> tree_reduce(init=1)(lambda x, y: x * y)(((1, 2), 3))
         6
+        >>> tree_reduce(init=1)(lambda x, y: x * y)((42,))
+        42
     """
 
     def impl(fun: Callable[[_T, _S], _T]):
         @functools.wraps(fun)
         def impl_inner(value: _S | tuple[_S | tuple, ...]):
-            if isinstance(value, tuple):
-                return functools.reduce(fun, tuple(impl_inner(v) for v in value), init)
-            else:
-                return value
+            return functools.reduce(fun, _flatten_tree((value,)), init)
 
         return impl_inner
 
