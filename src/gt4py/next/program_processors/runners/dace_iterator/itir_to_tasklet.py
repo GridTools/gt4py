@@ -758,8 +758,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{', '.join(internals[1:])}]"
             return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
+
         else:
-            # Not all dimensions are included in the deref indexes:
+            # Not all dimensions are included in the deref index list:
             # this means the ND-field will be sliced along one or more dimensions and the result will be an array
             field_array = self.context.body.arrays[iterator.field.data]
             result_shape = tuple(
@@ -782,7 +783,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 dace.Memlet.simple(node.data, "0") for node in deref_nodes[1:]
             ]
 
-            # we create a nested sdfg in order to access the scalar deref indexes as symbols in a memlet subset
+            # we create a nested sdfg in order to access the index scalar values as symbols in a memlet subset
             deref_sdfg = dace.SDFG("deref")
             deref_sdfg.add_array(
                 "_inp", field_array.shape, iterator.dtype, strides=field_array.strides
