@@ -59,11 +59,10 @@ def convert_arg(arg: Any):
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
         if isinstance(arg.ndarray, np.ndarray):
-            ret = np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
         else:
             assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
-            ret = cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
-        return ret.copy()   # Ensure that the memory will always existsing and is continious.
+            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
     return arg
 
 
