@@ -114,10 +114,19 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
-            shape = [dace.symbol(unique_var_name() + f'__{name}_shape{i}') for i in range(len(type_.dims))]
-            strides = [dace.symbol(unique_var_name() + f'__{name}_stride{i}') for i in range(len(type_.dims))]
+            shape = [
+                dace.symbol(unique_var_name() + f'__{name}_shape{i}')
+                for i in range(len(type_.dims))
+            ]
+            strides = [
+                dace.symbol(unique_var_name() + f'__{name}_stride{i}')
+                for i in range(len(type_.dims))
+            ]
             offset = (
-                [dace.symbol(unique_var_name() + f'__{name}_offset{i}') for i in range(len(type_.dims))]
+                [
+                    dace.symbol(unique_var_name() + f'__{name}_offset{i}')
+                    for i in range(len(type_.dims))
+                ]
                 if has_offset
                 else None
             )

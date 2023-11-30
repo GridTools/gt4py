@@ -192,7 +192,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
     run_on_gpu = kwargs.get("run_on_gpu", False)
     # Return parameter
     return_sdfg = kwargs.get('return_sdfg', False)
-    run_sdfg    = kwargs.get('run_sdfg', True)
+    run_sdfg = kwargs.get('run_sdfg', True)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     lift_mode = (
@@ -219,10 +219,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
         #  First commes the aruments listed in `params` and then follows the
         #  (implicit) arguments, their oder is determined by DaCe.
         assert len(sdfg.arg_names) == 0
-        arg_list = [str(a)  for a in program.params]
+        arg_list = [str(a) for a in program.params]
         sig_list = sdfg.signature_arglist(with_types=False)
         implicit_args = set(sig_list) - set(arg_list)
-        call_params = arg_list + [ia  for ia in sig_list if ia in implicit_args]
+        call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
         sdfg.arg_names = call_params
 
         sdfg.simplify()
@@ -269,17 +269,16 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
         if key in sdfg.signature_arglist(with_types=False)
     }
 
-    if(run_sdfg):
+    if run_sdfg:
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "allow_view_arguments", value=True)
             dace.config.Config.set("frontend", "check_args", value=True)
             sdfg_program(**expected_args)
     #
 
-    if(return_sdfg):
+    if return_sdfg:
         return sdfg
     return None
-#
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
