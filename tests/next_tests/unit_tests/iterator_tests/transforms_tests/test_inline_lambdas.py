@@ -74,6 +74,7 @@ def test_inline_lambda_args():
     )
     inlined = InlineLambdas.apply(
         testee,
+        opcount_preserving=True,
         force_inline_lambda_args=True,
     )
     assert inlined == expected
