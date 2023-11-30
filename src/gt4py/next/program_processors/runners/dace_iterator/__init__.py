@@ -185,6 +185,27 @@ def get_cache_id(
     return m.hexdigest()
 
 
+# TODO(edopao): remove this function after upgrade to DaCe >= v0.15, provided by DaCe itself
+def apply_gpu_storage(sdfg: dace.SDFG) -> None:
+    """Change the storage of the SDFG's input and output data to GPU global memory."""
+    written_scalars = set()
+    for state in sdfg.nodes():
+        for node in state.data_nodes():
+            desc = node.desc(sdfg)
+            if (
+                isinstance(desc, dace.data.Scalar)
+                and not desc.transient
+                and state.in_degree(node) > 0
+            ):
+                written_scalars.add(node.data)
+
+    for name, desc in sdfg.arrays.items():
+        if not desc.transient and desc.storage == dace.dtypes.StorageType.Default:
+            if isinstance(desc, dace.data.Scalar) and name not in written_scalars:
+                continue
+            desc.storage = dace.dtypes.StorageType.GPU_Global
+
+
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
@@ -223,6 +244,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
         if run_on_gpu:
             sdfg.apply_gpu_transformations()
+            # TODO(edopao): the call below won't be needed after upgrade to DaCe >= v0.15
+            apply_gpu_storage(sdfg)
 
         # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
