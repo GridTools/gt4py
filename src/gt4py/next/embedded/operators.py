@@ -122,7 +122,7 @@ def scan(
 ):
     scan_axis = scan_range[0]
     domain_intersection = embedded_common.intersect_domains(
-        *[field_utils.get_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
+        *[_intersect_tuple_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
     )
     non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
@@ -151,6 +151,11 @@ def scan(
         scan_loop(())
 
     return res
+
+
+@utils.tree_reduce(init=common.Domain())
+def _intersect_tuple_domain(a: common.Domain, b: common.Field) -> common.Domain:
+    return embedded_common.intersect_domains(a, b.domain)
 
 
 @utils.get_common_tuple_value
