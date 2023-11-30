@@ -184,11 +184,9 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Optional[dace.SDFG]:
+def build_sdfg_from_itir(program: itir.FencilDefinition, *args, **kwargs) -> dace.SDFG:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
-    build_cache = kwargs.get("build_cache", None)
-    build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
     # Return parameter
     return_sdfg = kwargs.get("return_sdfg", False)
@@ -202,40 +200,46 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
 
     arg_types = [type_translation.from_value(arg) for arg in args]
     device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
+
+    # visit ITIR and generate SDFG
+    program = preprocess_program(program, offset_provider, lift_mode)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
+    sdfg = sdfg_genenerator.visit(program)
+    sdfg.simplify()
+
+    # run DaCe auto-optimization heuristics
+    if auto_optimize:
+        # TODO Investigate how symbol definitions improve autoopt transformations,
+        #      in which case the cache table should take the symbols map into account.
+        symbols: dict[str, int] = {}
+        sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
+
+    return sdfg
+
+
+def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
+    # build parameters
+    build_cache = kwargs.get("build_cache", None)
+    build_type = kwargs.get("build_type", "RelWithDebInfo")
+    run_on_gpu = kwargs.get("run_on_gpu", False)
+    # ITIR parameters
+    column_axis = kwargs.get("column_axis", None)
+    offset_provider = kwargs["offset_provider"]
+
+    arg_types = [type_translation.from_value(arg) for arg in args]
+    device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
+    sdfg: Optional[dace.SDFG] = None
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
+
     else:
-        # visit ITIR and generate SDFG
-        program = preprocess_program(program, offset_provider, lift_mode)
-        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
-        sdfg = sdfg_genenerator.visit(program)
+        sdfg = build_sdfg_from_itir(program, *args, **kwargs)
 
-        # All arguments required by the SDFG, regardless if explicit and implicit, are added
-        #  as positional arguments. In the front are all arguments to the Fencil, in that
-        #  order, they are followed by the arguments created by the translation process,
-        #  their order is determined by DaCe and unspecific.
-        assert len(sdfg.arg_names) == 0
-        arg_list = [str(a) for a in program.params]
-        sig_list = sdfg.signature_arglist(with_types=False)
-        implicit_args = set(sig_list) - set(arg_list)
-        call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
-        sdfg.arg_names = call_params
-
-        sdfg.simplify()
-
-        # run DaCe auto-optimization heuristics
-        if auto_optimize:
-            # TODO Investigate how symbol definitions improve autoopt transformations,
-            #      in which case the cache table should take the symbols map into account.
-            symbols: dict[str, int] = {}
-            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
-
-        # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
