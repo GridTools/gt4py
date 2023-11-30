@@ -160,7 +160,7 @@ def unique_name(prefix):
 
 
 def unique_var_name():
-    return unique_name("__var")
+    return unique_name("_var")
 
 
 def flatten_list(node_list: list[Any]) -> list[Any]:
