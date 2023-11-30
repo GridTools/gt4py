@@ -15,7 +15,8 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
+from gt4py.next.iterator import ir, type_inference as ti
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def test_unsatisfiable_constraints():
