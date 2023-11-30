@@ -508,7 +508,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
-        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", is_start_block=True)
+        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
             lambda_sdfg, lambda_state, self.context.symbol_map
@@ -791,8 +791,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             for connector in deref_connectors[1:]:
                 deref_sdfg.add_scalar(connector, _INDEX_DTYPE)
             deref_sdfg.add_array("_out", result_shape, iterator.dtype)
-            deref_init_state = deref_sdfg.add_state(is_start_block=True)
-            deref_access_state = deref_sdfg.add_state()
+            deref_init_state = deref_sdfg.add_state("init", True)
+            deref_access_state = deref_sdfg.add_state("access")
             deref_sdfg.add_edge(
                 deref_init_state,
                 deref_access_state,
@@ -1144,7 +1144,7 @@ def closure_to_tasklet_sdfg(
     node_types: dict[int, next_typing.Type],
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
-    state = body.add_state("tasklet_toplevel_entry", is_start_block=True)
+    state = body.add_state("tasklet_toplevel_entry", True)
     symbol_map: dict[str, TaskletExpr] = {}
 
     idx_accesses = {}
