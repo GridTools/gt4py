@@ -29,6 +29,7 @@ from typing import Generator, Generic, TypeVar
 
 from devtools import debug
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
@@ -56,11 +57,10 @@ from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_fr
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DEFAULT_BACKEND: Callable = roundtrip.executor
+DEFAULT_BACKEND: Callable = None
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
@@ -171,15 +171,15 @@ class Program:
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
-    grid_type: Optional[GridType] = None
+    definition: Optional[types.FunctionType]
+    backend: Optional[ppi.ProgramExecutor]
+    grid_type: Optional[GridType]
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
+        backend: Optional[ppi.ProgramExecutor],
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -489,7 +489,7 @@ def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.Functi
 def program(
     definition=None,
     *,
-    backend=None,
+    backend=eve.NOTHING,
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -511,7 +511,9 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(definition, backend, grid_type)
+        return Program.from_function(
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        )
 
     return program_inner if definition is None else program_inner(definition)
 
@@ -543,9 +545,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
-    grid_type: Optional[GridType] = None
+    definition: Optional[types.FunctionType]
+    backend: Optional[ppi.ProgramExecutor]
+    grid_type: Optional[GridType]
     operator_attributes: Optional[dict[str, Any]] = None
     _program_cache: dict = dataclasses.field(default_factory=dict)
 
@@ -553,7 +555,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
+        backend: Optional[ppi.ProgramExecutor],
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -727,7 +729,7 @@ def field_operator(
     ...
 
 
-def field_operator(definition=None, *, backend=None, grid_type=None):
+def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -745,7 +747,9 @@ def field_operator(definition=None, *, backend=None, grid_type=None):
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend, grid_type)
+        return FieldOperator.from_function(
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
@@ -779,7 +783,7 @@ def scan_operator(
     axis: Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend=None,
+    backend=eve.NOTHING,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
@@ -816,7 +820,7 @@ def scan_operator(
     def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(
             definition,
-            backend,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
