@@ -215,9 +215,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Option
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
 
-        # The argument list of the function consists off _all_ arguments.
-        #  First commes the aruments listed in `params` and then follows the
-        #  (implicit) arguments, their oder is determined by DaCe.
+        # All arguments required by the SDFG, regardless if explicit and implicit, are added
+        #  as positional arguments. In the front are all arguments to the Fencil, in that
+        #  order, they are followed by the arguments created by the translation process,
+        #  their order is determined by DaCe and unspecific.
         assert len(sdfg.arg_names) == 0
         arg_list = [str(a) for a in program.params]
         sig_list = sdfg.signature_arglist(with_types=False)
