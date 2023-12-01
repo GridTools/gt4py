@@ -184,26 +184,53 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def build_sdfg_from_itir(program: itir.FencilDefinition, *args, **kwargs) -> dace.SDFG:
-    # build parameters
-    auto_optimize = kwargs.get("auto_optimize", False)
-    run_on_gpu = kwargs.get("run_on_gpu", False)
-    # Return parameter
-    return_sdfg = kwargs.get("return_sdfg", False)
-    run_sdfg = kwargs.get("run_sdfg", True)
-    # ITIR parameters
-    column_axis = kwargs.get("column_axis", None)
-    lift_mode = (
-        LiftMode.FORCE_INLINE
-    )  # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
-    offset_provider = kwargs["offset_provider"]
+def build_sdfg_from_itir(
+    program: itir.FencilDefinition,
+    *args,
+    offset_provider: dict[str, Any],
+    auto_optimize: bool = False,
+    for_gpu: Optional[bool] = None,
+    column_axis: Optional[Dimension] = None,
+    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
+    **kwargs,
+) -> dace.SDFG:
+    """Translate a Fencil into an SDFG.
+
+    Args:
+        program:	        The Fencil that should be translated.
+        *args:		        Arguments for which the fencil should be called.
+        offset_provider:	The set of offset providers that should be used.
+        auto_optimize:	    Apply DaCe's `auto_optimize` heuristic.
+        for_gpu:		    Performs the translation for GPU, defaults to `None`.
+        column_axis:		The column axis to be used, defaults to `None`.
+        lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
+        **kwargs:           Except `run_on_gpu` all are ignored.
+
+    Notes:
+        In the `run_dace_iterator()` the `for_gpu` argument is called `run_on_gpu`.
+            If `for_gpu` is `None`, the default, the function will consult `run_on_gpu`.
+        Currently only the `FORCE_INLINE` liftmode is supported and an error is generated.
+    """
+    if for_gpu is None and "run_on_gpu" in kwargs:
+        for_gpu = kwargs.pop("run_on_gpu")
+    elif "run_on_gpu" in kwargs and for_gpu != kwargs["run_on_gpu"]:
+        raise ValueError(
+            "Passed conflicting arguments, for `for_gpu` you passed"
+            f"`{for_gpu}` but `run_on_gpu` was `{kwargs['run_on_gpu']}`."
+        )
+
+    # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
+    if lift_mode != LiftMode.FORCE_INLINE:
+        raise NotImplementedError(
+            f"Currently only `FORCE_INLINE` as lift mode is supported, you passed `{lift_mode}`."
+        )
 
     arg_types = [type_translation.from_value(arg) for arg in args]
-    device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
+    device = dace.DeviceType.GPU if for_gpu else dace.DeviceType.CPU
 
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, bool(for_gpu))
     sdfg = sdfg_genenerator.visit(program)
     sdfg.simplify()
 
@@ -212,7 +239,7 @@ def build_sdfg_from_itir(program: itir.FencilDefinition, *args, **kwargs) -> dac
         # TODO Investigate how symbol definitions improve autoopt transformations,
         #      in which case the cache table should take the symbols map into account.
         symbols: dict[str, int] = {}
-        sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
+        sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=for_gpu)
 
     return sdfg
 
@@ -274,15 +301,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         if key in sdfg.signature_arglist(with_types=False)
     }
 
-    if run_sdfg:
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            dace.config.Config.set("frontend", "check_args", value=True)
-            sdfg_program(**expected_args)
-    #
-
-    if return_sdfg:
-        return sdfg
+    with dace.config.temporary_config():
+        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+        dace.config.Config.set("frontend", "check_args", value=True)
+        sdfg_program(**expected_args)
     return None
 
 
