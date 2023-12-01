@@ -216,7 +216,7 @@ class ItirToSDFG(eve.NodeVisitor):
         sig_list = program_sdfg.signature_arglist(with_types=False)
         implicit_args = set(sig_list) - set(arg_list)
         call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
-        program_sdfg.arg_names.extend(call_params)
+        program_sdfg.arg_names = call_params
 
         program_sdfg.validate()
         return program_sdfg
