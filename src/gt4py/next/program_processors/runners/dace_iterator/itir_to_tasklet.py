@@ -289,8 +289,10 @@ def builtin_can_deref(
     assert shift_callable.fun.id == "shift"
     iterator = transformer._visit_shift(can_deref_callable)
 
+    # this iterator is accessing a neighbor table, so it should return an index
+    assert iterator.dtype in dace.dtypes.INTEGER_TYPES
     # create tasklet to check that field indices are non-negative (-1 is invalid)
-    args = [ValueExpr(access_node, _INDEX_DTYPE) for access_node in iterator.indices.values()]
+    args = [ValueExpr(access_node, iterator.dtype) for access_node in iterator.indices.values()]
     internals = [f"{arg.value.data}_v" for arg in args]
     expr_code = " and ".join([f"{v} >= 0" for v in internals])
 
@@ -844,6 +846,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         offset_dim = tail[0].value
         assert isinstance(offset_dim, str)
         offset_node = self.visit(tail[1])[0]
+        assert offset_node.dtype in dace.dtypes.INTEGER_TYPES
 
         if isinstance(self.offset_provider[offset_dim], NeighborTableOffsetProvider):
             offset_provider = self.offset_provider[offset_dim]
@@ -853,7 +856,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             target_dim = offset_provider.neighbor_axis.value
             args = [
                 ValueExpr(connectivity, offset_provider.table.dtype),
-                ValueExpr(iterator.indices[shifted_dim], _INDEX_DTYPE),
+                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
@@ -864,7 +867,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
             args = [
-                ValueExpr(iterator.indices[shifted_dim], _INDEX_DTYPE),
+                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
@@ -875,14 +878,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             shifted_dim = self.offset_provider[offset_dim].value
             target_dim = shifted_dim
             args = [
-                ValueExpr(iterator.indices[shifted_dim], _INDEX_DTYPE),
+                ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]} + {internals[1]}"
 
         shifted_value = self.add_expr_tasklet(
-            list(zip(args, internals)), expr, _INDEX_DTYPE, "shift"
+            list(zip(args, internals)), expr, offset_node.dtype, "shift"
         )[0].value
 
         shifted_index = {dim: value for dim, value in iterator.indices.items()}
