@@ -299,7 +299,7 @@ def callable_type_info_cases():
             [ts.TupleType(types=[float_type, field_type])],
             {},
             [
-                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+                r"Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
             ],
             ts.VoidType(),
         ),
@@ -308,7 +308,7 @@ def callable_type_info_cases():
             [int_type],
             {},
             [
-                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+                r"Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
             ],
             ts.VoidType(),
         ),

@@ -233,7 +233,7 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> import gt4py.next.iterator.ir_makers as im
+        >>> import gt4py.next.iterator.ir_utils.ir_makers as im
         >>> from gt4py.eve.utils import UIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1

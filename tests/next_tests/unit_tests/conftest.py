@@ -50,6 +50,12 @@ def lift_mode(request):
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append((definitions.OptionalProgramBackendId.DACE_CPU, True))
+    # TODO(havogt): update tests to use proper allocation
+    # OPTIONAL_PROCESSORS.append(
+    #     pytest.param(
+    #         (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
+    #     )
+    # ),
 
 
 @pytest.fixture(
@@ -60,6 +66,7 @@ if dace_iterator:
         (definitions.ProgramBackendId.GTFN_CPU, True),
         (definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
         (definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
+        # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
         (definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
         (definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),

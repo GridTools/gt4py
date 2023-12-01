@@ -29,7 +29,8 @@ from gt4py.next.ffront import type_specifications as ts_ffront
 from gt4py.next.ffront.ast_passes import single_static_assign as ssa
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
-from gt4py.next.iterator import ir as itir, ir_makers as im
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 

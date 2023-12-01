@@ -37,7 +37,6 @@ from gt4py.next import (
     tanh,
     trunc,
 )
-from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -67,16 +66,8 @@ def test_power(cartesian_case):
     cases.verify_with_default_data(cartesian_case, pow, ref=lambda inp1: inp1**2)
 
 
+@pytest.mark.uses_floordiv
 def test_floordiv(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail(
-            "FloorDiv not yet supported."
-        )  # see https://github.com/GridTools/gt4py/issues/1136
-
     @gtx.field_operator
     def floorDiv(inp1: cases.IField) -> cases.IField:
         return inp1 // 2
@@ -90,7 +81,7 @@ def test_mod(cartesian_case):
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
         return inp1 % 2
 
-    inp1 = gtx.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
+    inp1 = cartesian_case.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()
 
     cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
@@ -102,13 +93,8 @@ def test_bit_xor(cartesian_case):
         return inp1 ^ inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    inp1 = cases.allocate(cartesian_case, binary_xor, "inp1").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
-    inp2 = cases.allocate(cartesian_case, binary_xor, "inp2").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    inp1 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    inp2 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     out = cases.allocate(cartesian_case, binary_xor, cases.RETURN)()
     cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1 ^ inp2)
 
@@ -119,13 +105,8 @@ def test_bit_and(cartesian_case):
         return inp1 & inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    inp1 = cases.allocate(cartesian_case, bit_and, "inp1").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
-    inp2 = cases.allocate(cartesian_case, bit_and, "inp2").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    inp1 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    inp2 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     out = cases.allocate(cartesian_case, bit_and, cases.RETURN)()
     cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1 & inp2)
 
@@ -136,13 +117,8 @@ def test_bit_or(cartesian_case):
         return inp1 | inp2
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    inp1 = cases.allocate(cartesian_case, bit_or, "inp1").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
-    inp2 = cases.allocate(cartesian_case, bit_or, "inp2").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    inp1 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    inp2 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     out = cases.allocate(cartesian_case, bit_or, cases.RETURN)()
     cases.verify(cartesian_case, bit_or, inp1, inp2, out=out, ref=inp1 | inp2)
 
@@ -164,10 +140,7 @@ def test_unary_invert(cartesian_case):
         return ~inp1
 
     size = cartesian_case.default_sizes[IDim]
-    bool_field = np.random.choice(a=[False, True], size=(size))
-    inp1 = cases.allocate(cartesian_case, tilde_fieldop, "inp1").strategy(
-        cases.ConstInitializer(bool_field)
-    )()
+    inp1 = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     out = cases.allocate(cartesian_case, tilde_fieldop, cases.RETURN)()
     cases.verify(cartesian_case, tilde_fieldop, inp1, out=out, ref=~inp1)
 

@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import functools
+import warnings
 from typing import Any
 
 import numpy.typing as npt
@@ -42,12 +44,14 @@ def convert_arg(arg: Any) -> Any:
         return arg
 
 
-def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
+def convert_args(
+    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+) -> stages.CompiledProgram:
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
         converted_args = [convert_arg(arg) for arg in args]
-        conn_args = extract_connectivity_args(offset_provider)
+        conn_args = extract_connectivity_args(offset_provider, device)
         return inp(
             *converted_args,
             *conn_args,
@@ -56,8 +60,22 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
     return decorated_program
 
 
+def _ensure_is_on_device(
+    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
+) -> npt.NDArray:
+    if device == core_defs.DeviceType.CUDA:
+        import cupy as cp
+
+        if not isinstance(connectivity_arg, cp.ndarray):
+            warnings.warn(
+                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+            )
+            return cp.asarray(connectivity_arg)
+    return connectivity_arg
+
+
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
 ) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
@@ -67,7 +85,9 @@ def extract_connectivity_args(
                 raise NotImplementedError(
                     "Only `NeighborTable` connectivities implemented at this point."
                 )
-            args.append((conn.table, tuple([0] * 2)))
+            # copying to device here is a fallback for easy testing and might be removed later
+            conn_arg = _ensure_is_on_device(conn.table, device)
+            args.append((conn_arg, tuple([0] * 2)))
         elif isinstance(conn, common.Dimension):
             pass
         else:
@@ -126,7 +146,7 @@ GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
     translation=GTFN_GPU_TRANSLATION_STEP,
     bindings=nanobind.bind_source,
     compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=convert_args,
+    decoration=functools.partial(convert_args, device=core_defs.DeviceType.CUDA),
 )
 
 
