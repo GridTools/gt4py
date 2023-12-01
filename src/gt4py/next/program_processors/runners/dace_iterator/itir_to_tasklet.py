@@ -40,6 +40,7 @@ from .utility import (
     filter_neighbor_tables,
     flatten_list,
     map_nested_sdfg_symbols,
+    new_array_symbols,
     unique_name,
     unique_var_name,
 )
@@ -132,14 +133,13 @@ _MATH_BUILTINS_MAPPING = {
 }
 
 
-# Define type of index variables and symbols used in definitions for array shape/strides
-_INDEX_DTYPE = _TYPE_MAPPING["int"]
-_SYMBOL_DTYPE = _TYPE_MAPPING["int64"]
+# Define type of variables used for field indexing
+_INDEX_DTYPE = _TYPE_MAPPING["int64"]
 
 
 @dataclasses.dataclass
 class SymbolExpr:
-    value: str | dace.symbolic.sympy.Basic
+    value: dace.symbolic.SymbolicType
     dtype: dace.typeclass
 
 
@@ -410,12 +410,7 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
         elif isinstance(arg, IteratorExpr):
             # create storage in lambda sdfg
             ndims = len(arg.dimensions)
-            shape = tuple(
-                dace.symbol(unique_var_name() + "__shp", _SYMBOL_DTYPE) for _ in range(ndims)
-            )
-            strides = tuple(
-                dace.symbol(unique_var_name() + "__strd", _SYMBOL_DTYPE) for _ in range(ndims)
-            )
+            shape, strides = new_array_symbols(param, ndims)
             self._sdfg.add_array(param, shape=shape, strides=strides, dtype=arg.dtype)
             index_names = {dim: f"__{param}_i_{dim}" for dim in arg.indices.keys()}
             for _, index_name in index_names.items():
@@ -536,14 +531,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Add connectivities as arrays
         for name in connectivity_names:
-            shape = (
-                dace.symbol(unique_var_name() + "__shp", _SYMBOL_DTYPE),
-                dace.symbol(unique_var_name() + "__shp", _SYMBOL_DTYPE),
-            )
-            strides = (
-                dace.symbol(unique_var_name() + "__strd", _SYMBOL_DTYPE),
-                dace.symbol(unique_var_name() + "__strd", _SYMBOL_DTYPE),
-            )
+            shape, strides = new_array_symbols(name, ndim=2)
             dtype = self.context.body.arrays[name].dtype
             lambda_sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
@@ -565,11 +553,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 result_name = unique_var_name()
                 lambda_sdfg.add_scalar(result_name, expr.dtype, transient=True)
                 result_access = lambda_state.add_access(result_name)
-                lambda_state.add_edge(
+                lambda_state.add_nedge(
                     expr.value,
-                    None,
                     result_access,
-                    None,
                     # in case of reduction lambda, the output edge from lambda tasklet performs write-conflict resolution
                     dace.Memlet.simple(result_access.data, "0", wcr_str=self.context.reduce_wcr),
                 )
@@ -805,11 +791,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 f"_sym_i_{dim}" if dim in iterator.indices else f"0:{size}"
                 for dim, size in zip(sorted_dims, field_array.shape)
             )
-            deref_access_state.add_edge(
+            deref_access_state.add_nedge(
                 deref_access_state.add_access("_inp"),
-                None,
                 deref_access_state.add_access("_out"),
-                None,
                 dace.Memlet(
                     data="_out",
                     subset=subsets.Range.from_array(result_array),
@@ -1158,16 +1142,10 @@ def closure_to_tasklet_sdfg(
     for name, ty in inputs:
         if isinstance(ty, ts.FieldType):
             ndim = len(ty.dims)
-            shape = [
-                dace.symbol(f"{unique_var_name()}_shp{i}", dtype=_SYMBOL_DTYPE) for i in range(ndim)
-            ]
-            stride = [
-                dace.symbol(f"{unique_var_name()}_strd{i}", dtype=_SYMBOL_DTYPE)
-                for i in range(ndim)
-            ]
+            shape, strides = new_array_symbols(name, ndim)
             dims = [dim.value for dim in ty.dims]
             dtype = as_dace_type(ty.dtype)
-            body.add_array(name, shape=shape, strides=stride, dtype=dtype)
+            body.add_array(name, shape=shape, strides=strides, dtype=dtype)
             field = state.add_access(name)
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
@@ -1177,11 +1155,8 @@ def closure_to_tasklet_sdfg(
             body.add_scalar(name, dtype=dtype)
             symbol_map[name] = ValueExpr(state.add_access(name), dtype)
     for arr, name in connectivities:
-        shape = [dace.symbol(f"{unique_var_name()}_shp{i}", dtype=_SYMBOL_DTYPE) for i in range(2)]
-        stride = [
-            dace.symbol(f"{unique_var_name()}_strd{i}", dtype=_SYMBOL_DTYPE) for i in range(2)
-        ]
-        body.add_array(name, shape=shape, strides=stride, dtype=arr.dtype)
+        shape, strides = new_array_symbols(name, ndim=2)
+        body.add_array(name, shape=shape, strides=strides, dtype=arr.dtype)
 
     context = Context(body, state, symbol_map)
     translator = PythonTaskletCodegen(offset_provider, context, node_types)
