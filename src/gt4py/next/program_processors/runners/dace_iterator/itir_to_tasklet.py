@@ -161,7 +161,6 @@ class Context:
     symbol_map: dict[str, TaskletExpr]
     # if we encounter a reduction node, the reduction state needs to be pushed to child nodes
     reduce_identity: Optional[SymbolExpr]
-    reduce_limit: int
 
     def __init__(
         self,
@@ -169,13 +168,11 @@ class Context:
         state: dace.SDFGState,
         symbol_map: dict[str, TaskletExpr],
         reduce_identity: Optional[SymbolExpr] = None,
-        reduce_limit: int = 0,
     ):
         self.body = body
         self.state = state
         self.symbol_map = symbol_map
         self.reduce_identity = reduce_identity
-        self.reduce_limit = reduce_limit
 
 
 def builtin_neighbors(
@@ -196,10 +193,6 @@ def builtin_neighbors(
         )
 
     assert transformer.context.reduce_identity is not None
-    if transformer.context.reduce_limit == 0:
-        transformer.context.reduce_limit = table.max_neighbors
-    else:
-        assert transformer.context.reduce_limit == table.max_neighbors
 
     sdfg: dace.SDFG = transformer.context.body
     state: dace.SDFGState = transformer.context.state
@@ -537,7 +530,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             lambda_state,
             lambda_symbols_pass.symbol_refs,
             reduce_identity=self.context.reduce_identity,
-            reduce_limit=self.context.reduce_limit,
         )
         lambda_taskgen = PythonTaskletCodegen(self.offset_provider, lambda_context, self.node_types)
 
@@ -679,13 +671,16 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         args: list[ValueExpr]
         sorted_dims = sorted(iterator.dimensions)
-        if self.context.reduce_limit:
+        if self.context.reduce_identity is not None:
             # we are visiting a child node of reduction, so the neighbor index can be used for indirect addressing
+            dim_neighbors = [dim for dim in iterator.dimensions if dim not in iterator.indices]
+            assert len(dim_neighbors) == 1
+            table: NeighborTableOffsetProvider = self.offset_provider[dim_neighbors[0]]
             result_name = unique_var_name()
             self.context.body.add_array(
                 result_name,
                 dtype=iterator.dtype,
-                shape=(self.context.reduce_limit,),
+                shape=(table.max_neighbors,),
                 transient=True,
             )
             result_access = self.context.state.add_access(result_name)
@@ -694,7 +689,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             index_name = unique_name("__deref_idx")
             me, mx = self.context.state.add_map(
                 "deref_map",
-                ndrange={index_name: f"0:{self.context.reduce_limit}"},
+                ndrange={index_name: f"0:{table.max_neighbors}"},
             )
 
             # if dim is not found in iterator indices, we take the neighbor index over the reduction domain
@@ -864,12 +859,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             assert isinstance(op_name, itir.SymRef)
             reduce_identity = get_reduce_identity_value(op_name.id, reduce_dtype)
 
-            # set reduction state
+            # set reduction state in visit context
             self.context.reduce_identity = SymbolExpr(reduce_identity, reduce_dtype)
 
             args = flatten_list(self.visit(node.args))
 
-            # check that all neighbors expression have the same range
+            # clear context
+            self.context.reduce_identity = None
+
+            # check that all neighbor expressions have the same shape and reduce range
             nreduce_shape = args[1].value.desc(self.context.body).shape
             assert len(nreduce_shape) == 1
             assert all(
@@ -911,13 +909,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 input_nodes={arg.value.data: arg.value for arg in args},
                 output_nodes={reduce_input_name: reduce_input_node},
             )
-
-        # builtin neighbors will set the number of neighbors
-        assert self.context.reduce_limit != 0
-
-        # clear context
-        self.context.reduce_identity = None
-        self.context.reduce_limit = 0
 
         reduce_input_desc = reduce_input_node.desc(self.context.body)
 
