@@ -115,6 +115,15 @@ def test_unit_range_repr(rng):
     assert repr(rng) == "UnitRange(-5, 5)"
 
 
+def test_unit_range_bound_start_stop():
+    assert UnitRange(-5, None).bound_start == -5
+    assert UnitRange(None, 5).bound_stop == 5
+    with pytest.raises(AssertionError):
+        UnitRange(None, 5).bound_start
+    with pytest.raises(AssertionError):
+        UnitRange(-5, None).bound_stop
+
+
 def test_unit_range_iter(rng):
     actual = []
     expected = list(range(-5, 5))
