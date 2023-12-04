@@ -53,7 +53,12 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
+from gt4py.next.iterator.ir_utils.ir_makers import (
+    literal_from_value,
+    promote_to_const_iterator,
+    ref,
+    sym,
+)
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -545,6 +550,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     definition: Optional[types.FunctionType] = None
     backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
+    _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -613,6 +619,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
+        hash_ = eve_utils.content_hash(
+            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
+        )
+        try:
+            return self._program_cache[hash_]
+        except KeyError:
+            pass
 
         loc = self.foast_node.location
         param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
@@ -666,12 +679,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        return Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+        return self._program_cache[hash_]
 
     def __call__(
         self,

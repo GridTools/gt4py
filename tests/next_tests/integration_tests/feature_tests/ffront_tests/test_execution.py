@@ -698,6 +698,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
     )
 
 
+@pytest.mark.uses_constant_fields
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
