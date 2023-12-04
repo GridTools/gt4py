@@ -451,7 +451,7 @@ class DaCeComputationCodegen:
                 const int __I = domain[0];
                 const int __J = domain[1];
                 const int __K = domain[2];
-                ${name}_t dace_handle;
+                ${name}_${state_suffix} dace_handle;
                 ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
@@ -561,6 +561,13 @@ class DaCeComputationCodegen:
         else:
             omp_threads = ""
             omp_header = ""
+
+        # Backward compatible state struct name change in DaCe >=0.15.x
+        try:
+            dace_state_suffix = dace.Config.get("compiler.codegen_state_struct_suffix")
+        except (KeyError, TypeError):
+            dace_state_suffix = "t"  # old structure name
+
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
@@ -568,6 +575,7 @@ class DaCeComputationCodegen:
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
+            state_suffix=dace_state_suffix,
         )
         generated_code = textwrap.dedent(
             f"""#include <gridtools/sid/sid_shift_origin.hpp>

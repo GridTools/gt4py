@@ -79,6 +79,7 @@ def apply_common_transforms(
     offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
+    force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
 ):
     if lift_mode is None:
@@ -160,6 +161,10 @@ def apply_common_transforms(
         ir = CommonSubexpressionElimination().visit(ir)
         ir = MergeLet().visit(ir)
 
-    ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    ir = InlineLambdas.apply(
+        ir,
+        opcount_preserving=True,
+        force_inline_lambda_args=force_inline_lambda_args,
+    )
 
     return ir

@@ -153,7 +153,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
-        last_state = program_sdfg.add_state("program_entry")
+        last_state = program_sdfg.add_state("program_entry", True)
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
@@ -219,7 +219,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
         closure_state = closure_sdfg.add_state("closure_entry")
-        closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
+        closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
@@ -426,7 +426,7 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_sdfg = dace.SDFG(name="scan")
 
         # create a state machine for lambda call over the scan dimension
-        start_state = scan_sdfg.add_state("start")
+        start_state = scan_sdfg.add_state("start", True)
         lambda_state = scan_sdfg.add_state("lambda_compute")
         end_state = scan_sdfg.add_state("end")
 
