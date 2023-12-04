@@ -185,12 +185,15 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> Optional[dace.SDFG]:
     # build parameters
     auto_optimize = kwargs.get("auto_optimize", False)
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     run_on_gpu = kwargs.get("run_on_gpu", False)
+    # Return parameter
+    return_sdfg = kwargs.get("return_sdfg", False)
+    run_sdfg = kwargs.get("run_sdfg", True)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     lift_mode = (
@@ -212,6 +215,18 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         program = preprocess_program(program, offset_provider, lift_mode)
         sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, run_on_gpu)
         sdfg = sdfg_genenerator.visit(program)
+
+        # All arguments required by the SDFG, regardless if explicit and implicit, are added
+        #  as positional arguments. In the front are all arguments to the Fencil, in that
+        #  order, they are followed by the arguments created by the translation process,
+        #  their order is determined by DaCe and unspecific.
+        assert len(sdfg.arg_names) == 0
+        arg_list = [str(a) for a in program.params]
+        sig_list = sdfg.signature_arglist(with_types=False)
+        implicit_args = set(sig_list) - set(arg_list)
+        call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
+        sdfg.arg_names = call_params
+
         sdfg.simplify()
 
         # run DaCe auto-optimization heuristics
@@ -256,10 +271,16 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
         if key in sdfg.signature_arglist(with_types=False)
     }
 
-    with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg_program(**expected_args)
+    if run_sdfg:
+        with dace.config.temporary_config():
+            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+            dace.config.Config.set("frontend", "check_args", value=True)
+            sdfg_program(**expected_args)
+    #
+
+    if return_sdfg:
+        return sdfg
+    return None
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
