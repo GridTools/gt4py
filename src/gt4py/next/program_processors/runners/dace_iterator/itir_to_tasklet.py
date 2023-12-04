@@ -432,7 +432,9 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             # create storage in lambda sdfg
             self._sdfg.add_scalar(param, dtype=arg.dtype)
             # update table of lambda symbol
-            self._symbol_map[param] = ValueExpr(self._state.add_access(param, debuginfo=self._sdfg.debuginfo), arg.dtype)
+            self._symbol_map[param] = ValueExpr(
+                self._state.add_access(param, debuginfo=self._sdfg.debuginfo), arg.dtype
+            )
         elif isinstance(arg, IteratorExpr):
             # create storage in lambda sdfg
             ndims = len(arg.dimensions)
@@ -444,7 +446,8 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             # update table of lambda symbol
             field = self._state.add_access(param, debuginfo=self._sdfg.debuginfo)
             indices = {
-                dim: self._state.add_access(index_arg, debuginfo=self._sdfg.debuginfo) for dim, index_arg in index_names.items()
+                dim: self._state.add_access(index_arg, debuginfo=self._sdfg.debuginfo)
+                for dim, index_arg in index_names.items()
             }
             self._symbol_map[param] = IteratorExpr(field, indices, arg.dtype, arg.dimensions)
         else:
@@ -580,7 +583,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             if isinstance(expr, ValueExpr):
                 result_name = unique_var_name()
                 lambda_sdfg.add_scalar(result_name, expr.dtype, transient=True)
-                result_access = lambda_state.add_access(result_name, debuginfo=lambda_sdfg.debuginfo)
+                result_access = lambda_state.add_access(
+                    result_name, debuginfo=lambda_sdfg.debuginfo
+                )
                 lambda_state.add_nedge(
                     expr.value,
                     result_access,
@@ -590,7 +595,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 result = ValueExpr(value=result_access, dtype=expr.dtype)
             else:
                 # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
-                result = lambda_taskgen.add_expr_tasklet([], expr.value, expr.dtype, "forward", dace_debuginfo=lambda_sdfg.debuginfo)[0]
+                result = lambda_taskgen.add_expr_tasklet(
+                    [], expr.value, expr.dtype, "forward", dace_debuginfo=lambda_sdfg.debuginfo
+                )[0]
             lambda_sdfg.arrays[result.value.data].transient = False
             results.append(result)
 
@@ -1202,7 +1209,9 @@ def closure_to_tasklet_sdfg(
     for dim, idx in domain.items():
         name = f"{idx}_value"
         body.add_scalar(name, dtype=_INDEX_DTYPE, transient=True)
-        tasklet = state.add_tasklet(f"get_{dim}", set(), {"value"}, f"value = {idx}", debuginfo=body.debuginfo)
+        tasklet = state.add_tasklet(
+            f"get_{dim}", set(), {"value"}, f"value = {idx}", debuginfo=body.debuginfo
+        )
         access = state.add_access(name, debuginfo=body.debuginfo)
         idx_accesses[dim] = access
         state.add_edge(tasklet, "value", access, None, dace.Memlet.simple(name, "0"))

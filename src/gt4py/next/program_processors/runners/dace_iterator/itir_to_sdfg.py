@@ -449,7 +449,11 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # tasklet for initialization of carry
         carry_init_tasklet = start_state.add_tasklet(
-            "get_carry_init_value", {}, {"__result"}, f"__result = {init_carry_value}", debuginfo=scan_sdfg.debuginfo
+            "get_carry_init_value",
+            {},
+            {"__result"},
+            f"__result = {init_carry_value}",
+            debuginfo=scan_sdfg.debuginfo,
         )
         start_state.add_edge(
             carry_init_tasklet,
@@ -556,7 +560,9 @@ class ItirToSDFG(eve.NodeVisitor):
         lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
         lambda_update_state.add_memlet_path(
             lambda_update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
-            lambda_update_state.add_access(scan_carry_name, debuginfo=lambda_context.body.debuginfo),
+            lambda_update_state.add_access(
+                scan_carry_name, debuginfo=lambda_context.body.debuginfo
+            ),
             memlet=dace.Memlet.simple(output_names[0], f"i_{scan_dim}", other_subset_str="0"),
         )
 
