@@ -12,13 +12,30 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import dace
 
 from gt4py.next import Dimension
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
+
+
+def dace_debuginfo(
+    node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    if node.location:
+        di = dace.dtypes.DebugInfo(
+            start_line=node.location.line,
+            start_column=node.location.column,
+            end_line=node.location.end_line,
+            end_column=node.location.end_column,
+            filename=node.location.filename,
+        )
+    else:
+        di = debuginfo
+    return di
 
 
 def as_dace_type(type_: ts.ScalarType):
