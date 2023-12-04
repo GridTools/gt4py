@@ -15,7 +15,8 @@ import copy
 
 import gt4py.next as gtx
 from gt4py.eve.utils import UIDs
-from gt4py.next.iterator import ir, ir_makers as im
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,

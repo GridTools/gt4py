@@ -84,6 +84,7 @@ def preprocess_program(
         fencil_definition = apply_common_transforms(
             program,
             common_subexpression_elimination=False,
+            force_inline_lambda_args=True,
             lift_mode=lift_mode,
             offset_provider=offset_provider,
             unroll_reduce=True,
