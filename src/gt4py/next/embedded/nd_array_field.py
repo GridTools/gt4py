@@ -115,7 +115,7 @@ class NdArrayField(
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple(-r.start for _, r in self._domain)
+        return tuple(-r.bound_start for _, r in self._domain)
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -563,9 +563,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             named_ranges.append((dim, field.domain[pos][1]))
         else:
             domain_slice.append(np.newaxis)
-            named_ranges.append(
-                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-            )
+            named_ranges.append((dim, common.UnitRange.unbound()))
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -635,7 +633,7 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.infinity():
+        if domain.ranges[pos] == common.UnitRange.unbound():
             return slice(None)
         else:
             return slice(

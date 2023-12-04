@@ -20,9 +20,9 @@ from gt4py.next.common import (
     Dimension,
     DimensionKind,
     Domain,
-    Infinity,
     NamedRange,
     UnitRange,
+    _Infinity,
     domain,
     named_range,
     promote_dims,
@@ -36,14 +36,57 @@ JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 
-@pytest.fixture(params=[Infinity.positive(), Infinity.negative()])
+@pytest.fixture
+def a_domain():
+    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+
+
+@pytest.fixture(params=[_Infinity(pos=True), _Infinity(pos=False)])
 def inf(request):
     yield request.param
 
 
-@pytest.fixture
-def a_domain():
-    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+def test_infinity(inf):
+    assert inf + 1 == inf
+    assert inf - 1 == inf
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+@pytest.mark.parametrize("op", [operator.le, operator.lt])
+def test_infinity_comparison_less(value, op):
+    assert not op(_Infinity(pos=True), value)
+    assert op(value, _Infinity(pos=True))
+
+    assert op(_Infinity(pos=False), value)
+    assert not op(value, _Infinity(pos=False))
+
+    assert op(_Infinity(pos=False), _Infinity(pos=True))
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+@pytest.mark.parametrize("op", [operator.ge, operator.gt])
+def test_infinity_comparison_greater(value, op):
+    assert op(_Infinity(pos=True), value)
+    assert not op(value, _Infinity(pos=True))
+
+    assert not op(_Infinity(pos=False), value)
+    assert op(value, _Infinity(pos=False))
+
+    assert not op(_Infinity(pos=False), _Infinity(pos=True))
+
+
+def test_infinity_eq(inf):
+    assert inf == inf
+    assert inf <= inf
+    assert inf >= inf
+
+
+@pytest.mark.parametrize("value", [-1, 0, 1])
+def test_max_min(value):
+    assert max(_Infinity(pos=True), value) == _Infinity(pos=True)
+    assert min(_Infinity(pos=True), value) == value
+    assert max(_Infinity(pos=False), value) == value
+    assert min(_Infinity(pos=False), value) == _Infinity(pos=False)
 
 
 def test_empty_range():
@@ -126,19 +169,19 @@ def test_unit_range_intersection(rng1, rng2, expected):
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
-        (UnitRange(20, Infinity.positive()), UnitRange(10, 15), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(5, 10), UnitRange(0, 0)),
-        (UnitRange(Infinity.negative(), 0), UnitRange(-10, 0), UnitRange(-10, 0)),
-        (UnitRange(0, Infinity.positive()), UnitRange(Infinity.negative(), 5), UnitRange(0, 5)),
+        (UnitRange(20, None), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(None, 0), UnitRange(5, 10), UnitRange(0, 0)),
+        (UnitRange(None, 0), UnitRange(-10, 0), UnitRange(-10, 0)),
+        (UnitRange(0, None), UnitRange(None, 5), UnitRange(0, 5)),
         (
-            UnitRange(Infinity.negative(), 0),
-            UnitRange(Infinity.negative(), 5),
-            UnitRange(Infinity.negative(), 0),
+            UnitRange(None, 0),
+            UnitRange(None, 5),
+            UnitRange(None, 0),
         ),
         (
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
-            UnitRange(Infinity.negative(), Infinity.positive()),
+            UnitRange(None, None),
+            UnitRange(None, None),
+            UnitRange(None, None),
         ),
     ],
 )
@@ -147,28 +190,19 @@ def test_unit_range_infinite_intersection(rng1, rng2, expected):
     assert result == expected
 
 
-def test_positive_infinity_range():
-    pos_inf_range = UnitRange(Infinity.positive(), Infinity.positive())
-    assert len(pos_inf_range) == 0
-
-
-def test_mixed_infinity_range():
-    mixed_inf_range = UnitRange(Infinity.negative(), Infinity.positive())
-    assert len(mixed_inf_range) == Infinity.positive()
+@pytest.mark.parametrize("rng", [UnitRange(None, 0), UnitRange(0, None), UnitRange(None, None)])
+def test_positive_infinity_range(rng):
+    with pytest.raises(ValueError, match=r".*unbound.*"):
+        len(rng)
 
 
 def test_range_contains():
     assert 1 in UnitRange(0, 2)
     assert 1 not in UnitRange(0, 1)
-    assert 1 in UnitRange(0, Infinity.positive())
-    assert 1 in UnitRange(Infinity.negative(), 2)
-    assert 1 in UnitRange(Infinity.negative(), Infinity.positive())
-    assert "s" not in UnitRange(Infinity.negative(), Infinity.positive())
-
-
-def test_range_contains_infinity(inf):
-    with pytest.raises(ValueError):
-        inf in UnitRange(Infinity.negative(), Infinity.positive())
+    assert 1 in UnitRange(0, None)
+    assert 1 in UnitRange(None, 2)
+    assert 1 in UnitRange(None, None)
+    assert "s" not in UnitRange(None, None)
 
 
 @pytest.mark.parametrize(
@@ -178,49 +212,35 @@ def test_range_contains_infinity(inf):
         (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
         (operator.le, UnitRange(-1, 2), {-1, 0}, False),
         (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
-        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
-        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+        (operator.le, UnitRange(None, 2), UnitRange(None, 3), True),
+        (operator.le, UnitRange(None, 2), {1, 2, 3}, False),
         (operator.ge, UnitRange(-2, 3), UnitRange(-1, 2), True),
         (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2}, True),
         (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2, 3}, False),
-        (operator.ge, UnitRange(Infinity.negative(), 3), UnitRange(Infinity.negative(), 2), True),
-        (operator.ge, UnitRange(Infinity.negative(), 3), {1, 2}, True),
+        (operator.ge, UnitRange(None, 3), UnitRange(None, 2), True),
+        (operator.ge, UnitRange(None, 3), {1, 2}, True),
         (operator.lt, UnitRange(-1, 2), UnitRange(-2, 2), True),
         (operator.lt, UnitRange(-2, 1), UnitRange(-2, 2), True),
         (operator.lt, UnitRange(-2, 2), {-1, 0, 1, 2}, False),
         (operator.lt, UnitRange(-2, 2), {-2, -1, 0, 1, 2}, True),
         (operator.lt, UnitRange(-2, 2), {-3, -2, -1, 0, 1, 2}, True),
-        (operator.lt, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
-        (operator.lt, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
+        (operator.lt, UnitRange(None, 2), UnitRange(None, 3), True),
+        (operator.lt, UnitRange(None, 2), {1, 2, 3}, False),
         (operator.gt, UnitRange(-2, 2), UnitRange(-1, 2), True),
         (operator.gt, UnitRange(-2, 2), UnitRange(-2, 1), True),
         (operator.gt, UnitRange(-2, 2), {-1, 0, 1}, True),
         (operator.gt, UnitRange(-2, 2), {-2, -1, 0}, True),
         (operator.gt, UnitRange(-2, 2), {-2, -1, 0, 1}, False),
-        (operator.gt, UnitRange(Infinity.negative(), 3), UnitRange(Infinity.negative(), 2), True),
-        (operator.gt, UnitRange(Infinity.negative(), 2), {0, 1}, True),
-        (operator.gt, UnitRange(Infinity.negative(), 2), {1, 2}, False),
-        (operator.eq, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 2), True),
+        (operator.gt, UnitRange(None, 3), UnitRange(None, 2), True),
+        (operator.gt, UnitRange(None, 2), {0, 1}, True),
+        (operator.gt, UnitRange(None, 2), {1, 2}, False),
+        (operator.eq, UnitRange(None, 2), UnitRange(None, 2), True),
         (operator.eq, UnitRange(-2, 2), {-2, -1, 0, 1}, True),
         (operator.eq, UnitRange(-2, 2), {-2, 1}, False),
-        (operator.ne, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
-        (operator.ne, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 2), False),
+        (operator.eq, UnitRange(None, 2), {0, 1}, False),
+        (operator.ne, UnitRange(None, 2), UnitRange(None, 3), True),
+        (operator.ne, UnitRange(None, 2), UnitRange(None, 2), False),
         (operator.ne, UnitRange(-2, 2), {-2, -1, 0}, True),
-    ],
-)
-def test_range_comparison(op, rng1, rng2, expected):
-    assert op(rng1, rng2) == expected
-
-
-@pytest.mark.parametrize(
-    "op, rng1, rng2, expected",
-    [
-        (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
-        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
-        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
-        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
-        (operator.le, UnitRange(Infinity.negative(), 2), UnitRange(Infinity.negative(), 3), True),
-        (operator.le, UnitRange(Infinity.negative(), 2), {1, 2, 3}, False),
     ],
 )
 def test_range_comparison(op, rng1, rng2, expected):

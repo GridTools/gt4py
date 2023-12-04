@@ -20,7 +20,6 @@ import dataclasses
 import enum
 import functools
 import numbers
-import sys
 import types
 from collections.abc import Mapping, Sequence, Set
 
@@ -52,16 +51,6 @@ DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
 
 
-class Infinity(int):
-    @classmethod
-    def positive(cls) -> Infinity:
-        return cls(sys.maxsize)
-
-    @classmethod
-    def negative(cls) -> Infinity:
-        return cls(-sys.maxsize)
-
-
 Tag: TypeAlias = str
 
 
@@ -84,31 +73,112 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
+@dataclasses.dataclass(frozen=True)
+class _Infinity:
+    """Currently implementation detail of `UnitRange` to simplify comparisons."""
+
+    pos: bool
+
+    def __init__(self, pos=True):
+        object.__setattr__(self, "pos", pos)
+
+    def __add__(self, _):
+        return self
+
+    __radd__ = __add__
+
+    def __sub__(self, _):
+        return self
+
+    __rsub__ = __sub__
+
+    def __eq__(self, other):
+        return isinstance(other, _Infinity) and self.pos == other.pos
+
+    def __lt__(self, _):
+        return not self.pos
+
+    def __le__(self, other):
+        return self == other or not self.pos
+
+    def __gt__(self, _):
+        return self.pos
+
+    def __ge__(self, other):
+        return self == other or self.pos
+
+
 @dataclasses.dataclass(frozen=True, init=False)
 class UnitRange(Sequence[int], Set[int]):
-    """Range from `start` to `stop` with step size one."""
+    """
+    Range from `start` to `stop` with step size one.
 
-    start: int
-    stop: int
+    An unbound range is constructed by passing `None` for `start` and/or `stop`.
+    """
 
-    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
-        if start < stop:
-            object.__setattr__(self, "start", int(start))
-            object.__setattr__(self, "stop", int(stop))
+    start: int | _Infinity
+    stop: int | _Infinity
+
+    def __init__(
+        self,
+        start: core_defs.IntegralScalar | _Infinity | None,
+        stop: core_defs.IntegralScalar | _Infinity | None,
+    ) -> None:
+        if (
+            start is None
+            or isinstance(start, _Infinity)
+            or stop is None
+            or isinstance(stop, _Infinity)
+            or start < stop
+        ):
+            if start is None:
+                start = _Infinity(pos=False)
+            elif isinstance(start, _Infinity):
+                assert start.pos is False
+                start = start
+            else:
+                start = int(start)
+            if stop is None:
+                stop = _Infinity(pos=True)
+            elif isinstance(stop, _Infinity):
+                assert stop.pos is True
+                stop = stop
+            else:
+                stop = int(stop)
+            object.__setattr__(self, "start", start)
+            object.__setattr__(self, "stop", stop)
         else:
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
-    # TODO: the whole infinity idea and implementation is broken and should be replaced
     @classmethod
-    def infinity(cls) -> UnitRange:
-        return cls(Infinity.negative(), Infinity.positive())
+    def unbound(cls) -> UnitRange:
+        return cls(None, None)
+
+    @property
+    def bound_start(self) -> int:
+        assert not isinstance(self.start, _Infinity)
+        return self.start
+
+    @property
+    def bound_stop(self) -> int:
+        assert not isinstance(self.stop, _Infinity)
+        return self.stop
 
     def __len__(self) -> int:
-        if Infinity.positive() in (abs(self.start), abs(self.stop)):
-            return Infinity.positive()
+        if self.is_left_unbound() or self.is_right_unbound():
+            raise ValueError("Cannot compute length of unbound UnitRange.")
         return max(0, self.stop - self.start)
+
+    def is_left_unbound(self):
+        return isinstance(self.start, _Infinity)
+
+    def is_right_unbound(self):
+        return isinstance(self.stop, _Infinity)
+
+    def is_unbound(self):
+        return self.is_left_unbound() or self.is_right_unbound()
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
@@ -140,24 +210,19 @@ class UnitRange(Sequence[int], Set[int]):
 
     def __and__(self, other: Set[int]) -> UnitRange:
         if isinstance(other, UnitRange):
-            start = max(self.start, other.start)
-            stop = min(self.stop, other.stop)
-            return UnitRange(start, stop)
+            return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
         else:
             raise NotImplementedError("Can only find the intersection between UnitRange instances.")
 
     def __contains__(self, value: Any) -> bool:
         if not isinstance(value, core_defs.INTEGRAL_TYPES):
             return False
-        if value == Infinity.positive() or value == Infinity.negative():
-            # raising error was an adhoc decision, feel free to improve
-            raise ValueError("Cannot check if Infinity is in UnitRange.")
         return value >= self.start and value < self.stop
 
     def __le__(self, other: Set[int]) -> bool:
         if isinstance(other, UnitRange):
             return self.start >= other.start and self.stop <= other.stop
-        elif len(self) == Infinity.positive():
+        elif self.is_unbound():
             return False
         else:
             return Set.__le__(self, other)
@@ -167,7 +232,7 @@ class UnitRange(Sequence[int], Set[int]):
             return (self.start > other.start and self.stop <= other.stop) or (
                 self.start >= other.start and self.stop < other.stop
             )
-        elif len(self) == Infinity.positive():
+        elif self.is_unbound():
             return False
         else:
             return Set.__lt__(self, other)
@@ -175,7 +240,7 @@ class UnitRange(Sequence[int], Set[int]):
     def __ge__(self, other: Set[int]) -> bool:
         if isinstance(other, UnitRange):
             return self.start <= other.start and self.stop >= other.stop
-        elif len(self) == Infinity.positive():
+        elif self.is_unbound():
             for v in other:
                 if v not in self:
                     return False
@@ -188,7 +253,7 @@ class UnitRange(Sequence[int], Set[int]):
             return (self.start < other.start and self.stop >= other.stop) or (
                 self.start <= other.start and self.stop > other.stop
             )
-        elif len(self) == Infinity.positive():
+        elif self.is_unbound():
             for v in other:
                 if v not in self:
                     return False
@@ -199,7 +264,7 @@ class UnitRange(Sequence[int], Set[int]):
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, UnitRange):
             return self.start == other.start and self.stop == other.stop
-        elif len(self) == Infinity.positive():
+        elif self.is_unbound():
             return False
         elif isinstance(other, Set):
             return Set.__eq__(self, other)
@@ -211,27 +276,13 @@ class UnitRange(Sequence[int], Set[int]):
 
     def __add__(self, other: int | Set[int]) -> UnitRange:
         if isinstance(other, int):
-            if other == Infinity.positive():
-                return UnitRange.infinity()
-            elif other == Infinity.negative():
-                return UnitRange(0, 0)
-            return UnitRange(
-                *(
-                    s if s in [Infinity.negative(), Infinity.positive()] else s + other
-                    for s in (self.start, self.stop)
-                )
-            )
+            return UnitRange(self.start + other, self.stop + other)
         else:
             raise NotImplementedError("Can only compute union with int instances.")
 
     def __sub__(self, other: int | Set[int]) -> UnitRange:
         if isinstance(other, int):
-            if other == Infinity.negative():
-                return self + Infinity.positive()
-            elif other == Infinity.positive():
-                return self + Infinity.negative()
-            else:
-                return self + (-other)
+            return UnitRange(self.start - other, self.stop - other)
         else:
             raise NotImplementedError("Can only compute substraction with int instances.")
 
@@ -258,8 +309,8 @@ def unit_range(r: RangeLike) -> UnitRange:
     #   once the related mypy bug (#16358) gets fixed
     if (
         isinstance(r, tuple)
-        and isinstance(r[0], core_defs.INTEGRAL_TYPES)
-        and isinstance(r[1], core_defs.INTEGRAL_TYPES)
+        and (isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] is None)
+        and (isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] is None)
     ):
         return UnitRange(r[0], r[1])
     if isinstance(r, core_defs.INTEGRAL_TYPES):
@@ -528,7 +579,7 @@ def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange.infinity() for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.unbound() for d in broadcast_dims
     )
 
 
@@ -890,7 +941,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinity(),))
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.unbound(),))
 
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:

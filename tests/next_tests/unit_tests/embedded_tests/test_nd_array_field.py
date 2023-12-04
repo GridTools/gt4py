@@ -353,7 +353,7 @@ def test_cartesian_remap_implementation():
                 common.field(
                     np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinity())),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.unbound())),
             )
         ),
         (
@@ -362,7 +362,7 @@ def test_cartesian_remap_implementation():
                 common.field(
                     np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinity(), UnitRange(0, 10))),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange.unbound(), UnitRange(0, 10))),
             )
         ),
         (
@@ -373,7 +373,7 @@ def test_cartesian_remap_implementation():
                 ),
                 Domain(
                     dims=(IDim, JDim, KDim),
-                    ranges=(UnitRange.infinity(), UnitRange(0, 10), UnitRange.infinity()),
+                    ranges=(UnitRange.unbound(), UnitRange(0, 10), UnitRange.unbound()),
                 ),
             )
         ),
