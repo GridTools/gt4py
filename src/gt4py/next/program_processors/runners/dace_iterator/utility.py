@@ -166,6 +166,13 @@ def unique_var_name():
     return unique_name("__var")
 
 
+def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    dtype = dace.int64
+    shape = [dace.symbol(unique_name(f"{name}_shp{i}"), dtype) for i in range(ndim)]
+    strides = [dace.symbol(unique_name(f"{name}_strd{i}"), dtype) for i in range(ndim)]
+    return shape, strides
+
+
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
         itertools.chain.from_iterable(
