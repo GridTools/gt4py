@@ -306,11 +306,8 @@ def builtin_can_deref(
         )
         return [ValueExpr(result_node, dace.dtypes.bool)]
 
-    # this iterator is accessing a neighbor table, so it should return an index
-    assert iterator.dtype in dace.dtypes.INTEGER_TYPES
-
     # create tasklet to check that field indices are non-negative (-1 is invalid)
-    args = [ValueExpr(access_node, iterator.dtype) for access_node in iterator.indices.values()]
+    args = [ValueExpr(access_node, _INDEX_DTYPE) for access_node in iterator.indices.values()]
     internals = [f"{arg.value.data}_v" for arg in args]
     expr_code = " and ".join([f"{v} >= 0" for v in internals])
 
