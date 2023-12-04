@@ -803,7 +803,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             result_name = unique_var_name()
             self.context.body.add_array(result_name, result_shape, iterator.dtype, transient=True)
             result_array = self.context.body.arrays[result_name]
-            result_node = self.context.state.add_access(result_name)
+            result_node = self.context.state.add_access(result_name, debuginfo=di)
 
             deref_connectors = ["_inp"] + [
                 f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
@@ -838,8 +838,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 for dim, size in zip(sorted_dims, field_array.shape)
             )
             deref_access_state.add_nedge(
-                deref_access_state.add_access("_inp"),
-                deref_access_state.add_access("_out"),
+                deref_access_state.add_access("_inp", debuginfo=di),
+                deref_access_state.add_access("_out", debuginfo=di),
                 dace.Memlet(
                     data="_out",
                     subset=subsets.Range.from_array(result_array),
@@ -852,6 +852,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 self.context.body,
                 inputs=set(deref_connectors),
                 outputs={"_out"},
+                debuginfo=di,
             )
             for connector, node, memlet in zip(deref_connectors, deref_nodes, deref_memlets):
                 self.context.state.add_edge(node, None, deref_node, connector, memlet)
@@ -1215,23 +1216,21 @@ def closure_to_tasklet_sdfg(
         access = state.add_access(name, debuginfo=body.debuginfo)
         idx_accesses[dim] = access
         state.add_edge(tasklet, "value", access, None, dace.Memlet.simple(name, "0"))
-    for i, (name, ty) in enumerate(inputs):
+    for name, ty in inputs:
         if isinstance(ty, ts.FieldType):
             ndim = len(ty.dims)
             shape, strides = new_array_symbols(name, ndim)
             dims = [dim.value for dim in ty.dims]
             dtype = as_dace_type(ty.dtype)
             body.add_array(name, shape=shape, strides=strides, dtype=dtype)
-            field = state.add_access(name, debuginfo=dace_debuginfo(node.inputs[i]))
+            field = state.add_access(name, debuginfo=body.debuginfo)
             indices = {dim: idx_accesses[dim] for dim in domain.keys()}
             symbol_map[name] = IteratorExpr(field, indices, dtype, dims)
         else:
             assert isinstance(ty, ts.ScalarType)
             dtype = as_dace_type(ty)
             body.add_scalar(name, dtype=dtype)
-            symbol_map[name] = ValueExpr(
-                state.add_access(name, debuginfo=dace_debuginfo(node.inputs[i])), dtype
-            )
+            symbol_map[name] = ValueExpr(state.add_access(name, debuginfo=body.debuginfo), dtype)
     for arr, name in connectivities:
         shape, strides = new_array_symbols(name, ndim=2)
         body.add_array(name, shape=shape, strides=strides, dtype=arr.dtype)

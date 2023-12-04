@@ -25,13 +25,14 @@ from gt4py.next.type_system import type_specifications as ts
 def dace_debuginfo(
     node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
-    if node.location:
+    location = node.location
+    if location:
         di = dace.dtypes.DebugInfo(
-            start_line=node.location.line,
-            start_column=node.location.column,
-            end_line=node.location.end_line,
-            end_column=node.location.end_column,
-            filename=node.location.filename,
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
         )
     else:
         di = debuginfo
