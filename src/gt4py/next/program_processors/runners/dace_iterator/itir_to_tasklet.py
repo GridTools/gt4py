@@ -681,13 +681,24 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
+        free_dims = {dim for dim in iterator.dimensions if dim not in iterator.indices}
+
         args: list[ValueExpr]
         sorted_dims = sorted(iterator.dimensions)
-        if self.context.reduce_identity is not None:
+        if len(free_dims) == 0:
+            # The deref iterator has index values on all dimensions: the result will be a scalar
+            args = [ValueExpr(iterator.field, iterator.dtype)] + [
+                ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]}[{', '.join(internals[1:])}]"
+            return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
+
+        elif self.context.reduce_identity is not None:
             # we are visiting a child node of reduction, so the neighbor index can be used for indirect addressing
-            dim_neighbors = [dim for dim in iterator.dimensions if dim not in iterator.indices]
-            assert len(dim_neighbors) == 1
-            table: NeighborTableOffsetProvider = self.offset_provider[dim_neighbors[0]]
+            assert len(free_dims) == 1
+            table: NeighborTableOffsetProvider = self.offset_provider[free_dims.pop()]
+
             result_name = unique_var_name()
             self.context.body.add_array(
                 result_name,
@@ -738,15 +749,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             return [ValueExpr(value=result_access, dtype=iterator.dtype)]
-
-        elif all([dim in iterator.indices for dim in iterator.dimensions]):
-            # The deref iterator has index values on all dimensions: the result will be a scalar
-            args = [ValueExpr(iterator.field, iterator.dtype)] + [
-                ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
-            ]
-            internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]}[{', '.join(internals[1:])}]"
-            return self.add_expr_tasklet(list(zip(args, internals)), expr, iterator.dtype, "deref")
 
         else:
             # Not all dimensions are included in the deref index list:
