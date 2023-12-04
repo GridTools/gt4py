@@ -204,7 +204,7 @@ def build_sdfg_from_itir(
         on_gpu:		        Performs the translation for GPU, defaults to `False`.
         column_axis:		The column axis to be used, defaults to `None`.
         lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
-        **kwargs:           Except `run_on_gpu` all are ignored.
+        **kwargs:           All elements are ignored.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and an error is generated.
