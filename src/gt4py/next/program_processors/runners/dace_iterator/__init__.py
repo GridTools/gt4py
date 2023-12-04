@@ -192,7 +192,6 @@ def build_sdfg_from_itir(
     on_gpu: bool = False,
     column_axis: Optional[Dimension] = None,
     lift_mode: LiftMode = LiftMode.FORCE_INLINE,
-    **kwargs,
 ) -> dace.SDFG:
     """Translate a Fencil into an SDFG.
 
@@ -204,7 +203,6 @@ def build_sdfg_from_itir(
         on_gpu:		        Performs the translation for GPU, defaults to `False`.
         column_axis:		The column axis to be used, defaults to `None`.
         lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
-        **kwargs:           All elements are ignored.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and an error is generated.
@@ -239,6 +237,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
+    auto_optimize = kwargs.get("auto_optimize", False)
+    lift_mode = kwargs.get("lift_mode", LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
@@ -255,7 +255,15 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         sdfg = sdfg_program.sdfg
 
     else:
-        sdfg = build_sdfg_from_itir(program, *args, **kwargs)
+        sdfg = build_sdfg_from_itir(
+            program,
+            *args,
+            offset_provider=offset_provider,
+            auto_optimize=auto_optimize,
+            on_gpu=on_gpu,
+            column_axis=column_axis,
+            lift_mode=lift_mode,
+        )
 
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
