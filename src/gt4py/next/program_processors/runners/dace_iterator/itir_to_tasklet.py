@@ -183,11 +183,17 @@ def builtin_neighbors(
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
     iterator = transformer.visit(data)
-    table: NeighborTableOffsetProvider = transformer.offset_provider[offset_dim]
-    assert isinstance(table, NeighborTableOffsetProvider)
+    assert isinstance(iterator, IteratorExpr)
+    field_desc = iterator.field.desc(transformer.context.body)
 
-    offset = transformer.offset_provider[offset_dim]
-    if isinstance(offset, Dimension):
+    field_index = "__field_idx"
+    offset_provider = transformer.offset_provider[offset_dim]
+    if isinstance(offset_provider, NeighborTableOffsetProvider):
+        neighbor_check = f"{field_index} >= 0"
+    elif isinstance(offset_provider, StridedNeighborOffsetProvider):
+        neighbor_check = f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
+    else:
+        assert isinstance(offset_provider, Dimension)
         raise NotImplementedError(
             "Neighbor reductions for cartesian grids not implemented in DaCe backend."
         )
@@ -197,30 +203,32 @@ def builtin_neighbors(
     sdfg: dace.SDFG = transformer.context.body
     state: dace.SDFGState = transformer.context.state
 
-    shifted_dim = table.origin_axis.value
+    shifted_dim = offset_provider.origin_axis.value
 
     result_name = unique_var_name()
-    sdfg.add_array(result_name, dtype=iterator.dtype, shape=(table.max_neighbors,), transient=True)
+    sdfg.add_array(
+        result_name, dtype=iterator.dtype, shape=(offset_provider.max_neighbors,), transient=True
+    )
     result_access = state.add_access(result_name)
 
     table_name = connectivity_identifier(offset_dim)
 
     # generate unique map index name to avoid conflict with other maps inside same state
-    index_name = unique_name("__neigh_idx")
+    neighbor_index = unique_name("neighbor_idx")
     me, mx = state.add_map(
         f"{offset_dim}_neighbors_map",
-        ndrange={index_name: f"0:{table.max_neighbors}"},
+        ndrange={neighbor_index: f"0:{offset_provider.max_neighbors}"},
     )
     shift_tasklet = state.add_tasklet(
         "shift",
-        code=f"__result = __table[__idx, {index_name}]",
+        code=f"__result = __table[__idx, {neighbor_index}]",
         inputs={"__table", "__idx"},
         outputs={"__result"},
     )
     data_access_tasklet = state.add_tasklet(
         "data_access",
-        code=f"__result = __field[__idx] if __idx >= 0 else {transformer.context.reduce_identity.value}",
-        inputs={"__field", "__idx"},
+        code=f"__result = __field[{field_index}] if {neighbor_check} else {transformer.context.reduce_identity.value}",
+        inputs={"__field", field_index},
         outputs={"__result"},
     )
     idx_name = unique_var_name()
@@ -239,17 +247,11 @@ def builtin_neighbors(
         memlet=dace.Memlet.simple(iterator.indices[shifted_dim].data, "0"),
         dst_conn="__idx",
     )
-    state.add_edge(
-        shift_tasklet,
-        "__result",
-        data_access_tasklet,
-        "__idx",
-        dace.Memlet.simple(idx_name, "0"),
-    )
+    state.add_edge(shift_tasklet, "__result", data_access_tasklet, field_index, dace.Memlet())
     # select full shape only in the neighbor-axis dimension
     field_subset = tuple(
-        f"0:{shape}" if dim == table.neighbor_axis.value else f"i_{dim}"
-        for dim, shape in zip(sorted(iterator.dimensions), sdfg.arrays[iterator.field.data].shape)
+        f"0:{shape}" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
+        for dim, shape in zip(sorted(iterator.dimensions), field_desc.shape)
     )
     state.add_memlet_path(
         iterator.field,
@@ -262,7 +264,7 @@ def builtin_neighbors(
         data_access_tasklet,
         mx,
         result_access,
-        memlet=dace.Memlet.simple(result_name, index_name),
+        memlet=dace.Memlet.simple(result_name, neighbor_index),
         src_conn="__result",
     )
 
