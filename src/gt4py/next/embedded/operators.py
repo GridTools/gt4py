@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Optional, Sequence
+import dataclasses
+from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -20,16 +21,42 @@ from gt4py.next import common, constructors, field_utils, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
-def field_operator_call(
-    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
-):
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+@dataclasses.dataclass(frozen=True)
+class EmbeddedOperator(Generic[_R, _P]):
+    fun: Callable[_P, _R]
+
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        return self.fun(*args, **kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class BroadcastedScalarScanOperator(EmbeddedOperator[_R, _P]):
+    forward: bool
+    init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
+    axis: common.Dimension
+
+    def __call__(self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
+        scan_range = embedded_context.closure_column_range.get()
+        assert self.axis == scan_range[0]
+
+        return _scan(self.fun, self.forward, self.init, scan_range, args, kwargs)
+
+
+def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
     if "out" in kwargs:
+        # called from program or direct field_operator as program
         offset_provider = kwargs.pop("offset_provider", None)
 
         new_context_kwargs = {}
         if embedded_context.within_context():
-            assert embedded_context.offset_provider.get() is offset_provider
+            # called from program
+            assert offset_provider is None
         else:
+            # field_operator as program
             new_context_kwargs["offset_provider"] = offset_provider
 
         out = kwargs.pop("out")
@@ -39,35 +66,14 @@ def field_operator_call(
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.new_context(**new_context_kwargs) as ctx:
-            res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
+            res = ctx.run(op, *args, **kwargs)
             _tuple_assign_field(
                 out,
                 res,
                 domain=out_domain,
             )
     else:
-        # field_operator called form field_operator in embedded execution
-        return _run_operator(op, operator_attributes, args, kwargs)
-
-
-def _run_operator(
-    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
-):
-    if operator_attributes is not None and any(
-        has_scan_op_attribute := [
-            attribute in operator_attributes for attribute in ["init", "axis", "forward"]
-        ]
-    ):
-        assert all(has_scan_op_attribute)
-        forward = operator_attributes["forward"]
-        init = operator_attributes["init"]
-        axis = operator_attributes["axis"]
-
-        scan_range = embedded_context.closure_column_range.get()
-        assert axis == scan_range[0]
-
-        return scan(op, forward, init, scan_range, args, kwargs)
-    else:
+        # called from other field_operator
         return op(*args, **kwargs)
 
 
@@ -89,14 +95,14 @@ def _tuple_assign_field(
     impl(target, source)
 
 
-def scan(
-    scan_op: Callable,
+def _scan(
+    scan_op: Callable[_P, _R],
     forward: bool,
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
     scan_range: common.NamedRange,
     args: tuple,
     kwargs: dict,
-):
+) -> Any:
     scan_axis = scan_range[0]
     domain_intersection = embedded_common.intersect_domains(
         *[_intersect_tuple_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
