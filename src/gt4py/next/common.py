@@ -234,10 +234,7 @@ class UnitRange(Sequence[int], Set[int]):
         if isinstance(other, UnitRange):
             return self.start <= other.start and self.stop >= other.stop
         elif self.is_open():
-            for v in other:
-                if v not in self:
-                    return False
-            return True
+            return all(v in self for v in other)
         else:
             return Set.__ge__(self, other)
 
@@ -247,10 +244,7 @@ class UnitRange(Sequence[int], Set[int]):
                 self.start <= other.start and self.stop > other.stop
             )
         elif self.is_open():
-            for v in other:
-                if v not in self:
-                    return False
-            return True
+            return all(v in self for v in other)
         else:
             return Set.__gt__(self, other)
 
