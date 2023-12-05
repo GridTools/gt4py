@@ -43,6 +43,8 @@ from .utility import (
     flatten_list,
     get_sorted_dims,
     map_nested_sdfg_symbols,
+    new_array_symbols,
+    unique_name,
     unique_var_name,
 )
 
@@ -115,10 +117,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
-            shape = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
-            strides = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
+            shape, strides = new_array_symbols(name, len(type_.dims))
             offset = (
-                [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
+                [dace.symbol(unique_name(f"{name}_offset{i}_")) for i in range(len(type_.dims))]
                 if has_offset
                 else None
             )
@@ -131,8 +132,10 @@ class ItirToSDFG(eve.NodeVisitor):
             sdfg.add_array(
                 name, shape=shape, strides=strides, offset=offset, dtype=dtype, storage=storage
             )
+
         elif isinstance(type_, ts.ScalarType):
             sdfg.add_symbol(name, as_dace_type(type_))
+
         else:
             raise NotImplementedError()
         self.storage_types[name] = type_
@@ -207,6 +210,16 @@ class ItirToSDFG(eve.NodeVisitor):
             for inner_name, memlet in output_mapping.items():
                 access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
+
+        # Create the call signature for the SDFG.
+        #  All arguments required by the SDFG, regardless if explicit and implicit, are added
+        #  as positional arguments. In the front are all arguments to the Fencil, in that
+        #  order, they are followed by the arguments created by the translation process,
+        arg_list = [str(a) for a in node.params]
+        sig_list = program_sdfg.signature_arglist(with_types=False)
+        implicit_args = set(sig_list) - set(arg_list)
+        call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
+        program_sdfg.arg_names = call_params
 
         program_sdfg.validate()
         return program_sdfg
