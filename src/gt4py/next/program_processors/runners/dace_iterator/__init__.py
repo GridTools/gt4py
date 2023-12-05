@@ -219,6 +219,10 @@ def build_sdfg_from_itir(
     program = preprocess_program(program, offset_provider, lift_mode)
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, on_gpu)
     sdfg = sdfg_genenerator.visit(program)
+    # for nested_sdfg in sdfg.all_sdfgs_recursive():
+    #     if not nested_sdfg.debuginfo:
+    #         warnings.warn(f"{nested_sdfg} does not have debuginfo.
+    #                         Consider adding them in the corresponding nested sdfg.")
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics

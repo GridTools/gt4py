@@ -49,6 +49,7 @@ class FieldOperatorLowering(NodeTranslator):
     Examples
     --------
     >>> from gt4py.next.ffront.func_to_foast import FieldOperatorParser
+    >>> from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
     >>> from gt4py.next import Field, Dimension, float64
     >>>
     >>> IDim = Dimension("IDim")
@@ -61,8 +62,8 @@ class FieldOperatorLowering(NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params
-    [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
+    >>> lowered.params # doctest: +ELLIPSIS
+    [Sym(location=..., id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
     uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
