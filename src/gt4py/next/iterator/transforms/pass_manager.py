@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Optional
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
@@ -80,7 +81,7 @@ def apply_common_transforms(
     unroll_reduce=False,
     common_subexpression_elimination=True,
     unconditionally_collapse_tuples=False,
-    symbolic_domain_sizes=None,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE

@@ -436,7 +436,7 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes: dict[str, str]):
+def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes: Optional[dict[str, str]]):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
     closures: list[ir.StencilClosure] = []
@@ -486,7 +486,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         consumed_domain.ranges.pop(old_axis)
                         assert new_axis not in consumed_domain.ranges
 
-                        if symbolic_sizes:
+                        if symbolic_sizes is None:
                             consumed_domain.ranges[new_axis] = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 symbolic_sizes[new_axis],
@@ -602,7 +602,7 @@ class CreateGlobalTmps(NodeTranslator):
         node: ir.FencilDefinition,
         *,
         offset_provider: Mapping[str, Any],
-        symbolic_sizes: dict[str, str],
+        symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node, offset_provider=offset_provider)
