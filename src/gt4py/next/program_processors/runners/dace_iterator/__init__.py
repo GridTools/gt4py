@@ -243,6 +243,9 @@ def build_sdfg_from_itir(
         # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
         sdfg.apply_transformations_repeated(RefineNestedAccess)
 
+    # run DaCe transformations to simplify the SDFG
+    sdfg.simplify()
+
     # run DaCe auto-optimization heuristics
     if auto_optimize:
         # TODO Investigate how symbol definitions improve autoopt transformations,
