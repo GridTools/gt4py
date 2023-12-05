@@ -23,54 +23,31 @@ from gt4py.next.embedded import common as embedded_common, context as embedded_c
 def field_operator_call(
     op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
 ):
-    # embedded execution
-    if embedded_context.within_context():
-        # field_operator called from program or other field_operator in embedded execution
-        if "out" in kwargs:
-            # field_operator called from program in embedded execution
-
-            offset_provider = kwargs.pop("offset_provider", None)
-            # offset_provider should already be set
-            assert (
-                offset_provider is None or embedded_context.offset_provider.get() is offset_provider
-            )
-            out = kwargs.pop("out")
-            domain = kwargs.pop("domain", None)
-            out_domain = (
-                common.domain(domain) if domain is not None else field_utils.get_domain(out)
-            )
-
-            vertical_range = _get_vertical_range(out_domain)
-
-            with embedded_context.new_context(closure_column_range=vertical_range) as ctx:
-                res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
-                _tuple_assign_field(
-                    out,
-                    res,
-                    domain=out_domain,
-                )
-
-        else:
-            # field_operator called form field_operator in embedded execution
-            return _run_operator(op, operator_attributes, args, kwargs)
-
-    else:
-        # field_operator called directly
+    if "out" in kwargs:
         offset_provider = kwargs.pop("offset_provider", None)
+
+        new_context_kwargs = {}
+        if embedded_context.within_context():
+            assert embedded_context.offset_provider.get() is offset_provider
+        else:
+            new_context_kwargs["offset_provider"] = offset_provider
+
         out = kwargs.pop("out")
         domain = kwargs.pop("domain", None)
-
         out_domain = common.domain(domain) if domain is not None else field_utils.get_domain(out)
 
-        with embedded_context.new_context(
-            offset_provider=offset_provider, closure_column_range=_get_vertical_range(out_domain)
-        ) as ctx:
+        new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
+
+        with embedded_context.new_context(**new_context_kwargs) as ctx:
             res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
             _tuple_assign_field(
                 out,
                 res,
                 domain=out_domain,
             )
+    else:
+        # field_operator called form field_operator in embedded execution
+        return _run_operator(op, operator_attributes, args, kwargs)
 
 
 def _run_operator(
