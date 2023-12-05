@@ -103,7 +103,9 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
@@ -257,6 +259,8 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
                 new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
                 new_stencil.location = node.location
-                return im.lift(new_stencil)(*new_arg_exprs.values())
+                itir_node = im.lift(new_stencil)(*new_arg_exprs.values())
+                itir_node.location = node.location
+                return itir_node
 
         return node

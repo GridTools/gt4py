@@ -143,9 +143,11 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
     if any(not isinstance(it_arg, ir.SymRef) for it_arg in it_args):
         used_closure_params = collect_symbol_refs(node)
         assert not (set(used_closure_params) - set(closure_params))
-        return im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
+        itir_node = im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
             *used_closure_params
         )
+        itir_node.location = node.location
+        return itir_node
     return node
 
 

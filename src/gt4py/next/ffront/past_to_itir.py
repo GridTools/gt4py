@@ -244,7 +244,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
-                    location=out_field.location,
                 )
             )
 
