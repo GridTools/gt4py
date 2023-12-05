@@ -14,7 +14,8 @@
 import textwrap
 
 from gt4py.eve.utils import UIDGenerator
-from gt4py.next.iterator import ir, ir_makers as im
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.cse import (
     CommonSubexpressionElimination as CSE,
     extract_subexpression,
