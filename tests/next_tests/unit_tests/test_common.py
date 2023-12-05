@@ -21,8 +21,8 @@ from gt4py.next.common import (
     DimensionKind,
     Domain,
     NamedRange,
+    OpenBound,
     UnitRange,
-    _Infinity,
     domain,
     named_range,
     promote_dims,
@@ -41,52 +41,52 @@ def a_domain():
     return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
 
 
-@pytest.fixture(params=[_Infinity(pos=True), _Infinity(pos=False)])
-def inf(request):
+@pytest.fixture(params=[OpenBound.UPPER, OpenBound.LOWER])
+def unbounded(request):
     yield request.param
 
 
-def test_infinity(inf):
-    assert inf + 1 == inf
-    assert inf - 1 == inf
+def test_unbounded_add_sub(unbounded):
+    assert unbounded + 1 == unbounded
+    assert unbounded - 1 == unbounded
 
 
 @pytest.mark.parametrize("value", [-1, 0, 1])
 @pytest.mark.parametrize("op", [operator.le, operator.lt])
-def test_infinity_comparison_less(value, op):
-    assert not op(_Infinity(pos=True), value)
-    assert op(value, _Infinity(pos=True))
+def test_unbounded_comparison_less(value, op):
+    assert not op(OpenBound.UPPER, value)
+    assert op(value, OpenBound.UPPER)
 
-    assert op(_Infinity(pos=False), value)
-    assert not op(value, _Infinity(pos=False))
+    assert op(OpenBound.LOWER, value)
+    assert not op(value, OpenBound.LOWER)
 
-    assert op(_Infinity(pos=False), _Infinity(pos=True))
+    assert op(OpenBound.LOWER, OpenBound.UPPER)
 
 
 @pytest.mark.parametrize("value", [-1, 0, 1])
 @pytest.mark.parametrize("op", [operator.ge, operator.gt])
-def test_infinity_comparison_greater(value, op):
-    assert op(_Infinity(pos=True), value)
-    assert not op(value, _Infinity(pos=True))
+def test_unbounded_comparison_greater(value, op):
+    assert op(OpenBound.UPPER, value)
+    assert not op(value, OpenBound.UPPER)
 
-    assert not op(_Infinity(pos=False), value)
-    assert op(value, _Infinity(pos=False))
+    assert not op(OpenBound.LOWER, value)
+    assert op(value, OpenBound.LOWER)
 
-    assert not op(_Infinity(pos=False), _Infinity(pos=True))
+    assert not op(OpenBound.LOWER, OpenBound.UPPER)
 
 
-def test_infinity_eq(inf):
-    assert inf == inf
-    assert inf <= inf
-    assert inf >= inf
+def test_unbounded_eq(unbounded):
+    assert unbounded == unbounded
+    assert unbounded <= unbounded
+    assert unbounded >= unbounded
 
 
 @pytest.mark.parametrize("value", [-1, 0, 1])
-def test_max_min(value):
-    assert max(_Infinity(pos=True), value) == _Infinity(pos=True)
-    assert min(_Infinity(pos=True), value) == value
-    assert max(_Infinity(pos=False), value) == value
-    assert min(_Infinity(pos=False), value) == _Infinity(pos=False)
+def test_unbounded_max_min(value):
+    assert max(OpenBound.UPPER, value) == OpenBound.UPPER
+    assert min(OpenBound.UPPER, value) == value
+    assert max(OpenBound.LOWER, value) == value
+    assert min(OpenBound.LOWER, value) == OpenBound.LOWER
 
 
 def test_empty_range():
@@ -115,13 +115,13 @@ def test_unit_range_repr(rng):
     assert repr(rng) == "UnitRange(-5, 5)"
 
 
-def test_unit_range_bound_start_stop():
-    assert UnitRange(-5, None).bound_start == -5
-    assert UnitRange(None, 5).bound_stop == 5
+def test_unit_range_bounded_start_stop():
+    assert UnitRange(-5, None).bounded_start == -5
+    assert UnitRange(None, 5).bounded_stop == 5
     with pytest.raises(AssertionError):
-        UnitRange(None, 5).bound_start
+        UnitRange(None, 5).bounded_start
     with pytest.raises(AssertionError):
-        UnitRange(-5, None).bound_stop
+        UnitRange(-5, None).bounded_stop
 
 
 def test_unit_range_iter(rng):
@@ -194,14 +194,14 @@ def test_unit_range_intersection(rng1, rng2, expected):
         ),
     ],
 )
-def test_unit_range_infinite_intersection(rng1, rng2, expected):
+def test_unit_range_unbounded_intersection(rng1, rng2, expected):
     result = rng1 & rng2
     assert result == expected
 
 
 @pytest.mark.parametrize("rng", [UnitRange(None, 0), UnitRange(0, None), UnitRange(None, None)])
-def test_positive_infinity_range(rng):
-    with pytest.raises(ValueError, match=r".*unbound.*"):
+def test_positive_unbounded_range(rng):
+    with pytest.raises(ValueError, match=r".*open.*"):
         len(rng)
 
 

@@ -132,7 +132,7 @@ def get_offset_args(
     arrays: Mapping[str, dace.data.Array], params: Sequence[itir.Sym], args: Sequence[Any]
 ) -> Mapping[str, int]:
     return {
-        str(sym): -drange.bound_start
+        str(sym): -drange.bounded_start
         for param, arg in zip(params, args)
         if is_field(arg)
         for sym, drange in zip(arrays[param.id].offset, get_sorted_dim_ranges(arg.domain))

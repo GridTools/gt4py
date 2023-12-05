@@ -115,7 +115,7 @@ class NdArrayField(
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple(-r.bound_start for _, r in self._domain)
+        return tuple(-r.bounded_start for _, r in self._domain)
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -387,8 +387,8 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             assert isinstance(image_range, common.UnitRange)
 
-            restricted_mask = (self._ndarray >= image_range.start) & (
-                self._ndarray < image_range.stop
+            restricted_mask = (self._ndarray >= image_range.bounded_start) & (
+                self._ndarray < image_range.bounded_stop
             )
             # indices of non-zero elements in each dimension
             nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
@@ -637,10 +637,10 @@ def _compute_slice(
             return slice(None)
         else:
             return slice(
-                rng.start - domain.ranges[pos].start,
-                rng.stop - domain.ranges[pos].start,
+                rng.bounded_start - domain.ranges[pos].bounded_start,
+                rng.bounded_stop - domain.ranges[pos].bounded_start,
             )
     elif common.is_int_index(rng):
-        return rng - domain.ranges[pos].start
+        return rng - domain.ranges[pos].bounded_start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")

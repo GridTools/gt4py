@@ -36,6 +36,7 @@ from gt4py.eve.extended_typing import (
     Optional,
     ParamSpec,
     Protocol,
+    Self,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -73,39 +74,31 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
-@dataclasses.dataclass(frozen=True)
-class _Infinity:
-    """Currently implementation detail of `UnitRange` to simplify comparisons."""
+class OpenBound(enum.Enum):
+    LOWER = enum.auto()
+    UPPER = enum.auto()
 
-    pos: bool
-
-    def __init__(self, pos=True):
-        object.__setattr__(self, "pos", pos)
-
-    def __add__(self, _):
+    def __add__(self, _: int) -> Self:
         return self
 
     __radd__ = __add__
 
-    def __sub__(self, _):
+    def __sub__(self, _: int) -> Self:
         return self
 
     __rsub__ = __sub__
 
-    def __eq__(self, other):
-        return isinstance(other, _Infinity) and self.pos == other.pos
+    def __le__(self, other: int | OpenBound) -> bool:
+        return self is self.LOWER or other is self.UPPER
 
-    def __lt__(self, _):
-        return not self.pos
+    def __lt__(self, other: int | OpenBound) -> bool:
+        return self is self.LOWER and other is not self
 
-    def __le__(self, other):
-        return self == other or not self.pos
+    def __ge__(self, other: int | OpenBound) -> bool:
+        return self is self.UPPER or other is self.LOWER
 
-    def __gt__(self, _):
-        return self.pos
-
-    def __ge__(self, other):
-        return self == other or self.pos
+    def __gt__(self, other: int | OpenBound) -> bool:
+        return self is self.UPPER and other is not self
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -113,35 +106,35 @@ class UnitRange(Sequence[int], Set[int]):
     """
     Range from `start` to `stop` with step size one.
 
-    An unbound range is constructed by passing `None` for `start` and/or `stop`.
+    An open range is constructed by passing `None` for `start` and/or `stop`.
     """
 
-    start: int | _Infinity
-    stop: int | _Infinity
+    start: int | OpenBound
+    stop: int | OpenBound
 
     def __init__(
         self,
-        start: core_defs.IntegralScalar | _Infinity | None,
-        stop: core_defs.IntegralScalar | _Infinity | None,
+        start: core_defs.IntegralScalar | OpenBound | None,
+        stop: core_defs.IntegralScalar | OpenBound | None,
     ) -> None:
         if (
             start is None
-            or isinstance(start, _Infinity)
+            or isinstance(start, OpenBound)
             or stop is None
-            or isinstance(stop, _Infinity)
+            or isinstance(stop, OpenBound)
             or start < stop
         ):
             if start is None:
-                start = _Infinity(pos=False)
-            elif isinstance(start, _Infinity):
-                assert start.pos is False
+                start = OpenBound.LOWER
+            elif isinstance(start, OpenBound):
+                assert start is OpenBound.LOWER
                 start = start
             else:
                 start = int(start)
             if stop is None:
-                stop = _Infinity(pos=True)
-            elif isinstance(stop, _Infinity):
-                assert stop.pos is True
+                stop = OpenBound.UPPER
+            elif isinstance(stop, OpenBound):
+                assert stop is OpenBound.UPPER
                 stop = stop
             else:
                 stop = int(stop)
@@ -157,28 +150,28 @@ class UnitRange(Sequence[int], Set[int]):
         return cls(None, None)
 
     @property
-    def bound_start(self) -> int:
-        assert not isinstance(self.start, _Infinity)
+    def bounded_start(self) -> int:
+        assert not isinstance(self.start, OpenBound)
         return self.start
 
     @property
-    def bound_stop(self) -> int:
-        assert not isinstance(self.stop, _Infinity)
+    def bounded_stop(self) -> int:
+        assert not isinstance(self.stop, OpenBound)
         return self.stop
 
     def __len__(self) -> int:
-        if self.is_left_unbound() or self.is_right_unbound():
-            raise ValueError("Cannot compute length of unbound UnitRange.")
-        return max(0, self.stop - self.start)
+        if self.is_left_open() or self.is_right_open():
+            raise ValueError("Cannot compute length of open UnitRange.")
+        return max(0, self.bounded_stop - self.bounded_start)
 
-    def is_left_unbound(self):
-        return isinstance(self.start, _Infinity)
+    def is_left_open(self):
+        return isinstance(self.start, OpenBound)
 
-    def is_right_unbound(self):
-        return isinstance(self.stop, _Infinity)
+    def is_right_open(self):
+        return isinstance(self.stop, OpenBound)
 
-    def is_unbound(self):
-        return self.is_left_unbound() or self.is_right_unbound()
+    def is_open(self):
+        return self.is_left_open() or self.is_right_open()
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
@@ -204,7 +197,7 @@ class UnitRange(Sequence[int], Set[int]):
                 index += len(self)
 
             if 0 <= index < len(self):
-                return self.start + index
+                return self.bounded_start + index
             else:
                 raise IndexError("UnitRange index out of range")
 
@@ -222,7 +215,7 @@ class UnitRange(Sequence[int], Set[int]):
     def __le__(self, other: Set[int]) -> bool:
         if isinstance(other, UnitRange):
             return self.start >= other.start and self.stop <= other.stop
-        elif self.is_unbound():
+        elif self.is_open():
             return False
         else:
             return Set.__le__(self, other)
@@ -232,7 +225,7 @@ class UnitRange(Sequence[int], Set[int]):
             return (self.start > other.start and self.stop <= other.stop) or (
                 self.start >= other.start and self.stop < other.stop
             )
-        elif self.is_unbound():
+        elif self.is_open():
             return False
         else:
             return Set.__lt__(self, other)
@@ -240,7 +233,7 @@ class UnitRange(Sequence[int], Set[int]):
     def __ge__(self, other: Set[int]) -> bool:
         if isinstance(other, UnitRange):
             return self.start <= other.start and self.stop >= other.stop
-        elif self.is_unbound():
+        elif self.is_open():
             for v in other:
                 if v not in self:
                     return False
@@ -253,7 +246,7 @@ class UnitRange(Sequence[int], Set[int]):
             return (self.start < other.start and self.stop >= other.stop) or (
                 self.start <= other.start and self.stop > other.stop
             )
-        elif self.is_unbound():
+        elif self.is_open():
             for v in other:
                 if v not in self:
                     return False
@@ -264,7 +257,7 @@ class UnitRange(Sequence[int], Set[int]):
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, UnitRange):
             return self.start == other.start and self.stop == other.stop
-        elif self.is_unbound():
+        elif self.is_open():
             return False
         elif isinstance(other, Set):
             return Set.__eq__(self, other)
