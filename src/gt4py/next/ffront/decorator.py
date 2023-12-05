@@ -718,9 +718,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 forward = self.operator_attributes["forward"]
                 init = self.operator_attributes["init"]
                 axis = self.operator_attributes["axis"]
-                op = embedded_operators.BroadcastedScalarScanOperator(
-                    self.definition, forward, init, axis
-                )
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
             else:
                 op = embedded_operators.EmbeddedOperator(self.definition)
             return embedded_operators.field_operator_call(op, args, kwargs)

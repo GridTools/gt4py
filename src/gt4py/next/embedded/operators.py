@@ -34,7 +34,7 @@ class EmbeddedOperator(Generic[_R, _P]):
 
 
 @dataclasses.dataclass(frozen=True)
-class BroadcastedScalarScanOperator(EmbeddedOperator[_R, _P]):
+class ScanOperator(EmbeddedOperator[_R, _P]):
     forward: bool
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
     axis: common.Dimension
