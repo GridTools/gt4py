@@ -87,7 +87,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                     raise NotImplementedError(
                         f"Using closure vars with same name but different value "
                         f"across functions is not implemented yet. \n"
-                        f"Collisions: {'`,  `'.join(collisions)}"
+                        f"Collisions: '{',  '.join(collisions)}'."
                     )
 
                 all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
@@ -124,7 +124,7 @@ def _deduce_grid_type(
 
     if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
         raise ValueError(
-            "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
@@ -146,7 +146,7 @@ def _field_constituents_shape_and_dims(
     elif isinstance(arg_type, ts.ScalarType):
         yield (None, [])
     else:
-        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
+        raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -169,7 +169,7 @@ class Program:
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
-        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+        grid_type: The grid type(cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
 
@@ -207,7 +207,7 @@ class Program:
         ]
         if misnamed_functions:
             raise RuntimeError(
-                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}"
+                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}."
             )
 
         undefined_symbols = [
@@ -217,7 +217,7 @@ class Program:
         ]
         if undefined_symbols:
             raise RuntimeError(
-                f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
+                f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
     @functools.cached_property
@@ -227,7 +227,7 @@ class Program:
         if self.backend:
             return self.backend.__gt_allocator__
         else:
-            raise RuntimeError(f"Program {self} does not have a backend set.")
+            raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -239,30 +239,30 @@ class Program:
         """
         Bind scalar, i.e. non field, program arguments.
 
-        Example (pseudo-code):
+        Example(pseudo-code):
 
-        >>> import gt4py.next as gtx
-        >>> @gtx.program  # doctest: +SKIP
+        >> > import gt4py.next as gtx
+        >> > @ gtx.program  # doctest: +SKIP
         ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
         ...     sample_field_operator(condition, out=out)  # noqa: F821
 
         Create a new program from `program` with the `condition` parameter set to `True`:
 
-        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
+        >> > program_with_bound_arg=program.with_bound_args(condition=True)  # doctest: +SKIP
 
         The resulting program is equivalent to
 
-        >>> @gtx.program  # doctest: +SKIP
+        >> > @ gtx.program  # doctest: +SKIP
         ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
         ...     sample_field_operator(condition=True, out=out)  # noqa: F821
 
         and can be executed without passing `condition`.
 
-        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
+        >> > program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
+                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -343,7 +343,7 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -396,9 +396,9 @@ class Program:
             ]
 
             raise TypeError(
-                "Only `ScanOperator`s defined on the same axis "
-                + "can be used in a `Program`, but found:\n"
-                + "\n".join(scanops_per_axis_strs)
+                "Only 'ScanOperator's defined on the same axis "
+                "can be used in a 'Program', found:\n"
+                "\n".join(scanops_per_axis_strs) + "."
             )
 
         return iter(scanops_per_axis.keys()).__next__()
@@ -435,7 +435,7 @@ class ProgramWithBoundArgs(Program):
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
+                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -444,10 +444,10 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
-                f"Invalid argument types in call to program `{self.past_node.id}` with "
-                f"bound arguments {bound_arg_names}!"
+                f"Invalid argument types in call to program '{self.past_node.id}' with "
+                f"bound arguments '{bound_arg_names}'."
             ) from err
 
         full_args = [*args]
@@ -500,18 +500,18 @@ def program(
     Generate an implementation of a program from a Python function object.
 
     Examples:
-        >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        >> > @program  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >> > program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
-        >>> # the backend can optionally be passed if already decided
-        >>> # not passing it will result in embedded execution by default
-        >>> # the above is equivalent to
-        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        >> >  # the backend can optionally be passed if already decided
+        >> >  # not passing it will result in embedded execution by default
+        >> >  # the above is equivalent to
+        >> > @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >> > program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
@@ -534,14 +534,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     Attributes:
         foast_node: The node representing the field operator.
-        closure_vars: Mapping of names referenced in the field operator (i.e.
+        closure_vars: Mapping of names referenced in the field operator(i.e.
             globals, nonlocals) to their values.
         backend: The backend used for executing the field operator. Only used
             if the field operator is called directly, otherwise the backend
             specified for the program takes precedence.
         definition: The original Python function object the field operator
-            was created from.
-        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
+            was created from .
+        grid_type: The grid type(cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
 
@@ -748,7 +748,7 @@ def _tuple_assign_field(
 ):
     if isinstance(target, tuple):
         if not isinstance(source, tuple):
-            raise RuntimeError(f"Cannot assign {source} to {target}.")
+            raise RuntimeError(f"Cannot assign '{source}' to '{target}'.")
         for t, s in zip(target, source):
             _tuple_assign_field(t, s, domain)
     else:
@@ -775,15 +775,15 @@ def field_operator(definition=None, *, backend=None, grid_type=None):
     Generate an implementation of the field operator from a Python function object.
 
     Examples:
-        >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        >> > @field_operator  # doctest: +SKIP
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
         ...     ...
-        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >> > field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
-        >>> # the backend can optionally be passed if already decided
-        >>> # not passing it will result in embedded execution by default
-        >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        >> >  # the backend can optionally be passed if already decided
+        >> >  # not passing it will result in embedded execution by default
+        >> > @field_operator(backend="roundtrip")  # doctest: +SKIP
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
         ...     ...
     """
 
@@ -834,24 +834,24 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A :ref:`Dimension` to reduce over.
+        axis: A: ref: `Dimension` to reduce over.
         forward: Boolean specifying the direction.
-        init: Initial value for the carry argument of the scan pass.
+        init: Initial value for the carry argument of the scan pass .
 
     Examples:
-        >>> import numpy as np
-        >>> import gt4py.next as gtx
-        >>> from gt4py.next.iterator import embedded
-        >>> embedded._column_range = 1  # implementation detail
-        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-        >>> inp = gtx.as_field([KDim], np.ones((10,)))
-        >>> out = gtx.as_field([KDim], np.zeros((10,)))
-        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
+        >> > import numpy as np
+        >> > import gt4py.next as gtx
+        >> > from gt4py.next.iterator import embedded
+        >> > embedded._column_range=1  # implementation detail
+        >> > KDim=gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >> > inp=gtx.as_field([KDim], np.ones((10,)))
+        >> > out=gtx.as_field([KDim], np.zeros((10,)))
+        >> > @ gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
-        ...     return carry+val
-        >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
-        >>> out.array()  # doctest: +SKIP
-        array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
+        ... return carry+val
+        >> > scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
+        >> > out.array()  # doctest: +SKIP
+        array([1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
     """
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.

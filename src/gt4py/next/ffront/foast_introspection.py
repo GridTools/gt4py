@@ -73,4 +73,4 @@ def deduce_stmt_return_kind(node: foast.Stmt) -> StmtReturnKind:
     elif isinstance(node, (foast.Assign, foast.TupleTargetAssign)):
         return StmtReturnKind.NO_RETURN
     else:
-        raise AssertionError(f"Statements of type `{type(node).__name__}` not understood.")
+        raise AssertionError(f"Statements of type '{type(node).__name__}' not understood.")

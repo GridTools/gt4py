@@ -295,7 +295,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     Literal(value='True', type='bool')
     """
     if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
-        raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")
+        raise ValueError(f"Value must be a scalar, but got {type(val).__name__}.")
 
     # At the time this has been written the iterator module has its own type system that is
     # uncoupled from the one used in the frontend. However since we decided to eventually replace

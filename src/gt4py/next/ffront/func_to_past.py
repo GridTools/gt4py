@@ -129,7 +129,7 @@ class ProgramParser(DialectParser[past.Program]):
         new_func = self.visit(node.func)
         if not isinstance(new_func, past.Name):
             raise errors.DSLError(
-                loc, "functions must be referenced by their name in function calls"
+                loc, "Functions must be referenced by their name in function calls."
             )
 
         return past.Call(
@@ -166,7 +166,7 @@ class ProgramParser(DialectParser[past.Program]):
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
             symbol_type = type_translation.from_value(node.operand.value)
             return past.Constant(value=-node.operand.value, type=symbol_type, location=loc)
-        raise errors.DSLError(loc, "unary operators are only applicable to literals")
+        raise errors.DSLError(loc, "Unary operators are only applicable to literals.")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
         symbol_type = type_translation.from_value(node.value)

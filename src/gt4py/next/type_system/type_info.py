@@ -75,13 +75,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     match symbol_type:
         case ts.DeferredType(constraint):
             if constraint is None:
-                raise ValueError(f"No type information available for {symbol_type}!")
+                raise ValueError(f"No type information available for '{symbol_type}'.")
             elif isinstance(constraint, tuple):
-                raise ValueError(f"Not sufficient type information available for {symbol_type}!")
+                raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
             return constraint
         case ts.TypeSpec() as concrete_type:
             return concrete_type.__class__
-    raise ValueError(f"Invalid type for TypeInfo: requires {ts.TypeSpec}, got {type(symbol_type)}!")
+    raise ValueError(
+        f"Invalid type for TypeInfo: requires '{ts.TypeSpec}', got '{type(symbol_type)}'."
+    )
 
 
 def primitive_constituents(
@@ -163,7 +165,7 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
             return dtype
         case ts.ScalarType() as dtype:
             return dtype
-    raise ValueError(f"Can not unambiguosly extract data type from {symbol_type}!")
+    raise ValueError(f"Can not unambiguosly extract data type from '{symbol_type}'.")
 
 
 def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
@@ -320,7 +322,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
             return []
         case ts.FieldType(dims):
             return dims
-    raise ValueError(f"Can not extract dimensions from {symbol_type}!")
+    raise ValueError(f"Can not extract dimensions from '{symbol_type}'.")
 
 
 def is_local_field(type_: ts.FieldType) -> bool:
@@ -435,7 +437,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
         dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
 
         return ts.FieldType(dims=dims, dtype=dtype)
-    raise TypeError("Expected a FieldType or ScalarType.")
+    raise TypeError("Expected a 'FieldType' or 'ScalarType'.")
 
 
 @functools.singledispatch
@@ -446,7 +448,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ):
     raise NotImplementedError(
-        f"Return type deduction of type " f"{type(callable_type).__name__} not implemented."
+        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
     )
 
 
@@ -473,7 +475,7 @@ def return_type_field(
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
     if not isinstance(with_args[0], ts.OffsetType):
-        raise ValueError(f"First argument must be of type {ts.OffsetType}, got {with_args[0]}.")
+        raise ValueError(f"First argument must be of type '{ts.OffsetType}', got '{with_args[0]}'.")
 
     source_dim = with_args[0].source
     target_dims = with_args[0].target
@@ -500,7 +502,7 @@ def canonicalize_arguments(
     ignore_errors=False,
     use_signature_ordering=False,
 ) -> tuple[list, dict]:
-    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
+    raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
 @canonicalize_arguments.register
@@ -526,7 +528,7 @@ def canonicalize_function_arguments(
                 cargs[args_idx] = ckwargs.pop(name)
             elif not ignore_errors:
                 raise AssertionError(
-                    f"Error canonicalizing function arguments. Got multiple values for argument `{name}`."
+                    f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
     a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
@@ -534,7 +536,7 @@ def canonicalize_function_arguments(
     if invalid_kw_args and (not ignore_errors or use_signature_ordering):
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
-        raise AssertionError(f"Invalid keyword arguments {', '.join(invalid_kw_args)}.")
+        raise AssertionError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
 
     if use_signature_ordering:
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
@@ -604,7 +606,7 @@ def function_signature_incompatibilities(
 
     Note that all types must be concrete/complete.
     """
-    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
+    raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
 @function_signature_incompatibilities.register
@@ -705,7 +707,7 @@ def accepts_args(
     """
     if not isinstance(callable_type, ts.CallableType):
         if raise_exception:
-            raise ValueError(f"Expected a callable type, but got `{callable_type}`.")
+            raise ValueError(f"Expected a callable type, but got '{callable_type}'.")
         return False
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
@@ -713,8 +715,8 @@ def accepts_args(
         error_list = list(errors)
         if len(error_list) > 0:
             raise ValueError(
-                f"Invalid call to function of type `{callable_type}`:\n"
-                + ("\n".join([f"  - {error}" for error in error_list]))
+                f"Invalid call to function of type '{callable_type}':\n"
+                + ("\n".join([f"  - '{error}''" for error in error_list]))
             )
         return True
 

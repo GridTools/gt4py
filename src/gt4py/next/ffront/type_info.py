@@ -51,7 +51,7 @@ def promote_zero_dims(
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
                 else:
-                    raise ValueError(f"{arg_el} is not compatible with {param_el}.")
+                    raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
         return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
@@ -235,7 +235,8 @@ def function_signature_incompatibilities_scanop(
     # build a function type to leverage the already existing signature checking capabilities
     function_type = ts.FunctionType(
         pos_only_args=[],
-        pos_or_kw_args=promoted_params,  # type: ignore[arg-type] # dict is invariant, but we don't care here.
+        # dict is invariant, but we don't care here.
+        pos_or_kw_args=promoted_params,  # type: ignore[arg-type]
         kw_only_args=promoted_kwparams,  # type: ignore[arg-type] # same as above
         returns=ts.DeferredType(constraint=None),
     )

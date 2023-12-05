@@ -73,17 +73,23 @@ float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
-BOOL_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
+BOOL_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], BoolScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
 IntT = TypeVar("IntT", bound=IntScalar)
-INT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
+INT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], IntScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
-UINT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
+UINT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], UnsignedIntScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
@@ -93,7 +99,9 @@ INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 FloatingScalar: TypeAlias = Union[float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
-FLOAT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
+FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], FloatingScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 #: Type alias for all scalar types supported by GT4Py
@@ -195,7 +203,7 @@ def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
     if issubclass(sc_type, numbers.Complex):
         return DTypeKind.COMPLEX
 
-    raise TypeError("Unknown scalar type kind")
+    raise TypeError("Unknown scalar type kind.")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -491,22 +499,28 @@ class NDArrayObject(Protocol):
     def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
+    # mypy wants to return `bool`
+    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override]
         ...
 
-    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
+    # mypy wants to return `bool`
+    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override]
         ...
 
-    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+    # Forward operator is not callable
+    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
         ...
 
-    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+    # Forward operator is not callable
+    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
         ...
 
-    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+    # Forward operator is not callable
+    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
         ...
 
-    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
+    # Forward operator is not callable
+    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
         ...
 
     def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject:

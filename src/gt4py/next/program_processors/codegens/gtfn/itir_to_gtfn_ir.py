@@ -59,7 +59,7 @@ def pytype_to_cpptype(t: str):
             "axis_literal": None,  # TODO: domain?
         }[t]
     except KeyError:
-        raise TypeError(f"Unsupported type '{t}'") from None
+        raise TypeError(f"Unsupported type '{t}'.") from None
 
 
 _vertical_dimension = "gtfn::unstructured::dim::vertical"
@@ -83,7 +83,7 @@ def _get_gridtype(closures: list[itir.StencilClosure]) -> common.GridType:
     grid_types = {_extract_grid_type(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(
-            f"Found StencilClosures with more than one GridType: {grid_types}. This is currently not supported."
+            f"Found 'StencilClosures' with more than one 'GridType': '{grid_types}'. This is currently not supported."
         )
     return grid_types.pop()
 
@@ -109,7 +109,7 @@ def _collect_dimensions_from_domain(
                 offset_definitions[dim_name] = TagDefinition(name=Sym(id=dim_name))
         elif domain.fun == itir.SymRef(id="unstructured_domain"):
             if len(domain.args) > 2:
-                raise ValueError("unstructured_domain must not have more than 2 arguments.")
+                raise ValueError("Unstructured_domain must not have more than 2 arguments.")
             if len(domain.args) > 0:
                 horizontal_range = domain.args[0]
                 assert isinstance(horizontal_range, itir.FunCall)
@@ -126,7 +126,7 @@ def _collect_dimensions_from_domain(
                 )
         else:
             raise AssertionError(
-                "Expected either a call to `cartesian_domain` or to `unstructured_domain`."
+                "Expected either a call to 'cartesian_domain' or to 'unstructured_domain'."
             )
     return offset_definitions
 
@@ -181,7 +181,7 @@ def _collect_offset_definitions(
                 )
         else:
             raise AssertionError(
-                "Elements of offset provider need to be either `Dimension` or `Connectivity`."
+                "Elements of offset provider need to be either 'Dimension' or 'Connectivity'."
             )
     return offset_definitions
 
@@ -233,7 +233,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             fencil_definition = node
         else:
             raise TypeError(
-                f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(node).__name__}`."
+                f"Expected a 'FencilDefinition' or 'FencilWithTemporaries', but got '{type(node).__name__}'."
             )
 
         grid_type = _get_gridtype(fencil_definition.closures)
@@ -303,7 +303,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 isinstance(named_range, itir.FunCall)
                 and named_range.fun == itir.SymRef(id="named_range")
             ):
-                raise ValueError("Arguments to `domain` need to be calls to `named_range`.")
+                raise ValueError("Arguments to 'domain' need to be calls to 'named_range'.")
             tags.append(self.visit(named_range.args[0]))
             sizes.append(
                 BinaryExpr(
@@ -410,9 +410,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 # special handling of applied builtins is handled in `_visit_<builtin>`
                 return getattr(self, visit_method)(node, **kwargs)
             elif node.fun.id == "shift":
-                raise ValueError("unapplied shift call not supported: {node}")
+                raise ValueError("Unapplied shift call not supported: '{node}'.")
             elif node.fun.id == "scan":
-                raise ValueError("scans are only supported at the top level of a stencil closure")
+                raise ValueError("Scans are only supported at the top level of a stencil closure.")
         if isinstance(node.fun, itir.FunCall):
             if node.fun.fun == itir.SymRef(id="shift"):
                 assert len(node.args) == 1
@@ -440,7 +440,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return self.visit(node)
         elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
             return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
-        raise ValueError("Expected `SymRef` or `make_tuple` in output argument.")
+        raise ValueError("Expected 'SymRef' or 'make_tuple' in output argument.")
 
     @staticmethod
     def _bool_from_literal(node: itir.Node):
