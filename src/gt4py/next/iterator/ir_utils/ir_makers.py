@@ -29,7 +29,7 @@ def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     Sym(location=None, id=SymbolName('a'), kind=None, dtype=None)
 
     >>> sym(itir.Sym(id="b"))
-    Sym(id=SymbolName('b'), kind=None, dtype=None)
+    Sym(location=None, id=SymbolName('b'), kind=None, dtype=None)
     """
     if isinstance(sym_or_name, itir.Sym):
         return sym_or_name
@@ -46,7 +46,7 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     SymRef(location=None, id=SymbolRef('a'))
 
     >>> ref(itir.SymRef(id="b"))
-    SymRef(id=SymbolRef('b'))
+    SymRef(location=None, id=SymbolRef('b'))
     """
     if isinstance(ref_or_name, itir.SymRef):
         return ref_or_name
@@ -63,10 +63,10 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     SymRef(location=None, id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type='int32')
+    Literal(location=None, value='3', type='int32')
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
-    OffsetLiteral(value='i')
+    OffsetLiteral(location=None, value='i')
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
@@ -86,7 +86,7 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     OffsetLiteral(location=None, value='V2E')
 
     >>> ensure_offset(itir.OffsetLiteral(value="J"))
-    OffsetLiteral(value='J')
+    OffsetLiteral(location=None, value='J')
     """
     if isinstance(str_or_offset, (str, int)):
         return itir.OffsetLiteral(value=str_or_offset)
@@ -267,7 +267,7 @@ def shift(offset, value=None):
     FunCall(location=None, fun=FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('shift')), args=[OffsetLiteral(location=None, value='i'), OffsetLiteral(location=None, value=0)]), args=[SymRef(location=None, id=SymbolRef('a'))])
 
     >>> shift("V2E")("b")
-    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
+    FunCall(location=None, fun=FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('shift')), args=[OffsetLiteral(location=None, value='V2E')]), args=[SymRef(location=None, id=SymbolRef('b'))])
     """
     offset = ensure_offset(offset)
     args = [offset]
@@ -288,11 +288,11 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     >>> literal_from_value(1.)
     Literal(location=None, value='1.0', type='float64')
     >>> literal_from_value(1)
-    Literal(value='1', type='int32')
+    Literal(location=None, value='1', type='int32')
     >>> literal_from_value(2147483648)
-    Literal(value='2147483648', type='int64')
+    Literal(location=None, value='2147483648', type='int64')
     >>> literal_from_value(True)
-    Literal(value='True', type='bool')
+    Literal(location=None, value='True', type='bool')
     """
     if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, but got {type(val).__name__}")

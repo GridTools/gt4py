@@ -185,9 +185,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         if isinstance(node, past.Name):
             return itir.SymRef(id=node.id, location=node.location)
         elif isinstance(node, past.Subscript):
-            return_ = self._construct_itir_out_arg(node.value)
-            return_.location = node.location
-            return return_
+            itir_node = self._construct_itir_out_arg(node.value)
+            itir_node.location = node.location
+            return itir_node
         elif isinstance(node, past.TupleExpr):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
@@ -273,10 +273,10 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 f"Expected {dim}, but got {keys_dims_types} "
             )
 
-        return_ = [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
+        itir_node = [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
         for i, bound in enumerate(node_domain.values_[dim_i].elts):
-            return_[i].location = bound.location
-        return return_
+            itir_node[i].location = bound.location
+        return itir_node
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):
