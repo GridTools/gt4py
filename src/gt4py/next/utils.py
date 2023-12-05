@@ -63,7 +63,21 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 
 def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
-    """Extract data from elements of tuple. Requiring all elements result in the same value."""
+    """
+    Extract data from elements of tuple. Requiring all elements result in the same value.
+
+    Examples:
+        >>> get_common_tuple_value(lambda x: x)(((42, 42), 42))
+        42
+
+        >>> get_common_tuple_value(lambda x: x[1])((("Foo", "Bor"), "Boz"))
+        'o'
+
+        >>> get_common_tuple_value(lambda x: x)(((42, 1), 42))
+        Traceback (most recent call last):
+            ...
+        AssertionError
+    """
 
     @functools.wraps(fun)
     def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
