@@ -84,6 +84,7 @@ def preprocess_program(
         fencil_definition = apply_common_transforms(
             program,
             common_subexpression_elimination=False,
+            force_inline_lambda_args=True,
             lift_mode=lift_mode,
             offset_provider=offset_provider,
             unroll_reduce=True,
@@ -184,46 +185,92 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs) -> None:
+def build_sdfg_from_itir(
+    program: itir.FencilDefinition,
+    *args,
+    offset_provider: dict[str, Any],
+    auto_optimize: bool = False,
+    on_gpu: bool = False,
+    column_axis: Optional[Dimension] = None,
+    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
+) -> dace.SDFG:
+    """Translate a Fencil into an SDFG.
+
+    Args:
+        program:	        The Fencil that should be translated.
+        *args:		        Arguments for which the fencil should be called.
+        offset_provider:	The set of offset providers that should be used.
+        auto_optimize:	    Apply DaCe's `auto_optimize` heuristic.
+        on_gpu:		        Performs the translation for GPU, defaults to `False`.
+        column_axis:		The column axis to be used, defaults to `None`.
+        lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
+
+    Notes:
+        Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
+    """
+    # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
+    #                `lift_more` to `FORCE_INLINE` mode.
+    lift_mode = LiftMode.FORCE_INLINE
+
+    arg_types = [type_translation.from_value(arg) for arg in args]
+    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
+
+    # visit ITIR and generate SDFG
+    program = preprocess_program(program, offset_provider, lift_mode)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+    sdfg = sdfg_genenerator.visit(program)
+    if sdfg is None:
+        raise RuntimeError(f"visit failed for program {program.id}")
+
+    # run DaCe transformations to simplify the SDFG
+    sdfg.simplify()
+
+    # run DaCe auto-optimization heuristics
+    if auto_optimize:
+        # TODO Investigate how symbol definitions improve autoopt transformations,
+        #      in which case the cache table should take the symbols map into account.
+        symbols: dict[str, int] = {}
+        sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
+
+    if on_gpu:
+        sdfg.apply_gpu_transformations()
+
+    return sdfg
+
+
+def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # build parameters
-    auto_optimize = kwargs.get("auto_optimize", True)
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
-    run_on_gpu = kwargs.get("run_on_gpu", False)
+    on_gpu = kwargs.get("on_gpu", False)
+    auto_optimize = kwargs.get("auto_optimize", True)
+    lift_mode = kwargs.get("lift_mode", LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
-    lift_mode = (
-        LiftMode.FORCE_INLINE
-    )  # TODO(edopao): make it configurable once temporaries are supported in DaCe backend
     offset_provider = kwargs["offset_provider"]
 
     arg_types = [type_translation.from_value(arg) for arg in args]
-    device = dace.DeviceType.GPU if run_on_gpu else dace.DeviceType.CPU
+    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
+    sdfg: Optional[dace.SDFG]
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
+
     else:
-        # visit ITIR and generate SDFG
-        program = preprocess_program(program, offset_provider, lift_mode)
-        sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
-        sdfg = sdfg_genenerator.visit(program)
-        sdfg.simplify()
+        sdfg = build_sdfg_from_itir(
+            program,
+            *args,
+            offset_provider=offset_provider,
+            auto_optimize=auto_optimize,
+            on_gpu=on_gpu,
+            column_axis=column_axis,
+            lift_mode=lift_mode,
+        )
 
-        # run DaCe auto-optimization heuristics
-        if auto_optimize:
-            # TODO Investigate how symbol definitions improve autoopt transformations,
-            #      in which case the cache table should take the symbols map into account.
-            symbols: dict[str, int] = {}
-            sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=run_on_gpu)
-
-        if run_on_gpu:
-            sdfg.apply_gpu_transformations()
-
-        # compile SDFG and retrieve SDFG program
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
@@ -271,7 +318,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **kwargs,
         build_cache=_build_cache_cpu,
         build_type=_build_type,
-        run_on_gpu=False,
+        on_gpu=False,
     )
 
 
@@ -289,7 +336,7 @@ if cp:
             **kwargs,
             build_cache=_build_cache_gpu,
             build_type=_build_type,
-            run_on_gpu=True,
+            on_gpu=True,
         )
 
 else:
