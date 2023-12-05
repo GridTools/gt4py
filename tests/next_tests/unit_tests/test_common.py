@@ -151,13 +151,6 @@ def test_unit_range_slice_error(rng):
         rng[1:2:5]
 
 
-def test_unit_range_set_intersection(rng):
-    with pytest.raises(
-        NotImplementedError, match="Can only find the intersection between UnitRange instances."
-    ):
-        rng & {1, 5}
-
-
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
@@ -218,38 +211,18 @@ def test_range_contains():
     "op, rng1, rng2, expected",
     [
         (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
-        (operator.le, UnitRange(-1, 2), {-1, 0, 1}, True),
-        (operator.le, UnitRange(-1, 2), {-1, 0}, False),
-        (operator.le, UnitRange(-1, 2), {-2, -1, 0, 1, 2}, True),
         (operator.le, UnitRange(None, 2), UnitRange(None, 3), True),
-        (operator.le, UnitRange(None, 2), {1, 2, 3}, False),
         (operator.ge, UnitRange(-2, 3), UnitRange(-1, 2), True),
-        (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2}, True),
-        (operator.ge, UnitRange(-2, 3), {-2, -1, 0, 1, 2, 3}, False),
         (operator.ge, UnitRange(None, 3), UnitRange(None, 2), True),
-        (operator.ge, UnitRange(None, 3), {1, 2}, True),
         (operator.lt, UnitRange(-1, 2), UnitRange(-2, 2), True),
         (operator.lt, UnitRange(-2, 1), UnitRange(-2, 2), True),
-        (operator.lt, UnitRange(-2, 2), {-1, 0, 1, 2}, False),
-        (operator.lt, UnitRange(-2, 2), {-2, -1, 0, 1, 2}, True),
-        (operator.lt, UnitRange(-2, 2), {-3, -2, -1, 0, 1, 2}, True),
         (operator.lt, UnitRange(None, 2), UnitRange(None, 3), True),
-        (operator.lt, UnitRange(None, 2), {1, 2, 3}, False),
         (operator.gt, UnitRange(-2, 2), UnitRange(-1, 2), True),
         (operator.gt, UnitRange(-2, 2), UnitRange(-2, 1), True),
-        (operator.gt, UnitRange(-2, 2), {-1, 0, 1}, True),
-        (operator.gt, UnitRange(-2, 2), {-2, -1, 0}, True),
-        (operator.gt, UnitRange(-2, 2), {-2, -1, 0, 1}, False),
         (operator.gt, UnitRange(None, 3), UnitRange(None, 2), True),
-        (operator.gt, UnitRange(None, 2), {0, 1}, True),
-        (operator.gt, UnitRange(None, 2), {1, 2}, False),
         (operator.eq, UnitRange(None, 2), UnitRange(None, 2), True),
-        (operator.eq, UnitRange(-2, 2), {-2, -1, 0, 1}, True),
-        (operator.eq, UnitRange(-2, 2), {-2, 1}, False),
-        (operator.eq, UnitRange(None, 2), {0, 1}, False),
         (operator.ne, UnitRange(None, 2), UnitRange(None, 3), True),
         (operator.ne, UnitRange(None, 2), UnitRange(None, 2), False),
-        (operator.ne, UnitRange(-2, 2), {-2, -1, 0}, True),
     ],
 )
 def test_range_comparison(op, rng1, rng2, expected):

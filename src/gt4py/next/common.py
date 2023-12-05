@@ -21,7 +21,7 @@ import enum
 import functools
 import numbers
 import types
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -102,7 +102,7 @@ class OpenBound(enum.Enum):
 
 
 @dataclasses.dataclass(frozen=True, init=False)
-class UnitRange(Sequence[int], Set[int]):
+class UnitRange(Sequence[int]):
     """
     Range from `start` to `stop` with step size one.
 
@@ -201,77 +201,44 @@ class UnitRange(Sequence[int], Set[int]):
             else:
                 raise IndexError("UnitRange index out of range")
 
-    def __and__(self, other: Set[int]) -> UnitRange:
-        if isinstance(other, UnitRange):
-            return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
-        else:
-            raise NotImplementedError("Can only find the intersection between UnitRange instances.")
+    def __and__(self, other: UnitRange) -> UnitRange:
+        return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
         if not isinstance(value, core_defs.INTEGRAL_TYPES):
             return False
         return value >= self.start and value < self.stop
 
-    def __le__(self, other: Set[int]) -> bool:
-        if isinstance(other, UnitRange):
-            return self.start >= other.start and self.stop <= other.stop
-        elif self.is_open():
-            return False
-        else:
-            return Set.__le__(self, other)
+    def __le__(self, other: UnitRange) -> bool:
+        return self.start >= other.start and self.stop <= other.stop
 
-    def __lt__(self, other: Set[int]) -> bool:
-        if isinstance(other, UnitRange):
-            return (self.start > other.start and self.stop <= other.stop) or (
-                self.start >= other.start and self.stop < other.stop
-            )
-        elif self.is_open():
-            return False
-        else:
-            return Set.__lt__(self, other)
+    def __lt__(self, other: UnitRange) -> bool:
+        return (self.start > other.start and self.stop <= other.stop) or (
+            self.start >= other.start and self.stop < other.stop
+        )
 
-    def __ge__(self, other: Set[int]) -> bool:
-        if isinstance(other, UnitRange):
-            return self.start <= other.start and self.stop >= other.stop
-        elif self.is_open():
-            return all(v in self for v in other)
-        else:
-            return Set.__ge__(self, other)
+    def __ge__(self, other: UnitRange) -> bool:
+        return self.start <= other.start and self.stop >= other.stop
 
-    def __gt__(self, other: Set[int]) -> bool:
-        if isinstance(other, UnitRange):
-            return (self.start < other.start and self.stop >= other.stop) or (
-                self.start <= other.start and self.stop > other.stop
-            )
-        elif self.is_open():
-            return all(v in self for v in other)
-        else:
-            return Set.__gt__(self, other)
+    def __gt__(self, other: UnitRange) -> bool:
+        return (self.start < other.start and self.stop >= other.stop) or (
+            self.start <= other.start and self.stop > other.stop
+        )
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, UnitRange):
             return self.start == other.start and self.stop == other.stop
-        elif self.is_open():
-            return False
-        elif isinstance(other, Set):
-            return Set.__eq__(self, other)
         else:
             return False
 
     def __ne__(self, other: Any) -> bool:
         return not self.__eq__(other)
 
-    def __add__(self, other: int | Set[int]) -> UnitRange:
-        if isinstance(other, int):
-            return UnitRange(self.start + other, self.stop + other)
-        else:
-            raise NotImplementedError("Can only compute union with int instances.")
+    def __add__(self, other: int) -> UnitRange:
+        return UnitRange(self.start + other, self.stop + other)
 
-    def __sub__(self, other: int | Set[int]) -> UnitRange:
-        if isinstance(other, int):
-            return UnitRange(self.start - other, self.stop - other)
-        else:
-            raise NotImplementedError("Can only compute substraction with int instances.")
+    def __sub__(self, other: int) -> UnitRange:
+        return UnitRange(self.start - other, self.stop - other)
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
