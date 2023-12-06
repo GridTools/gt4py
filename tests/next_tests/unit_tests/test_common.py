@@ -14,6 +14,7 @@
 import operator
 from typing import Optional, Pattern
 
+import numpy as np
 import pytest
 
 from gt4py.next.common import (
@@ -111,6 +112,19 @@ def test_unit_range_length(rng):
 @pytest.mark.parametrize("rng_like", [(2, 4), range(2, 4), UnitRange(2, 4)])
 def test_unit_range_like(rng_like):
     assert unit_range(rng_like) == UnitRange(2, 4)
+
+
+@pytest.mark.parametrize(
+    "rng,expected",
+    [
+        (UnitRange(None, 2), UnitRange(OpenBound.LOWER, 2)),
+        (UnitRange(2, None), UnitRange(2, OpenBound.UPPER)),
+        (UnitRange.open(), UnitRange(OpenBound.LOWER, OpenBound.UPPER)),
+        (UnitRange(np.int16(2), np.int64(4)), UnitRange(2, 4)),
+    ],
+)
+def test_unit_range_construction(rng, expected):
+    assert rng == expected
 
 
 def test_unit_range_repr(rng):
