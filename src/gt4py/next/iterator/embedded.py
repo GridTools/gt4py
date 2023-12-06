@@ -1059,7 +1059,7 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension, common.UnitRange.unbound()))
+        return common.Domain((self._dimension, common.UnitRange.open()))
 
     @property
     def codomain(self) -> type[core_defs.int32]:

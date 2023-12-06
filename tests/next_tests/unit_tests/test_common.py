@@ -79,6 +79,8 @@ def test_unbounded_eq(unbounded):
     assert unbounded == unbounded
     assert unbounded <= unbounded
     assert unbounded >= unbounded
+    assert not unbounded < unbounded
+    assert not unbounded > unbounded
 
 
 @pytest.mark.parametrize("value", [-1, 0, 1])

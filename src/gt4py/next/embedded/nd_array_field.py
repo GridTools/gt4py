@@ -563,7 +563,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             named_ranges.append((dim, field.domain[pos][1]))
         else:
             domain_slice.append(np.newaxis)
-            named_ranges.append((dim, common.UnitRange.unbound()))
+            named_ranges.append((dim, common.UnitRange.open()))
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -633,7 +633,7 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.unbound():
+        if domain.ranges[pos] == common.UnitRange.open():
             return slice(None)
         else:
             return slice(

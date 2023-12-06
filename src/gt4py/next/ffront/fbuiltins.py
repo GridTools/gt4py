@@ -189,7 +189,7 @@ def broadcast(
         np.asarray(field)[
             tuple([np.newaxis] * len(dims))
         ],  # TODO(havogt) use FunctionField once available
-        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.unbound()] * len(dims))),
+        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.open()] * len(dims))),
     )
 
 

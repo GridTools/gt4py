@@ -75,6 +75,8 @@ class Dimension:
 
 
 class OpenBound(enum.Enum):
+    """Describes an open bound of a `UnitRange`, behaves like an integer infinity."""
+
     LOWER = enum.auto()
     UPPER = enum.auto()
 
@@ -117,26 +119,16 @@ class UnitRange(Sequence[int]):
         start: core_defs.IntegralScalar | OpenBound | None,
         stop: core_defs.IntegralScalar | OpenBound | None,
     ) -> None:
-        if (
-            start is None
-            or isinstance(start, OpenBound)
-            or stop is None
-            or isinstance(stop, OpenBound)
-            or start < stop
-        ):
-            if start is None:
+        if start is None or stop is None or start < stop:
+            if start in (None, OpenBound.LOWER):
                 start = OpenBound.LOWER
-            elif isinstance(start, OpenBound):
-                assert start is OpenBound.LOWER
-                start = start
             else:
+                assert start is not None and not isinstance(start, OpenBound)  # for mypy
                 start = int(start)
-            if stop is None:
+            if stop in (None, OpenBound.UPPER):
                 stop = OpenBound.UPPER
-            elif isinstance(stop, OpenBound):
-                assert stop is OpenBound.UPPER
-                stop = stop
             else:
+                assert stop is not None and not isinstance(stop, OpenBound)  # for mypy
                 stop = int(stop)
             object.__setattr__(self, "start", start)
             object.__setattr__(self, "stop", stop)
@@ -146,8 +138,10 @@ class UnitRange(Sequence[int]):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def unbound(cls) -> UnitRange:
-        return cls(None, None)
+    def open(  # noqa: A003 # shadowing built-in (but I don't see why a class-method should shadow a free function)
+        cls,
+    ) -> UnitRange:
+        return cls(OpenBound.LOWER, OpenBound.UPPER)
 
     @property
     def bounded_start(self) -> int:
@@ -165,10 +159,10 @@ class UnitRange(Sequence[int]):
         return max(0, self.bounded_stop - self.bounded_start)
 
     def is_left_open(self):
-        return isinstance(self.start, OpenBound)
+        return self.start is OpenBound.LOWER
 
     def is_right_open(self):
-        return isinstance(self.stop, OpenBound)
+        return self.stop is OpenBound.UPPER
 
     def is_open(self):
         return self.is_left_open() or self.is_right_open()
@@ -532,9 +526,7 @@ def domain(domain_like: DomainLike) -> Domain:
 def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
-    return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange.unbound() for d in broadcast_dims
-    )
+    return tuple(ranges[dims.index(d)] if d in dims else UnitRange.open() for d in broadcast_dims)
 
 
 if TYPE_CHECKING:
@@ -895,7 +887,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.unbound(),))
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.open(),))
 
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:
