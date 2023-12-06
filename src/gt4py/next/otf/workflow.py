@@ -82,8 +82,7 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         if not dataclasses.is_dataclass(self):
             raise TypeError(f"'{self.__class__}' is not a dataclass.")
         assert not isinstance(self, type)
-        # `self` is guaranteed to be a dataclass (is_dataclass) should be a `TypeGuard`?
-        return dataclasses.replace(self, **kwargs)  # type: ignore[misc]
+        return dataclasses.replace(self, **kwargs)  # type: ignore[misc] # `self` is guaranteed to be a dataclass (is_dataclass) should be a `TypeGuard`?
 
 
 class ChainableWorkflowMixin(Workflow[StartT, EndT]):

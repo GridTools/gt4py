@@ -212,8 +212,7 @@ class NdArrayField(
         new_buffer = self.ndarray[buffer_slice]
         if len(new_domain) == 0:
             # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
-            # I don't think we can express that we return `ScalarT` here
-            return new_buffer  # type: ignore[return-value]
+            return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
             return self.__class__.from_array(new_buffer, domain=new_domain)
 
@@ -234,8 +233,7 @@ class NdArrayField(
             value = value.ndarray
 
         assert hasattr(self.ndarray, "__setitem__")
-        # np and cp allow index assignment, jax overrides
-        self._ndarray[target_slice] = value  # type: ignore[index]
+        self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
 
     __abs__ = _make_builtin("abs", "abs")
 

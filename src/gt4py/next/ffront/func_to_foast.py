@@ -104,13 +104,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             annotated_return_type = type_translation.from_type_hint(annotations["return"])
             # TODO(tehrengruber): use `type_info.return_type` when the type of the
             #  arguments becomes available here
-            # revisit when `type_info.return_type` is implemented
-            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr]
+            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
                     foast_node.location,
                     "Annotated return type does not match deduced return type: expected "
-                    # revisit when 'type_info.return_type' is implemented
-                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr]
+                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
                     f", got '{annotated_return_type}'.",
                 )
         return foast_node
@@ -449,8 +447,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
 
     def _func_name(self, node: ast.Call) -> str:
-        # We want this to fail if the attribute does not exist unexpectedly.
-        return node.func.id  # type: ignore[attr-defined]
+        return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?

@@ -321,9 +321,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     isinstance(field, past.Subscript) for field in flattened
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
                 assert all(
-                    # mypy cannot deduce type
                     concepts.eq_nonlocated(
-                        first_field.slice_, field.slice  # type: ignore[union-attr]
+                        first_field.slice_, field.slice  # type: ignore[union-attr] # mypy cannot deduce type
                     )
                     for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."

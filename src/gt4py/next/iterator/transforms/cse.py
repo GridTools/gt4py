@@ -123,8 +123,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         depth = kwargs.pop("depth")
         return super().generic_visit(*args, depth=depth + 1, **kwargs)
 
-    # supertype accepts any node, but we want to be more specific here.
-    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]
+    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 

@@ -499,28 +499,22 @@ class NDArrayObject(Protocol):
     def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
         ...
 
-    # mypy wants to return `bool`
-    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override]
+    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
 
-    # mypy wants to return `bool`
-    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override]
+    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
 
-    # Forward operator is not callable
-    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
+    def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
-    # Forward operator is not callable
-    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
+    def __ge__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
-    # Forward operator is not callable
-    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
+    def __lt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
-    # Forward operator is not callable
-    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc]
+    def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
     def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject:

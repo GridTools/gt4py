@@ -469,8 +469,7 @@ def domain(domain_like: DomainLike) -> Domain:
             return Domain(
                 dims=tuple(domain_like.keys()),
                 ranges=tuple(
-                    # type of `s` is checked in condition
-                    UnitRange(0, s)  # type: ignore[arg-type]
+                    UnitRange(0, s)  # type: ignore[arg-type] # type of `s` is checked in condition
                     for s in domain_like.values()
                 ),
             )
@@ -718,36 +717,31 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    # Forward operator not callalbe
-    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc]
+    def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    # Forward operator not callalbe
-    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc]
+    def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    # Forward operator not callalbe
-    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc]
+    def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    # Forward operator not callalbe
-    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc]
+    def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    # Forward operator not callalbe
-    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc]
+    def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
@@ -770,8 +764,7 @@ def is_connectivity_field(
     # extended_runtime_checkable does not make the protocol runtime_checkable
     # for mypy.
     # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-    # we use extended_runtime_checkable
-    return isinstance(v, ConnectivityField)  # type: ignore[misc]
+    return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 @functools.singledispatch
