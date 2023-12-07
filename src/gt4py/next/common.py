@@ -104,6 +104,10 @@ class Infinity(enum.Enum):
         return self is self.POSITIVE and other is not self
 
 
+def _as_int(v: core_defs.IntegralScalar | Infinity) -> int | Infinity:
+    return v if isinstance(v, Infinity) else int(v)
+
+
 @dataclasses.dataclass(frozen=True, init=False)
 class UnitRange(Sequence[int]):
     """
@@ -116,23 +120,11 @@ class UnitRange(Sequence[int]):
     stop: int | Infinity
 
     def __init__(
-        self,
-        start: core_defs.IntegralScalar | Infinity | None,
-        stop: core_defs.IntegralScalar | Infinity | None,
+        self, start: core_defs.IntegralScalar | Infinity, stop: core_defs.IntegralScalar | Infinity
     ) -> None:
-        if start is None or stop is None or start < stop:
-            if start in (None, Infinity.NEGATIVE):
-                start = Infinity.NEGATIVE
-            else:
-                assert start is not None and not isinstance(start, Infinity)  # for mypy
-                start = int(start)
-            if stop in (None, Infinity.POSITIVE):
-                stop = Infinity.POSITIVE
-            else:
-                assert stop is not None and not isinstance(stop, Infinity)  # for mypy
-                stop = int(stop)
-            object.__setattr__(self, "start", start)
-            object.__setattr__(self, "stop", stop)
+        if start < stop:
+            object.__setattr__(self, "start", _as_int(start))
+            object.__setattr__(self, "stop", _as_int(stop))
         else:
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
@@ -242,6 +234,7 @@ RangeLike: TypeAlias = (
     | range
     | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
     | core_defs.IntegralScalar
+    | None
 )
 
 
@@ -256,12 +249,20 @@ def unit_range(r: RangeLike) -> UnitRange:
     #   once the related mypy bug (#16358) gets fixed
     if (
         isinstance(r, tuple)
-        and (isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] is None)
-        and (isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] is None)
+        and (
+            isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] is None or r[0] is Infinity.NEGATIVE
+        )
+        and (
+            isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] is None or r[1] is Infinity.POSITIVE
+        )
     ):
-        return UnitRange(r[0], r[1])
+        start = r[0] if r[0] is not None else Infinity.NEGATIVE
+        stop = r[1] if r[1] is not None else Infinity.POSITIVE
+        return UnitRange(start, stop)
     if isinstance(r, core_defs.INTEGRAL_TYPES):
         return UnitRange(0, cast(core_defs.IntegralScalar, r))
+    if r is None:
+        return UnitRange.infinite()
     raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
 
 

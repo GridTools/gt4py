@@ -109,22 +109,20 @@ def test_unit_range_length(rng):
     assert len(rng) == 10
 
 
-@pytest.mark.parametrize("rng_like", [(2, 4), range(2, 4), UnitRange(2, 4)])
-def test_unit_range_like(rng_like):
-    assert unit_range(rng_like) == UnitRange(2, 4)
-
-
 @pytest.mark.parametrize(
-    "rng,expected",
+    "rng_like, expected",
     [
-        (UnitRange(None, 2), UnitRange(Infinity.NEGATIVE, 2)),
-        (UnitRange(2, None), UnitRange(2, Infinity.POSITIVE)),
-        (UnitRange.infinite(), UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
-        (UnitRange(np.int16(2), np.int64(4)), UnitRange(2, 4)),
+        ((2, 4), UnitRange(2, 4)),
+        (range(2, 4), UnitRange(2, 4)),
+        (UnitRange(2, 4), UnitRange(2, 4)),
+        ((None, None), UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
+        ((2, None), UnitRange(2, Infinity.POSITIVE)),
+        ((None, 4), UnitRange(Infinity.NEGATIVE, 4)),
+        (None, UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
     ],
 )
-def test_unit_range_construction(rng, expected):
-    assert rng == expected
+def test_unit_range_like(rng_like, expected):
+    assert unit_range(rng_like) == expected
 
 
 def test_unit_range_repr(rng):
@@ -178,19 +176,19 @@ def test_unit_range_intersection(rng1, rng2, expected):
 @pytest.mark.parametrize(
     "rng1, rng2, expected",
     [
-        (UnitRange(20, None), UnitRange(10, 15), UnitRange(0, 0)),
-        (UnitRange(None, 0), UnitRange(5, 10), UnitRange(0, 0)),
-        (UnitRange(None, 0), UnitRange(-10, 0), UnitRange(-10, 0)),
-        (UnitRange(0, None), UnitRange(None, 5), UnitRange(0, 5)),
+        (UnitRange(20, Infinity.POSITIVE), UnitRange(10, 15), UnitRange(0, 0)),
+        (UnitRange(Infinity.NEGATIVE, 0), UnitRange(5, 10), UnitRange(0, 0)),
+        (UnitRange(Infinity.NEGATIVE, 0), UnitRange(-10, 0), UnitRange(-10, 0)),
+        (UnitRange(0, Infinity.POSITIVE), UnitRange(Infinity.NEGATIVE, 5), UnitRange(0, 5)),
         (
-            UnitRange(None, 0),
-            UnitRange(None, 5),
-            UnitRange(None, 0),
+            UnitRange(Infinity.NEGATIVE, 0),
+            UnitRange(Infinity.NEGATIVE, 5),
+            UnitRange(Infinity.NEGATIVE, 0),
         ),
         (
-            UnitRange(None, None),
-            UnitRange(None, None),
-            UnitRange(None, None),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+            UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
         ),
     ],
 )
@@ -199,8 +197,15 @@ def test_unit_range_unbounded_intersection(rng1, rng2, expected):
     assert result == expected
 
 
-@pytest.mark.parametrize("rng", [UnitRange(None, 0), UnitRange(0, None), UnitRange(None, None)])
-def test_positive_unbounded_range(rng):
+@pytest.mark.parametrize(
+    "rng",
+    [
+        UnitRange(Infinity.NEGATIVE, 0),
+        UnitRange(0, Infinity.POSITIVE),
+        UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE),
+    ],
+)
+def test_positive_infinite_range_len(rng):
     with pytest.raises(ValueError, match=r".*open.*"):
         len(rng)
 
@@ -208,28 +213,28 @@ def test_positive_unbounded_range(rng):
 def test_range_contains():
     assert 1 in UnitRange(0, 2)
     assert 1 not in UnitRange(0, 1)
-    assert 1 in UnitRange(0, None)
-    assert 1 in UnitRange(None, 2)
-    assert 1 in UnitRange(None, None)
-    assert "s" not in UnitRange(None, None)
+    assert 1 in UnitRange(0, Infinity.POSITIVE)
+    assert 1 in UnitRange(Infinity.NEGATIVE, 2)
+    assert 1 in UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)
+    assert "s" not in UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)
 
 
 @pytest.mark.parametrize(
     "op, rng1, rng2, expected",
     [
         (operator.le, UnitRange(-1, 2), UnitRange(-2, 3), True),
-        (operator.le, UnitRange(None, 2), UnitRange(None, 3), True),
+        (operator.le, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
         (operator.ge, UnitRange(-2, 3), UnitRange(-1, 2), True),
-        (operator.ge, UnitRange(None, 3), UnitRange(None, 2), True),
+        (operator.ge, UnitRange(Infinity.NEGATIVE, 3), UnitRange(Infinity.NEGATIVE, 2), True),
         (operator.lt, UnitRange(-1, 2), UnitRange(-2, 2), True),
         (operator.lt, UnitRange(-2, 1), UnitRange(-2, 2), True),
-        (operator.lt, UnitRange(None, 2), UnitRange(None, 3), True),
+        (operator.lt, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
         (operator.gt, UnitRange(-2, 2), UnitRange(-1, 2), True),
         (operator.gt, UnitRange(-2, 2), UnitRange(-2, 1), True),
-        (operator.gt, UnitRange(None, 3), UnitRange(None, 2), True),
-        (operator.eq, UnitRange(None, 2), UnitRange(None, 2), True),
-        (operator.ne, UnitRange(None, 2), UnitRange(None, 3), True),
-        (operator.ne, UnitRange(None, 2), UnitRange(None, 2), False),
+        (operator.gt, UnitRange(Infinity.NEGATIVE, 3), UnitRange(Infinity.NEGATIVE, 2), True),
+        (operator.eq, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 2), True),
+        (operator.ne, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 3), True),
+        (operator.ne, UnitRange(Infinity.NEGATIVE, 2), UnitRange(Infinity.NEGATIVE, 2), False),
     ],
 )
 def test_range_comparison(op, rng1, rng2, expected):
