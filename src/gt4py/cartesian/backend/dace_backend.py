@@ -451,7 +451,7 @@ class DaCeComputationCodegen:
                 const int __I = domain[0];
                 const int __J = domain[1];
                 const int __K = domain[2];
-                ${name}_${state_suffix} dace_handle;
+                ${name}${state_suffix} dace_handle;
                 ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
@@ -566,7 +566,7 @@ class DaCeComputationCodegen:
         try:
             dace_state_suffix = dace.Config.get("compiler.codegen_state_struct_suffix")
         except (KeyError, TypeError):
-            dace_state_suffix = "t"  # old structure name
+            dace_state_suffix = "_t"  # old structure name
 
         interface = cls.template.definition.render(
             name=sdfg.name,
