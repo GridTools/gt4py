@@ -64,11 +64,12 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
                 acc = self.fun(acc, *new_args, **new_kwargs)
                 _tuple_assign_value(pos, res, acc)
 
-        for hpos in embedded_common.iterate_domain(non_scan_domain):
-            scan_loop(hpos)
         if len(non_scan_domain) == 0:
             # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
             scan_loop(())
+        else:
+            for hpos in embedded_common.iterate_domain(non_scan_domain):
+                scan_loop(hpos)
 
         return res
 
