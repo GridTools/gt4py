@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, field_utils, utils
+from gt4py.next import common, constructors, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
@@ -89,7 +89,11 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
 
         out = kwargs.pop("out")
         domain = kwargs.pop("domain", None)
-        out_domain = common.domain(domain) if domain is not None else field_utils.get_domain(out)
+
+        flattened_out: tuple[common.Field, ...] = utils.flatten_nested_tuple((out,))
+        assert all(f.domain == flattened_out[0].domain for f in flattened_out)
+
+        out_domain = common.domain(domain) if domain is not None else flattened_out[0].domain
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 

@@ -62,34 +62,6 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
 
 
-def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
-    """
-    Extract data from elements of tuple. Requiring all elements result in the same value.
-
-    Examples:
-        >>> get_common_tuple_value(lambda x: x)(((42, 42), 42))
-        42
-
-        >>> get_common_tuple_value(lambda x: x[1])((("Foo", "Bor"), "Boz"))
-        'o'
-
-        >>> get_common_tuple_value(lambda x: x)(((42, 1), 42))
-        Traceback (most recent call last):
-            ...
-        AssertionError
-    """
-
-    @functools.wraps(fun)
-    def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
-        if isinstance(value, tuple):
-            all_res = tuple(impl(v) for v in value)
-            assert all(v == all_res[0] for v in all_res)
-            return all_res[0]
-        return fun(value)
-
-    return impl
-
-
 # TODO(havogt): remove flatten duplications in the whole codebase
 def flatten_nested_tuple(value: tuple[_S | tuple, ...]) -> tuple[_S, ...]:
     if isinstance(value, tuple):
