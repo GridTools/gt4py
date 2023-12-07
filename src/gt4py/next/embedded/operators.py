@@ -104,9 +104,7 @@ def _scan(
     kwargs: dict,
 ) -> Any:
     scan_axis = scan_range[0]
-    domain_intersection = embedded_common.intersect_domains(
-        *[_intersect_tuple_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
-    )
+    domain_intersection = _intersect_scan_args(*args, *kwargs.values())
     non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
     out_domain = common.Domain(
@@ -136,14 +134,12 @@ def _scan(
     return res
 
 
-@utils.tree_reduce(init=common.Domain())
-def _intersect_tuple_domain(a: common.Domain, b: common.Field) -> common.Domain:
-    return embedded_common.intersect_domains(a, b.domain)
-
-
-@utils.get_common_tuple_value
-def _is_field_or_tuple(field: common.Field) -> bool:
-    return common.is_field(field)
+def _intersect_scan_args(
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+) -> common.Domain:
+    return embedded_common.intersect_domains(
+        *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
+    )
 
 
 def _construct_scan_array(domain: common.Domain):
