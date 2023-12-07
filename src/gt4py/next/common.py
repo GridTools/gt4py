@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
+    Generic,
     Never,
     Optional,
     ParamSpec,
@@ -74,11 +75,11 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
-class OpenBound(enum.Enum):
-    """Describes an open bound of a `UnitRange`, behaves like an integer infinity."""
+class Infinity(enum.Enum):
+    """Describes an unbounded `UnitRange`."""
 
-    LOWER = enum.auto()
-    UPPER = enum.auto()
+    NEGATIVE = enum.auto()
+    POSITIVE = enum.auto()
 
     def __add__(self, _: int) -> Self:
         return self
@@ -90,17 +91,17 @@ class OpenBound(enum.Enum):
 
     __rsub__ = __sub__
 
-    def __le__(self, other: int | OpenBound) -> bool:
-        return self is self.LOWER or other is self.UPPER
+    def __le__(self, other: int | Infinity) -> bool:
+        return self is self.NEGATIVE or other is self.POSITIVE
 
-    def __lt__(self, other: int | OpenBound) -> bool:
-        return self is self.LOWER and other is not self
+    def __lt__(self, other: int | Infinity) -> bool:
+        return self is self.NEGATIVE and other is not self
 
-    def __ge__(self, other: int | OpenBound) -> bool:
-        return self is self.UPPER or other is self.LOWER
+    def __ge__(self, other: int | Infinity) -> bool:
+        return self is self.POSITIVE or other is self.NEGATIVE
 
-    def __gt__(self, other: int | OpenBound) -> bool:
-        return self is self.UPPER and other is not self
+    def __gt__(self, other: int | Infinity) -> bool:
+        return self is self.POSITIVE and other is not self
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -111,24 +112,24 @@ class UnitRange(Sequence[int]):
     An open range is constructed by passing `None` for `start` and/or `stop`.
     """
 
-    start: int | OpenBound
-    stop: int | OpenBound
+    start: int | Infinity
+    stop: int | Infinity
 
     def __init__(
         self,
-        start: core_defs.IntegralScalar | OpenBound | None,
-        stop: core_defs.IntegralScalar | OpenBound | None,
+        start: core_defs.IntegralScalar | Infinity | None,
+        stop: core_defs.IntegralScalar | Infinity | None,
     ) -> None:
         if start is None or stop is None or start < stop:
-            if start in (None, OpenBound.LOWER):
-                start = OpenBound.LOWER
+            if start in (None, Infinity.NEGATIVE):
+                start = Infinity.NEGATIVE
             else:
-                assert start is not None and not isinstance(start, OpenBound)  # for mypy
+                assert start is not None and not isinstance(start, Infinity)  # for mypy
                 start = int(start)
-            if stop in (None, OpenBound.UPPER):
-                stop = OpenBound.UPPER
+            if stop in (None, Infinity.POSITIVE):
+                stop = Infinity.POSITIVE
             else:
-                assert stop is not None and not isinstance(stop, OpenBound)  # for mypy
+                assert stop is not None and not isinstance(stop, Infinity)  # for mypy
                 stop = int(stop)
             object.__setattr__(self, "start", start)
             object.__setattr__(self, "stop", stop)
@@ -138,34 +139,19 @@ class UnitRange(Sequence[int]):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def open(  # noqa: A003 # shadowing built-in (but I don't see why a class-method should shadow a free function)
+    def infinite(
         cls,
     ) -> UnitRange:
-        return cls(OpenBound.LOWER, OpenBound.UPPER)
-
-    @property
-    def bounded_start(self) -> int:
-        assert not isinstance(self.start, OpenBound)
-        return self.start
-
-    @property
-    def bounded_stop(self) -> int:
-        assert not isinstance(self.stop, OpenBound)
-        return self.stop
+        return cls(Infinity.NEGATIVE, Infinity.POSITIVE)
 
     def __len__(self) -> int:
-        if self.is_left_open() or self.is_right_open():
-            raise ValueError("Cannot compute length of open UnitRange.")
-        return max(0, self.bounded_stop - self.bounded_start)
+        if UnitRange.is_finite(self):
+            return max(0, self.stop - self.start)
+        raise ValueError("Cannot compute length of open UnitRange.")
 
-    def is_left_open(self):
-        return self.start is OpenBound.LOWER
-
-    def is_right_open(self):
-        return self.stop is OpenBound.UPPER
-
-    def is_open(self):
-        return self.is_left_open() or self.is_right_open()
+    @classmethod
+    def is_finite(cls, obj) -> TypeGuard[FiniteUnitRange]:
+        return obj.start is not Infinity.NEGATIVE and obj.stop is not Infinity.POSITIVE
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
@@ -179,6 +165,7 @@ class UnitRange(Sequence[int]):
         ...
 
     def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+        assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             if step != 1:
@@ -191,7 +178,7 @@ class UnitRange(Sequence[int]):
                 index += len(self)
 
             if 0 <= index < len(self):
-                return self.bounded_start + index
+                return self.start + index
             else:
                 raise IndexError("UnitRange index out of range")
 
@@ -238,6 +225,18 @@ class UnitRange(Sequence[int]):
         return f"({self.start}:{self.stop})"
 
 
+@dataclasses.dataclass(frozen=True, init=False)
+class FiniteUnitRange(UnitRange):
+    start: int
+    stop: int
+
+    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
+        assert isinstance(start, core_defs.INTEGRAL_TYPES) and isinstance(
+            stop, core_defs.INTEGRAL_TYPES
+        )
+        super().__init__(start, stop)
+
+
 RangeLike: TypeAlias = (
     UnitRange
     | range
@@ -269,6 +268,7 @@ def unit_range(r: RangeLike) -> UnitRange:
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
+FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
@@ -293,6 +293,10 @@ def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
         and isinstance(v[0], Dimension)
         and isinstance(v[1], UnitRange)
     )
+
+
+def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
+    return UnitRange.is_finite(v[1])
 
 
 def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
@@ -333,18 +337,21 @@ def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
     return (v[0], unit_range(v[1]))
 
 
+_Rng = TypeVar("_Rng", bound=UnitRange)
+
+
 @dataclasses.dataclass(frozen=True, init=False)
-class Domain(Sequence[NamedRange]):
+class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
 
     dims: tuple[Dimension, ...]
-    ranges: tuple[UnitRange, ...]
+    ranges: tuple[_Rng, ...]
 
     def __init__(
         self,
-        *args: NamedRange,
+        *args: tuple[Dimension, _Rng],
         dims: Optional[Sequence[Dimension]] = None,
-        ranges: Optional[Sequence[UnitRange]] = None,
+        ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
@@ -391,16 +398,22 @@ class Domain(Sequence[NamedRange]):
     def shape(self) -> tuple[int, ...]:
         return tuple(len(r) for r in self.ranges)
 
+    @classmethod
+    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
+        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+
     @overload
-    def __getitem__(self, index: int) -> NamedRange:
+    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]:
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> Domain:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
         ...
 
     @overload
-    def __getitem__(self, index: Dimension) -> NamedRange:  # noqa: F811 # redefine unused
+    def __getitem__(  # noqa: F811 # redefine unused
+        self, index: Dimension
+    ) -> tuple[Dimension, _Rng]:
         ...
 
     def __getitem__(  # noqa: F811 # redefine unused
@@ -480,6 +493,9 @@ class Domain(Sequence[NamedRange]):
         return Domain(dims=dims, ranges=ranges)
 
 
+FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
+
+
 DomainLike: TypeAlias = (
     Sequence[tuple[Dimension, RangeLike]] | Mapping[Dimension, RangeLike]
 )  # `Domain` is `Sequence[NamedRange]` and therefore a subset
@@ -526,7 +542,9 @@ def domain(domain_like: DomainLike) -> Domain:
 def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
-    return tuple(ranges[dims.index(d)] if d in dims else UnitRange.open() for d in broadcast_dims)
+    return tuple(
+        ranges[dims.index(d)] if d in dims else UnitRange.infinite() for d in broadcast_dims
+    )
 
 
 if TYPE_CHECKING:
@@ -887,7 +905,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.open(),))
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
 
     @property
     def __gt_dims__(self) -> tuple[Dimension, ...]:

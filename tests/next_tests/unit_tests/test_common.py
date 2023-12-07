@@ -21,8 +21,8 @@ from gt4py.next.common import (
     Dimension,
     DimensionKind,
     Domain,
+    Infinity,
     NamedRange,
-    OpenBound,
     UnitRange,
     domain,
     named_range,
@@ -42,7 +42,7 @@ def a_domain():
     return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
 
 
-@pytest.fixture(params=[OpenBound.UPPER, OpenBound.LOWER])
+@pytest.fixture(params=[Infinity.POSITIVE, Infinity.NEGATIVE])
 def unbounded(request):
     yield request.param
 
@@ -55,25 +55,25 @@ def test_unbounded_add_sub(unbounded):
 @pytest.mark.parametrize("value", [-1, 0, 1])
 @pytest.mark.parametrize("op", [operator.le, operator.lt])
 def test_unbounded_comparison_less(value, op):
-    assert not op(OpenBound.UPPER, value)
-    assert op(value, OpenBound.UPPER)
+    assert not op(Infinity.POSITIVE, value)
+    assert op(value, Infinity.POSITIVE)
 
-    assert op(OpenBound.LOWER, value)
-    assert not op(value, OpenBound.LOWER)
+    assert op(Infinity.NEGATIVE, value)
+    assert not op(value, Infinity.NEGATIVE)
 
-    assert op(OpenBound.LOWER, OpenBound.UPPER)
+    assert op(Infinity.NEGATIVE, Infinity.POSITIVE)
 
 
 @pytest.mark.parametrize("value", [-1, 0, 1])
 @pytest.mark.parametrize("op", [operator.ge, operator.gt])
 def test_unbounded_comparison_greater(value, op):
-    assert op(OpenBound.UPPER, value)
-    assert not op(value, OpenBound.UPPER)
+    assert op(Infinity.POSITIVE, value)
+    assert not op(value, Infinity.POSITIVE)
 
-    assert not op(OpenBound.LOWER, value)
-    assert op(value, OpenBound.LOWER)
+    assert not op(Infinity.NEGATIVE, value)
+    assert op(value, Infinity.NEGATIVE)
 
-    assert not op(OpenBound.LOWER, OpenBound.UPPER)
+    assert not op(Infinity.NEGATIVE, Infinity.POSITIVE)
 
 
 def test_unbounded_eq(unbounded):
@@ -86,10 +86,10 @@ def test_unbounded_eq(unbounded):
 
 @pytest.mark.parametrize("value", [-1, 0, 1])
 def test_unbounded_max_min(value):
-    assert max(OpenBound.UPPER, value) == OpenBound.UPPER
-    assert min(OpenBound.UPPER, value) == value
-    assert max(OpenBound.LOWER, value) == value
-    assert min(OpenBound.LOWER, value) == OpenBound.LOWER
+    assert max(Infinity.POSITIVE, value) == Infinity.POSITIVE
+    assert min(Infinity.POSITIVE, value) == value
+    assert max(Infinity.NEGATIVE, value) == value
+    assert min(Infinity.NEGATIVE, value) == Infinity.NEGATIVE
 
 
 def test_empty_range():
@@ -117,9 +117,9 @@ def test_unit_range_like(rng_like):
 @pytest.mark.parametrize(
     "rng,expected",
     [
-        (UnitRange(None, 2), UnitRange(OpenBound.LOWER, 2)),
-        (UnitRange(2, None), UnitRange(2, OpenBound.UPPER)),
-        (UnitRange.open(), UnitRange(OpenBound.LOWER, OpenBound.UPPER)),
+        (UnitRange(None, 2), UnitRange(Infinity.NEGATIVE, 2)),
+        (UnitRange(2, None), UnitRange(2, Infinity.POSITIVE)),
+        (UnitRange.infinite(), UnitRange(Infinity.NEGATIVE, Infinity.POSITIVE)),
         (UnitRange(np.int16(2), np.int64(4)), UnitRange(2, 4)),
     ],
 )
@@ -129,15 +129,6 @@ def test_unit_range_construction(rng, expected):
 
 def test_unit_range_repr(rng):
     assert repr(rng) == "UnitRange(-5, 5)"
-
-
-def test_unit_range_bounded_start_stop():
-    assert UnitRange(-5, None).bounded_start == -5
-    assert UnitRange(None, 5).bounded_stop == 5
-    with pytest.raises(AssertionError):
-        UnitRange(None, 5).bounded_start
-    with pytest.raises(AssertionError):
-        UnitRange(-5, None).bounded_stop
 
 
 def test_unit_range_iter(rng):

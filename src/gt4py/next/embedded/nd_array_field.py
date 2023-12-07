@@ -49,7 +49,7 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = functools.reduce(
+        domain_intersection: common.Domain[common.UnitRange] = functools.reduce(
             operator.and_,
             [f.domain for f in fields if common.is_field(f)],
             common.Domain(dims=tuple(), ranges=tuple()),
@@ -115,7 +115,8 @@ class NdArrayField(
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple(-r.bounded_start for _, r in self._domain)
+        assert common.Domain.is_finite(self._domain)
+        return tuple(-r.start for _, r in self._domain)
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -387,8 +388,9 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             assert isinstance(image_range, common.UnitRange)
 
-            restricted_mask = (self._ndarray >= image_range.bounded_start) & (
-                self._ndarray < image_range.bounded_stop
+            assert common.UnitRange.is_finite(image_range)
+            restricted_mask = (self._ndarray >= image_range.start) & (
+                self._ndarray < image_range.stop
             )
             # indices of non-zero elements in each dimension
             nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
@@ -563,7 +565,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             named_ranges.append((dim, field.domain[pos][1]))
         else:
             domain_slice.append(np.newaxis)
-            named_ranges.append((dim, common.UnitRange.open()))
+            named_ranges.append((dim, common.UnitRange.infinite()))
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -633,14 +635,19 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.open():
-            return slice(None)
-        else:
+        if common.UnitRange.is_finite(domain.ranges[pos]):
             return slice(
-                rng.bounded_start - domain.ranges[pos].bounded_start,
-                rng.bounded_stop - domain.ranges[pos].bounded_start,
+                rng.start - domain.ranges[pos].start,
+                rng.stop - domain.ranges[pos].start,
             )
+        else:
+            assert (
+                domain.ranges[pos].start == common.Infinity.NEGATIVE
+                and domain.ranges[pos].stop == common.Infinity.POSITIVE
+            )  # TODO do we need to cover the half unbounded range?
+            return slice(None)
     elif common.is_int_index(rng):
-        return rng - domain.ranges[pos].bounded_start
+        assert common.Domain.is_finite(domain)
+        return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
