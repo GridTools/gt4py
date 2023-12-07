@@ -108,16 +108,20 @@ def _as_int(v: core_defs.IntegralScalar | Infinity) -> int | Infinity:
     return v if isinstance(v, Infinity) else int(v)
 
 
+_Left = TypeVar("_Left", int, Infinity)
+_Right = TypeVar("_Right", int, Infinity)
+
+
 @dataclasses.dataclass(frozen=True, init=False)
-class UnitRange(Sequence[int]):
+class UnitRange(Sequence[int], Generic[_Left, _Right]):
     """
     Range from `start` to `stop` with step size one.
 
     An open range is constructed by passing `None` for `start` and/or `stop`.
     """
 
-    start: int | Infinity
-    stop: int | Infinity
+    start: _Left
+    stop: _Right
 
     def __init__(
         self, start: core_defs.IntegralScalar | Infinity, stop: core_defs.IntegralScalar | Infinity
@@ -142,8 +146,16 @@ class UnitRange(Sequence[int]):
         raise ValueError("Cannot compute length of open UnitRange.")
 
     @classmethod
-    def is_finite(cls, obj) -> TypeGuard[FiniteUnitRange]:
+    def is_finite(cls, obj: UnitRange) -> TypeGuard[FiniteUnitRange]:
         return obj.start is not Infinity.NEGATIVE and obj.stop is not Infinity.POSITIVE
+
+    @classmethod
+    def is_right_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[_Left, int]]:
+        return obj.stop is not Infinity.POSITIVE
+
+    @classmethod
+    def is_left_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[int, _Right]]:
+        return obj.start is not Infinity.NEGATIVE
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
@@ -217,16 +229,7 @@ class UnitRange(Sequence[int]):
         return f"({self.start}:{self.stop})"
 
 
-@dataclasses.dataclass(frozen=True, init=False)
-class FiniteUnitRange(UnitRange):
-    start: int
-    stop: int
-
-    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
-        assert isinstance(start, core_defs.INTEGRAL_TYPES) and isinstance(
-            stop, core_defs.INTEGRAL_TYPES
-        )
-        super().__init__(start, stop)
+FiniteUnitRange: TypeAlias = UnitRange[int, int]
 
 
 RangeLike: TypeAlias = (

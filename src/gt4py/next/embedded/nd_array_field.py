@@ -635,17 +635,17 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if common.UnitRange.is_finite(domain.ranges[pos]):
-            return slice(
-                rng.start - domain.ranges[pos].start,
-                rng.stop - domain.ranges[pos].start,
-            )
-        else:
-            assert (
-                domain.ranges[pos].start == common.Infinity.NEGATIVE
-                and domain.ranges[pos].stop == common.Infinity.POSITIVE
-            )  # TODO do we need to cover the half unbounded range?
-            return slice(None)
+        start = (
+            rng.start - domain.ranges[pos].start
+            if common.UnitRange.is_left_finite(domain.ranges[pos])
+            else None
+        )
+        stop = (
+            rng.stop - domain.ranges[pos].start
+            if common.UnitRange.is_right_finite(domain.ranges[pos])
+            else None
+        )
+        return slice(start, stop)
     elif common.is_int_index(rng):
         assert common.Domain.is_finite(domain)
         return rng - domain.ranges[pos].start
