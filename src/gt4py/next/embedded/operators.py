@@ -42,8 +42,35 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
     def __call__(self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
+        scan_axis = scan_range[0]
+        domain_intersection = _intersect_scan_args(*args, *kwargs.values())
+        non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
-        return _scan(self.fun, self.forward, self.init, scan_range, args, kwargs)
+        out_domain = common.Domain(
+            *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
+        )
+        if scan_axis not in out_domain.dims:
+            # even if the scan dimension is not in the input, we can scan over it
+            out_domain = common.Domain(*out_domain, (scan_range))
+
+        res = _construct_scan_array(out_domain)(self.init)
+
+        def scan_loop(hpos):
+            acc = self.init
+            for k in scan_range[1] if self.forward else reversed(scan_range[1]):
+                pos = (*hpos, (scan_axis, k))
+                new_args = [_tuple_at(pos, arg) for arg in args]
+                new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
+                acc = self.fun(acc, *new_args, **new_kwargs)
+                _tuple_assign_value(pos, res, acc)
+
+        for hpos in embedded_common.iterate_domain(non_scan_domain):
+            scan_loop(hpos)
+        if len(non_scan_domain) == 0:
+            # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
+            scan_loop(())
+
+        return res
 
 
 def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
@@ -93,45 +120,6 @@ def _tuple_assign_field(
         target[domain] = source[domain]
 
     impl(target, source)
-
-
-def _scan(
-    scan_op: Callable[_P, _R],
-    forward: bool,
-    init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
-    scan_range: common.NamedRange,
-    args: tuple,
-    kwargs: dict,
-) -> Any:
-    scan_axis = scan_range[0]
-    domain_intersection = _intersect_scan_args(*args, *kwargs.values())
-    non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
-
-    out_domain = common.Domain(
-        *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
-    )
-    if scan_axis not in out_domain.dims:
-        # even if the scan dimension is not in the input, we can scan over it
-        out_domain = common.Domain(*out_domain, (scan_range))
-
-    res = _construct_scan_array(out_domain)(init)
-
-    def scan_loop(hpos):
-        acc = init
-        for k in scan_range[1] if forward else reversed(scan_range[1]):
-            pos = (*hpos, (scan_axis, k))
-            new_args = [_tuple_at(pos, arg) for arg in args]
-            new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
-            acc = scan_op(acc, *new_args, **new_kwargs)
-            _tuple_assign_value(pos, res, acc)
-
-    for hpos in embedded_common.iterate_domain(non_scan_domain):
-        scan_loop(hpos)
-    if len(non_scan_domain) == 0:
-        # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
-        scan_loop(())
-
-    return res
 
 
 def _intersect_scan_args(
