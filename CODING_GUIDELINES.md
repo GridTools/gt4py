@@ -53,7 +53,7 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
 
 ### Error messages
 
-Error messages should be written as sentences, starting with a capital letter and ending with a period (avoid exclamation marks). Try to be informative without being verbose. Code object like 'ClassNames' and 'function_names' etc should be single-quoted and so should string values used to interpolate the message.
+Error messages should be written as sentences, starting with a capital letter and ending with a period (avoid exclamation marks). Try to be informative without being verbose. Code objects such as 'ClassNames' and 'function_names' should be enclosed in single quotes, and so should string values used for message interpolation.
 
 Examples:
 
@@ -61,7 +61,7 @@ Examples:
 raise ValueError(f"Invalid argument 'dimension': should be of type 'Dimension', got '{dimension.type}'.")
 ```
 
-Interpolated Integer values do not need double quotes, if they are indicating an amount. Example:
+Interpolated integer values do not need double quotes, if they are indicating an amount. Example:
 
 ```python
 raise ValueError(f"Invalid number of arguments: expected 3 arguments, got {len(args)}.")
@@ -82,7 +82,7 @@ raise ValueError(f"Received an unexpeted number of arguments. Should receive 5 a
 raise ValueError(f"Wrong number of arguments: expected 5, got {len(args)}.")
 
 # less extreme
-raise TypeError(f"Wrong argument type. Can only accept 'int's, got '{type(arg)' instead.")
+raise TypeError(f"Wrong argument type. Can only accept 'int's, got '{type(arg)}' instead.")
 # but can still be improved
 raise TypeError(f"Wrong argument type: 'int' expected, got '{type(arg)}'")
 ```
