@@ -234,6 +234,7 @@ def build_sdfg_from_itir(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # build parameters
     build_cache = kwargs.get("build_cache", None)
+    build_args = kwargs.get("build_args", None)  # `None` will take default.
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
     auto_optimize = kwargs.get("auto_optimize", False)
@@ -267,7 +268,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
-            dace.config.Config.set("compiler", "cpu", "args", value=_cpu_args)
+            if build_args is not None:
+                dace.config.Config.set(
+                    "compiler", "cuda" if on_gpu else "cpu", "args", value=build_args
+                )
             sdfg_program = sdfg.compile(validate=False)
 
         # store SDFG program in build cache
@@ -311,6 +315,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         **kwargs,
         build_cache=_build_cache_cpu,
         build_type=_build_type,
+        build_args=_cpu_args,
         on_gpu=False,
     )
 
