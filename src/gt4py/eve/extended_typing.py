@@ -526,6 +526,14 @@ else:
 
 def has_type_parameters(cls: Type) -> bool:
     """Return ``True`` if obj is a generic class with type parameters."""
+    if len(getattr(cls, "__parameters__", [])) == 0:
+        cls.__parameters__ = []
+        annotations = getattr(cls, "__annotations__", {})
+        type_ = annotations.get("type")
+        if annotations and type_:
+            for t in get_args(type_):
+                if isinstance(t, _typing.TypeVar):
+                    cls.__parameters__.append(t)
     return issubclass(cls, Generic) and len(getattr(cls, "__parameters__", [])) > 0  # type: ignore[arg-type]  # Generic not considered as a class
 
 
