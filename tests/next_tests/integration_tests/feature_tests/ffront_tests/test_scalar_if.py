@@ -334,7 +334,7 @@ def test_if_without_else(cartesian_case, condition1, condition2):
 
 
 def test_if_non_scalar_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be scalar."):
+    with pytest.raises(errors.DSLError, match="Condition for 'if' must be scalar"):
 
         @field_operator
         def if_non_scalar_condition(
@@ -347,7 +347,7 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be of boolean type."):
+    with pytest.raises(errors.DSLError, match="Condition for 'if' must be of boolean type"):
 
         @field_operator
         def if_non_boolean_condition(

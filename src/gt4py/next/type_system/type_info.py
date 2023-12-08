@@ -568,7 +568,7 @@ def structural_function_signature_incompatibilities(
             if args_idx < len(args):
                 # remove the argument here such that later errors stay comprehensible
                 kwargs.pop(name)
-                yield f"Got multiple values for argument `{name}`."
+                yield f"Got multiple values for argument '{name}'."
 
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     num_pos_args = len(args) - args.count(UNDEFINED_ARG)
@@ -584,17 +584,17 @@ def structural_function_signature_incompatibilities(
         range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
     ):
         if args[i] is UNDEFINED_ARG:
-            missing_positional_args.append(f"`{arg_type}`")
+            missing_positional_args.append(f"'{arg_type}'")
     if missing_positional_args:
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
 
     # check for missing or extra keyword arguments
     kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys())
     if len(kw_a_m_b) > 0:
-        yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} `{'`, `'.join(kw_a_m_b)}`."
+        yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} '{', '.join(kw_a_m_b)}'."
     kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys())
     if len(kw_b_m_a) > 0:
-        yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} `{'`, `'.join(kw_b_m_a)}`."
+        yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} '{', '.join(kw_b_m_a)}'."
 
 
 @functools.singledispatch
@@ -641,14 +641,14 @@ def function_signature_incompatibilities_func(  # noqa: C901
             if i < len(func_type.pos_only_args):
                 arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
             else:
-                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}`"
-            yield f"Expected {arg_repr} to be of type `{a_arg}`, but got `{b_arg}`."
+                arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+            yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
         ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
-            yield f"Expected keyword argument `{kwarg}` to be of type `{func_type.kw_only_args[kwarg]}`, but got `{kwargs[kwarg]}`."
+            yield f"Expected keyword argument '{kwarg}' to be of type '{func_type.kw_only_args[kwarg]}', got '{kwargs[kwarg]}'."
 
 
 @function_signature_incompatibilities.register
@@ -662,11 +662,11 @@ def function_signature_incompatibilities_field(
         return
 
     if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected first argument to be of type {ts.OffsetType}, but got {args[0]}."
+        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
         return
 
     if kwargs:
-        yield f"Got unexpected keyword argument(s) `{'`, `'.join(kwargs.keys())}`."
+        yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
     source_dim = args[0].source
@@ -707,7 +707,7 @@ def accepts_args(
     """
     if not isinstance(callable_type, ts.CallableType):
         if raise_exception:
-            raise ValueError(f"Expected a callable type, but got '{callable_type}'.")
+            raise ValueError(f"Expected a callable type, got '{callable_type}'.")
         return False
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
@@ -716,7 +716,7 @@ def accepts_args(
         if len(error_list) > 0:
             raise ValueError(
                 f"Invalid call to function of type '{callable_type}':\n"
-                + ("\n".join([f"  - '{error}''" for error in error_list]))
+                + ("\n".join([f"  - {error}" for error in error_list]))
             )
         return True
 

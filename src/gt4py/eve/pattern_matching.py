@@ -78,9 +78,9 @@ def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]
     right-hand-side.
     """
     if type(a) is not type(b):
-        yield (path, f"Expected a value of type {type(a).__name__}, but got {type(b).__name__}")
+        yield (path, f"Expected a value of type '{type(a).__name__}', got '{type(b).__name__}'.")
     elif a != b:
-        yield (path, f"Values are not equal. `{a}` != `{b}`")
+        yield (path, f"Values are not equal. '{a}' != '{b}'.")
 
 
 @get_differences.register
@@ -88,12 +88,12 @@ def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, a.cls):
         yield (
             path,
-            f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}",
+            f"Expected an instance of class '{a.cls.__name__}', got '{type(b).__name__}'.",
         )
     else:
         for k in a.fields.keys():
             if not hasattr(b, k):
-                yield (path, f"Value has no attribute {k}.")
+                yield (path, f"Value has no attribute '{k}'.")
             else:
                 yield from get_differences(a.fields[k], getattr(b, k), path=f"{path}.{k}")
 
@@ -101,9 +101,9 @@ def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
 @get_differences.register
 def _(a: list, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, list):
-        yield (path, f"Expected list, but got {type(b).__name__}")
+        yield (path, f"Expected 'list', got '{type(b).__name__}'.")
     elif len(a) != len(b):
-        yield (path, f"Expected list of length {len(a)}, but got length {len(b)}")
+        yield (path, f"Expected 'list' of length {len(a)}, got length {len(b)}.")
     else:
         for i, (el_a, el_b) in enumerate(zip(a, b)):
             yield from get_differences(el_a, el_b, path=f"{path}[{i}]")
@@ -112,23 +112,23 @@ def _(a: list, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
 @get_differences.register
 def _(a: dict, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, dict):
-        yield (path, f"Expected dict, but got {type(b).__name__}")
+        yield (path, f"Expected 'dict', got '{type(b).__name__}'.")
     elif set(a.keys()) != set(b.keys()):
         a_min_b = set(a.keys()).difference(b.keys())
         b_min_a = set(b.keys()).difference(a.keys())
         if a_min_b:
-            missing_keys_str = "`" + "`, `".join(map(str, a_min_b)) + "`"
+            missing_keys_str = ", ".join(map(str, a_min_b))
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
-                f"but the following keys are missing: {missing_keys_str}",
+                f"Expected dictionary with keys '{', '.join(map(str, a.keys()))}', "
+                f"the following keys are missing: '{missing_keys_str}'.",
             )
         if b_min_a:
-            extra_keys_str = "`" + "`, `".join(map(str, b_min_a)) + "`"
+            extra_keys_str = ", ".join(map(str, b_min_a))
             yield (
                 path,
-                f"Expected dictionary with keys `{'`, `'.join(map(str, a.keys()))}`, "
-                f"but the following keys are extra: {extra_keys_str}",
+                f"Expected dictionary with keys '{', '.join(map(str, a.keys()))}', "
+                f"the following keys are extra: '{extra_keys_str}'.",
             )
     else:
         for k, v_a, v_b in zip(a.keys(), a.values(), b.values()):

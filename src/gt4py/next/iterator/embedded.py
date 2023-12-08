@@ -486,7 +486,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
         return constant_field(val)
     else:
         raise ValueError(
-            f"Expected a 'Field' or a number ('float', 'np.int64', ...), but got '{val_type}'."
+            f"Expected a 'Field' or a number ('float', 'np.int64', ...), got '{val_type}'."
         )
 
 

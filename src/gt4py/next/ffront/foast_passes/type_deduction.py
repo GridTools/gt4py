@@ -53,7 +53,7 @@ def with_altered_scalar_kind(
     elif isinstance(type_spec, ts.ScalarType):
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
     else:
-        raise ValueError(f"Expected field or scalar type, but got '{type_spec}'.")
+        raise ValueError(f"Expected field or scalar type, got '{type_spec}'.")
 
 
 def construct_tuple_type(
@@ -313,15 +313,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if new_init.type != new_def_type.returns:
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as its return. "
-                f"Expected '{new_def_type.returns}', but got '{new_init.type}'",
+                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
             )
         elif new_init.type != carry_type:
             carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
             raise errors.DSLError(
                 node.location,
-                f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument. "
-                f"Expected '{carry_type}', but got '{new_init.type}'.",
+                f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
+                f"expected '{carry_type}', got '{new_init.type}'.",
             )
 
         new_type = ts_ffront.ScanOperatorType(
@@ -364,9 +364,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             targets: TargetType = node.targets
             indices: list[tuple[int, int] | int] = compute_assign_indices(targets, num_elts)
 
-            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
+            if not any(isinstance(i, tuple) for i in indices) and len(targets) != num_elts:
                 raise errors.DSLError(
-                    node.location, f"Too many values to unpack (expected {len(indices)})."
+                    node.location, f"Too many values to unpack (expected {len(targets)})."
                 )
 
             new_targets: TargetType = []
@@ -891,7 +891,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             raise errors.DSLError(
                 node.location,
                 f"Incompatible argument in call to '{str(node.func)}': expected "
-                f"a field with dtype 'bool', but got '{mask_type}'.",
+                f"a field with dtype 'bool', got '{mask_type}'.",
             )
 
         try:

@@ -233,7 +233,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             fencil_definition = node
         else:
             raise TypeError(
-                f"Expected a 'FencilDefinition' or 'FencilWithTemporaries', but got '{type(node).__name__}'."
+                f"Expected a 'FencilDefinition' or 'FencilWithTemporaries', got '{type(node).__name__}'."
             )
 
         grid_type = _get_gridtype(fencil_definition.closures)

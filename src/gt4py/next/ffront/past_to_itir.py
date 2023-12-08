@@ -259,8 +259,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
             raise ValueError(
-                "Dimensions in out field and field domain are not equivalent"
-                f"Expected '{dim}', but got '{keys_dims_types}'."
+                "Dimensions in out field and field domain are not equivalent:"
+                f"expected '{dim}', got '{keys_dims_types}'."
             )
 
         return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
@@ -322,7 +322,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
                 assert all(
                     concepts.eq_nonlocated(
-                        first_field.slice_, field.slice  # type: ignore[union-attr] # mypy cannot deduce type
+                        first_field.slice_,
+                        field.slice_,  # type: ignore[union-attr] # mypy cannot deduce type
                     )
                     for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
