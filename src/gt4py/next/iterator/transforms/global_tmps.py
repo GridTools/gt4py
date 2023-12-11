@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import common
 from gt4py.next.iterator import ir, ir_makers as im, type_inference
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
@@ -498,7 +499,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                                     str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
                                 ),
                             )
-                    elif offset_provider[offset_name].__class__.__name__ == "DummyConnectivity":
+                    elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
                         old_axis = nbt_provider.origin_axis.value

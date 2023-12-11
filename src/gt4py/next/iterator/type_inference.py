@@ -570,7 +570,7 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                     )
                     constraints.add((current_loc_out, Location(name=axis.origin_axis.value)))
                     current_loc_out = Location(name=axis.neighbor_axis.value)
-                elif axis.__class__.__name__ == "DummyConnectivity":
+                elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
                         == axis.neighbor_axis.kind
