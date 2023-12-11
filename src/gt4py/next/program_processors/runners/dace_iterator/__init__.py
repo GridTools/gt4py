@@ -104,7 +104,7 @@ def preprocess_program(
 
     else:
         raise TypeError(
-            f"Expected a `FencilDefinition` or `FencilWithTemporaries`, but got `{type(program).__name__}`."
+            f"Expected a 'FencilDefinition' or 'FencilWithTemporaries, got '{type(program).__name__}'."
         )
 
     return fencil_definition, tmps
@@ -238,7 +238,7 @@ def build_sdfg_from_itir(
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis, on_gpu)
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
-        raise RuntimeError(f"visit failed for program {program.id}")
+        raise RuntimeError(f"visit failed for program '{program.id}'")
     elif tmps:
         # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
         sdfg.apply_transformations_repeated(RefineNestedAccess)
@@ -360,7 +360,7 @@ if cp:
 else:
 
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+        raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
 
 
 run_dace_gpu = otf_exec.OTFBackend(
