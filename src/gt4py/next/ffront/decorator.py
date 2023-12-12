@@ -32,8 +32,9 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -169,7 +170,7 @@ class Program:
             For example, referenced global and nonlocal variables.
         backend: The backend to be used for code generation.
         definition: The Python function object corresponding to the PAST node.
-        grid_type: The grid type(cartesian or unstructured) to be used. If not explicitly given
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
 
@@ -239,26 +240,26 @@ class Program:
         """
         Bind scalar, i.e. non field, program arguments.
 
-        Example(pseudo-code):
+        Example (pseudo-code):
 
-        >> > import gt4py.next as gtx
-        >> > @ gtx.program  # doctest: +SKIP
+        >>> import gt4py.next as gtx
+        >>> @gtx.program  # doctest: +SKIP
         ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
         ...     sample_field_operator(condition, out=out)  # noqa: F821
 
         Create a new program from `program` with the `condition` parameter set to `True`:
 
-        >> > program_with_bound_arg=program.with_bound_args(condition=True)  # doctest: +SKIP
+        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
 
         The resulting program is equivalent to
 
-        >> > @ gtx.program  # doctest: +SKIP
+        >>> @gtx.program  # doctest: +SKIP
         ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
         ...     sample_field_operator(condition=True, out=out)  # noqa: F821
 
         and can be executed without passing `condition`.
 
-        >> > program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
+        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
@@ -397,8 +398,9 @@ class Program:
 
             raise TypeError(
                 "Only 'ScanOperator's defined on the same axis "
-                "can be used in a 'Program', found:\n"
-                "\n".join(scanops_per_axis_strs) + "."
+                + "can be used in a 'Program', found:\n"
+                + "\n".join(scanops_per_axis_strs)
+                + "."
             )
 
         return iter(scanops_per_axis.keys()).__next__()
@@ -500,18 +502,18 @@ def program(
     Generate an implementation of a program from a Python function object.
 
     Examples:
-        >> > @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
+        >>> @program  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >> > program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
 
-        >> >  # the backend can optionally be passed if already decided
-        >> >  # not passing it will result in embedded execution by default
-        >> >  # the above is equivalent to
-        >> > @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> # the above is equivalent to
+        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >> > program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
@@ -534,14 +536,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     Attributes:
         foast_node: The node representing the field operator.
-        closure_vars: Mapping of names referenced in the field operator(i.e.
+        closure_vars: Mapping of names referenced in the field operator (i.e.
             globals, nonlocals) to their values.
         backend: The backend used for executing the field operator. Only used
             if the field operator is called directly, otherwise the backend
             specified for the program takes precedence.
         definition: The original Python function object the field operator
-            was created from .
-        grid_type: The grid type(cartesian or unstructured) to be used. If not explicitly given
+            was created from.
+        grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
     """
 
@@ -550,6 +552,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     definition: Optional[types.FunctionType] = None
     backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
+    operator_attributes: Optional[dict[str, Any]] = None
     _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
@@ -586,6 +589,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
             backend=backend,
             grid_type=grid_type,
+            operator_attributes=operator_attributes,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -692,68 +696,38 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         *args,
         **kwargs,
     ) -> None:
-        # TODO(havogt): Don't select mode based on existence of kwargs,
-        # because now we cannot provide nice error messages. E.g. set context var
-        # if we are reaching this from a program call.
-        if "out" in kwargs:
-            out = kwargs.pop("out")
+        if not next_embedded.context.within_context() and self.backend is not None:
+            # non embedded execution
             offset_provider = kwargs.pop("offset_provider", None)
-            if self.backend is not None:
-                # "out" and "offset_provider" -> field_operator as program
-                # When backend is None, we are in embedded execution and for now
-                # we disable the program generation since it would involve generating
-                # Python source code from a PAST node.
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-                # TODO(tehrengruber): check all offset providers are given
-                # deduce argument types
-                arg_types = []
-                for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
-                kwarg_types = {}
-                for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
+            out = kwargs.pop("out")
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            # TODO(tehrengruber): check all offset providers are given
+            # deduce argument types
+            arg_types = []
+            for arg in args:
+                arg_types.append(type_translation.from_value(arg))
+            kwarg_types = {}
+            for name, arg in kwargs.items():
+                kwarg_types[name] = type_translation.from_value(arg)
 
-                return self.as_program(arg_types, kwarg_types)(
-                    *args, out, offset_provider=offset_provider, **kwargs
-                )
-            else:
-                # "out" -> field_operator called from program in embedded execution or
-                # field_operator called directly from Python in embedded execution
-                domain = kwargs.pop("domain", None)
-                if not next_embedded.context.within_context():
-                    # field_operator from Python in embedded execution
-                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                        res = ctx.run(self.definition, *args, **kwargs)
-                else:
-                    # field_operator from program in embedded execution (offset_provicer is already set)
-                    assert (
-                        offset_provider is None
-                        or next_embedded.context.offset_provider.get() is offset_provider
-                    )
-                    res = self.definition(*args, **kwargs)
-                _tuple_assign_field(
-                    out, res, domain=None if domain is None else common.domain(domain)
-                )
-                return
+            return self.as_program(arg_types, kwarg_types)(
+                *args, out, offset_provider=offset_provider, **kwargs
+            )
         else:
-            # field_operator called from other field_operator in embedded execution
-            assert self.backend is None
-            return self.definition(*args, **kwargs)
-
-
-def _tuple_assign_field(
-    target: tuple[common.Field | tuple, ...] | common.Field,
-    source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: Optional[common.Domain],
-):
-    if isinstance(target, tuple):
-        if not isinstance(source, tuple):
-            raise RuntimeError(f"Cannot assign '{source}' to '{target}'.")
-        for t, s in zip(target, source):
-            _tuple_assign_field(t, s, domain)
-    else:
-        domain = domain or target.domain
-        target[domain] = source[domain]
+            if self.operator_attributes is not None and any(
+                has_scan_op_attribute := [
+                    attribute in self.operator_attributes
+                    for attribute in ["init", "axis", "forward"]
+                ]
+            ):
+                assert all(has_scan_op_attribute)
+                forward = self.operator_attributes["forward"]
+                init = self.operator_attributes["init"]
+                axis = self.operator_attributes["axis"]
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+            else:
+                op = embedded_operators.EmbeddedOperator(self.definition)
+            return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 @typing.overload
@@ -775,15 +749,15 @@ def field_operator(definition=None, *, backend=None, grid_type=None):
     Generate an implementation of the field operator from a Python function object.
 
     Examples:
-        >> > @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
+        >>> @field_operator  # doctest: +SKIP
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
-        >> > field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
-        >> >  # the backend can optionally be passed if already decided
-        >> >  # not passing it will result in embedded execution by default
-        >> > @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
+        >>> # the backend can optionally be passed if already decided
+        >>> # not passing it will result in embedded execution by default
+        >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
         ...     ...
     """
 
@@ -834,24 +808,24 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A: ref: `Dimension` to reduce over.
+        axis: A :ref:`Dimension` to reduce over.
         forward: Boolean specifying the direction.
-        init: Initial value for the carry argument of the scan pass .
+        init: Initial value for the carry argument of the scan pass.
 
     Examples:
-        >> > import numpy as np
-        >> > import gt4py.next as gtx
-        >> > from gt4py.next.iterator import embedded
-        >> > embedded._column_range=1  # implementation detail
-        >> > KDim=gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-        >> > inp=gtx.as_field([KDim], np.ones((10,)))
-        >> > out=gtx.as_field([KDim], np.zeros((10,)))
-        >> > @ gtx.scan_operator(axis=KDim, forward=True, init=0.)
+        >>> import numpy as np
+        >>> import gt4py.next as gtx
+        >>> from gt4py.next.iterator import embedded
+        >>> embedded._column_range = 1  # implementation detail
+        >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
+        >>> inp = gtx.as_field([KDim], np.ones((10,)))
+        >>> out = gtx.as_field([KDim], np.zeros((10,)))
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
-        ... return carry+val
-        >> > scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
-        >> > out.array()  # doctest: +SKIP
-        array([1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
+        ...     return carry+val
+        >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
+        >>> out.array()  # doctest: +SKIP
+        array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])
     """
     # TODO(tehrengruber): enable doctests again. For unknown / obscure reasons
     #  the above doctest fails when executed using `pytest --doctest-modules`.

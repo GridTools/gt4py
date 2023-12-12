@@ -321,16 +321,36 @@ def builtin_can_deref(
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args = [arg for li in transformer.visit(node_args) for arg in li]
-    expr_args = [(arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)]
-    internals = [
-        arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
+    args = transformer.visit(node_args)
+    assert len(args) == 3
+    if_node = args[0][0] if isinstance(args[0], list) else args[0]
+
+    # the argument could be a list of elements on each branch representing the result of `make_tuple`
+    # however, the normal case is to find one value expression
+    assert len(args[1]) == len(args[2])
+    if_expr_args = [
+        (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
+        for a, b in zip(args[1], args[2])
     ]
-    expr = "({1} if {0} else {2})".format(*internals)
-    node_type = transformer.node_types[id(node)]
-    assert isinstance(node_type, itir_typing.Val)
-    type_ = itir_type_as_dace_type(node_type.dtype)
-    return transformer.add_expr_tasklet(expr_args, expr, type_, "if")
+
+    # in case of tuple arguments, generate one if-tasklet for each element of the output tuple
+    if_expr_values = []
+    for a, b in if_expr_args:
+        assert a.dtype == b.dtype
+        expr_args = [
+            (arg, f"{arg.value.data}_v")
+            for arg in (if_node, a, b)
+            if not isinstance(arg, SymbolExpr)
+        ]
+        internals = [
+            arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v"
+            for arg in (if_node, a, b)
+        ]
+        expr = "({1} if {0} else {2})".format(*internals)
+        if_expr = transformer.add_expr_tasklet(expr_args, expr, a.dtype, "if")
+        if_expr_values.append(if_expr[0])
+
+    return if_expr_values
 
 
 def builtin_list_get(
@@ -356,7 +376,7 @@ def builtin_list_get(
 def builtin_cast(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args = [transformer.visit(node_args[0])[0]]
+    args = transformer.visit(node_args[0])
     internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
     assert isinstance(target_type, itir.SymRef)
@@ -380,7 +400,7 @@ def builtin_tuple_get(
     elements = transformer.visit(node_args[1])
     index = node_args[0]
     if isinstance(index, itir.Literal):
-        return elements[int(index.value)]
+        return [elements[int(index.value)]]
     raise ValueError("Tuple can only be subscripted with compile-time constants.")
 
 
