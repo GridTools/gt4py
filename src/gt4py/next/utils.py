@@ -15,10 +15,6 @@
 import functools
 from typing import Any, Callable, ClassVar, ParamSpec, TypeGuard, TypeVar, cast
 
-import numpy as np
-
-from gt4py.next import common
-
 
 class RecursionGuard:
     """
@@ -57,7 +53,6 @@ class RecursionGuard:
 
 
 _T = TypeVar("_T")
-
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -66,8 +61,17 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
 
 
+# TODO(havogt): remove flatten duplications in the whole codebase
+def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
+    if isinstance(value, tuple):
+        return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
+    else:
+        return (value,)
+
+
 def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
-    """Apply `fun` to each entry of (possibly nested) tuples.
+    """
+    Apply `fun` to each entry of (possibly nested) tuples.
 
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))
@@ -88,9 +92,3 @@ def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]
         )  # mypy doesn't understand that `args` at this point is of type `_P.args`
 
     return impl
-
-
-# TODO(havogt): consider moving to module like `field_utils`
-@tree_map
-def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
-    return field.asnumpy() if common.is_field(field) else field  # type: ignore[return-value] # mypy doesn't understand the condition

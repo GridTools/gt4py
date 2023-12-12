@@ -14,6 +14,10 @@
 
 from __future__ import annotations
 
+import functools
+import itertools
+import operator
+
 from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
@@ -88,6 +92,19 @@ def _absolute_sub_domain(
             named_ranges.append((dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
+
+
+def intersect_domains(*domains: common.Domain) -> common.Domain:
+    return functools.reduce(
+        operator.and_,
+        domains,
+        common.Domain(dims=tuple(), ranges=tuple()),
+    )
+
+
+def iterate_domain(domain: common.Domain):
+    for i in itertools.product(*[list(r) for r in domain.ranges]):
+        yield tuple(zip(domain.dims, i))
 
 
 def _expand_ellipsis(
