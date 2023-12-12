@@ -325,12 +325,15 @@ def builtin_if(
     assert len(args) == 3
     if_node = args[0][0] if isinstance(args[0], list) else args[0]
 
+    # the argument could be a list of elements on each branch representing the result of `make_tuple`
+    # however, the normal case is to find one value expression
     assert len(args[1]) == len(args[2])
     if_expr_args = [
         (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
         for a, b in zip(args[1], args[2])
     ]
 
+    # in case of tuple arguments, generate one if-tasklet for each element of the output tuple
     if_expr_values = []
     for a, b in if_expr_args:
         assert a.dtype == b.dtype
