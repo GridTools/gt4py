@@ -323,13 +323,13 @@ def builtin_if(
 ) -> list[ValueExpr]:
     args = transformer.visit(node_args)
     assert len(args) == 3
-    if_node = args[0][0] if isinstance(args[0], list) else args[0]
+    if_node = args[0][0] if type(args[0]) is list else args[0]
 
     # the argument could be a list of elements on each branch representing the result of `make_tuple`
     # however, the normal case is to find one value expression
     assert len(args[1]) == len(args[2])
     if_expr_args = [
-        (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
+        (a[0] if type(a) is list else a, b[0] if type(b) is list else b)
         for a, b in zip(args[1], args[2])
     ]
 
@@ -1010,9 +1010,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args: list[SymbolExpr | ValueExpr] = list(
-            itertools.chain(*[self.visit(arg) for arg in node.args])
-        )
+        args = flatten_list(self.visit(node.args))
         expr_args = [
             (arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)
         ]
