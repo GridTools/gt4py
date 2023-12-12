@@ -196,7 +196,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
-column_range_cvar: cvars.ContextVar[range] = next_embedded.context.closure_column_range
+column_range_cvar: cvars.ContextVar[common.NamedRange] = next_embedded.context.closure_column_range
 #: Offset provider dict in the current closure execution context.
 offset_provider_cvar: cvars.ContextVar[OffsetProvider] = next_embedded.context.offset_provider
 
@@ -211,8 +211,8 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
     def __init__(self, kstart: int, data: np.ndarray | Scalar) -> None:
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
-        column_range = column_range_cvar.get()
-        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range), data)
+        column_range: common.NamedRange = column_range_cvar.get()
+        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range[1]), data)
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -746,7 +746,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = column_range_cvar.get()
+        column_range = column_range_cvar.get()[1]
         assert column_range is not None
 
         col: list[
@@ -823,7 +823,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range[1]))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -864,7 +864,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        column_range = column_range_cvar.get()
+        column_range = column_range_cvar.get()[1]
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_axis] = column_range.start
@@ -1479,7 +1479,7 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = column_range_cvar.get()
+        column_range = column_range_cvar.get()[1]
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1532,7 +1532,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            column_range = column.col_range
+            column_range = (
+                column_axis,
+                common.UnitRange(column.col_range.start, column.col_range.stop),
+            )
 
         out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
