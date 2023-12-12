@@ -1010,9 +1010,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args: list[SymbolExpr | ValueExpr] = list(
-            itertools.chain(*[self.visit(arg) for arg in node.args])
-        )
+        args = flatten_list(self.visit(node.args))
         expr_args = [
             (arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)
         ]
