@@ -373,7 +373,7 @@ def builtin_list_get(
 def builtin_cast(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args = [transformer.visit(node_args[0])[0]]
+    args = transformer.visit(node_args[0])
     internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
     assert isinstance(target_type, itir.SymRef)
@@ -397,7 +397,7 @@ def builtin_tuple_get(
     elements = transformer.visit(node_args[1])
     index = node_args[0]
     if isinstance(index, itir.Literal):
-        return elements[int(index.value)]
+        return [elements[int(index.value)]]
     raise ValueError("Tuple can only be subscripted with compile-time constants")
 
 
