@@ -323,13 +323,13 @@ def builtin_if(
 ) -> list[ValueExpr]:
     args = transformer.visit(node_args)
     assert len(args) == 3
-    if_node = args[0][0] if type(args[0]) is list else args[0]
+    if_node = args[0][0] if isinstance(args[0], list) else args[0]
 
     # the argument could be a list of elements on each branch representing the result of `make_tuple`
     # however, the normal case is to find one value expression
     assert len(args[1]) == len(args[2])
     if_expr_args = [
-        (a[0] if type(a) is list else a, b[0] if type(b) is list else b)
+        (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
         for a, b in zip(args[1], args[2])
     ]
 
