@@ -53,7 +53,6 @@ class RecursionGuard:
 
 
 _T = TypeVar("_T")
-_S = TypeVar("_S")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -63,7 +62,7 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
 
 
 # TODO(havogt): remove flatten duplications in the whole codebase
-def flatten_nested_tuple(value: tuple[_S | tuple, ...]) -> tuple[_S, ...]:
+def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
     if isinstance(value, tuple):
         return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
     else:
