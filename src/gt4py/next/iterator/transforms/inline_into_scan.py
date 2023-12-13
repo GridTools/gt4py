@@ -53,7 +53,9 @@ def _lambda_and_lift_inliner(node: ir.FunCall) -> ir.FunCall:
     return inlined
 
 
-class InlineIntoScan(traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineIntoScan(
+    traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Inline non-SymRef arguments into the scan.
 

@@ -21,10 +21,11 @@ import collections.abc
 import copy
 from typing import ClassVar
 
+from gt4py.next.ffront.field_operator_ast import Name
+
 from . import concepts, trees
 from .extended_typing import Any
 from .type_definitions import NOTHING
-from gt4py.next.ffront.field_operator_ast import Name
 
 
 class NodeVisitor:

@@ -40,7 +40,9 @@ def _flatten_tuple_expr(
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(
+    traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 

@@ -112,7 +112,9 @@ def _transform_and_extract_lift_args(
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific
