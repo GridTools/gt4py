@@ -713,7 +713,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             inputs=set(nsdfg_inputs.keys()),
             outputs=set(r.value.data for r in results),
             symbol_mapping=symbol_mapping,
-            debuginfo=dace_debuginfo(node, self.context.body.debuginfo),
+            debuginfo=dace_debuginfo(node, func_context.body.debuginfo),
         )
 
         for name, value in func_inputs:
