@@ -222,13 +222,7 @@ def build_sdfg_from_itir(
         on_gpu:		        Performs the translation for GPU, defaults to `False`.
         column_axis:		The column axis to be used, defaults to `None`.
         lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
-
-    Notes:
-        Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
     """
-    # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
-    #                `lift_more` to `FORCE_INLINE` mode.
-    lift_mode = LiftMode.FORCE_INLINE
 
     arg_types = [type_translation.from_value(arg) for arg in args]
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
