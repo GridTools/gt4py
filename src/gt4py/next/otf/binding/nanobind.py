@@ -206,7 +206,7 @@ def create_bindings(
     """
     if program_source.language not in [languages.Cpp, languages.Cuda]:
         raise ValueError(
-            f"Can only create bindings for C++ program sources, received {program_source.language}."
+            f"Can only create bindings for C++ program sources, received '{program_source.language}'."
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 

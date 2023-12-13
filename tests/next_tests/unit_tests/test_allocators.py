@@ -108,7 +108,7 @@ def test_get_allocator():
 
     with pytest.raises(
         TypeError,
-        match=f"Object {invalid_obj} is neither a field allocator nor a field allocator factory",
+        match=f"Object '{invalid_obj}' is neither a field allocator nor a field allocator factory",
     ):
         next_allocators.get_allocator(invalid_obj, strict=True)
 
