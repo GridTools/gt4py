@@ -15,16 +15,16 @@
 from typing import Any, Dict, Set
 
 from gt4py.eve import NOTHING, NodeTranslator
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 
 
-class InlineFundefs(NodeTranslator):
+class InlineFundefs(PreserveLocation, NodeTranslator):
     def visit_SymRef(self, node: ir.SymRef, *, symtable: Dict[str, Any]):
         if node.id in symtable and isinstance((symbol := symtable[node.id]), ir.FunctionDefinition):
             return ir.Lambda(
                 params=self.generic_visit(symbol.params, symtable=symtable),
                 expr=self.generic_visit(symbol.expr, symtable=symtable),
-                location=node.location,
             )
         return self.generic_visit(node)
 
@@ -32,7 +32,7 @@ class InlineFundefs(NodeTranslator):
         return self.generic_visit(node, symtable=node.annex.symtable)
 
 
-class PruneUnreferencedFundefs(NodeTranslator):
+class PruneUnreferencedFundefs(PreserveLocation, NodeTranslator):
     def visit_FunctionDefinition(
         self, node: ir.FunctionDefinition, *, referenced: Set[str], second_pass: bool
     ):

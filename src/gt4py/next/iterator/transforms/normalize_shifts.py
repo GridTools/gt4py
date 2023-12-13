@@ -13,10 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve import NodeTranslator
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 
 
-class NormalizeShifts(NodeTranslator):
+class NormalizeShifts(PreserveLocation, NodeTranslator):
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if (
@@ -36,6 +37,5 @@ class NormalizeShifts(NodeTranslator):
                     fun=ir.SymRef(id="shift"), args=node.args[0].fun.args + node.fun.args
                 ),
                 args=node.args[0].args,
-                location=node.location,
             )
         return node

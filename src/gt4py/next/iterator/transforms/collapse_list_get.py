@@ -13,10 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py import eve
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 
 
-class CollapseListGet(eve.NodeTranslator):
+class CollapseListGet(PreserveLocation, eve.NodeTranslator):
     """Simplifies expressions containing `list_get`.
 
     Examples
@@ -49,10 +50,8 @@ class CollapseListGet(eve.NodeTranslator):
                                 args=[it],
                             )
                         ],
-                        location=node.location,
                     )
                 if node.args[1].fun == ir.SymRef(id="make_const_list"):
-                    node.args[1].args[0].location = node.location
                     return node.args[1].args[0]
 
         return node

@@ -14,6 +14,7 @@
 
 from gt4py.eve import NodeTranslator
 from gt4py.eve.pattern_matching import ObjectPattern as P
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 
 
@@ -22,7 +23,7 @@ from gt4py.next.iterator import ir
 #  `(λ(...) → plus(multiplies(...), ...))(...)`.
 
 
-class PropagateDeref(NodeTranslator):
+class PropagateDeref(PreserveLocation, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node):
         """
@@ -55,6 +56,5 @@ class PropagateDeref(NodeTranslator):
                     expr=ir.FunCall(fun=builtin, args=[lambda_fun.expr]),
                 ),
                 args=lambda_args,
-                location=node.location,
             )
         return self.generic_visit(node)

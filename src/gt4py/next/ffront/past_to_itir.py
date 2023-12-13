@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
@@ -40,7 +41,7 @@ def _flatten_tuple_expr(
     raise ValueError("Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed.")
 
 
-class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(PreserveLocation, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -125,7 +126,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             function_definitions=function_definitions,
             params=params,
             closures=closures,
-            location=node.location,
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
@@ -355,12 +355,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"Scalars of kind {node.type.kind} not supported currently."
                     )
             typename = node.type.kind.name.lower()
-            return itir.Literal(value=str(node.value), type=typename, location=node.location)
+            return itir.Literal(value=str(node.value), type=typename)
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
     def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
-        return itir.SymRef(id=node.id, location=node.location)
+        return itir.SymRef(id=node.id)
 
     def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
@@ -368,14 +368,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             kind = "Iterator"
             dtype = node.type.dtype.kind.name.lower()
             is_list = type_info.is_local_field(node.type)
-            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list), location=node.location)
-        return itir.Sym(id=node.id, location=node.location)
+            return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
+        return itir.Sym(id=node.id)
 
     def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
-            location=node.location,
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
@@ -383,7 +382,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
-                location=node.location,
             )
         else:
             raise AssertionError(

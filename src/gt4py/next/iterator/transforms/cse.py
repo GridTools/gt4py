@@ -19,12 +19,13 @@ import typing
 
 from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
 @dataclasses.dataclass
-class _NodeReplacer(NodeTranslator):
+class _NodeReplacer(PreserveLocation, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     expr_map: dict[int, ir.SymRef]
@@ -341,7 +342,7 @@ def extract_subexpression(
 
 
 @dataclasses.dataclass(frozen=True)
-class CommonSubexpressionElimination(NodeTranslator):
+class CommonSubexpressionElimination(PreserveLocation, NodeTranslator):
     """
     Perform common subexpression elimination.
 
@@ -379,7 +380,6 @@ class CommonSubexpressionElimination(NodeTranslator):
         result = ir.FunCall(
             fun=ir.Lambda(params=list(extracted.keys()), expr=new_expr),
             args=list(extracted.values()),
-            location=node.location,
         )
 
         # if the node id is ignored (because its parent is eliminated), but it occurs

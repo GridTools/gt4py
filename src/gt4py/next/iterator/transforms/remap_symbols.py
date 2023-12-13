@@ -15,10 +15,11 @@
 from typing import Any, Dict, Optional, Set
 
 from gt4py.eve import NodeTranslator, SymbolTableTrait
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 
 
-class RemapSymbolRefs(NodeTranslator):
+class RemapSymbolRefs(PreserveLocation, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
@@ -30,7 +31,6 @@ class RemapSymbolRefs(NodeTranslator):
         return ir.Lambda(
             params=node.params,
             expr=self.visit(node.expr, symbol_map=new_symbol_map),
-            location=node.location,
         )
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
@@ -40,27 +40,21 @@ class RemapSymbolRefs(NodeTranslator):
         return super().generic_visit(node, **kwargs)
 
 
-class RenameSymbols(NodeTranslator):
+class RenameSymbols(PreserveLocation, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     def visit_Sym(
         self, node: ir.Sym, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.Sym(
-                id=name_map.get(node.id, node.id),
-                location=node.location,
-            )
+            return ir.Sym(id=name_map.get(node.id, node.id))
         return node
 
     def visit_SymRef(
         self, node: ir.SymRef, *, name_map: Dict[str, str], active: Optional[Set[str]] = None
     ):
         if active and node.id in active:
-            return ir.SymRef(
-                id=name_map.get(node.id, node.id),
-                location=node.location,
-            )
+            return ir.SymRef(id=name_map.get(node.id, node.id))
         return node
 
     def generic_visit(  # type: ignore[override]

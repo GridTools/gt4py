@@ -13,11 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve import NodeTranslator
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import embedded, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-class ConstantFolding(NodeTranslator):
+class ConstantFolding(PreserveLocation, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
@@ -47,5 +48,4 @@ class ConstantFolding(NodeTranslator):
                 arg_values = [getattr(embedded, str(arg.type))(arg.value) for arg in new_node.args]  # type: ignore[attr-defined] # arg type already established in if condition
                 new_node = im.literal_from_value(fun(*arg_values))
 
-        new_node.location = node.location
         return new_node

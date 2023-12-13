@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
+from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -143,11 +144,9 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
     if any(not isinstance(it_arg, ir.SymRef) for it_arg in it_args):
         used_closure_params = collect_symbol_refs(node)
         assert not (set(used_closure_params) - set(closure_params))
-        itir_node = im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
+        return im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
             *used_closure_params
         )
-        itir_node.location = node.location
-        return itir_node
     return node
 
 
@@ -268,7 +267,6 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
                             inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
-                            location=closure.location,
                         )
                     )
 
@@ -296,7 +294,6 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                         output=current_closure.output,
                         inputs=current_closure.inputs
                         + [ir.SymRef(id=sym.id) for sym in extracted_lifts.keys()],
-                        location=closure.location,
                     )
                 )
             else:
@@ -313,7 +310,6 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
         ),
         params=node.params,
         tmps=[Temporary(id=tmp.id) for tmp in tmps],
-        location=node.location,
     )
 
 
@@ -340,7 +336,6 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
         ),
         params=node.params,
         tmps=[tmp for tmp in node.tmps if tmp.id not in unused_tmps],
-        location=node.location,
     )
 
 
@@ -458,7 +453,6 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 stencil=closure.stencil,
                 output=closure.output,
                 inputs=closure.inputs,
-                location=closure.location,
             )
         else:
             domain = closure.domain
@@ -514,7 +508,6 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
         ),
         params=node.params,
         tmps=node.tmps,
-        location=node.location,
     )
 
 
@@ -565,14 +558,13 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
         tmps=[
             Temporary(id=tmp.id, domain=domains[tmp.id], dtype=types[tmp.id]) for tmp in node.tmps
         ],
-        location=node.location,
     )
 
 
 # TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol). This can be
 #  tricky: For every lift statement that is dynamically shifted we can not compute bounds anymore
 #  and hence also not extract as a temporary.
-class CreateGlobalTmps(NodeTranslator):
+class CreateGlobalTmps(PreserveLocation, NodeTranslator):
     """Main entry point for introducing global temporaries.
 
     Transforms an existing iterator IR fencil into a fencil with global temporaries.
