@@ -231,7 +231,7 @@ class FieldOperatorLowering(PreserveLocation, NodeTranslator):
         dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
-                raise NotImplementedError(f"{node.op} is only supported on `bool`s.")
+                raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._map("not_", node.operand)
 
         return self._map(
@@ -314,7 +314,7 @@ class FieldOperatorLowering(PreserveLocation, NodeTranslator):
             return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
 
         raise AssertionError(
-            f"Call to object of type {type(node.func.type).__name__} not understood."
+            f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -372,7 +372,9 @@ class FieldOperatorLowering(PreserveLocation, NodeTranslator):
                     im.literal(str(bool(source_type(node.args[0].value))), "bool")
                 )
             return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
-        raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
+        raise FieldOperatorLoweringError(
+            f"Encountered a type cast, which is not supported: {node}."
+        )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
@@ -389,7 +391,7 @@ class FieldOperatorLowering(PreserveLocation, NodeTranslator):
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.promote_to_const_iterator(im.literal(str(val), typename))
-        raise ValueError(f"Unsupported literal type {type_}.")
+        raise ValueError(f"Unsupported literal type '{type_}'.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
         return self._make_literal(node.value, node.type)

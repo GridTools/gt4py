@@ -74,12 +74,12 @@ def test_undecorated_formatter_function_is_not_recognized():
     def undecorated_formatter(fencil: itir.FencilDefinition, *args, **kwargs) -> str:
         return ""
 
-    with pytest.raises(TypeError, match="is not a ProgramFormatter"):
+    with pytest.raises(TypeError, match="is not a 'ProgramFormatter'"):
         ensure_processor_kind(undecorated_formatter, ProgramFormatter)
 
 
 def test_wrong_processor_type_is_caught_at_runtime(dummy_formatter):
-    with pytest.raises(TypeError, match="is not a ProgramExecutor"):
+    with pytest.raises(TypeError, match="is not a 'ProgramExecutor'"):
         ensure_processor_kind(dummy_formatter, ProgramExecutor)
 
 

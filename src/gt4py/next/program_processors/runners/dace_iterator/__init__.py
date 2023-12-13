@@ -148,7 +148,7 @@ def get_stride_args(
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
                 raise ValueError(
-                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)"
+                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
             stride_args[str(sym)] = stride
 
@@ -252,7 +252,6 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     neighbor_tables = filter_neighbor_tables(offset_provider)
 
     cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
-    sdfg: Optional[dace.SDFG] = None
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
@@ -340,7 +339,7 @@ if cp:
 else:
 
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+        raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
 
 
 run_dace_gpu = otf_exec.OTFBackend(

@@ -22,7 +22,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:
@@ -39,7 +38,7 @@ import next_tests.exclusion_matrices as definitions
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+    raise ValueError("No backend selected. Backend selection is mandatory in tests.")
 
 
 OPTIONAL_PROCESSORS = []

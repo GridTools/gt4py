@@ -96,7 +96,7 @@ def test_unit_range_slice_error(rng):
 
 def test_unit_range_set_intersection(rng):
     with pytest.raises(
-        NotImplementedError, match="Can only find the intersection between UnitRange instances."
+        NotImplementedError, match="Can only find the intersection between 'UnitRange' instances."
     ):
         rng & {1, 5}
 
