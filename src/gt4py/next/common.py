@@ -782,7 +782,7 @@ def field(
 def connectivity(
     definition: Any,
     /,
-    codomain: Dimension,
+    codomain: Dimension | fbuiltins.FieldOffset,
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,

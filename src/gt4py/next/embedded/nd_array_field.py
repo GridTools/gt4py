@@ -209,9 +209,9 @@ class NdArrayField(
                 connectivity.codomain, fbuiltins.FieldOffset
             ):
                 new_buffer = (
-                    np.diagonal(new_buffer).T
+                    xp.transpose(xp.diagonal(new_buffer))
                     if dim.kind == "horizontal"
-                    else np.diagonal(new_buffer.T)
+                    else xp.diagonal(xp.transpose(new_buffer))
                 )
 
         return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
@@ -356,7 +356,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         cls,
         data: npt.ArrayLike | core_defs.NDArrayObject,
         /,
-        codomain: common.DimT | fbuiltins.FieldOffset,
+        codomain: common.DimT,
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
@@ -603,6 +603,9 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
     raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
+
+
 def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayConnectivityField:
     if isinstance(field, NdArrayField):
         # change field.ndarray from local to global
@@ -615,7 +618,6 @@ def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayCo
     )
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)
 
 

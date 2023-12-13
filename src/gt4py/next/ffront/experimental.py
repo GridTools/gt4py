@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
+
 from gt4py.next import common
 from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset
 
@@ -22,4 +24,5 @@ def as_offset(
     field: common.Field,
     /,
 ) -> common.ConnectivityField:
-    raise NotImplementedError()
+    global_index_arr = np.arange(field.ndarray.shape[0]) + field.ndarray
+    return common.connectivity(global_index_arr, codomain=offset_, domain=field.domain)
