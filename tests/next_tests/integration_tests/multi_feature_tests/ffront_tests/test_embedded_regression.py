@@ -20,6 +20,7 @@ from gt4py.next import errors
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 # fixtures
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # fixtures
+    KDim,
     fieldview_backend,
 )
 
@@ -41,7 +42,7 @@ def test_default_backend_is_respected(cartesian_case):  # noqa: F811 # fixtures
         _ = copy(a, out=a, offset_provider={})
 
 
-def test_missing_arg(cartesian_case):  # noqa: F811 # fixtures
+def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that calling a field_operator without required args raises an error."""
 
     @gtx.field_operator(backend=cartesian_case.backend)
@@ -55,3 +56,46 @@ def test_missing_arg(cartesian_case):  # noqa: F811 # fixtures
 
     with pytest.raises(errors.MissingArgumentError, match="'offset_provider'"):
         _ = copy(a, out=a)
+
+
+def test_missing_arg_scan_operator(cartesian_case):  # noqa: F811 # fixtures
+    """Test that calling a scan_operator without required args raises an error."""
+
+    @gtx.scan_operator(backend=cartesian_case.backend, axis=KDim, init=0.0, forward=True)
+    def sum(state: float, a: float) -> float:
+        return state + a
+
+    a = cases.allocate(cartesian_case, sum, "a")()
+
+    with pytest.raises(errors.MissingArgumentError, match="'out'"):
+        _ = sum(a, offset_provider={})
+
+    with pytest.raises(errors.MissingArgumentError, match="'offset_provider'"):
+        _ = sum(a, out=a)
+
+
+def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
+    """Test that calling a program without required args raises an error."""
+
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    a = cases.allocate(cartesian_case, copy, "a")()
+    b = cases.allocate(cartesian_case, copy, cases.RETURN)()
+
+    with pytest.raises(errors.DSLError, match="Invalid call"):
+
+        @gtx.program(backend=cartesian_case.backend)
+        def copy_program(a: IField, b: IField) -> IField:
+            copy(a)
+
+        _ = copy_program(a, offset_provider={})
+
+    with pytest.raises(TypeError, match="'offset_provider'"):
+
+        @gtx.program(backend=cartesian_case.backend)
+        def copy_program(a: IField, b: IField) -> IField:
+            copy(a, out=b)
+
+        _ = copy_program(a)
