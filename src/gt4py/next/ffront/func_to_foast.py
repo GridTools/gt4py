@@ -107,8 +107,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
                 raise errors.DSLError(
                     foast_node.location,
-                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                    f", but got `{annotated_return_type}`.",
+                    "Annotated return type does not match deduced return type: expected "
+                    f"'{foast_node.type.returns}'"  # type: ignore[union-attr] # revisit when 'type_info.return_type' is implemented
+                    f", got '{annotated_return_type}'.",
                 )
         return foast_node
 
@@ -167,7 +168,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         new_body = self._visit_stmts(node.body, self.get_location(node), **kwargs)
 
         if deduce_stmt_return_kind(new_body) == StmtReturnKind.NO_RETURN:
-            raise errors.DSLError(loc, "Function is expected to return a value.")
+            raise errors.DSLError(loc, "'Function' is expected to return a value.")
 
         return foast.FunctionDefinition(
             id=node.name,
@@ -224,7 +225,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             )
 
         if not isinstance(target, ast.Name):
-            raise errors.DSLError(self.get_location(node), "can only assign to names")
+            raise errors.DSLError(self.get_location(node), "Can only assign to names.")
         new_value = self.visit(node.value)
         constraint_type: Type[ts.DataType] = ts.DataType
         if isinstance(new_value, foast.TupleExpr):
@@ -246,7 +247,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
-            raise errors.DSLError(self.get_location(node), "can only assign to names")
+            raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
         if node.annotation is not None:
             assert isinstance(
@@ -281,14 +282,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 return -node.operand.value
             if isinstance(node.op, ast.UAdd):
                 return node.operand.value
-        raise ValueError(f"Not an index: {node}")
+        raise ValueError(f"Not an index: '{node}'.")
 
     def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
         try:
             index = self._match_index(node.slice)
         except ValueError:
             raise errors.DSLError(
-                self.get_location(node.slice), "expected an integral index"
+                self.get_location(node.slice), "eXpected an integral index."
             ) from None
 
         return foast.Subscript(
@@ -310,7 +311,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
         loc = self.get_location(node)
         if not node.value:
-            raise errors.DSLError(loc, "must return a value, not None")
+            raise errors.DSLError(loc, "Must return a value, not None")
         return foast.Return(value=self.visit(node.value), location=loc)
 
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
@@ -442,11 +443,11 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
             raise errors.DSLError(
                 self.get_location(node),
-                f"{self._func_name(node)}() only takes literal arguments!",
+                f"'{self._func_name(node)}()' only takes literal arguments.",
             )
 
     def _func_name(self, node: ast.Call) -> str:
-        return node.func.id  # type: ignore[attr-defined]  # We want this to fail if the attribute does not exist unexpectedly.
+        return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
     def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
         # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
@@ -468,7 +469,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             type_ = type_translation.from_value(node.value)
         except ValueError:
             raise errors.DSLError(
-                loc, f"constants of type {type(node.value)} are not permitted"
+                loc, f"Constants of type {type(node.value)} are not permitted."
             ) from None
 
         return foast.Constant(
