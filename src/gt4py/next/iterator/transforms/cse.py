@@ -17,7 +17,13 @@ import math
 import operator
 import typing
 
-from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
+from gt4py.eve import (
+    NodeTranslator,
+    NodeVisitor,
+    SymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+    traits,
+)
 from gt4py.eve.utils import UIDGenerator
 from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
@@ -73,7 +79,9 @@ def _is_collectable_expr(node: ir.Node) -> bool:
 
 
 @dataclasses.dataclass
-class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
+class CollectSubexpressions(
+    traits.PreserveLocationWithSymbolTableTrait, VisitorWithSymbolTableTrait, NodeVisitor
+):
     @dataclasses.dataclass
     class SubexpressionData:
         #: A list of node ids with equal hash and a set of collected child subexpression ids
