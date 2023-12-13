@@ -127,7 +127,7 @@ class ConstInitializer(DataInitializer):
     def __init__(self, value: ScalarValue):
         if not core_defs.is_scalar_type(value):
             raise ValueError(
-                "`ConstInitializer` can not be used with non-scalars. Use `Case.as_field` instead."
+                "'ConstInitializer' can not be used with non-scalars. Use 'Case.as_field' instead."
             )
         self.value = value
 
@@ -162,7 +162,7 @@ class IndexInitializer(DataInitializer):
 
     @property
     def scalar_value(self) -> ScalarValue:
-        raise AttributeError("`scalar_value` not supported in `IndexInitializer`.")
+        raise AttributeError("'scalar_value' not supported in 'IndexInitializer'.")
 
     def field(
         self,
@@ -172,7 +172,7 @@ class IndexInitializer(DataInitializer):
     ) -> FieldValue:
         if len(sizes) > 1:
             raise ValueError(
-                f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
+                f"'IndexInitializer' only supports fields with a single 'Dimension', got {sizes}."
             )
         n_data = list(sizes.values())[0]
         return constructors.as_field(
@@ -244,7 +244,7 @@ class Builder:
         return self.partial(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        raise AttributeError(f"No setter for argument {name}.")
+        raise AttributeError(f"No setter for argument '{name}'.")
 
 
 @typing.overload
@@ -323,7 +323,7 @@ def make_builder(
     if 0 < len(args) <= 1 and args[0] is not None:
         return make_builder_inner(args[0])
     if len(args) > 1:
-        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received!")
+        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received.")
     return make_builder_inner
 
 
@@ -533,7 +533,7 @@ def _allocate_from_type(
             )
         case _:
             raise TypeError(
-                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
+                f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
             )
 
 
@@ -542,7 +542,7 @@ def get_param_types(
 ) -> dict[str, ts.TypeSpec]:
     if fieldview_prog.definition is None:
         raise ValueError(
-            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
+            f"test cases do not support '{type(fieldview_prog)}' with empty .definition attribute (as you would get from .as_program())."
         )
     annotations = xtyping.get_type_hints(fieldview_prog.definition)
     return {
@@ -559,7 +559,7 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
         case ts.TupleType(types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
-            raise TypeError(f"Can not get size for parameter of type {param_type}")
+            raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 
 
 def extend_sizes(

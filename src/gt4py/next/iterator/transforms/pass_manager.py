@@ -68,7 +68,7 @@ def _inline_into_scan(ir, *, max_iter=10):
             break
         ir = inlined
     else:
-        raise RuntimeError(f"Inlining into scan did not converge with {max_iter} iterations.")
+        raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
     return ir
 
 
@@ -117,7 +117,7 @@ def apply_common_transforms(
             break
         ir = inlined
     else:
-        raise RuntimeError("Inlining lift and lambdas did not converge.")
+        raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
