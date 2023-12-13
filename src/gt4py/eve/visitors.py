@@ -24,6 +24,7 @@ from typing import ClassVar
 from . import concepts, trees
 from .extended_typing import Any
 from .type_definitions import NOTHING
+from gt4py.next.ffront.field_operator_ast import Name
 
 
 class NodeVisitor:
@@ -201,6 +202,6 @@ class NodeTranslator(NodeVisitor):
 class PreserveLocation(NodeVisitor):
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         result = super().visit(node, **kwargs)
-        if hasattr(node, "location") and hasattr(result, "location"):
+        if hasattr(node, "location") and hasattr(result, "location") and not isinstance(node, Name):
             result.location = node.location
         return result
