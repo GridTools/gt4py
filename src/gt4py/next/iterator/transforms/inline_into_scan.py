@@ -16,7 +16,6 @@ from typing import Sequence, TypeGuard
 
 from gt4py import eve
 from gt4py.eve import NodeTranslator, traits
-from gt4py.eve.visitors import PreserveLocation
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import symbol_ref_utils
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -54,7 +53,7 @@ def _lambda_and_lift_inliner(node: ir.FunCall) -> ir.FunCall:
     return inlined
 
 
-class InlineIntoScan(PreserveLocation, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineIntoScan(traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Inline non-SymRef arguments into the scan.
 
