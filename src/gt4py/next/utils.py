@@ -53,7 +53,6 @@ class RecursionGuard:
 
 
 _T = TypeVar("_T")
-_S = TypeVar("_S")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
@@ -62,54 +61,17 @@ def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
     return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
 
 
-def get_common_tuple_value(fun: Callable[[_T], _S]) -> Callable[[_T | tuple[_T | tuple, ...]], _S]:
-    """Extract data from elements of tuple. Requiring all elements result in the same value."""
-
-    @functools.wraps(fun)
-    def impl(value: tuple[_T | tuple, ...] | _T) -> _S:
-        if isinstance(value, tuple):
-            all_res = tuple(impl(v) for v in value)
-            assert all(v == all_res[0] for v in all_res)
-            return all_res[0]
-        return fun(value)
-
-    return impl
-
-
-def _flatten_tree(value: tuple[_S | tuple, ...]):
-    assert isinstance(value, tuple)
-    res = []
-    for v in value:
-        if isinstance(v, tuple):
-            res.extend(list(_flatten_tree(v)))
-        else:
-            res.append(v)
-    return tuple(res)
-
-
-def tree_reduce(*, init: _T):
-    """
-    Reduce (possibly nested) tuples using the binary function `fun`.
-
-    Examples:
-        >>> tree_reduce(init=1)(lambda x, y: x * y)(((1, 2), 3))
-        6
-        >>> tree_reduce(init=1)(lambda x, y: x * y)((42,))
-        42
-    """
-
-    def impl(fun: Callable[[_T, _S], _T]):
-        @functools.wraps(fun)
-        def impl_inner(value: _S | tuple[_S | tuple, ...]):
-            return functools.reduce(fun, _flatten_tree((value,)), init)
-
-        return impl_inner
-
-    return impl
+# TODO(havogt): remove flatten duplications in the whole codebase
+def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
+    if isinstance(value, tuple):
+        return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
+    else:
+        return (value,)
 
 
 def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
-    """Apply `fun` to each entry of (possibly nested) tuples.
+    """
+    Apply `fun` to each entry of (possibly nested) tuples.
 
     Examples:
         >>> tree_map(lambda x: x + 1)(((1, 2), 3))

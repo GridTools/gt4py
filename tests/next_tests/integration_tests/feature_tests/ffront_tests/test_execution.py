@@ -846,6 +846,41 @@ def test_scan_different_domain_in_tuple(cartesian_case):
     cases.verify(cartesian_case, foo, inp1, inp2, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
+def test_scan_tuple_field_scalar_mixed(cartesian_case):
+    init = 1.0
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
+    inp2_np = np.fromfunction(lambda i, k: k, shape=(i_size, k_size), dtype=float)
+    inp2 = cartesian_case.as_field([IDim, KDim], inp2_np)
+    out = cartesian_case.as_field([IDim, KDim], np.zeros((i_size, k_size)))
+
+    def prev_levels_iterator(i):
+        return range(i + 1)
+
+    expected = np.asarray(
+        [
+            reduce(
+                lambda prev, k: prev + 1.0 + inp2_np[:, k],
+                prev_levels_iterator(k),
+                init,
+            )
+            for k in range(k_size)
+        ]
+    ).transpose()
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=init)
+    def scan_op(carry: float, a: tuple[float, float]) -> float:
+        return carry + a[0] + a[1]
+
+    @gtx.field_operator
+    def foo(inp1: float, inp2: gtx.Field[[IDim, KDim], float]) -> gtx.Field[[IDim, KDim], float]:
+        return scan_op((inp1, inp2))
+
+    cases.verify(cartesian_case, foo, 1.0, inp2, out=out, ref=expected)
+
+
 def test_docstring(cartesian_case):
     @gtx.field_operator
     def fieldop_with_docstring(a: cases.IField) -> cases.IField:

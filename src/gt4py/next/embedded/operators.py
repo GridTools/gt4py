@@ -12,89 +12,108 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Callable, Optional, Sequence
+import dataclasses
+from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, errors, field_utils, utils
+from gt4py.next import common, constructors, errors, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
-def field_operator_call(
-    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
-):
-    # embedded execution
-    if embedded_context.within_context():
-        # field_operator called from program or other field_operator in embedded execution
-        if "out" in kwargs:
-            # field_operator called from program in embedded execution
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
-            offset_provider = kwargs.pop("offset_provider", None)
-            # offset_provider should already be set
-            assert (
-                offset_provider is None or embedded_context.offset_provider.get() is offset_provider
-            )
-            out = kwargs.pop("out")
-            domain = kwargs.pop("domain", None)
-            out_domain = (
-                common.domain(domain) if domain is not None else field_utils.get_domain(out)
-            )
 
-            vertical_range = _get_vertical_range(out_domain)
+@dataclasses.dataclass(frozen=True)
+class EmbeddedOperator(Generic[_R, _P]):
+    fun: Callable[_P, _R]
 
-            with embedded_context.new_context(closure_column_range=vertical_range) as ctx:
-                res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
-                _tuple_assign_field(
-                    out,
-                    res,
-                    domain=out_domain,
-                )
+    def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        return self.fun(*args, **kwargs)
 
+
+@dataclasses.dataclass(frozen=True)
+class ScanOperator(EmbeddedOperator[_R, _P]):
+    forward: bool
+    init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
+    axis: common.Dimension
+
+    def __call__(self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
+        scan_range = embedded_context.closure_column_range.get()
+        assert self.axis == scan_range[0]
+        scan_axis = scan_range[0]
+        domain_intersection = _intersect_scan_args(*args, *kwargs.values())
+        non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
+
+        out_domain = common.Domain(
+            *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
+        )
+        if scan_axis not in out_domain.dims:
+            # even if the scan dimension is not in the input, we can scan over it
+            out_domain = common.Domain(*out_domain, (scan_range))
+
+        res = _construct_scan_array(out_domain)(self.init)
+
+        def scan_loop(hpos):
+            acc = self.init
+            for k in scan_range[1] if self.forward else reversed(scan_range[1]):
+                pos = (*hpos, (scan_axis, k))
+                new_args = [_tuple_at(pos, arg) for arg in args]
+                new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
+                acc = self.fun(acc, *new_args, **new_kwargs)
+                _tuple_assign_value(pos, res, acc)
+
+        if len(non_scan_domain) == 0:
+            # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
+            scan_loop(())
         else:
-            # field_operator called form field_operator in embedded execution
-            return _run_operator(op, operator_attributes, args, kwargs)
+            for hpos in embedded_common.iterate_domain(non_scan_domain):
+                scan_loop(hpos)
 
-    else:
-        # field_operator called directly
-        if "offset_provider" not in kwargs:
-            raise errors.MissingArgumentError(None, "offset_provider", True)
-        offset_provider = kwargs.pop("offset_provider", None)
+        return res
+
+
+def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
+    if "out" in kwargs:
+        # called from program or direct field_operator as program
+        new_context_kwargs = {}
+        if embedded_context.within_context():
+            # called from program
+            assert "offset_provider" not in kwargs
+        else:
+            # field_operator as program
+            if "offset_provider" not in kwargs:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
+            offset_provider = kwargs.pop("offset_provider", None)
+
+            new_context_kwargs["offset_provider"] = offset_provider
+
         if "out" not in kwargs:
             raise errors.MissingArgumentError(None, "out", True)
         out = kwargs.pop("out")
+
         domain = kwargs.pop("domain", None)
 
-        out_domain = common.domain(domain) if domain is not None else field_utils.get_domain(out)
+        flattened_out: tuple[common.Field, ...] = utils.flatten_nested_tuple((out,))
+        assert all(f.domain == flattened_out[0].domain for f in flattened_out)
 
-        with embedded_context.new_context(
-            offset_provider=offset_provider, closure_column_range=_get_vertical_range(out_domain)
-        ) as ctx:
-            res = ctx.run(_run_operator, op, operator_attributes, args, kwargs)
+        out_domain = common.domain(domain) if domain is not None else flattened_out[0].domain
+
+        new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
+
+        with embedded_context.new_context(**new_context_kwargs) as ctx:
+            res = ctx.run(op, *args, **kwargs)
             _tuple_assign_field(
                 out,
                 res,
                 domain=out_domain,
             )
-
-
-def _run_operator(
-    op: Callable, operator_attributes: Optional[dict[str, Any]], args: Any, kwargs: Any
-):
-    if operator_attributes is not None and any(
-        has_scan_op_attribute := [
-            attribute in operator_attributes for attribute in ["init", "axis", "forward"]
-        ]
-    ):
-        assert all(has_scan_op_attribute)
-        forward = operator_attributes["forward"]
-        init = operator_attributes["init"]
-        axis = operator_attributes["axis"]
-
-        scan_range = embedded_context.closure_column_range.get()
-        assert axis == scan_range[0]
-
-        return scan(op, forward, init, scan_range, args, kwargs)
     else:
+        # called from other field_operator or missing `out` argument
+        if "offset_provider" in kwargs:
+            # assuming we wanted to call the field_operator as program, otherwise `offset_provider` would not be there
+            raise errors.MissingArgumentError(None, "out", True)
         return op(*args, **kwargs)
 
 
@@ -116,55 +135,12 @@ def _tuple_assign_field(
     impl(target, source)
 
 
-def scan(
-    scan_op: Callable,
-    forward: bool,
-    init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
-    scan_range: common.NamedRange,
-    args: tuple,
-    kwargs: dict,
-):
-    scan_axis = scan_range[0]
-    domain_intersection = embedded_common.intersect_domains(
-        *[_intersect_tuple_domain(f) for f in [*args, *kwargs.values()] if _is_field_or_tuple(f)]
+def _intersect_scan_args(
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+) -> common.Domain:
+    return embedded_common.intersect_domains(
+        *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
     )
-    non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
-
-    out_domain = common.Domain(
-        *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
-    )
-    if scan_axis not in out_domain.dims:
-        # even if the scan dimension is not in the input, we can scan over it
-        out_domain = common.Domain(*out_domain, (scan_range))
-
-    res = _construct_scan_array(out_domain)(init)
-
-    def scan_loop(hpos):
-        acc = init
-        for k in scan_range[1] if forward else reversed(scan_range[1]):
-            pos = (*hpos, (scan_axis, k))
-            new_args = [_tuple_at(pos, arg) for arg in args]
-            new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
-            acc = scan_op(acc, *new_args, **new_kwargs)
-            _tuple_assign_value(pos, res, acc)
-
-    for hpos in embedded_common.iterate_domain(non_scan_domain):
-        scan_loop(hpos)
-    if len(non_scan_domain) == 0:
-        # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
-        scan_loop(())
-
-    return res
-
-
-@utils.tree_reduce(init=common.Domain())
-def _intersect_tuple_domain(a: common.Domain, b: common.Field) -> common.Domain:
-    return embedded_common.intersect_domains(a, b.domain)
-
-
-@utils.get_common_tuple_value
-def _is_field_or_tuple(field: common.Field) -> bool:
-    return common.is_field(field)
 
 
 def _construct_scan_array(domain: common.Domain):

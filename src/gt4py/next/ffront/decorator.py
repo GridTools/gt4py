@@ -716,9 +716,20 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 *args, out, offset_provider=offset_provider, **kwargs
             )
         else:
-            return embedded_operators.field_operator_call(
-                self.definition, self.operator_attributes, args, kwargs
-            )
+            if self.operator_attributes is not None and any(
+                has_scan_op_attribute := [
+                    attribute in self.operator_attributes
+                    for attribute in ["init", "axis", "forward"]
+                ]
+            ):
+                assert all(has_scan_op_attribute)
+                forward = self.operator_attributes["forward"]
+                init = self.operator_attributes["init"]
+                axis = self.operator_attributes["axis"]
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+            else:
+                op = embedded_operators.EmbeddedOperator(self.definition)
+            return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 @typing.overload
