@@ -20,7 +20,7 @@ from typing import List
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
 from gt4py.next import common, iterator
-from gt4py.next.iterator import builtins, ir_makers as im
+from gt4py.next.iterator import builtins
 from gt4py.next.iterator.ir import (
     AxisLiteral,
     Expr,
@@ -34,6 +34,7 @@ from gt4py.next.iterator.ir import (
     Sym,
     SymRef,
 )
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications, type_translation
 
 
@@ -163,7 +164,7 @@ def make_node(o):
         return NoneLiteral()
     if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
-    raise NotImplementedError(f"Cannot handle {o}")
+    raise NotImplementedError(f"Cannot handle '{o}'.")
 
 
 def trace_function_call(fun, *, args=None):
@@ -268,7 +269,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
                 # the last parameter info might also be a keyword or variadic keyword argument, but
                 # they are not supported.
                 raise NotImplementedError(
-                    "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                    "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
                 )
             param_info = param_infos[-1]
 
@@ -278,7 +279,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
             param_name = param_info.name
         else:
             raise NotImplementedError(
-                "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
             )
 
         kind, dtype = None, None

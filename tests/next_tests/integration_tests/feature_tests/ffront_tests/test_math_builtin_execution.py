@@ -58,7 +58,7 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.Program
             "return": cases.IFloatField,
         }
     else:
-        raise AssertionError(f"Unknown builtin `{builtin_name}`")
+        raise AssertionError(f"Unknown builtin '{builtin_name}'.")
 
     closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 

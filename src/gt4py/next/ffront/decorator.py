@@ -55,7 +55,12 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
+from gt4py.next.iterator.ir_utils.ir_makers import (
+    literal_from_value,
+    promote_to_const_iterator,
+    ref,
+    sym,
+)
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -83,7 +88,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                     raise NotImplementedError(
                         f"Using closure vars with same name but different value "
                         f"across functions is not implemented yet. \n"
-                        f"Collisions: {'`,  `'.join(collisions)}"
+                        f"Collisions: '{',  '.join(collisions)}'."
                     )
 
                 all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
@@ -120,7 +125,7 @@ def _deduce_grid_type(
 
     if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
         raise ValueError(
-            "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
@@ -142,7 +147,7 @@ def _field_constituents_shape_and_dims(
     elif isinstance(arg_type, ts.ScalarType):
         yield (None, [])
     else:
-        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
+        raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -203,7 +208,7 @@ class Program:
         ]
         if misnamed_functions:
             raise RuntimeError(
-                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}"
+                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}."
             )
 
         undefined_symbols = [
@@ -213,7 +218,7 @@ class Program:
         ]
         if undefined_symbols:
             raise RuntimeError(
-                f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
+                f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
     @functools.cached_property
@@ -223,7 +228,7 @@ class Program:
         if self.backend:
             return self.backend.__gt_allocator__
         else:
-            raise RuntimeError(f"Program {self} does not have a backend set.")
+            raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -258,7 +263,7 @@ class Program:
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
+                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -339,7 +344,7 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -392,9 +397,10 @@ class Program:
             ]
 
             raise TypeError(
-                "Only `ScanOperator`s defined on the same axis "
-                + "can be used in a `Program`, but found:\n"
+                "Only 'ScanOperator's defined on the same axis "
+                + "can be used in a 'Program', found:\n"
                 + "\n".join(scanops_per_axis_strs)
+                + "."
             )
 
         return iter(scanops_per_axis.keys()).__next__()
@@ -431,7 +437,7 @@ class ProgramWithBoundArgs(Program):
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
+                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -440,10 +446,10 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
-                f"Invalid argument types in call to program `{self.past_node.id}` with "
-                f"bound arguments {bound_arg_names}!"
+                f"Invalid argument types in call to program '{self.past_node.id}' with "
+                f"bound arguments '{bound_arg_names}'."
             ) from err
 
         full_args = [*args]

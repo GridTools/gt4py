@@ -699,6 +699,7 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
     )
 
 
+@pytest.mark.uses_constant_fields
 @pytest.mark.uses_unstructured_shift
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
@@ -1187,7 +1188,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
+        match=(r"Too many values to unpack \(expected 3\)."),
     ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
@@ -1196,8 +1197,10 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
             return a, b, c
 
 
-def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(errors.DSLError, match=(r"Assignment value must be of type tuple!")):
+def test_tuple_unpacking_too_few_values(cartesian_case):
+    with pytest.raises(
+        errors.DSLError, match=(r"Assignment value must be of type tuple, got 'int32'.")
+    ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:
