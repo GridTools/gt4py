@@ -28,7 +28,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
-from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront import experimental, fbuiltins
 
 
 try:
@@ -173,13 +173,19 @@ class NdArrayField(
         assert common.is_connectivity_field(connectivity)
 
         # Compute the new domain
-        dim = connectivity.codomain
+        dim = (
+            connectivity.codomain
+            if isinstance(connectivity.codomain, common.Dimension)
+            else connectivity.codomain.source
+        )
         dim_idx = self.domain.dim_index(dim)
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
 
         current_range: common.UnitRange = self.domain[dim_idx][1]
         new_ranges = connectivity.inverse_image(current_range)
+        if isinstance(connectivity.codomain, fbuiltins.FieldOffset):
+            new_ranges = [new_ranges[dim_idx]]
         new_domain = self.domain.replace(dim_idx, *new_ranges)
 
         # perform contramap
@@ -201,6 +207,14 @@ class NdArrayField(
             new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+            if len(new_idx_array.shape) > 1 and isinstance(
+                connectivity.codomain, fbuiltins.FieldOffset
+            ):
+                new_buffer = (
+                    np.diagonal(new_buffer).T
+                    if dim.kind == "horizontal"
+                    else np.diagonal(new_buffer.T)
+                )
 
         return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
@@ -343,7 +357,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         cls,
         data: npt.ArrayLike | core_defs.NDArrayObject,
         /,
-        codomain: common.DimT,
+        codomain: common.DimT | fbuiltins.FieldOffset,
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
@@ -363,7 +377,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         assert len(domain) == array.ndim
         assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
-        assert isinstance(codomain, common.Dimension)
+        assert isinstance(codomain, (common.Dimension, fbuiltins.FieldOffset))
 
         return cls(domain, array, codomain)
 
@@ -586,7 +600,20 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
     raise AssertionError("This is the NdArrayField implementation of `fbuiltins.astype`.")
 
 
+def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayConnectivityField:
+    if isinstance(field, NdArrayField):
+        # change field.ndarray from local to global
+        global_index_arr = np.arange(field.shape[0]) + field.ndarray
+        return NumPyArrayConnectivityField.from_array(
+            global_index_arr, codomain=offset_, domain=field.domain
+        )
+    raise AssertionError(
+        "This is the NdArrayConnectivityField implementation of `experimental.as_offset`."
+    )
+
+
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
+NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)
 
 
 def _get_slices_from_domain_slice(

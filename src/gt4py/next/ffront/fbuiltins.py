@@ -25,7 +25,6 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -58,6 +57,10 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
+    elif t is FieldOffset:
+        return ts.OffsetType
+    elif t is common.ConnectivityField:
+        return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
@@ -297,7 +300,6 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
-    "as_offset",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
