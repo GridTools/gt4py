@@ -223,7 +223,6 @@ def build_sdfg_from_itir(
         column_axis:		The column axis to be used, defaults to `None`.
         lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
     """
-
     arg_types = [type_translation.from_value(arg) for arg in args]
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
