@@ -31,12 +31,7 @@ from gt4py.next.otf.compilation import cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import (
-    connectivity_identifier,
-    dace_debuginfo,
-    filter_neighbor_tables,
-    get_sorted_dims,
-)
+from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
 try:
@@ -229,7 +224,13 @@ def build_sdfg_from_itir(
             warnings.warn(
                 f"{nested_sdfg} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
             )
-            nested_sdfg.debuginfo = dace_debuginfo(program)
+            nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
+                start_line=0,
+                start_column=0,
+                end_line=-1,
+                end_column=0,
+                filename=None,
+            )
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics
