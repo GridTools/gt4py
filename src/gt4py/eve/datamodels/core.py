@@ -1291,7 +1291,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
 @utils.optional_lru_cache(maxsize=None, typed=True)
 def _make_concrete_with_cache(
-    datamodel_cls: Type[GenericDataModelT],
+    datamodel_cls: Type,
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,

@@ -1225,7 +1225,7 @@ class XIterable(Iterable[T]):
             [('a', 'b', 'c'), (1, 2, 3)]
 
         """
-        return XIterable(zip(*self.iterator))  # type: ignore  # mypy gets confused with *args
+        return XIterable(zip(*self.iterator))  # mypy gets confused with *args
 
     @typing.overload
     def islice(self, __stop: int) -> XIterable[T]:
@@ -1536,7 +1536,7 @@ class XIterable(Iterable[T]):
     ) -> Dict[K, S]:
         ...
 
-    def reduceby(  # type: ignore[misc] # signatures 2 and 4 are not satified due to inconsistencies with type variables
+    def reduceby(  # signatures 2 and 4 are not satified due to inconsistencies with type variables
         self,
         bin_op_func: Callable[[S, T], S],
         key: Union[str, List[K], Callable[[T], K]],
