@@ -59,6 +59,7 @@ def test_copy():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     assert lowered.id == "copy_field"
     assert lowered.expr == im.ref("inp")
@@ -70,6 +71,7 @@ def test_scalar_arg():
 
     parsed = FieldOperatorParser.apply_to_function(scalar_arg)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("multiplies")(
         "alpha", "bar"
@@ -84,6 +86,7 @@ def test_multicopy():
 
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
 
@@ -96,6 +99,7 @@ def test_arithmetic():
 
     parsed = FieldOperatorParser.apply_to_function(arithmetic)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("plus")("inp1", "inp2")
 
@@ -110,6 +114,7 @@ def test_shift():
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", 1)("it"))))("inp")
 
@@ -124,6 +129,7 @@ def test_negative_shift():
 
     parsed = FieldOperatorParser.apply_to_function(shift_by_one)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.lift(im.lambda_("it")(im.deref(im.shift("Ioff", -1)("it"))))("inp")
 
@@ -139,6 +145,7 @@ def test_temp_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.let(
         itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"), "inp"
@@ -165,6 +172,7 @@ def test_unary_ops():
 
     parsed = FieldOperatorParser.apply_to_function(unary)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.let(
         itir.Sym(id=ssa.unique_name("tmp", 0), dtype=("float64", False), kind="Iterator"),
@@ -194,6 +202,7 @@ def test_unpacking():
 
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
     tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
@@ -223,6 +232,7 @@ def test_annotated_assignment():
 
     parsed = FieldOperatorParser.apply_to_function(copy_field)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.let(ssa.unique_name("tmp", 0), "inp")(ssa.unique_name("tmp", 0))
 
@@ -247,6 +257,7 @@ def test_call():
 
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
 
@@ -262,6 +273,7 @@ def test_temp_tuple():
 
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     tuple_expr = im.promote_to_lifted_stencil("make_tuple")("a", "b")
     reference = im.let(ssa.unique_name("tmp", 0), tuple_expr)(ssa.unique_name("tmp", 0))
@@ -275,6 +287,7 @@ def test_unary_not():
 
     parsed = FieldOperatorParser.apply_to_function(unary_not)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("not_")("cond")
 
@@ -287,6 +300,7 @@ def test_binary_plus():
 
     parsed = FieldOperatorParser.apply_to_function(plus)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("plus")("a", "b")
 
@@ -299,6 +313,7 @@ def test_add_scalar_literal_to_field():
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_field)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("plus")(
         im.promote_to_const_iterator(im.literal("2.0", "float64")), "a"
@@ -314,6 +329,7 @@ def test_add_scalar_literals():
 
     parsed = FieldOperatorParser.apply_to_function(scalar_plus_scalar)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.let(
         ssa.unique_name("tmp", 0),
@@ -332,6 +348,7 @@ def test_binary_mult():
 
     parsed = FieldOperatorParser.apply_to_function(mult)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("multiplies")("a", "b")
 
@@ -344,6 +361,7 @@ def test_binary_minus():
 
     parsed = FieldOperatorParser.apply_to_function(minus)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("minus")("a", "b")
 
@@ -356,6 +374,7 @@ def test_binary_div():
 
     parsed = FieldOperatorParser.apply_to_function(division)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("divides")("a", "b")
 
@@ -368,6 +387,7 @@ def test_binary_and():
 
     parsed = FieldOperatorParser.apply_to_function(bit_and)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("and_")("a", "b")
 
@@ -380,6 +400,7 @@ def test_scalar_and():
 
     parsed = FieldOperatorParser.apply_to_function(scalar_and)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("and_")(
         "a", im.promote_to_const_iterator(im.literal("False", "bool"))
@@ -394,6 +415,7 @@ def test_binary_or():
 
     parsed = FieldOperatorParser.apply_to_function(bit_or)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("or_")("a", "b")
 
@@ -406,6 +428,7 @@ def test_compare_scalars():
 
     parsed = FieldOperatorParser.apply_to_function(comp_scalars)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("greater")(
         im.promote_to_const_iterator(im.literal("3", "int32")),
@@ -421,6 +444,7 @@ def test_compare_gt():
 
     parsed = FieldOperatorParser.apply_to_function(comp_gt)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("greater")("a", "b")
 
@@ -433,6 +457,7 @@ def test_compare_lt():
 
     parsed = FieldOperatorParser.apply_to_function(comp_lt)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("less")("a", "b")
 
@@ -445,6 +470,7 @@ def test_compare_eq():
 
     parsed = FieldOperatorParser.apply_to_function(comp_eq)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("eq")("a", "b")
 
@@ -459,6 +485,7 @@ def test_compare_chain():
 
     parsed = FieldOperatorParser.apply_to_function(compare_chain)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("and_")(
         im.promote_to_lifted_stencil("greater")("a", "b"),
@@ -474,6 +501,7 @@ def test_reduction_lowering_simple():
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil(
         im.call(
@@ -496,6 +524,7 @@ def test_reduction_lowering_expr():
 
     parsed = FieldOperatorParser.apply_to_function(reduction)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     mapped = im.promote_to_lifted_stencil(im.map_("multiplies"))(
         im.promote_to_lifted_stencil("make_const_list")(
@@ -539,6 +568,7 @@ def test_builtin_int_constructors():
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
         im.promote_to_const_iterator(im.literal("1", "int32")),
@@ -575,6 +605,7 @@ def test_builtin_float_constructors():
 
     parsed = FieldOperatorParser.apply_to_function(float_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
@@ -595,6 +626,7 @@ def test_builtin_bool_constructors():
 
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
+    lowered.location = None
 
     reference = im.promote_to_lifted_stencil("make_tuple")(
         im.promote_to_const_iterator(im.literal(str(True), "bool")),
