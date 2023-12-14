@@ -26,3 +26,6 @@ def as_offset(
 ) -> common.ConnectivityField:
     global_index_arr = np.arange(field.ndarray.shape[0]) + field.ndarray
     return common.connectivity(global_index_arr, codomain=offset_, domain=field.domain)
+
+
+EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset"]
