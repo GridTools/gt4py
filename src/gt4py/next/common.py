@@ -143,7 +143,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def __len__(self) -> int:
         if UnitRange.is_finite(self):
             return max(0, self.stop - self.start)
-        raise ValueError("Cannot compute length of open UnitRange.")
+        raise ValueError("Cannot compute length of open 'UnitRange'.")
 
     @classmethod
     def is_finite(cls, obj: UnitRange) -> TypeGuard[FiniteUnitRange]:
@@ -173,7 +173,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             if step != 1:
-                raise ValueError("UnitRange: step required to be `1`.")
+                raise ValueError("'UnitRange': step required to be '1'.")
             new_start = self.start + (start or 0)
             new_stop = (self.start if stop > 0 else self.stop) + stop
             return UnitRange(new_start, new_stop)
@@ -184,7 +184,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
             if 0 <= index < len(self):
                 return self.start + index
             else:
-                raise IndexError("UnitRange index out of range")
+                raise IndexError("'UnitRange' index out of range")
 
     def __and__(self, other: UnitRange) -> UnitRange:
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
@@ -246,7 +246,7 @@ def unit_range(r: RangeLike) -> UnitRange:
         return r
     if isinstance(r, range):
         if r.step != 1:
-            raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
+            raise ValueError(f"'UnitRange' requires step size 1, got '{r.step}'.")
         return UnitRange(r.start, r.stop)
     # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
     #   once the related mypy bug (#16358) gets fixed
@@ -266,7 +266,7 @@ def unit_range(r: RangeLike) -> UnitRange:
         return UnitRange(0, cast(core_defs.IntegralScalar, r))
     if r is None:
         return UnitRange.infinite()
-    raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
+    raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
@@ -359,20 +359,20 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
-                raise ValueError("Either both none of `dims` and `ranges` must be specified.")
+                raise ValueError("Either both none of 'dims' and 'ranges' must be specified.")
             if len(args) > 0:
                 raise ValueError(
-                    "No extra `args` allowed when constructing fomr `dims` and `ranges`."
+                    "No extra 'args' allowed when constructing fomr 'dims' and 'ranges'."
                 )
 
             assert dims is not None and ranges is not None  # for mypy
             if not all(isinstance(dim, Dimension) for dim in dims):
                 raise ValueError(
-                    f"`dims` argument needs to be a `tuple[Dimension, ...], got `{dims}`."
+                    f"'dims' argument needs to be a 'tuple[Dimension, ...]', got '{dims}'."
                 )
             if not all(isinstance(rng, UnitRange) for rng in ranges):
                 raise ValueError(
-                    f"`ranges` argument needs to be a `tuple[UnitRange, ...], got `{ranges}`."
+                    f"'ranges' argument needs to be a 'tuple[UnitRange, ...]', got '{ranges}'."
                 )
             if len(dims) != len(ranges):
                 raise ValueError(
@@ -383,13 +383,15 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
             if not all(is_named_range(arg) for arg in args):
-                raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
+                raise ValueError(
+                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                )
             dims, ranges = zip(*args) if args else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
 
         if len(set(self.dims)) != len(self.dims):
-            raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
+            raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -434,7 +436,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
             except ValueError:
-                raise KeyError(f"No Dimension of type {index} is present in the Domain.")
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
@@ -484,10 +486,12 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         if isinstance(index, Dimension):
             dim_index = self.dim_index(index)
             if dim_index is None:
-                raise ValueError(f"Dimension {index} not found in Domain.")
+                raise ValueError(f"Dimension '{index}' not found in Domain.")
             index = dim_index
         if not (-len(self.dims) <= index < len(self.dims)):
-            raise IndexError(f"Index {index} out of bounds for Domain of length {len(self.dims)}.")
+            raise IndexError(
+                f"Index '{index}' out of bounds for Domain of length {len(self.dims)}."
+            )
         if index < 0:
             index += len(self.dims)
         new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
@@ -534,13 +538,16 @@ def domain(domain_like: DomainLike) -> Domain:
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
                 dims=tuple(domain_like.keys()),
-                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),  # type: ignore[arg-type] # type of `s` is checked in condition
+                ranges=tuple(
+                    UnitRange(0, s)  # type: ignore[arg-type] # type of `s` is checked in condition
+                    for s in domain_like.values()
+                ),
             )
         return Domain(
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),
         )
-    raise ValueError(f"`{domain_like}` is not `DomainLike`.")
+    raise ValueError(f"'{domain_like}' is not 'DomainLike'.")
 
 
 def _broadcast_ranges(
@@ -742,7 +749,8 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):  # type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but break in another place
+class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
     def codomain(self) -> DimT:
@@ -762,61 +770,61 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     # Operators
     def __abs__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __neg__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __invert__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __eq__(self, other: Any) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __ne__(self, other: Any) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __or__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
 
 def is_connectivity_field(
@@ -917,7 +925,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @property
     def __gt_origin__(self) -> Never:
-        raise TypeError("CartesianConnectivity does not support this operation")
+        raise TypeError("'CartesianConnectivity' does not support this operation.")
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
@@ -949,7 +957,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         if not isinstance(image_range, UnitRange):
             if image_range[0] != self.codomain:
                 raise ValueError(
-                    f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                    f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
                 )
 
             image_range = image_range[1]
@@ -1088,4 +1096,5 @@ class FieldBuiltinFuncRegistry:
 
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
+        return cls._builtin_func_map.get(func, NotImplemented)
         return cls._builtin_func_map.get(func, NotImplemented)

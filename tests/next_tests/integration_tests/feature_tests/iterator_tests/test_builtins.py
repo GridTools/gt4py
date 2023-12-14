@@ -126,7 +126,7 @@ def fencil(builtin, out, *inps, processor, as_column=False):
             closure(cartesian_domain(named_range(IDim, 0, size)), dispatch, out, [arg0, arg1, arg2])
 
     else:
-        raise AssertionError("Add overload")
+        raise AssertionError("Add overload.")
 
     return run_processor(fenimpl, processor, out.shape[0], *inps, out)
 

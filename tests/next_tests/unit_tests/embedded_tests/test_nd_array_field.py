@@ -630,5 +630,5 @@ def test_setitem_wrong_domain():
         np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(-5, 5)))
     )
 
-    with pytest.raises(ValueError, match=r"Incompatible `Domain`.*"):
+    with pytest.raises(ValueError, match=r"Incompatible 'Domain'.*"):
         field[(1, slice(None))] = value_incompatible

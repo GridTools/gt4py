@@ -139,7 +139,7 @@ def test_as_field_origin():
 def test_field_wrong_dims():
     with pytest.raises(
         ValueError,
-        match=(r"Cannot construct `Field` from array of shape"),
+        match=(r"Cannot construct 'Field' from array of shape"),
     ):
         gtx.as_field([I, J], np.random.rand(sizes[I]).astype(gtx.float32))
 
@@ -147,7 +147,7 @@ def test_field_wrong_dims():
 def test_field_wrong_domain():
     with pytest.raises(
         ValueError,
-        match=(r"Cannot construct `Field` from array of shape"),
+        match=(r"Cannot construct 'Field' from array of shape"),
     ):
         domain = common.Domain(
             dims=(I, J),

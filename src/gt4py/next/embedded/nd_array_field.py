@@ -175,7 +175,7 @@ class NdArrayField(
         dim = connectivity.codomain
         dim_idx = self.domain.dim_index(dim)
         if dim_idx is None:
-            raise ValueError(f"Incompatible index field, expected a field with dimension {dim}.")
+            raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
 
         current_range: common.UnitRange = self.domain[dim_idx][1]
         new_ranges = connectivity.inverse_image(current_range)
@@ -227,7 +227,7 @@ class NdArrayField(
         if common.is_field(value):
             if not value.domain == target_domain:
                 raise ValueError(
-                    f"Incompatible `Domain` in assignment. Source domain = {value.domain}, target domain = {target_domain}."
+                    f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
             value = value.ndarray
 
@@ -269,28 +269,28 @@ class NdArrayField(
     def __and__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_builtin("logical_and", "logical_and")(self, other)
-        raise NotImplementedError("`__and__` not implemented for non-`bool` fields.")
+        raise NotImplementedError("'__and__' not implemented for non-'bool' fields.")
 
     __rand__ = __and__
 
     def __or__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_builtin("logical_or", "logical_or")(self, other)
-        raise NotImplementedError("`__or__` not implemented for non-`bool` fields.")
+        raise NotImplementedError("'__or__' not implemented for non-'bool' fields.")
 
     __ror__ = __or__
 
     def __xor__(self, other: common.Field | core_defs.ScalarT) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_builtin("logical_xor", "logical_xor")(self, other)
-        raise NotImplementedError("`__xor__` not implemented for non-`bool` fields.")
+        raise NotImplementedError("'__xor__' not implemented for non-'bool' fields.")
 
     __rxor__ = __xor__
 
     def __invert__(self) -> NdArrayField:
         if self.dtype == core_defs.BoolDType():
             return _make_builtin("invert", "invert")(self)
-        raise NotImplementedError("`__invert__` not implemented for non-`bool` fields.")
+        raise NotImplementedError("'__invert__' not implemented for non-'bool' fields.")
 
     def _slice(
         self, index: common.AnyIndexSpec
@@ -323,7 +323,8 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         raise NotImplementedError()
 
     @property
-    def codomain(self) -> common.DimT:  # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+    # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
+    def codomain(self) -> common.DimT:
         return self._codomain
 
     @functools.cached_property
@@ -379,7 +380,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
                 if image_range[0] != self.codomain:
                     raise ValueError(
-                        f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                        f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
                     )
 
                 image_range = image_range[1]
@@ -425,7 +426,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             if non_contiguous_dims:
                 raise ValueError(
-                    f"Restriction generates non-contiguous dimensions {non_contiguous_dims}"
+                    f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
                 )
 
         return new_dims
@@ -448,8 +449,12 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
 # -- Specialized implementations for builtin operations on array fields --
 
-NdArrayField.register_builtin_func(fbuiltins.abs, NdArrayField.__abs__)  # type: ignore[attr-defined]
-NdArrayField.register_builtin_func(fbuiltins.power, NdArrayField.__pow__)  # type: ignore[attr-defined]
+NdArrayField.register_builtin_func(
+    fbuiltins.abs, NdArrayField.__abs__  # type: ignore[attr-defined]
+)
+NdArrayField.register_builtin_func(
+    fbuiltins.power, NdArrayField.__pow__  # type: ignore[attr-defined]
+)
 # TODO gamma
 
 for name in (
@@ -482,7 +487,7 @@ def _make_reduction(
         if not axis.kind == common.DimensionKind.LOCAL:
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
-            raise ValueError(f"Field doesn't have dimension {axis}. Cannot reduce.")
+            raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
         reduce_dim_index = field.domain.dims.index(axis)
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
         return field.__class__.from_array(
@@ -549,7 +554,7 @@ if jnp:
             value: common.Field | core_defs.NDArrayObject | core_defs.ScalarT,
         ) -> None:
             # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
-            raise NotImplementedError("`__setitem__` for JaxArrayField not yet implemented.")
+            raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
 
     common.field.register(jnp.ndarray, JaxArrayField.from_array)
 
@@ -572,7 +577,7 @@ def _builtins_broadcast(
 ) -> common.Field:  # separated for typing reasons
     if common.is_field(field):
         return _broadcast(field, new_dimensions)
-    raise AssertionError("Scalar case not reachable from `fbuiltins.broadcast`.")
+    raise AssertionError("Scalar case not reachable from 'fbuiltins.broadcast'.")
 
 
 NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
@@ -581,7 +586,7 @@ NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdArrayField:
     if isinstance(field, NdArrayField):
         return field.__class__.from_array(field.ndarray.astype(type_), domain=field.domain)
-    raise AssertionError("This is the NdArrayField implementation of `fbuiltins.astype`.")
+    raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
@@ -648,4 +653,4 @@ def _compute_slice(
         assert common.Domain.is_finite(domain)
         return rng - domain.ranges[pos].start
     else:
-        raise ValueError(f"Can only use integer or UnitRange ranges, provided type: {type(rng)}")
+        raise ValueError(f"Can only use integer or UnitRange ranges, provided type: '{type(rng)}'.")

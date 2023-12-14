@@ -150,7 +150,7 @@ def get_stride_args(
             stride, remainder = divmod(stride_size, value.itemsize)
             if remainder != 0:
                 raise ValueError(
-                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)"
+                    f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
             stride_args[str(sym)] = stride
 
@@ -342,7 +342,7 @@ if cp:
 else:
 
     def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-        raise RuntimeError("Missing `cupy` dependency for GPU execution.")
+        raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
 
 
 run_dace_gpu = otf_exec.OTFBackend(

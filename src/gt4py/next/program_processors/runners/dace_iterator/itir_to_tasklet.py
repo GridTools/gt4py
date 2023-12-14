@@ -401,7 +401,7 @@ def builtin_tuple_get(
     index = node_args[0]
     if isinstance(index, itir.Literal):
         return [elements[int(index.value)]]
-    raise ValueError("Tuple can only be subscripted with compile-time constants")
+    raise ValueError("Tuple can only be subscripted with compile-time constants.")
 
 
 _GENERAL_BUILTIN_MAPPING: dict[
@@ -640,7 +640,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             elif builtin_name in _GENERAL_BUILTIN_MAPPING:
                 return self._visit_general_builtin(node)
             else:
-                raise NotImplementedError(f"{builtin_name} not implemented")
+                raise NotImplementedError(f"'{builtin_name}' not implemented.")
         return self._visit_call(node)
 
     def _visit_call(self, node: itir.FunCall):

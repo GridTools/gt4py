@@ -101,7 +101,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
                 return f"find_package(GridTools REQUIRED PATHS {gridtools_cpp.get_cmake_dir()} NO_DEFAULT_PATH)"
             case _:
-                raise ValueError("Library {name} is not supported".format(name=dep.name))
+                raise ValueError(f"Library '{dep.name}' is not supported")
 
     def visit_LinkDependency(self, dep: LinkDependency):
         # TODO(ricoh): do not add more libraries here
@@ -115,7 +115,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case "gridtools_gpu":
                 lib_name = "GridTools::fn_gpu"
             case _:
-                raise ValueError("Library {name} is not supported".format(name=dep.name))
+                raise ValueError(f"Library '{dep.name}' is not supported")
 
         cfg = ""
         if dep.name == "nanobind":

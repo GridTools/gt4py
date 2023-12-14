@@ -102,7 +102,7 @@ You can call field operators from [programs](#Programs), other field operators, 
 result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 add(a, b, out=result, offset_provider={})
 
-print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
+print("{} + {} = {} ± {}".format(a_value, b_value, np.average(result.asnumpy()), np.std(result.asnumpy())))
 ```
 
 #### Programs
@@ -128,7 +128,7 @@ You can execute the program by simply calling it:
 result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 run_add(a, b, result, offset_provider={})
 
-print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.asarray(result)), np.std(np.asarray(result))))
+print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(result.asnumpy()), np.std(result.asnumpy())))
 ```
 
 #### Composing field operators and programs
@@ -256,7 +256,7 @@ def run_nearest_cell_to_edge(cell_values: gtx.Field[[CellDim], float64], out : g
 
 run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
-print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
+print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 ```
 
 Running the above snippet results in the following edge field:
@@ -283,7 +283,7 @@ def run_sum_adjacent_cells(cells : gtx.Field[[CellDim], float64], out : gtx.Fiel
 
 run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
-print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
+print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 ```
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
@@ -317,7 +317,7 @@ def conditional(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, K
     return where(mask, a, b)
 
 conditional(mask, a, b, out=result_where, offset_provider={})
-print("where return: {}".format(np.asarray(result_where)))
+print("where return: {}".format(result_where.asnumpy()))
 ```
 
 **Tuple implementation:**
@@ -340,7 +340,7 @@ result_1: gtx.Field[[CellDim, KDim], float64], result_2: gtx.Field[[CellDim, KDi
      _conditional_tuple(mask, a, b, out=(result_1, result_2))
 
 conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
-print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
+print("where tuple return: {}".format((result_1.asnumpy(), result_2.asnumpy())))
 ```
 
 The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling:
@@ -375,7 +375,7 @@ def conditional_tuple_nested(
     _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
 
 conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
-print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
+print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnumpy()), (result_2.asnumpy(), result_1.asnumpy()))))
 ```
 
 #### Implementing the pseudo-laplacian
@@ -447,7 +447,7 @@ run_pseudo_laplacian(cell_values,
                      result_pseudo_lap,
                      offset_provider={"E2C": E2C_offset_provider, "C2E": C2E_offset_provider})
 
-print("pseudo-laplacian: {}".format(np.asarray(result_pseudo_lap)))
+print("pseudo-laplacian: {}".format(result_pseudo_lap.asnumpy()))
 ```
 
 As a closure, here is an example of chaining field operators, which is very simple to do when working with fields. The field operator below executes the pseudo-laplacian, and then calls the pseudo-laplacian on the result of the first, in effect, calculating the laplacian of a laplacian.
