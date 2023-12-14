@@ -66,10 +66,11 @@ class FieldOperatorLowering(NodeTranslator):
     """
 
     uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
+    preserve_location: bool = True
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
-        return cls().visit(node)
+    def apply(cls, node: foast.LocatedNode, preserve_location: bool = True) -> itir.Expr:
+        return cls(preserve_location=preserve_location).visit(node)
 
     def visit(self, node: concepts.RootNode, **kwargs: extended_typing.Any) -> extended_typing.Any:
         result = super().visit(node, **kwargs)
@@ -77,6 +78,7 @@ class FieldOperatorLowering(NodeTranslator):
             hasattr(node, "location")
             and hasattr(result, "location")
             and not isinstance(node, foast.Name)
+            and self.preserve_location
         ):
             result.location = node.location
         return result
