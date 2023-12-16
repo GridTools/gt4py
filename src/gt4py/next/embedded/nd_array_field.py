@@ -18,15 +18,15 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
+from gt4py.eve.extended_typing import Any, ClassVar, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
+from gt4py.next.embedded.common import _compute_domain_slice, broadcast_domain
 from gt4py.next.ffront import fbuiltins
 
 
@@ -58,7 +58,7 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
-                    f_broadcasted = _broadcast(f, domain_intersection.dims)
+                    f_broadcasted = fbuiltins.broadcast(f, domain_intersection.dims)
                     f_slices = _get_slices_from_domain_slice(
                         f_broadcasted.domain, domain_intersection
                     )
@@ -558,17 +558,8 @@ if jnp:
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
-    domain_slice: list[slice | None] = []
-    named_ranges = []
-    for dim in new_dimensions:
-        if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
-            domain_slice.append(slice(None))
-            named_ranges.append((dim, field.domain[pos][1]))
-        else:
-            domain_slice.append(np.newaxis)
-            named_ranges.append(
-                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-            )
+    domain_slice = _compute_domain_slice(field, new_dimensions)
+    named_ranges = broadcast_domain(field, new_dimensions)
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -613,7 +604,7 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
+        if (pos := embedded_common.find_index_of_dim(dim, domain_slice)) is not None:
             index_or_range = domain_slice[pos][1]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:

@@ -11,22 +11,21 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import dataclasses
 import itertools
-import math
 import operator
-from typing import Callable, Iterable
 
 import numpy as np
 import pytest
 
-from gt4py.next import common, embedded
+from gt4py.next import Dimension, common, embedded
 from gt4py.next.common import Dimension, Domain, UnitRange
-from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
+from gt4py.next.embedded import (
+    exceptions as embedded_exceptions,
+    function_field as funcf,
+    nd_array_field,
+)
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
-
-from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 
 IDim = Dimension("IDim")
@@ -70,10 +69,23 @@ def unary_logical_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=None):
+@pytest.fixture(
+    params=[
+        lambda x, y: operator.truediv(y, x),  # Reverse true division
+        lambda x, y: operator.add(y, x),  # Reverse addition
+        lambda x, y: operator.mul(y, x),  # Reverse multiplication
+        lambda x, y: operator.sub(y, x),  # Reverse subtraction
+        lambda x, y: operator.floordiv(y, x),  # Reverse floor division
+    ]
+)
+def binary_reverse_arithmetic_op(request):
+    yield request.param
+
+
+def _make_base_ndarray_field(arr: np.ndarray, nd_array_implementation, *, domain=None, dtype=None):
     if not dtype:
         dtype = nd_array_implementation.float32
-    buffer = nd_array_implementation.asarray(lst, dtype=dtype)
+    buffer = nd_array_implementation.asarray(arr, dtype=dtype)
     if domain is None:
         domain = tuple(
             (common.Dimension(f"D{i}"), common.UnitRange(0, s)) for i, s in enumerate(buffer.shape)
@@ -84,23 +96,37 @@ def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=No
     )
 
 
-@pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
-def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementation):
+def _make_function_field():
+    def adder(i, j):
+        return i + j
+
+    return funcf.FunctionField(
+        adder,
+        domain=common.Domain(
+            dims=(IDim, JDim), ranges=(common.UnitRange(1, 10), common.UnitRange(5, 10))
+        ),
+    )
+
+
+normal_dist = np.random.normal(3, 2.5, size=(10,))
+
+
+@pytest.fixture(params=[_make_base_ndarray_field(normal_dist, np), _make_function_field()])
+def all_field_types(request):
+    yield request.param
+
+
+@pytest.mark.parametrize("builtin_name", funcf._UNARY_BUILTINS)
+def test_unary_builtins_for_all_fields(all_field_types, builtin_name):
     if builtin_name == "gamma":
         # numpy has no gamma function
         pytest.xfail("TODO: implement gamma")
-        ref_impl: Callable = np.vectorize(math.gamma)
-    else:
-        ref_impl: Callable = getattr(np, builtin_name)
 
-    expected = ref_impl(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+    fbuiltin_func = getattr(fbuiltins, builtin_name)
+    result = fbuiltin_func(all_field_types).asnumpy()
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
-
-    builtin = getattr(fbuiltins, builtin_name)
-    result = builtin(*field_inputs)
-
-    assert np.allclose(result.ndarray, expected)
+    expected = getattr(np, builtin_name)(all_field_types.asnumpy())
+    assert np.allclose(result, expected, equal_nan=True)
 
 
 def test_where_builtin(nd_array_implementation):
@@ -108,7 +134,9 @@ def test_where_builtin(nd_array_implementation):
     true_ = np.asarray([1.0, 2.0], dtype=np.float32)
     false_ = np.asarray([3.0, 4.0], dtype=np.float32)
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in [cond, true_, false_]]
+    field_inputs = [
+        _make_base_ndarray_field(inp, nd_array_implementation) for inp in [cond, true_, false_]
+    ]
     expected = np.where(cond, true_, false_)
 
     result = fbuiltins.where(*field_inputs)
@@ -148,27 +176,36 @@ def test_where_builtin_with_tuple(nd_array_implementation):
     expected0 = np.where(cond, true0, false0)
     expected1 = np.where(cond, true1, false1)
 
-    cond_field = _make_field(cond, nd_array_implementation, dtype=bool)
-    field_true = tuple(_make_field(inp, nd_array_implementation) for inp in [true0, true1])
-    field_false = tuple(_make_field(inp, nd_array_implementation) for inp in [false0, false1])
+    cond_field = _make_base_ndarray_field(cond, nd_array_implementation, dtype=bool)
+    field_true = tuple(
+        _make_base_ndarray_field(inp, nd_array_implementation) for inp in [true0, true1]
+    )
+    field_false = tuple(
+        _make_base_ndarray_field(inp, nd_array_implementation) for inp in [false0, false1]
+    )
 
     result = fbuiltins.where(cond_field, field_true, field_false)
     assert np.allclose(result[0].ndarray, expected0)
     assert np.allclose(result[1].ndarray, expected1)
 
 
-def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation):
+def test_binary_arithmetic_ops(
+    binary_arithmetic_op, binary_reverse_arithmetic_op, nd_array_implementation
+):
     inp_a = [-1.0, 4.2, 42]
     inp_b = [2.0, 3.0, -3.0]
     inputs = [inp_a, inp_b]
 
-    expected = binary_arithmetic_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+    ops = [binary_arithmetic_op, binary_reverse_arithmetic_op]
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
+    for op in ops:
+        expected = op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
 
-    result = binary_arithmetic_op(*field_inputs)
+        field_inputs = [_make_base_ndarray_field(inp, nd_array_implementation) for inp in inputs]
 
-    assert np.allclose(result.ndarray, expected)
+        result = op(*field_inputs)
+
+        assert np.allclose(result.ndarray, expected)
 
 
 def test_binary_logical_ops(binary_logical_op, nd_array_implementation):
@@ -178,7 +215,9 @@ def test_binary_logical_ops(binary_logical_op, nd_array_implementation):
 
     expected = binary_logical_op(*[np.asarray(inp) for inp in inputs])
 
-    field_inputs = [_make_field(inp, nd_array_implementation, dtype=bool) for inp in inputs]
+    field_inputs = [
+        _make_base_ndarray_field(inp, nd_array_implementation, dtype=bool) for inp in inputs
+    ]
 
     result = binary_logical_op(*field_inputs)
 
@@ -193,7 +232,7 @@ def test_unary_logical_ops(unary_logical_op, nd_array_implementation):
 
     expected = unary_logical_op(np.asarray(inp))
 
-    field_input = _make_field(inp, nd_array_implementation, dtype=bool)
+    field_input = _make_base_ndarray_field(inp, nd_array_implementation, dtype=bool)
 
     result = unary_logical_op(field_input)
 
@@ -205,7 +244,7 @@ def test_unary_arithmetic_ops(unary_arithmetic_op, nd_array_implementation):
 
     expected = unary_arithmetic_op(np.asarray(inp, dtype=np.float32))
 
-    field_input = _make_field(inp, nd_array_implementation)
+    field_input = _make_base_ndarray_field(inp, nd_array_implementation)
 
     result = unary_arithmetic_op(field_input)
 
@@ -256,8 +295,8 @@ def test_mixed_fields(product_nd_array_implementation):
 
     expected = np.asarray(inp_a) + np.asarray(inp_b)
 
-    field_inp_a = _make_field(inp_a, first_impl)
-    field_inp_b = _make_field(inp_b, second_impl)
+    field_inp_a = _make_base_ndarray_field(inp_a, first_impl)
+    field_inp_b = _make_base_ndarray_field(inp_b, second_impl)
 
     result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
@@ -274,9 +313,9 @@ def test_non_dispatched_function():
 
     expected = np.asarray(inp_a) * np.asarray(inp_b) + np.asarray(inp_c)
 
-    field_inp_a = _make_field(inp_a, np)
-    field_inp_b = _make_field(inp_b, np)
-    field_inp_c = _make_field(inp_c, np)
+    field_inp_a = _make_base_ndarray_field(inp_a, np)
+    field_inp_b = _make_base_ndarray_field(inp_b, np)
+    field_inp_c = _make_base_ndarray_field(inp_c, np)
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)

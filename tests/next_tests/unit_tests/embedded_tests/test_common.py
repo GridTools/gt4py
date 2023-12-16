@@ -124,6 +124,11 @@ K = common.Dimension("K")
             (slice(1, 2), slice(1, 2), Ellipsis),
             [(I, (3, 4)), (J, (4, 5)), (K, (4, 7))],
         ),
+        ([], Ellipsis, []),
+        ([], slice(None), IndexError),
+        ([], 0, IndexError),
+        ([], (I, 0), IndexError),
+        # ([], (), []), # once we implement the array API standard
     ],
 )
 def test_sub_domain(domain, index, expected):
@@ -135,6 +140,33 @@ def test_sub_domain(domain, index, expected):
         expected = common.domain(expected)
         result = sub_domain(domain, index)
         assert result == expected
+
+
+@pytest.fixture
+def get_finite_domain():
+    return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4)))
+
+
+@pytest.fixture
+def get_infinite_domain():
+    return common.Domain((I, UnitRange.infinity()), (J, UnitRange.infinity()))
+
+
+@pytest.fixture
+def get_mixed_domain():
+    return common.Domain((I, UnitRange(-1, 3)), (J, UnitRange.infinity()))
+
+
+def test_finite_domain_is_finite(get_finite_domain):
+    assert get_finite_domain.is_finite()
+
+
+def test_infinite_domain_is_finite(get_infinite_domain):
+    assert not get_infinite_domain.is_finite()
+
+
+def test_mixed_domain_is_finite(get_mixed_domain):
+    assert not get_mixed_domain.is_finite()
 
 
 def test_iterate_domain():

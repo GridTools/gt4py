@@ -401,6 +401,12 @@ class Domain(Sequence[NamedRange]):
     def __str__(self) -> str:
         return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
 
+    def is_finite(self) -> bool:
+        for _, rng in self:
+            if Infinity.positive() in (abs(rng.start), abs(rng.stop)):
+                return False
+        return True
+
     def dim_index(self, dim: Dimension) -> Optional[int]:
         return self.dims.index(dim) if dim in self.dims else None
 

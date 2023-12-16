@@ -11,12 +11,13 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
 from __future__ import annotations
 
 import functools
 import itertools
 import operator
+
+import numpy as np
 
 from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
 from gt4py.next import common
@@ -42,9 +43,7 @@ def _relative_sub_domain(
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
-        raise IndexError(
-            f"Can not access dimension with index {index} of 'Field' with {len(domain)} dimensions."
-        )
+        raise embedded_exceptions.IndexOutOfBounds(domain=domain, indices=index)
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for (dim, rng), idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
@@ -71,8 +70,12 @@ def _absolute_sub_domain(
     domain: common.Domain, index: common.AbsoluteIndexSequence
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
+
+    if len(domain) < len(index):
+        raise embedded_exceptions.IndexOutOfBounds(domain=domain, indices=index)
+
     for i, (dim, rng) in enumerate(domain):
-        if (pos := _find_index_of_dim(dim, index)) is not None:
+        if (pos := find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
             idx = named_idx[1]
             if isinstance(idx, common.UnitRange):
@@ -137,7 +140,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
     return common.UnitRange(start, stop)
 
 
-def _find_index_of_dim(
+def find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> Optional[int]:
@@ -145,3 +148,29 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
+
+
+def broadcast_domain(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> Sequence[common.NamedRange]:
+    named_ranges = []
+    for dim in new_dimensions:
+        if (pos := find_index_of_dim(dim, field.domain)) is not None:
+            named_ranges.append((dim, field.domain[pos][1]))
+        else:
+            named_ranges.append(
+                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
+            )
+    return named_ranges
+
+
+def _compute_domain_slice(
+    field: common.Field, new_dimensions: tuple[common.Dimension, ...]
+) -> Sequence[slice | None]:
+    domain_slice: list[slice | None] = []
+    for dim in new_dimensions:
+        if find_index_of_dim(dim, field.domain) is not None:
+            domain_slice.append(slice(None))
+        else:
+            domain_slice.append(np.newaxis)
+    return domain_slice

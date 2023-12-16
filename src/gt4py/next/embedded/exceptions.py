@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Optional
+
 from gt4py.next import common
 from gt4py.next.errors import exceptions as gt4py_exceptions
 
@@ -19,20 +21,52 @@ from gt4py.next.errors import exceptions as gt4py_exceptions
 class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
     domain: common.Domain
     indices: common.AnyIndexSpec
-    index: common.AnyIndexElement
-    dim: common.Dimension
+    index: Optional[common.AnyIndexElement]
+    dim: Optional[common.Dimension]
 
     def __init__(
         self,
         domain: common.Domain,
         indices: common.AnyIndexSpec,
-        index: common.AnyIndexElement,
-        dim: common.Dimension,
+        index: Optional[common.AnyIndexElement] = None,
+        dim: Optional[common.Dimension] = None,
     ):
-        super().__init__(
-            f"Out of bounds: slicing {domain} with index `{indices}`, `{index}` is out of bounds in dimension `{dim}`."
-        )
+        msg = f"Out of bounds: slicing {domain} with index `{indices}`."
+        if index is not None and dim is not None:
+            msg += f" `{index}` is out of bounds in dimension `{dim}`."
+
+        super().__init__(msg)
         self.domain = domain
         self.indices = indices
         self.index = index
         self.dim = dim
+
+
+class EmptyDomainIndexError(gt4py_exceptions.GT4PyError):
+    cls_name: str
+
+    def __init__(self, cls_name: str):
+        super().__init__(f"Error in `{cls_name}`: Cannot index `{cls_name}` with an empty domain.")
+        self.cls_name = cls_name
+
+
+class FunctionFieldError(gt4py_exceptions.GT4PyError):
+    cls_name: str
+    msg: str
+
+    def __init__(self, cls_name: str, msg: str):
+        super().__init__(f"Error in `{cls_name}`: {msg}.")
+        self.cls_name = cls_name
+        self.msg = msg
+
+
+class InfiniteRangeNdarrayError(gt4py_exceptions.GT4PyError):
+    cls_name: str
+    domain: common.Domain
+
+    def __init__(self, cls_name: str, domain: common.Domain):
+        super().__init__(
+            f"Error in `{cls_name}`: Cannot construct an ndarray with an infinite range in domain: `{domain}`."
+        )
+        self.cls_name = cls_name
+        self.domain = domain
