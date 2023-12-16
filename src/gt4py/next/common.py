@@ -114,11 +114,7 @@ _Right = TypeVar("_Right", int, Infinity)
 
 @dataclasses.dataclass(frozen=True, init=False)
 class UnitRange(Sequence[int], Generic[_Left, _Right]):
-    """
-    Range from `start` to `stop` with step size one.
-
-    An open range is constructed by passing `None` for `start` and/or `stop`.
-    """
+    """Range from `start` to `stop` with step size one."""
 
     start: _Left
     stop: _Right
@@ -147,14 +143,17 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
 
     @classmethod
     def is_finite(cls, obj: UnitRange) -> TypeGuard[FiniteUnitRange]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE and obj.stop is not Infinity.POSITIVE
 
     @classmethod
     def is_right_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[_Left, int]]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.stop is not Infinity.POSITIVE
 
     @classmethod
     def is_left_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[int, _Right]]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE
 
     def __repr__(self) -> str:
@@ -190,9 +189,11 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
-        if not isinstance(value, core_defs.INTEGRAL_TYPES):
-            return False
-        return value >= self.start and value < self.stop
+        return (
+            isinstance(value, core_defs.INTEGRAL_TYPES)
+            and value >= self.start
+            and value < self.stop
+        )
 
     def __le__(self, other: UnitRange) -> bool:
         return self.start >= other.start and self.stop <= other.stop
@@ -252,12 +253,8 @@ def unit_range(r: RangeLike) -> UnitRange:
     #   once the related mypy bug (#16358) gets fixed
     if (
         isinstance(r, tuple)
-        and (
-            isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] is None or r[0] is Infinity.NEGATIVE
-        )
-        and (
-            isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] is None or r[1] is Infinity.POSITIVE
-        )
+        and (isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] in (None, Infinity.NEGATIVE))
+        and (isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] in (None, Infinity.POSITIVE))
     ):
         start = r[0] if r[0] is not None else Infinity.NEGATIVE
         stop = r[1] if r[1] is not None else Infinity.POSITIVE
@@ -341,7 +338,13 @@ def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
     return (v[0], unit_range(v[1]))
 
 
-_Rng = TypeVar("_Rng", bound=UnitRange)
+_Rng = TypeVar(
+    "_Rng",
+    UnitRange[int, int],
+    UnitRange[Infinity, int],
+    UnitRange[int, Infinity],
+    UnitRange[Infinity, Infinity],
+)
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -406,6 +409,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
 
     @classmethod
     def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
     @overload
