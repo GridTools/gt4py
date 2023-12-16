@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import field_utils
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
@@ -56,15 +57,17 @@ def shift_stencil(inp):
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 1:],
-            lambda shape: gtx.np_as_located_field(IDim, KDim)(
-                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
+            lambda shape: gtx.as_field(
+                [IDim, KDim], np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 1])
             ),
         ),
         (
             shift_stencil,
             lambda inp: np.asarray(inp)[1:, 2:],
-            lambda shape: gtx.np_as_located_field(IDim, KDim, origin={IDim: 0, KDim: 1})(
-                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2])
+            lambda shape: gtx.as_field(
+                [IDim, KDim],
+                np.fromfunction(lambda i, k: i * 10 + k, [shape[0] + 1, shape[1] + 2]),
+                origin={IDim: 0, KDim: 1},
             ),
         ),
     ],
@@ -81,13 +84,13 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
 
     shape = [5, 7]
     inp = (
-        gtx.np_as_located_field(IDim, KDim)(np.fromfunction(lambda i, k: i * 10 + k, shape))
+        gtx.as_field([IDim, KDim], np.fromfunction(lambda i, k: i * 10 + k, shape))
         if inp_fun is None
         else inp_fun(shape)
     )
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape))
+    out = gtx.as_field([IDim, KDim], np.zeros(shape))
 
-    ref = ref_fun(inp)
+    ref = ref_fun(inp.asnumpy())
 
     run_processor(
         stencil[{IDim: range(0, shape[0]), KDim: range(0, shape[1])}],
@@ -100,7 +103,7 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -129,21 +132,21 @@ def k_level_condition_upper_tuple(k_idx, k_level):
         (
             k_level_condition_lower,
             lambda inp: 0,
-            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([[0], inp[:-1]]),
         ),
         (
             k_level_condition_upper,
             lambda inp: inp.shape[0] - 1,
-            lambda k_size: gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+            lambda k_size: gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             lambda inp: np.concatenate([inp[1:], [0]]),
         ),
         (
             k_level_condition_upper_tuple,
             lambda inp: inp[0].shape[0] - 1,
             lambda k_size: (
-                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
-                gtx.np_as_located_field(KDim)(np.arange(k_size, dtype=np.int32)),
+                gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
+                gtx.as_field([KDim], np.arange(k_size, dtype=np.int32)),
             ),
             lambda inp: np.concatenate([(inp[0][1:] + inp[1][1:]), [0]]),
         ),
@@ -155,9 +158,9 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
 
     k_size = 5
     inp = inp_function(k_size)
-    ref = ref_function(inp)
+    ref = ref_function(field_utils.asnumpy(inp))
 
-    out = gtx.np_as_located_field(KDim)(np.zeros((5,), dtype=np.int32))
+    out = gtx.as_field([KDim], np.zeros((5,), dtype=np.int32))
 
     run_processor(
         fun[{KDim: range(0, k_size)}],
@@ -171,7 +174,7 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
     )
 
     if validate:
-        np.allclose(ref, out)
+        np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -204,8 +207,8 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
+    inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype))
 
     run_processor(
         ksum_fencil,
@@ -220,7 +223,7 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     )
 
     if validate:
-        assert np.allclose(reference, np.asarray(out))
+        assert np.allclose(reference, out.asnumpy())
 
 
 @fundef
@@ -241,8 +244,8 @@ def ksum_back_fencil(i_size, k_size, inp, out):
 def test_ksum_back_scan(program_processor, lift_mode):
     program_processor, validate = program_processor
     shape = [1, 7]
-    inp = gtx.np_as_located_field(IDim, KDim)(np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
-    out = gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=inp.dtype))
+    inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
+    out = gtx.as_field([IDim, KDim], np.zeros(shape, dtype=inp.dtype))
 
     ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
 
@@ -258,7 +261,7 @@ def test_ksum_back_scan(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(ref, np.asarray(out))
+        assert np.allclose(ref, out.asnumpy())
 
 
 @fundef
@@ -304,11 +307,11 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
     pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
-    inp0 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.float64))
-    inp1 = gtx.np_as_located_field(IDim, KDim)(np.asarray([list(range(7))], dtype=np.int32))
+    inp0 = gtx.as_field([IDim, KDim], np.asarray([list(range(7))], dtype=np.float64))
+    inp1 = gtx.as_field([IDim, KDim], np.asarray([list(range(7))], dtype=np.int32))
     out = (
-        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float64)),
-        gtx.np_as_located_field(IDim, KDim)(np.zeros(shape, dtype=np.float32)),
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=np.float64)),
+        gtx.as_field([IDim, KDim], np.zeros(shape, dtype=np.float32)),
     )
 
     run_processor(
@@ -348,9 +351,9 @@ def test_different_vertical_sizes(program_processor):
     program_processor, validate = program_processor
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
-    inp1 = gtx.np_as_located_field(KDim)(np.arange(0, k_size + 1))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=inp0.dtype))
+    inp0 = gtx.as_field([KDim], np.arange(0, k_size))
+    inp1 = gtx.as_field([KDim], np.arange(0, k_size + 1))
+    out = gtx.as_field([KDim], np.zeros(k_size, dtype=inp0.dtype))
     ref = inp0.ndarray + inp1.ndarray[1:]
 
     run_processor(
@@ -364,7 +367,7 @@ def test_different_vertical_sizes(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref[1:], out[1:])
+        assert np.allclose(ref[1:], out.asnumpy()[1:])
 
 
 @fundef
@@ -387,10 +390,10 @@ def test_different_vertical_sizes_with_origin(program_processor):
     program_processor, validate = program_processor
 
     k_size = 10
-    inp0 = gtx.np_as_located_field(KDim)(np.arange(0, k_size))
-    inp1 = gtx.np_as_located_field(KDim, origin={KDim: 1})(np.arange(0, k_size + 1))
-    out = gtx.np_as_located_field(KDim)(np.zeros(k_size, dtype=np.int64))
-    ref = np.asarray(inp0) + np.asarray(inp1)[:-1]
+    inp0 = gtx.as_field([KDim], np.arange(0, k_size))
+    inp1 = gtx.as_field([KDim], np.arange(0, k_size + 1), origin={KDim: 1})
+    out = gtx.as_field([KDim], np.zeros(k_size, dtype=np.int64))
+    ref = inp0.asnumpy() + inp1.asnumpy()[:-1]
 
     run_processor(
         sum_fencil,
@@ -403,7 +406,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     )
 
     if validate:
-        assert np.allclose(ref, out)
+        assert np.allclose(ref, out.asnumpy())
 
 
 # TODO(havogt) test tuple_get builtin on a Column

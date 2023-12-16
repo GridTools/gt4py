@@ -14,15 +14,23 @@
 
 from typing import Any
 
-from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.pretty_parser import pparse
-from gt4py.next.iterator.pretty_printer import pformat
-from gt4py.next.program_processors.processor_interface import program_formatter
+import gt4py.eve as eve
+import gt4py.next.iterator.ir as itir
+import gt4py.next.iterator.pretty_parser as pretty_parser
+import gt4py.next.iterator.pretty_printer as pretty_printer
+import gt4py.next.program_processors.processor_interface as ppi
 
 
-@program_formatter
-def pretty_format_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
-    pretty = pformat(program)
-    parsed = pparse(pretty)
-    assert parsed == program
+class _RemoveITIRSymTypes(eve.NodeTranslator):
+    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
+        return itir.Sym(id=node.id, dtype=None, kind=None)
+
+
+@ppi.program_formatter
+def format_itir_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
+    # remove types from ITIR as they are not supported for the roundtrip
+    root = _RemoveITIRSymTypes().visit(program)
+    pretty = pretty_printer.pformat(root)
+    parsed = pretty_parser.pparse(pretty)
+    assert parsed == root
     return pretty

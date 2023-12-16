@@ -22,7 +22,7 @@ class NodeYielder(ast.NodeTransformer):
     def apply(cls, node: ast.AST) -> ast.AST:
         result = list(cls().visit(node))
         if len(result) != 1:
-            raise ValueError("AST was split or lost during the pass. Use `.visit()` instead.")
+            raise ValueError("AST was split or lost during the pass, use '.visit()' instead.")
         return result[0]
 
     def visit(self, node: ast.AST) -> Iterator[ast.AST]:

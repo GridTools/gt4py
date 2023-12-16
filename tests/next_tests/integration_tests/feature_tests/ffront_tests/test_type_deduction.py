@@ -88,7 +88,7 @@ def type_info_cases() -> list[tuple[Optional[ts.TypeSpec], dict]]:
 def callable_type_info_cases():
     # reuse all the other test cases
     not_callable = [
-        (symbol_type, [], {}, [r"Expected a callable type, but got "], None)
+        (symbol_type, [], {}, [r"Expected a callable type, got "], None)
         for symbol_type, attributes in type_info_cases()
         if not isinstance(symbol_type, ts.CallableType)
     ]
@@ -165,7 +165,7 @@ def callable_type_info_cases():
             nullary_func_type,
             [],
             {"foo": bool_type},
-            [r"Got unexpected keyword argument `foo`."],
+            [r"Got unexpected keyword argument 'foo'."],
             None,
         ),
         (
@@ -180,7 +180,7 @@ def callable_type_info_cases():
             unary_func_type,
             [float_type],
             {},
-            [r"Expected 1st argument to be of type `bool`, but got `float64`."],
+            [r"Expected 1st argument to be of type 'bool', got 'float64'."],
             None,
         ),
         (
@@ -188,7 +188,7 @@ def callable_type_info_cases():
             [],
             {},
             [
-                r"Missing 1 required positional argument: `foo`",
+                r"Missing 1 required positional argument: 'foo'",
                 r"Function takes 1 positional argument, but 0 were given.",
             ],
             None,
@@ -199,31 +199,31 @@ def callable_type_info_cases():
             kw_or_pos_arg_func_type,
             [],
             {"foo": float_type},
-            [r"Expected argument `foo` to be of type `bool`, but got `float64`."],
+            [r"Expected argument 'foo' to be of type 'bool', got 'float64'."],
             None,
         ),
         (
             kw_or_pos_arg_func_type,
             [],
             {"bar": bool_type},
-            [r"Got unexpected keyword argument `bar`."],
+            [r"Got unexpected keyword argument 'bar'."],
             None,
         ),
         # function with keyword-only argument
-        (kw_only_arg_func_type, [], {}, [r"Missing required keyword argument `foo`."], None),
+        (kw_only_arg_func_type, [], {}, [r"Missing required keyword argument 'foo'."], None),
         (kw_only_arg_func_type, [], {"foo": bool_type}, [], ts.VoidType()),
         (
             kw_only_arg_func_type,
             [],
             {"foo": float_type},
-            [r"Expected keyword argument `foo` to be of type `bool`, but got `float64`."],
+            [r"Expected keyword argument 'foo' to be of type 'bool', got 'float64'."],
             None,
         ),
         (
             kw_only_arg_func_type,
             [],
             {"bar": bool_type},
-            [r"Got unexpected keyword argument `bar`."],
+            [r"Got unexpected keyword argument 'bar'."],
             None,
         ),
         # function with positional, keyword-or-positional, and keyword-only argument
@@ -232,9 +232,9 @@ def callable_type_info_cases():
             [],
             {},
             [
-                r"Missing 1 required positional argument: `foo`",
+                r"Missing 1 required positional argument: 'foo'",
                 r"Function takes 2 positional arguments, but 0 were given.",
-                r"Missing required keyword argument `bar`",
+                r"Missing required keyword argument 'bar'",
             ],
             None,
         ),
@@ -244,7 +244,7 @@ def callable_type_info_cases():
             {},
             [
                 r"Function takes 2 positional arguments, but 1 were given.",
-                r"Missing required keyword argument `bar`",
+                r"Missing required keyword argument 'bar'",
             ],
             None,
         ),
@@ -252,14 +252,14 @@ def callable_type_info_cases():
             pos_arg_and_kw_or_pos_arg_and_kw_only_arg_func_type,
             [bool_type],
             {"foo": int_type},
-            [r"Missing required keyword argument `bar`"],
+            [r"Missing required keyword argument 'bar'"],
             None,
         ),
         (
             pos_arg_and_kw_or_pos_arg_and_kw_only_arg_func_type,
             [bool_type],
             {"foo": int_type},
-            [r"Missing required keyword argument `bar`"],
+            [r"Missing required keyword argument 'bar'"],
             None,
         ),
         (
@@ -274,9 +274,9 @@ def callable_type_info_cases():
             [int_type],
             {"bar": bool_type, "foo": bool_type},
             [
-                r"Expected 1st argument to be of type `bool`, but got `int64`",
-                r"Expected argument `foo` to be of type `int64`, but got `bool`",
-                r"Expected keyword argument `bar` to be of type `float64`, but got `bool`",
+                r"Expected 1st argument to be of type 'bool', got 'int64'",
+                r"Expected argument 'foo' to be of type 'int64', got 'bool'",
+                r"Expected keyword argument 'bar' to be of type 'float64', got 'bool'",
             ],
             None,
         ),
@@ -299,7 +299,7 @@ def callable_type_info_cases():
             [ts.TupleType(types=[float_type, field_type])],
             {},
             [
-                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `tuple\[float64, Field\[\[I\], float64\]\]`"
+                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[I\], float64\]\]', got 'tuple\[float64, Field\[\[I\], float64\]\]'"
             ],
             ts.VoidType(),
         ),
@@ -308,7 +308,7 @@ def callable_type_info_cases():
             [int_type],
             {},
             [
-                "Expected 1st argument to be of type `tuple\[bool, Field\[\[I\], float64\]\]`, but got `int64`"
+                r"Expected 1st argument to be of type 'tuple\[bool, Field\[\[I\], float64\]\]', got 'int64'"
             ],
             ts.VoidType(),
         ),
@@ -330,8 +330,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected argument `a` to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
-                r"Expected argument `b` to be of type `Field\[\[K\], int64\]`, but got `Field\[\[K\], float64\]`",
+                r"Expected argument 'a' to be of type 'Field\[\[K\], int64\]', got 'Field\[\[K\], float64\]'",
+                r"Expected argument 'b' to be of type 'Field\[\[K\], int64\]', got 'Field\[\[K\], float64\]'",
             ],
             ts.FieldType(dims=[KDim], dtype=float_type),
         ),
@@ -393,8 +393,8 @@ def callable_type_info_cases():
             ],
             {},
             [
-                r"Expected argument `a` to be of type `tuple\[Field\[\[I, J, K\], int64\], "
-                r"Field\[\[\.\.\.\], int64\]\]`, but got `tuple\[Field\[\[I, J, K\], int64\]\]`."
+                r"Expected argument 'a' to be of type 'tuple\[Field\[\[I, J, K\], int64\], "
+                r"Field\[\[\.\.\.\], int64\]\]', got 'tuple\[Field\[\[I, J, K\], int64\]\]'."
             ],
             ts.FieldType(dims=[IDim, JDim, KDim], dtype=float_type),
         ),
@@ -491,7 +491,7 @@ def test_adding_bool():
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Type Field\[\[TDim\], bool\] can not be used in operator `\+`!"),
+        match=(r"Type 'Field\[\[TDim\], bool\]' can not be used in operator '\+'."),
     ):
         _ = FieldOperatorParser.apply_to_function(add_bools)
 
@@ -507,7 +507,7 @@ def test_binop_nonmatching_dims():
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Could not promote `Field\[\[X], float64\]` and `Field\[\[Y\], float64\]` to common type in call to +."
+            r"Could not promote 'Field\[\[X], float64\]' and 'Field\[\[Y\], float64\]' to common type in call to +."
         ),
     ):
         _ = FieldOperatorParser.apply_to_function(nonmatching)
@@ -519,7 +519,7 @@ def test_bitopping_float():
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Type Field\[\[TDim\], float64\] can not be used in operator `\&`!"),
+        match=(r"Type 'Field\[\[TDim\], float64\]' can not be used in operator '\&'."),
     ):
         _ = FieldOperatorParser.apply_to_function(float_bitop)
 
@@ -530,7 +530,7 @@ def test_signing_bool():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Incompatible type for unary operator `\-`: `Field\[\[TDim\], bool\]`!",
+        match=r"Incompatible type for unary operator '\-': 'Field\[\[TDim\], bool\]'.",
     ):
         _ = FieldOperatorParser.apply_to_function(sign_bool)
 
@@ -541,7 +541,7 @@ def test_notting_int():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Incompatible type for unary operator `not`: `Field\[\[TDim\], int64\]`!",
+        match=r"Incompatible type for unary operator 'not': 'Field\[\[TDim\], int64\]'.",
     ):
         _ = FieldOperatorParser.apply_to_function(not_int)
 
@@ -613,7 +613,7 @@ def test_mismatched_literals():
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Could not promote `float32` and `float64` to common type in call to +."),
+        match=(r"Could not promote 'float32' and 'float64' to common type in call to +."),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
 
@@ -643,7 +643,7 @@ def test_broadcast_disjoint():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Expected broadcast dimension is missing",
+        match=r"expected broadcast dimension\(s\) \'.*\' missing",
     ):
         _ = FieldOperatorParser.apply_to_function(disjoint_broadcast)
 
@@ -658,7 +658,7 @@ def test_broadcast_badtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Expected all broadcast dimensions to be of type Dimension.",
+        match=r"expected all broadcast dimensions to be of type 'Dimension'.",
     ):
         _ = FieldOperatorParser.apply_to_function(badtype_broadcast)
 
@@ -778,15 +778,15 @@ def test_astype_wrong_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Invalid call to `astype`. Second argument must be a scalar type, but got.",
+        match=r"Invalid call to 'astype': second argument must be a scalar type, got.",
     ):
         _ = FieldOperatorParser.apply_to_function(simple_astype)
 
 
 def test_astype_wrong_value_type():
     def simple_astype(a: Field[[TDim], float64]):
-        # we just use a tuple here but anything that is not a field or scalar works
-        return astype((1, 2), bool)
+        # we just use broadcast here but anything that is not a field, scalar or tuple thereof works
+        return astype(broadcast, bool)
 
     with pytest.raises(errors.DSLError) as exc_info:
         _ = FieldOperatorParser.apply_to_function(simple_astype)
@@ -806,7 +806,7 @@ def test_mod_floats():
 
     with pytest.raises(
         errors.DSLError,
-        match=r"Type float64 can not be used in operator `%`",
+        match=r"Type 'float64' can not be used in operator '%'",
     ):
         _ = FieldOperatorParser.apply_to_function(modulo_floats)
 
@@ -844,6 +844,6 @@ def test_as_offset_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=f"Excepted integer for offset field dtype",
+        match=f"expected integer for offset field dtype",
     ):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)

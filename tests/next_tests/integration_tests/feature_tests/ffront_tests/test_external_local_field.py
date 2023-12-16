@@ -26,7 +26,20 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
+pytestmark = pytest.mark.uses_unstructured_shift
+
+
 def test_external_local_field(unstructured_case):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
@@ -35,7 +48,9 @@ def test_external_local_field(unstructured_case):
             inp * ones(V2E), axis=V2EDim
         )  # multiplication with shifted `ones` because reduction of only non-shifted field with local dimension is not supported
 
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
+    inp = unstructured_case.as_field(
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+    )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
     cases.verify(
@@ -56,7 +71,9 @@ def test_external_local_field_only(unstructured_case):
     def testee(inp: gtx.Field[[Vertex, V2EDim], int32]) -> gtx.Field[[Vertex], int32]:
         return neighbor_sum(inp, axis=V2EDim)
 
-    inp = gtx.np_as_located_field(Vertex, V2EDim)(unstructured_case.offset_provider["V2E"].table)
+    inp = unstructured_case.as_field(
+        [Vertex, V2EDim], unstructured_case.offset_provider["V2E"].table
+    )
 
     cases.verify(
         unstructured_case,

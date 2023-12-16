@@ -14,7 +14,7 @@
 
 import pytest
 
-from gt4py.next.iterator import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
 
@@ -55,4 +55,26 @@ def test(name, opcount_preserving, testee, expected):
         expected = expected[opcount_preserving]
 
     inlined = InlineLambdas.apply(testee, opcount_preserving=opcount_preserving)
+    assert inlined == expected
+
+
+def test_inline_lambda_args():
+    testee = im.let("reduce_step", im.lambda_("x", "y")(im.plus("x", "y")))(
+        im.lambda_("a")(
+            im.call("reduce_step")(im.call("reduce_step")(im.call("reduce_step")("a", 1), 2), 3)
+        )
+    )
+    expected = im.lambda_("a")(
+        im.call(im.lambda_("x", "y")(im.plus("x", "y")))(
+            im.call(im.lambda_("x", "y")(im.plus("x", "y")))(
+                im.call(im.lambda_("x", "y")(im.plus("x", "y")))("a", 1), 2
+            ),
+            3,
+        )
+    )
+    inlined = InlineLambdas.apply(
+        testee,
+        opcount_preserving=True,
+        force_inline_lambda_args=True,
+    )
     assert inlined == expected

@@ -13,10 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, cast
+import functools
+import itertools
+import operator
 
 import numpy as np
 
+from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
@@ -30,7 +33,7 @@ def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Doma
     if common.is_relative_index_sequence(index_sequence):
         return _relative_sub_domain(domain, index_sequence)
 
-    raise IndexError(f"Unsupported index type: {index}")
+    raise IndexError(f"Unsupported index type: '{index}'.")
 
 
 def _relative_sub_domain(
@@ -94,6 +97,19 @@ def _absolute_sub_domain(
             named_ranges.append((dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
+
+
+def intersect_domains(*domains: common.Domain) -> common.Domain:
+    return functools.reduce(
+        operator.and_,
+        domains,
+        common.Domain(dims=tuple(), ranges=tuple()),
+    )
+
+
+def iterate_domain(domain: common.Domain):
+    for i in itertools.product(*[list(r) for r in domain.ranges]):
+        yield tuple(zip(domain.dims, i))
 
 
 def _expand_ellipsis(

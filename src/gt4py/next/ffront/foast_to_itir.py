@@ -25,7 +25,8 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
-from gt4py.next.iterator import ir as itir, ir_makers as im
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -229,7 +230,7 @@ class FieldOperatorLowering(NodeTranslator):
         dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
-                raise NotImplementedError(f"{node.op} is only supported on `bool`s.")
+                raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._map("not_", node.operand)
 
         return self._map(
@@ -312,17 +313,14 @@ class FieldOperatorLowering(NodeTranslator):
             return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
 
         raise AssertionError(
-            f"Call to object of type {type(node.func.type).__name__} not understood."
+            f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
-        obj, dtype = node.args[0], node.args[1].id
-
-        # TODO check that we test astype that results in a itir.map_ operation
-        return self._map(
-            im.lambda_("it")(im.call("cast_")("it", str(dtype))),
-            obj,
+        obj, new_type = node.args[0], node.args[1].id
+        return self._process_elements(
+            lambda x: im.call("cast_")(x, str(new_type)), obj, obj.type, **kwargs
         )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -373,7 +371,9 @@ class FieldOperatorLowering(NodeTranslator):
                     im.literal(str(bool(source_type(node.args[0].value))), "bool")
                 )
             return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
-        raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
+        raise FieldOperatorLoweringError(
+            f"Encountered a type cast, which is not supported: {node}."
+        )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
@@ -390,7 +390,7 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.promote_to_const_iterator(im.literal(str(val), typename))
-        raise ValueError(f"Unsupported literal type {type_}.")
+        raise ValueError(f"Unsupported literal type '{type_}'.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
         return self._make_literal(node.value, node.type)
@@ -402,6 +402,32 @@ class FieldOperatorLowering(NodeTranslator):
             op = im.call("map_")(op)
 
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+
+    def _process_elements(
+        self,
+        process_func: Callable[[itir.Expr], itir.Expr],
+        obj: foast.Expr,
+        current_el_type: ts.TypeSpec,
+        current_el_expr: itir.Expr = im.ref("expr"),
+    ):
+        """Recursively applies a processing function to all primitive constituents of a tuple."""
+        if isinstance(current_el_type, ts.TupleType):
+            # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
+            return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
+                *[
+                    self._process_elements(
+                        process_func,
+                        obj,
+                        current_el_type.types[i],
+                        im.tuple_get(i, current_el_expr),
+                    )
+                    for i in range(len(current_el_type.types))
+                ]
+            )
+        elif type_info.contains_local_field(current_el_type):
+            raise NotImplementedError("Processing fields with local dimension is not implemented.")
+        else:
+            return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
 class FieldOperatorLoweringError(Exception):

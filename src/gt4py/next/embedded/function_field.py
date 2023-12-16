@@ -103,8 +103,7 @@ class FunctionField(common.FieldBuiltinFuncRegistry, common.Field[common.DimsT, 
 
     __getitem__ = restrict
 
-    @property
-    def ndarray(self) -> core_defs.NDArrayObject:
+    def asnumpy(self) -> core_defs.NDArrayObject:
         # handle case where we have a constant FunctionField where field.ndarray is a scalar
         if (
             isinstance(self._trigger_func(), (int, float)) and not self.domain.is_finite()
@@ -116,6 +115,10 @@ class FunctionField(common.FieldBuiltinFuncRegistry, common.Field[common.DimsT, 
                 self.__class__.__name__, self.domain
             )
         return np.fromfunction(self.func, self.domain.shape)
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject:
+        return self.asnumpy()
 
     def _handle_function_field_op(self, other: FunctionField, op: Callable) -> FunctionField:
         domain_intersection = self.domain & other.domain
@@ -152,6 +155,9 @@ class FunctionField(common.FieldBuiltinFuncRegistry, common.Field[common.DimsT, 
 
     def _unary_op(self, op: Callable) -> FunctionField:
         return self.__class__(_compose(op, self), self.domain)
+
+    def __ne__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
+        return NotImplemented  # TODO
 
     def __add__(self, other: common.Field | core_defs.ScalarT) -> common.Field:
         return self._binary_operation(operator.add, other)

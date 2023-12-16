@@ -122,7 +122,7 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
             gtfn.run_gtfn,
             gtfn.run_gtfn_imperative,
             gtfn.run_gtfn_with_temporaries,
-            gtfn_formatters.format_sourcecode,
+            gtfn_formatters.format_cpp,
         ]
         and lift_mode == LiftMode.FORCE_INLINE
     ):
@@ -134,7 +134,7 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
-    as_3d_field = gtx.np_as_located_field(IDim, JDim, KDim)
+    as_3d_field = gtx.as_field.partial([IDim, JDim, KDim])
     a_s = as_3d_field(a)
     b_s = as_3d_field(b)
     c_s = as_3d_field(c)
@@ -158,4 +158,4 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(x, x_s)
+        assert np.allclose(x, x_s.asnumpy())

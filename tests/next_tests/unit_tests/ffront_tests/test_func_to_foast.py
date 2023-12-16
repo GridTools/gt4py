@@ -88,7 +88,7 @@ def test_mistyped_arg():
 
     with pytest.raises(
         ValueError,
-        match="Field type requires two arguments, got 0!",
+        match="Field type requires two arguments, got 0.",
     ):
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
@@ -245,7 +245,7 @@ def test_conditional_wrong_mask_type():
     ) -> gtx.Field[[TDim], float64]:
         return where(a, a, a)
 
-    msg = r"Expected a field with dtype `bool`."
+    msg = r"expected a field with dtype 'bool'"
     with pytest.raises(errors.DSLError, match=msg):
         _ = FieldOperatorParser.apply_to_function(conditional_wrong_mask_type)
 
@@ -269,7 +269,7 @@ def test_ternary_with_field_condition():
     def ternary_with_field_condition(cond: gtx.Field[[], bool]):
         return 1 if cond else 2
 
-    with pytest.raises(errors.DSLError, match=r"should be .* `bool`"):
+    with pytest.raises(errors.DSLError, match=r"should be .* 'bool'"):
         _ = FieldOperatorParser.apply_to_function(ternary_with_field_condition)
 
 
@@ -288,7 +288,7 @@ def test_adr13_wrong_return_type_annotation():
     def wrong_return_type_annotation() -> gtx.Field[[], float]:
         return 1.0
 
-    with pytest.raises(errors.DSLError, match=r"Expected `float.*`"):
+    with pytest.raises(errors.DSLError, match=r"expected 'float.*'"):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
 
@@ -395,8 +395,6 @@ def test_zero_dims_ternary():
     ):
         return a if cond == 1 else b
 
-    msg = r"Incompatible datatypes in operator `==`"
-    with pytest.raises(errors.DSLError) as exc_info:
+    msg = r"Incompatible datatypes in operator '=='"
+    with pytest.raises(errors.DSLError, match=msg):
         _ = FieldOperatorParser.apply_to_function(zero_dims_ternary)
-
-    assert re.search(msg, exc_info.value.args[0]) is not None

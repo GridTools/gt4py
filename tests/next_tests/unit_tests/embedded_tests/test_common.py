@@ -19,7 +19,7 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
-from gt4py.next.embedded.common import _slice_range, sub_domain
+from gt4py.next.embedded.common import _slice_range, iterate_domain, sub_domain
 
 
 @pytest.mark.parametrize(
@@ -167,3 +167,15 @@ def test_infinite_domain_is_finite(get_infinite_domain):
 
 def test_mixed_domain_is_finite(get_mixed_domain):
     assert not get_mixed_domain.is_finite()
+
+
+def test_iterate_domain():
+    domain = common.domain({I: 2, J: 3})
+    ref = []
+    for i in domain[I][1]:
+        for j in domain[J][1]:
+            ref.append(((I, i), (J, j)))
+
+    testee = list(iterate_domain(domain))
+
+    assert testee == ref

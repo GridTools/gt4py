@@ -56,15 +56,16 @@ def test_strided_offset_provider(program_processor):
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()
-    inp = gtx.np_as_located_field(LocAB)(
+    inp = gtx.as_field(
+        [LocAB],
         rng.normal(
             size=(LocAB_size,),
-        )
+        ),
     )
-    out = gtx.np_as_located_field(LocA)(np.zeros((LocA_size,)))
-    ref = np.sum(np.asarray(inp).reshape(LocA_size, max_neighbors), axis=-1)
+    out = gtx.as_field([LocA], np.zeros((LocA_size,)))
+    ref = np.sum(inp.asnumpy().reshape(LocA_size, max_neighbors), axis=-1)
 
     run_processor(fencil, program_processor, LocA_size, out, inp)
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)

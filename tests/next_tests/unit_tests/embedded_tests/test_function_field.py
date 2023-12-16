@@ -73,8 +73,8 @@ def test_constant_field_getitem_missing_domain_ellipsis(test_index):
 )
 def test_constant_field_ndarray(domain):
     cf = funcf.constant_field(10, domain)
-    assert isinstance(cf.ndarray, int)
-    assert cf.ndarray == 10
+    assert isinstance(cf.asnumpy(), int)
+    assert cf.asnumpy() == 10
 
 
 def test_constant_field_and_field_op():
@@ -83,7 +83,7 @@ def test_constant_field_and_field_op():
     cf = funcf.constant_field(10)
 
     result = cf + field
-    assert np.allclose(result.ndarray, 11)
+    assert np.allclose(result.asnumpy(), 11)
     assert result.domain == domain
 
 

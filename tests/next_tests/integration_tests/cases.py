@@ -25,9 +25,10 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import common
+from gt4py.next import common, constructors, field_utils
 from gt4py.next.ffront import decorator
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -71,9 +72,9 @@ E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
 C2EDim = gtx.Dimension("C2E", kind=common.DimensionKind.LOCAL)
 V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
 E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("E2V", source=Edge, target=(Cell, C2EDim))
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
-ScalarValue: TypeAlias = np.int32 | np.int64 | np.float32 | np.float64 | np.generic
+ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
 FieldViewArg: TypeAlias = FieldValue | ScalarValue | tuple["FieldViewArg", ...]
 FieldViewInout: TypeAlias = FieldValue | tuple["FieldViewInout", ...]
@@ -117,11 +118,18 @@ class DataInitializer(Protocol):
         return self
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(init=False)
 class ConstInitializer(DataInitializer):
     """Initialize with a given value across the coordinate space."""
 
     value: ScalarValue
+
+    def __init__(self, value: ScalarValue):
+        if not core_defs.is_scalar_type(value):
+            raise ValueError(
+                "'ConstInitializer' can not be used with non-scalars. Use 'Case.as_field' instead."
+            )
+        self.value = value
 
     @property
     def scalar_value(self) -> ScalarValue:
@@ -129,12 +137,15 @@ class ConstInitializer(DataInitializer):
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        backend: ppi.ProgramExecutor,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
-        return gtx.np_as_located_field(*sizes.keys())(
-            np.full(tuple(sizes.values()), self.value, dtype=dtype)
+        return constructors.full(
+            domain=common.domain(sizes),
+            fill_value=self.value,
+            dtype=dtype,
+            allocator=backend,
         )
 
 
@@ -151,20 +162,22 @@ class IndexInitializer(DataInitializer):
 
     @property
     def scalar_value(self) -> ScalarValue:
-        raise AttributeError("`scalar_value` not supported in `IndexInitializer`.")
+        raise AttributeError("'scalar_value' not supported in 'IndexInitializer'.")
 
     def field(
         self,
-        backend: ppi.ProgramProcessor,
+        backend: ppi.ProgramExecutor,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
     ) -> FieldValue:
         if len(sizes) > 1:
             raise ValueError(
-                f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
+                f"'IndexInitializer' only supports fields with a single 'Dimension', got {sizes}."
             )
         n_data = list(sizes.values())[0]
-        return gtx.np_as_located_field(*sizes.keys())(np.arange(0, n_data, dtype=dtype))
+        return constructors.as_field(
+            domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
+        )
 
     def from_case(
         self: Self,
@@ -202,8 +215,10 @@ class UniqueInitializer(DataInitializer):
         svals = tuple(sizes.values())
         n_data = int(np.prod(svals))
         self.start += n_data
-        return gtx.np_as_located_field(*sizes.keys())(
-            np.arange(start, start + n_data, dtype=dtype).reshape(svals)
+        return constructors.as_field(
+            common.domain(sizes),
+            np.arange(start, start + n_data, dtype=dtype).reshape(svals),
+            allocator=backend,
         )
 
     def from_case(
@@ -229,7 +244,7 @@ class Builder:
         return self.partial(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
-        raise AttributeError(f"No setter for argument {name}.")
+        raise AttributeError(f"No setter for argument '{name}'.")
 
 
 @typing.overload
@@ -308,7 +323,7 @@ def make_builder(
     if 0 < len(args) <= 1 and args[0] is not None:
         return make_builder_inner(args[0])
     if len(args) > 1:
-        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received!")
+        raise ValueError(f"make_builder takes only one positional argument, {len(args)} received.")
     return make_builder_inner
 
 
@@ -420,14 +435,13 @@ def verify(
         run(case, fieldview_prog, *args, offset_provider=offset_provider)
 
     out_comp = out or inout
-    out_comp_str = str(out_comp)
     assert out_comp is not None
-    if hasattr(out_comp, "ndarray"):
-        out_comp_str = str(out_comp.ndarray)
-    assert comparison(ref, out_comp), (
+    out_comp_ndarray = field_utils.asnumpy(out_comp)
+    ref_ndarray = field_utils.asnumpy(ref)
+    assert comparison(ref_ndarray, out_comp_ndarray), (
         f"Verification failed:\n"
         f"\tcomparison={comparison.__name__}(ref, out)\n"
-        f"\tref = {ref}\n\tout = {out_comp_str}"
+        f"\tref = {ref_ndarray}\n\tout = {str(out_comp_ndarray)}"
     )
 
 
@@ -453,7 +467,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.ndarray if hasattr(i, "ndarray") else i for i in inps)
+    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
     verify(
         case,
         fieldop,
@@ -519,7 +533,7 @@ def _allocate_from_type(
             )
         case _:
             raise TypeError(
-                f"Can not allocate for type {arg_type} with initializer {strategy or 'default'}"
+                f"Can not allocate for type '{arg_type}' with initializer '{strategy or 'default'}'."
             )
 
 
@@ -528,7 +542,7 @@ def get_param_types(
 ) -> dict[str, ts.TypeSpec]:
     if fieldview_prog.definition is None:
         raise ValueError(
-            f"test cases do not support {type(fieldview_prog)} with empty .definition attribute (as you would get from .as_program())!"
+            f"test cases do not support '{type(fieldview_prog)}' with empty .definition attribute (as you would get from .as_program())."
         )
     annotations = xtyping.get_type_hints(fieldview_prog.definition)
     return {
@@ -545,7 +559,7 @@ def get_param_size(param_type: ts.TypeSpec, sizes: dict[gtx.Dimension, int]) -> 
         case ts.TupleType(types):
             return sum([get_param_size(t, sizes=sizes) for t in types])
         case _:
-            raise TypeError(f"Can not get size for parameter of type {param_type}")
+            raise TypeError(f"Can not get size for parameter of type '{param_type}'.")
 
 
 def extend_sizes(
@@ -591,3 +605,7 @@ class Case:
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
+
+    @property
+    def as_field(self):
+        return constructors.as_field.partial(allocator=self.backend)

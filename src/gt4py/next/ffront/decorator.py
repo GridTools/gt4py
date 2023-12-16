@@ -30,9 +30,11 @@ from typing import Generator, Generic, TypeVar
 from devtools import debug
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.eve.utils import UIDGenerator
+from gt4py.next import allocators as next_allocators, embedded as next_embedded
 from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -52,7 +54,12 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
+from gt4py.next.iterator.ir_utils.ir_makers import (
+    literal_from_value,
+    promote_to_const_iterator,
+    ref,
+    sym,
+)
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
@@ -81,7 +88,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                     raise NotImplementedError(
                         f"Using closure vars with same name but different value "
                         f"across functions is not implemented yet. \n"
-                        f"Collisions: {'`,  `'.join(collisions)}"
+                        f"Collisions: '{',  '.join(collisions)}'."
                     )
 
                 all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
@@ -118,7 +125,7 @@ def _deduce_grid_type(
 
     if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
         raise ValueError(
-            "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
@@ -140,7 +147,7 @@ def _field_constituents_shape_and_dims(
     elif isinstance(arg_type, ts.ScalarType):
         yield (None, [])
     else:
-        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
+        raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -170,14 +177,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -201,7 +208,7 @@ class Program:
         ]
         if misnamed_functions:
             raise RuntimeError(
-                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}"
+                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}."
             )
 
         undefined_symbols = [
@@ -211,8 +218,17 @@ class Program:
         ]
         if undefined_symbols:
             raise RuntimeError(
-                f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
+                f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
+
+    @functools.cached_property
+    def __gt_allocator__(
+        self,
+    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        if self.backend:
+            return self.backend.__gt_allocator__
+        else:
+            raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -247,7 +263,7 @@ class Program:
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
+                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -272,27 +288,23 @@ class Program:
         )
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        if (
-            self.backend is None and DEFAULT_BACKEND is None
-        ):  # TODO(havogt): for now enable embedded execution by setting DEFAULT_BACKEND to None
-            self.definition(*args, **kwargs)
-            return
-
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if not self.backend:
+        if self.backend is None:
             warnings.warn(
                 UserWarning(
-                    f"Field View Program '{self.itir.id}': Using default ({DEFAULT_BACKEND}) backend."
+                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
                 )
             )
-        backend = self.backend or DEFAULT_BACKEND
+            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                ctx.run(self.definition, *rewritten_args, **kwargs)
+            return
 
-        ppi.ensure_processor_kind(backend, ppi.ProgramExecutor)
+        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
-        backend(
+        self.backend(
             self.itir,
             *rewritten_args,
             *size_args,
@@ -332,7 +344,7 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -385,9 +397,10 @@ class Program:
             ]
 
             raise TypeError(
-                "Only `ScanOperator`s defined on the same axis "
-                + "can be used in a `Program`, but found:\n"
+                "Only 'ScanOperator's defined on the same axis "
+                + "can be used in a 'Program', found:\n"
                 + "\n".join(scanops_per_axis_strs)
+                + "."
             )
 
         return iter(scanops_per_axis.keys()).__next__()
@@ -424,7 +437,7 @@ class ProgramWithBoundArgs(Program):
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
+                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -433,10 +446,10 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
-                f"Invalid argument types in call to program `{self.past_node.id}` with "
-                f"bound arguments {bound_arg_names}!"
+                f"Invalid argument types in call to program '{self.past_node.id}' with "
+                f"bound arguments '{bound_arg_names}'."
             ) from err
 
         full_args = [*args]
@@ -537,14 +550,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = None
+    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
     grid_type: Optional[GridType] = None
+    operator_attributes: Optional[dict[str, Any]] = None
+    _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = None,
+        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -574,6 +589,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
             backend=backend,
             grid_type=grid_type,
+            operator_attributes=operator_attributes,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -607,9 +623,16 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
+        hash_ = eve_utils.content_hash(
+            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
+        )
+        try:
+            return self._program_cache[hash_]
+        except KeyError:
+            pass
 
         loc = self.foast_node.location
-        param_sym_uids = UIDGenerator()  # use a new UID generator to allow caching
+        param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
@@ -660,46 +683,51 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        return Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+        return self._program_cache[hash_]
 
     def __call__(
         self,
         *args,
         **kwargs,
     ) -> None:
-        # TODO(havogt): Don't select mode based on existence of kwargs,
-        # because now we cannot provide nice error messages. E.g. set context var
-        # if we are reaching this from a program call.
-        if "out" in kwargs:
+        if not next_embedded.context.within_context() and self.backend is not None:
+            # non embedded execution
+            offset_provider = kwargs.pop("offset_provider", None)
             out = kwargs.pop("out")
-            if "offset_provider" in kwargs:
-                # "out" and "offset_provider" -> field_operator as program
-                offset_provider = kwargs.pop("offset_provider")
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-                # TODO(tehrengruber): check all offset providers are given
-                # deduce argument types
-                arg_types = []
-                for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
-                kwarg_types = {}
-                for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            # TODO(tehrengruber): check all offset providers are given
+            # deduce argument types
+            arg_types = []
+            for arg in args:
+                arg_types.append(type_translation.from_value(arg))
+            kwarg_types = {}
+            for name, arg in kwargs.items():
+                kwarg_types[name] = type_translation.from_value(arg)
 
-                return self.as_program(arg_types, kwarg_types)(
-                    *args, out, offset_provider=offset_provider, **kwargs
-                )
-            else:
-                # "out" -> field_operator called from program in embedded execution
-                out.ndarray[:] = self.definition(*args, **kwargs).ndarray[:]
-                return
+            return self.as_program(arg_types, kwarg_types)(
+                *args, out, offset_provider=offset_provider, **kwargs
+            )
         else:
-            # field_operator called from other field_operator in embedded execution
-            return self.definition(*args, **kwargs)
+            if self.operator_attributes is not None and any(
+                has_scan_op_attribute := [
+                    attribute in self.operator_attributes
+                    for attribute in ["init", "axis", "forward"]
+                ]
+            ):
+                assert all(has_scan_op_attribute)
+                forward = self.operator_attributes["forward"]
+                init = self.operator_attributes["init"]
+                axis = self.operator_attributes["axis"]
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+            else:
+                op = embedded_operators.EmbeddedOperator(self.definition)
+            return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 @typing.overload
@@ -790,8 +818,8 @@ def scan_operator(
         >>> from gt4py.next.iterator import embedded
         >>> embedded._column_range = 1  # implementation detail
         >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
-        >>> inp = gtx.np_as_located_field(KDim)(np.ones((10,)))
-        >>> out = gtx.np_as_located_field(KDim)(np.zeros((10,)))
+        >>> inp = gtx.as_field([KDim], np.ones((10,)))
+        >>> out = gtx.as_field([KDim], np.zeros((10,)))
         >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
         ... def scan_operator(carry: float, val: float) -> float:
         ...     return carry+val
