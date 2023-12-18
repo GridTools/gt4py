@@ -47,10 +47,6 @@ def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
 
 """ Default build configuration in DaCe backend """
 _build_type = "Release"
-# removing  -ffast-math from DaCe default compiler args in order to support isfinite/isinf/isnan built-ins
-_cpu_args = (
-    "-std=c++14 -fPIC -Wall -Wextra -O3 -march=native -Wno-unused-parameter -Wno-unused-label"
-)
 
 
 def convert_arg(arg: Any):
@@ -234,7 +230,7 @@ def build_sdfg_from_itir(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # build parameters
     build_cache = kwargs.get("build_cache", None)
-    build_args = kwargs.get("build_args", None)  # `None` will take default.
+    compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
     auto_optimize = kwargs.get("auto_optimize", False)
@@ -265,12 +261,12 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             lift_mode=lift_mode,
         )
 
-        sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
-            if build_args is not None:
+            sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
+            if compiler_args is not None:
                 dace.config.Config.set(
-                    "compiler", "cuda" if on_gpu else "cpu", "args", value=build_args
+                    "compiler", "cuda" if on_gpu else "cpu", "args", value=compiler_args
                 )
             sdfg_program = sdfg.compile(validate=False)
 
@@ -309,13 +305,21 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
+    compiler_args = dace.config.Config.get("compiler", "cpu", "args")
+
+    # disable finite-math-only in order to support isfinite/isinf/isnan builtins
+    if "-ffast-math" in compiler_args:
+        compiler_args += " -fno-finite-math-only"
+    if "-ffinite-math-only" in compiler_args:
+        compiler_args.replace("-ffinite-math-only", "")
+
     run_dace_iterator(
         program,
         *args,
         **kwargs,
         build_cache=_build_cache_cpu,
         build_type=_build_type,
-        build_args=_cpu_args,
+        compiler_args=compiler_args,
         on_gpu=False,
     )
 
