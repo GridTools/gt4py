@@ -243,7 +243,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     build_cache = kwargs.get("build_cache", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
-    auto_optimize = kwargs.get("auto_optimize", False)
+    auto_optimize = kwargs.get("auto_optimize", True)
     lift_mode = kwargs.get("lift_mode", LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
