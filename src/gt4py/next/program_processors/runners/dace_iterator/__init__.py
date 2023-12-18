@@ -24,10 +24,9 @@ import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.otf_compile_executor as otf_exec
 import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next.common import Dimension, Domain, UnitRange, is_field
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider, StridedNeighborOffsetProvider
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
-from gt4py.next.otf.compilation import cache
+from gt4py.next import common
+from gt4py.next.iterator import embedded as itir_embedded, transforms as itir_transforms
+from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
@@ -40,7 +39,8 @@ except ImportError:
     cp = None
 
 
-def get_sorted_dim_ranges(domain: Domain) -> Sequence[UnitRange]:
+def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.FiniteUnitRange]:
+    assert common.Domain.is_finite(domain)
     sorted_dims = get_sorted_dims(domain.dims)
     return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
 
@@ -54,7 +54,7 @@ _cpu_args = (
 
 
 def convert_arg(arg: Any):
-    if is_field(arg):
+    if common.is_field(arg):
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -67,9 +67,11 @@ def convert_arg(arg: Any):
 
 
 def preprocess_program(
-    program: itir.FencilDefinition, offset_provider: Mapping[str, Any], lift_mode: LiftMode
+    program: itir.FencilDefinition,
+    offset_provider: Mapping[str, Any],
+    lift_mode: itir_transforms.LiftMode,
 ):
-    node = apply_common_transforms(
+    node = itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
         lift_mode=lift_mode,
@@ -81,7 +83,7 @@ def preprocess_program(
     if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
         fencil_definition = node
     else:
-        fencil_definition = apply_common_transforms(
+        fencil_definition = itir_transforms.apply_common_transforms(
             program,
             common_subexpression_elimination=False,
             force_inline_lambda_args=True,
@@ -109,7 +111,7 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]],
+    neighbor_tables: Sequence[tuple[str, itir_embedded.NeighborTableOffsetProvider]],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
     return {
@@ -134,7 +136,7 @@ def get_offset_args(
     return {
         str(sym): -drange.start
         for param, arg in zip(params, args)
-        if is_field(arg)
+        if common.is_field(arg)
         for sym, drange in zip(arrays[param.id].offset, get_sorted_dim_ranges(arg.domain))
     }
 
@@ -162,13 +164,19 @@ _build_cache_gpu: dict[str, CompiledSDFG] = {}
 def get_cache_id(
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
-    column_axis: Optional[Dimension],
+    column_axis: Optional[common.Dimension],
     offset_provider: Mapping[str, Any],
 ) -> str:
     max_neighbors = [
         (k, v.max_neighbors)
         for k, v in offset_provider.items()
-        if isinstance(v, (NeighborTableOffsetProvider, StridedNeighborOffsetProvider))
+        if isinstance(
+            v,
+            (
+                itir_embedded.NeighborTableOffsetProvider,
+                itir_embedded.StridedNeighborOffsetProvider,
+            ),
+        )
     ]
     cache_id_args = [
         str(arg)
@@ -191,8 +199,8 @@ def build_sdfg_from_itir(
     offset_provider: dict[str, Any],
     auto_optimize: bool = False,
     on_gpu: bool = False,
-    column_axis: Optional[Dimension] = None,
-    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
+    column_axis: Optional[common.Dimension] = None,
+    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
 ) -> dace.SDFG:
     """Translate a Fencil into an SDFG.
 
@@ -210,7 +218,7 @@ def build_sdfg_from_itir(
     """
     # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
     #                `lift_more` to `FORCE_INLINE` mode.
-    lift_mode = LiftMode.FORCE_INLINE
+    lift_mode = itir_transforms.LiftMode.FORCE_INLINE
 
     arg_types = [type_translation.from_value(arg) for arg in args]
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
@@ -237,7 +245,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
     auto_optimize = kwargs.get("auto_optimize", False)
-    lift_mode = kwargs.get("lift_mode", LiftMode.FORCE_INLINE)
+    lift_mode = kwargs.get("lift_mode", itir_transforms.LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
@@ -263,7 +271,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             lift_mode=lift_mode,
         )
 
-        sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
+        sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
             dace.config.Config.set("compiler", "cpu", "args", value=_cpu_args)
