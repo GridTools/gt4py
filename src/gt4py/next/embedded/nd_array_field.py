@@ -113,6 +113,7 @@ class NdArrayField(
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
+        assert common.Domain.is_finite(self._domain)
         return tuple(-r.start for _, r in self._domain)
 
     @property
@@ -386,6 +387,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             assert isinstance(image_range, common.UnitRange)
 
+            assert common.UnitRange.is_finite(image_range)
             restricted_mask = (self._ndarray >= image_range.start) & (
                 self._ndarray < image_range.stop
             )
@@ -566,9 +568,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             named_ranges.append((dim, field.domain[pos][1]))
         else:
             domain_slice.append(np.newaxis)
-            named_ranges.append(
-                (dim, common.UnitRange(common.Infinity.negative(), common.Infinity.positive()))
-            )
+            named_ranges.append((dim, common.UnitRange.infinite()))
     return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -638,14 +638,19 @@ def _compute_slice(
         ValueError: If `new_rng` is not an integer or a UnitRange.
     """
     if isinstance(rng, common.UnitRange):
-        if domain.ranges[pos] == common.UnitRange.infinity():
-            return slice(None)
-        else:
-            return slice(
-                rng.start - domain.ranges[pos].start,
-                rng.stop - domain.ranges[pos].start,
-            )
+        start = (
+            rng.start - domain.ranges[pos].start
+            if common.UnitRange.is_left_finite(domain.ranges[pos])
+            else None
+        )
+        stop = (
+            rng.stop - domain.ranges[pos].start
+            if common.UnitRange.is_right_finite(domain.ranges[pos])
+            else None
+        )
+        return slice(start, stop)
     elif common.is_int_index(rng):
+        assert common.Domain.is_finite(domain)
         return rng - domain.ranges[pos].start
     else:
         raise ValueError(f"Can only use integer or UnitRange ranges, provided type: '{type(rng)}'.")
