@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
 import warnings
-from typing import Any, Mapping, Optional, Sequence, Union
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 import numpy as np
@@ -94,12 +94,9 @@ def preprocess_program(
     return fencil_definition
 
 
-def get_args(params: Union[Sequence[itir.Sym], dace.SDFG], args: Sequence[Any]) -> dict[str, Any]:
-    if isinstance(params, dace.SDFG):
-        params = params.arg_names
-    else:
-        params = [name.id for name in params]
-    return {name: convert_arg(arg) for name, arg in zip(params, args)}
+def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
+    sdfg_params: Sequence[str] = sdfg.arg_names
+    return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
 
 
 def _ensure_is_on_device(
@@ -135,19 +132,16 @@ def get_shape_args(
 
 
 def get_offset_args(
-    arrays: Mapping[str, dace.data.Array],
-    params: Union[Sequence[itir.Sym], dace.SDFG],
+    sdfg: dace.SDFG,
     args: Sequence[Any],
 ) -> Mapping[str, int]:
-    if isinstance(params, dace.SDFG):
-        params = params.arg_names
-    else:
-        params = [name.id for name in params]
+    sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
+    sdfg_params: Sequence[str] = sdfg.arg_names
     return {
         str(sym): -drange.start
-        for name, arg in zip(params, args)
+        for sdfg_param, arg in zip(sdfg_params, args)
         if common.is_field(arg)
-        for sym, drange in zip(arrays[name].offset, get_sorted_dim_ranges(arg.domain))
+        for sym, drange in zip(sdfg_arrays[sdfg_param].offset, get_sorted_dim_ranges(arg.domain))
     }
 
 
@@ -224,7 +218,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    dace_offsets = get_offset_args(sdfg.arrays, sdfg, args)
+    dace_offsets = get_offset_args(sdfg, args)
     all_args = {
         **dace_args,
         **dace_conn_args,
