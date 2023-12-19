@@ -88,7 +88,7 @@ test py38:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
       VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda112, -cpu]
+      SUBVARIANT: [-cuda11x, -cpu]
     - SUBPACKAGE: eve
   variables:
     CRAY_CUDA_MPS: 1
@@ -113,7 +113,8 @@ test py310:
     matrix:
     - SUBPACKAGE: [cartesian, storage]
       VARIANT: [-internal, -dace]
-      SUBVARIANT: [-cuda112, -cpu]
+      SUBVARIANT: [-cuda11x, -cpu]
     - SUBPACKAGE: eve
     - SUBPACKAGE: next
       VARIANT: [-nomesh, -atlas]
+      SUBVARIANT: [-cuda11x, -cpu]

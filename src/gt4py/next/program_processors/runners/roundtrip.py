@@ -21,14 +21,25 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-from gt4py.eve import codegen
+import gt4py.eve.codegen as codegen
+import gt4py.next.allocators as next_allocators
+import gt4py.next.common as common
+import gt4py.next.iterator.embedded as embedded
+import gt4py.next.iterator.ir as itir
+import gt4py.next.iterator.transforms as itir_transforms
+import gt4py.next.iterator.transforms.global_tmps as gtmps_transform
+import gt4py.next.program_processors.otf_compile_executor as otf_compile_executor
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next.common import Dimension
-from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
-from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
-from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
-from gt4py.next.program_processors.processor_interface import program_executor
+
+
+def _create_tmp(axes, origin, shape, dtype):
+    if isinstance(dtype, tuple):
+        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
+    else:
+        return (
+            f"gtx.as_field([{axes}], np.empty({shape}, dtype=np.dtype('{dtype}')), origin={origin})"
+        )
 
 
 class EmbeddedDSL(codegen.TemplatedGenerator):
@@ -61,14 +72,7 @@ def ${id}(${','.join(params)}):
     def visit_FencilWithTemporaries(self, node, **kwargs):
         params = self.visit(node.params)
 
-        def np_dtype(dtype):
-            if isinstance(dtype, int):
-                return params[dtype] + ".dtype"
-            if isinstance(dtype, tuple):
-                return "np.dtype([" + ", ".join(f"('', {np_dtype(d)})" for d in dtype) + "])"
-            return f"np.dtype('{dtype}')"
-
-        tmps = "\n    ".join(self.visit(node.tmps, np_dtype=np_dtype))
+        tmps = "\n    ".join(self.visit(node.tmps))
         args = ", ".join(params + [tmp.id for tmp in node.tmps])
         params = ", ".join(params)
         fencil = self.visit(node.fencil)
@@ -80,7 +84,7 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node, *, np_dtype, **kwargs):
+    def visit_Temporary(self, node, **kwargs):
         assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
             "cartesian_domain",
             "unstructured_domain",
@@ -93,8 +97,7 @@ def ${id}(${','.join(params)}):
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
-        dtype = np_dtype(node.dtype)
-        return f"{node.id} = np_as_located_field({axes}, origin={origin})(np.empty({shape}, dtype={dtype}))"
+        return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 
 _BACKEND_NAME = "roundtrip"
@@ -105,9 +108,9 @@ _FENCIL_CACHE: dict[int, Callable] = {}
 def fencil_generator(
     ir: itir.Node,
     debug: bool,
-    lift_mode: LiftMode,
+    lift_mode: itir_transforms.LiftMode,
     use_embedded: bool,
-    offset_provider: dict[str, NeighborTableOffsetProvider],
+    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
 ) -> Callable:
     """
     Generate a directly executable fencil from an ITIR node.
@@ -127,9 +130,17 @@ def fencil_generator(
     if cache_key in _FENCIL_CACHE:
         return _FENCIL_CACHE[cache_key]
 
-    ir = apply_common_transforms(ir, lift_mode=lift_mode, offset_provider=offset_provider)
+    ir = itir_transforms.apply_common_transforms(
+        ir, lift_mode=lift_mode, offset_provider=offset_provider
+    )
 
     program = EmbeddedDSL.apply(ir)
+
+    # format output in debug mode for better debuggability
+    # (e.g. line numbers, overview in the debugger).
+    if debug:
+        program = codegen.format_python_source(program)
+
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
         .if_isinstance(itir.OffsetLiteral)
@@ -149,9 +160,9 @@ def fencil_generator(
     header = textwrap.dedent(
         f"""
         import numpy as np
+        import gt4py.next as gtx
         {builtins_import}
         from gt4py.next.iterator.runtime import *
-        from gt4py.next.iterator.embedded import np_as_located_field
         """
     )
 
@@ -160,7 +171,7 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = CartesianAxis("{o}")' for o in axis_literals]
+        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")
@@ -176,8 +187,12 @@ def fencil_generator(
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
-    fencil_name = ir.fencil.id + "_wrapper" if isinstance(ir, FencilWithTemporaries) else ir.id
+    assert isinstance(ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries))
+    fencil_name = (
+        ir.fencil.id + "_wrapper"
+        if isinstance(ir, gtmps_transform.FencilWithTemporaries)
+        else ir.id
+    )
     fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
@@ -188,11 +203,11 @@ def fencil_generator(
 def execute_roundtrip(
     ir: itir.Node,
     *args,
-    column_axis: Optional[Dimension] = None,
-    offset_provider: dict[str, NeighborTableOffsetProvider],
+    column_axis: Optional[common.Dimension] = None,
+    offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
     debug: bool = False,
-    lift_mode: LiftMode = LiftMode.FORCE_INLINE,
-    dispatch_backend: Optional[str] = None,
+    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
+    dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
     fencil = fencil_generator(
         ir,
@@ -212,6 +227,8 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-@program_executor
-def executor(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    execute_roundtrip(program, *args, **kwargs)
+executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
+
+backend = otf_compile_executor.OTFBackend(
+    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)

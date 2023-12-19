@@ -25,6 +25,7 @@ from dace.sdfg.utils import inline_sdfgs
 from dace.serialize import dumps
 
 from gt4py import storage as gt_storage
+from gt4py.cartesian import config as gt_config
 from gt4py.cartesian.backend.base import CLIBackendMixin, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
@@ -450,7 +451,7 @@ class DaCeComputationCodegen:
                 const int __I = domain[0];
                 const int __J = domain[1];
                 const int __K = domain[2];
-                ${name}_t dace_handle;
+                ${name}${state_suffix} dace_handle;
                 ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
@@ -543,6 +544,8 @@ class DaCeComputationCodegen:
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            if gt_config.GT4PY_USE_HIP:
+                dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
@@ -558,6 +561,13 @@ class DaCeComputationCodegen:
         else:
             omp_threads = ""
             omp_header = ""
+
+        # Backward compatible state struct name change in DaCe >=0.15.x
+        try:
+            dace_state_suffix = dace.Config.get("compiler.codegen_state_struct_suffix")
+        except (KeyError, TypeError):
+            dace_state_suffix = "_t"  # old structure name
+
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
@@ -565,6 +575,7 @@ class DaCeComputationCodegen:
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
+            state_suffix=dace_state_suffix,
         )
         generated_code = textwrap.dedent(
             f"""#include <gridtools/sid/sid_shift_origin.hpp>

@@ -18,7 +18,7 @@ import types
 from dataclasses import dataclass
 from typing import Any, Callable, Optional, Union
 
-from devtools import debug
+import devtools
 
 from gt4py.next import common
 from gt4py.next.iterator import builtins
@@ -31,7 +31,7 @@ from gt4py.next.program_processors.processor_interface import (
 )
 
 
-__all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
+__all__ = ["offset", "fundef", "fendef", "closure"]
 
 
 @dataclass(frozen=True)
@@ -41,10 +41,6 @@ class Offset:
 
 def offset(value):
     return Offset(value)
-
-
-# TODO: rename to dimension and remove axis terminology
-CartesianAxis = common.Dimension
 
 
 class CartesianDomain(dict):
@@ -70,19 +66,26 @@ class FendefDispatcher:
         self,
         *args,
         fendef_codegen: Optional[Callable[[types.FunctionType], FencilDefinition]] = None,
+        debug=False,
         **kwargs,
     ):
         args, kwargs = self._rewrite_args(args, kwargs)
+
+        # For consistency with `__call__` we also allow these keyword arguments, but ignore them
+        # here, as they are not used for code generation.
+        for ignored_kwarg in ["offset_provider", "lift_mode", "column_axis"]:
+            kwargs.pop(ignored_kwarg, None)
+
         if fendef_codegen is None:
             # TODO(ricoh): refactor so that `tracing` does not import this module
             #   and can be imported top level. Then set `fendef_tracing` as a
             #   proper default value, instead of using `None` as a sentinel.
-            from .tracing import fendef_tracing
+            from gt4py.next.iterator.tracing import trace_fencil_definition
 
-            fendef_codegen = fendef_tracing
-        fencil_definition = fendef_codegen(self.function, *args, **kwargs)
-        if "debug" in kwargs:
-            debug(fencil_definition)
+            fendef_codegen = trace_fencil_definition
+        fencil_definition = fendef_codegen(self.function, args, **kwargs)
+        if debug:
+            devtools.debug(fencil_definition)
         return fencil_definition
 
     def __call__(self, *args, backend: Optional[ProgramExecutor] = None, **kwargs):
@@ -93,7 +96,7 @@ class FendefDispatcher:
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
-                raise RuntimeError("Embedded execution is not registered")
+                raise RuntimeError("Embedded execution is not registered.")
             fendef_embedded(self.function, *args, **kwargs)
 
     def format_itir(self, *args, formatter: ProgramFormatter, **kwargs) -> str:

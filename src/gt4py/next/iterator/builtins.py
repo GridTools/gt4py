@@ -39,6 +39,26 @@ def shift(*args):
 
 
 @builtin_dispatch
+def neighbors(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def map_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def make_const_list(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def list_get(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def lift(*args):
     raise BackendNotSelectedError()
 
@@ -368,7 +388,7 @@ UNARY_MATH_FP_BUILTINS = {
 }
 UNARY_MATH_FP_PREDICATE_BUILTINS = {"isfinite", "isinf", "isnan"}
 BINARY_MATH_NUMBER_BUILTINS = {"minimum", "maximum", "fmod", "power"}
-TYPEBUILTINS = {"int", "int32", "int64", "float", "float32", "float64", "bool"}
+TYPEBUILTINS = {"int32", "int64", "float32", "float64", "bool"}
 MATH_BUILTINS = (
     UNARY_MATH_NUMBER_BUILTINS
     | UNARY_MATH_FP_BUILTINS
@@ -380,6 +400,10 @@ BUILTINS = {
     "deref",
     "can_deref",
     "shift",
+    "neighbors",
+    "list_get",
+    "make_const_list",
+    "map_",
     "lift",
     "reduce",
     "plus",

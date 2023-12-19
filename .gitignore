@@ -3,6 +3,8 @@ _build
 _local
 
 ### GT4Py ####
+/src/__init__.py
+/tests/__init__.py
 .gt_cache/
 .gt_cache_pytest*/
 

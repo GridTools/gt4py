@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""Typing definitions working across different Python versions (via `typing_extensions`).
+"""
+Typing definitions working across different Python versions (via `typing_extensions`).
 
 Definitions in 'typing_extensions' take priority over those in 'typing'.
 """
@@ -22,6 +23,7 @@ from __future__ import annotations
 import abc as _abc
 import array as _array
 import collections.abc as _collections_abc
+import ctypes as _ctypes
 import dataclasses as _dataclasses
 import enum as _enum
 import functools as _functools
@@ -34,8 +36,9 @@ import typing as _typing
 from typing import *  # noqa: F403
 from typing import overload  # Only needed to avoid false flake8 errors
 
+import numpy.typing as npt
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403
 
 
 if _sys.version_info >= (3, 9):
@@ -234,6 +237,99 @@ class HashlibAlgorithm(Protocol):
 
 
 # -- Third party protocols --
+class SupportsArray(Protocol):
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]:
+        ...
+
+
+def supports_array(value: Any) -> TypeGuard[SupportsArray]:
+    return hasattr(value, "__array__")
+
+
+class ArrayInterface(Protocol):
+    @property
+    def __array_interface__(self) -> Dict[str, Any]:
+        ...
+
+
+class ArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    descr: NotRequired[List[Tuple]]
+    data: NotRequired[Tuple[int, bool]]
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    mask: NotRequired[Optional["StrictArrayInterface"]]
+    offset: NotRequired[int]
+    version: int
+
+
+class StrictArrayInterface(Protocol):
+    @property
+    def __array_interface__(self) -> ArrayInterfaceTypedDict:
+        ...
+
+
+def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
+    return hasattr(value, "__array_interface__")
+
+
+class CUDAArrayInterface(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> Dict[str, Any]:
+        ...
+
+
+class CUDAArrayInterfaceTypedDict(TypedDict):
+    shape: Tuple[int, ...]
+    typestr: str
+    data: Tuple[int, bool]
+    version: int
+    strides: NotRequired[Optional[Tuple[int, ...]]]
+    descr: NotRequired[List[Tuple]]
+    mask: NotRequired[Optional["StrictCUDAArrayInterface"]]
+    stream: NotRequired[Optional[int]]
+
+
+class StrictCUDAArrayInterface(Protocol):
+    @property
+    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict:
+        ...
+
+
+def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
+    """Check if the given value supports the CUDA Array Interface."""
+    return hasattr(value, "__cuda_array_interface__")
+
+
+DLPackDevice = Tuple[int, int]
+
+
+class MultiStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: Optional[int] = None) -> Any:
+        ...
+
+    def __dlpack_device__(self) -> DLPackDevice:
+        ...
+
+
+class SingleStreamDLPackBuffer(Protocol):
+    def __dlpack__(self, *, stream: None = None) -> Any:
+        ...
+
+    def __dlpack_device__(self) -> DLPackDevice:
+        ...
+
+
+DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
+
+
+def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
+    """Check if a given object supports the DLPack protocol."""
+    return callable(getattr(value, "__dlpack__", None)) and callable(
+        getattr(value, "__dlpack_device__", None)
+    )
+
+
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
@@ -246,7 +342,11 @@ class NonProtocolABCMeta(_typing._ProtocolMeta):
     """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
 
     __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None
+    __subclasshook__ = None  # type: ignore[assignment]
+
+
+class NonProtocolABC(metaclass=NonProtocolABCMeta):
+    pass
 
 
 _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
@@ -378,7 +478,7 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
                         return NotImplemented
                 return True
 
-            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined]
+            cls.__subclasshook__ = _patched_proto_hook  # type: ignore[attr-defined,method-assign]
 
         return cls
 
@@ -496,9 +596,12 @@ def is_value_hashable_typing(
     return type_annotation is None
 
 
-def is_protocol(type_: Type) -> bool:
+def _is_protocol(type_: type, /) -> bool:
     """Check if a type is a Protocol definition."""
     return getattr(type_, "_is_protocol", False)
+
+
+is_protocol = getattr(_typing_extensions, "is_protocol", _is_protocol)
 
 
 def get_partial_type_hints(

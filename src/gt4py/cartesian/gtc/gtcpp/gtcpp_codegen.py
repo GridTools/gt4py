@@ -173,6 +173,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
                 NativeFunction.POW: "std::pow",
                 NativeFunction.EXP: "std::exp",
                 NativeFunction.LOG: "std::log",
+                NativeFunction.LOG10: "std::log10",
                 NativeFunction.GAMMA: "std::tgamma",
                 NativeFunction.CBRT: "std::cbrt",
                 NativeFunction.ISFINITE: "std::isfinite",

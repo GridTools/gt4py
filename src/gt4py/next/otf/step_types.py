@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Protocol, TypeVar
 
-from gt4py.next.otf import languages, stages
+from gt4py.next.otf import languages, stages, workflow
 
 
 SrcL = TypeVar("SrcL", bound=languages.LanguageTag)
@@ -27,11 +27,13 @@ TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 LS_co = TypeVar("LS_co", bound=languages.LanguageSettings, covariant=True)
 
 
-class TranslationStep(Protocol[SrcL, LS]):
+class TranslationStep(
+    workflow.ReplaceEnabledWorkflowMixin[stages.ProgramCall, stages.ProgramSource[SrcL, LS]],
+    Protocol[SrcL, LS],
+):
     """Translate a GT4Py program to source code (ProgramCall -> ProgramSource)."""
 
-    def __call__(self, program_call: stages.ProgramCall) -> stages.ProgramSource[SrcL, LS]:
-        ...
+    ...
 
 
 class BindingStep(Protocol[SrcL, LS, TgtL]):
@@ -48,7 +50,10 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
         ...
 
 
-class CompilationStep(Protocol[SrcL, LS, TgtL]):
+class CompilationStep(
+    workflow.Workflow[stages.CompilableSource[SrcL, LS, TgtL], stages.CompiledProgram],
+    Protocol[SrcL, LS, TgtL],
+):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
     def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
