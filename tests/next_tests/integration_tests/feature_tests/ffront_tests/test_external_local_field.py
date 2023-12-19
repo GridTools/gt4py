@@ -82,3 +82,22 @@ def test_external_local_field_only(unstructured_case):
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
     )
+
+
+@pytest.mark.uses_sparse_fields_as_output
+def test_write_local_field(unstructured_case):
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
+        return inp(V2E)
+
+    out = unstructured_case.as_field(
+        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].table)
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=out,
+        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].table],
+    )
