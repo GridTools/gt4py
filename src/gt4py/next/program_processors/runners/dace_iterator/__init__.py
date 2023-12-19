@@ -91,7 +91,7 @@ def preprocess_program(
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
-    sdfg_params: Sequence[str] = sdfg.arg_names
+    sdfg_params: Sequence[str] = sdfg.signature_arglist(with_types=False)
     return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
 
 
@@ -132,7 +132,7 @@ def get_offset_args(
     args: Sequence[Any],
 ) -> Mapping[str, int]:
     sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
-    sdfg_params: Sequence[str] = sdfg.arg_names
+    sdfg_params: Sequence[str] = sdfg.signature_arglist(with_types=False)
     return {
         str(sym): -drange.start
         for sdfg_param, arg in zip(sdfg_params, args)
