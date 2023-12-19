@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import numpy as np
 import pytest
 
 from gt4py import next as gtx
@@ -25,7 +26,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 )
 
 
-def test_default_backend_is_respected(cartesian_case):  # noqa: F811 # fixtures
+def test_default_backend_is_respected_field_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that manually calling the field operator without setting the backend raises an error."""
 
     # Important not to set the backend here!
@@ -40,6 +41,41 @@ def test_default_backend_is_respected(cartesian_case):  # noqa: F811 # fixtures
         # due to `fieldview_backend` fixture (dependency of `cartesian_case`)
         # setting the default backend to something invalid.
         _ = copy(a, out=a, offset_provider={})
+
+
+def test_default_backend_is_respected_scan_operator(cartesian_case):  # noqa: F811 # fixtures
+    """Test that manually calling the scan operator without setting the backend raises an error."""
+
+    # Important not to set the backend here!
+    @gtx.scan_operator(axis=KDim, init=0.0, forward=True)
+    def sum(state: float, a: float) -> float:
+        return state + a
+
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.backend)
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = sum(a, out=a, offset_provider={})
+
+
+def test_default_backend_is_respected_program(cartesian_case):  # noqa: F811 # fixtures
+    """Test that manually calling the program without setting the backend raises an error."""
+
+    @gtx.field_operator
+    def copy(a: IField) -> IField:
+        return a
+
+    # Important not to set the backend here!
+    @gtx.program
+    def copy_program(a: IField, b: IField) -> IField:
+        copy(a, out=b)
+
+    a = cases.allocate(cartesian_case, copy_program, "a")()
+    b = cases.allocate(cartesian_case, copy_program, "b")()
+
+    with pytest.raises(ValueError, match="No backend selected!"):
+        # see comment in field_operator test
+        _ = copy_program(a, b, offset_provider={})
 
 
 def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
