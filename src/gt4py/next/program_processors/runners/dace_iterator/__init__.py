@@ -258,21 +258,22 @@ def build_sdfg_from_itir(
     # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
     #                `lift_more` to `FORCE_INLINE` mode.
     lift_mode = itir_transforms.LiftMode.FORCE_INLINE
-
     arg_types = [type_translation.from_value(arg) for arg in args]
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
+    # TODO: According to Lex one should build the SDFG first in a general mannor.
+    #       Generalisation to a particular device should happen only at the end.
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, on_gpu)
     sdfg = sdfg_genenerator.visit(program)
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics
     if auto_optimize:
-        # TODO Investigate how symbol definitions improve autoopt transformations,
-        #      in which case the cache table should take the symbols map into account.
+        # TODO: Investigate how symbol definitions improve autoopt transformations,
+        #       in which case the cache table should take the symbols map into account.
         symbols: dict[str, int] = {}
+        device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
 
     return sdfg
