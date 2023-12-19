@@ -780,9 +780,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 deref_access_state.add_access("_inp"),
                 deref_access_state.add_access("_out"),
                 dace.Memlet(
-                    data="_inp",
-                    subset=",".join(source_subset),
-                    other_subset=subsets.Range.from_array(result_array),
+                    data="_out",
+                    subset=subsets.Range.from_array(result_array),
+                    other_subset=",".join(source_subset),
                 ),
             )
 
