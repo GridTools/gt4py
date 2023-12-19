@@ -91,7 +91,7 @@ def preprocess_program(
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
-    sdfg_params: Sequence[str] = sdfg.signature_arglist(with_types=False)
+    sdfg_params: Sequence[str] = sdfg.arg_names
     return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
 
 
@@ -132,7 +132,7 @@ def get_offset_args(
     args: Sequence[Any],
 ) -> Mapping[str, int]:
     sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
-    sdfg_params: Sequence[str] = sdfg.signature_arglist(with_types=False)
+    sdfg_params: Sequence[str] = sdfg.arg_names
     return {
         str(sym): -drange.start
         for sdfg_param, arg in zip(sdfg_params, args)
@@ -207,6 +207,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
+    sdfg_sig = sdfg.signature_arglist(with_types=False)
     dace_args = get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
@@ -224,11 +225,8 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
         **dace_conn_strides,
         **dace_offsets,
     }
-    expected_args = {
-        key: value
-        for key, value in all_args.items()
-        if key in sdfg.signature_arglist(with_types=False)
-    }
+    expected_args = {key: all_args[key] for key in sdfg_sig}
+
     return expected_args
 
 
