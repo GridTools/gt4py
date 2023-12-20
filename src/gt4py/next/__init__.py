@@ -39,6 +39,11 @@ from .iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from .program_processors.runners.gtfn import (
+    run_gtfn_cached as gtfn_cpu,
+    run_gtfn_gpu_cached as gtfn_gpu,
+)
+from .program_processors.runners.roundtrip import backend as itir_embedded
 
 
 __all__ = [
@@ -74,5 +79,9 @@ __all__ = [
     "field_operator",
     "program",
     "scan_operator",
+    # from program_processor
+    "gtfn_cpu",
+    "gtfn_gpu",
+    "itir_embedded",
     *fbuiltins.__all__,
 ]

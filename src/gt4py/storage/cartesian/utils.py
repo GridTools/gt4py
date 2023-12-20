@@ -192,6 +192,8 @@ def cpu_copy(array: Union[np.ndarray, "cp.ndarray"]) -> np.ndarray:
 def asarray(
     array: FieldLike, *, device: Literal["cpu", "gpu", None] = None
 ) -> np.ndarray | cp.ndarray:
+    if hasattr(array, "ndarray"):
+        array = array.ndarray
     if device == "gpu" or (not device and hasattr(array, "__cuda_array_interface__")):
         return cp.asarray(array)
     if device == "cpu" or (

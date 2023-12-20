@@ -172,7 +172,7 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
+    def __gt_domain__(self) -> common.Domain:
         ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
@@ -182,7 +182,7 @@ class LocatedField(Protocol):
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_dims__))
+        return tuple([0] * len(self.__gt_domain__.dims))
 
 
 @runtime_checkable
@@ -680,7 +680,18 @@ def _get_axes(
         assert all(first == _get_axes(f) for f in field_or_tuple)
         return first
     else:
-        return field_or_tuple.__gt_dims__
+        return field_or_tuple.__gt_domain__.dims
+
+
+def _get_domain(
+    field_or_tuple: LocatedField | tuple,
+) -> common.Domain:  # arbitrary nesting of tuples of LocatedField
+    if isinstance(field_or_tuple, tuple):
+        first = _get_domain(field_or_tuple[0])
+        assert all(first == _get_domain(f) for f in field_or_tuple)
+        return first
+    else:
+        return field_or_tuple.__gt_domain__
 
 
 def _single_vertical_idx(
@@ -894,14 +905,14 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     _ndarrayfield: common.Field
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return self._ndarrayfield.__gt_dims__
+    def __gt_domain__(self) -> common.Domain:
+        return self._ndarrayfield.__gt_domain__
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
     ) -> common.AbsoluteIndexSequence:
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
-            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_dims__
+            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_domain__.dims
         }
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
@@ -1046,8 +1057,8 @@ class IndexField(common.Field):
     _dimension: common.Dimension
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return (self._dimension,)
+    def __gt_domain__(self) -> common.Domain:
+        return self.domain
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -1165,8 +1176,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     _value: core_defs.ScalarT
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return tuple()
+    def __gt_domain__(self) -> common.Domain:
+        return self.domain
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -1452,7 +1463,7 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 class TupleOfFields(TupleField):
     def __init__(self, data):
         self.data = data
-        self.__gt_dims__ = _get_axes(data)
+        self.__gt_domain__ = _get_domain(data)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return _build_tuple_result(self.data, named_indices)
