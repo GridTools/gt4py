@@ -87,7 +87,7 @@ class MissingArgumentError(DSLError):
 
     def __init__(self, location: Optional[SourceLocation], arg_name: str, is_kwarg: bool) -> None:
         super().__init__(
-            location, f"expected {'keyword-' if is_kwarg else ''}argument '{arg_name}'"
+            location, f"Expected {'keyword-' if is_kwarg else ''}argument '{arg_name}'."
         )
         self.attr_name = arg_name
         self.is_kwarg = is_kwarg
