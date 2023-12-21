@@ -109,7 +109,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            unconditionally_collapse_tuples=True, # possibly dangerous
+            ignore_tuple_size=True, # possibly dangerous
             use_global_type_inference=False,
         )
 
