@@ -801,6 +801,7 @@ def scan_operator(
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
+    grid_type: GridType,
 ) -> FieldOperator[foast.ScanOperator]:
     ...
 
@@ -812,6 +813,7 @@ def scan_operator(
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
+    grid_type: GridType,
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
 
@@ -823,6 +825,7 @@ def scan_operator(
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
     backend=None,
+    grid_type: GridType = None,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
@@ -860,6 +863,7 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             backend,
+            grid_type,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
