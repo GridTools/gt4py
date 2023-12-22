@@ -484,19 +484,27 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         nbt_provider = offset_provider[offset_name]
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
-                        consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
-                        consumed_domain.ranges[new_axis] = SymbolicRange(
+                        new_range = SymbolicRange(
                             im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                             im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
                         )
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
+                        )
                     else:
-                        raise NotImplementedError
+                        raise NotImplementedError()
                 consumed_domains.append(consumed_domain)
 
             # compute the bounds of all consumed domains
             if consumed_domains:
-                domains[param] = domain_union(consumed_domains).as_expr()
+                if all(
+                        consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
+                        for consumed_domain in consumed_domains
+                ):  # scalar otherwise
+                    domains[param] = domain_union(consumed_domains).as_expr()
+                else:
+                    breakpoint()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(

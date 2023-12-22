@@ -113,8 +113,10 @@ class Val(Type):
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     dtype: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
-    current_loc: Type = ANYWHERE
-    defined_loc: Type = ANYWHERE
+    current_loc: Type = eve.field(default_factory=TypeVar.fresh)
+    defined_loc: Type = eve.field(default_factory=TypeVar.fresh)
+    #current_loc: Type = ANYWHERE
+    #defined_loc: Type = ANYWHERE
 
 
 class ValTuple(Type):
@@ -912,9 +914,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                         dtype=stencil_param.dtype,
                         size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
-                        current_loc=ANYWHERE,
+                        #current_loc=ANYWHERE,
+                        current_loc=TypeVar.fresh(),
                         # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
-                        defined_loc=stencil_param.defined_loc,
+                        #defined_loc=stencil_param.defined_loc,
+                        defined_loc=TypeVar.fresh(),
                     ),
                 )
             )
@@ -930,6 +934,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             )
         )
         return Closure(output=output, inputs=Tuple.from_elems(*inputs))
+
+    def visit_FencilWithTemporaries(self, node: "ir.FencilWithTemporaries", **kwargs):
+        return self.visit(node.fencil, **kwargs)
 
     def visit_FencilDefinition(
         self,

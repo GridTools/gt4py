@@ -117,6 +117,9 @@ class NdArrayField(
     def __gt_origin__(self) -> tuple[int, ...]:
         return tuple(-r.start for _, r in self._domain)
 
+    def __array__(self):
+        raise TypeError("Field can not be used as an array directly. Use `asnumpy`.")
+
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
