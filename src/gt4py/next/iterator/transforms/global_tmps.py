@@ -503,8 +503,6 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         for consumed_domain in consumed_domains
                 ):  # scalar otherwise
                     domains[param] = domain_union(consumed_domains).as_expr()
-                else:
-                    breakpoint()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
