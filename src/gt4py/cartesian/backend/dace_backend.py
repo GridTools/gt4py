@@ -546,6 +546,9 @@ class DaCeComputationCodegen:
         with dace.config.temporary_config():
             if gt_config.GT4PY_USE_HIP:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
+                dace.config.Config.set(
+                    "compiler", "cuda", "default_block_size", value=gt_config.default_block_size
+                )
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
