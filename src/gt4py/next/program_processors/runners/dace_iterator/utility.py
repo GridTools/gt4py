@@ -27,16 +27,14 @@ def dace_debuginfo(
 ) -> Optional[dace.dtypes.DebugInfo]:
     location = node.location
     if location:
-        di = dace.dtypes.DebugInfo(
+        return dace.dtypes.DebugInfo(
             start_line=location.line,
             start_column=location.column if location.column else 0,
             end_line=location.end_line if location.end_line else -1,
             end_column=location.end_column if location.end_column else 0,
             filename=location.filename,
         )
-    else:
-        di = debuginfo
-    return di
+    return debuginfo
 
 
 def as_dace_type(type_: ts.ScalarType):
