@@ -65,7 +65,7 @@ class _AssignmentTracker:
 
     def define(self, name: str) -> None:
         if name in self.names():
-            raise ValueError(f"Variable {name} is already defined.")
+            raise ValueError(f"Variable '{name}' is already defined.")
         # -1 signifies a
         self._counts[name] = -1
 

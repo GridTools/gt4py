@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 
 

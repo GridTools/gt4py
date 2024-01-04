@@ -46,6 +46,16 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     if unstructured_case.backend in [
         gtfn.run_gtfn,
         gtfn.run_gtfn_gpu,
@@ -69,6 +79,16 @@ def test_maxover_execution_(unstructured_case, strategy):
 
 @pytest.mark.uses_unstructured_shift
 def test_minover_execution(unstructured_case):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
@@ -82,6 +102,16 @@ def test_minover_execution(unstructured_case):
 
 @pytest.mark.uses_unstructured_shift
 def test_reduction_execution(unstructured_case):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
@@ -120,6 +150,16 @@ def test_reduction_expression_in_call(unstructured_case):
 
 @pytest.mark.uses_unstructured_shift
 def test_reduction_with_common_expression(unstructured_case):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
@@ -155,8 +195,8 @@ def test_conditional_nested_tuple(cartesian_case):
         b,
         out=cases.allocate(cartesian_case, conditional_nested_tuple, cases.RETURN)(),
         ref=np.where(
-            mask,
-            ((a, b), (b, a)),
+            mask.asnumpy(),
+            ((a.asnumpy(), b.asnumpy()), (b.asnumpy(), a.asnumpy())),
             ((np.full(size, 5.0), np.full(size, 7.0)), (np.full(size, 7.0), np.full(size, 5.0))),
         ),
     )
@@ -219,7 +259,15 @@ def test_conditional(cartesian_case):
     b = cases.allocate(cartesian_case, conditional, "b")()
     out = cases.allocate(cartesian_case, conditional, cases.RETURN)()
 
-    cases.verify(cartesian_case, conditional, mask, a, b, out=out, ref=np.where(mask, a, b))
+    cases.verify(
+        cartesian_case,
+        conditional,
+        mask,
+        a,
+        b,
+        out=out,
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy()),
+    )
 
 
 def test_conditional_promotion(cartesian_case):
@@ -231,10 +279,9 @@ def test_conditional_promotion(cartesian_case):
     mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
     a = cases.allocate(cartesian_case, conditional_promotion, "a")()
     out = cases.allocate(cartesian_case, conditional_promotion, cases.RETURN)()
+    ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
 
-    cases.verify(
-        cartesian_case, conditional_promotion, mask, a, out=out, ref=np.where(mask, a, 10.0)
-    )
+    cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
 
 
 def test_conditional_compareop(cartesian_case):
@@ -279,7 +326,7 @@ def test_conditional_shifted(cartesian_case):
         b,
         out,
         inout=out,
-        ref=np.where(mask, a, b)[1:],
+        ref=np.where(mask.asnumpy(), a.asnumpy(), b.asnumpy())[1:],
     )
 
 

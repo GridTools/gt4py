@@ -49,13 +49,13 @@ class Sym(Node):  # helper
     @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
         if value and value not in ["Iterator", "Value"]:
-            raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")
+            raise ValueError(f"Invalid kind '{value}', must be one of 'Iterator', 'Value'.")
 
     @datamodels.validator("dtype")
     def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
         if value and value[0] not in TYPEBUILTINS:
             raise ValueError(
-                f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
+                f"Invalid dtype '{value}', must be one of '{', '.join(TYPEBUILTINS)}'."
             )
 
 
@@ -71,7 +71,7 @@ class Literal(Expr):
     @datamodels.validator("type")
     def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if value not in TYPEBUILTINS:
-            raise ValueError(f"{value} is not a valid builtin type.")
+            raise ValueError(f"'{value}' is not a valid builtin type.")
 
 
 class NoneLiteral(Expr):
@@ -115,7 +115,7 @@ class StencilClosure(Node):
     @datamodels.validator("output")
     def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
-            raise ValueError("Only FunCall to `make_tuple` allowed.")
+            raise ValueError("Only FunCall to 'make_tuple' allowed.")
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}

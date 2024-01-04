@@ -53,7 +53,7 @@ def test_single_argument(program_processor, dom):
 
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
-        assert np.allclose(inp, out)
+        assert np.allclose(inp.asnumpy(), out.asnumpy())
 
 
 def test_2_arguments(program_processor, dom):
@@ -70,7 +70,7 @@ def test_2_arguments(program_processor, dom):
     run_processor(fun[dom], program_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(inp0 + inp1, out)
+        assert np.allclose(inp0.asnumpy() + inp1.asnumpy(), out.asnumpy())
 
 
 def test_lambda_domain(program_processor):
@@ -82,4 +82,4 @@ def test_lambda_domain(program_processor):
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(inp, out)
+        assert np.allclose(inp.asnumpy(), out.asnumpy())

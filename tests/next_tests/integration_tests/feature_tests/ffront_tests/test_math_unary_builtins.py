@@ -37,7 +37,6 @@ from gt4py.next import (
     tanh,
     trunc,
 )
-from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -67,17 +66,8 @@ def test_power(cartesian_case):
     cases.verify_with_default_data(cartesian_case, pow, ref=lambda inp1: inp1**2)
 
 
+@pytest.mark.uses_floordiv
 def test_floordiv(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-        gtfn.run_gtfn_gpu,
-    ]:
-        pytest.xfail(
-            "FloorDiv not yet supported."
-        )  # see https://github.com/GridTools/gt4py/issues/1136
-
     @gtx.field_operator
     def floorDiv(inp1: cases.IField) -> cases.IField:
         return inp1 // 2
@@ -157,9 +147,9 @@ def test_unary_invert(cartesian_case):
 
 def test_unary_not(cartesian_case):
     pytest.xfail(
-        "We accidentally supported `not` on fields. This is wrong, we should raise an error."
+        "We accidentally supported 'not' on fields. This is wrong, we should raise an error."
     )
-    with pytest.raises:  # TODO `not` on a field should be illegal
+    with pytest.raises:  # TODO 'not' on a field should be illegal
 
         @gtx.field_operator
         def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:

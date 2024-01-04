@@ -57,7 +57,7 @@ def make_builtin_field_operator(builtin_name: str):
             "return": cases.IFloatField,
         }
     else:
-        raise AssertionError(f"Unknown builtin `{builtin_name}`")
+        raise AssertionError(f"Unknown builtin '{builtin_name}'.")
 
     closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
@@ -135,4 +135,4 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
 
     builtin_field_op(*inps, out=out, offset_provider={})
 
-    assert np.allclose(np.asarray(out), expected)
+    assert np.allclose(out.asnumpy(), expected)

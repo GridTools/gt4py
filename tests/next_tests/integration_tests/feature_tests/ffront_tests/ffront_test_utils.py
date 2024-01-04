@@ -22,7 +22,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:
@@ -39,12 +38,15 @@ import next_tests.exclusion_matrices as definitions
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+    raise ValueError("No backend selected. Backend selection is mandatory in tests.")
 
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(
+        pytest.param(definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu)
+    ),
 
 
 @pytest.fixture(
@@ -209,7 +211,7 @@ def reduction_setup():
         inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
         out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4, has_skip_values=False),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
             "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
             "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),

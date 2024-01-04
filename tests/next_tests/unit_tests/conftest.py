@@ -50,6 +50,12 @@ def lift_mode(request):
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append((definitions.OptionalProgramBackendId.DACE_CPU, True))
+    # TODO(havogt): update tests to use proper allocation
+    # OPTIONAL_PROCESSORS.append(
+    #     pytest.param(
+    #         (definitions.OptionalProgramBackendId.DACE_GPU, True), marks=pytest.mark.requires_gpu
+    #     )
+    # ),
 
 
 @pytest.fixture(
@@ -103,7 +109,7 @@ def run_processor(
     elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):
         print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
-        raise TypeError(f"program processor kind not recognized: {processor}!")
+        raise TypeError(f"program processor kind not recognized: '{processor}'.")
 
 
 @dataclasses.dataclass

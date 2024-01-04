@@ -158,4 +158,4 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(x, x_s)
+        assert np.allclose(x, x_s.asnumpy())

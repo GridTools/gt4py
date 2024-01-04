@@ -37,7 +37,7 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
         filename = str(pathlib.Path(inspect.getabsfile(func)).resolve())
         if not filename:
             raise ValueError(
-                "Can not create field operator from a function that is not in a source file!"
+                "Can not create field operator from a function that is not in a source file."
             )
         source_lines, line_offset = inspect.getsourcelines(func)
         source_code = textwrap.dedent(inspect.getsource(func))
@@ -47,7 +47,7 @@ def make_source_definition_from_function(func: Callable) -> SourceDefinition:
         return SourceDefinition(source_code, filename, line_offset - 1, column_offset)
 
     except OSError as err:
-        raise ValueError(f"Can not get source code of passed function ({func})") from err
+        raise ValueError(f"Can not get source code of passed function '{func}'.") from err
 
 
 def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME) -> SymbolNames:
@@ -55,13 +55,13 @@ def make_symbol_names_from_source(source: str, filename: str = MISSING_FILENAME)
         mod_st = symtable.symtable(source, filename, "exec")
     except SyntaxError as err:
         raise ValueError(
-            f"Unexpected error when parsing provided source code (\n{source}\n)"
+            f"Unexpected error when parsing provided source code: \n{source}\n"
         ) from err
 
     assert mod_st.get_type() == "module"
     if len(children := mod_st.get_children()) != 1:
         raise ValueError(
-            f"Sources with multiple function definitions are not yet supported (\n{source}\n)"
+            f"Sources with multiple function definitions are not yet supported: \n{source}\n"
         )
 
     assert children[0].get_type() == "function"

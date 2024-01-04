@@ -83,7 +83,7 @@ def extract_connectivity_args(
         if isinstance(conn, common.Connectivity):
             if not isinstance(conn, common.NeighborTable):
                 raise NotImplementedError(
-                    "Only `NeighborTable` connectivities implemented at this point."
+                    "Only 'NeighborTable' connectivities implemented at this point."
                 )
             # copying to device here is a fallback for easy testing and might be removed later
             conn_arg = _ensure_is_on_device(conn.table, device)
@@ -92,8 +92,8 @@ def extract_connectivity_args(
             pass
         else:
             raise AssertionError(
-                f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
-                f"but got {type(conn).__name__}."
+                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
+                f"but got '{type(conn).__name__}'."
             )
     return args
 
