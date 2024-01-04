@@ -161,15 +161,13 @@ class NdArrayField(
         return cls(domain, array)
 
     def remap(
-        self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
+        self: NdArrayField, connectivity: common.ConnectivityField #| fbuiltins.FieldOffset
     ) -> NdArrayField:
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
-            assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
 
         assert common.is_connectivity_field(connectivity)
-
         # Compute the new domain
         dim = (
             connectivity.codomain
@@ -182,8 +180,6 @@ class NdArrayField(
 
         current_range: common.UnitRange = self.domain[dim_idx][1]
         new_ranges = connectivity.inverse_image(current_range)
-        if isinstance(connectivity.codomain, fbuiltins.FieldOffset):
-            new_ranges = [new_ranges[dim_idx]]
         new_domain = self.domain.replace(dim_idx, *new_ranges)
 
         # perform contramap
@@ -202,17 +198,16 @@ class NdArrayField(
 
             # then compute the index array
             xp = self.array_ns
-            new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-            # finally, take the new array
-            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
-            if len(new_idx_array.shape) > 1 and isinstance(
-                connectivity.codomain, fbuiltins.FieldOffset
-            ):
-                new_buffer = (
-                    xp.transpose(xp.diagonal(new_buffer))
-                    if dim.kind == "horizontal"
-                    else xp.diagonal(xp.transpose(new_buffer))
-                )
+            if len(connectivity.domain.dims) > 1:
+                offset_buffer = np.indices(connectivity.ndarray.shape)[dim_idx].T
+                offset_abs = tuple([connectivity.ndarray if d == dim else offset_buffer for d in self.domain.dims])
+                arr_i_abs = np.arange(np.prod(self.ndarray.shape)).reshape(self.ndarray.shape)
+                new_buffer_flat = xp.take(self.ndarray.flatten(), arr_i_abs[offset_abs].flatten())
+                new_buffer = new_buffer_flat.reshape(connectivity.ndarray.shape)
+            else:
+                new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
+                # finally, take the new array
+                new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
         return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
@@ -325,7 +320,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     common.ConnectivityField[common.DimsT, common.DimT],
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
-    _codomain: common.DimT | fbuiltins.FieldOffset
+    _codomain: common.DimT
 
     @functools.cached_property
     def _cache(self) -> dict:
@@ -337,7 +332,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
     @property
     # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
-    def codomain(self) -> common.DimT | fbuiltins.FieldOffset:
+    def codomain(self) -> common.DimT:
         return self._codomain
 
     @functools.cached_property
@@ -346,10 +341,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         if self.domain.ndim > 1:
             kind |= common.ConnectivityKind.MODIFY_RANK
             kind |= common.ConnectivityKind.MODIFY_DIMS
-        if isinstance(self.codomain, fbuiltins.FieldOffset):
-            codomain_new = self.codomain.source
-        else:
-            codomain_new = self.codomain
+        codomain_new = self.codomain
         if self.domain.dim_index(codomain_new) is None:
             kind |= common.ConnectivityKind.MODIFY_DIMS
 
@@ -360,7 +352,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         cls,
         data: npt.ArrayLike | core_defs.NDArrayObject,
         /,
-        codomain: common.DimT | fbuiltins.FieldOffset,
+        codomain: common.DimT,
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
@@ -380,7 +372,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         assert len(domain) == array.ndim
         assert all(len(r) == s or s == 1 for r, s in zip(domain.ranges, array.shape))
 
-        assert isinstance(codomain, (common.Dimension, fbuiltins.FieldOffset))
+        assert isinstance(codomain, common.Dimension)
 
         return cls(domain, array, codomain)
 
@@ -612,10 +604,11 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayConnectivityField:
     if isinstance(field, NdArrayField):
-        # change field.ndarray from local to global
-        global_index_arr = np.arange(field.shape[0]) + field.ndarray
+        # change field.ndarray from relative to absolute
+        offset_dim = np.where(list(map(lambda x: x == offset_.source, field.domain.dims)))[0][0]
+        new_connectivity = np.indices(field.ndarray.shape)[offset_dim] + field.ndarray
         return NumPyArrayConnectivityField.from_array(
-            global_index_arr, codomain=offset_, domain=field.domain
+            new_connectivity, codomain=offset_.source, domain=field.domain
         )
     raise AssertionError(
         "This is the NdArrayConnectivityField implementation of `experimental.as_offset`."
