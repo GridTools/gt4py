@@ -228,8 +228,8 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
         copy_program(inp, out, offset_provider={})
 
     msgs = [
-        r"- Expected argument `in_field` to be of type `Field\[\[IDim], float64\]`,"
-        r" but got `Field\[\[JDim\], float64\]`.",
+        r"- Expected argument 'in_field' to be of type 'Field\[\[IDim], float64\]',"
+        r" got 'Field\[\[JDim\], float64\]'.",
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None

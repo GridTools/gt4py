@@ -37,7 +37,7 @@ def _flatten_tuple_expr(
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise ValueError("Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed.")
+    raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -174,7 +174,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else:
                 lowered_bound = self.visit(slice_bound, **kwargs)
         else:
-            raise AssertionError("Expected `None` or `past.Constant`.")
+            raise AssertionError("Expected 'None' or 'past.Constant'.")
         return lowered_bound
 
     def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
@@ -189,8 +189,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         else:
             raise ValueError(
-                "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
-                " or a `past.TupleExpr` thereof."
+                "Unexpected 'out' argument. Must be a 'past.Name', 'past.Subscript'"
+                " or a 'past.TupleExpr' thereof."
             )
 
     def _construct_itir_domain_arg(
@@ -209,9 +209,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of `{out_field.id}` argument to be"
-                f" fields defined on the same dimensions. This error should be "
-                f" caught in type deduction already."
+                f"Expected constituents of '{out_field.id}' argument to be"
+                " fields defined on the same dimensions. This error should be "
+                " caught in type deduction already."
             )
 
         for dim_i, dim in enumerate(out_dims):
@@ -232,7 +232,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
             if dim.kind == DimensionKind.LOCAL:
-                raise ValueError(f"Dimension {dim.value} must not be local.")
+                raise ValueError(f"Dimension '{dim.value}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
@@ -259,8 +259,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
             raise ValueError(
-                f"Dimensions in out field and field domain are not equivalent"
-                f"Expected {dim}, but got {keys_dims_types} "
+                "Dimensions in out field and field domain are not equivalent:"
+                f"expected '{dim}', got '{keys_dims_types}'."
             )
 
         return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
@@ -277,13 +277,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             out_field_slice_ = [node.slice_]
         else:
             raise AssertionError(
-                "Unexpected `out` argument. Must be tuple of slices or slice expression."
+                "Unexpected 'out' argument, must be tuple of slices or slice expression."
             )
         node_dims_ls = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims_ls, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
             raise ValueError(
-                f"Too many indices for field {out_field_name}: field is {len(node_dims_ls)}"
+                f"Too many indices for field '{out_field_name}': field is {len(node_dims_ls)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
             )
         return out_field_slice_
@@ -321,7 +321,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     isinstance(field, past.Subscript) for field in flattened
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
                 assert all(
-                    concepts.eq_nonlocated(first_field.slice_, field.slice_) for field in flattened  # type: ignore[union-attr] # mypy cannot deduce type
+                    concepts.eq_nonlocated(
+                        first_field.slice_,
+                        field.slice_,  # type: ignore[union-attr] # mypy cannot deduce type
+                    )
+                    for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
@@ -332,7 +336,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         else:
             raise AssertionError(
-                "Unexpected `out` argument. Must be a `past.Subscript`, `past.Name` or `past.TupleExpr` node."
+                "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
             )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
@@ -340,7 +344,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             match node.type.kind:
                 case ts.ScalarKind.STRING:
                     raise NotImplementedError(
-                        f"Scalars of kind {node.type.kind} not supported currently."
+                        f"Scalars of kind '{node.type.kind}' not supported currently."
                     )
             typename = node.type.kind.name.lower()
             return itir.Literal(value=str(node.value), type=typename)
@@ -373,5 +377,5 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         else:
             raise AssertionError(
-                "Only `minimum` and `maximum` builtins supported supported currently."
+                "Only 'minimum' and 'maximum' builtins supported supported currently."
             )

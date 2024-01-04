@@ -29,7 +29,7 @@ def inline_lambda(  # noqa: C901  # see todo above
     opcount_preserving=False,
     force_inline_lift_args=False,
     force_inline_trivial_lift_args=False,
-    force_inline_lambda_args=True,
+    force_inline_lambda_args=False,
     eligible_params: Optional[list[bool]] = None,
 ):
     assert isinstance(node.fun, ir.Lambda)
@@ -60,7 +60,7 @@ def inline_lambda(  # noqa: C901  # see todo above
             if is_applied_lift(arg) and len(arg.args) == 0:
                 eligible_params[i] = True
 
-    # TODO(tehrengruber): make configurable
+    # inline lambdas passed as arguments
     if force_inline_lambda_args:
         for i, arg in enumerate(node.args):
             if isinstance(arg, ir.Lambda):
@@ -127,6 +127,8 @@ class InlineLambdas(NodeTranslator):
 
     opcount_preserving: bool
 
+    force_inline_lambda_args: bool
+
     force_inline_lift_args: bool
 
     force_inline_trivial_lift_args: bool
@@ -138,9 +140,9 @@ class InlineLambdas(NodeTranslator):
         cls,
         node: ir.Node,
         opcount_preserving=False,
+        force_inline_lambda_args=False,
         force_inline_lift_args=False,
         force_inline_trivial_lift_args=False,
-        force_inline_lambda_args=True,
     ):
         """
         Inline lambda calls by substituting every argument by its value.
@@ -156,6 +158,8 @@ class InlineLambdas(NodeTranslator):
             opcount_preserving: Preserve the number of operations, i.e. only
                 inline lambda call if the resulting call has the same number of
                 operations.
+            force_inline_lambda_args: Inline all arguments that are lambda calls, i.e.
+                `(λ(p) → p(a, a))(λ(x, y) → x+y)`
             force_inline_lift_args: Inline all arguments that are applied lifts, i.e.
                 `lift(λ(...) → ...)(...)`.
             force_inline_trivial_lift_args: Inline all arguments that are trivial
@@ -164,9 +168,9 @@ class InlineLambdas(NodeTranslator):
         """
         return cls(
             opcount_preserving=opcount_preserving,
+            force_inline_lambda_args=force_inline_lambda_args,
             force_inline_lift_args=force_inline_lift_args,
             force_inline_trivial_lift_args=force_inline_trivial_lift_args,
-            force_inline_lambda_args=force_inline_lambda_args,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -175,9 +179,9 @@ class InlineLambdas(NodeTranslator):
             return inline_lambda(
                 node,
                 opcount_preserving=self.opcount_preserving,
+                force_inline_lambda_args=self.force_inline_lambda_args,
                 force_inline_lift_args=self.force_inline_lift_args,
                 force_inline_trivial_lift_args=self.force_inline_trivial_lift_args,
-                force_inline_lambda_args=self.force_inline_lambda_args,
             )
 
         return node

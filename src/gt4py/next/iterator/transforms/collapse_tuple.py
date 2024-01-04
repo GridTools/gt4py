@@ -46,6 +46,9 @@ def _get_tuple_size(elem: ir.Node, use_global_information: bool) -> int | type[U
         ):
             return UnknownLength
 
+    if not type_.dtype.has_known_length:
+        return UnknownLength
+
     return len(type_.dtype)
 
 

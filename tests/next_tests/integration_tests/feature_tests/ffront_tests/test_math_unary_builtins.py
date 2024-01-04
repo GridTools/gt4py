@@ -147,9 +147,9 @@ def test_unary_invert(cartesian_case):
 
 def test_unary_not(cartesian_case):
     pytest.xfail(
-        "We accidentally supported `not` on fields. This is wrong, we should raise an error."
+        "We accidentally supported 'not' on fields. This is wrong, we should raise an error."
     )
-    with pytest.raises:  # TODO `not` on a field should be illegal
+    with pytest.raises:  # TODO 'not' on a field should be illegal
 
         @gtx.field_operator
         def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
