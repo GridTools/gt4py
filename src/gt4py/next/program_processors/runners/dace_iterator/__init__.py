@@ -264,7 +264,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             lift_mode=lift_mode,
         )
 
-        sdfg.build_folder = cache._session_cache_dir_path / ".dacecache"
+        # TODO: make configurable in backend setup
+        sdfg.build_folder = cache.SESSION_STORAGE / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
             dace.config.Config.set("compiler", "cpu", "args", value=_cpu_args)
