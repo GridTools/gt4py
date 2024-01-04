@@ -116,6 +116,7 @@ def apply_common_transforms(
             # to limit number of times global type inference is executed, only in the last iterations.
             use_global_type_inference=inlined == ir,
         )
+        inlined = PropagateDeref.apply(inlined)  # todo: document
 
         if inlined == ir:
             break
