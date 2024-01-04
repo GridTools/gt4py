@@ -971,6 +971,14 @@ def _make_devtools_pretty() -> (
     return __pretty__
 
 
+def _is_concrete_data_model(
+    cls: Type, type_args: Tuple[Type]
+) -> typing.TypeGuard[Type[DataModelT]]:
+    return hasattr(cls, "__bound_type_params__") and all(
+        a == b for a, b in zip(cls.__bound_type_params__.values(), type_args)
+    )
+
+
 def _make_data_model_class_getitem() -> classmethod:
     def __class_getitem__(
         cls: Type[GenericDataModelT], args: Union[Type, Tuple[Type]]
@@ -980,7 +988,9 @@ def _make_data_model_class_getitem() -> classmethod:
         See :class:`GenericDataModelAlias` for further information.
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
-        concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
+        concrete_cls: Type[DataModelT] = (
+            cls if _is_concrete_data_model(cls, type_args) else concretize(cls, *type_args)
+        )
         res = xtyping.StdGenericAliasType(concrete_cls, type_args)
         if sys.version_info < (3, 9):
             # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
@@ -1348,9 +1358,14 @@ def _make_concrete_with_cache(
 
         class_name = f"{datamodel_cls.__name__}__{'_'.join(arg_names)}"
 
+    bound_type_params = {
+        tp_var.__name__: type_params_map[tp_var] for tp_var in datamodel_cls.__parameters__
+    }
+
     namespace = {
         "__annotations__": new_annotations,
         "__module__": module if module else datamodel_cls.__module__,
+        "__bound_type_params__": bound_type_params,  # TODO(havogt) is this useful information?
         **new_field_c_attrs,
     }
 
