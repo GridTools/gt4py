@@ -143,11 +143,17 @@ class CollapseTuple(eve.NodeTranslator):
         if use_global_type_inference:
             it_type_inference.infer_all(node, save_to_annex=True)
 
+        # TODO(tehrengruber): We don't want neither opcount preserving nor unconditionally inlining,
+        #  but only force inline of lambda args.
+        new_node = InlineLambdas.apply(
+            node, opcount_preserving=True, force_inline_lambda_args=True
+        )
+
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
             use_global_type_inference=use_global_type_inference,
             flags=flags,
-        ).visit(node)
+        ).visit(new_node)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
