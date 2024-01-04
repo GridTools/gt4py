@@ -847,6 +847,7 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
