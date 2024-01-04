@@ -446,24 +446,30 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     )
 
 
+@pytest.mark.parametrize(
+    "dims, offset, offset_dim",
+    [([IDim, KDim], Ioff, IDim), ([IDim, JDim], Ioff, IDim), ([IDim, KDim], Koff, KDim)],
+)
 @pytest.mark.uses_dynamic_offsets
-def test_offset_field(cartesian_case):
+def test_offset_field(cartesian_case, dims, offset, offset_dim):
     ref = np.full(
-        (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
+        (cartesian_case.default_sizes[dims[0]], cartesian_case.default_sizes[dims[1]]),
+        True,
+        dtype=bool,
     )
 
     @gtx.field_operator
-    def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
-        a_i = a(as_offset(Ioff, offset_field))
-        a_i_k = a_i(as_offset(Koff, offset_field))
-        b_i = a(Ioff[1])
-        b_i_k = b_i(Koff[1])
-        return a_i_k == b_i_k
+    def testee(
+        a: gtx.Field[[dims[0], dims[1]], int], offset_field: gtx.Field[[dims[0], dims[1]], int]
+    ) -> gtx.Field[[dims[0], dims[1]], bool]:
+        a_i = a(as_offset(offset, offset_field))
+        b_i = a(offset[3])
+        return a_i == b_i
 
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1), KDim: (0, 1)})()
+    a = cases.allocate(cartesian_case, testee, "a").extend({offset_dim: (0, 3)})()
     offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
-        cases.ConstInitializer(1)
+        cases.ConstInitializer(3)
     )()
 
     cases.verify(
@@ -472,7 +478,7 @@ def test_offset_field(cartesian_case):
         a,
         offset_field,
         out=out,
-        offset_provider={"Ioff": IDim, "Koff": KDim},
+        offset_provider={"offset": offset_dim, "Ioff": IDim, "Koff": KDim},
         ref=np.full_like(offset_field, True, dtype=bool),
         comparison=lambda out, ref: np.all(out == ref),
     )
