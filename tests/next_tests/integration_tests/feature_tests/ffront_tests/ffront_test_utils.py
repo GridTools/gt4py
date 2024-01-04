@@ -41,15 +41,7 @@ import next_tests.exclusion_matrices as definitions
 @ppi.program_executor
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
-    raise ValueError("No backend selected. Backend selection is mandatory in tests.")
-    """Temporary default backend to not accidentally test the wrong backend."""
-
-    @property
-    def kind(self) -> type[ppi.ProgramExecutor]:
-        return ppi.ProgramExecutor
-
-    def __call__(program: itir.FencilDefinition, *args: Any, **kwargs: Any):
-        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+    raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 
 OPTIONAL_PROCESSORS = []
