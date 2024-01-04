@@ -58,6 +58,7 @@ def _relative_sub_domain(
         else:
             # not in new domain
             assert common.is_int_index(idx)
+            assert common.UnitRange.is_finite(rng)
             new_index = (rng.start if idx >= 0 else rng.stop) + idx
             if new_index < rng.start or new_index >= rng.stop:
                 raise embedded_exceptions.IndexOutOfBounds(
