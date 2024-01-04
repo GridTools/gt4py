@@ -38,7 +38,7 @@ import next_tests
 import next_tests.exclusion_matrices as definitions
 
 
-@program_executor
+@ppi.program_executor
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected. Backend selection is mandatory in tests.")
