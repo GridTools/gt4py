@@ -80,7 +80,7 @@ class Compiler(
 
         if not new_data or not is_compiled(new_data) or not module_exists(new_data, src_dir):
             raise CompilationError(
-                "On-the-fly compilation unsuccessful for {inp.source_module.entry_point.name}!"
+                f"On-the-fly compilation unsuccessful for '{inp.program_source.entry_point.name}'."
             )
 
         return getattr(
