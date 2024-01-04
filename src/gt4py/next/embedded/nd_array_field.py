@@ -161,7 +161,7 @@ class NdArrayField(
         return cls(domain, array)
 
     def remap(
-        self: NdArrayField, connectivity: common.ConnectivityField #| fbuiltins.FieldOffset
+        self: NdArrayField, connectivity: common.ConnectivityField 
     ) -> NdArrayField:
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
@@ -169,11 +169,7 @@ class NdArrayField(
 
         assert common.is_connectivity_field(connectivity)
         # Compute the new domain
-        dim = (
-            connectivity.codomain
-            if isinstance(connectivity.codomain, common.Dimension)
-            else connectivity.codomain.source
-        )
+        dim = connectivity.codomain
         dim_idx = self.domain.dim_index(dim)
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
@@ -341,8 +337,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         if self.domain.ndim > 1:
             kind |= common.ConnectivityKind.MODIFY_RANK
             kind |= common.ConnectivityKind.MODIFY_DIMS
-        codomain_new = self.codomain
-        if self.domain.dim_index(codomain_new) is None:
+        if self.domain.dim_index(self.codomain) is None:
             kind |= common.ConnectivityKind.MODIFY_DIMS
 
         return kind
