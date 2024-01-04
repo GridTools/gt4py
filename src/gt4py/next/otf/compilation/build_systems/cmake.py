@@ -54,7 +54,7 @@ class CMakeFactory(
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
-        cache_strategy: cache.Strategy,
+        cache_storage: str,
     ) -> CMakeProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -73,7 +73,7 @@ class CMakeFactory(
             languages=cmake_languages,
         )
         return CMakeProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(source, cache_storage),
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,

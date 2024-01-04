@@ -130,7 +130,7 @@ GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
 )
 
 GTFN_DEFAULT_COMPILE_STEP: step_types.CompilationStep = compiler.Compiler(
-    cache_strategy=cache.Strategy.SESSION, builder_factory=compiledb.CompiledbFactory()
+    cache_storage=cache.SESSION_STORAGE, builder_factory=compiledb.CompiledbFactory()
 )
 
 

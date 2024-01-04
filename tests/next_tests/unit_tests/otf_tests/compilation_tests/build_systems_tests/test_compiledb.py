@@ -20,7 +20,7 @@ from gt4py.next.otf.compilation.build_systems import compiledb
 
 def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_strategy=cache.Strategy.SESSION
+        compilable_source_example, cache_storage=cache.SESSION_STORAGE
     )
 
     # make sure the example project has not been written yet
