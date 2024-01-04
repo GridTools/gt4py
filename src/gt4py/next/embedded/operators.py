@@ -89,8 +89,6 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
 
             new_context_kwargs["offset_provider"] = offset_provider
 
-        if "out" not in kwargs:
-            raise errors.MissingArgumentError(None, "out", True)
         out = kwargs.pop("out")
 
         domain = kwargs.pop("domain", None)

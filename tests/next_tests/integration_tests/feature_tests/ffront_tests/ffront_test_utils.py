@@ -38,7 +38,10 @@ import next_tests
 import next_tests.exclusion_matrices as definitions
 
 
-class no_backend:
+@program_executor
+def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+    """Temporary default backend to not accidentally test the wrong backend."""
+    raise ValueError("No backend selected. Backend selection is mandatory in tests.")
     """Temporary default backend to not accidentally test the wrong backend."""
 
     @property
@@ -86,7 +89,7 @@ def fieldview_backend(request):
             skip_mark(msg.format(marker=marker, backend=backend_id))
 
     backup_backend = decorator.DEFAULT_BACKEND
-    decorator.DEFAULT_BACKEND = no_backend()
+    decorator.DEFAULT_BACKEND = no_backend
     yield backend
     decorator.DEFAULT_BACKEND = backup_backend
 
