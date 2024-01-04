@@ -358,6 +358,8 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         """Create an ``FixedTypeValidator`` validator for a specific type."""
 
         def _is_instance_of(value: Any, **kwargs: Any) -> None:
+            if type_ is Any:
+                return
             if not isinstance(value, type_):
                 raise TypeError(
                     f"'{name}' must be {type_} (got '{value}' which is a {type(value)})."
