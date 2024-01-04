@@ -495,7 +495,7 @@ def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.Functi
 def program(
     definition=None,
     *,
-    backend=eve.NOTHING,# `NOTHING` -> default backend, `None` -> no backend (embedded execution) 
+    backend=eve.NOTHING,  # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -806,7 +806,7 @@ def scan_operator(
     axis: Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend=eve.NOTHING, 
+    backend=eve.NOTHING,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
