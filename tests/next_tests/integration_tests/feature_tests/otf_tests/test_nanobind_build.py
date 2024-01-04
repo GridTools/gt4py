@@ -30,7 +30,7 @@ def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
-            cache_strategy=cache.Strategy.SESSION, builder_factory=cmake.CMakeFactory()
+            cache_storage=cache.SESSION_STORAGE, builder_factory=cmake.CMakeFactory()
         ),
     )
     compiled_program = build_the_program(example_program_source)
@@ -48,7 +48,7 @@ def test_gtfn_cpp_with_compiledb(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_compiledb")
     build_the_program = workflow.make_step(nanobind.bind_source).chain(
         compiler.Compiler(
-            cache_strategy=cache.Strategy.SESSION,
+            cache_storage=cache.SESSION_STORAGE,
             builder_factory=compiledb.CompiledbFactory(),
         ),
     )

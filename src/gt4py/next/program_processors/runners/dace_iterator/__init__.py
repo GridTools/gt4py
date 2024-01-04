@@ -308,7 +308,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             lift_mode=lift_mode,
         )
 
-        sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
+        sdfg.build_folder = compilation_cache.SESSION_STORAGE / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
             if compiler_args is not None:
