@@ -199,14 +199,9 @@ class ItirToSDFG(eve.NodeVisitor):
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
         # Create the call signature for the SDFG.
-        #  All arguments required by the SDFG, regardless if explicit and implicit, are added
-        #  as positional arguments. In the front are all arguments to the Fencil, in that
-        #  order, they are followed by the arguments created by the translation process,
-        arg_list = [str(a) for a in node.params]
-        sig_list = program_sdfg.signature_arglist(with_types=False)
-        implicit_args = set(sig_list) - set(arg_list)
-        call_params = arg_list + [ia for ia in sig_list if ia in implicit_args]
-        program_sdfg.arg_names = call_params
+        #  Only the arguments requiered by the Fencil, i.e. `node.params` are added as poitional arguments.
+        #  The implicit arguments, such as the offset providers or the arguments created by the translation process, must be passed as keywords only arguments.
+        program_sdfg.arg_names = [str(a) for a in node.params]
 
         program_sdfg.validate()
         return program_sdfg

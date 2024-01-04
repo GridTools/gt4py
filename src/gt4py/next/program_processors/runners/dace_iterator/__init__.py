@@ -207,6 +207,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
+    sdfg_sig = sdfg.signature_arglist(with_types=False)
     dace_args = get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
@@ -224,11 +225,8 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
         **dace_conn_strides,
         **dace_offsets,
     }
-    expected_args = {
-        key: value
-        for key, value in all_args.items()
-        if key in sdfg.signature_arglist(with_types=False)
-    }
+    expected_args = {key: all_args[key] for key in sdfg_sig}
+
     return expected_args
 
 
@@ -258,9 +256,7 @@ def build_sdfg_from_itir(
     # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
     #                `lift_more` to `FORCE_INLINE` mode.
     lift_mode = itir_transforms.LiftMode.FORCE_INLINE
-
     arg_types = [type_translation.from_value(arg) for arg in args]
-    device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
@@ -274,9 +270,10 @@ def build_sdfg_from_itir(
 
     # run DaCe auto-optimization heuristics
     if auto_optimize:
-        # TODO Investigate how symbol definitions improve autoopt transformations,
-        #      in which case the cache table should take the symbols map into account.
+        # TODO: Investigate how symbol definitions improve autoopt transformations,
+        #       in which case the cache table should take the symbols map into account.
         symbols: dict[str, int] = {}
+        device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
 
     if on_gpu:

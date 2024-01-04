@@ -77,6 +77,12 @@ class Tuple(Type):
             raise ValueError(f"Can not iterate over partially defined tuple '{self}'.")
         yield from self.others
 
+    @property
+    def has_known_length(self):
+        return isinstance(self.others, EmptyTuple) or (
+            isinstance(self.others, Tuple) and self.others.has_known_length
+        )
+
     def __len__(self) -> int:
         return sum(1 for _ in self)
 
