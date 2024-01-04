@@ -161,13 +161,15 @@ class NdArrayField(
         return cls(domain, array)
 
     def remap(
-        self: NdArrayField, connectivity: common.ConnectivityField 
+        self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
     ) -> NdArrayField:
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
+            assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
 
         assert common.is_connectivity_field(connectivity)
+
         # Compute the new domain
         dim = connectivity.codomain
         dim_idx = self.domain.dim_index(dim)
