@@ -292,6 +292,7 @@ def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee_op, qc, tuple_scalar, out=qc, ref=expected)
 
 
+@pytest.mark.uses_cartesian_shift
 @pytest.mark.uses_scan
 @pytest.mark.uses_index_fields
 def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
@@ -802,6 +803,85 @@ def test_scan_nested_tuple_input(cartesian_case):
     cases.verify(cartesian_case, simple_scan_operator, (inp1, inp2), out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
+def test_scan_different_domain_in_tuple(cartesian_case):
+    init = 1.0
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
+    inp1_np = np.ones(
+        (
+            i_size + 1,
+            k_size,
+        )
+    )  # i_size bigger than in the other argument
+    inp2_np = np.fromfunction(lambda i, k: k, shape=(i_size, k_size), dtype=float)
+    inp1 = cartesian_case.as_field([IDim, KDim], inp1_np)
+    inp2 = cartesian_case.as_field([IDim, KDim], inp2_np)
+    out = cartesian_case.as_field([IDim, KDim], np.zeros((i_size, k_size)))
+
+    def prev_levels_iterator(i):
+        return range(i + 1)
+
+    expected = np.asarray(
+        [
+            reduce(
+                lambda prev, k: prev + inp1_np[:-1, k] + inp2_np[:, k],
+                prev_levels_iterator(k),
+                init,
+            )
+            for k in range(k_size)
+        ]
+    ).transpose()
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=init)
+    def scan_op(carry: float, a: tuple[float, float]) -> float:
+        return carry + a[0] + a[1]
+
+    @gtx.field_operator
+    def foo(
+        inp1: gtx.Field[[IDim, KDim], float], inp2: gtx.Field[[IDim, KDim], float]
+    ) -> gtx.Field[[IDim, KDim], float]:
+        return scan_op((inp1, inp2))
+
+    cases.verify(cartesian_case, foo, inp1, inp2, out=out, ref=expected)
+
+
+@pytest.mark.uses_scan
+def test_scan_tuple_field_scalar_mixed(cartesian_case):
+    init = 1.0
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
+    inp2_np = np.fromfunction(lambda i, k: k, shape=(i_size, k_size), dtype=float)
+    inp2 = cartesian_case.as_field([IDim, KDim], inp2_np)
+    out = cartesian_case.as_field([IDim, KDim], np.zeros((i_size, k_size)))
+
+    def prev_levels_iterator(i):
+        return range(i + 1)
+
+    expected = np.asarray(
+        [
+            reduce(
+                lambda prev, k: prev + 1.0 + inp2_np[:, k],
+                prev_levels_iterator(k),
+                init,
+            )
+            for k in range(k_size)
+        ]
+    ).transpose()
+
+    @gtx.scan_operator(axis=KDim, forward=True, init=init)
+    def scan_op(carry: float, a: tuple[float, float]) -> float:
+        return carry + a[0] + a[1]
+
+    @gtx.field_operator
+    def foo(inp1: float, inp2: gtx.Field[[IDim, KDim], float]) -> gtx.Field[[IDim, KDim], float]:
+        return scan_op((inp1, inp2))
+
+    cases.verify(cartesian_case, foo, 1.0, inp2, out=out, ref=expected)
+
+
 def test_docstring(cartesian_case):
     @gtx.field_operator
     def fieldop_with_docstring(a: cases.IField) -> cases.IField:
@@ -1108,7 +1188,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 def test_tuple_unpacking_too_many_values(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Could not deduce type: Too many values to unpack \(expected 3\)"),
+        match=(r"Too many values to unpack \(expected 3\)."),
     ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
@@ -1117,8 +1197,10 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
             return a, b, c
 
 
-def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(errors.DSLError, match=(r"Assignment value must be of type tuple!")):
+def test_tuple_unpacking_too_few_values(cartesian_case):
+    with pytest.raises(
+        errors.DSLError, match=(r"Assignment value must be of type tuple, got 'int32'.")
+    ):
 
         @gtx.field_operator(backend=cartesian_case.backend)
         def _invalid_unpack() -> tuple[int32, float64, int32]:

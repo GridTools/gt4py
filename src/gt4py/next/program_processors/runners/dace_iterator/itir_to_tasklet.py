@@ -18,7 +18,6 @@ from typing import Any, Callable, Optional, TypeAlias, cast
 
 import dace
 import numpy as np
-from dace import subsets
 from dace.transformation.dataflow import MapFusion
 
 import gt4py.eve.codegen
@@ -321,16 +320,36 @@ def builtin_can_deref(
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args = [arg for li in transformer.visit(node_args) for arg in li]
-    expr_args = [(arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)]
-    internals = [
-        arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
+    args = transformer.visit(node_args)
+    assert len(args) == 3
+    if_node = args[0][0] if isinstance(args[0], list) else args[0]
+
+    # the argument could be a list of elements on each branch representing the result of `make_tuple`
+    # however, the normal case is to find one value expression
+    assert len(args[1]) == len(args[2])
+    if_expr_args = [
+        (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
+        for a, b in zip(args[1], args[2])
     ]
-    expr = "({1} if {0} else {2})".format(*internals)
-    node_type = transformer.node_types[id(node)]
-    assert isinstance(node_type, itir_typing.Val)
-    type_ = itir_type_as_dace_type(node_type.dtype)
-    return transformer.add_expr_tasklet(expr_args, expr, type_, "if")
+
+    # in case of tuple arguments, generate one if-tasklet for each element of the output tuple
+    if_expr_values = []
+    for a, b in if_expr_args:
+        assert a.dtype == b.dtype
+        expr_args = [
+            (arg, f"{arg.value.data}_v")
+            for arg in (if_node, a, b)
+            if not isinstance(arg, SymbolExpr)
+        ]
+        internals = [
+            arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v"
+            for arg in (if_node, a, b)
+        ]
+        expr = "({1} if {0} else {2})".format(*internals)
+        if_expr = transformer.add_expr_tasklet(expr_args, expr, a.dtype, "if")
+        if_expr_values.append(if_expr[0])
+
+    return if_expr_values
 
 
 def builtin_list_get(
@@ -356,7 +375,7 @@ def builtin_list_get(
 def builtin_cast(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    args = [transformer.visit(node_args[0])[0]]
+    args = transformer.visit(node_args[0])
     internals = [f"{arg.value.data}_v" for arg in args]
     target_type = node_args[1]
     assert isinstance(target_type, itir.SymRef)
@@ -380,8 +399,8 @@ def builtin_tuple_get(
     elements = transformer.visit(node_args[1])
     index = node_args[0]
     if isinstance(index, itir.Literal):
-        return elements[int(index.value)]
-    raise ValueError("Tuple can only be subscripted with compile-time constants")
+        return [elements[int(index.value)]]
+    raise ValueError("Tuple can only be subscripted with compile-time constants.")
 
 
 _GENERAL_BUILTIN_MAPPING: dict[
@@ -620,7 +639,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             elif builtin_name in _GENERAL_BUILTIN_MAPPING:
                 return self._visit_general_builtin(node)
             else:
-                raise NotImplementedError(f"{builtin_name} not implemented")
+                raise NotImplementedError(f"'{builtin_name}' not implemented.")
         return self._visit_call(node)
 
     def _visit_call(self, node: itir.FunCall):
@@ -734,52 +753,29 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 dace.Memlet.simple(node.data, "0") for node in deref_nodes[1:]
             ]
 
-            # we create a nested sdfg in order to access the index scalar values as symbols in a memlet subset
-            deref_sdfg = dace.SDFG("deref")
-            deref_sdfg.add_array(
-                "_inp", field_array.shape, iterator.dtype, strides=field_array.strides
-            )
-            for connector in deref_connectors[1:]:
-                deref_sdfg.add_scalar(connector, _INDEX_DTYPE)
-            deref_sdfg.add_array("_out", result_shape, iterator.dtype)
-            deref_init_state = deref_sdfg.add_state("init", True)
-            deref_access_state = deref_sdfg.add_state("access")
-            deref_sdfg.add_edge(
-                deref_init_state,
-                deref_access_state,
-                dace.InterstateEdge(
-                    assignments={f"_sym{inp}": inp for inp in deref_connectors[1:]}
-                ),
-            )
-            # we access the size in source field shape as symbols set on the nested sdfg
-            source_subset = tuple(
-                f"_sym_i_{dim}" if dim in iterator.indices else f"0:{size}"
+            # we create a mapped tasklet for array slicing
+            map_ranges = {
+                f"_i_{dim}": f"0:{size}"
                 for dim, size in zip(sorted_dims, field_array.shape)
+                if dim not in iterator.indices
+            }
+            src_subset = ",".join([f"_i_{dim}" for dim in sorted_dims])
+            dst_subset = ",".join(
+                [f"_i_{dim}" for dim in sorted_dims if dim not in iterator.indices]
             )
-            deref_access_state.add_nedge(
-                deref_access_state.add_access("_inp"),
-                deref_access_state.add_access("_out"),
-                dace.Memlet(
-                    data="_out",
-                    subset=subsets.Range.from_array(result_array),
-                    other_subset=",".join(source_subset),
-                ),
-            )
-
-            deref_node = self.context.state.add_nested_sdfg(
-                deref_sdfg,
-                self.context.body,
-                inputs=set(deref_connectors),
-                outputs={"_out"},
-            )
-            for connector, node, memlet in zip(deref_connectors, deref_nodes, deref_memlets):
-                self.context.state.add_edge(node, None, deref_node, connector, memlet)
-            self.context.state.add_edge(
-                deref_node,
-                "_out",
-                result_node,
-                None,
-                dace.Memlet.from_array(result_name, result_array),
+            self.context.state.add_mapped_tasklet(
+                "deref",
+                map_ranges,
+                inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
+                outputs={
+                    "_out": dace.Memlet.from_array(result_name, result_array),
+                },
+                code=f"_out[{dst_subset}] = _inp[{src_subset}]",
+                external_edges=True,
+                input_nodes={node.data: node for node in deref_nodes},
+                output_nodes={
+                    result_name: result_node,
+                },
             )
             return [ValueExpr(result_node, iterator.dtype)]
 
@@ -990,9 +986,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     def _visit_numeric_builtin(self, node: itir.FunCall) -> list[ValueExpr]:
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args: list[SymbolExpr | ValueExpr] = list(
-            itertools.chain(*[self.visit(arg) for arg in node.args])
-        )
+        args = flatten_list(self.visit(node.args))
         expr_args = [
             (arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)
         ]

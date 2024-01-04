@@ -32,7 +32,7 @@ def as_dace_type(type_: ts.ScalarType):
         return dace.float32
     elif type_.kind == ts.ScalarKind.FLOAT64:
         return dace.float64
-    raise ValueError(f"scalar type {type_} not supported")
+    raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):

@@ -59,7 +59,7 @@ class ProgramSource(Generic[SrcL, SettingT]):
     def __post_init__(self):
         if not isinstance(self.language_settings, self.language.settings_class):
             raise TypeError(
-                f"Wrong language settings type for {self.language}, must be subclass of {self.language.settings_class}"
+                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
             )
 
 
