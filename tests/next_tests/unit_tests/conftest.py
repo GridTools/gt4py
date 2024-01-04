@@ -109,7 +109,7 @@ def run_processor(
     elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):
         print(program.format_itir(*args, formatter=processor, **kwargs))
     else:
-        raise TypeError(f"program processor kind not recognized: {processor}!")
+        raise TypeError(f"program processor kind not recognized: '{processor}'.")
 
 
 @dataclasses.dataclass

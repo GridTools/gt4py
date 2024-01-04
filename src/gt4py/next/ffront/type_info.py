@@ -51,7 +51,7 @@ def promote_zero_dims(
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
                 else:
-                    raise ValueError(f"{arg_el} is not compatible with {param_el}.")
+                    raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
         return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)

@@ -142,7 +142,9 @@ def get_allocator(
     elif not strict or is_field_allocator(default):
         return default
     else:
-        raise TypeError(f"Object {obj} is neither a field allocator nor a field allocator factory")
+        raise TypeError(
+            f"Object '{obj}' is neither a field allocator nor a field allocator factory."
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -331,7 +333,7 @@ def allocate(
 
     """
     if device is None and allocator is None:
-        raise ValueError("No 'device' or 'allocator' specified")
+        raise ValueError("No 'device' or 'allocator' specified.")
     actual_allocator = get_allocator(allocator)
     if actual_allocator is None:
         assert device is not None  # for mypy
@@ -339,7 +341,7 @@ def allocate(
     elif device is None:
         device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
     elif device.device_type != actual_allocator.__gt_device_type__:
-        raise ValueError(f"Device {device} and allocator {actual_allocator} are incompatible")
+        raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
 
     return actual_allocator.__gt_allocate__(
         domain=common.domain(domain),

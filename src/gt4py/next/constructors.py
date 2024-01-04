@@ -254,12 +254,12 @@ def as_field(
         domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:
             raise ValueError(
-                f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
+                f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
             )
         if origin:
             domain_dims = set(domain)
             if unknown_dims := set(origin.keys()) - domain_dims:
-                raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}")
+                raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
         else:
             origin = {}
         actual_domain = common.domain(
@@ -277,7 +277,7 @@ def as_field(
     #   already the correct layout and device.
     shape = storage_utils.asarray(data).shape
     if shape != actual_domain.shape:
-        raise ValueError(f"Cannot construct `Field` from array of shape `{shape}` ")
+        raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
@@ -334,20 +334,20 @@ def as_connectivity(
         domain = cast(Sequence[common.Dimension], domain)
         if len(domain) != data.ndim:
             raise ValueError(
-                f"Cannot construct `Field` from array of shape `{data.shape}` and domain `{domain}` "
+                f"Cannot construct 'Field' from array of shape '{data.shape}' and domain '{domain}'."
             )
         actual_domain = common.domain([(d, (0, s)) for d, s in zip(domain, data.shape)])
     else:
         actual_domain = common.domain(cast(common.DomainLike, domain))
 
     if not isinstance(codomain, common.Dimension):
-        raise ValueError(f"Invalid codomain dimension `{codomain}`")
+        raise ValueError(f"Invalid codomain dimension '{codomain}'.")
 
     # TODO(egparedes): allow zero-copy construction (no reallocation) if buffer has
     #   already the correct layout and device.
     shape = storage_utils.asarray(data).shape
     if shape != actual_domain.shape:
-        raise ValueError(f"Cannot construct `Field` from array of shape `{shape}` ")
+        raise ValueError(f"Cannot construct 'Field' from array of shape '{shape}'.")
     if dtype is None:
         dtype = storage_utils.asarray(data).dtype
     dtype = core_defs.dtype(dtype)
@@ -356,7 +356,8 @@ def as_connectivity(
     if (allocator is None) and (device is None) and xtyping.supports_dlpack(data):
         device = core_defs.Device(*data.__dlpack_device__())
     buffer = next_allocators.allocate(actual_domain, dtype, allocator=allocator, device=device)
-    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index] # TODO(havogt): consider addin MutableNDArrayObject
+    # TODO(havogt): consider adding MutableNDArrayObject
+    buffer.ndarray[...] = storage_utils.asarray(data)  # type: ignore[index]
     connectivity_field = common._connectivity(
         buffer.ndarray, codomain=codomain, domain=actual_domain
     )

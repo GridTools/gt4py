@@ -56,7 +56,7 @@ def test_embedded_error_on_wrong_domain():
             1,
         ),
     )
-    with pytest.raises(RuntimeError, match="expected `UnstructuredDomain`"):
+    with pytest.raises(RuntimeError, match="expected 'UnstructuredDomain'"):
         foo[dom](
             gtx.as_field([I], np.zeros((1,))),
             out=out,
