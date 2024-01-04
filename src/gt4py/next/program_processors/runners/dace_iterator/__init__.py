@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
+import pathlib
 import warnings
 from typing import Any, Mapping, Optional, Sequence
 
@@ -308,7 +309,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             lift_mode=lift_mode,
         )
 
-        sdfg.build_folder = compilation_cache.SESSION_STORAGE / ".dacecache"
+        sdfg.build_folder = pathlib.Path(compilation_cache.SESSION_STORAGE) / ".dacecache"
         with dace.config.temporary_config():
             dace.config.Config.set("compiler", "build_type", value=build_type)
             if compiler_args is not None:
