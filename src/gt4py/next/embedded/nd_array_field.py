@@ -198,13 +198,13 @@ class NdArrayField(
             xp = self.array_ns
             if restricted_connectivity.domain.ndim > 1:
                 offset_abs = [
-                    connectivity.ndarray
+                    restricted_connectivity.ndarray
                     if d == dim
                     else np.indices(restricted_connectivity.shape)[d_i]
-                    for d_i, d in enumerate(self.domain.dims)
+                    for d_i, d in enumerate(new_domain.dims)
                 ]
                 arr_i_abs = np.arange(np.prod(self.shape)).reshape(self.shape)
-                new_buffer_flat = xp.take(self.ndarray.flatten(), arr_i_abs[tuple(offset_abs)].flatten())  # type: ignore[attr-defined] # mypy does not recognize flatten
+                new_buffer_flat = xp.take(self._ndarray.flatten(), arr_i_abs[tuple(offset_abs)].flatten())  # type: ignore[attr-defined] # mypy does not recognize flatten()
                 new_buffer = new_buffer_flat.reshape(restricted_connectivity.shape)
             else:
                 new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
