@@ -50,33 +50,34 @@ class PowerUnrolling(NodeTranslator):
                 raise TypeError("Power unrolling is only supported for ir.SymRef and ir.FunCall.")
 
         def compute_integer_power_of_two(exp):
-            return math.floor(math.log2(int(exp)))
+            return math.floor(math.log2(exp))
 
         new_node = self.generic_visit(node)
 
         if check_node(new_node):
             assert len(new_node.args) == 2
             # Check if unroll should be performed or if exponent is too large
-            if int(new_node.args[1].value) > self.max_unroll:
+            base, exponent = new_node.args[0], int(new_node.args[1].value)
+            if exponent > self.max_unroll:
                 return new_node
             else:
-                if new_node.args[1].value == im.literal_from_value(0).value:
+                if exponent == int(im.literal_from_value(0).value):
                     return im.literal_from_value(
                         1
                     )  # TODO: returned type of literal should be the same as the one of base
                 else:
                     # Calculate and store powers of two of the base as long as they are smaller than the exponent.
                     # Do the same (using the stored values) with the remainder and multiply computed values.
-                    pow_cur = compute_integer_power_of_two(new_node.args[1].value)
+                    pow_cur = compute_integer_power_of_two(exponent)
                     pow_max = pow_cur
-                    remainder = int(new_node.args[1].value)
+                    remainder = exponent
                     powers = [None] * (pow_max + 1)
 
-                    # Account for two new_node.args[0] being either an ir.SymRef or an ir.FunCall
+                    # Account for two base being either an ir.SymRef or an ir.FunCall
                     if check_node_args0_symref_funcall(new_node):
-                        powers[0] = new_node.args[0].id
+                        powers[0] = base.id
                     else:
-                        powers[0] = new_node.args[0]
+                        powers[0] = base
                     for i in range(1, pow_max + 1):
                         if check_node_args0_symref_funcall(new_node):
                             powers[i] = im.multiplies_(powers[i - 1], powers[i - 1])
