@@ -606,7 +606,9 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayConnectivityField:
     if isinstance(field, NdArrayField):
         # change field.ndarray from relative to absolute
-        offset_dim = np.where(list(map(lambda x: x == offset_.source, field.domain.dims)))[0][0]
+        offset_dim = np.squeeze(
+            np.where(list(map(lambda x: x == offset_.source, field.domain.dims)))
+        ).item()
         new_connectivity = np.indices(field.ndarray.shape)[offset_dim] + field.ndarray
         return NumPyArrayConnectivityField.from_array(
             new_connectivity, codomain=offset_.source, domain=field.domain
