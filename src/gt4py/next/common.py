@@ -428,7 +428,7 @@ class Domain(Sequence[NamedRange]):
         if index < 0:
             index += len(self.dims)
         new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
-        if len(new_dims) == len(self.dims):
+        if new_dims == self.dims:
             dims = new_dims
             ranges = new_ranges
         else:
