@@ -12,8 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.power_unrolling import PowerUnrolling
+from src.gt4py.eve import SymbolRef
 
 
 def test_power_unrolling_zero():
@@ -26,7 +28,7 @@ def test_power_unrolling_zero():
 
 def test_power_unrolling_one():
     testee = im.call("power")("x", 1)
-    expected = "x"
+    expected = ir.SymRef(id=SymbolRef("x"))
 
     actual = PowerUnrolling.apply(testee)
     assert actual == expected
@@ -98,6 +100,16 @@ def test_power_unrolling_seven_unrolled():
 
     actual = PowerUnrolling.apply(testee, max_unroll=7)
     assert actual == expected
+
+
+# def test_power_unrolling_x_plus_one_seven_unrolled():
+#     testee = im.call("power")(im.plus("x", 1), 7)
+#     tmp2 = im.multiplies_(im.plus("x", 1), im.plus("x", 1))
+#     tmp4 = im.multiplies_(tmp2, tmp2)
+#     expected = im.multiplies_(im.multiplies_(tmp4, tmp2), im.plus("x", 1))
+#
+#     actual = PowerUnrolling.apply(testee, max_unroll=7)
+#     assert actual == expected
 
 
 def test_power_unrolling_eight():

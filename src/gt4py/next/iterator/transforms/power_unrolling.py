@@ -61,7 +61,7 @@ class PowerUnrolling(NodeTranslator):
             if exponent > self.max_unroll:
                 return new_node
             else:
-                if exponent == int(im.literal_from_value(0).value):
+                if exponent == 0:
                     return im.literal_from_value(
                         1
                     )  # TODO: returned type of literal should be the same as the one of base
@@ -73,11 +73,8 @@ class PowerUnrolling(NodeTranslator):
                     remainder = exponent
                     powers = [None] * (pow_max + 1)
 
-                    # Account for two base being either an ir.SymRef or an ir.FunCall
-                    if check_node_args0_symref_funcall(new_node):
-                        powers[0] = base.id
-                    else:
-                        powers[0] = base
+                    powers[0] = base
+
                     for i in range(1, pow_max + 1):
                         if check_node_args0_symref_funcall(new_node):
                             powers[i] = im.multiplies_(powers[i - 1], powers[i - 1])
