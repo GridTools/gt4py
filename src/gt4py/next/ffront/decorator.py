@@ -453,11 +453,24 @@ class ProgramWithBoundArgs(Program):
             ) from err
 
         full_args = [*args]
+        full_kwargs = list(kwargs.items())
         for index, param in enumerate(self.past_node.params):
             if param.id in self.bound_args.keys():
-                full_args.insert(index, self.bound_args[param.id])
+                if index < len(full_args):
+                    full_args.insert(index, self.bound_args[param.id])
+                else:
+                    pos = list(self.past_node.type.definition.pos_or_kw_args).index(str(param.id))
+                    full_kwargs.insert(pos, (str(param.id), self.bound_args[param.id]))
+                    #full_kwargs[str(param.id)] = self.bound_args[param.id]
 
-        return super()._process_args(tuple(full_args), kwargs)
+        return super()._process_args(tuple(full_args), dict(full_kwargs))
+
+        # full_args = [*args]
+        # for index, param in enumerate(self.past_node.params):
+        #     if param.id in self.bound_args.keys():
+        #         full_args.insert(index, self.bound_args[param.id])
+        #
+        # return super()._process_args(tuple(full_args), kwargs)
 
     @functools.cached_property
     def itir(self):
