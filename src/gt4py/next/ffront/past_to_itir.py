@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import itertools
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
@@ -149,11 +150,12 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             ),
         ]
         param_to_arg = ts_utils.link_params_to_args(node.func.type_2.parameters, args)
-        lowered_args = [
-            *(self.visit(arg) for arg in node.args),
-            *(self.visit(arg) for arg in node.kwargs.values()),
-        ]
-        lowered_args = [lowered_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
+        node_args = [*node.args, *node.kwargs.values()]
+        linked_args = [node_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
+        lowered_args = list(itertools.chain(*[
+            [self.visit(arg)] if not isinstance(arg, past.TupleExpr) else _flatten_tuple_expr(arg)
+            for arg in linked_args
+        ]))
 
         return itir.StencilClosure(
             domain=lowered_domain,
