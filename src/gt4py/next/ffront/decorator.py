@@ -41,15 +41,13 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FieldOffset
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.ffront.foast_passes import type_inference
+from gt4py.next.type_system_2 import traits
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
-    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
-)
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from gt4py.next.ffront.past_passes import type_inference as past_type_inference
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
@@ -61,7 +59,8 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 )
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system_2 import types as ts2, traits
+from gt4py.next.ffront.type_system_2 import inference as ti2_f, types as ts2_f
 
 
 DEFAULT_BACKEND: Callable = roundtrip.executor
@@ -131,19 +130,19 @@ def _deduce_grid_type(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
+    arg, arg_type: ts2_f.FieldType | ts2.IntegerType | ts2.FloatType | ts2.TupleType
 ) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
-    if isinstance(arg_type, ts.TupleType):
-        for el, el_type in zip(arg, arg_type.types):
+    if isinstance(arg_type, ts2.TupleType):
+        for el, el_type in zip(arg, arg_type.elements):
             yield from _field_constituents_shape_and_dims(el, el_type)
-    elif isinstance(arg_type, ts.FieldType):
-        dims = type_info.extract_dims(arg_type)
+    elif isinstance(arg_type, ts2_f.FieldType):
+        dims = sorted(list(arg_type.dimensions), key=lambda x: x.value)
         if hasattr(arg, "shape"):
             assert len(arg.shape) == len(dims)
             yield (arg.shape, dims)
         else:
             yield (None, dims)
-    elif isinstance(arg_type, ts.ScalarType):
+    elif isinstance(arg_type, (ts2.IntegerType | ts2.FloatType)):
         yield (None, [])
     else:
         raise ValueError("Expected `FieldType` or `TupleType` thereof.")
@@ -332,23 +331,21 @@ class Program:
         )
 
     def _validate_args(self, *args, **kwargs) -> None:
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
+        arg_types = [ti2_f.inferrer.from_instance(arg) for arg in args]
+        kwarg_types = {k: ti2_f.inferrer.from_instance(v) for k, v in kwargs.items()}
 
-        try:
-            type_info.accepts_args(
-                self.past_node.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
-        except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+        args = [
+            *(traits.FunctionArgument(arg_ty, idx) for idx, arg_ty in enumerate(arg_types)),
+            *(traits.FunctionArgument(arg_ty, name) for name, arg_ty in kwarg_types.items() if name != "out")
+        ]
+        is_callable, result_or_error = self.past_node.type_2.is_callable(args)
+        if not is_callable:
+            raise TypeError(f"program is not callable with arguments: {result_or_error}")
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
+        #args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
@@ -359,8 +356,8 @@ class Program:
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
+            if implicit_domain and isinstance(param.type_2, (ts2_f.FieldType, ts2.TupleType)):
+                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type_2)]
                 shape, dims = shapes_and_dims[0]
                 if not all(
                     el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
@@ -383,9 +380,9 @@ class Program:
         ).items():
             if isinstance(
                 (type_ := gt_callable.__gt_type__()),
-                ts_ffront.ScanOperatorType,
+                ts2_f.ScanOperatorType,
             ):
-                scanops_per_axis.setdefault(type_.axis, []).append(name)
+                scanops_per_axis.setdefault(type_.dimension, []).append(name)
 
         if len(scanops_per_axis.values()) == 0:
             return None
@@ -570,7 +567,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
-            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+            key: foast.Constant(value=value, type_2=ti2_f.inferrer.from_instance(value), location=loc)
             for key, value in operator_attributes.items()
         }
         untyped_foast_node = operator_node_cls(
@@ -579,7 +576,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             location=loc,
             **operator_attribute_nodes,
         )
-        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+        foast_node = type_inference.TypeInferencePass().visit(untyped_foast_node)
         return cls(
             foast_node=foast_node,
             closure_vars=closure_vars,
@@ -588,10 +585,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             grid_type=grid_type,
         )
 
-    def __gt_type__(self) -> ts.CallableType:
-        type_ = self.foast_node.type
-        assert isinstance(type_, ts.CallableType)
-        return type_
+    def __gt_type__(self) -> traits.CallableTrait:
+        ty = self.foast_node.type_2
+        assert isinstance(ty, traits.CallableTrait)
+        return ty
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> FieldOperator:
         return dataclasses.replace(self, backend=backend)
@@ -613,7 +610,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return self.closure_vars
 
     def as_program(
-        self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
+        self, arg_types: list[ts2.Type], kwarg_types: dict[str, ts2.Type], out_type: ts2.Type
     ) -> Program:
         # TODO(tehrengruber): implement mechanism to deduce default values
         #  of arg and kwarg types
@@ -634,16 +631,31 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         params_decl: list[past.Symbol] = [
             past.DataSymbol(
                 id=param_sym_uids.sequential_id(prefix="__sym"),
-                type=arg_type,
+                type_2=arg_type,
                 namespace=dialect_ast_enums.Namespace.LOCAL,
                 location=loc,
             )
             for arg_type in arg_types
         ]
         params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
+        ty: ts2_f.FieldOperatorType | ts2_f.ScanOperatorType = self.foast_node.type_2
+        args = [
+            *(traits.FunctionArgument(arg_ty, idx) for idx, arg_ty in enumerate(arg_types)),
+            *(traits.FunctionArgument(arg_ty, name) for name, arg_ty in kwarg_types.items() if name != "out")
+        ]
+        is_callable, result_or_error = ty.is_callable(args)
+        if not is_callable:
+            raise TypeError(f"program is not callable with arguments: {result_or_error}")
+        if isinstance(type_, ts2_f.ScanOperatorType):
+            if not traits.is_implicitly_convertible(result_or_error, ts2_f.get_element_type(out_type)):
+                raise TypeError(f"program (scan op) is not callable with output type: {out_type}")
+        elif isinstance(type_, ts2_f.FieldOperatorType):
+            if not traits.is_implicitly_convertible(result_or_error, out_type):
+                raise TypeError(f"program (field op) is not callable with output type: {out_type}")
+
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
-            type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
+            type_2=out_type,
             namespace=dialect_ast_enums.Namespace.LOCAL,
             location=loc,
         )
@@ -655,7 +667,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         closure_symbols = [
             past.Symbol(
                 id=self.foast_node.id,
-                type=ts.DeferredType(constraint=None),
                 namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=loc,
             ),
@@ -663,7 +674,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
-            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=params_decl + [out_sym],
             body=[
                 past.Call(
@@ -676,8 +686,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
-        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
-        past_node = ProgramTypeDeduction.apply(untyped_past_node)
+        untyped_past_node = past_type_inference.ClosureVarInferencePass(closure_vars).visit(untyped_past_node)
+        past_node = past_type_inference.TypeInferencePass().visit(untyped_past_node)
 
         self._program_cache[hash_] = Program(
             past_node=past_node,
@@ -703,17 +713,18 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 # When backend is None, we are in embedded execution and for now
                 # we disable the program generation since it would involve generating
                 # Python source code from a PAST node.
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+                # args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
                 # TODO(tehrengruber): check all offset providers are given
                 # deduce argument types
                 arg_types = []
                 for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
+                    arg_types.append(ti2_f.inferrer.from_instance(arg))
                 kwarg_types = {}
                 for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
+                    kwarg_types[name] = ti2_f.inferrer.from_instance(arg)
+                out_type = ti2_f.inferrer.from_instance(out)
 
-                return self.as_program(arg_types, kwarg_types)(
+                return self.as_program(arg_types, kwarg_types, out_type)(
                     *args, out, offset_provider=offset_provider, **kwargs
                 )
             else:

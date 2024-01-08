@@ -21,7 +21,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases

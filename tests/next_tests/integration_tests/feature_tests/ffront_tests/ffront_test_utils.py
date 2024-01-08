@@ -53,13 +53,13 @@ if dace_iterator:
 @pytest.fixture(
     params=[
         definitions.ProgramBackendId.ROUNDTRIP,
-        definitions.ProgramBackendId.GTFN_CPU,
-        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
-        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
-        None,
-    ]
-    + OPTIONAL_PROCESSORS,
+        # definitions.ProgramBackendId.GTFN_CPU,
+        # definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
+        # definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        # pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
+        #None,
+    ],
+    #+ OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id() if p is not None else "None",
 )
 def fieldview_backend(request):

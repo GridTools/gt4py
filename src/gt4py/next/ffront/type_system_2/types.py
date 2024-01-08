@@ -1,10 +1,11 @@
 import dataclasses
+import itertools
 import typing
 import copy
 
 import gt4py.next.common as gtx_common
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.type_system_2 import types as ts2, traits
+from gt4py.next.type_system_2 import types as ts2, traits, utils as ts2_u
 from typing import Optional, Sequence, Any
 from gt4py.next.type_system_2.traits import FunctionArgument
 
@@ -23,24 +24,31 @@ class FieldOperatorType(ts2.Type, traits.CallableTrait):
 
 
 @dataclasses.dataclass
-class ScanOperatorType(ts2.Type):
+class ScanOperatorType(ts2.Type, traits.CallableTrait):
     dimension: gtx_common.Dimension
     carry: Optional[ts2.Type]
-    arguments: list[ts2.FunctionParameter]
+    parameters: list[ts2.FunctionParameter]
     result: Optional[ts2.Type]
 
     def __init__(
             self,
             dimension: gtx_common.Dimension,
             carry: Optional[ts2.Type],
-            arguments: list[ts2.FunctionParameter],
+            parameters: list[ts2.FunctionParameter],
             result: Optional[ts2.Type]
     ):
         self.dimension = dimension
         self.carry = carry
-        self.arguments = arguments
+        self.parameters = parameters
         self.result = result
 
+    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str]:
+        structures = [arg.ty for arg in args]
+        flattened = [ts2_u.flatten_tuples(struct) for struct in structures]
+        scalarized = [[get_element_type(ty) for ty in fl] for fl in flattened]
+        restructured = [ts2_u.unflatten_tuples(scalar, struct) for scalar, struct in zip(scalarized, structures)]
+        scalarized_args = [ts2.FunctionArgument(ty, arg.location) for ty, arg in zip(restructured, args)]
+        return ts2.FunctionType(self.parameters, self.result).is_callable(scalarized_args)
 
 @dataclasses.dataclass
 class FieldType(
@@ -166,7 +174,15 @@ class BuiltinFunctionType(ts2.Type, traits.CallableTrait):
     def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
         if self.func == fbuiltins.broadcast:
             return self.is_callable_broadcast(args)
-        return False, f"'{self.func.function.__name__}' not implemented"
+        elif self.func == fbuiltins.astype:
+            return self.is_callable_as_type(args)
+        elif self.func == fbuiltins.neighbor_sum:
+            return self.is_callable_reduction(args)
+        elif self.func == fbuiltins.min_over:
+            return self.is_callable_reduction(args)
+        elif self.func == fbuiltins.max_over:
+            return self.is_callable_reduction(args)
+        return False, f"callable trait for '{self.func.function.__name__}' not implemented"
 
     def is_callable_broadcast(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
         args = sorted(args, key=lambda v: v.location)
@@ -181,3 +197,46 @@ class BuiltinFunctionType(ts2.Type, traits.CallableTrait):
         if not all(dim in target_dims for dim in source_dims):
             return False, f"broadcasting '{source}' to dimensions '{dims}' would remove dimensions"
         return True, FieldType(element_ty, target_dims)
+
+    def is_callable_as_type(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        if len(args) != 2:
+            return False, "expected an object and a type as arguments"
+        value_arg, ty_args = args
+        if not isinstance(ty_args.ty, CastFunctionType):
+            return False, f"could not convert {ty_args.ty} to type literal"
+
+        def can_cast_element(ty):
+            element_ty = get_element_type(ty)
+            success, result = ty_args.ty.is_callable([FunctionArgument(element_ty, 0)])
+            if success:
+                return success, FieldType(result, ty.dimensions) if isinstance(ty, FieldType) else result
+            return success, result
+
+        structure_ty = value_arg.ty
+        source_tys = ts2_u.flatten_tuples(structure_ty)
+        results = [can_cast_element(ty) for ty in source_tys]
+        for success, message in results:
+            if not success:
+                return success, f"{message}; while converting {structure_ty} to {ty_args.ty.result}"
+        result_tys = [r[1] for r in results]
+        result_ty = ts2_u.unflatten_tuples(result_tys, structure_ty)
+        return True, result_ty
+
+    def is_callable_reduction(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        args_map = {arg.location: arg.ty for arg in args}
+        if 0 not in args_map:
+            return False, "expected a field as positional argument"
+        if "axis" not in args_map:
+            return False, "expected an 'axis' keyword argument"
+        field_ty = args_map[0]
+        axis = args_map["axis"]
+        if not isinstance(field_ty, FieldType):
+            return False, f"expected a field, got {field_ty}"
+        if not isinstance(axis, DimensionType):
+            return False, f"expected a dimension, got {axis}"
+        if axis.dimension not in field_ty.dimensions:
+            return False, f"field {field_ty} is missing reduction dimension {axis.dimension}"
+        dimensions = {dim for dim in field_ty.dimensions if dim != axis.dimension}
+        return True, FieldType(field_ty.element_type, dimensions)
+
+

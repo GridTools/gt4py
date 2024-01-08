@@ -42,6 +42,8 @@ class TypeInferrer:
 def primitive_from_annotation(_: TypeInferrer, annotation: Any) -> Optional[types.Type]:
     try:
         dtype = np.dtype(annotation)
+        if not np.issctype(annotation):
+            return None
         if dtype.kind == 'i':
             if dtype.itemsize not in [1, 2, 4, 8]:
                 return None

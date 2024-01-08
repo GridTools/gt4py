@@ -19,9 +19,11 @@ from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.next.ffront import dialect_ast_enums, type_specifications as ts_ffront
 from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system_2 import types as ts2
 
 
 class LocatedNode(Node):
+    type_2: Optional[ts2.Type] = None
     location: SourceLocation
 
 
@@ -30,7 +32,6 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -50,7 +51,7 @@ TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[ts.TypeSpec] = None  # noqa A003
+    ...
 
 
 class BinOp(Expr):
@@ -99,7 +100,7 @@ class Stmt(LocatedNode):
 
 class Program(LocatedNode, SymbolTableTrait):
     id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # noqa A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]
+    type_2: Optional[ts2.FunctionType] = None

@@ -30,13 +30,10 @@ from gt4py.next.ffront.ast_passes import (
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.ffront.foast_passes.closure_var_folding import ClosureVarFolding
-from gt4py.next.ffront.foast_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClosureVarElimination
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_passes.type_inference import TypeInferencePass, ClosureVarInferencePass
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 from gt4py.next.type_system_2 import types as ts2
 from gt4py.next.ffront.type_system_2 import inference as ti2_f
 
@@ -99,25 +96,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         foast_node, closure_vars = TypeAliasReplacement.apply(foast_node, closure_vars)
         foast_node = ClosureVarFolding.apply(foast_node, closure_vars)
         foast_node = DeadClosureVarElimination.apply(foast_node)
-        typed_node = foast_node
-        foast_node = ClosureVarTypeDeduction.apply(foast_node, closure_vars)
-        foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+        foast_node = ClosureVarInferencePass(closure_vars).visit(foast_node)
+        foast_node = TypeInferencePass().visit(foast_node)
         foast_node = UnpackedAssignPass.apply(foast_node)
 
-        typed_node = ClosureVarInferencePass(closure_vars).visit(typed_node)
-        typed_node = TypeInferencePass().visit(typed_node)
-
-        # check deduced matches annotated return type
-        if "return" in annotations:
-            annotated_return_type = type_translation.from_type_hint(annotations["return"])
-            # TODO(tehrengruber): use `type_info.return_type` when the type of the
-            #  arguments becomes available here
-            if annotated_return_type != foast_node.type.returns:  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                raise errors.DSLError(
-                    foast_node.location,
-                    f"Annotated return type does not match deduced return type. Expected `{foast_node.type.returns}`"  # type: ignore[union-attr] # revisit when `type_info.return_type` is implemented
-                    f", but got `{annotated_return_type}`.",
-                )
         return foast_node
 
     def _builtin_type_constructor_symbols(
@@ -140,14 +122,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             result.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.FunctionType(
-                        pos_only_args=[
-                            ts.DeferredType(constraint=ts.ScalarType)
-                        ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
-                        pos_or_kw_args={},
-                        kw_only_args={},
-                        returns=cast(ts.DataType, type_translation.from_type_hint(value)),
-                    ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
                 )
@@ -166,7 +140,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             closure_var_symbols.append(
                 foast.Symbol(
                     id=name,
-                    type=ts.DeferredType(constraint=None),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=self.get_location(node),
                 )
@@ -201,11 +174,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
+        new_type = ti2_f.inferrer.from_annotation(annotation)
         new_type_2 = ti2_f.inferrer.from_annotation(annotation)
-        if not isinstance(new_type, ts.DataType):
-            raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
-        return foast.DataSymbol(id=node.arg, location=loc, type=new_type, type_2=new_type_2)
+        return foast.DataSymbol(id=node.arg, location=loc, type_2=new_type_2)
 
     def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
@@ -222,10 +193,8 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                             id=foast.DataSymbol(
                                 id=self.visit(elt.value).id,
                                 location=self.get_location(elt),
-                                type=ts.DeferredType(constraint=ts.DataType),
                             ),
                             location=self.get_location(elt),
-                            type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
                 else:
@@ -233,7 +202,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         foast.DataSymbol(
                             id=self.visit(elt).id,
                             location=self.get_location(elt),
-                            type=ts.DeferredType(constraint=ts.DataType),
                         )
                     )
 
@@ -244,19 +212,10 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         if not isinstance(target, ast.Name):
             raise errors.DSLError(self.get_location(node), "can only assign to names")
         new_value = self.visit(node.value)
-        constraint_type: Type[ts.DataType] = ts.DataType
-        if isinstance(new_value, foast.TupleExpr):
-            constraint_type = ts.TupleType
-        elif (
-            type_info.is_concrete(new_value.type)
-            and type_info.type_class(new_value.type) is ts.ScalarType
-        ):
-            constraint_type = ts.ScalarType
         return foast.Assign(
             target=foast.DataSymbol(
                 id=target.id,
                 location=self.get_location(target),
-                type=ts.DeferredType(constraint=constraint_type),
             ),
             value=new_value,
             location=self.get_location(node),
@@ -405,7 +364,6 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             true_expr=self.visit(node.body),
             false_expr=self.visit(node.orelse),
             location=self.get_location(node),
-            type=ts.DeferredType(constraint=ts.DataType),
         )
 
     def visit_If(self, node: ast.If, **kwargs) -> foast.IfStmt:
@@ -483,7 +441,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
         loc = self.get_location(node)
         try:
-            type_ = type_translation.from_value(node.value)
+            type_ = ti2_f.inferrer.from_instance(node.value)
         except ValueError:
             raise errors.DSLError(
                 loc, f"constants of type {type(node.value)} are not permitted"
@@ -492,5 +450,5 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         return foast.Constant(
             value=node.value,
             location=loc,
-            type=type_,
+            type_2=type_,
         )

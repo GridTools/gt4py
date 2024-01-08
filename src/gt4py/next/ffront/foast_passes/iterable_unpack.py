@@ -51,7 +51,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def _unique_tuple_symbol(self, node: foast.TupleTargetAssign) -> foast.Symbol[Any]:
         sym: foast.Symbol = foast.Symbol(
             id=f"__tuple_tmp_{self.unique_tuple_symbol_id}",
-            type=node.value.type,
+            type_2=node.value.type_2,
             location=node.location,
         )
         self.unique_tuple_symbol_id += 1
@@ -62,7 +62,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
 
         for stmt in node.stmts:
             if isinstance(stmt, foast.TupleTargetAssign):
-                num_elts, targets = len(stmt.value.type.types), stmt.targets  # type: ignore
+                num_elts, targets = len(stmt.value.type_2.elements), stmt.targets  # type: ignore
                 indices = compute_assign_indices(targets, num_elts)
                 tuple_symbol = self._unique_tuple_symbol(stmt)
                 unrolled_stmts.append(
@@ -70,23 +70,23 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                 )
 
                 for index, subtarget in zip(indices, targets):
-                    el_type = subtarget.type
+                    el_type = subtarget.type_2
                     tuple_name = foast.Name(
-                        id=tuple_symbol.id, type=el_type, location=tuple_symbol.location
+                        id=tuple_symbol.id, type_2=el_type, location=tuple_symbol.location
                     )
                     if isinstance(index, tuple):  # handle starred target
                         lower, upper = index
                         slice_indices = list(range(lower, upper))
                         tuple_slice = [
                             foast.Subscript(
-                                value=tuple_name, index=i, type=el_type, location=stmt.location
+                                value=tuple_name, index=i, type_2=el_type, location=stmt.location
                             )
                             for i in slice_indices
                         ]
 
                         new_tuple = foast.TupleExpr(
                             elts=tuple_slice,
-                            type=el_type,
+                            type_2=el_type,
                             location=stmt.location,
                         )
                         new_assign = foast.Assign(
@@ -98,7 +98,7 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         new_assign = foast.Assign(
                             target=subtarget,
                             value=foast.Subscript(
-                                value=tuple_name, index=index, type=el_type, location=stmt.location
+                                value=tuple_name, index=index, type_2=el_type, location=stmt.location
                             ),
                             location=stmt.location,
                         )

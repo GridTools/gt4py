@@ -1,5 +1,3 @@
-import typing
-
 from gt4py.next.ffront import field_operator_ast as foast, fbuiltins
 from gt4py import eve
 from gt4py.next import errors
@@ -24,7 +22,6 @@ class ClosureVarInferencePass(eve.NodeTranslator, eve.traits.VisitorWithSymbolTa
             new_symbol: foast.Symbol = foast.Symbol(
                 id=sym.id,
                 location=sym.location,
-                type=sym.type,
                 type_2=ty,
             )
             new_closure_vars.append(new_symbol)
@@ -186,8 +183,7 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
                 name = value_t.field_offset.value
                 src = value_t.field_offset.source
                 tar = (value_t.field_offset.target[0],)
-                conn = value_t.field_offset.connectivity
-                fo = fbuiltins.FieldOffset(value=name, source=src, target=tar, connectivity=conn)
+                fo = fbuiltins.FieldOffset(value=name, source=src, target=tar)
                 ty = ts2_f.FieldOffsetType(fo)
             elif len(value_t.field_offset.target) == 1:
                 if value_t.field_offset.source != value_t.field_offset.target[0]:
@@ -226,9 +222,9 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
                            f" types must be the same")
                 raise errors.DSLError(true_branch.annex.symtable[sym].location, message)
             # TODO: properly patch symtable (new node?)
-            symtable[sym].type = result.annex.propagated_symbols[
+            symtable[sym].type_2 = result.annex.propagated_symbols[
                 sym
-            ].type = true_branch.annex.symtable[sym].type
+            ].type_2 = true_branch.annex.symtable[sym].type_2
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         from gt4py.next.ffront.dialect_ast_enums import UnaryOperator

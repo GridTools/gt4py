@@ -22,12 +22,12 @@ from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
-    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.ffront.type_system_2 import inference as ti2_f
+from gt4py.next.ffront.past_passes import type_inference
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -38,14 +38,14 @@ class ProgramParser(DialectParser[past.Program]):
     def _postprocess_dialect_ast(
         cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
-        output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
-        return ProgramTypeDeduction.apply(output_node)
+        output_node = type_inference.ClosureVarInferencePass(closure_vars).visit(output_node)
+        return type_inference.TypeInferencePass().visit(output_node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> past.Program:
         closure_symbols: list[past.Symbol] = [
             past.Symbol(
                 id=name,
-                type=type_translation.from_value(val),
+                type_2=ti2_f.inferrer.from_instance(val),
                 namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=self.get_location(node),
             )
@@ -54,7 +54,6 @@ class ProgramParser(DialectParser[past.Program]):
 
         return past.Program(
             id=node.name,
-            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=self.visit(node.args),
             body=[self.visit(node) for node in node.body],
             closure_vars=closure_symbols,
@@ -68,10 +67,8 @@ class ProgramParser(DialectParser[past.Program]):
         loc = self.get_location(node)
         if (annotation := self.annotations.get(node.arg, None)) is None:
             raise errors.MissingParameterAnnotationError(loc, node.arg)
-        new_type = type_translation.from_type_hint(annotation)
-        if not isinstance(new_type, ts.DataType):
-            raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
-        return past.DataSymbol(id=node.arg, location=loc, type=new_type)
+        new_type = ti2_f.inferrer.from_annotation(annotation)
+        return past.DataSymbol(id=node.arg, location=loc, type_2=new_type)
 
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
@@ -150,7 +147,6 @@ class ProgramParser(DialectParser[past.Program]):
         return past.TupleExpr(
             elts=[self.visit(item) for item in node.elts],
             location=self.get_location(node),
-            type=ts.DeferredType(constraint=ts.TupleType),
         )
 
     def visit_Slice(self, node: ast.Slice) -> past.Slice:
@@ -164,10 +160,10 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_UnaryOp(self, node: ast.UnaryOp) -> past.Constant:
         loc = self.get_location(node)
         if isinstance(node.op, ast.USub) and isinstance(node.operand, ast.Constant):
-            symbol_type = type_translation.from_value(node.operand.value)
-            return past.Constant(value=-node.operand.value, type=symbol_type, location=loc)
+            symbol_type = ti2_f.inferrer.from_instance(node.operand.value)
+            return past.Constant(value=-node.operand.value, location=loc)
         raise errors.DSLError(loc, "unary operators are only applicable to literals")
 
     def visit_Constant(self, node: ast.Constant) -> past.Constant:
-        symbol_type = type_translation.from_value(node.value)
-        return past.Constant(value=node.value, type=symbol_type, location=self.get_location(node))
+        symbol_type = ti2_f.inferrer.from_instance(node.value)
+        return past.Constant(value=node.value, location=self.get_location(node))

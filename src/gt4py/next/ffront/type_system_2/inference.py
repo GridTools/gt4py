@@ -6,6 +6,7 @@ from gt4py.next.ffront.type_system_2 import types as ts2_f
 import gt4py.next as gtx
 from typing import Any
 from gt4py.next.ffront import fbuiltins
+from gt4py.next import common as gtx_common
 
 
 def field_from_annotation(inferrer: ti2.TypeInferrer, annotation: Any):
@@ -22,6 +23,23 @@ def field_from_annotation(inferrer: ti2.TypeInferrer, annotation: Any):
     if element_type is None:
         raise ValueError("field type annotation: expected a valid element_type")
     return ts2_f.FieldType(element_type, set(dimensions))
+
+
+def field_from_instance(inferrer: ti2.TypeInferrer, instance: Any):
+    if isinstance(instance, gtx_common.Field):
+        dimensions = instance.domain.dims
+        element_type = inferrer.from_annotation(instance.dtype.dtype)
+        if element_type is None:
+            return None
+        return ts2_f.FieldType(element_type, dimensions)
+    return None
+
+
+def field_operator_from_instance(_: ti2.TypeInferrer, instance: Any):
+    from gt4py.next.ffront.decorator import FieldOperator
+    if isinstance(instance, FieldOperator):
+        return instance.foast_node.type_2
+    return None
 
 
 def dimension_from_instance(_: ti2.TypeInferrer, instance: Any):
@@ -50,7 +68,8 @@ def builtin_function_from_instance(_: ti2.TypeInferrer, instance: Any):
 inferrer = ti2.TypeInferrer(
     [
         *ti2.inferrer.patterns,
-        ti2.Pattern(field_from_annotation, None),
+        ti2.Pattern(field_from_annotation, field_from_instance),
+        ti2.Pattern(None, field_operator_from_instance),
         ti2.Pattern(None, dimension_from_instance),
         ti2.Pattern(None, field_offset_from_instance),
         ti2.Pattern(None, cast_function_from_instance),

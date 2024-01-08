@@ -54,7 +54,6 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
     id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -77,7 +76,7 @@ DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
+    ...
 
 
 class Name(Expr):
@@ -194,7 +193,7 @@ class IfStmt(Stmt):
         )
         instance.annex.propagated_symbols = {
             sym_name: Symbol(
-                id=sym_name, type=ts.DeferredType(constraint=None), location=instance.location
+                id=sym_name, location=instance.location
             )
             for sym_name in common_symbol_names
         }

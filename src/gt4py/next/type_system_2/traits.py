@@ -57,7 +57,7 @@ class BitwiseTrait(Trait):
         return self if self == other else None
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True)
 class FunctionArgument:
     ty: Any
     location: int | str

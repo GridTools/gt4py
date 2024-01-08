@@ -20,7 +20,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import errors
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
-from gt4py.next.ffront.foast_passes import type_deduction
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement

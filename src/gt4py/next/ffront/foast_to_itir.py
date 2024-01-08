@@ -21,19 +21,19 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
-    type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system_2 import types as ts2, utils as ts2_utils
+from gt4py.next.ffront.type_system_2 import types as ts2_f, utils as ts2_utils_f
 
 
 def promote_to_list(
     node: foast.Symbol | foast.Expr,
 ) -> Callable[[itir.Expr], itir.Expr]:
-    if not type_info.contains_local_field(node.type):
+    if not ts2_utils_f.contains_local_field(node.type_2):
         return lambda x: im.promote_to_lifted_stencil("make_const_list")(x)
     return lambda x: x
 
@@ -143,10 +143,7 @@ class FieldOperatorLowering(NodeTranslator):
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
         #  from a scalar value (and not a field)
-        assert (
-            isinstance(node.condition.type, ts.ScalarType)
-            and node.condition.type.kind == ts.ScalarKind.BOOL
-        )
+        assert node.condition.type_2 == ts2.BoolType();
 
         cond = self.visit(node.condition, **kwargs)
 
@@ -205,10 +202,10 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
-        if isinstance(node.type, ts.FieldType):
+        if isinstance(node.type_2, ts2_f.FieldType):
             kind = "Iterator"
-            dtype = node.type.dtype.kind.name.lower()
-            is_list = type_info.is_local_field(node.type)
+            dtype = str(node.type_2.element_type)
+            is_list = ts2_utils_f.is_field_type_local(node.type_2)
             return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return im.sym(node.id)
 
@@ -227,15 +224,15 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
-        dtype = type_info.extract_dtype(node.type)
+        dtype = ts2_f.get_element_type(node.type_2)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
-            if dtype.kind != ts.ScalarKind.BOOL:
+            if dtype != ts2.BoolType():
                 raise NotImplementedError(f"{node.op} is only supported on `bool`s.")
             return self._map("not_", node.operand)
 
         return self._map(
             node.op.value,
-            foast.Constant(value="0", type=dtype, location=node.location),
+            foast.Constant(value="0", type_2=dtype, location=node.location),
             node.operand,
         )
 
@@ -268,7 +265,7 @@ class FieldOperatorLowering(NodeTranslator):
         )
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.Expr:
-        if type_info.type_class(node.func.type) is ts.FieldType:
+        if isinstance(node.func.type_2, ts2_f.FieldType):
             return self._visit_shift(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
@@ -278,49 +275,57 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(node.func, foast.Name) and node.func.id in TYPE_BUILTIN_NAMES:
             return self._visit_type_constr(node, **kwargs)
         elif isinstance(
-            node.func.type,
+            node.func.type_2,
             (
-                ts_ffront.FieldOperatorType,
-                ts_ffront.ScanOperatorType,
+                ts2_f.FieldOperatorType,
+                ts2_f.ScanOperatorType,
             ),
         ):
             # Operators are lowered into lifted stencils.
             lowered_func = self.visit(node.func, **kwargs)
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
-            lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
-                node.func.type,
-                [self.visit(arg, **kwargs) for arg in node.args],
-                {name: self.visit(arg, **kwargs) for name, arg in node.kwargs.items()},
-                use_signature_ordering=True,
-            )
+            args = [
+                *(ts2.FunctionArgument(arg.type_2, idx) for idx, arg in enumerate(node.args)),
+                *(ts2.FunctionArgument(arg.type_2, name) for name, arg in node.kwargs.items() if name != "out"),
+            ]
+            param_to_arg = ts2_utils.link_params_to_args(node.func.type_2.parameters, args)
+            lowered_args = [
+                *(self.visit(arg) for arg in node.args),
+                *(self.visit(arg) for arg in node.kwargs.values()),
+            ]
+            lowered_args = [lowered_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
+
             call_args = [f"__arg{i}" for i in range(len(lowered_args))]
-            call_kwargs = [f"__kwarg_{name}" for name in lowered_kwargs.keys()]
             return im.lift(
-                im.lambda_(*call_args, *call_kwargs)(
-                    im.call(lowered_func)(*call_args, *call_kwargs)
+                im.lambda_(*call_args)(
+                    im.call(lowered_func)(*call_args)
                 )
-            )(*lowered_args, *lowered_kwargs.values())
-        elif isinstance(node.func.type, ts.FunctionType):
+            )(*lowered_args)
+        elif isinstance(node.func.type_2, ts2.FunctionType):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
-            lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
-                node.func.type,
-                self.visit(node.args, **kwargs),
-                self.visit(node.kwargs, **kwargs),
-                use_signature_ordering=True,
-            )
-            return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
+            args = [
+                *(ts2.FunctionArgument(arg.type_2, idx) for idx, arg in enumerate(node.args)),
+                *(ts2.FunctionArgument(arg.type_2, name) for name, arg in node.kwargs.items() if name != "out"),
+            ]
+            param_to_arg = ts2_utils.link_params_to_args(node.func.type_2.parameters, args)
+            lowered_args = [
+                *(self.visit(arg) for arg in node.args),
+                *(self.visit(arg) for arg in node.kwargs.values()),
+            ]
+            lowered_args = [lowered_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
+            return im.call(self.visit(node.func, **kwargs))(*lowered_args)
 
         raise AssertionError(
-            f"Call to object of type {type(node.func.type).__name__} not understood."
+            f"Call to object of type {type(node.func.type_2).__name__} not understood."
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
         return self._process_elements(
-            lambda x: im.call("cast_")(x, str(new_type)), obj, obj.type, **kwargs
+            lambda x: im.call("cast_")(x, str(new_type)), obj, obj.type_2, **kwargs
         )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -341,31 +346,31 @@ class FieldOperatorLowering(NodeTranslator):
     ):
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
-        assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
+        assert isinstance(node.kwargs["axis"].type_2, ts2_f.DimensionType)
         val = im.call(im.call("reduce")(op, im.deref(init_expr)))
         return im.promote_to_lifted_stencil(val)(it)
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        dtype = type_info.extract_dtype(node.type)
+        dtype = ts2_f.get_element_type(node.type_2)
         return self._make_reduction_expr(node, "plus", self._make_literal("0", dtype), **kwargs)
 
     def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        dtype = type_info.extract_dtype(node.type)
+        dtype = ts2_f.get_element_type(node.type_2)
         min_value, _ = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
     def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        dtype = type_info.extract_dtype(node.type)
+        dtype = ts2_f.get_element_type(node.type_2)
         _, max_value = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
     def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Expr:
         if isinstance(node.args[0], foast.Constant):
-            node_kind = self.visit(node.type).kind.name.lower()
+            node_kind = str(node.type_2)
             target_type = fbuiltins.BUILTINS[node_kind]
-            source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
+            source_type = {**fbuiltins.BUILTINS, "string": str}[str(node.args[0].type_2)]
             if target_type is bool and source_type is not bool:
                 return im.promote_to_const_iterator(
                     im.literal(str(bool(source_type(node.args[0].value))), "bool")
@@ -373,29 +378,29 @@ class FieldOperatorLowering(NodeTranslator):
             return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
         raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
 
-    def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
+    def _make_literal(self, val: Any, type_: ts2.Type) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
         # the following constructs work if they are removed by inlining.
-        if isinstance(type_, ts.TupleType):
+        if isinstance(type_, ts2.TupleType):
             return im.promote_to_const_iterator(
                 im.make_tuple(
                     *(
                         im.deref(self._make_literal(val, type_))
-                        for val, type_ in zip(val, type_.types)
+                        for val, type_ in zip(val, type_.elements)
                     )
                 )
             )
-        elif isinstance(type_, ts.ScalarType):
-            typename = type_.kind.name.lower()
+        elif isinstance(type_, (ts2.IntegerType, ts2.FloatType)):
+            typename = str(type_)
             return im.promote_to_const_iterator(im.literal(str(val), typename))
         raise ValueError(f"Unsupported literal type {type_}.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
-        return self._make_literal(node.value, node.type)
+        return self._make_literal(node.value, node.type_2)
 
     def _map(self, op, *args, **kwargs):
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
-        if any(type_info.contains_local_field(arg.type) for arg in args):
+        if any(ts2_utils_f.contains_local_field(arg.type_2) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call("map_")(op)
 
@@ -405,24 +410,24 @@ class FieldOperatorLowering(NodeTranslator):
         self,
         process_func: Callable[[itir.Expr], itir.Expr],
         obj: foast.Expr,
-        current_el_type: ts.TypeSpec,
+        current_el_type: ts2.Type,
         current_el_expr: itir.Expr = im.ref("expr"),
     ):
         """Recursively applies a processing function to all primitive constituents of a tuple."""
-        if isinstance(current_el_type, ts.TupleType):
+        if isinstance(current_el_type, ts2.TupleType):
             # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
             return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
                 *[
                     self._process_elements(
                         process_func,
                         obj,
-                        current_el_type.types[i],
+                        current_el_type.elements[i],
                         im.tuple_get(i, current_el_expr),
                     )
-                    for i in range(len(current_el_type.types))
+                    for i in range(len(current_el_type.elements))
                 ]
             )
-        elif type_info.contains_local_field(current_el_type):
+        elif ts2_utils_f.contains_local_field(current_el_type):
             raise NotImplementedError("Processing fields with local dimension is not implemented.")
         else:
             return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
