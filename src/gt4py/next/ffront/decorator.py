@@ -461,16 +461,8 @@ class ProgramWithBoundArgs(Program):
                 else:
                     pos = list(self.past_node.type.definition.pos_or_kw_args).index(str(param.id))
                     full_kwargs.insert(pos, (str(param.id), self.bound_args[param.id]))
-                    #full_kwargs[str(param.id)] = self.bound_args[param.id]
 
         return super()._process_args(tuple(full_args), dict(full_kwargs))
-
-        # full_args = [*args]
-        # for index, param in enumerate(self.past_node.params):
-        #     if param.id in self.bound_args.keys():
-        #         full_args.insert(index, self.bound_args[param.id])
-        #
-        # return super()._process_args(tuple(full_args), kwargs)
 
     @functools.cached_property
     def itir(self):
@@ -485,8 +477,9 @@ class ProgramWithBoundArgs(Program):
                 new_clos.inputs.pop(index)
             new_args = [ref(inp.id) for inp in new_clos.inputs]
             params = [sym(inp.id) for inp in new_clos.inputs]
-            for value in self.bound_args.values():
-                new_args.append(promote_to_const_iterator(literal_from_value(value)))
+            for key, value in self.bound_args.items():
+                pos = list(self.past_node.type.definition.pos_or_kw_args).index(key)
+                new_args.insert(pos, promote_to_const_iterator(literal_from_value(value)))
             expr = itir.FunCall(
                 fun=new_clos.stencil,
                 args=new_args,
