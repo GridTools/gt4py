@@ -918,7 +918,7 @@ def test_with_bound_args(cartesian_case):
     cases.verify(cartesian_case, prog_bounds, a, out, inout=out, ref=ref)
 
 
-def test_with_bound_args_pos_args(cartesian_case):
+def test_with_bound_args_order_args(cartesian_case):
     @gtx.field_operator
     def fieldop_args(a: cases.IField, condition: bool, scalar: int32) -> cases.IField:
         if not condition:
@@ -931,13 +931,12 @@ def test_with_bound_args_pos_args(cartesian_case):
 
     a = cases.allocate(cartesian_case, program_args, "a")()
     scalar = int32(1)
-    ref = a + 1
+    ref = a.asnumpy() + scalar
     out = cases.allocate(cartesian_case, program_args, "out")()
 
     prog_bounds = program_args.with_bound_args(condition=True)
     prog_bounds(a=a, scalar=scalar, out=out, offset_provider={})
-    # cases.verify(cartesian_case, prog_bounds, a=a, scalar=scalar, out=out, inout=out, ref=ref)
-
+    np.allclose(out.asnumpy(), ref)
 
 def test_domain(cartesian_case):
     @gtx.field_operator
