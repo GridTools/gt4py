@@ -143,7 +143,7 @@ class FieldOperatorLowering(NodeTranslator):
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
         #  from a scalar value (and not a field)
-        assert node.condition.type_2 == ts2.BoolType();
+        assert node.condition.type_2 == ts2.BoolType(), f"expected bool, got {node.condition.type_2}";
 
         cond = self.visit(node.condition, **kwargs)
 

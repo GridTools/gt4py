@@ -226,6 +226,8 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
                 sym
             ].type_2 = true_branch.annex.symtable[sym].type_2
 
+        return result
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
         from gt4py.next.ffront.dialect_ast_enums import UnaryOperator
 
@@ -325,3 +327,11 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
         if ty is None:
             raise errors.DSLError(node.location, "could not infer type of constant expression")
         return foast.Constant(value=node.value, location=node.location, type_2=ty)
+
+    def visit_BlockStmt(self, node: foast.BlockStmt, **kwargs):
+        statements = [self.visit(statement, **kwargs) for statement in node.stmts]
+        return foast.BlockStmt(
+            stmts=statements,
+            type_2=None,
+            location=node.location,
+        )

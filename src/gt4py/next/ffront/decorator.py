@@ -336,7 +336,7 @@ class Program:
 
         args = [
             *(traits.FunctionArgument(arg_ty, idx) for idx, arg_ty in enumerate(arg_types)),
-            *(traits.FunctionArgument(arg_ty, name) for name, arg_ty in kwarg_types.items() if name != "out")
+            *(traits.FunctionArgument(arg_ty, name) for name, arg_ty in kwarg_types.items())
         ]
         is_callable, result_or_error = self.past_node.type_2.is_callable(args)
         if not is_callable:
@@ -406,46 +406,20 @@ class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
     def _process_args(self, args: tuple, kwargs: dict):
-        type_ = self.past_node.type
-        new_type = ts_ffront.ProgramType(
-            definition=ts.FunctionType(
-                kw_only_args={
-                    k: v
-                    for k, v in type_.definition.kw_only_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                pos_only_args=type_.definition.pos_only_args,
-                pos_or_kw_args={
-                    k: v
-                    for k, v in type_.definition.pos_or_kw_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                returns=type_.definition.returns,
-            )
+        type_ = self.past_node.type_2
+        new_type = ts2.FunctionType(
+            parameters=[
+              param for param in type_.parameters if param.name not in self.bound_args.keys()
+            ],
+            result=type_.result,
         )
 
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
+        arg_types = [ts2.FunctionArgument(ti2_f.inferrer.from_instance(arg), i) for i, arg in enumerate(args)]
+        kwarg_types = {ts2.FunctionArgument(ti2_f.inferrer.from_instance(v), k) for k, v in kwargs.items()}
 
-        try:
-            # This error is also catched using `accepts_args`, but we do it manually here to give
-            # a better error message.
-            for name in self.bound_args.keys():
-                if name in kwargs:
-                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
-
-            type_info.accepts_args(
-                new_type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
-        except ValueError as err:
-            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
-            raise TypeError(
-                f"Invalid argument types in call to program `{self.past_node.id}` with "
-                f"bound arguments {bound_arg_names}!"
-            ) from err
+        success, result_or_error = new_type.is_callable([*arg_types, *kwarg_types])
+        if not success:
+            raise TypeError(f"program not callable with supplied arguments: {result_or_error}")
 
         full_args = [*args]
         for index, param in enumerate(self.past_node.params):

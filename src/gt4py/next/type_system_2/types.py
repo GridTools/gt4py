@@ -32,6 +32,11 @@ class IntegerType(
         signed = "" if self.signed else "u"
         return f"{signed}int{self.width}" if self.width > 1 else "bool"
 
+    def __eq__(self, other):
+        if isinstance(other, IntegerType):
+            return self.width == other.width and self.signed == other.signed
+        return False
+
     def is_signed(self) -> bool:
         return self.signed
 
