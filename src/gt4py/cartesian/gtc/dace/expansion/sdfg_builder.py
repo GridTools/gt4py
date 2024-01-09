@@ -123,7 +123,6 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 slice_data, slice_desc = sdfg_ctx.sdfg.add_view(
                     f"{node.connector}_v", field_decl.data_dims, dtype, find_new_name=True
                 )
-                slice_node = sdfg_ctx.state.add_access(slice_data)
             else:
                 slice_data, slice_desc = sdfg_ctx.sdfg.add_array(
                     f"{node.connector}_t",
@@ -132,8 +131,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                     find_new_name=True,
                     transient=True,
                 )
-                slice_node = sdfg_ctx.state.add_access(slice_data)
-
+            slice_node = sdfg_ctx.state.add_access(slice_data)
             if node.is_read:
                 sdfg_ctx.state.add_edge(
                     endpoint,
