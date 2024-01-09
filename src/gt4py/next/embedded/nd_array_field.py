@@ -74,6 +74,26 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
     return _builtin_op
 
 
+def _take_mdim(
+    input_arr: core_defs.NDArrayObject,
+    restricted_connectivity: common.ConnectivityField,
+    new_domain: common.Domain,
+    dim: common.Dimension,
+) -> core_defs.NDArrayObject:
+    offset_abs = [
+        restricted_connectivity.ndarray
+        if d == dim
+        else np.indices(restricted_connectivity.ndarray.shape)[d_i]
+        for d_i, d in enumerate(new_domain.dims)
+    ]
+    arr_i_abs = np.arange(np.prod(input_arr.shape)).reshape(input_arr.shape)
+    new_buffer_flat = np.take(
+        np.asarray(input_arr).flatten(), arr_i_abs[tuple(offset_abs)].flatten()
+    )
+    new_buffer = new_buffer_flat.reshape(restricted_connectivity.ndarray.shape)
+    return new_buffer
+
+
 _Value: TypeAlias = common.Field | core_defs.ScalarT
 _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
@@ -197,15 +217,7 @@ class NdArrayField(
             # then compute the index array
             xp = self.array_ns
             if restricted_connectivity.domain.ndim > 1:
-                offset_abs = [
-                    restricted_connectivity.ndarray
-                    if d == dim
-                    else np.indices(restricted_connectivity.ndarray.shape)[d_i]
-                    for d_i, d in enumerate(new_domain.dims)
-                ]
-                arr_i_abs = np.arange(np.prod(self.shape)).reshape(self.shape)
-                new_buffer_flat = xp.take(self._ndarray.flatten(), arr_i_abs[tuple(offset_abs)].flatten())  # type: ignore[attr-defined] # mypy does not recognize flatten()
-                new_buffer = new_buffer_flat.reshape(restricted_connectivity.ndarray.shape)
+                new_buffer = _take_mdim(self._ndarray, restricted_connectivity, new_domain, dim)
             else:
                 new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
                 # finally, take the new array
