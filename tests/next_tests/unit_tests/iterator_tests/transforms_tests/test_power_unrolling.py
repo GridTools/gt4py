@@ -42,6 +42,26 @@ def test_power_unrolling_two():
     assert actual == expected
 
 
+def test_power_unrolling_two_x_plus_two():
+    testee = im.call("power")(im.plus("x", 2), 2)
+    expected = im.let("power_1", im.plus("x", 2))(
+        im.let("power_2", im.multiplies_("power_1", "power_1"))("power_2")
+    )
+
+    actual = PowerUnrolling.apply(testee)
+    assert actual == expected
+
+
+def test_power_unrolling_two_x_plus_one_times_three():
+    testee = im.call("power")(im.multiplies_(im.plus("x", 1), 3), 2)
+    expected = im.let("power_1", im.multiplies_(im.plus("x", 1), 3))(
+        im.let("power_2", im.multiplies_("power_1", "power_1"))("power_2")
+    )
+
+    actual = PowerUnrolling.apply(testee)
+    assert actual == expected
+
+
 def test_power_unrolling_three():
     testee = im.call("power")("x", 3)
     expected = im.multiplies_(im.multiplies_("x", "x"), "x")
@@ -68,22 +88,6 @@ def test_power_unrolling_five():
     assert actual == expected
 
 
-def test_power_unrolling_x_plus_two():
-    testee = im.call("power")(im.plus("x", 2), 2)
-    tmp = im.plus("x", 2)
-    expected = im.let("tmp", tmp)(im.multiplies_("tmp", "tmp"))
-    actual = PowerUnrolling.apply(testee)
-    assert actual == expected
-
-
-def test_power_unrolling_x_plus_one_times_three():
-    testee = im.call("power")(im.multiplies_(im.plus("x", 1), 3), 2)
-    tmp = im.multiplies_(im.plus("x", 1), 3)
-    expected = im.let("tmp", tmp)(im.multiplies_("tmp", "tmp"))
-    actual = PowerUnrolling.apply(testee)
-    assert actual == expected
-
-
 def test_power_unrolling_seven():
     testee = im.call("power")("x", 7)
     expected = im.call("power")("x", 7)
@@ -102,14 +106,18 @@ def test_power_unrolling_seven_unrolled():
     assert actual == expected
 
 
-# def test_power_unrolling_x_plus_one_seven_unrolled():
-#     testee = im.call("power")(im.plus("x", 1), 7)
-#     tmp2 = im.multiplies_(im.plus("x", 1), im.plus("x", 1))
-#     tmp4 = im.multiplies_(tmp2, tmp2)
-#     expected = im.multiplies_(im.multiplies_(tmp4, tmp2), im.plus("x", 1))
-#
-#     actual = PowerUnrolling.apply(testee, max_unroll=7)
-#     assert actual == expected
+def test_power_unrolling_seven_x_plus_one_unrolled():
+    testee = im.call("power")(im.plus("x", 1), 7)
+    expected = im.let("power_1", im.plus("x", 1))(
+        im.let("power_2", im.multiplies_("power_1", "power_1"))(
+            im.let("power_4", im.multiplies_("power_2", "power_2"))(
+                im.multiplies_(im.multiplies_("power_4", "power_2"), "power_1")
+            )
+        )
+    )
+
+    actual = PowerUnrolling.apply(testee, max_unroll=7)
+    assert actual == expected
 
 
 def test_power_unrolling_eight():
@@ -125,6 +133,20 @@ def test_power_unrolling_eight_unrolled():
     tmp2 = im.multiplies_("x", "x")
     tmp4 = im.multiplies_(tmp2, tmp2)
     expected = im.multiplies_(tmp4, tmp4)
+
+    actual = PowerUnrolling.apply(testee, max_unroll=8)
+    assert actual == expected
+
+
+def test_power_unrolling_eight_x_plus_one_unrolled():
+    testee = im.call("power")(im.plus("x", 1), 8)
+    expected = im.let("power_1", im.plus("x", 1))(
+        im.let("power_2", im.multiplies_("power_1", "power_1"))(
+            im.let("power_4", im.multiplies_("power_2", "power_2"))(
+                im.let("power_8", im.multiplies_("power_4", "power_4"))("power_8")
+            )
+        )
+    )
 
     actual = PowerUnrolling.apply(testee, max_unroll=8)
     assert actual == expected

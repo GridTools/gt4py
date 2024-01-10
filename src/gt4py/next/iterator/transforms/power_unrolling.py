@@ -73,19 +73,33 @@ class PowerUnrolling(NodeTranslator):
                     remainder = exponent
                     powers = [None] * (pow_max + 1)
 
-                    powers[0] = base
-
-                    for i in range(1, pow_max + 1):
+                    # Set up powers list
+                    for i in range(pow_max + 1):
                         if check_node_args0_symref_funcall(new_node):
-                            powers[i] = im.multiplies_(powers[i - 1], powers[i - 1])
+                            if i == 0:  # power of one
+                                powers[i] = base
+                            else:
+                                powers[i] = im.multiplies_(powers[i - 1], powers[i - 1])
                         else:
-                            powers[i] = im.let("tmp", powers[i - 1])(im.multiplies_("tmp", "tmp"))
+                            powers[i] = f"power_{2 ** i}"
+
+                    # Build target expression
                     ret = powers[pow_max]
                     remainder -= 2**pow_cur
                     while remainder > 0:
                         pow_cur = compute_integer_power_of_two(remainder)
                         remainder -= 2**pow_cur
+
                         ret = im.multiplies_(ret, powers[pow_cur])
+
+                    # In case of FunCall: build nested expression to avoid multiple evaluations of base
+                    if not check_node_args0_symref_funcall(new_node):
+                        for i in range(pow_max, 0, -1):
+                            ret = im.let(
+                                f"power_{2 ** i}",
+                                im.multiplies_(f"power_{2**(i-1)}", f"power_{2**(i-1)}"),
+                            )(ret)
+                        ret = im.let("power_1", base)(ret)
 
                 return ret
         return new_node
