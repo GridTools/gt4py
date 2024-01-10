@@ -573,7 +573,7 @@ class FieldAccessInfo(eve.Node):
     def apply_iteration(self, grid_subset: GridSubset):
         res_intervals = dict(self.grid_subset.intervals)
         for axis, field_interval in self.grid_subset.intervals.items():
-            if axis in grid_subset.intervals:
+            if axis in grid_subset.intervals and not isinstance(field_interval, DomainInterval):
                 grid_interval = grid_subset.intervals[axis]
                 assert isinstance(field_interval, IndexWithExtent)
                 extent = field_interval.extent
@@ -880,7 +880,7 @@ class DomainMap(ComputationNode, IterationNode):
 
 
 class ComputationState(IterationNode):
-    computations: List[Union[Tasklet, DomainMap]]
+    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
 
 
 class DomainLoop(IterationNode, ComputationNode):

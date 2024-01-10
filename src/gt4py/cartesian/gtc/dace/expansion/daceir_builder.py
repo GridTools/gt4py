@@ -316,6 +316,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
         node: oir.FieldAccess,
         *,
         is_target: bool,
+        symbol_collector: "DaCeIRBuilder.SymbolCollector",
         targets: Set[eve.SymbolRef],
         var_offset_fields: Set[eve.SymbolRef],
         **kwargs: Any,
@@ -347,6 +348,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 res = dcir.ScalarAccess(name=name, dtype=node.dtype)
         if is_target:
             targets.add(node.name)
+        for index in node.data_index:
+            if isinstance(index, oir.ScalarAccess):
+                symbol_collector.add_symbol(index.name)
         return res
 
     def visit_ScalarAccess(
@@ -451,12 +455,58 @@ class DaCeIRBuilder(eve.NodeTranslator):
             k_interval=k_interval,
         )
 
-        dcir_node = dcir.Tasklet(
+        dcir_node: dcir.ComputationNode = dcir.Tasklet(
             decls=decls,
             stmts=stmts,
             read_memlets=read_memlets,
             write_memlets=write_memlets,
         )
+
+        if next(dcir_node.walk_values().if_isinstance(dcir.IndexAccess).iterator, None) is not None:
+            """
+            In case of tasklet inside a map scope for the vertical dimension, the tasklet is not mapped directly
+            rather it is instanciated inside a nested SDFG. The reason is to avoid the tasklet to be connected
+            to map nodes, instead ensuring that it is connected to access nodes. This in order to be able to use
+            views of array containers, in case the tasklet contains array access with partial subset index.
+            """
+            field_decls = global_ctx.get_dcir_decls(
+                {
+                    field: global_ctx.library_node.access_infos[field]
+                    for field in set(memlet.field for memlet in [*read_memlets, *write_memlets])
+                },
+                symbol_collector=symbol_collector,
+            )
+            for memlet in [*read_memlets, *write_memlets]:
+                for sym in memlet.access_info.grid_subset.free_symbols:
+                    symbol_collector.add_symbol(sym, common.DataType.INT32)
+            nested_read_memlets = [
+                dcir.Memlet(
+                    field=field,
+                    connector=field,
+                    access_info=global_ctx.library_node.access_infos[field],
+                    is_read=True,
+                    is_write=False,
+                )
+                for field in set(memlet.field for memlet in read_memlets)
+            ]
+            nested_write_memlets = [
+                dcir.Memlet(
+                    field=field,
+                    connector=field,
+                    access_info=global_ctx.library_node.access_infos[field],
+                    is_read=False,
+                    is_write=True,
+                )
+                for field in set(memlet.field for memlet in write_memlets)
+            ]
+            dcir_node = dcir.NestedSDFG(
+                label=f"{global_ctx.library_node.label}_tasklet",
+                field_decls=field_decls,
+                read_memlets=nested_read_memlets,
+                write_memlets=nested_write_memlets,
+                states=self.to_state(dcir_node, grid_subset=iteration_ctx.grid_subset),
+                symbol_decls=list(symbol_collector.symbol_decls.values()),
+            )
 
         for item in reversed(expansion_items):
             iteration_ctx = iteration_ctx.pop()

@@ -110,32 +110,17 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
         """
         In case of memlet to/from a tasklet where the data passed to the tasklet is an array (not a scalar),
         the tasklet should use explicit indexes for the full array shape. In case the memlet is limited to
-        a subset of the full shape, the resulting slice needs to be presented as a view or a transient array.
+        a subset of the full shape, the resulting slice needs to be presented as a view of the original array.
         """
         if isinstance(scope_node, dace.nodes.Tasklet) and field_decl.data_dims:
             dtype = data_type_to_dace_typeclass(field_decl.dtype)
-            endpoint, endpoint_connector = (
-                node_ctx.input_node_and_conns[memlet.data]
-                if node.is_read
-                else node_ctx.output_node_and_conns[memlet.data]
+            slice_data, slice_desc = sdfg_ctx.sdfg.add_view(
+                f"{node.connector}_v", field_decl.data_dims, dtype, find_new_name=True
             )
-            if isinstance(endpoint, dace.nodes.AccessNode):
-                slice_data, slice_desc = sdfg_ctx.sdfg.add_view(
-                    f"{node.connector}_v", field_decl.data_dims, dtype, find_new_name=True
-                )
-            else:
-                slice_data, slice_desc = sdfg_ctx.sdfg.add_array(
-                    f"{node.connector}_t",
-                    field_decl.data_dims,
-                    dtype,
-                    find_new_name=True,
-                    transient=True,
-                )
             slice_node = sdfg_ctx.state.add_access(slice_data)
             if node.is_read:
                 sdfg_ctx.state.add_edge(
-                    endpoint,
-                    endpoint_connector,
+                    *node_ctx.input_node_and_conns[memlet.data],
                     slice_node,
                     None,
                     memlet,
@@ -158,8 +143,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
                 sdfg_ctx.state.add_edge(
                     slice_node,
                     None,
-                    endpoint,
-                    endpoint_connector,
+                    *node_ctx.output_node_and_conns[memlet.data],
                     memlet,
                 )
         else:
