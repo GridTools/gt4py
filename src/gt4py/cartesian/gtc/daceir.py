@@ -536,7 +536,7 @@ class GridSubset(eve.Node):
             else:
                 assert (
                     isinstance(interval2, (TileInterval, DomainInterval))
-                    and isinstance(interval1, IndexWithExtent)
+                    and isinstance(interval1, (IndexWithExtent, DomainInterval))
                 ) or (
                     isinstance(interval1, (TileInterval, DomainInterval))
                     and isinstance(interval2, IndexWithExtent)
@@ -880,7 +880,7 @@ class DomainMap(ComputationNode, IterationNode):
 
 
 class ComputationState(IterationNode):
-    computations: List[Union[Tasklet, DomainMap, NestedSDFG]]
+    computations: List[Union[Tasklet, DomainMap]]
 
 
 class DomainLoop(IterationNode, ComputationNode):

@@ -107,60 +107,20 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             subset=make_dace_subset(field_decl.access_info, node.access_info, field_decl.data_dims),
             dynamic=field_decl.is_dynamic,
         )
-        """
-        In case of memlet to/from a tasklet where the data passed to the tasklet is an array (not a scalar),
-        the tasklet should use explicit indexes for the full array shape. In case the memlet is limited to
-        a subset of the full shape, the resulting slice needs to be presented as a view of the original array.
-        """
-        if isinstance(scope_node, dace.nodes.Tasklet) and field_decl.data_dims:
-            dtype = data_type_to_dace_typeclass(field_decl.dtype)
-            slice_data, slice_desc = sdfg_ctx.sdfg.add_view(
-                f"{node.connector}_v", field_decl.data_dims, dtype, find_new_name=True
+        if node.is_read:
+            sdfg_ctx.state.add_edge(
+                *node_ctx.input_node_and_conns[memlet.data],
+                scope_node,
+                connector_prefix + node.connector,
+                memlet,
             )
-            slice_node = sdfg_ctx.state.add_access(slice_data)
-            if node.is_read:
-                sdfg_ctx.state.add_edge(
-                    *node_ctx.input_node_and_conns[memlet.data],
-                    slice_node,
-                    None,
-                    memlet,
-                )
-                sdfg_ctx.state.add_edge(
-                    slice_node,
-                    None,
-                    scope_node,
-                    connector_prefix + node.connector,
-                    dace.Memlet.from_array(slice_data, slice_desc),
-                )
-            if node.is_write:
-                sdfg_ctx.state.add_edge(
-                    scope_node,
-                    connector_prefix + node.connector,
-                    slice_node,
-                    None,
-                    dace.Memlet.from_array(slice_data, slice_desc),
-                )
-                sdfg_ctx.state.add_edge(
-                    slice_node,
-                    None,
-                    *node_ctx.output_node_and_conns[memlet.data],
-                    memlet,
-                )
-        else:
-            if node.is_read:
-                sdfg_ctx.state.add_edge(
-                    *node_ctx.input_node_and_conns[memlet.data],
-                    scope_node,
-                    connector_prefix + node.connector,
-                    memlet,
-                )
-            if node.is_write:
-                sdfg_ctx.state.add_edge(
-                    scope_node,
-                    connector_prefix + node.connector,
-                    *node_ctx.output_node_and_conns[memlet.data],
-                    memlet,
-                )
+        if node.is_write:
+            sdfg_ctx.state.add_edge(
+                scope_node,
+                connector_prefix + node.connector,
+                *node_ctx.output_node_and_conns[memlet.data],
+                memlet,
+            )
 
     @classmethod
     def _add_empty_edges(
