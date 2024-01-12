@@ -24,7 +24,7 @@ from gt4py.eve.utils import noninstantiable
 
 @noninstantiable
 class Node(eve.Node):
-    location: Optional[SourceLocation] = eve.field(default=None, repr=False)
+    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
