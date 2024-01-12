@@ -465,7 +465,6 @@ class DaCeIRBuilder(eve.NodeTranslator):
             (no slicing) and the tasklet code should use all explicit indexes for array access.
             """
             for memlet in [*read_memlets, *write_memlets]:
-                ndims = len(iteration_ctx.grid_subset.intervals)
                 field_decl = global_ctx.library_node.field_decls[memlet.field]
                 # calculate array subset from original memlet
                 memlet_subset = make_dace_subset(
@@ -474,10 +473,10 @@ class DaCeIRBuilder(eve.NodeTranslator):
                     field_decl.data_dims,
                 )
                 # ensure grid access on single point
-                assert memlet_subset.size()[:ndims] == [1] * ndims
                 memlet_data_index = [
                     dcir.Literal(value=str(r[0]), dtype=common.DataType.INT32)
-                    for r in memlet_subset[:ndims]
+                    for r, size in zip(memlet_subset, memlet_subset.size())
+                    if size == 1
                 ]
                 # loop through assignment statements in the tasklet body
                 tasklet_subset_size = 0
