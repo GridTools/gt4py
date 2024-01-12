@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve import NodeTranslator
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
@@ -25,7 +25,7 @@ def _is_scan(node: ir.Node):
     )
 
 
-class ScanEtaReduction(PreserveLocation, NodeTranslator):
+class ScanEtaReduction(PreserveLocationVisitor, NodeTranslator):
     """Applies eta-reduction-like transformation involving scans.
 
     Simplifies `λ(x, y) → scan(λ(state, param_y, param_x) → ..., ...)(y, x)` to `scan(λ(state, param_x, param_y) → ..., ...)`.

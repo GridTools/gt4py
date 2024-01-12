@@ -18,7 +18,7 @@ from typing import TypeGuard
 
 from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -130,7 +130,7 @@ def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
 
 
 @dataclasses.dataclass(frozen=True)
-class UnrollReduce(PreserveLocation, NodeTranslator):
+class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)

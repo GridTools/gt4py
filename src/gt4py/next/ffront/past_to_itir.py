@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Optional, cast
 
-from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
@@ -40,9 +40,7 @@ def _flatten_tuple_expr(
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(
-    traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator
-):
+class ProgramLowering(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -256,7 +254,9 @@ class ProgramLowering(
             raise AssertionError()
 
         return itir.FunCall(
-            fun=itir.SymRef(id=domain_builtin), args=domain_args, location=out_field.location
+            fun=itir.SymRef(id=domain_builtin),
+            args=domain_args,
+            location=(node_domain or out_field).location,
         )
 
     def _construct_itir_initialized_domain_arg(
@@ -273,10 +273,7 @@ class ProgramLowering(
                 f"expected '{dim}', got '{keys_dims_types}'."
             )
 
-        itir_node = [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
-        for i, bound in enumerate(node_domain.values_[dim_i].elts):
-            itir_node[i].location = bound.location
-        return itir_node
+        return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
     def _compute_field_slice(node: past.Subscript):

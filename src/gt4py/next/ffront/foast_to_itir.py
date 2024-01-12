@@ -74,12 +74,7 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit(self, node: concepts.RootNode, **kwargs: extended_typing.Any) -> extended_typing.Any:
         result = super().visit(node, **kwargs)
-        if (
-            hasattr(node, "location")
-            and hasattr(result, "location")
-            and not isinstance(node, foast.Name)
-            and self.preserve_location
-        ):
+        if hasattr(node, "location") and hasattr(result, "location") and self.preserve_location:
             result.location = node.location
         return result
 

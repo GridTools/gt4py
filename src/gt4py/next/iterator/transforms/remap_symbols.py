@@ -15,11 +15,11 @@
 from typing import Any, Dict, Optional, Set
 
 from gt4py.eve import NodeTranslator, SymbolTableTrait
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
-class RemapSymbolRefs(PreserveLocation, NodeTranslator):
+class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     def visit_SymRef(self, node: ir.SymRef, *, symbol_map: Dict[str, ir.Node]):
@@ -40,7 +40,7 @@ class RemapSymbolRefs(PreserveLocation, NodeTranslator):
         return super().generic_visit(node, **kwargs)
 
 
-class RenameSymbols(PreserveLocation, NodeTranslator):
+class RenameSymbols(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     def visit_Sym(

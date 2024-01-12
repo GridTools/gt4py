@@ -13,11 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py import eve
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
-class CollapseListGet(PreserveLocation, eve.NodeTranslator):
+class CollapseListGet(PreserveLocationVisitor, eve.NodeTranslator):
     """Simplifies expressions containing `list_get`.
 
     Examples

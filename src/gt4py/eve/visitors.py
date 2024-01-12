@@ -198,7 +198,7 @@ class NodeTranslator(NodeVisitor):
         return copy.deepcopy(node, memo=memo)
 
 
-class PreserveLocation(NodeVisitor):
+class PreserveLocationVisitor(NodeVisitor):
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         result = super().visit(node, **kwargs)
         if hasattr(node, "location") and hasattr(result, "location"):

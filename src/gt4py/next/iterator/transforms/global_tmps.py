@@ -22,7 +22,7 @@ import gt4py.next as gtx
 from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -570,7 +570,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
 # TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol). This can be
 #  tricky: For every lift statement that is dynamically shifted we can not compute bounds anymore
 #  and hence also not extract as a temporary.
-class CreateGlobalTmps(PreserveLocation, NodeTranslator):
+class CreateGlobalTmps(PreserveLocationVisitor, NodeTranslator):
     """Main entry point for introducing global temporaries.
 
     Transforms an existing iterator IR fencil into a fencil with global temporaries.

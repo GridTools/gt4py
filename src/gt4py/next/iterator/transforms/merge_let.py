@@ -13,12 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import gt4py.eve as eve
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
-class MergeLet(PreserveLocation, eve.NodeTranslator):
+class MergeLet(PreserveLocationVisitor, eve.NodeTranslator):
     """
     Merge let-like statements.
 

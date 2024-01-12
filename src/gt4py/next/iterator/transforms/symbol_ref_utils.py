@@ -17,12 +17,12 @@ from collections import defaultdict
 from typing import Iterable, Optional, Sequence
 
 import gt4py.eve as eve
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir as itir
 
 
 @dataclasses.dataclass
-class CountSymbolRefs(PreserveLocation, eve.NodeVisitor):
+class CountSymbolRefs(PreserveLocationVisitor, eve.NodeVisitor):
     ref_counts: dict[str, int] = dataclasses.field(default_factory=lambda: defaultdict(int))
 
     @classmethod

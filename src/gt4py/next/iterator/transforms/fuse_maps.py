@@ -15,7 +15,7 @@
 import dataclasses
 from typing import TypeGuard
 
-from gt4py.eve import NodeTranslator, traits
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor, traits
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import inline_lambdas
@@ -38,9 +38,7 @@ def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
 
 
 @dataclasses.dataclass(frozen=True)
-class FuseMaps(
-    traits.PreserveLocationWithSymbolTableTrait, traits.VisitorWithSymbolTableTrait, NodeTranslator
-):
+class FuseMaps(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Fuses nested `map_`s.
 

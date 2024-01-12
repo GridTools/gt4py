@@ -17,21 +17,15 @@ import math
 import operator
 import typing
 
-from gt4py.eve import (
-    NodeTranslator,
-    NodeVisitor,
-    SymbolTableTrait,
-    VisitorWithSymbolTableTrait,
-    traits,
-)
+from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
-from gt4py.eve.visitors import PreserveLocation
+from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
 @dataclasses.dataclass
-class _NodeReplacer(PreserveLocation, NodeTranslator):
+class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     expr_map: dict[int, ir.SymRef]
@@ -79,9 +73,7 @@ def _is_collectable_expr(node: ir.Node) -> bool:
 
 
 @dataclasses.dataclass
-class CollectSubexpressions(
-    traits.PreserveLocationWithSymbolTableTrait, VisitorWithSymbolTableTrait, NodeVisitor
-):
+class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait, NodeVisitor):
     @dataclasses.dataclass
     class SubexpressionData:
         #: A list of node ids with equal hash and a set of collected child subexpression ids
@@ -350,7 +342,7 @@ def extract_subexpression(
 
 
 @dataclasses.dataclass(frozen=True)
-class CommonSubexpressionElimination(PreserveLocation, NodeTranslator):
+class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     """
     Perform common subexpression elimination.
 
