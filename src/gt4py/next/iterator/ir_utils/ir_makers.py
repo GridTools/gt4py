@@ -26,10 +26,10 @@ def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     Examples
     --------
     >>> sym("a")
-    Sym(location=None, id=SymbolName('a'), kind=None, dtype=None)
+    Sym(id=SymbolName('a'), kind=None, dtype=None)
 
     >>> sym(itir.Sym(id="b"))
-    Sym(location=None, id=SymbolName('b'), kind=None, dtype=None)
+    Sym(id=SymbolName('b'), kind=None, dtype=None)
     """
     if isinstance(sym_or_name, itir.Sym):
         return sym_or_name
@@ -43,10 +43,10 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     Examples
     --------
     >>> ref("a")
-    SymRef(location=None, id=SymbolRef('a'))
+    SymRef(id=SymbolRef('a'))
 
     >>> ref(itir.SymRef(id="b"))
-    SymRef(location=None, id=SymbolRef('b'))
+    SymRef(id=SymbolRef('b'))
     """
     if isinstance(ref_or_name, itir.SymRef):
         return ref_or_name
@@ -60,13 +60,13 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     Examples
     --------
     >>> ensure_expr("a")
-    SymRef(location=None, id=SymbolRef('a'))
+    SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(location=None, value='3', type='int32')
+    Literal(value='3', type='int32')
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
-    OffsetLiteral(location=None, value='i')
+    OffsetLiteral(value='i')
     """
     if isinstance(literal_or_expr, str):
         return ref(literal_or_expr)
@@ -83,10 +83,10 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     Examples
     --------
     >>> ensure_offset("V2E")
-    OffsetLiteral(location=None, value='V2E')
+    OffsetLiteral(value='V2E')
 
     >>> ensure_offset(itir.OffsetLiteral(value="J"))
-    OffsetLiteral(location=None, value='J')
+    OffsetLiteral(value='J')
     """
     if isinstance(str_or_offset, (str, int)):
         return itir.OffsetLiteral(value=str_or_offset)
@@ -100,7 +100,7 @@ class lambda_:
     Examples
     --------
     >>> lambda_("a")(deref("a"))  # doctest: +ELLIPSIS
-    Lambda(location=None, params=[Sym(location=None, id=SymbolName('a'), kind=None, dtype=None)], expr=FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('deref')), args=[SymRef(location=None, id=SymbolRef('a'))]))
+    Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
     """
 
     def __init__(self, *args):
@@ -117,7 +117,7 @@ class call:
     Examples
     --------
     >>> call("plus")(1, 1)
-    FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('plus')), args=[Literal(location=None, value='1', type='int32'), Literal(location=None, value='1', type='int32')])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int32'), Literal(value='1', type='int32')])
     """
 
     def __init__(self, expr):
@@ -264,10 +264,10 @@ def shift(offset, value=None):
     Examples
     --------
     >>> shift("i", 0)("a")
-    FunCall(location=None, fun=FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('shift')), args=[OffsetLiteral(location=None, value='i'), OffsetLiteral(location=None, value=0)]), args=[SymRef(location=None, id=SymbolRef('a'))])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='i'), OffsetLiteral(value=0)]), args=[SymRef(id=SymbolRef('a'))])
 
     >>> shift("V2E")("b")
-    FunCall(location=None, fun=FunCall(location=None, fun=SymRef(location=None, id=SymbolRef('shift')), args=[OffsetLiteral(location=None, value='V2E')]), args=[SymRef(location=None, id=SymbolRef('b'))])
+    FunCall(fun=FunCall(fun=SymRef(id=SymbolRef('shift')), args=[OffsetLiteral(value='V2E')]), args=[SymRef(id=SymbolRef('b'))])
     """
     offset = ensure_offset(offset)
     args = [offset]
@@ -286,13 +286,13 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     Make a literal node from a value.
 
     >>> literal_from_value(1.)
-    Literal(location=None, value='1.0', type='float64')
+    Literal(value='1.0', type='float64')
     >>> literal_from_value(1)
-    Literal(location=None, value='1', type='int32')
+    Literal(value='1', type='int32')
     >>> literal_from_value(2147483648)
-    Literal(location=None, value='2147483648', type='int64')
+    Literal(value='2147483648', type='int64')
     >>> literal_from_value(True)
-    Literal(location=None, value='True', type='bool')
+    Literal(value='True', type='bool')
     """
     if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, got '{type(val).__name__}'.")
