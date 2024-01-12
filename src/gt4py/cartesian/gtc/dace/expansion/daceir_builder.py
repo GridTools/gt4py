@@ -479,16 +479,19 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 Special case of tasklet performing array access. The memlet should pass the full array shape
                 (no slicing) and the tasklet code should use all explicit indexes for array access.
                 """
+                reshape_memlet = False
                 for access_node in dcir_node.walk_values().if_isinstance(dcir.IndexAccess):
                     if access_node.data_index and access_node.name == memlet.connector:
                         for idx in reversed(memlet_data_index):
                             access_node.data_index.insert(0, idx)
                         assert len(access_node.data_index) == array_ndims
-                # ensure that memlet symbols used for array indexing are defined in context
-                for sym in memlet.access_info.grid_subset.free_symbols:
-                    symbol_collector.add_symbol(sym)
-                # set full shape on memlet
-                memlet.access_info = global_ctx.library_node.access_infos[memlet.field]
+                        reshape_memlet = True
+                if reshape_memlet:
+                    # ensure that memlet symbols used for array indexing are defined in context
+                    for sym in memlet.access_info.grid_subset.free_symbols:
+                        symbol_collector.add_symbol(sym)
+                    # set full shape on memlet
+                    memlet.access_info = global_ctx.library_node.access_infos[memlet.field]
 
         for item in reversed(expansion_items):
             iteration_ctx = iteration_ctx.pop()
