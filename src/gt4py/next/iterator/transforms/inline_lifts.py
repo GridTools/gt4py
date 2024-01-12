@@ -40,10 +40,10 @@ def _generate_unique_symbol(
         else:
             desired_name = f"__arg{arg_idx}"
 
-    new_symbol = desired_name
+    new_symbol = ir.Sym(id=desired_name)
     # make unique
     while new_symbol.id in occupied_names or new_symbol in occupied_symbols:
-        new_symbol = new_symbol + "_"
+        new_symbol = ir.Sym(id=new_symbol.id + "_")
     return new_symbol
 
 
@@ -73,7 +73,7 @@ def _is_scan(node: ir.FunCall):
 def _transform_and_extract_lift_args(
     node: ir.FunCall,
     symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[eve.SymbolName, ir.Expr],
+    extracted_args: dict[ir.Sym, ir.Expr],
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -89,8 +89,8 @@ def _transform_and_extract_lift_args(
     new_args = []
     for i, arg in enumerate(node.args):
         if isinstance(arg, ir.SymRef):
-            sym = arg.id
-            assert sym not in extracted_args or extracted_args[sym].id == arg.id
+            sym = ir.Sym(id=arg.id)
+            assert sym not in extracted_args or extracted_args[sym] == arg
             extracted_args[sym] = arg
             new_args.append(arg)
         else:
@@ -101,7 +101,7 @@ def _transform_and_extract_lift_args(
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
-            new_args.append(ir.SymRef(id=new_symbol))
+            new_args.append(ir.SymRef(id=new_symbol.id))
 
     itir_node = im.lift(inner_stencil)(*new_args)
     itir_node.location = node.location
@@ -226,7 +226,7 @@ class InlineLifts(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, N
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
                 #  actually want is to inline whenever the argument is not shifted. This is
                 #  currently beyond the capabilities of the inliner and the shift tracer.
-                new_arg_exprs: dict[eve.SymbolName, ir.Expr] = {}
+                new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
                 inlined_args = []
                 for i, (arg, eligible) in enumerate(zip(node.args, eligible_lifted_args)):
                     if eligible:
@@ -237,7 +237,7 @@ class InlineLifts(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, N
                         inlined_args.append(inlined_arg)
                     else:
                         if isinstance(arg, ir.SymRef):
-                            new_arg_sym = arg.id
+                            new_arg_sym = ir.Sym(id=arg.id)
                         else:
                             new_arg_sym = _generate_unique_symbol(
                                 desired_name=(stencil, i),
@@ -246,7 +246,7 @@ class InlineLifts(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, N
                             )
 
                         new_arg_exprs[new_arg_sym] = arg
-                        inlined_args.append(ir.SymRef(id=new_arg_sym))
+                        inlined_args.append(ir.SymRef(id=new_arg_sym.id))
 
                 inlined_call = self.visit(
                     inline_lambda(
