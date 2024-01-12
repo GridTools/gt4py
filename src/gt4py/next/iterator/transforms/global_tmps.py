@@ -170,6 +170,11 @@ class TemporaryExtractionPredicate:
         if self.heuristics and not self.heuristics(expr):
             return False
         stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
+        # TODO(tehrengruber): document and write testcase
+        # do not capture trivial lifts, they might create captures inside of stencils preventing other lifts from being extraced
+        # we can not just count because of this case λ() → (λ(__arg0____, __arg1___) → {·__arg0____, ·__arg1___})((↑(λ() → 0.0))(), (↑(λ() → 0.0))())
+        if not collect_symbol_refs(expr.args):
+            return False
         # do not extract when the stencil is capturing
         used_symbols = collect_symbol_refs(stencil)
         if used_symbols:
@@ -295,6 +300,8 @@ def split_closures(
                     # (otherwise we would need to canonicalize using `canonicalize_applied_lift`
                     # this doesn't seem to be necessary right now as we extract the lifts
                     # in post-order of the tree)
+                    if not all(isinstance(arg, ir.SymRef) for arg in lift_expr.args):
+                        lift_expr = canonicalize_applied_lift([str(param.id) for param in current_closure_stencil.params], lift_expr)
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
                     # create a mapping from the closures parameters to the closure arguments
@@ -590,7 +597,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             raise NotImplementedError("Temporaries with dtype list not supported.")
         raise AssertionError()
 
-    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider)
+    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider, save_to_annex=True)
     fencil_type = all_types[id(node.fencil)]
     assert isinstance(fencil_type, type_inference.FencilDefinitionType)
     assert isinstance(fencil_type.params, type_inference.Tuple)

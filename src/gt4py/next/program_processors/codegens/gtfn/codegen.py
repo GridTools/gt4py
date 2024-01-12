@@ -100,13 +100,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
         match pytype_to_cpptype(node.type):
             case "float":
-                return self.asfloat(node.value) + "f"
+                result = self.asfloat(node.value) + "f"
             case "double":
-                return self.asfloat(node.value)
+                result = self.asfloat(node.value)
             case "bool":
-                return node.value.lower()
+                result = node.value.lower()
             case _:
-                return node.value
+                result = node.value
+        return f"({result})"
 
     IntegralConstant = as_fmt("{value}_c")
 

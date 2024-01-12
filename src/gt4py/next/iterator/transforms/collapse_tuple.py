@@ -145,9 +145,10 @@ class CollapseTuple(eve.NodeTranslator):
 
         # TODO(tehrengruber): We don't want neither opcount preserving nor unconditionally inlining,
         #  but only force inline of lambda args.
-        new_node = InlineLambdas.apply(
-            node, opcount_preserving=True, force_inline_lambda_args=True
-        )
+        #new_node = InlineLambdas.apply(
+        #    node, opcount_preserving=True, force_inline_lambda_args=True
+        #)
+        new_node = node
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
@@ -167,7 +168,21 @@ class CollapseTuple(eve.NodeTranslator):
         return new_node
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
-        node = self.generic_visit(node, **kwargs)
+        node = self.generic_visit(node)
+        return self.fp_transform(node)
+
+    def fp_transform(self, node: ir.Expr) -> ir.Node:
+        while True:
+            new_node = self.transform(node)
+            if new_node is node:
+                break
+            node = new_node
+        return node
+
+
+    def transform(self, node: ir.Expr, **kwargs) -> ir.Node:
+        if not isinstance(node, ir.FunCall):
+            return node
 
         if (
             self.flags & self.Flag.COLLAPSE_MAKE_TUPLE_TUPLE_GET
@@ -189,7 +204,7 @@ class CollapseTuple(eve.NodeTranslator):
                     and ir_misc.is_provable_equal(v.args[1], first_expr)
                 ):
                     # tuple argument differs, just continue with the rest of the tree
-                    return self.generic_visit(node)
+                    return node
 
             if self.ignore_tuple_size or _get_tuple_size(
                 first_expr, self.use_global_type_inference
@@ -222,17 +237,17 @@ class CollapseTuple(eve.NodeTranslator):
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
             if is_let(node.args[1]):
                 idx, let_expr = node.args
-                return self.visit(
-                    im.call(im.lambda_(*let_expr.fun.params)(im.tuple_get(idx, let_expr.fun.expr)))(
+                return im.call(im.lambda_(*let_expr.fun.params)(self.fp_transform(im.tuple_get(idx, let_expr.fun.expr))))(
                         *let_expr.args
                     )
-                )
             elif isinstance(node.args[1], ir.FunCall) and node.args[1].fun == im.ref("if_"):
                 idx = node.args[0]
                 cond, true_branch, false_branch = node.args[1].args
-                return self.visit(
-                    im.if_(cond, im.tuple_get(idx, true_branch), im.tuple_get(idx, false_branch))
-                )  # todo: check if visit needed
+                return im.if_(
+                    cond,
+                    self.fp_transform(im.tuple_get(idx, true_branch)),
+                    self.fp_transform(im.tuple_get(idx, false_branch))
+                ) # todo: check if visit needed
 
         if self.flags & self.Flag.LETIFY_MAKE_TUPLE_ELEMENTS and node.fun == ir.SymRef(
             id="make_tuple"
@@ -254,7 +269,7 @@ class CollapseTuple(eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.visit(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
+                return self.fp_transform(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
@@ -263,18 +278,20 @@ class CollapseTuple(eve.NodeTranslator):
             if any(eligible_params):
                 return self.visit(inline_lambda(node, eligible_params=eligible_params))
 
-        if self.flags & self.Flag.PROPAGATE_TO_IF_ON_TUPLES and not node.fun == im.ref("if_"):
+        #if self.flags & self.Flag.PROPAGATE_TO_IF_ON_TUPLES and not node.fun == im.ref("if_"):
             # TODO(tehrengruber): This significantly increases the size of the tree. Revisit.
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
-            for i, arg in enumerate(node.args):
-                if is_if_call(arg):
-                    cond, true_branch, false_branch = arg.args
-                    new_true_branch = self.visit(_with_altered_arg(node, i, true_branch), **kwargs)
-                    new_false_branch = self.visit(
-                        _with_altered_arg(node, i, false_branch), **kwargs
-                    )
-                    return im.if_(cond, new_true_branch, new_false_branch)
+            # let (b, (if(...))) b[0]
+            # (lambda b, c: b[0])(if(...), c)
+        #    for i, arg in enumerate(node.args):
+        #        if is_if_call(arg):
+        #            cond, true_branch, false_branch = arg.args
+        #            new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch), **kwargs)
+        #            new_false_branch = self.fp_transform(
+        #                _with_altered_arg(node, i, false_branch), **kwargs
+        #            )
+        #            return im.if_(cond, new_true_branch, new_false_branch)
 
         if self.flags & self.Flag.PROPAGATE_NESTED_LET and is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
@@ -291,8 +308,19 @@ class CollapseTuple(eve.NodeTranslator):
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
-                node = self.visit(
-                    im.let(*outer_vars.items())(im.let(*inner_vars.items())(original_inner_expr))
+                # inner transform is needed for as trivial let make tuple can occur. how about outer?
+                # (λ(__wtf28) → ...)(
+                #   (λ(_tuple_el_31, _tuple_el_32, _tuple_el_33) → {_tuple_el_31, _tuple_el_32, _tuple_el_33})(
+                #     cast_(·vn, float64), ·vtᐞ0, cast_(0.5 × (·vn × ·vn + cast_(·vtᐞ0 × ·vtᐞ0, float64)), float64)
+                #   )
+                # )
+                #
+                # (λ(_tuple_el_31, _tuple_el_32, _tuple_el_33) →
+                #    (λ(__wtf28) → ...)({_tuple_el_31, _tuple_el_32, _tuple_el_33}))(
+                #   cast_(·vn, float64), ·vtᐞ0, cast_(0.5 × (·vn × ·vn + cast_(·vtᐞ0 × ·vtᐞ0, float64)), float64)
+                # )
+                node = self.fp_transform(
+                    im.let(*outer_vars.items())(self.fp_transform(im.let(*inner_vars.items())(original_inner_expr)))
                 )
 
         if (

@@ -315,6 +315,7 @@ class _Unifier:
                     assert isinstance(tv, Type)
                     self._add_constraint(sv, tv)
                 else:
+                    breakpoint()
                     assert sv == tv
             return True
 

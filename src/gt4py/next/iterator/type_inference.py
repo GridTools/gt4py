@@ -120,8 +120,10 @@ class Val(Type):
     kind: Type = eve.field(default_factory=TypeVar.fresh)
     dtype: Type = eve.field(default_factory=TypeVar.fresh)
     size: Type = eve.field(default_factory=TypeVar.fresh)
-    current_loc: Type = ANYWHERE
-    defined_loc: Type = ANYWHERE
+    current_loc: Type = eve.field(default_factory=TypeVar.fresh)
+    defined_loc: Type = eve.field(default_factory=TypeVar.fresh)
+    #current_loc: Type = ANYWHERE
+    #defined_loc: Type = ANYWHERE
 
 
 class ValTuple(Type):
@@ -890,22 +892,31 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     ) -> Closure:
         domain = self.visit(node.domain, **kwargs)
         stencil = self.visit(node.stencil, **kwargs)
-        output = self.visit(node.output, **kwargs)
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
+        if isinstance(node.output, ir.SymRef) and node.output.id.startswith("_tmp"):
+            output = self.visit(node.output, **kwargs)
+            self.constraints.add(
+               (
+                   output,
+                   Val(
+                       kind=Iterator(),
+                       dtype=output_dtype,
+                       size=Column(),
+                       defined_loc=output_loc,
+                   ),
+               )
+            )
+        else:
+            self.visit(node.output, **kwargs)
+            output = Val(
+                kind=Iterator(),
+                dtype=output_dtype,
+                size=Column(),
+                defined_loc=output_loc,
+            )
         self.constraints.add(
             (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
-        )
-        self.constraints.add(
-            (
-                output,
-                Val(
-                    kind=Iterator(),
-                    dtype=output_dtype,
-                    size=Column(),
-                    defined_loc=output_loc,
-                ),
-            )
         )
 
         inputs: list[Type] = self.visit(node.inputs, **kwargs)
@@ -920,9 +931,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                         dtype=stencil_param.dtype,
                         size=stencil_param.size,
                         # closure input and stencil param differ in `current_loc`
-                        current_loc=ANYWHERE,
+                        #current_loc=ANYWHERE,
+                        current_loc=TypeVar.fresh(),
                         # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
-                        defined_loc=stencil_param.defined_loc,
+                        #defined_loc=stencil_param.defined_loc,
+                        defined_loc=TypeVar.fresh(),
                     ),
                 )
             )

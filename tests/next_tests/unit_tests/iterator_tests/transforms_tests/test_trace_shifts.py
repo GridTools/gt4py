@@ -59,25 +59,8 @@ def test_shift():
 
 def test_lift():
     testee = ir.StencilClosure(
-        stencil=ir.Lambda(
-            expr=ir.FunCall(
-                fun=ir.SymRef(id="deref"),
-                args=[
-                    ir.FunCall(
-                        fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.FunCall(
-                                    fun=ir.SymRef(id="shift"),
-                                    args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
-                                ),
-                                args=[ir.SymRef(id="x")],
-                            )
-                        ],
-                    )
-                ],
-            ),
-            params=[ir.Sym(id="x")],
+        stencil=im.lambda_("x")(
+            im.deref(im.lift("deref")(im.shift("I", 1)("x")))
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
@@ -88,6 +71,20 @@ def test_lift():
     actual = TraceShifts.apply(testee)
     assert actual == expected
 
+
+def test_lift2():
+    testee = ir.StencilClosure(
+        stencil=im.lambda_("x")(
+            im.deref(im.shift("I", 1)(im.lift(im.lambda_("x")(im.deref(im.shift("J", 1)("x"))))("x")))
+        ),
+        inputs=[ir.SymRef(id="inp")],
+        output=ir.SymRef(id="out"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+    )
+    expected = {"inp": {(ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1))}}
+
+    actual = TraceShifts.apply(testee, save_to_annex=True)
+    assert actual == expected
 
 def test_neighbors():
     testee = ir.StencilClosure(
