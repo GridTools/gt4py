@@ -747,7 +747,7 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
-    init = (1, (2, 3))
+    init = (int32(1), (int32(2), int32(3)))
     k_size = cartesian_case.default_sizes[KDim]
     expected = np.arange(1, 1 + k_size, 1, dtype=int32)
     if not forward:

@@ -1,6 +1,7 @@
 import itertools
 from collections.abc import Sequence
 from . import types as ts
+from typing import Optional
 
 
 def flatten_tuples(ty: ts.Type) -> list[ts.Type]:
@@ -21,30 +22,33 @@ def unflatten_tuples(tys: Sequence[ts.Type], structure: ts.Type) -> ts.Type:
         if tys:
             return tys[0], tys[1:]
         raise ValueError("not enough values in for each element of the structure")
+
     new_ty, remaining = helper(tys, structure)
     if remaining:
         raise ValueError("too many values for structure")
     return new_ty
 
 
-def link_params_to_args(
+def assign_arguments(
         parameters: Sequence[ts.FunctionParameter],
         arguments: Sequence[ts.FunctionArgument]
-) -> dict[int, int]:
-    name_to_index = {param.name: idx for idx, param in enumerate(parameters) if param.keyword}
-    links: dict[int, int] = {}
-    for arg_idx, arg in enumerate(arguments):
-        if isinstance(arg.location, int):
-            if arg.location >= len(parameters):
-                raise ValueError("argument index out of range")
-            if arg.location in links:
-                raise ValueError(f"argument for '{parameters[arg.location].name}' supplied multiple times")
-            links[arg.location] = arg_idx
+) -> list[ts.FunctionArgument]:
+    by_index = {arg.location: arg for arg in arguments if isinstance(arg.location, int)}
+    by_name = {arg.location: arg for arg in arguments if isinstance(arg.location, str)}
+
+    assignment: dict[int, ts.FunctionArgument] = {}
+    for index, param in enumerate(parameters):
+        arg: Optional[ts.FunctionArgument] = None
+        if param.positional and index in by_index:
+            arg = by_index[index]
+        elif param.keyword and param.name in by_name:
+            arg = by_name[param.name]
+        if arg:
+            assignment[index] = arg
         else:
-            if arg.location not in name_to_index:
-                raise ValueError(f"unexpected keyword argument '{arg.location}'")
-            param_idx = name_to_index[arg.location]
-            if param_idx in links:
-                raise ValueError(f"argument for '{parameters[arg.location].name}' supplied multiple times")
-            links[param_idx] = arg_idx
-    return links
+            raise ValueError(f"no argument for function parameter '{param.name}' supplied")
+
+    if len(parameters) < len(arguments):
+        raise ValueError(f"too many arguments to function call")
+
+    return [assignment[i] for i in range(len(arguments))]

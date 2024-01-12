@@ -59,7 +59,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 )
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import roundtrip
-from gt4py.next.type_system_2 import types as ts2, traits
+from gt4py.next.type_system_2 import types as ts2, traits, utils as ts2_utils
 from gt4py.next.ffront.type_system_2 import inference as ti2_f, types as ts2_f
 
 
@@ -345,19 +345,34 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        #args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
-
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
             for stmt in self.past_node.body
         )
+
+        func_args = [
+            *(ts2.FunctionArgument(ts2.Type(), idx) for idx, arg in enumerate(args)),
+            *(ts2.FunctionArgument(ts2.Type(), name) for name, arg in kwargs.items()),
+        ]
+        assigned_args = ts2_utils.assign_arguments(self.past_node.type_2.parameters, func_args)
+        by_location = {
+            **{index: arg for index, arg in enumerate(args)},
+            **{name: arg for name, arg in kwargs.items()},
+        }
+        ordered_args = [by_location[arg.location] for arg in assigned_args]
+        ordered_pos_args = [by_location[arg.location] for arg in assigned_args if isinstance(arg.location, int)]
+        ordered_kw_args = {
+            arg.location: by_location[arg.location]
+            for arg in assigned_args
+            if isinstance(arg.location, str)
+        }
 
         # extract size of all field arguments
         size_args: list[Optional[tuple[int, ...]]] = []
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if implicit_domain and isinstance(param.type_2, (ts2_f.FieldType, ts2.TupleType)):
-                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type_2)]
+                shapes_and_dims = [*_field_constituents_shape_and_dims(ordered_args[param_idx], param.type_2)]
                 shape, dims = shapes_and_dims[0]
                 if not all(
                     el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
@@ -367,7 +382,7 @@ class Program:
                         " tuple) need to have the same shape and dimensions."
                     )
                 size_args.extend(shape if shape else [None] * len(dims))
-        return tuple(rewritten_args), tuple(size_args), kwargs
+        return tuple(ordered_args), tuple(size_args), {}
 
     @functools.cached_property
     def _column_axis(self):

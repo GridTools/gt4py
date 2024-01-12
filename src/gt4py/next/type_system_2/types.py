@@ -163,27 +163,16 @@ class FunctionType(Type, traits.CallableTrait):
         self.result = result
 
     def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
-        positionals = [param for param in self.parameters if param.positional]
-        keywords = {param.name: param for param in self.parameters if param.keyword}
-        supplied = {param.name: False for param in self.parameters}
-        for arg in args:
-            if isinstance(arg.location, int):
-                if arg.location >= len(positionals):
-                    return False, "too many positional arguments supplied"
-                param = positionals[arg.location]
-            else:
-                if arg.location not in keywords:
-                    return False, f"unexpected keyword argument '{arg.location}'"
-                param = keywords[arg.location]
-            if supplied[param.name]:
-                return False, f"argument '{param.name}' supplied multiple times"
-            if not traits.is_implicitly_convertible(arg.ty, param.ty):
-                return False, f"argument cannot be implicitly converted from '{arg.ty}' to '{param.ty}'  for parameter '{param.name}'"
-            supplied[param.name] = True
-        for param_name, p_supplied in supplied.items():
-            if not p_supplied:
-                return False, f"argument '{param_name}' missing"
-        return True, self.result
+        from gt4py.next.type_system_2 import utils
+        try:
+            assigned = utils.assign_arguments(self.parameters, args)
+            for param, arg in zip(self.parameters, assigned):
+                if not traits.is_implicitly_convertible(arg.ty, param.ty):
+                    return False, (f"argument cannot be implicitly converted from '{arg.ty}' to '{param.ty}' "
+                                   f"for parameter '{param.name}'")
+            return True, self.result
+        except ValueError as error:
+            return False, str(error)
 
 
 # -------------------------------------------------------------------------------

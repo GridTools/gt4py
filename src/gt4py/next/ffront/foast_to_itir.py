@@ -289,12 +289,15 @@ class FieldOperatorLowering(NodeTranslator):
                 *(ts2.FunctionArgument(arg.type_2, idx) for idx, arg in enumerate(node.args)),
                 *(ts2.FunctionArgument(arg.type_2, name) for name, arg in node.kwargs.items() if name != "out"),
             ]
-            param_to_arg = ts2_utils.link_params_to_args(node.func.type_2.parameters, args)
+            assigned_args = ts2_utils.assign_arguments(node.func.type_2.parameters, args)
+            node_args = {
+                **{index: arg for index, arg in enumerate(node.args)},
+                **{name: arg for name, arg in node.kwargs.items()},
+            }
             lowered_args = [
-                *(self.visit(arg) for arg in node.args),
-                *(self.visit(arg) for arg in node.kwargs.values()),
+                self.visit(node_args[arg.location])
+                for arg in assigned_args
             ]
-            lowered_args = [lowered_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
 
             call_args = [f"__arg{i}" for i in range(len(lowered_args))]
             return im.lift(
@@ -309,12 +312,15 @@ class FieldOperatorLowering(NodeTranslator):
                 *(ts2.FunctionArgument(arg.type_2, idx) for idx, arg in enumerate(node.args)),
                 *(ts2.FunctionArgument(arg.type_2, name) for name, arg in node.kwargs.items() if name != "out"),
             ]
-            param_to_arg = ts2_utils.link_params_to_args(node.func.type_2.parameters, args)
+            assigned_args = ts2_utils.assign_arguments(node.func.type_2.parameters, args)
+            node_args = {
+                **{index: arg for index, arg in enumerate(node.args)},
+                **{name: arg for name, arg in node.kwargs.items()},
+            }
             lowered_args = [
-                *(self.visit(arg) for arg in node.args),
-                *(self.visit(arg) for arg in node.kwargs.values()),
+                self.visit(node_args[arg.location])
+                for arg in assigned_args
             ]
-            lowered_args = [lowered_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
             return im.call(self.visit(node.func, **kwargs))(*lowered_args)
 
         raise AssertionError(

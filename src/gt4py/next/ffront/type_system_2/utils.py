@@ -9,7 +9,7 @@ def is_field_type_local(ty: ts_f.FieldType):
 
 
 def contains_local_field(type_: ts.Type) -> bool:
-    """Return if primitive constitutens of `type_` contains a field defined on a local dimension."""
+    """Determine if there is a local field among the elements of `type_`."""
     return any(
         isinstance(t, ts_f.FieldType) and is_field_type_local(t) for t in ts_utils.flatten_tuples(type_)
     )

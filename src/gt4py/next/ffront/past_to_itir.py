@@ -149,13 +149,17 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 if name != "out" and name != "domain"
             ),
         ]
-        param_to_arg = ts_utils.link_params_to_args(node.func.type_2.parameters, args)
-        node_args = [*node.args, *node.kwargs.values()]
-        linked_args = [node_args[param_to_arg[idx]] for idx in range(len(param_to_arg))]
-        lowered_args = list(itertools.chain(*[
-            [self.visit(arg)] if not isinstance(arg, past.TupleExpr) else _flatten_tuple_expr(arg)
-            for arg in linked_args
-        ]))
+        assigned_args = ts_utils.assign_arguments(node.func.type_2.parameters, args)
+        node_args = {
+            **{index: arg for index, arg in enumerate(node.args)},
+            **{name: arg for name, arg in node.kwargs.items()},
+        }
+        lowered_args = [
+            self.visit(node_args[arg.location])
+            if not isinstance(node_args[arg.location], past.TupleExpr)
+            else _flatten_tuple_expr(node_args[arg.location])
+            for arg in assigned_args
+        ]
 
         return itir.StencilClosure(
             domain=lowered_domain,
