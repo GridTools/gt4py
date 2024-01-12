@@ -15,7 +15,7 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator, concepts, extended_typing
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -39,7 +39,7 @@ def promote_to_list(
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(NodeTranslator):
+class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
@@ -71,12 +71,6 @@ class FieldOperatorLowering(NodeTranslator):
     @classmethod
     def apply(cls, node: foast.LocatedNode, preserve_location: bool = True) -> itir.Expr:
         return cls(preserve_location=preserve_location).visit(node)
-
-    def visit(self, node: concepts.RootNode, **kwargs: extended_typing.Any) -> extended_typing.Any:
-        result = super().visit(node, **kwargs)
-        if hasattr(node, "location") and hasattr(result, "location") and self.preserve_location:
-            result.location = node.location
-        return result
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs

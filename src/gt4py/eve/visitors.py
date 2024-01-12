@@ -199,8 +199,14 @@ class NodeTranslator(NodeVisitor):
 
 
 class PreserveLocationVisitor(NodeVisitor):
+    preserve_location: bool = True
+
+    def __init__(self, preserve_location: bool = True) -> None:
+        super().__init__()
+        self.preserve_location = preserve_location
+
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         result = super().visit(node, **kwargs)
-        if hasattr(node, "location") and hasattr(result, "location"):
+        if hasattr(node, "location") and hasattr(result, "location") and self.preserve_location:
             result.location = node.location
         return result
