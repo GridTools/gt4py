@@ -21,15 +21,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront.experimental import as_offset
 from tests.next_tests.integration_tests import cases
-from tests.next_tests.integration_tests.cases import (
-    IDim,
-    Ioff,
-    JDim,
-    KDim,
-    Koff,
-    cartesian_case,
-    unstructured_case,
-)
+from tests.next_tests.integration_tests.cases import IDim, Ioff, JDim, KDim, Koff, cartesian_case
 from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
     reduction_setup,
@@ -103,6 +95,9 @@ def test_offset_field_domain(cartesian_case):
 
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field_input_domain(cartesian_case):
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
     @gtx.field_operator
     def testee_fo(
         a: gtx.Field[[IDim, KDim], int], offset_field: gtx.Field[[IDim, KDim], int]
@@ -117,14 +112,10 @@ def test_offset_field_input_domain(cartesian_case):
     ):
         testee_fo(a, offset_field, out=out)
 
-    # out = cases.allocate(cartesian_case, testee, "out")()
     a_fo = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 3)})().ndarray
-    # a = gtx.as_field({IDim: (1, 5), KDim: (0, 10)}, a_fo)
     out = gtx.as_field(
         [IDim, KDim],
-        np.zeros(
-            [cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]], dtype=int
-        ),
+        np.zeros([i_size, k_size], dtype=int),
         origin={IDim: 2, KDim: 0},
     )
     a = gtx.as_field([IDim, KDim], a_fo, origin={IDim: 2, KDim: 0})
@@ -137,11 +128,10 @@ def test_offset_field_input_domain(cartesian_case):
         testee,
         a,
         offset_field,
-        out,
-        inout=out,
+        out[2:],
+        inout=out[2:],
         offset_provider={"Ioff": IDim},
         ref=ref,
-        comparison=lambda out, ref: np.all(out == ref),
     )
 
 

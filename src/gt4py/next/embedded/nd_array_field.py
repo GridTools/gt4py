@@ -214,12 +214,10 @@ class NdArrayField(
 
             # then compute the index array
             xp = self.array_ns
+            new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
             if restricted_connectivity.domain.ndim > 1:
-                new_buffer = _take_mdim(
-                    self._ndarray, restricted_connectivity.ndarray, new_domain, dim
-                )
+                new_buffer = _take_mdim(self._ndarray, new_idx_array, new_domain, dim)
             else:
-                new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
                 # finally, take the new array
                 new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
