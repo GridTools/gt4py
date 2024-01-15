@@ -23,6 +23,7 @@ from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 def _is_power_call(
     node: ir.FunCall,
 ) -> bool:
+    """Match expressions of the form `power(base, integral_literal)`."""
     return (
         isinstance(node.fun, ir.SymRef)
         and node.fun.id == "power"
@@ -32,7 +33,7 @@ def _is_power_call(
     )
 
 
-def _compute_integer_power_of_two(exp):
+def _compute_integer_power_of_two(exp) -> int:
     return math.floor(math.log2(exp))
 
 
@@ -41,7 +42,7 @@ class PowerUnrolling(NodeTranslator):
     max_unroll: int
 
     @classmethod
-    def apply(cls, node: ir.Node, max_unroll=5) -> ir.Node:
+    def apply(cls, node: ir.Node, max_unroll: int = 5) -> ir.Node:
         return cls(max_unroll=max_unroll).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
@@ -67,7 +68,7 @@ class PowerUnrolling(NodeTranslator):
 
                     ret = im.multiplies_(ret, f"power_{2 ** pow_cur}")
 
-                # In case of FunCall: build nested expression to avoid multiple evaluations of base
+                # Nest target expression to avoid multiple redundant evaluations
                 for i in range(pow_max, 0, -1):
                     ret = im.let(
                         f"power_{2 ** i}",
@@ -77,7 +78,7 @@ class PowerUnrolling(NodeTranslator):
 
                 # Simplify expression in case of SymRef by resolving let statements
                 if isinstance(base, ir.SymRef):
-                    return InlineLambdas.apply(ret)
+                    return InlineLambdas.apply(ret, opcount_preserving=True)
                 else:
                     return ret
         return new_node

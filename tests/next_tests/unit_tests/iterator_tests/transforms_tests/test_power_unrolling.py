@@ -21,7 +21,9 @@ from gt4py.next.iterator.transforms.power_unrolling import PowerUnrolling
 
 
 def test_power_unrolling_zero():
-    pytest.xfail("Not implemented.")
+    pytest.xfail(
+        "Not implementeds we don't have an easy way to determine the type of the one literal (type inference is to expensive)."
+    )
     testee = im.call("power")("x", 0)
     expected = im.literal_from_value(1)
 
@@ -75,8 +77,7 @@ def test_power_unrolling_three():
 
 def test_power_unrolling_four():
     testee = im.call("power")("x", 4)
-    tmp = im.multiplies_("x", "x")
-    expected = im.multiplies_(tmp, tmp)
+    expected = im.let("power_2", im.multiplies_("x", "x"))(im.multiplies_("power_2", "power_2"))
 
     actual = PowerUnrolling.apply(testee)
     assert actual == expected
@@ -86,6 +87,9 @@ def test_power_unrolling_five():
     testee = im.call("power")("x", 5)
     tmp2 = im.multiplies_("x", "x")
     expected = im.multiplies_(im.multiplies_(tmp2, tmp2), "x")
+    expected = im.let("power_2", im.multiplies_("x", "x"))(
+        im.multiplies_(im.multiplies_("power_2", "power_2"), "x")
+    )
 
     actual = PowerUnrolling.apply(testee)
     assert actual == expected
@@ -101,9 +105,9 @@ def test_power_unrolling_seven():
 
 def test_power_unrolling_seven_unrolled():
     testee = im.call("power")("x", 7)
-    tmp2 = im.multiplies_("x", "x")
-    tmp4 = im.multiplies_(tmp2, tmp2)
-    expected = im.multiplies_(im.multiplies_(tmp4, tmp2), "x")
+    expected = im.let("power_2", im.multiplies_("x", "x"))(
+        im.multiplies_(im.multiplies_(im.multiplies_("power_2", "power_2"), "power_2"), "x")
+    )
 
     actual = PowerUnrolling.apply(testee, max_unroll=7)
     assert actual == expected
@@ -133,9 +137,11 @@ def test_power_unrolling_eight():
 
 def test_power_unrolling_eight_unrolled():
     testee = im.call("power")("x", 8)
-    tmp2 = im.multiplies_("x", "x")
-    tmp4 = im.multiplies_(tmp2, tmp2)
-    expected = im.multiplies_(tmp4, tmp4)
+    expected = im.let("power_2", im.multiplies_("x", "x"))(
+        im.let("power_4", im.multiplies_("power_2", "power_2"))(
+            im.multiplies_("power_4", "power_4")
+        )
+    )
 
     actual = PowerUnrolling.apply(testee, max_unroll=8)
     assert actual == expected
