@@ -76,7 +76,7 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
 
 def _take_mdim(
     input_arr: core_defs.NDArrayObject,
-    restricted_connectivity: common.ConnectivityField,
+    restricted_connectivity: core_defs.NDArrayObject,
     new_domain: common.Domain,
     dim: common.Dimension,
 ) -> core_defs.NDArrayObject:
