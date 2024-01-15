@@ -574,18 +574,30 @@ if TYPE_CHECKING:
             ...
 
 
-# TODO(havogt): we need to specify when we should use this interface vs the `Field` protocol.
-class GTFieldInterface(Protocol):
-    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
+# TODO(havogt): we need to describe when this interface shouold be used instead of the `Field` protocol.
+class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol):
+    """
+    Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
+
+    Note:
+    - A default impolementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
+    - No implementation of `__gt_origin__` is provided because of infinite fields.
+    """
 
     @property
     def __gt_domain__(self) -> Domain:
+        # TODO probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
+        # to allow implementations without having to import gtx.Domain.
         ...
+
+    @property
+    def __gt_dims__(self) -> tuple[str, ...]:
+        return tuple(d.value for d in self.__gt_domain__.dims)
 
 
 @extended_runtime_checkable
 class Field(
-    core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]
+    GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]
 ):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
@@ -596,10 +608,6 @@ class Field(
     @property
     def __gt_domain__(self) -> Domain:
         return self.domain
-
-    @property
-    def __gt_dims__(self) -> tuple[str, ...]:
-        return tuple(d.value for d in self.domain.dims)
 
     @property
     def codomain(self) -> type[core_defs.ScalarT] | Dimension:
