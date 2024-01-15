@@ -580,7 +580,7 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
     Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
 
     Note:
-    - A default impolementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
+    - A default implementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
     - No implementation of `__gt_origin__` is provided because of infinite fields.
     """
 
