@@ -49,8 +49,7 @@ def test_with_bound_args(cartesian_case):
 def test_with_bound_args_order_args(cartesian_case):
     @gtx.field_operator
     def fieldop_args(a: cases.IField, condition: bool, scalar: int32) -> cases.IField:
-        if not condition:
-            scalar = 0
+        scalar = 0 if not condition else scalar
         return a + scalar
 
     @gtx.program(backend=cartesian_case.backend)
@@ -58,10 +57,8 @@ def test_with_bound_args_order_args(cartesian_case):
         fieldop_args(a, condition, scalar, out=out)
 
     a = cases.allocate(cartesian_case, program_args, "a")()
-    scalar = int32(1)
-    ref = a.asnumpy() + scalar
     out = cases.allocate(cartesian_case, program_args, "out")()
 
     prog_bounds = program_args.with_bound_args(condition=True)
-    prog_bounds(a=a, scalar=scalar, out=out, offset_provider={})
-    np.allclose(out.asnumpy(), ref)
+    prog_bounds(a=a, scalar=int32(1), out=out, offset_provider={})
+    np.allclose(out.asnumpy(), a.asnumpy() + int32(1))
