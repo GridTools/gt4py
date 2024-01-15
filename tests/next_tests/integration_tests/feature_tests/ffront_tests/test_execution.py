@@ -444,6 +444,7 @@ def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
         comparison=lambda a, b: np.all(a == b),
     )
 
+
 def test_nested_tuple_return(cartesian_case):
     @gtx.field_operator
     def pack_tuple(
