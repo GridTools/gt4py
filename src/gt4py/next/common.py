@@ -596,9 +596,7 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
 
 
 @extended_runtime_checkable
-class Field(
-    GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]
-):
+class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
