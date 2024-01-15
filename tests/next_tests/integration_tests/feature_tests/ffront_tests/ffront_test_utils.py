@@ -32,8 +32,8 @@ except ModuleNotFoundError as e:
     else:
         raise e
 
-import tests.next_tests
-import tests.next_tests.exclusion_matrices as definitions
+import next_tests
+import next_tests.exclusion_matrices as definitions
 
 
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
@@ -71,7 +71,7 @@ def fieldview_backend(request):
     backend_id = request.param
     backend = None if backend_id is None else backend_id.load()
 
-    for marker, skip_mark, msg in tests.next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
     ):
         if request.node.get_closest_marker(marker):
