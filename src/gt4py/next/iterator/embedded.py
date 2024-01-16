@@ -55,7 +55,7 @@ from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
-
+from gt4py.next.utils import tree_map
 
 EMBEDDED = "embedded"
 
@@ -1564,7 +1564,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                     for k in column.col_range:
                         col_pos[column.axis] = k
                         assert _is_concrete_position(col_pos)
-                        out.field_setitem(col_pos, res[k])
+                        out.field_setitem(col_pos, tree_map(lambda res_el: res_el[k])(res))
 
         ctx = cvars.copy_context()
         ctx.run(_closure_runner)
