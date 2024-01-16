@@ -32,7 +32,7 @@ from devtools import debug
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -344,7 +344,9 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
+            raise errors.DSLError(
+                None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
+            ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
