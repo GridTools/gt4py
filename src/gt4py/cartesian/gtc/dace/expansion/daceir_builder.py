@@ -482,8 +482,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 reshape_memlet = False
                 for access_node in dcir_node.walk_values().if_isinstance(dcir.IndexAccess):
                     if access_node.data_index and access_node.name == memlet.connector:
-                        for idx in reversed(memlet_data_index):
-                            access_node.data_index.insert(0, idx)
+                        access_node.data_index = memlet_data_index + access_node.data_index
                         assert len(access_node.data_index) == array_ndims
                         reshape_memlet = True
                 if reshape_memlet:
