@@ -175,6 +175,8 @@ def get_cache_id(
             return offset.origin_axis, offset.neighbor_axis, offset.max_neighbors
         if isinstance(offset, fbuiltins.FieldOffset):
             return offset.source, offset.target
+        if isinstance(offset, common.Dimension):
+            return offset,
         return tuple()
     offset_cache_keys = [
         (name, offset_invariants(offset))
