@@ -107,7 +107,15 @@ class GTFNCodegen(codegen.TemplatedGenerator):
                 result = node.value.lower()
             case _:
                 result = node.value
-        return f"({result})"
+        # TODO: isn't this wrong and int32 should also be casted to int32?
+        if node.type in ["float64", "float32", "int32", "int64"]:
+            result = f"({result})"
+        elif node.type == "axis_literal":
+            pass
+        else:
+            breakpoint()
+            raise "123"
+        return result
 
     IntegralConstant = as_fmt("{value}_c")
 
