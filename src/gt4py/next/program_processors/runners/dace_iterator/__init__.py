@@ -168,19 +168,20 @@ def get_cache_id(
     offset_provider: Mapping[str, Any],
 ) -> str:
     def offset_invariants(offset):
-        from gt4py.next.ffront import fbuiltins
-        if isinstance(offset, itir_embedded.NeighborTableOffsetProvider):
+        if isinstance(
+            offset,
+            (
+                itir_embedded.NeighborTableOffsetProvider,
+                itir_embedded.StridedNeighborOffsetProvider,
+            ),
+        ):
             return offset.origin_axis, offset.neighbor_axis, offset.max_neighbors
-        if isinstance(offset, itir_embedded.StridedNeighborOffsetProvider):
-            return offset.origin_axis, offset.neighbor_axis, offset.max_neighbors
-        if isinstance(offset, fbuiltins.FieldOffset):
-            return offset.source, offset.target
         if isinstance(offset, common.Dimension):
-            return offset,
+            return (offset,)
         return tuple()
+
     offset_cache_keys = [
-        (name, offset_invariants(offset))
-        for name, offset in offset_provider.items()
+        (name, offset_invariants(offset)) for name, offset in offset_provider.items()
     ]
     cache_id_args = [
         str(arg)
