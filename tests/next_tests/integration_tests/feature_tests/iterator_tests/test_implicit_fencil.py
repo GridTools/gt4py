@@ -18,7 +18,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -34,11 +33,11 @@ def dom():
 
 
 def a_field():
-    return gtx.np_as_located_field(I)(np.arange(0, _isize, dtype=np.float64))
+    return gtx.as_field([I], np.arange(0, _isize, dtype=np.float64))
 
 
 def out_field():
-    return gtx.np_as_located_field(I)(np.zeros(shape=(_isize,)))
+    return gtx.as_field([I], np.zeros(shape=(_isize,)))
 
 
 @fundef
@@ -54,15 +53,11 @@ def test_single_argument(program_processor, dom):
 
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
-        assert np.allclose(inp, out)
+        assert np.allclose(inp.asnumpy(), out.asnumpy())
 
 
 def test_2_arguments(program_processor, dom):
     program_processor, validate = program_processor
-    if program_processor == run_dace_iterator:
-        pytest.xfail(
-            "Not supported in DaCe backend: argument types are not propagated for ITIR tests"
-        )
 
     @fundef
     def fun(inp0, inp1):
@@ -75,7 +70,7 @@ def test_2_arguments(program_processor, dom):
     run_processor(fun[dom], program_processor, inp0, inp1, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(inp0.array() + inp1.array(), out)
+        assert np.allclose(inp0.asnumpy() + inp1.asnumpy(), out.asnumpy())
 
 
 def test_lambda_domain(program_processor):
@@ -87,4 +82,4 @@ def test_lambda_domain(program_processor):
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
 
     if validate:
-        assert np.allclose(inp, out)
+        assert np.allclose(inp.asnumpy(), out.asnumpy())

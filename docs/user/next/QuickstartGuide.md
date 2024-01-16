@@ -51,7 +51,7 @@ from gt4py.next import float64, neighbor_sum, where
 
 #### Fields
 
-Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `np_as_located_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
+Fields store data as a multi-dimensional array, and are defined over a set of named dimensions. The code snippet below defines two named dimensions, _Cell_ and _K_, and creates the fields `a` and `b` over their cartesian product using the `gtx.as_field` helper function. The fields contain the values 2 for `a` and 3 for `b` for all entries.
 
 ```{code-cell} ipython3
 CellDim = gtx.Dimension("Cell")
@@ -63,8 +63,20 @@ grid_shape = (num_cells, num_layers)
 
 a_value = 2.0
 b_value = 3.0
-a = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
-b = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
+a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
+b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
+```
+
+Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
+
+```{code-cell} ipython3
+from gt4py._core import definitions as core_defs
+array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
+field_of_ones = gtx.constructors.ones(
+    domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
+    dtype=core_defs.dtype(np.float64),
+    allocator=gtx.program_processors.runners.roundtrip.backend
+)
 ```
 
 _Note: The interface to construct fields is provisional only and will change soon._
@@ -87,10 +99,10 @@ def add(a: gtx.Field[[CellDim, KDim], float64],
 You can call field operators from [programs](#Programs), other field operators, or directly. The code snippet below shows a direct call, in which case you have to supply two additional arguments: `out`, which is a field to write the return value to, and `offset_provider`, which is left empty for now. The result of the field operator is a field with all entries equal to 5, but for brevity, only the average and the standard deviation of the entries are printed:
 
 ```{code-cell} ipython3
-result = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 add(a, b, out=result, offset_provider={})
 
-print("{} + {} = {} ± {}".format(a_value, b_value, np.average(np.asarray(result)), np.std(np.asarray(result))))
+print("{} + {} = {} ± {}".format(a_value, b_value, np.average(result.asnumpy()), np.std(result.asnumpy())))
 ```
 
 #### Programs
@@ -113,10 +125,10 @@ def run_add(a : gtx.Field[[CellDim, KDim], float64],
 You can execute the program by simply calling it:
 
 ```{code-cell} ipython3
-result = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 run_add(a, b, result, offset_provider={})
 
-print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(np.asarray(result)), np.std(np.asarray(result))))
+print("{} + {} = {} ± {}".format(b_value, (a_value + b_value), np.average(result.asnumpy()), np.std(result.asnumpy())))
 ```
 
 #### Composing field operators and programs
@@ -200,8 +212,8 @@ cell_to_edge_table = np.array([
 Let's start by defining two fields: one over the cells and another one over the edges. The field over cells serves input for subsequent calculations and is therefore filled up with values, whereas the field over the edges stores the output of the calculations and is therefore left blank.
 
 ```{code-cell} ipython3
-cell_values = gtx.np_as_located_field(CellDim)(np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
-edge_values = gtx.np_as_located_field(EdgeDim)(np.zeros((12,)))
+cell_values = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
+edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
 | ![cell_values](connectivity_cell_field.svg) |
@@ -244,7 +256,7 @@ def run_nearest_cell_to_edge(cell_values: gtx.Field[[CellDim], float64], out : g
 
 run_nearest_cell_to_edge(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
-print("0th adjacent cell's value: {}".format(np.asarray(edge_values)))
+print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 ```
 
 Running the above snippet results in the following edge field:
@@ -271,7 +283,7 @@ def run_sum_adjacent_cells(cells : gtx.Field[[CellDim], float64], out : gtx.Fiel
 
 run_sum_adjacent_cells(cell_values, edge_values, offset_provider={"E2C": E2C_offset_provider})
 
-print("sum of adjacent cells: {}".format(np.asarray(edge_values)))
+print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 ```
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
@@ -295,8 +307,8 @@ This function takes 3 input arguments:
   In the case where the true and false branches are either fields or scalars, the resulting output will be a field including all dimensions from all inputs. For example:
 
 ```{code-cell} ipython3
-mask = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape, dtype=bool))
-result_where = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+mask = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape, dtype=bool))
+result_where = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 b = 6.0
 
 @gtx.field_operator
@@ -305,7 +317,7 @@ def conditional(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, K
     return where(mask, a, b)
 
 conditional(mask, a, b, out=result_where, offset_provider={})
-print("where return: {}".format(np.asarray(result_where)))
+print("where return: {}".format(result_where.asnumpy()))
 ```
 
 **Tuple implementation:**
@@ -313,8 +325,8 @@ print("where return: {}".format(np.asarray(result_where)))
 The `where` supports the return of tuples of fields. To perform promotion of dimensions and dtype of the output, all arguments are analyzed and promoted as in the above section.
 
 ```{code-cell} ipython3
-result_1 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_1 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
 def _conditional_tuple(mask: gtx.Field[[CellDim, KDim], bool], a: gtx.Field[[CellDim, KDim], float64], b: float
@@ -328,7 +340,7 @@ result_1: gtx.Field[[CellDim, KDim], float64], result_2: gtx.Field[[CellDim, KDi
      _conditional_tuple(mask, a, b, out=(result_1, result_2))
 
 conditional_tuple(mask, a, b, result_1, result_2, offset_provider={})
-print("where tuple return: {}".format((np.asarray(result_1), np.asarray(result_2))))
+print("where tuple return: {}".format((result_1.asnumpy(), result_2.asnumpy())))
 ```
 
 The `where` builtin also allows for nesting of tuples. In this scenario, it will first perform an unrolling:
@@ -338,13 +350,13 @@ The `where` builtin also allows for nesting of tuples. In this scenario, it will
 and then combine results to match the return type:
 
 ```{code-cell} ipython3
-a = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
-b = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
-c = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
-d = gtx.np_as_located_field(CellDim, KDim)(np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
+a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=2.0, dtype=np.float64))
+b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=3.0, dtype=np.float64))
+c = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=4.0, dtype=np.float64))
+d = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=5.0, dtype=np.float64))
 
-result_1 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
-result_2 = gtx.np_as_located_field(CellDim, KDim)(np.zeros(shape=grid_shape))
+result_1 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
+result_2 = gtx.as_field([CellDim, KDim], np.zeros(shape=grid_shape))
 
 @gtx.field_operator
 def _conditional_tuple_nested(
@@ -363,7 +375,7 @@ def conditional_tuple_nested(
     _conditional_tuple_nested(mask, a, b, c, d, out=((result_1, result_2), (result_2, result_1)))
 
 conditional_tuple_nested(mask, a, b, c, d, result_1, result_2, offset_provider={})
-print("where nested tuple return: {}".format(((np.asarray(result_1), np.asarray(result_2)), (np.asarray(result_2), np.asarray(result_1)))))
+print("where nested tuple return: {}".format(((result_1.asnumpy(), result_2.asnumpy()), (result_2.asnumpy(), result_1.asnumpy()))))
 ```
 
 #### Implementing the pseudo-laplacian
@@ -402,7 +414,7 @@ edge_weights = np.array([
     [0, -1, -1], # cell 5
 ], dtype=np.float64)
 
-edge_weight_field = gtx.np_as_located_field(CellDim, C2EDim)(edge_weights)
+edge_weight_field = gtx.as_field([CellDim, C2EDim], edge_weights)
 ```
 
 Now you have everything to implement the pseudo-laplacian. Its field operator requires the cell field and the edge weights as inputs, and outputs a cell field of the same shape as the input.
@@ -428,14 +440,14 @@ def run_pseudo_laplacian(cells : gtx.Field[[CellDim], float64],
                          out : gtx.Field[[CellDim], float64]):
     pseudo_lap(cells, edge_weights, out=out)
 
-result_pseudo_lap = gtx.np_as_located_field(CellDim)(np.zeros(shape=(6,)))
+result_pseudo_lap = gtx.as_field([CellDim], np.zeros(shape=(6,)))
 
 run_pseudo_laplacian(cell_values,
                      edge_weight_field,
                      result_pseudo_lap,
                      offset_provider={"E2C": E2C_offset_provider, "C2E": C2E_offset_provider})
 
-print("pseudo-laplacian: {}".format(np.asarray(result_pseudo_lap)))
+print("pseudo-laplacian: {}".format(result_pseudo_lap.asnumpy()))
 ```
 
 As a closure, here is an example of chaining field operators, which is very simple to do when working with fields. The field operator below executes the pseudo-laplacian, and then calls the pseudo-laplacian on the result of the first, in effect, calculating the laplacian of a laplacian.

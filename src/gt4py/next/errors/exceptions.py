@@ -33,16 +33,18 @@ from gt4py.eve import SourceLocation
 from . import formatting
 
 
-class DSLError(Exception):
+class GT4PyError(Exception):
+    @property
+    def message(self) -> str:
+        return self.args[0]
+
+
+class DSLError(GT4PyError):
     location: Optional[SourceLocation]
 
     def __init__(self, location: Optional[SourceLocation], message: str) -> None:
         self.location = location
         super().__init__(message)
-
-    @property
-    def message(self) -> str:
-        return self.args[0]
 
     def with_location(self, location: Optional[SourceLocation]) -> DSLError:
         self.location = location
@@ -59,7 +61,7 @@ class UnsupportedPythonFeatureError(DSLError):
     feature: str
 
     def __init__(self, location: Optional[SourceLocation], feature: str) -> None:
-        super().__init__(location, f"unsupported Python syntax: '{feature}'")
+        super().__init__(location, f"Unsupported Python syntax: '{feature}'.")
         self.feature = feature
 
 
@@ -67,7 +69,7 @@ class UndefinedSymbolError(DSLError):
     sym_name: str
 
     def __init__(self, location: Optional[SourceLocation], name: str) -> None:
-        super().__init__(location, f"name '{name}' is not defined")
+        super().__init__(location, f"Name '{name}' is not defined.")
         self.sym_name = name
 
 
@@ -75,7 +77,7 @@ class MissingAttributeError(DSLError):
     attr_name: str
 
     def __init__(self, location: Optional[SourceLocation], attr_name: str) -> None:
-        super().__init__(location, f"object does not have attribute '{attr_name}'")
+        super().__init__(location, f"Object does not have attribute '{attr_name}'.")
         self.attr_name = attr_name
 
 
@@ -88,7 +90,7 @@ class MissingParameterAnnotationError(TypeError_):
     param_name: str
 
     def __init__(self, location: Optional[SourceLocation], param_name: str) -> None:
-        super().__init__(location, f"parameter '{param_name}' is missing type annotations")
+        super().__init__(location, f"Parameter '{param_name}' is missing type annotations.")
         self.param_name = param_name
 
 
@@ -98,7 +100,7 @@ class InvalidParameterAnnotationError(TypeError_):
 
     def __init__(self, location: Optional[SourceLocation], param_name: str, type_: Any) -> None:
         super().__init__(
-            location, f"parameter '{param_name}' has invalid type annotation '{type_}'"
+            location, f"Parameter '{param_name}' has invalid type annotation '{type_}'."
         )
         self.param_name = param_name
         self.annotated_type = type_

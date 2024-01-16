@@ -113,7 +113,7 @@ def test_undefined_field_program(identity_def):
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Undeclared or untyped symbol `out_field`."),
+        match=(r"Undeclared or untyped symbol 'out_field'."),
     ):
         ProgramParser.apply_to_function(undefined_field_program)
 
@@ -165,10 +165,10 @@ def test_domain_exception_1(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_1_program)
 
-    assert exc_info.match("Invalid call to `domain_format_1`")
+    assert exc_info.match("Invalid call to 'domain_format_1'")
 
     assert (
-        re.search("Only Dictionaries allowed in domain", exc_info.value.__cause__.args[0])
+        re.search("Only Dictionaries allowed in 'domain'", exc_info.value.__cause__.args[0])
         is not None
     )
 
@@ -184,7 +184,7 @@ def test_domain_exception_2(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_2_program)
 
-    assert exc_info.match("Invalid call to `domain_format_2`")
+    assert exc_info.match("Invalid call to 'domain_format_2'")
 
     assert (
         re.search("Only 2 values allowed in domain range", exc_info.value.__cause__.args[0])
@@ -203,10 +203,10 @@ def test_domain_exception_3(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_3_program)
 
-    assert exc_info.match("Invalid call to `domain_format_3`")
+    assert exc_info.match("Invalid call to 'domain_format_3'")
 
     assert (
-        re.search("Missing required keyword argument\(s\) `out`.", exc_info.value.__cause__.args[0])
+        re.search(r"Missing required keyword argument\ 'out'", exc_info.value.__cause__.args[0])
         is not None
     )
 
@@ -224,7 +224,7 @@ def test_domain_exception_4(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_4_program)
 
-    assert exc_info.match("Invalid call to `domain_format_4`")
+    assert exc_info.match("Invalid call to 'domain_format_4'")
 
     assert (
         re.search("Either only domain or slicing allowed", exc_info.value.__cause__.args[0])
@@ -243,7 +243,7 @@ def test_domain_exception_5(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_5_program)
 
-    assert exc_info.match("Invalid call to `domain_format_5`")
+    assert exc_info.match("Invalid call to 'domain_format_5'")
 
     assert (
         re.search("Only integer values allowed in domain range", exc_info.value.__cause__.args[0])
@@ -262,6 +262,6 @@ def test_domain_exception_6(identity_def):
     ) as exc_info:
         ProgramParser.apply_to_function(domain_format_6_program)
 
-    assert exc_info.match("Invalid call to `domain_format_6`")
+    assert exc_info.match("Invalid call to 'domain_format_6'")
 
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None

@@ -18,18 +18,13 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
+from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim
 from next_tests.integration_tests.multi_feature_tests.iterator_tests.hdiff_reference import (
     hdiff_reference,
 )
-from next_tests.unit_tests.conftest import (
-    lift_mode,
-    program_processor,
-    program_processor_no_dace_exec,
-    run_processor,
-)
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 I = offset("I")
@@ -76,24 +71,30 @@ def hdiff(inp, coeff, out, x, y):
     )
 
 
-def test_hdiff(hdiff_reference, program_processor_no_dace_exec, lift_mode):
-    program_processor, validate = program_processor_no_dace_exec
-    if program_processor == run_gtfn or program_processor == run_gtfn_imperative:
+@pytest.mark.uses_origin
+def test_hdiff(hdiff_reference, program_processor, lift_mode):
+    program_processor, validate = program_processor
+    if program_processor in [
+        gtfn.run_gtfn,
+        gtfn.run_gtfn_imperative,
+        gtfn.run_gtfn_with_temporaries,
+    ]:
+        # TODO(tehrengruber): check if still true
         from gt4py.next.iterator import transforms
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:
-            pytest.xfail("there is an issue with temporaries that crashes the application")
+            pytest.xfail("Temporaries are not compatible with origins.")
 
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = gtx.np_as_located_field(IDim, JDim, origin={IDim: 2, JDim: 2})(inp[:, :, 0])
-    coeff_s = gtx.np_as_located_field(IDim, JDim)(coeff[:, :, 0])
-    out_s = gtx.np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
+    inp_s = gtx.as_field([IDim, JDim], inp[:, :, 0], origin={IDim: 2, JDim: 2})
+    coeff_s = gtx.as_field([IDim, JDim], coeff[:, :, 0])
+    out_s = gtx.as_field([IDim, JDim], np.zeros_like(coeff[:, :, 0]))
 
     run_processor(
         hdiff, program_processor, inp_s, coeff_s, out_s, shape[0], shape[1], lift_mode=lift_mode
     )
 
     if validate:
-        assert np.allclose(out[:, :, 0], out_s)
+        assert np.allclose(out[:, :, 0], out_s.asnumpy())

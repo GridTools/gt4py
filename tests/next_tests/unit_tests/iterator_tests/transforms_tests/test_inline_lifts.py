@@ -14,7 +14,7 @@
 
 import pytest
 
-from gt4py.next.iterator import ir_makers as im
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
 

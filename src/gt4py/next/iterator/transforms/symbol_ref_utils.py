@@ -36,7 +36,7 @@ class CountSymbolRefs(eve.NodeVisitor):
         Count references to given or all symbols in scope.
 
         Examples:
-            >>> import gt4py.next.iterator.ir_makers as im
+            >>> import gt4py.next.iterator.ir_utils.ir_makers as im
             >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
             >>> CountSymbolRefs.apply(expr)
             {'x': 2, 'y': 2, 'z': 1}

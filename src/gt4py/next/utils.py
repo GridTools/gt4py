@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, ClassVar
+import functools
+from typing import Any, Callable, ClassVar, ParamSpec, TypeGuard, TypeVar, cast
 
 
 class RecursionGuard:
@@ -49,3 +50,45 @@ class RecursionGuard:
 
     def __exit__(self, *exc):
         self.guarded_objects.remove(id(self.obj))
+
+
+_T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def is_tuple_of(v: Any, t: type[_T]) -> TypeGuard[tuple[_T, ...]]:
+    return isinstance(v, tuple) and all(isinstance(e, t) for e in v)
+
+
+# TODO(havogt): remove flatten duplications in the whole codebase
+def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
+    if isinstance(value, tuple):
+        return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
+    else:
+        return (value,)
+
+
+def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:
+    """
+    Apply `fun` to each entry of (possibly nested) tuples.
+
+    Examples:
+        >>> tree_map(lambda x: x + 1)(((1, 2), 3))
+        ((2, 3), 4)
+
+        >>> tree_map(lambda x, y: x + y)(((1, 2), 3), ((4, 5), 6))
+        ((5, 7), 9)
+    """
+
+    @functools.wraps(fun)
+    def impl(*args: Any | tuple[Any | tuple, ...]) -> _R | tuple[_R | tuple, ...]:
+        if isinstance(args[0], tuple):
+            assert all(isinstance(arg, tuple) and len(args[0]) == len(arg) for arg in args)
+            return tuple(impl(*arg) for arg in zip(*args))
+
+        return fun(
+            *cast(_P.args, args)
+        )  # mypy doesn't understand that `args` at this point is of type `_P.args`
+
+    return impl

@@ -15,7 +15,35 @@
 import numpy as np
 
 import gt4py.next as gtx
-from gt4py.next.iterator import ir, ir_makers as im, type_inference as ti
+from gt4py.next.iterator import ir, type_inference as ti
+from gt4py.next.iterator.ir_utils import ir_makers as im
+
+
+def test_unsatisfiable_constraints():
+    a = ir.Sym(id="a", dtype=("float32", False))
+    b = ir.Sym(id="b", dtype=("int32", False))
+
+    testee = im.lambda_(a, b)(im.plus("a", "b"))
+
+    # The type inference uses a set to store the constraints. Since the TypeVar indices use a
+    # global counter the constraint resolution order depends on previous runs of the inference.
+    # To avoid false positives we just ignore which way the constraints have been resolved.
+    # (The previous description has never been verified.)
+    expected_error = [
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='int32') ≡ Primitive(name='float32')"
+        ),
+        (
+            "Type inference failed: Can not satisfy constraints:\n"
+            "  Primitive(name='float32') ≡ Primitive(name='int32')"
+        ),
+    ]
+
+    try:
+        inferred = ti.infer(testee)
+    except ti.UnsatisfiableConstraintsError as e:
+        assert str(e) in expected_error
 
 
 def test_unsatisfiable_constraints():

@@ -23,6 +23,31 @@ from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
 
+def _number_to_ordinal_number(number: int) -> str:
+    """
+    Convert number into ordinal number.
+
+    >>> for i in range(0, 5):
+    ...   print(_number_to_ordinal_number(i))
+    0th
+    1st
+    2nd
+    3rd
+    4th
+    """
+    number_as_string = str(number)
+    if len(number_as_string) > 1 and number_as_string[-2] == "1":
+        return number_as_string + "th"
+    last_digit = number_as_string[-1]
+    if last_digit == "1":
+        return number_as_string + "st"
+    if last_digit == "2":
+        return number_as_string + "nd"
+    if last_digit == "3":
+        return number_as_string + "rd"
+    return number_as_string + "th"
+
+
 def is_concrete(symbol_type: ts.TypeSpec) -> TypeGuard[ts.TypeSpec]:
     """Figure out if the foast type is completely deduced."""
     if isinstance(symbol_type, ts.DeferredType):
@@ -50,13 +75,15 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     match symbol_type:
         case ts.DeferredType(constraint):
             if constraint is None:
-                raise ValueError(f"No type information available for {symbol_type}!")
+                raise ValueError(f"No type information available for '{symbol_type}'.")
             elif isinstance(constraint, tuple):
-                raise ValueError(f"Not sufficient type information available for {symbol_type}!")
+                raise ValueError(f"Not sufficient type information available for '{symbol_type}'.")
             return constraint
         case ts.TypeSpec() as concrete_type:
             return concrete_type.__class__
-    raise ValueError(f"Invalid type for TypeInfo: requires {ts.TypeSpec}, got {type(symbol_type)}!")
+    raise ValueError(
+        f"Invalid type for TypeInfo: requires '{ts.TypeSpec}', got '{type(symbol_type)}'."
+    )
 
 
 def primitive_constituents(
@@ -138,7 +165,7 @@ def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
             return dtype
         case ts.ScalarType() as dtype:
             return dtype
-    raise ValueError(f"Can not unambiguosly extract data type from {symbol_type}!")
+    raise ValueError(f"Can not unambiguosly extract data type from '{symbol_type}'.")
 
 
 def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
@@ -295,7 +322,7 @@ def extract_dims(symbol_type: ts.TypeSpec) -> list[common.Dimension]:
             return []
         case ts.FieldType(dims):
             return dims
-    raise ValueError(f"Can not extract dimensions from {symbol_type}!")
+    raise ValueError(f"Can not extract dimensions from '{symbol_type}'.")
 
 
 def is_local_field(type_: ts.FieldType) -> bool:
@@ -410,7 +437,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
         dtype = cast(ts.ScalarType, promote(*(extract_dtype(type_) for type_ in types)))
 
         return ts.FieldType(dims=dims, dtype=dtype)
-    raise TypeError("Expected a FieldType or ScalarType.")
+    raise TypeError("Expected a 'FieldType' or 'ScalarType'.")
 
 
 @functools.singledispatch
@@ -421,7 +448,7 @@ def return_type(
     with_kwargs: dict[str, ts.TypeSpec],
 ):
     raise NotImplementedError(
-        f"Return type deduction of type " f"{type(callable_type).__name__} not implemented."
+        f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
     )
 
 
@@ -448,7 +475,7 @@ def return_type_field(
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
     if not isinstance(with_args[0], ts.OffsetType):
-        raise ValueError(f"First argument must be of type {ts.OffsetType}, got {with_args[0]}.")
+        raise ValueError(f"First argument must be of type '{ts.OffsetType}', got '{with_args[0]}'.")
 
     source_dim = with_args[0].source
     target_dims = with_args[0].target
@@ -475,7 +502,7 @@ def canonicalize_arguments(
     ignore_errors=False,
     use_signature_ordering=False,
 ) -> tuple[list, dict]:
-    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
+    raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
 @canonicalize_arguments.register
@@ -501,7 +528,7 @@ def canonicalize_function_arguments(
                 cargs[args_idx] = ckwargs.pop(name)
             elif not ignore_errors:
                 raise AssertionError(
-                    f"Error canonicalizing function arguments. Got multiple values for argument `{name}`."
+                    f"Error canonicalizing function arguments. Got multiple values for argument '{name}'."
                 )
 
     a, b = set(func_type.kw_only_args.keys()), set(ckwargs.keys())
@@ -509,7 +536,7 @@ def canonicalize_function_arguments(
     if invalid_kw_args and (not ignore_errors or use_signature_ordering):
         # this error can not be ignored as otherwise the invariant that no arguments are dropped
         # is invalidated.
-        raise AssertionError(f"Invalid keyword arguments {', '.join(invalid_kw_args)}.")
+        raise AssertionError(f"Invalid keyword arguments '{', '.join(invalid_kw_args)}'.")
 
     if use_signature_ordering:
         ckwargs = {k: ckwargs[k] for k in func_type.kw_only_args.keys() if k in ckwargs}
@@ -541,7 +568,7 @@ def structural_function_signature_incompatibilities(
             if args_idx < len(args):
                 # remove the argument here such that later errors stay comprehensible
                 kwargs.pop(name)
-                yield f"Got multiple values for argument `{name}`."
+                yield f"Got multiple values for argument '{name}'."
 
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     num_pos_args = len(args) - args.count(UNDEFINED_ARG)
@@ -557,17 +584,17 @@ def structural_function_signature_incompatibilities(
         range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
     ):
         if args[i] is UNDEFINED_ARG:
-            missing_positional_args.append(f"`{arg_type}`")
+            missing_positional_args.append(f"'{arg_type}'")
     if missing_positional_args:
         yield f"Missing {len(missing_positional_args)} required positional argument{'s' if len(missing_positional_args) != 1 else ''}: {', '.join(missing_positional_args)}"
 
     # check for missing or extra keyword arguments
     kw_a_m_b = set(func_type.kw_only_args.keys()) - set(kwargs.keys())
     if len(kw_a_m_b) > 0:
-        yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} `{'`, `'.join(kw_a_m_b)}`."
+        yield f"Missing required keyword argument{'s' if len(kw_a_m_b) != 1 else ''} '{', '.join(kw_a_m_b)}'."
     kw_b_m_a = set(kwargs.keys()) - set(func_type.kw_only_args.keys())
     if len(kw_b_m_a) > 0:
-        yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} `{'`, `'.join(kw_b_m_a)}`."
+        yield f"Got unexpected keyword argument{'s' if len(kw_b_m_a) != 1 else ''} '{', '.join(kw_b_m_a)}'."
 
 
 @functools.singledispatch
@@ -579,7 +606,7 @@ def function_signature_incompatibilities(
 
     Note that all types must be concrete/complete.
     """
-    raise NotImplementedError(f"Not implemented for type {type(func_type).__name__}.")
+    raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
 
 @function_signature_incompatibilities.register
@@ -612,16 +639,16 @@ def function_signature_incompatibilities_func(  # noqa: C901
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             if i < len(func_type.pos_only_args):
-                arg_repr = f"{i}-th argument"
+                arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
             else:
-                arg_repr = f"argument `{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}`"
-            yield f"Expected {arg_repr} to be of type `{a_arg}`, but got `{b_arg}`."
+                arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+            yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
         if (a_kwarg := func_type.kw_only_args[kwarg]) != (
             b_kwarg := kwargs[kwarg]
         ) and not is_concretizable(a_kwarg, to_type=b_kwarg):
-            yield f"Expected keyword argument `{kwarg}` to be of type `{func_type.kw_only_args[kwarg]}`, but got `{kwargs[kwarg]}`."
+            yield f"Expected keyword argument '{kwarg}' to be of type '{func_type.kw_only_args[kwarg]}', got '{kwargs[kwarg]}'."
 
 
 @function_signature_incompatibilities.register
@@ -631,15 +658,15 @@ def function_signature_incompatibilities_field(
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     if len(args) != 1:
-        yield f"Function takes 1 argument(s), but {len(args)} were given."
+        yield f"Function takes 1 argument, but {len(args)} were given."
         return
 
     if not isinstance(args[0], ts.OffsetType):
-        yield f"Expected 0-th argument to be of type {ts.OffsetType}, but got {args[0]}."
+        yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
         return
 
     if kwargs:
-        yield f"Got unexpected keyword argument(s) `{'`, `'.join(kwargs.keys())}`."
+        yield f"Got unexpected keyword argument(s) '{', '.join(kwargs.keys())}'."
         return
 
     source_dim = args[0].source
@@ -680,7 +707,7 @@ def accepts_args(
     """
     if not isinstance(callable_type, ts.CallableType):
         if raise_exception:
-            raise ValueError(f"Expected a callable type, but got `{callable_type}`.")
+            raise ValueError(f"Expected a callable type, got '{callable_type}'.")
         return False
 
     errors = function_signature_incompatibilities(callable_type, with_args, with_kwargs)
@@ -688,7 +715,7 @@ def accepts_args(
         error_list = list(errors)
         if len(error_list) > 0:
             raise ValueError(
-                f"Invalid call to function of type `{callable_type}`:\n"
+                f"Invalid call to function of type '{callable_type}':\n"
                 + ("\n".join([f"  - {error}" for error in error_list]))
             )
         return True

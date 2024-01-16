@@ -20,6 +20,7 @@ from gt4py.eve import NodeTranslator
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
 def _is_shifted(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
@@ -34,17 +35,9 @@ def _is_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return isinstance(arg, itir.FunCall) and arg.fun == itir.SymRef(id="neighbors")
 
 
-def _is_applied_lift(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="lift")
-    )
-
-
 def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return _is_neighbors(arg) or (
-        _is_applied_lift(arg)
+        is_applied_lift(arg)
         and any(_is_neighbors_or_lifted_and_neighbors(nested_arg) for nested_arg in arg.args)
     )
 
@@ -67,7 +60,7 @@ def _get_partial_offset_tag(arg: itir.FunCall) -> str:
         assert isinstance(offset.value, str)
         return offset.value
     else:
-        assert _is_applied_lift(arg)
+        assert is_applied_lift(arg)
         assert _is_list_of_funcalls(arg.args)
         partial_offsets = [_get_partial_offset_tag(arg) for arg in arg.args]
         assert all(o == partial_offsets[0] for o in partial_offsets)
@@ -88,7 +81,7 @@ def _get_connectivity(
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not _is_reduce(applied_reduce_node):
-        raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
+        raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
     connectivities: list[common.Connectivity] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
@@ -97,11 +90,11 @@ def _get_connectivity(
         connectivities.append(conn)
 
     if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+        raise RuntimeError("Couldn't detect partial shift in any arguments of 'reduce'.")
 
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+        raise RuntimeError("Arguments to 'reduce' have incompatible partial shifts.")
     return connectivities[0]
 
 

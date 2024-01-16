@@ -18,8 +18,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
-from gt4py.next.program_processors.runners.dace_iterator import run_dace_iterator
-from gt4py.next.program_processors.runners.gtfn_cpu import run_gtfn, run_gtfn_imperative
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
@@ -49,25 +47,25 @@ def fencil(size, out, inp):
     )
 
 
+@pytest.mark.uses_strided_neighbor_offset
 def test_strided_offset_provider(program_processor):
     program_processor, validate = program_processor
-    if program_processor in [run_dace_iterator, run_gtfn, run_gtfn_imperative]:
-        pytest.xfail("gtx.StridedNeighborOffsetProvider not implemented in bindings.")
 
     LocA_size = 2
     max_neighbors = LocA2LocAB_offset_provider.max_neighbors
     LocAB_size = LocA_size * max_neighbors
 
     rng = np.random.default_rng()
-    inp = gtx.np_as_located_field(LocAB)(
+    inp = gtx.as_field(
+        [LocAB],
         rng.normal(
             size=(LocAB_size,),
-        )
+        ),
     )
-    out = gtx.np_as_located_field(LocA)(np.zeros((LocA_size,)))
-    ref = np.sum(np.asarray(inp).reshape(LocA_size, max_neighbors), axis=-1)
+    out = gtx.as_field([LocA], np.zeros((LocA_size,)))
+    ref = np.sum(inp.asnumpy().reshape(LocA_size, max_neighbors), axis=-1)
 
     run_processor(fencil, program_processor, LocA_size, out, inp)
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)

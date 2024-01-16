@@ -11,11 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-from typing import Any
+import itertools
+from typing import Any, Sequence
 
 import dace
 
+from gt4py.next import Dimension
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
@@ -31,7 +32,7 @@ def as_dace_type(type_: ts.ScalarType):
         return dace.float32
     elif type_.kind == ts.ScalarKind.FLOAT64:
         return dace.float64
-    raise ValueError(f"scalar type {type_} not supported")
+    raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
@@ -47,14 +48,16 @@ def connectivity_identifier(name: str):
 
 
 def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    bounds = [(0, size) for size in source_array.shape]
-    subset = ", ".join(f"{lb}:{ub}" for lb, ub in bounds)
-    return dace.Memlet(data=source_identifier, subset=subset)
+    return dace.Memlet.from_array(source_identifier, source_array)
 
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
+    return dace.Memlet.simple(source_identifier, subset)
+
+
+def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
+    return sorted(enumerate(dims), key=lambda v: v[1].value)
 
 
 def map_nested_sdfg_symbols(
@@ -81,10 +84,95 @@ def map_nested_sdfg_symbols(
     return symbol_mapping
 
 
-_unique_id = 0
+def add_mapped_nested_sdfg(
+    state: dace.SDFGState,
+    map_ranges: dict[str, str | dace.subsets.Subset] | list[tuple[str, str | dace.subsets.Subset]],
+    inputs: dict[str, dace.Memlet],
+    outputs: dict[str, dace.Memlet],
+    sdfg: dace.SDFG,
+    symbol_mapping: dict[str, Any] | None = None,
+    schedule: Any = dace.dtypes.ScheduleType.Default,
+    unroll_map: bool = False,
+    location: Any = None,
+    debuginfo: Any = None,
+    input_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+    output_nodes: dict[str, dace.nodes.AccessNode] | None = None,
+) -> tuple[dace.nodes.NestedSDFG, dace.nodes.MapEntry, dace.nodes.MapExit]:
+    if not symbol_mapping:
+        symbol_mapping = {sym: sym for sym in sdfg.free_symbols}
+
+    nsdfg_node = state.add_nested_sdfg(
+        sdfg,
+        None,
+        set(inputs.keys()),
+        set(outputs.keys()),
+        symbol_mapping,
+        name=sdfg.name,
+        schedule=schedule,
+        location=location,
+        debuginfo=debuginfo,
+    )
+
+    map_entry, map_exit = state.add_map(
+        f"{sdfg.name}_map", map_ranges, schedule, unroll_map, debuginfo
+    )
+
+    if input_nodes is None:
+        input_nodes = {
+            memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()
+        }
+    if output_nodes is None:
+        output_nodes = {
+            memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
+        }
+    if not inputs:
+        state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
+    for name, memlet in inputs.items():
+        state.add_memlet_path(
+            input_nodes[memlet.data],
+            map_entry,
+            nsdfg_node,
+            memlet=memlet,
+            src_conn=None,
+            dst_conn=name,
+            propagate=True,
+        )
+    if not outputs:
+        state.add_edge(nsdfg_node, None, map_exit, None, dace.Memlet())
+    for name, memlet in outputs.items():
+        state.add_memlet_path(
+            nsdfg_node,
+            map_exit,
+            output_nodes[memlet.data],
+            memlet=memlet,
+            src_conn=name,
+            dst_conn=None,
+            propagate=True,
+        )
+
+    return nsdfg_node, map_entry, map_exit
+
+
+def unique_name(prefix):
+    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    return f"{prefix}_{unique_id}"
 
 
 def unique_var_name():
-    global _unique_id
-    _unique_id += 1
-    return f"__var_{_unique_id}"
+    return unique_name("_var")
+
+
+def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    dtype = dace.int64
+    shape = [dace.symbol(unique_name(f"{name}_shape{i}"), dtype) for i in range(ndim)]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i in range(ndim)]
+    return shape, strides
+
+
+def flatten_list(node_list: list[Any]) -> list[Any]:
+    return list(
+        itertools.chain.from_iterable(
+            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+        )
+    )
