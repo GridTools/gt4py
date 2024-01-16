@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import dataclasses
 import itertools
 import math
 import operator
@@ -20,7 +19,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common, embedded
+from gt4py.next import common
 from gt4py.next.common import Dimension, Domain, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
@@ -353,7 +352,7 @@ def test_cartesian_remap_implementation():
                 common.field(
                     np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinity())),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinite())),
             )
         ),
         (
@@ -362,7 +361,7 @@ def test_cartesian_remap_implementation():
                 common.field(
                     np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
                 ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinity(), UnitRange(0, 10))),
+                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
             )
         ),
         (
@@ -373,7 +372,7 @@ def test_cartesian_remap_implementation():
                 ),
                 Domain(
                     dims=(IDim, JDim, KDim),
-                    ranges=(UnitRange.infinity(), UnitRange(0, 10), UnitRange.infinity()),
+                    ranges=(UnitRange.infinite(), UnitRange(0, 10), UnitRange.infinite()),
                 ),
             )
         ),
