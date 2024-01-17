@@ -508,7 +508,9 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     and since Python 3.11:
         ``isinstance(typing.Any, type) is True``
     """
-    return isinstance(obj, type) and obj not in _ArtefactTypes
+    return (
+        isinstance(obj, type) and (obj not in _ArtefactTypes) and (type(obj) not in _ArtefactTypes)
+    )
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
