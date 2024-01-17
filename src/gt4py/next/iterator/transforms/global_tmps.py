@@ -487,7 +487,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         consumed_domain.ranges.pop(old_axis)
                         assert new_axis not in consumed_domain.ranges
 
-                        if symbolic_sizes is None:
+                        if symbolic_sizes is not None:
                             consumed_domain.ranges[new_axis] = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 symbolic_sizes[new_axis],
