@@ -167,16 +167,26 @@ def get_cache_id(
     column_axis: Optional[common.Dimension],
     offset_provider: Mapping[str, Any],
 ) -> str:
-    max_neighbors = [
-        (k, v.max_neighbors)
-        for k, v in offset_provider.items()
+    def offset_invariants(offset):
         if isinstance(
-            v,
+            offset,
             (
                 itir_embedded.NeighborTableOffsetProvider,
                 itir_embedded.StridedNeighborOffsetProvider,
             ),
-        )
+        ):
+            return (
+                offset.origin_axis,
+                offset.neighbor_axis,
+                offset.has_skip_values,
+                offset.max_neighbors,
+            )
+        if isinstance(offset, common.Dimension):
+            return (offset,)
+        return tuple()
+
+    offset_cache_keys = [
+        (name, *offset_invariants(offset)) for name, offset in offset_provider.items()
     ]
     cache_id_args = [
         str(arg)
@@ -184,7 +194,7 @@ def get_cache_id(
             program,
             *arg_types,
             column_axis,
-            *max_neighbors,
+            *offset_cache_keys,
         )
     ]
     m = hashlib.sha256()
