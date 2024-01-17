@@ -24,11 +24,7 @@ def as_offset(
     field: common.Field,
     /,
 ) -> common.ConnectivityField:
-    offset_dim = np.squeeze(
-        np.where(list(map(lambda x: x == offset_.source, field.domain.dims)))
-    ).item()
-    new_connectivity = np.indices(field.ndarray.shape)[offset_dim] + field.ndarray
-    return common.connectivity(new_connectivity, codomain=offset_.source, domain=field.domain)
+    raise NotImplementedError()
 
 
 EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset"]

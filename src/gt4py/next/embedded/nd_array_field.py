@@ -74,24 +74,6 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
     return _builtin_op
 
 
-def _take_mdim(
-    input_arr: core_defs.NDArrayObject,
-    restricted_connectivity: core_defs.NDArrayObject,
-    new_domain: common.Domain,
-    dim: common.Dimension,
-) -> core_defs.NDArrayObject:
-    offset_abs = [
-        restricted_connectivity if d == dim else np.indices(restricted_connectivity.shape)[d_i]
-        for d_i, d in enumerate(new_domain.dims)
-    ]
-    new_buffer_flat = np.take(
-        np.asarray(input_arr).flatten(),
-        np.ravel_multi_index(tuple(offset_abs), input_arr.shape).flatten(),
-    )
-    new_buffer = new_buffer_flat.reshape(restricted_connectivity.shape)
-    return new_buffer
-
-
 _Value: TypeAlias = common.Field | core_defs.ScalarT
 _P = ParamSpec("_P")
 _R = TypeVar("_R", _Value, tuple[_Value, ...])
@@ -217,7 +199,7 @@ class NdArrayField(
             xp = self.array_ns
             new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
             if self._ndarray.ndim > 1 and restricted_connectivity_domain == new_domain:
-                new_buffer = _take_mdim(self._ndarray, new_idx_array, new_domain, dim)
+                new_buffer = self._take_mdim(new_idx_array, axis=dim_idx)
             else:
                 # finally, take the new array
                 new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
@@ -326,6 +308,24 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    def _take_mdim(
+        self,
+        restricted_connectivity: core_defs.NDArrayObject,
+        axis: int,
+    ) -> core_defs.NDArrayObject:
+        xp = self.array_ns
+        dim = self.domain.dims[axis]
+        offset_abs = [
+            restricted_connectivity if d == dim else xp.indices(restricted_connectivity.shape)[d_i]
+            for d_i, d in enumerate(self.domain.dims)
+        ]
+        new_buffer_flat = xp.take(
+            xp.asarray(self._ndarray).flatten(),
+            xp.ravel_multi_index(tuple(offset_abs), self._ndarray.shape).flatten(),
+        )
+        new_buffer = new_buffer_flat.reshape(restricted_connectivity.shape)
+        return new_buffer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -613,16 +613,12 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 
-def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> NdArrayConnectivityField:
+def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> common.ConnectivityField:
     if isinstance(field, NdArrayField):
         # change field.ndarray from relative to absolute
-        offset_dim = np.squeeze(
-            np.where(list(map(lambda x: x == offset_.source, field.domain.dims)))
-        ).item()
-        new_connectivity = np.indices(field.ndarray.shape)[offset_dim] + field.ndarray
-        return NumPyArrayConnectivityField.from_array(
-            new_connectivity, codomain=offset_.source, domain=field.domain
-        )
+        offset_dim = field.domain.dims.index(offset_.source)
+        new_connectivity = field.array_ns.indices(field.ndarray.shape)[offset_dim] + field.ndarray
+        return common.connectivity(new_connectivity, codomain=offset_.source, domain=field.domain)
     raise AssertionError(
         "This is the NdArrayConnectivityField implementation of `experimental.as_offset`."
     )
