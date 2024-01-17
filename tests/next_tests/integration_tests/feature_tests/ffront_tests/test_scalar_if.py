@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import Field, errors, field_operator, float64, index_field
+from gt4py.next import Field, errors, field_operator, float64, index_field, int32
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -75,10 +75,10 @@ def test_simple_if_conditional(condition1, condition2, cartesian_case):
     ) -> cases.IField:
         if condition1:
             result1 = a
-            result2 = a + 1
+            result2 = a + int32(1)
         else:
             result1 = b
-            result2 = b + 1
+            result2 = b + int32(1)
         return result1 if condition2 else result2
 
     a = cases.allocate(cartesian_case, simple_if, "a")()
@@ -231,10 +231,10 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
         if condition1:
             tmp1 = inp
             if condition2:
-                return tmp1 + 1
-            result = tmp1 + 2
+                return tmp1 + int32(1)
+            result = tmp1 + int32(2)
         else:
-            result = inp + 3
+            result = inp + int32(3)
         return result
 
     inp = cases.allocate(cartesian_case, nested_if_conditional_return, "inp")()
@@ -267,14 +267,14 @@ def test_nested_if(cartesian_case, condition):
             if not condition:
                 inner = a
             else:
-                inner = a + 1
+                inner = a + int32(1)
             result = inner
         else:
             result = b
             if condition:
-                another_inner = 3
+                another_inner = int32(3)
             else:
-                another_inner = 5
+                another_inner = int32(5)
             result = result + another_inner
         return result
 
@@ -300,13 +300,13 @@ def test_if_without_else(cartesian_case, condition1, condition2):
     def if_without_else(
         a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
-        result = b + 1
+        result = b + int32(1)
 
         if condition1:
             if not condition2:
                 inner = a
             else:
-                inner = a + 2
+                inner = a + int32(2)
             result = inner
         return result
 
@@ -334,12 +334,12 @@ def test_if_without_else(cartesian_case, condition1, condition2):
 
 
 def test_if_non_scalar_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be scalar."):
+    with pytest.raises(errors.DSLError, match="could not implicitly convert from"):
 
         @field_operator
         def if_non_scalar_condition(
             a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
-        ):
+        ) -> Field[[IDim, JDim], float64]:
             result = a
             if a == b:
                 result = b
@@ -347,12 +347,12 @@ def test_if_non_scalar_condition():
 
 
 def test_if_non_boolean_condition():
-    with pytest.raises(errors.DSLError, match="Condition for `if` must be of boolean type."):
+    with pytest.raises(errors.DSLError, match="could not implicitly convert from"):
 
         @field_operator
         def if_non_boolean_condition(
             a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: float64
-        ):
+        ) -> Field[[IDim, JDim], float64]:
             if condition:
                 result = b
             else:
@@ -363,13 +363,13 @@ def test_if_non_boolean_condition():
 def test_if_inconsistent_types():
     with pytest.raises(
         errors.DSLError,
-        match="Inconsistent types between two branches for variable",
+        match="types must be the same",
     ):
 
         @field_operator
         def if_inconsistent_types(
             a: Field[[IDim, JDim], float64], b: Field[[IDim, JDim], float64], condition: bool
-        ):
+        ) -> float:
             if condition:
                 result = 1
             else:

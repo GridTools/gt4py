@@ -175,7 +175,7 @@ class _PrettyPrinter(TemplatedGenerator):
     def visit_FunctionDefinition(self, node: foast.FunctionDefinition, **kwargs):
         params = self.visit(node.params)
         types = [
-            str(param.type) if not isinstance(param.type, ts.DeferredType) else None
+            str(param.type_2) if not isinstance(param.type_2, ts.DeferredType) else None
             for param in node.params
         ]
         params_annotated = [

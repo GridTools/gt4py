@@ -293,7 +293,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 "Unexpected `out` argument. Must be tuple of slices or slice expression."
             )
         node_dims_ls = cast(ts2_f.FieldType, node.type_2).dimensions
-        assert isinstance(node_dims_ls, list)
+        assert isinstance(node_dims_ls, set)
         if isinstance(node.type_2, ts2_f.FieldType) and len(out_field_slice_) != len(node_dims_ls):
             raise ValueError(
                 f"Too many indices for field {out_field_name}: field is {len(node_dims_ls)}"

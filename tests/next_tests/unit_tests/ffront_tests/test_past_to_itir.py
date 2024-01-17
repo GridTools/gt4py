@@ -100,8 +100,8 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
-                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(itir.Literal, value="1", type="int64"),
+                        P(itir.Literal, value="2", type="int64"),
                     ],
                 )
             ],
@@ -177,7 +177,7 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
             grid_type=gtx.GridType.CARTESIAN,
         )
 
-    assert exc_info.match("Invalid call to `identity`")
+    assert exc_info.match("invalid arguments to call")
     # TODO(tehrengruber): re-enable again when call signature check doesn't return
     #  immediately after missing `out` argument
     # assert (

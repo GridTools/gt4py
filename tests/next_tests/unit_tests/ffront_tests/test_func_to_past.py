@@ -22,7 +22,8 @@ from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next import errors, float64
 from gt4py.next.ffront import program_ast as past
 from gt4py.next.ffront.func_to_past import ProgramParser
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system_2 import types as ts2
+from gt4py.next.ffront.type_system_2 import types as ts2_f
 
 from next_tests.past_common_fixtures import (
     IDim,
@@ -48,16 +49,16 @@ def test_tuple_constructed_in_out(make_tuple_op):
 def test_copy_parsing(copy_program_def):
     past_node = ProgramParser.apply_to_function(copy_program_def)
 
-    field_type = ts.FieldType(
+    field_type = ts2_f.FieldType(
         dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dtype=ts2.Float64Type(),
     )
     pattern_node = P(
         past.Program,
         id=eve.SymbolName("copy_program"),
         params=[
-            P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("out"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("in_field"), type_2=field_type),
+            P(past.Symbol, id=eve.SymbolName("out"), type_2=field_type),
         ],
         body=[
             P(
@@ -75,17 +76,17 @@ def test_copy_parsing(copy_program_def):
 def test_double_copy_parsing(double_copy_program_def):
     past_node = ProgramParser.apply_to_function(double_copy_program_def)
 
-    field_type = ts.FieldType(
+    field_type = ts2_f.FieldType(
         dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dtype=ts2.Float64Type(),
     )
     pattern_node = P(
         past.Program,
         id=eve.SymbolName("double_copy_program"),
         params=[
-            P(past.Symbol, id=eve.SymbolName("in_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("intermediate_field"), type=field_type),
-            P(past.Symbol, id=eve.SymbolName("out"), type=field_type),
+            P(past.Symbol, id=eve.SymbolName("in_field"), type_2=field_type),
+            P(past.Symbol, id=eve.SymbolName("intermediate_field"), type_2=field_type),
+            P(past.Symbol, id=eve.SymbolName("out"), type_2=field_type),
         ],
         body=[
             P(
@@ -113,7 +114,7 @@ def test_undefined_field_program(identity_def):
 
     with pytest.raises(
         errors.DSLError,
-        match=(r"Undeclared or untyped symbol `out_field`."),
+        match=(r"name 'out_field' is not defined"),
     ):
         ProgramParser.apply_to_function(undefined_field_program)
 
@@ -121,9 +122,9 @@ def test_undefined_field_program(identity_def):
 def test_copy_restrict_parsing(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
 
-    field_type = ts.FieldType(
+    field_type = ts2_f.FieldType(
         dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dtype=ts2.Float64Type(),
     )
     slice_pattern_node = P(
         past.Slice, lower=P(past.Constant, value=1), upper=P(past.Constant, value=2)

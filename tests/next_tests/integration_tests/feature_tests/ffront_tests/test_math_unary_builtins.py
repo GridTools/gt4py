@@ -61,7 +61,7 @@ def test_arithmetic(cartesian_case):
 def test_power(cartesian_case):
     @gtx.field_operator
     def pow(inp1: cases.IField) -> cases.IField:
-        return inp1**2
+        return inp1**int32(2)
 
     cases.verify_with_default_data(cartesian_case, pow, ref=lambda inp1: inp1**2)
 
@@ -70,7 +70,7 @@ def test_power(cartesian_case):
 def test_floordiv(cartesian_case):
     @gtx.field_operator
     def floorDiv(inp1: cases.IField) -> cases.IField:
-        return inp1 // 2
+        return inp1 // int32(2)
 
     cases.verify_with_default_data(cartesian_case, floorDiv, ref=lambda inp1: inp1 // 2)
 
@@ -79,7 +79,7 @@ def test_floordiv(cartesian_case):
 def test_mod(cartesian_case):
     @gtx.field_operator
     def mod_fieldop(inp1: cases.IField) -> cases.IField:
-        return inp1 % 2
+        return inp1 % int32(2)
 
     inp1 = cartesian_case.as_field([IDim], np.asarray(range(10), dtype=int32) - 5)
     out = cases.allocate(cartesian_case, mod_fieldop, cases.RETURN)()

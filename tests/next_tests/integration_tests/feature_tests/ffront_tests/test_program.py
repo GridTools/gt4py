@@ -238,7 +238,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
 @pytest.mark.checks_specific_error
 def test_dimensions_domain(cartesian_case):
     @gtx.field_operator
-    def empty_domain_fieldop(a: cases.IJField):
+    def empty_domain_fieldop(a: cases.IJField) -> cases.IJField:
         return a
 
     @gtx.program

@@ -49,7 +49,7 @@ def _generate_arg_permutations(
 def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[str], tuple[str]]):
     @field_operator
     def testee(a: IField, b: IField, c: IField) -> IField:
-        return a * 2 * b - c
+        return a * int32(2) * b - c
 
     args = {name: cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", "c")}
     out = cases.allocate(cartesian_case, testee, cases.RETURN)()
@@ -72,7 +72,7 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
 def test_call_program_from_python(cartesian_case, arg_spec):
     @field_operator
     def foo(a: IField, b: IField) -> IField:
-        return a + 2 * b
+        return a + int32(2) * b
 
     @program
     def testee(a: IField, b: IField, out: IField):
@@ -96,22 +96,22 @@ def test_call_program_from_python(cartesian_case, arg_spec):
 
 def test_call_field_operator_from_field_operator(cartesian_case):
     @field_operator
-    def foo(x: IField, y: IField, z: IField):
-        return x + 2 * y + 3 * z
+    def foo(x: IField, y: IField, z: IField) -> IField:
+        return x + int32(2) * y + int32(3) * z
 
     @field_operator
     def testee(a: IField, b: IField, c: IField) -> IField:
-        return foo(a, b, c) + 5 * foo(a, y=b, z=c) + 7 * foo(a, z=c, y=b) + 11 * foo(a, b, z=c)
+        return foo(a, b, c) + int32(5) * foo(a, y=b, z=c) + int32(7) * foo(a, z=c, y=b) + int32(11) * foo(a, b, z=c)
 
     def foo_np(x, y, z):
-        return x + 2 * y + 3 * z
+        return x + int32(2) * y + int32(3) * z
 
     def testee_np(a, b, c):
         return (
             foo_np(a, b, c)
-            + 5 * foo_np(a, y=b, z=c)
-            + 7 * foo_np(a, z=c, y=b)
-            + 11 * foo_np(a, b, z=c)
+            + int32(5) * foo_np(a, y=b, z=c)
+            + int32(7) * foo_np(a, z=c, y=b)
+            + int32(11) * foo_np(a, b, z=c)
         )
 
     cases.verify_with_default_data(cartesian_case, testee, ref=testee_np)
@@ -120,7 +120,7 @@ def test_call_field_operator_from_field_operator(cartesian_case):
 def test_call_field_operator_from_program(cartesian_case):
     @field_operator
     def foo(x: IField, y: IField, z: IField) -> IField:
-        return x + 2 * y + 3 * z
+        return x + int32(2) * y + int32(3) * z
 
     @program
     def testee(
@@ -226,7 +226,7 @@ def test_call_scan_operator_from_program(cartesian_case):
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
+        match=(r"could not implicitly convert init"),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
@@ -245,7 +245,7 @@ def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+            r"could not implicitly convert init"
         ),
     ):
 
@@ -253,7 +253,7 @@ def test_scan_wrong_state_type(cartesian_case):
         def testee_scan(
             state: float,
         ) -> int32:
-            return 1
+            return int32(1)
 
         @program
         def testee(qc: cases.IKFloatField, param_1: int32, param_2: float, scalar: float):
@@ -264,7 +264,7 @@ def test_scan_wrong_state_type(cartesian_case):
 def bound_args_testee():
     @field_operator
     def fieldop_bound_args() -> cases.IField:
-        return broadcast(0, (IDim,))
+        return broadcast(int32(0), (IDim,))
 
     @program
     def program_bound_args(arg1: bool, arg2: bool, out: cases.IField):

@@ -83,7 +83,7 @@ def test_untyped_arg():
 def test_mistyped_arg():
     """Field operator parameters must be type annotated."""
 
-    def mistyped(inp: gtx.Field):
+    def mistyped(inp: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return inp
 
     with pytest.raises(
@@ -101,7 +101,7 @@ def test_return_type():
 
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
-    assert parsed.body.stmts[-1].value.type == ts.FieldType(
+    assert parsed.body.stmts[-1].value.type == ts2_f.FieldType(
         dims=[TDim],
         dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
     )
@@ -110,7 +110,7 @@ def test_return_type():
 def test_invalid_syntax_no_return():
     """Field operators must end with a return statement."""
 
-    def no_return(inp: gtx.Field[[TDim], "float64"]):
+    def no_return(inp: gtx.Field[[TDim], "float64"]) -> None:
         tmp = inp  # noqa
 
     with pytest.raises(
@@ -392,7 +392,7 @@ def test_zero_dims_ternary():
 
     def zero_dims_ternary(
         cond: gtx.Field[[], float64], a: gtx.Field[[ADim], float64], b: gtx.Field[[ADim], float64]
-    ):
+    ) -> gtx.Field[[ADim], float64]:
         return a if cond == 1 else b
 
     msg = r"Incompatible datatypes in operator `==`"

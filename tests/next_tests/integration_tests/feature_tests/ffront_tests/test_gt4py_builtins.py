@@ -104,7 +104,7 @@ def test_reduction_expression_in_call(unstructured_case):
     def reduce_expr(edge_f: cases.EField) -> cases.VField:
         tmp_nbh_tup = edge_f(V2E), edge_f(V2E)
         tmp_nbh = tmp_nbh_tup[0]
-        return 3 * neighbor_sum(-edge_f(V2E) * tmp_nbh * 2, axis=V2EDim)
+        return int32(3) * neighbor_sum(-edge_f(V2E) * tmp_nbh * int32(2), axis=V2EDim)
 
     @gtx.program
     def fencil(edge_f: cases.EField, out: cases.VField):

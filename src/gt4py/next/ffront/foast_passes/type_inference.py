@@ -65,6 +65,12 @@ class TypeInferencePass(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslat
             definition_t.parameters[1:],
             definition_t.result
         )
+        if not traits.is_implicitly_convertible(init.type_2, ty.carry):
+            message = f"could not implicitly convert init '{init.type_2}' to carry '{ty.carry}'"
+            raise errors.DSLError(init.location, message)
+        if not traits.is_implicitly_convertible(ty.result, ty.carry):
+            message = f"could not implicitly convert result '{ty.result}' to carry '{ty.carry}'"
+            raise errors.DSLError(init.location, message)
         return foast.ScanOperator(
             id=node.id,
             definition=definition,

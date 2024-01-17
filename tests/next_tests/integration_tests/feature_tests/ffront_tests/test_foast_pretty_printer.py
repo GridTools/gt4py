@@ -54,7 +54,7 @@ def test_fieldop():
     I = Dimension("I")
 
     @field_operator
-    def foo(inp1: Field[[I], int64], inp2: Field[[I], int64]):
+    def foo(inp1: Field[[I], int64], inp2: Field[[I], int64]) -> Field[[I], int64]:
         return inp1 + inp2
 
     @field_operator
@@ -75,7 +75,7 @@ def test_fieldop():
 def test_scanop():
     KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
-    @scan_operator(axis=KDim, forward=False, init=1)
+    @scan_operator(axis=KDim, forward=False, init=int32(1))
     def scan(inp: int32) -> int32:
         foo = inp
         return inp

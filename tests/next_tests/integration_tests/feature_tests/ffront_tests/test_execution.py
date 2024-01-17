@@ -991,7 +991,7 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(
         inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), 2)
+        return where(k_index > int32(0), inp(Koff[-1]), int32(2))
 
     @gtx.program
     def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):

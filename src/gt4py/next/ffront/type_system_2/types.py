@@ -182,6 +182,12 @@ class BuiltinFunctionType(ts2.Type, traits.CallableTrait):
             return self.is_callable_reduction(args)
         elif self.func == fbuiltins.max_over:
             return self.is_callable_reduction(args)
+        elif self.func.name.split('.')[-1] == "minimum":
+            return self.is_callable_arithmetic_binop(args)
+        elif self.func.name.split('.')[-1] == "maximum":
+            return self.is_callable_arithmetic_binop(args)
+        elif self.func == fbuiltins.where:
+            return self.is_callable_where(args)
         return False, f"callable trait for '{self.func.function.__name__}' not implemented"
 
     def is_callable_broadcast(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
@@ -238,5 +244,41 @@ class BuiltinFunctionType(ts2.Type, traits.CallableTrait):
             return False, f"field {field_ty} is missing reduction dimension {axis.dimension}"
         dimensions = {dim for dim in field_ty.dimensions if dim != axis.dimension}
         return True, FieldType(field_ty.element_type, dimensions)
+
+    def is_callable_arithmetic_binop(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        if len(args) != 2:
+            return False, f"expected 2 arguments, got {len(args)}"
+        lhs, rhs = args
+        if not isinstance(lhs.ty, traits.ArithmeticTrait) or not lhs.ty.supports_arithmetic():
+            return False, f"expected arithmetic type for LHS, got '{lhs.ty}'"
+        if not isinstance(rhs.ty, traits.ArithmeticTrait) or not rhs.ty.supports_arithmetic():
+            return False, f"expected arithmetic type for RHS, got '{rhs.ty}'"
+        common_ty = rhs.ty.common_arithmetic_type(lhs.ty)
+        if not common_ty:
+            return False, f"could not promote '{lhs.ty}' and '{lhs.ty}' to a common arithmetic type"
+        return True, common_ty
+
+    def is_callable_where(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+        if len(args) != 3:
+            return False, f"expected 3 arguments, got {len(args)}"
+        cond, lhs, rhs = args
+        cond_elem = get_element_type(cond.ty)
+        lhs_elem = get_element_type(lhs.ty)
+        rhs_elem = get_element_type(rhs.ty)
+
+        combined_dims = get_dimensions(cond.ty) | get_dimensions(lhs.ty) | get_dimensions(rhs.ty)
+        is_field = isinstance(cond.ty, FieldType) or isinstance(lhs.ty, FieldType) or isinstance(rhs.ty, FieldType)
+
+        if not traits.is_implicitly_convertible(cond_elem, ts2.BoolType()):
+            return False, (f"could not implicitly convert from '{cond_elem}' to '{ts2.BoolType()}'"
+                           f" (condition was '{cond.ty}')")
+        common_ty = traits.common_type(lhs_elem, rhs_elem)
+        if not common_ty:
+            return False, (f"could not convert '{lhs_elem}' and '{lhs_elem}' to a common type"
+                           f" (LHS was {lhs.ty} and RHS was {rhs.ty})")
+        if not is_field:
+            return True, common_ty
+        else:
+            return True, FieldType(common_ty, combined_dims)
 
 

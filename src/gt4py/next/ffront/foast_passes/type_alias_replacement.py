@@ -56,7 +56,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         if self.is_type_alias(node.id):
             return foast.Name(
-                id=self.closure_vars[node.id].__name__, location=node.location, type=node.type
+                id=self.closure_vars[node.id].__name__, location=node.location, type_2=node.type_2
             )
         return node
 
@@ -74,14 +74,7 @@ class TypeAliasReplacement(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                     new_closure_vars.append(
                         foast.Symbol(
                             id=actual_type_name,
-                            type=ts.FunctionType(
-                                pos_or_kw_args={},
-                                kw_only_args={},
-                                pos_only_args=[ts.DeferredType(constraint=ts.ScalarType)],
-                                returns=cast(
-                                    ts.DataType, from_type_hint(self.closure_vars[var.id])
-                                ),
-                            ),
+                            type_2=None,
                             namespace=dialect_ast_enums.Namespace.CLOSURE,
                             location=location,
                         )

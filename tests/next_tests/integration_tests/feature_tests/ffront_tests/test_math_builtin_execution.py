@@ -22,6 +22,8 @@ import gt4py.next as gtx
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
 from gt4py.next.type_system import type_translation
+from gt4py.next.ffront.type_system_2 import inference as ti2_f
+from gt4py.next.ffront.foast_passes import type_inference as foast_inference
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
@@ -63,7 +65,7 @@ def make_builtin_field_operator(builtin_name: str):
     loc = foast.SourceLocation(line=1, column=1, filename="none")
 
     params = [
-        foast.Symbol(id=k, type=type_translation.from_type_hint(type), location=loc)
+        foast.Symbol(id=k, type_2=ti2_f.inferrer.from_annotation(type), location=loc)
         for k, type in annotations.items()
         if k != "return"
     ]
@@ -103,7 +105,7 @@ def make_builtin_field_operator(builtin_name: str):
         ),
         location=loc,
     )
-    typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
+    typed_foast_node = foast_inference.TypeInferencePass().visit(foast_node)
 
     return FieldOperator(
         foast_node=typed_foast_node,
