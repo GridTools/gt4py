@@ -33,7 +33,7 @@ def _is_power_call(
     )
 
 
-def _compute_integer_power_of_two(exp) -> int:
+def _compute_integer_power_of_two(exp: int) -> int:
     return math.floor(math.log2(exp))
 
 
