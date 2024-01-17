@@ -17,8 +17,8 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next import int32
-from tests.next_tests.integration_tests import cases
 
+from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
@@ -31,7 +31,7 @@ def test_with_bound_args(cartesian_case):
     def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:
         if not condition:
             scalar = 0
-        return a + a + scalar
+        return a + scalar
 
     @gtx.program
     def program_bound_args(a: cases.IField, scalar: int32, condition: bool, out: cases.IField):
@@ -39,7 +39,7 @@ def test_with_bound_args(cartesian_case):
 
     a = cases.allocate(cartesian_case, program_bound_args, "a")()
     scalar = int32(1)
-    ref = a + a + 1
+    ref = a + scalar
     out = cases.allocate(cartesian_case, program_bound_args, "out")()
 
     prog_bounds = program_bound_args.with_bound_args(scalar=scalar, condition=True)
