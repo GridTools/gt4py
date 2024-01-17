@@ -460,25 +460,26 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
 
         for memlet in [*read_memlets, *write_memlets]:
+            """
+            This loop handles the special case of a tasklet performing array access.
+            The memlet should pass the full array shape (no tiling) and
+            the tasklet expression for array access should use all explicit indexes.
+            """
             array_ndims = len(global_ctx.arrays[memlet.field].shape)
             field_decl = global_ctx.library_node.field_decls[memlet.field]
-            # calculate array subset from original memlet
+            # calculate array subset on original memlet
             memlet_subset = make_dace_subset(
                 global_ctx.library_node.access_infos[memlet.field],
                 memlet.access_info,
                 field_decl.data_dims,
             )
-            # index values for single-point grid access
+            # select index values for single-point grid access
             memlet_data_index = [
                 dcir.Literal(value=str(dim_range[0]), dtype=common.DataType.INT32)
                 for dim_range, dim_size in zip(memlet_subset, memlet_subset.size())
                 if dim_size == 1
             ]
             if len(memlet_data_index) < array_ndims:
-                """
-                Special case of tasklet performing array access. The memlet should pass the full array shape
-                (no slicing) and the tasklet code should use all explicit indexes for array access.
-                """
                 reshape_memlet = False
                 for access_node in dcir_node.walk_values().if_isinstance(dcir.IndexAccess):
                     if access_node.data_index and access_node.name == memlet.connector:
