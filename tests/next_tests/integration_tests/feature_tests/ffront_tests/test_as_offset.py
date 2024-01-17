@@ -13,8 +13,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from functools import reduce
-
 import numpy as np
 import pytest
 

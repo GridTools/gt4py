@@ -12,8 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
-
 from gt4py.next import common
 from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset
 
