@@ -179,7 +179,12 @@ class TemporaryExtractionPredicate:
 
 @dataclasses.dataclass(frozen=True)
 class SimpleTemporaryExtractionHeuristics:
-    """Heuristic that extracts only if a lift expr is derefed in more than one position."""
+    """
+    Heuristic that extracts only if a lift expr is derefed in more than one position.
+
+    Note that such expression result in redundant computations if inlined instead of being
+    placed into a temporary.
+    """
 
     closure: ir.StencilClosure
 
