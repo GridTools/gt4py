@@ -142,7 +142,7 @@ def apply_common_transforms(
                 break
             ir = inlined
         else:
-            raise RuntimeError("Inlining lift and lambdas did not converge.")
+            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
         # If after creating temporaries, the scan is not at the top, we inline.
         # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.

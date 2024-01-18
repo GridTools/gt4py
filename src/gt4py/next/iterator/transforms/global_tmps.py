@@ -495,7 +495,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             assert isinstance(closure.output, ir.SymRef)
 
             if closure.output.id not in domains:
-                raise NotImplementedError(f"Closure output {closure.output.id} is never used.")
+                raise NotImplementedError(f"Closure output '{closure.output.id}' is never used.")
 
             domain = domains[closure.output.id]
 
@@ -532,6 +532,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                             im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                             im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
                         )
+                        # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
                             for axis, range_ in consumed_domain.ranges.items()
