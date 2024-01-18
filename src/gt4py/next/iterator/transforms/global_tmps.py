@@ -437,7 +437,11 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes: Optional[dict[str, str]]):
+def update_domains(
+    node: FencilWithTemporaries,
+    offset_provider: Mapping[str, Any],
+    symbolic_sizes: Optional[dict[str, str]],
+):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
 
     closures: list[ir.StencilClosure] = []
@@ -479,46 +483,30 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         # cartesian shift
                         dim = offset_provider[offset_name].value
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
-                    elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
-                        # unstructured shift
-                        nbt_provider = offset_provider[offset_name]
-                        old_axis = nbt_provider.origin_axis.value
-                        new_axis = nbt_provider.neighbor_axis.value
-                        consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
-
-                        if symbolic_sizes is not None:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                symbolic_sizes[new_axis],
-                            )
-                        else:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
-                                ),
-                            )
                     elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
-                        # consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
 
-                        if symbolic_sizes:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                symbolic_sizes[new_axis],
-                            )
-                        else:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
+                        assert new_axis not in consumed_domain.ranges or old_axis == new_axis
+
+                        if symbolic_sizes is None:
+                            new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.literal(
                                     str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
                                 ),
                             )
+                        else:
+                            new_range = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                symbolic_sizes[new_axis],
+                            )
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
+                        )
                     else:
                         raise NotImplementedError
                 consumed_domains.append(consumed_domain)

@@ -28,7 +28,6 @@ from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode, pass_manager
-from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -200,22 +199,24 @@ class GTFNTranslationStep(
             pass_manager.apply_common_transforms,
             lift_mode=lift_mode,
             offset_provider=offset_provider,
-            unroll_reduce=self.use_imperative_backend,
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
         )
 
-        program = apply_common_transforms(program, unroll_reduce=not self.use_imperative_backend)
+        new_program = apply_common_transforms(
+            program, unroll_reduce=not self.use_imperative_backend
+        )
 
         if self.use_imperative_backend and any(
-            is_applied_lift(node) for node in program.pre_walk_values()
+            node.id == "neighbors"
+            for node in new_program.pre_walk_values().if_isinstance(itir.SymRef)
         ):
             # if we don't unroll, there may be lifts left in the itir which can't be lowered to
             # gtfn. In this case, just retry with unrolled reductions.
-            program = apply_common_transforms(program, unroll_reduce=True)
+            new_program = apply_common_transforms(program, unroll_reduce=True)
 
-        return program
+        return new_program
 
     def generate_stencil_source(
         self,
