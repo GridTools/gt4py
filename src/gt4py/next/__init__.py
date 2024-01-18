@@ -43,7 +43,7 @@ from .program_processors.runners.gtfn import (
     run_gtfn_cached as gtfn_cpu,
     run_gtfn_gpu_cached as gtfn_gpu,
 )
-from .program_processors.runners.roundtrip import backend as itir_embedded
+from .program_processors.runners.roundtrip import backend as itir_python
 
 
 __all__ = [
@@ -82,6 +82,6 @@ __all__ = [
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",
-    "itir_embedded",
+    "itir_python",
     *fbuiltins.__all__,
 ]

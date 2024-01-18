@@ -675,12 +675,7 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    if isinstance(field_or_tuple, tuple):
-        first = _get_axes(field_or_tuple[0])
-        assert all(first == _get_axes(f) for f in field_or_tuple)
-        return first
-    else:
-        return field_or_tuple.__gt_domain__.dims
+    return _get_domain(field_or_tuple).dims
 
 
 def _get_domain(

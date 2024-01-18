@@ -574,7 +574,7 @@ if TYPE_CHECKING:
             ...
 
 
-# TODO(havogt): we need to describe when this interface shouold be used instead of the `Field` protocol.
+# TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
 class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol):
     """
     Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
