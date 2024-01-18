@@ -85,9 +85,8 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    ref = (a.ndarray * 2)[unstructured_case.offset_provider["E2V"].table[:, 0]] + (a.ndarray * 2)[
-        unstructured_case.offset_provider["E2V"].table[:, 1]
-    ]
+    first_nbs, second_nbs = (reduction_setup.offset_provider["E2V"].table[:, i] for i in [0, 1])
+    ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(
         unstructured_case,

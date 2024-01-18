@@ -500,7 +500,7 @@ def update_domains(
                         else:
                             new_range = SymbolicRange(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                symbolic_sizes[new_axis],
+                                im.ref(symbolic_sizes[new_axis]),
                             )
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)

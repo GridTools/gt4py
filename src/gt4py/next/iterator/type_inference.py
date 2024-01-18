@@ -21,7 +21,6 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
