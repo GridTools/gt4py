@@ -56,6 +56,9 @@ def test_offset_field_regular_input_size(cartesian_case):
 
 @pytest.mark.uses_dynamic_offsets
 def test_offset_field_domain(cartesian_case):
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
     @gtx.field_operator
     def testee_fo(
         a: gtx.Field[[IDim, KDim], int], offset_field: gtx.Field[[IDim, KDim], int]
@@ -71,11 +74,11 @@ def test_offset_field_domain(cartesian_case):
         testee_fo(a, offset_field, out=out, domain={IDim: (1, 5), KDim: (0, 10)})
 
     out = cases.allocate(cartesian_case, testee, "out")()
+    ref = gtx.as_field([IDim, KDim], np.zeros([i_size, k_size], dtype=int))
     a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 3)})()
     offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
         cases.ConstInitializer(3)
     )()
-    ref = out.asnumpy().copy()
     a_shift = a[3:]
     ref[1:5] = a_shift.asnumpy()[1:5]
 
