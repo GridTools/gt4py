@@ -437,9 +437,22 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
+def update_symbolic_range(axis: str, symbolic_sizes:  dict[str, str] | None, horizontal_sizes: dict[str, int]):
+    """Update symbolic range for a given axis based on symbolic sizes or horizontal sizes."""
+    if symbolic_sizes is not None:
+        return SymbolicRange(
+            im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+            symbolic_sizes[axis],
+        )
+    else:
+        return SymbolicRange(
+            im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+            im.literal(str(horizontal_sizes[axis]), ir.INTEGER_INDEX_BUILTIN),
+        )
+
+
 def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any], symbolic_sizes: Optional[dict[str, str]]):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
@@ -475,50 +488,20 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             for shift_chain in shift_chains:
                 consumed_domain = SymbolicDomain.from_expr(domain)
                 for offset_name, offset in _group_offsets(shift_chain):
-                    if isinstance(offset_provider[offset_name], gtx.Dimension):
+                    offset_type = offset_provider[offset_name]
+                    if isinstance(offset_type, gtx.Dimension):
                         # cartesian shift
                         dim = offset_provider[offset_name].value
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
-                    elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
-                        # unstructured shift
-                        nbt_provider = offset_provider[offset_name]
+                    elif isinstance(offset_type, (gtx.NeighborTableOffsetProvider, common.Connectivity)):
+                        # unstructured shift, consolidated handling for both types
+                        nbt_provider = offset_type
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
                         consumed_domain.ranges.pop(old_axis)
                         assert new_axis not in consumed_domain.ranges
 
-                        if symbolic_sizes is not None:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                symbolic_sizes[new_axis],
-                            )
-                        else:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
-                                ),
-                            )
-                    elif isinstance(offset_provider[offset_name], common.Connectivity):
-                        # unstructured shift
-                        nbt_provider = offset_provider[offset_name]
-                        old_axis = nbt_provider.origin_axis.value
-                        new_axis = nbt_provider.neighbor_axis.value
-                        # consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
-
-                        if symbolic_sizes:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                symbolic_sizes[new_axis],
-                            )
-                        else:
-                            consumed_domain.ranges[new_axis] = SymbolicRange(
-                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                                im.literal(
-                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
-                                ),
-                            )
+                        consumed_domain.ranges[new_axis] = update_symbolic_range(new_axis, symbolic_sizes, horizontal_sizes)
                     else:
                         raise NotImplementedError
                 consumed_domains.append(consumed_domain)
