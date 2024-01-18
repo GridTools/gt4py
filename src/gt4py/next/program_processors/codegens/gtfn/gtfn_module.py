@@ -139,7 +139,7 @@ class GTFNTranslationStep(
             if isinstance(connectivity, Connectivity):
                 if connectivity.index_type not in [np.int32, np.int64]:
                     raise ValueError(
-                        "Neighbor table indices must be of type `np.int32` or `np.int64`."
+                        "Neighbor table indices must be of type 'np.int32' or 'np.int64'."
                     )
 
                 # parameter
@@ -169,8 +169,8 @@ class GTFNTranslationStep(
                 pass
             else:
                 raise AssertionError(
-                    f"Expected offset provider `{name}` to be a `Connectivity` or `Dimension`, "
-                    f"but got {type(connectivity).__name__}."
+                    f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
+                    f"got '{type(connectivity).__name__}'."
                 )
 
         return parameters, arg_exprs

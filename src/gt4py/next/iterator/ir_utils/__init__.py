@@ -11,14 +11,3 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
-
-
-def test_deref_propagation():
-    testee = im.deref(im.call(im.lambda_("inner_it")(im.lift("stencil")("inner_it")))("outer_it"))
-    expected = im.call(im.lambda_("inner_it")(im.deref(im.lift("stencil")("inner_it"))))("outer_it")
-
-    actual = PropagateDeref.apply(testee)
-    assert actual == expected

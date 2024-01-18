@@ -30,6 +30,16 @@ pytestmark = pytest.mark.uses_unstructured_shift
 
 
 def test_external_local_field(unstructured_case):
+    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
+    try:
+        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
+
+        if unstructured_case.backend == run_dace_gpu:
+            # see https://github.com/spcl/dace/pull/1442
+            pytest.xfail("requires fix in dace module for cuda codegen")
+    except ImportError:
+        pass
+
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]
@@ -71,4 +81,23 @@ def test_external_local_field_only(unstructured_case):
         inp,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
+    )
+
+
+@pytest.mark.uses_sparse_fields_as_output
+def test_write_local_field(unstructured_case):
+    @gtx.field_operator
+    def testee(inp: gtx.Field[[Edge], int32]) -> gtx.Field[[Vertex, V2EDim], int32]:
+        return inp(V2E)
+
+    out = unstructured_case.as_field(
+        [Vertex, V2EDim], np.zeros_like(unstructured_case.offset_provider["V2E"].table)
+    )
+    inp = cases.allocate(unstructured_case, testee, "inp")()
+    cases.verify(
+        unstructured_case,
+        testee,
+        inp,
+        out=out,
+        ref=inp.asnumpy()[unstructured_case.offset_provider["V2E"].table],
     )

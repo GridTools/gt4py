@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import pytest
@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
 from gt4py.next.ffront.decorator import FieldOperator
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
@@ -39,7 +40,7 @@ from next_tests.integration_tests.feature_tests.math_builtin_test_data import ma
 #  becomes easier.
 
 
-def make_builtin_field_operator(builtin_name: str):
+def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.ProgramExecutor]):
     # TODO(tehrengruber): creating a field operator programmatically should be
     #  easier than what we need to do here.
     # construct annotation dictionary containing the input argument and return
@@ -57,7 +58,7 @@ def make_builtin_field_operator(builtin_name: str):
             "return": cases.IFloatField,
         }
     else:
-        raise AssertionError(f"Unknown builtin `{builtin_name}`")
+        raise AssertionError(f"Unknown builtin '{builtin_name}'.")
 
     closure_vars = {"IDim": IDim, builtin_name: getattr(fbuiltins, builtin_name)}
 
@@ -109,8 +110,9 @@ def make_builtin_field_operator(builtin_name: str):
     return FieldOperator(
         foast_node=typed_foast_node,
         closure_vars=closure_vars,
-        backend=None,
         definition=None,
+        backend=backend,
+        grid_type=None,
     )
 
 
@@ -129,9 +131,7 @@ def test_math_function_builtins_execution(cartesian_case, builtin_name: str, inp
     expected = ref_impl(*inputs)
     out = cartesian_case.as_field([IDim], np.zeros_like(expected))
 
-    builtin_field_op = make_builtin_field_operator(builtin_name).with_backend(
-        cartesian_case.backend
-    )
+    builtin_field_op = make_builtin_field_operator(builtin_name, cartesian_case.backend)
 
     builtin_field_op(*inps, out=out, offset_provider={})
 

@@ -22,6 +22,7 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
@@ -37,6 +38,7 @@ import next_tests
 import next_tests.exclusion_matrices as definitions
 
 
+@ppi.program_executor
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
@@ -45,6 +47,9 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(
+        pytest.param(definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu)
+    ),
 
 
 @pytest.fixture(

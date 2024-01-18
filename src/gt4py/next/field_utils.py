@@ -12,13 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
+import numpy as np
+
+from gt4py.next import common, utils
 
 
-def test_deref_propagation():
-    testee = im.deref(im.call(im.lambda_("inner_it")(im.lift("stencil")("inner_it")))("outer_it"))
-    expected = im.call(im.lambda_("inner_it")(im.deref(im.lift("stencil")("inner_it"))))("outer_it")
-
-    actual = PropagateDeref.apply(testee)
-    assert actual == expected
+@utils.tree_map
+def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
+    return field.asnumpy() if common.is_field(field) else field  # type: ignore[return-value] # mypy doesn't understand the condition

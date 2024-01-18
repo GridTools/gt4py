@@ -69,7 +69,7 @@ def _inline_into_scan(ir, *, max_iter=10):
             break
         ir = inlined
     else:
-        raise RuntimeError(f"Inlining into scan did not converge with {max_iter} iterations.")
+        raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
     return ir
 
 
@@ -80,6 +80,7 @@ def apply_common_transforms(
     offset_provider=None,
     unroll_reduce=False,
     common_subexpression_elimination=True,
+    force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
@@ -118,7 +119,7 @@ def apply_common_transforms(
             break
         ir = inlined
     else:
-        raise RuntimeError("Inlining lift and lambdas did not converge.")
+        raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
@@ -164,6 +165,10 @@ def apply_common_transforms(
         ir = CommonSubexpressionElimination().visit(ir)
         ir = MergeLet().visit(ir)
 
-    ir = InlineLambdas.apply(ir, opcount_preserving=True)
+    ir = InlineLambdas.apply(
+        ir,
+        opcount_preserving=True,
+        force_inline_lambda_args=force_inline_lambda_args,
+    )
 
     return ir

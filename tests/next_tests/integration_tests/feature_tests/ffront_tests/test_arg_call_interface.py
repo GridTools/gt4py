@@ -226,7 +226,7 @@ def test_call_scan_operator_from_program(cartesian_case):
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
+        match=(r"Argument 'init' to scan operator 'testee_scan' must have same type as its return"),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
@@ -245,7 +245,7 @@ def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+            r"Argument 'init' to scan operator 'testee_scan' must have same type as 'state' argument"
         ),
     ):
 
@@ -276,7 +276,7 @@ def bound_args_testee():
 
 def test_bind_invalid_arg(cartesian_case, bound_args_testee):
     with pytest.raises(
-        TypeError, match="Keyword argument `inexistent_arg` is not a valid program parameter."
+        TypeError, match="Keyword argument 'inexistent_arg' is not a valid program parameter."
     ):
         bound_args_testee.with_bound_args(inexistent_arg=1)
 
@@ -306,7 +306,7 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
 
     assert (
         re.search(
-            "Parameter `arg2` already set as a bound argument.", exc_info.value.__cause__.args[0]
+            "Parameter 'arg2' already set as a bound argument.", exc_info.value.__cause__.args[0]
         )
         is not None
     )

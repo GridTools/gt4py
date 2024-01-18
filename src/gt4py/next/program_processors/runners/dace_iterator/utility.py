@@ -32,7 +32,7 @@ def as_dace_type(type_: ts.ScalarType):
         return dace.float32
     elif type_.kind == ts.ScalarKind.FLOAT64:
         return dace.float64
-    raise ValueError(f"scalar type {type_} not supported")
+    raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
@@ -153,17 +153,21 @@ def add_mapped_nested_sdfg(
     return nsdfg_node, map_entry, map_exit
 
 
-_unique_id = 0
-
-
 def unique_name(prefix):
-    global _unique_id
-    _unique_id += 1
-    return f"{prefix}_{_unique_id}"
+    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    return f"{prefix}_{unique_id}"
 
 
 def unique_var_name():
-    return unique_name("__var")
+    return unique_name("_var")
+
+
+def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    dtype = dace.int64
+    shape = [dace.symbol(unique_name(f"{name}_shape{i}"), dtype) for i in range(ndim)]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i in range(ndim)]
+    return shape, strides
 
 
 def flatten_list(node_list: list[Any]) -> list[Any]:

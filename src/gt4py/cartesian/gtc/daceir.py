@@ -101,6 +101,7 @@ class MapSchedule(eve.IntEnum):
             dace.ScheduleType.Default: MapSchedule.Default,
             dace.ScheduleType.Sequential: MapSchedule.Sequential,
             dace.ScheduleType.CPU_Multicore: MapSchedule.CPU_Multicore,
+            dace.ScheduleType.GPU_Default: MapSchedule.GPU_Device,
             dace.ScheduleType.GPU_Device: MapSchedule.GPU_Device,
             dace.ScheduleType.GPU_ThreadBlock: MapSchedule.GPU_ThreadBlock,
         }[schedule]
@@ -535,7 +536,7 @@ class GridSubset(eve.Node):
             else:
                 assert (
                     isinstance(interval2, (TileInterval, DomainInterval))
-                    and isinstance(interval1, IndexWithExtent)
+                    and isinstance(interval1, (IndexWithExtent, DomainInterval))
                 ) or (
                     isinstance(interval1, (TileInterval, DomainInterval))
                     and isinstance(interval2, IndexWithExtent)
@@ -572,7 +573,7 @@ class FieldAccessInfo(eve.Node):
     def apply_iteration(self, grid_subset: GridSubset):
         res_intervals = dict(self.grid_subset.intervals)
         for axis, field_interval in self.grid_subset.intervals.items():
-            if axis in grid_subset.intervals:
+            if axis in grid_subset.intervals and not isinstance(field_interval, DomainInterval):
                 grid_interval = grid_subset.intervals[axis]
                 assert isinstance(field_interval, IndexWithExtent)
                 extent = field_interval.extent

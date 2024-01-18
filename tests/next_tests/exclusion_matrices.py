@@ -57,6 +57,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_cpu"
+    DACE_GPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_gpu"
 
 
 class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
@@ -83,9 +84,9 @@ class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
 # Test markers
 REQUIRES_ATLAS = "requires_atlas"
 USES_APPLIED_SHIFTS = "uses_applied_shifts"
-USES_CAN_DEREF = "uses_can_deref"
 USES_CONSTANT_FIELDS = "uses_constant_fields"
 USES_DYNAMIC_OFFSETS = "uses_dynamic_offsets"
+USES_FLOORDIV = "uses_floordiv"
 USES_IF_STMTS = "uses_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
@@ -94,6 +95,7 @@ USES_ORIGIN = "uses_origin"
 USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
+USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
@@ -111,56 +113,53 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
     "We cannot unroll a reduction on a sparse field only (not clear if it is legal ITIR)"
 )
 # Common list of feature markers to skip
-GTFN_SKIP_TEST_LIST = [
+COMMON_SKIP_TEST_LIST = [
     (REQUIRES_ATLAS, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_APPLIED_SHIFTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+]
+DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    (USES_CONSTANT_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
-    (USES_SCAN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
+]
+GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
+    # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
+    (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
 #: (<test_marker>, <skip_definition, <skip_message>)
 BACKEND_SKIP_TEST_MATRIX = {
     None: EMBEDDED_SKIP_LIST,
-    OptionalProgramBackendId.DACE_CPU: GTFN_SKIP_TEST_LIST
+    OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [
-        (USES_CAN_DEREF, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_CONSTANT_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_REDUCTION_OVER_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+        # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
+        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
-    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
-    + [
-        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    ],
-    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
-    + [
-        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    ],
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
-    + [
-        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
-    ],
+    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST,
+    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
+    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST,
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
     + [
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
-        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
     ProgramFormatterId.GTFN_CPP_FORMATTER: [
         (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
     ],
+    ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
 }

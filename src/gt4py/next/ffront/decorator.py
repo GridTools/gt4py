@@ -29,11 +29,13 @@ from typing import Generator, Generic, TypeVar
 
 from devtools import debug
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, common, embedded as next_embedded
+from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
 from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
@@ -53,13 +55,17 @@ from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_makers import literal_from_value, promote_to_const_iterator, ref, sym
+from gt4py.next.iterator.ir_utils.ir_makers import (
+    literal_from_value,
+    promote_to_const_iterator,
+    ref,
+    sym,
+)
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
-DEFAULT_BACKEND: Callable = roundtrip.executor
+DEFAULT_BACKEND: Callable = None
 
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
@@ -82,7 +88,7 @@ def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any
                     raise NotImplementedError(
                         f"Using closure vars with same name but different value "
                         f"across functions is not implemented yet. \n"
-                        f"Collisions: {'`,  `'.join(collisions)}"
+                        f"Collisions: '{',  '.join(collisions)}'."
                     )
 
                 all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
@@ -119,7 +125,7 @@ def _deduce_grid_type(
 
     if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
         raise ValueError(
-            "grid_type == GridType.CARTESIAN was requested, but unstructured `FieldOffset` or local `Dimension` was found."
+            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
         )
 
     return deduced_grid_type if requested_grid_type is None else requested_grid_type
@@ -141,7 +147,7 @@ def _field_constituents_shape_and_dims(
     elif isinstance(arg_type, ts.ScalarType):
         yield (None, [])
     else:
-        raise ValueError("Expected `FieldType` or `TupleType` thereof.")
+        raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -170,15 +176,15 @@ class Program:
 
     past_node: past.Program
     closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
-    grid_type: Optional[GridType] = None
+    definition: Optional[types.FunctionType]
+    backend: Optional[ppi.ProgramExecutor]
+    grid_type: Optional[GridType]
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
+        backend: Optional[ppi.ProgramExecutor],
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -202,7 +208,7 @@ class Program:
         ]
         if misnamed_functions:
             raise RuntimeError(
-                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}"
+                f"The following symbols resolve to a function with a mismatching name: {','.join(misnamed_functions)}."
             )
 
         undefined_symbols = [
@@ -212,7 +218,7 @@ class Program:
         ]
         if undefined_symbols:
             raise RuntimeError(
-                f"The following closure variables are undefined: {', '.join(undefined_symbols)}"
+                f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
     @functools.cached_property
@@ -222,7 +228,7 @@ class Program:
         if self.backend:
             return self.backend.__gt_allocator__
         else:
-            raise RuntimeError(f"Program {self} does not have a backend set.")
+            raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -257,7 +263,7 @@ class Program:
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise TypeError(f"Keyword argument `{key}` is not a valid program parameter.")
+                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -338,7 +344,7 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to `{self.past_node.id}`!") from err
+            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -391,9 +397,10 @@ class Program:
             ]
 
             raise TypeError(
-                "Only `ScanOperator`s defined on the same axis "
-                + "can be used in a `Program`, but found:\n"
+                "Only 'ScanOperator's defined on the same axis "
+                + "can be used in a 'Program', found:\n"
                 + "\n".join(scanops_per_axis_strs)
+                + "."
             )
 
         return iter(scanops_per_axis.keys()).__next__()
@@ -430,7 +437,7 @@ class ProgramWithBoundArgs(Program):
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(f"Parameter `{name}` already set as a bound argument.")
+                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -439,34 +446,39 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ", ".join([f"`{bound_arg}`" for bound_arg in self.bound_args.keys()])
+            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
-                f"Invalid argument types in call to program `{self.past_node.id}` with "
-                f"bound arguments {bound_arg_names}!"
+                f"Invalid argument types in call to program '{self.past_node.id}' with "
+                f"bound arguments '{bound_arg_names}'."
             ) from err
 
         full_args = [*args]
+        full_kwargs = {**kwargs}
         for index, param in enumerate(self.past_node.params):
             if param.id in self.bound_args.keys():
-                full_args.insert(index, self.bound_args[param.id])
+                if index < len(full_args):
+                    full_args.insert(index, self.bound_args[param.id])
+                else:
+                    full_kwargs[str(param.id)] = self.bound_args[param.id]
 
-        return super()._process_args(tuple(full_args), kwargs)
+        return super()._process_args(tuple(full_args), full_kwargs)
 
     @functools.cached_property
     def itir(self):
         new_itir = super().itir
         for new_clos in new_itir.closures:
-            for key in self.bound_args.keys():
+            new_args = [ref(inp.id) for inp in new_clos.inputs]
+            for key, value in self.bound_args.items():
                 index = next(
                     index
                     for index, closure_input in enumerate(new_clos.inputs)
                     if closure_input.id == key
                 )
+                new_args[new_args.index(new_clos.inputs[index])] = promote_to_const_iterator(
+                    literal_from_value(value)
+                )
                 new_clos.inputs.pop(index)
-            new_args = [ref(inp.id) for inp in new_clos.inputs]
             params = [sym(inp.id) for inp in new_clos.inputs]
-            for value in self.bound_args.values():
-                new_args.append(promote_to_const_iterator(literal_from_value(value)))
             expr = itir.FunCall(
                 fun=new_clos.stencil,
                 args=new_args,
@@ -488,7 +500,7 @@ def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.Functi
 def program(
     definition=None,
     *,
-    backend=None,
+    backend=eve.NOTHING,  # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -510,7 +522,9 @@ def program(
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
-        return Program.from_function(definition, backend, grid_type)
+        return Program.from_function(
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        )
 
     return program_inner if definition is None else program_inner(definition)
 
@@ -542,15 +556,17 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     foast_node: OperatorNodeT
     closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType] = None
-    backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND
-    grid_type: Optional[GridType] = None
+    definition: Optional[types.FunctionType]
+    backend: Optional[ppi.ProgramExecutor]
+    grid_type: Optional[GridType]
+    operator_attributes: Optional[dict[str, Any]] = None
+    _program_cache: dict = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor] = DEFAULT_BACKEND,
+        backend: Optional[ppi.ProgramExecutor],
         grid_type: Optional[GridType] = None,
         *,
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
@@ -580,6 +596,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             definition=definition,
             backend=backend,
             grid_type=grid_type,
+            operator_attributes=operator_attributes,
         )
 
     def __gt_type__(self) -> ts.CallableType:
@@ -613,6 +630,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
+        hash_ = eve_utils.content_hash(
+            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
+        )
+        try:
+            return self._program_cache[hash_]
+        except KeyError:
+            pass
 
         loc = self.foast_node.location
         param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
@@ -666,80 +690,57 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        return Program(
+        self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
+            definition=None,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+        return self._program_cache[hash_]
 
     def __call__(
         self,
         *args,
         **kwargs,
     ) -> None:
-        # TODO(havogt): Don't select mode based on existence of kwargs,
-        # because now we cannot provide nice error messages. E.g. set context var
-        # if we are reaching this from a program call.
-        if "out" in kwargs:
+        if not next_embedded.context.within_context() and self.backend is not None:
+            # non embedded execution
+            if "offset_provider" not in kwargs:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
+            offset_provider = kwargs.pop("offset_provider")
+
+            if "out" not in kwargs:
+                raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
-            offset_provider = kwargs.pop("offset_provider", None)
-            if self.backend is not None:
-                # "out" and "offset_provider" -> field_operator as program
-                # When backend is None, we are in embedded execution and for now
-                # we disable the program generation since it would involve generating
-                # Python source code from a PAST node.
-                args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
-                # TODO(tehrengruber): check all offset providers are given
-                # deduce argument types
-                arg_types = []
-                for arg in args:
-                    arg_types.append(type_translation.from_value(arg))
-                kwarg_types = {}
-                for name, arg in kwargs.items():
-                    kwarg_types[name] = type_translation.from_value(arg)
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            # TODO(tehrengruber): check all offset providers are given
+            # deduce argument types
+            arg_types = []
+            for arg in args:
+                arg_types.append(type_translation.from_value(arg))
+            kwarg_types = {}
+            for name, arg in kwargs.items():
+                kwarg_types[name] = type_translation.from_value(arg)
 
-                return self.as_program(arg_types, kwarg_types)(
-                    *args, out, offset_provider=offset_provider, **kwargs
-                )
-            else:
-                # "out" -> field_operator called from program in embedded execution or
-                # field_operator called directly from Python in embedded execution
-                domain = kwargs.pop("domain", None)
-                if not next_embedded.context.within_context():
-                    # field_operator from Python in embedded execution
-                    with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                        res = ctx.run(self.definition, *args, **kwargs)
-                else:
-                    # field_operator from program in embedded execution (offset_provicer is already set)
-                    assert (
-                        offset_provider is None
-                        or next_embedded.context.offset_provider.get() is offset_provider
-                    )
-                    res = self.definition(*args, **kwargs)
-                _tuple_assign_field(
-                    out, res, domain=None if domain is None else common.domain(domain)
-                )
-                return
+            return self.as_program(arg_types, kwarg_types)(
+                *args, out, offset_provider=offset_provider, **kwargs
+            )
         else:
-            # field_operator called from other field_operator in embedded execution
-            assert self.backend is None
-            return self.definition(*args, **kwargs)
-
-
-def _tuple_assign_field(
-    target: tuple[common.Field | tuple, ...] | common.Field,
-    source: tuple[common.Field | tuple, ...] | common.Field,
-    domain: Optional[common.Domain],
-):
-    if isinstance(target, tuple):
-        if not isinstance(source, tuple):
-            raise RuntimeError(f"Cannot assign {source} to {target}.")
-        for t, s in zip(target, source):
-            _tuple_assign_field(t, s, domain)
-    else:
-        domain = domain or target.domain
-        target[domain] = source[domain]
+            if self.operator_attributes is not None and any(
+                has_scan_op_attribute := [
+                    attribute in self.operator_attributes
+                    for attribute in ["init", "axis", "forward"]
+                ]
+            ):
+                assert all(has_scan_op_attribute)
+                forward = self.operator_attributes["forward"]
+                init = self.operator_attributes["init"]
+                axis = self.operator_attributes["axis"]
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+            else:
+                op = embedded_operators.EmbeddedOperator(self.definition)
+            return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 @typing.overload
@@ -756,7 +757,7 @@ def field_operator(
     ...
 
 
-def field_operator(definition=None, *, backend=None, grid_type=None):
+def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
     """
     Generate an implementation of the field operator from a Python function object.
 
@@ -774,7 +775,9 @@ def field_operator(definition=None, *, backend=None, grid_type=None):
     """
 
     def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
-        return FieldOperator.from_function(definition, backend, grid_type)
+        return FieldOperator.from_function(
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+        )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
 
@@ -787,6 +790,7 @@ def scan_operator(
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
+    grid_type: GridType,
 ) -> FieldOperator[foast.ScanOperator]:
     ...
 
@@ -798,6 +802,7 @@ def scan_operator(
     forward: bool,
     init: core_defs.Scalar,
     backend: Optional[str],
+    grid_type: GridType,
 ) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
     ...
 
@@ -808,7 +813,8 @@ def scan_operator(
     axis: Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend=None,
+    backend=eve.NOTHING,
+    grid_type: GridType = None,
 ) -> (
     FieldOperator[foast.ScanOperator]
     | Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]
@@ -845,7 +851,8 @@ def scan_operator(
     def scan_operator_inner(definition: types.FunctionType) -> FieldOperator:
         return FieldOperator.from_function(
             definition,
-            backend,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
