@@ -570,9 +570,7 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                 axis = offset_provider[offset]
                 if isinstance(axis, gtx.Dimension):
                     continue  # Cartesian shifts don’t change the location type
-                elif isinstance(
-                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
-                ):
+                elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
                         == axis.neighbor_axis.kind

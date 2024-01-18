@@ -247,6 +247,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
                     if _is_lift(arg) and not hasattr(param.annex, "recorded_shifts"):
                         breakpoint()
+                    # TODO: for lift it should be fine as long as shift only occurs once (not only centre)
                     eligible_lifted_args[i] |= _is_lift(arg) and (param.annex.recorded_shifts in [set(), {()}])
 
 

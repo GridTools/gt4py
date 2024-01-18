@@ -371,7 +371,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     >>> str(promote_to_lifted_stencil("op")("a", "b"))
     '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
-    if isinstance(op, (str, itir.SymRef)):
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
     def _impl(*its: itir.Expr) -> itir.Expr:

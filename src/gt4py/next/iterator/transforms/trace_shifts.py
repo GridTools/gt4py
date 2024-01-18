@@ -32,18 +32,12 @@ class ShiftRecorder:
     recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] = dataclasses.field(
         default_factory=dict
     )
-    # TODO(tehrengruber): trace parameters of lift instead of arguments
-    recorded_local_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] = dataclasses.field(
-        default_factory=dict
-    )
 
     def register_node(self, inp: ir.Expr | ir.Sym) -> None:
         self.recorded_shifts.setdefault(id(inp), set())
-        self.recorded_local_shifts.setdefault(id(inp), set())
 
-    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...], local_offsets: tuple[ir.OffsetLiteral, ...]) -> None:
+    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]) -> None:
         self.recorded_shifts[id(inp)].add(offsets)
-        self.recorded_local_shifts[id(inp)].add(local_offsets)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,10 +45,10 @@ class ForwardingShiftRecorder:
     wrapped_tracer: Any
     shift_recorder: ShiftRecorder
 
-    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...], local_offsets: tuple[ir.OffsetLiteral, ...]):
-        self.shift_recorder(inp, offsets, local_offsets)
+    def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]):
+        self.shift_recorder(inp, offsets)
         # Forward shift to wrapped tracer such it can record the shifts of the parent nodes
-        self.wrapped_tracer.shift(offsets, local_offsets).deref()
+        self.wrapped_tracer.shift(offsets).deref()
 
 
 # for performance reasons (`isinstance` is slow otherwise) we don't use abc here
@@ -62,7 +56,7 @@ class IteratorTracer:
     def deref(self):
         raise NotImplementedError()
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...], local_offsets: tuple[ir.OffsetLiteral, ...]):
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         raise NotImplementedError()
 
 
@@ -71,18 +65,22 @@ class IteratorArgTracer(IteratorTracer):
     arg: ir.Expr | ir.Sym
     shift_recorder: ShiftRecorder | ForwardingShiftRecorder
     offsets: tuple[ir.OffsetLiteral, ...] = ()
-    local_offsets: tuple[ir.OffsetLiteral, ...] = ()
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...], local_offsets: tuple[ir.OffsetLiteral, ...]):
+    already_derefed: bool = False
+
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return IteratorArgTracer(
             arg=self.arg,
             shift_recorder=self.shift_recorder,
             offsets=self.offsets + tuple(offsets),
-            local_offsets=self.local_offsets + tuple(local_offsets)
         )
 
     def deref(self):
-        self.shift_recorder(self.arg, self.offsets, self.local_offsets)
+        if self.already_derefed:
+            breakpoint()
+        super().__setattr__("already_derefed", True)
+
+        self.shift_recorder(self.arg, self.offsets)
         return Sentinel.VALUE
 
 
@@ -92,8 +90,8 @@ class IteratorArgTracer(IteratorTracer):
 class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
 
-    def shift(self, offsets: tuple[ir.OffsetLiteral, ...], local_offsets: tuple[ir.OffsetLiteral, ...]):
-        return CombinedTracer(tuple(_shift(*offsets, local_offsets=local_offsets)(it) for it in self.its))
+    def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
+        return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
         derefed_its = [it.deref() for it in self.its]
@@ -108,7 +106,6 @@ def _combine(*values):
         val in [Sentinel.VALUE, Sentinel.TYPE] or isinstance(val, ir.OffsetLiteral)
         for val in values
     ):
-        breakpoint()
         raise AssertionError("All arguments must be values or types.")
     return Sentinel.VALUE
 
@@ -122,12 +119,10 @@ def _can_deref(x):
     return Sentinel.VALUE
 
 
-def _shift(*offsets, local_offsets=None):
-    if local_offsets is None:
-        local_offsets = offsets
+def _shift(*offsets):
     def apply(arg):
         assert isinstance(arg, IteratorTracer)
-        return arg.shift(offsets, local_offsets)
+        return arg.shift(offsets)
 
     return apply
 
@@ -137,8 +132,8 @@ class AppliedLift(IteratorTracer):
     stencil: Callable
     its: tuple[IteratorTracer, ...]
 
-    def shift(self, offsets, local_offsets):
-        return AppliedLift(self.stencil, tuple(_shift(*offsets, local_offsets=())(it) for it in self.its))
+    def shift(self, offsets):
+        return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
         return self.stencil(*self.its)
@@ -269,7 +264,6 @@ class TraceShifts(NodeTranslator):
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-
         return fun(*args)
 
     def visit(self, node, **kwargs):
@@ -310,6 +304,7 @@ class TraceShifts(NodeTranslator):
             self.shift_recorder.register_node(inp)
             tracers.append(IteratorArgTracer(arg=inp, shift_recorder=self.shift_recorder))
 
+        # TODO: why was this needed and is it correct?
         if isinstance(node.stencil, ir.SymRef):
             return
 
@@ -326,10 +321,9 @@ class TraceShifts(NodeTranslator):
         instance.visit(node)
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
-        recorded_local_shifts = instance.shift_recorder.recorded_local_shifts
 
         if save_to_annex:
-            _save_to_annex(node, recorded_shifts, recorded_local_shifts)
+            _save_to_annex(node, recorded_shifts)
 
         if inputs_only:
             inputs_shifts = {}
@@ -342,10 +336,8 @@ class TraceShifts(NodeTranslator):
 
 def _save_to_annex(
         node: ir.Node,
-        recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]],
-        recorded_local_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
+        recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:
             child_node.annex.recorded_shifts = recorded_shifts[id(child_node)]
-            child_node.annex.recorded_local_shifts = recorded_local_shifts[id(child_node)]

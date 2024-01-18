@@ -141,6 +141,7 @@ def main_transforms(
     for _ in range(10):
         inlined = ir
 
+        # TODO: save trace shifts info here once and don't recompute twice below
         inlined = InlineSinglePosDerefLiftArgs().visit(inlined)
         inlined = _inline_lifts(inlined, lift_mode)
 
