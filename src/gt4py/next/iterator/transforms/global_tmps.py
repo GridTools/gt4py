@@ -443,7 +443,6 @@ def update_domains(
     symbolic_sizes: Optional[dict[str, str]],
 ):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
