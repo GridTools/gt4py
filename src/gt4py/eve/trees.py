@@ -153,7 +153,7 @@ def _post_walk_items(
     yield __key__, node
 
 
-def _post_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _post_walk_values(node: TreeLike) -> Iterable:
     """Create a post-order tree traversal iterator of values."""
     if (iter_children_values := getattr(node, "iter_children_values", None)) is not None:
         for child in iter_children_values():
