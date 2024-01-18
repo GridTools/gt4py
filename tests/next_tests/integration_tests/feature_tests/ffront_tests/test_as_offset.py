@@ -18,6 +18,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next.ffront.experimental import as_offset
+
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, KDim, Koff, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
@@ -91,46 +92,46 @@ def test_offset_field_domain(cartesian_case):
     )
 
 
-# @pytest.mark.uses_dynamic_offsets
-# def test_offset_field_input_domain(cartesian_case):
-#     i_size = cartesian_case.default_sizes[IDim]
-#     k_size = cartesian_case.default_sizes[KDim]
-#
-#     @gtx.field_operator
-#     def testee_fo(
-#         a: gtx.Field[[IDim, KDim], int], offset_field: gtx.Field[[IDim, KDim], int]
-#     ) -> gtx.Field[[IDim, KDim], int]:
-#         return a(as_offset(Ioff, offset_field))
-#
-#     @gtx.program
-#     def testee(
-#         a: gtx.Field[[IDim, KDim], int],
-#         offset_field: gtx.Field[[IDim, KDim], int],
-#         out: gtx.Field[[IDim, KDim], int],
-#     ):
-#         testee_fo(a, offset_field, out=out)
-#
-#     a_fo = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 3)})().ndarray
-#     out = gtx.as_field(
-#         [IDim, KDim],
-#         np.zeros([i_size, k_size], dtype=int),
-#         origin={IDim: 2, KDim: 0},
-#     )
-#     a = gtx.as_field([IDim, KDim], a_fo, origin={IDim: 2, KDim: 0})
-#     offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
-#         cases.ConstInitializer(3)
-#     )()
-#     ref = a[5:]
-#     cases.verify(
-#         cartesian_case,
-#         testee,
-#         a,
-#         offset_field,
-#         out[2:],
-#         inout=out[2:],
-#         offset_provider={"Ioff": IDim},
-#         ref=ref,
-#     )
+@pytest.mark.uses_dynamic_offsets
+def test_offset_field_input_domain(cartesian_case):
+    i_size = cartesian_case.default_sizes[IDim]
+    k_size = cartesian_case.default_sizes[KDim]
+
+    @gtx.field_operator
+    def testee_fo(
+        a: gtx.Field[[IDim, KDim], int], offset_field: gtx.Field[[IDim, KDim], int]
+    ) -> gtx.Field[[IDim, KDim], int]:
+        return a(as_offset(Ioff, offset_field))
+
+    @gtx.program
+    def testee(
+        a: gtx.Field[[IDim, KDim], int],
+        offset_field: gtx.Field[[IDim, KDim], int],
+        out: gtx.Field[[IDim, KDim], int],
+    ):
+        testee_fo(a, offset_field, out=out)
+
+    a_fo = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 3)})().ndarray
+    out = gtx.as_field(
+        [IDim, KDim],
+        np.zeros([i_size, k_size], dtype=int),
+        origin={IDim: 2, KDim: 0},
+    )
+    a = gtx.as_field([IDim, KDim], a_fo, origin={IDim: 2, KDim: 0})
+    offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
+        cases.ConstInitializer(3)
+    )()
+    ref = a[5:]
+    cases.verify(
+        cartesian_case,
+        testee,
+        a,
+        offset_field,
+        out[2:],
+        inout=out[2:],
+        offset_provider={"Ioff": IDim},
+        ref=ref,
+    )
 
 
 @pytest.mark.parametrize(
