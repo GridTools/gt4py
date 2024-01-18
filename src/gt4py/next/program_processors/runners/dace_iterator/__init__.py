@@ -263,7 +263,7 @@ def build_sdfg_from_itir(
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
-        raise RuntimeError(f"visit failed for program {program.id}")
+        raise RuntimeError(f"Visit failed for program {program.id}.")
 
     # run DaCe transformations to simplify the SDFG
     sdfg.simplify()
