@@ -115,12 +115,12 @@ def test_offset_field_input_domain(cartesian_case):
         testee_fo(a, offset_field, out=out)
 
     a_fo = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 3)})().ndarray
-    out = gtx.as_field(
+    out = cartesian_case.as_field(
         [IDim, KDim],
         np.zeros([i_size, k_size], dtype=int),
         origin={IDim: 2, KDim: 0},
     )
-    a = gtx.as_field([IDim, KDim], a_fo, origin={IDim: 2, KDim: 0})
+    a = cartesian_case.as_field([IDim, KDim], a_fo, origin={IDim: 2, KDim: 0})
     offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
         cases.ConstInitializer(3)
     )()
