@@ -108,10 +108,6 @@ class NdArrayField(
         return self._ndarray.shape
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return self._domain.dims
-
-    @property
     def __gt_origin__(self) -> tuple[int, ...]:
         assert common.Domain.is_finite(self._domain)
         return tuple(-r.start for _, r in self._domain)
