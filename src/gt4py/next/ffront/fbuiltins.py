@@ -364,7 +364,6 @@ class FieldOffset(runtime.Offset):
             if common.is_connectivity_field(offset_definition):
                 connectivity = offset_definition
             elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
-                assert not offset_definition.has_skip_values
                 connectivity = gtx.as_connectivity(
                     domain=self.target,
                     codomain=self.source,

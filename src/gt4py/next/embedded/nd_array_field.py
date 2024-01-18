@@ -26,7 +26,7 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
-from gt4py.next.embedded import common as embedded_common
+from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.ffront import fbuiltins
 
 
@@ -160,6 +160,8 @@ class NdArrayField(
     def remap(
         self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
     ) -> NdArrayField:
+        # TODO skip values: if the skip_value is -1 we don't need special treatment, we'll just select a random value (the wrapped around one)
+
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
             assert isinstance(connectivity, fbuiltins.FieldOffset)
@@ -384,7 +386,16 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             assert isinstance(image_range, common.UnitRange)
 
             assert common.UnitRange.is_finite(image_range)
-            restricted_mask = (self._ndarray >= image_range.start) & (
+
+            # HANNES HACK
+            # map all negative indices (skip_values) to the smallest positiv index
+            smallest = xp.min(
+                self._ndarray, initial=xp.iinfo(xp.int32).max, where=self._ndarray >= 0
+            )
+            clipped_array = xp.where(self._ndarray < 0, smallest, self._ndarray)
+            # END HANNES HACK
+
+            restricted_mask = (clipped_array >= image_range.start) & (
                 self._ndarray < image_range.stop
             )
             # indices of non-zero elements in each dimension
@@ -485,9 +496,24 @@ def _make_reduction(
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
         reduce_dim_index = field.domain.dims.index(axis)
+        # HANNES HACK
+        current_offset_provider = embedded_context.offset_provider.get(None)
+        assert current_offset_provider is not None
+        offset_definition = current_offset_provider[
+            axis.value
+        ]  # assumes offset and local dimension have same name
+        # TODO mapping of connectivity to field dimensions
+        # TODO unclear in case of multiple local dimensions (probably just chain)
+        # END HANNES HACK
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+
         return field.__class__.from_array(
-            getattr(field.array_ns, array_builtin_name)(field.ndarray, axis=reduce_dim_index),
+            getattr(field.array_ns, array_builtin_name)(
+                field.ndarray,
+                axis=reduce_dim_index,
+                initial=0,  # set proper inital value
+                where=offset_definition.table >= 0,
+            ),
             domain=new_domain,
         )
 

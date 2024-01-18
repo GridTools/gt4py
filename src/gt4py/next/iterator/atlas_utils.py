@@ -29,7 +29,7 @@ class AtlasTable:
             if neigh_index < self.atlas_connectivity.cols(primary_index):
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
-                return None
+                return -1
         else:
             if neigh_index < 2:
                 return self.atlas_connectivity[primary_index, neigh_index]
@@ -53,3 +53,12 @@ class AtlasTable:
                 if v is not None:
                     maximum = max(maximum, v)
         return maximum
+
+    def asnumpy(self):
+        import numpy as np
+
+        res = np.empty(self.shape, dtype=self.dtype)
+        for i in range(self.shape[0]):
+            for j in range(self.shape[1]):
+                res[i, j] = self[i, j]
+        return res
