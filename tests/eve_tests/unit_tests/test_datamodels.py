@@ -1187,26 +1187,26 @@ class TestGenericModelValidation:
         with pytest.raises(TypeError, match=".value'"):
             PartiallyConcretizedGenericModel(value=["1"])
 
-        FullySpecializedGenericModel = PartiallyConcretizedGenericModel[str]
+        FullyConcretizedGenericModel = PartiallyConcretizedGenericModel[str]
 
-        assert len(FullySpecializedGenericModel.__parameters__) == 0
+        assert len(FullyConcretizedGenericModel.__parameters__) == 0
 
-        FullySpecializedGenericModel(value=[])
-        FullySpecializedGenericModel(value=[(1, "value")])
+        FullyConcretizedGenericModel(value=[])
+        FullyConcretizedGenericModel(value=[(1, "value")])
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=1)
+            FullyConcretizedGenericModel(value=1)
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=(1, 2))
+            FullyConcretizedGenericModel(value=(1, 2))
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=[1.0])
+            FullyConcretizedGenericModel(value=[1.0])
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=["1"])
+            FullyConcretizedGenericModel(value=["1"])
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=1)
+            FullyConcretizedGenericModel(value=1)
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=[(1, 2)])
+            FullyConcretizedGenericModel(value=[(1, 2)])
         with pytest.raises(TypeError, match=".value'"):
-            FullySpecializedGenericModel(value=[(1, (11, 12))])
+            FullyConcretizedGenericModel(value=[(1, (11, 12))])
 
     def test_partial_concretization_with_typevar(self):
         class PartialGenericModel(datamodels.GenericDataModel, Generic[T]):
