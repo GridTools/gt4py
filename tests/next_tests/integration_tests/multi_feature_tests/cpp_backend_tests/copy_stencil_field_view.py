@@ -18,7 +18,7 @@ from numpy import float64
 
 import gt4py.next as gtx
 from gt4py.next import Field, field_operator, program
-from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 
 IDim = gtx.Dimension("IDim")
@@ -47,7 +47,9 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = copy_program.itir
-    generated_code = generate(prog, offset_provider={})
+    generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
+        prog, offset_provider={}, column_axis=None
+    )
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

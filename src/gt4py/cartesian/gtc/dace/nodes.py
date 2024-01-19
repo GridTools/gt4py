@@ -121,7 +121,7 @@ class StencilComputation(library.LibraryNode):
         *args,
         **kwargs,
     ):
-        super().__init__(name=name, *args, **kwargs)
+        super().__init__(*args, name=name, **kwargs)
 
         from gt4py.cartesian.gtc.dace.utils import compute_dcir_access_infos
 
