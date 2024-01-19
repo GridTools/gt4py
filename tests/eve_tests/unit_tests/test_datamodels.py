@@ -1155,6 +1155,8 @@ class TestGenericModelValidation:
         class BaseGenericModel(datamodels.GenericDataModel, Generic[T, U]):
             value: List[Tuple[T, U]]
 
+        assert len(BaseGenericModel.__parameters__) == 2
+
         BaseGenericModel(value=[])
         BaseGenericModel(value=[("value", 3)])
         BaseGenericModel(value=[(1, "value")])
@@ -1167,8 +1169,6 @@ class TestGenericModelValidation:
             BaseGenericModel(value=[()])
         with pytest.raises(TypeError, match="'BaseGenericModel.value'"):
             BaseGenericModel(value=[(1,)])
-
-        assert len(BaseGenericModel.__parameters__) == 2
 
         PartiallyConcretizedGenericModel = BaseGenericModel[int, U]
 
