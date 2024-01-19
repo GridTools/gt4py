@@ -646,8 +646,9 @@ def get_partial_type_hints(
             hints[name] = resolved_hints[name]
         except NameError as error:
             if isinstance(hint, str):
-                # This conversion could be probably skipped after the fix applied in bpo-41370.
-                # Check: https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
+                # This conversion could be probably skipped in Python versions containing
+                # the fix applied in bpo-41370. Check:
+                # https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
                 hints[name] = ForwardRef(hint)
             elif isinstance(hint, (ForwardRef, _typing.ForwardRef)):
                 hints[name] = hint
