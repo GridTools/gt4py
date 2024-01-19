@@ -814,7 +814,7 @@ def concretize(
 
     """  # noqa: RST301  # doctest conventions confuse RST validator
     concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
-        datamodel_cls, *type_args, class_name=class_name, module=module
+        datamodel_cls, *type_args, class_name=class_name, module=module  # type: ignore[arg-type]
     )
     assert isinstance(concrete_cls, type) and is_datamodel(concrete_cls)
 

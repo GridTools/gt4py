@@ -270,10 +270,12 @@ def build_sdfg_from_itir(
 
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
-    # TODO: According to Lex one should build the SDFG first in a general mannor.
-    #       Generalisation to a particular device should happen only at the end.
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis, on_gpu)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
     sdfg = sdfg_genenerator.visit(program)
+    if sdfg is None:
+        raise RuntimeError(f"Visit failed for program {program.id}.")
+
+    # run DaCe transformations to simplify the SDFG
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics
@@ -284,6 +286,9 @@ def build_sdfg_from_itir(
         device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
 
+    if on_gpu:
+        sdfg.apply_gpu_transformations()
+
     return sdfg
 
 
@@ -293,7 +298,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
-    auto_optimize = kwargs.get("auto_optimize", False)
+    auto_optimize = kwargs.get("auto_optimize", True)
     lift_mode = kwargs.get("lift_mode", itir_transforms.LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
