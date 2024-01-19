@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.eve import Coerced, NodeTranslator
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import common
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -437,9 +438,12 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
+def update_domains(
+    node: FencilWithTemporaries,
+    offset_provider: Mapping[str, Any],
+    symbolic_sizes: Optional[dict[str, str]],
+):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
@@ -479,16 +483,29 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         # cartesian shift
                         dim = offset_provider[offset_name].value
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
-                    elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
+                    elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
-                        consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
-                        consumed_domain.ranges[new_axis] = SymbolicRange(
-                            im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                            im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
+
+                        assert new_axis not in consumed_domain.ranges or old_axis == new_axis
+
+                        if symbolic_sizes is None:
+                            new_range = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                im.literal(
+                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                ),
+                            )
+                        else:
+                            new_range = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                im.ref(symbolic_sizes[new_axis]),
+                            )
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
                         )
                     else:
                         raise NotImplementedError
@@ -570,7 +587,11 @@ class CreateGlobalTmps(NodeTranslator):
     """
 
     def visit_FencilDefinition(
-        self, node: ir.FencilDefinition, *, offset_provider: Mapping[str, Any]
+        self,
+        node: ir.FencilDefinition,
+        *,
+        offset_provider: Mapping[str, Any],
+        symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node, offset_provider=offset_provider)
@@ -581,6 +602,6 @@ class CreateGlobalTmps(NodeTranslator):
         # Perform an eta-reduction which should put all calls at the highest level of a closure
         res = EtaReduction().visit(res)
         # Perform a naive extent analysis to compute domain sizes of closures and temporaries
-        res = update_domains(res, offset_provider)
+        res = update_domains(res, offset_provider, symbolic_sizes)
         # Use type inference to determine the data type of the temporaries
         return collect_tmps_info(res, offset_provider=offset_provider)

@@ -323,7 +323,7 @@ def test_update_cartesian_domains():
             for a, s in (("JDim", "j"), ("KDim", "k"))
         ],
     )
-    actual = update_domains(testee, {"I": gtx.Dimension("IDim")})
+    actual = update_domains(testee, {"I": gtx.Dimension("IDim")}, symbolic_sizes=None)
     assert actual == expected
 
 
