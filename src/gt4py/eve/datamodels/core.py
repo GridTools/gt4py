@@ -883,17 +883,6 @@ def _substitute_typevars(
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
-        # TODO(egparedes): WIP fix for partial specialization
-        # # Type hint is a generic model: replace all the concretized type vars
-        # noqa: e800 replaced = False
-        # noqa: e800 new_args = []
-        # noqa: e800 for tp in type_hint.__parameters__:
-        # noqa: e800     if tp in type_params_map:
-        # noqa: e800         new_args.append(type_params_map[tp])
-        # noqa: e800         replaced = True
-        # noqa: e800     else:
-        # noqa: e800         new_args.append(type_params_map[tp])
-        # noqa: e800 return type_hint[tuple(new_args)], replaced
     else:
         return type_hint, False
 
@@ -981,21 +970,14 @@ def _make_data_model_class_getitem() -> classmethod:
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
-        res = xtyping.StdGenericAliasType(concrete_cls, type_args)
-        if sys.version_info < (3, 9):
-            # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
-            # does not copy all required `__dict__` entries, so do it manually
-            for k, v in concrete_cls.__dict__.items():
-                if k not in res.__dict__:
-                    res.__dict__[k] = v
-        return res
+        return concrete_cls
 
     return classmethod(__class_getitem__)
 
 
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
-    # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
-    #
+    # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
+    # as a tree traversal.
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)
@@ -1316,11 +1298,7 @@ def _make_concrete_with_cache(
     # Replace field definitions with the new actual types for generic fields
     type_params_map = dict(zip(datamodel_cls.__parameters__, type_args))
     model_fields = getattr(datamodel_cls, MODEL_FIELD_DEFINITIONS_ATTR)
-    new_annotations = {
-        # TODO(egparedes): ?
-        # noqa: e800 "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
-        # noqa: e800 "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
-    }
+    new_annotations = {}
 
     new_field_c_attrs = {}
     for field_name, field_type in xtyping.get_type_hints(datamodel_cls).items():
@@ -1353,8 +1331,16 @@ def _make_concrete_with_cache(
         "__module__": module if module else datamodel_cls.__module__,
         **new_field_c_attrs,
     }
-
     concrete_cls = type(class_name, (datamodel_cls,), namespace)
+
+    # Update the tuple of generic parameters in the new class, in case
+    # this is a partial concretization
+    assert hasattr(concrete_cls, "__parameters__")
+    concrete_cls.__parameters__ = tuple(
+        type_params_map[tp_var]
+        for tp_var in datamodel_cls.__parameters__
+        if isinstance(type_params_map[tp_var], typing.TypeVar)
+    )
     assert concrete_cls.__module__ == module or not module
 
     if MODEL_FIELD_DEFINITIONS_ATTR not in concrete_cls.__dict__:
