@@ -548,9 +548,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = (
-            filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else []
+            filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else {}
         )
-        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
@@ -679,7 +679,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
-        for conn, _ in neighbor_tables:
+        for conn, _ in neighbor_tables.items():
             var = connectivity_identifier(conn)
             nsdfg_inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
 
@@ -707,7 +707,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     store = value.indices[dim]
                     idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
-        for conn, _ in neighbor_tables:
+        for conn, _ in neighbor_tables.items():
             var = connectivity_identifier(conn)
             memlet = nsdfg_inputs[var]
             access = self.context.state.add_access(var)

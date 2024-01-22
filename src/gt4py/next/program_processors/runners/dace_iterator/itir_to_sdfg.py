@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional, cast
+from typing import Any, Mapping, Optional, cast
 
 import dace
 
@@ -41,8 +41,8 @@ from .utility import (
     filter_neighbor_tables,
     flatten_list,
     get_sorted_dims,
+    map_field_dimensions_to_sdfg_symbols,
     map_nested_sdfg_symbols,
-    new_array_symbols,
     unique_name,
     unique_var_name,
 )
@@ -111,9 +111,16 @@ class ItirToSDFG(eve.NodeVisitor):
         self.offset_provider = offset_provider
         self.storage_types = {}
 
-    def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
+    def add_storage(
+        self,
+        sdfg: dace.SDFG,
+        name: str,
+        type_: ts.TypeSpec,
+        neighbor_tables: Mapping[str, NeighborTableOffsetProvider],
+        has_offset: bool = True,
+    ):
         if isinstance(type_, ts.FieldType):
-            shape, strides = new_array_symbols(name, len(type_.dims))
+            shape, strides = map_field_dimensions_to_sdfg_symbols(name, type_.dims, neighbor_tables)
             offset = (
                 [dace.symbol(unique_name(f"{name}_offset{i}_")) for i in range(len(type_.dims))]
                 if has_offset
@@ -151,14 +158,20 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
-            self.add_storage(program_sdfg, str(param.id), type_)
+            self.add_storage(program_sdfg, str(param.id), type_, neighbor_tables)
 
         # Add connectivities as SDFG storages.
-        for offset, table in neighbor_tables:
+        for offset, table in neighbor_tables.items():
             scalar_kind = type_translation.get_scalar_kind(table.table.dtype)
-            local_dim = Dimension("ElementDim", kind=DimensionKind.LOCAL)
+            local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
             type_ = ts.FieldType([table.origin_axis, local_dim], ts.ScalarType(scalar_kind))
-            self.add_storage(program_sdfg, connectivity_identifier(offset), type_, has_offset=False)
+            self.add_storage(
+                program_sdfg,
+                connectivity_identifier(offset),
+                type_,
+                neighbor_tables,
+                has_offset=False,
+            )
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
@@ -218,7 +231,9 @@ class ItirToSDFG(eve.NodeVisitor):
 
         input_names = [str(inp.id) for inp in node.inputs]
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
-        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [
+            connectivity_identifier(offset) for offset, _ in neighbor_tables.items()
+        ]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
         output_names = [k for k, _ in output_nodes.items()]
@@ -551,7 +566,9 @@ class ItirToSDFG(eve.NodeVisitor):
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [
+            connectivity_identifier(offset) for offset, _ in neighbor_tables.items()
+        ]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}
@@ -564,7 +581,7 @@ class ItirToSDFG(eve.NodeVisitor):
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
         input_arrays = [(name, self.storage_types[name]) for name in input_names]
-        connectivity_arrays = [(array_table[name], name) for name in conn_names]
+        connectivity_arrays = [(array_table[name], name) for name in connectivity_names]
 
         context, results = closure_to_tasklet_sdfg(
             node,

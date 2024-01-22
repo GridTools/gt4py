@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import dace
 
-from gt4py.next import Dimension
+from gt4py.next import Dimension, DimensionKind
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.type_system import type_specifications as ts
 
@@ -36,11 +36,11 @@ def as_dace_type(type_: ts.ScalarType):
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
-    return [
-        (offset, table)
+    return {
+        offset: table
         for offset, table in offset_provider.items()
         if isinstance(table, NeighborTableOffsetProvider)
-    ]
+    }
 
 
 def connectivity_identifier(name: str):
@@ -161,6 +161,20 @@ def unique_name(prefix):
 
 def unique_var_name():
     return unique_name("_var")
+
+
+def map_field_dimensions_to_sdfg_symbols(
+    name: str, dims: Sequence[Dimension], neighbor_tables: Mapping[str, NeighborTableOffsetProvider]
+) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    dtype = dace.int64
+    shape = [
+        neighbor_tables[dim.value].max_neighbors
+        if dim.kind == DimensionKind.LOCAL
+        else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+        for i, dim in enumerate(dims)
+    ]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
+    return shape, strides
 
 
 def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:

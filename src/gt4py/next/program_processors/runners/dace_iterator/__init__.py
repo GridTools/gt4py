@@ -108,12 +108,12 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Sequence[tuple[str, itir_embedded.NeighborTableOffsetProvider]],
+    neighbor_tables: Mapping[str, itir_embedded.NeighborTableOffsetProvider],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
     return {
         connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
-        for offset, table in neighbor_tables
+        for offset, table in neighbor_tables.items()
     }
 
 
@@ -124,6 +124,7 @@ def get_shape_args(
         str(sym): size
         for name, value in args.items()
         for sym, size in zip(arrays[name].shape, value.shape)
+        if isinstance(sym, dace.symbol)
     }
 
 
@@ -271,7 +272,7 @@ def build_sdfg_from_itir(
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
-    sdfg = sdfg_genenerator.visit(program)
+    sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
 
