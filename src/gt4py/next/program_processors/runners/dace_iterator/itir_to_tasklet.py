@@ -233,7 +233,12 @@ def builtin_neighbors(
     )
     data_access_tasklet = state.add_tasklet(
         "data_access",
-        code=f"__result = __field[{field_index}] if {neighbor_check} else {transformer.context.reduce_identity.value}",
+        code=f"__result = __field[{field_index}]"
+        + (
+            f" if {neighbor_check} else {transformer.context.reduce_identity.value}"
+            if offset_provider.has_skip_values
+            else ""
+        ),
         inputs={"__field", field_index},
         outputs={"__result"},
     )
@@ -358,18 +363,25 @@ def builtin_list_get(
     args = list(itertools.chain(*transformer.visit(node_args)))
     assert len(args) == 2
     # index node
-    assert isinstance(args[0], (SymbolExpr, ValueExpr))
-    # 1D-array node
-    assert isinstance(args[1], ValueExpr)
-    # source node should be a 1D array
-    assert len(transformer.context.body.arrays[args[1].value.data].shape) == 1
+    if isinstance(args[0], SymbolExpr):
+        index_value = args[0].value
+        result_name = unique_var_name()
+        transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
+        result_node = transformer.context.state.add_access(result_name)
+        transformer.context.state.add_edge(
+            args[1].value,
+            None,
+            result_node,
+            None,
+            dace.Memlet.simple(args[1].value.data, index_value),
+        )
+        return [ValueExpr(result_node, args[1].dtype)]
 
-    expr_args = [(arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)]
-    internals = [
-        arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
-    ]
-    expr = f"{internals[1]}[{internals[0]}]"
-    return transformer.add_expr_tasklet(expr_args, expr, args[1].dtype, "list_get")
+    else:
+        expr_args = [(arg, f"{arg.value.data}_v") for arg in args]
+        internals = [f"{arg.value.data}_v" for arg in args]
+        expr = f"{internals[1]}[{internals[0]}]"
+        return transformer.add_expr_tasklet(expr_args, expr, args[1].dtype, "list_get")
 
 
 def builtin_cast(
