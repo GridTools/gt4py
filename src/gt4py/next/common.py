@@ -498,11 +498,11 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             )
         if index < 0:
             index += len(self.dims)
-        new_dims, _ = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
-        dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
+
+        ranges_dict = dict(named_ranges)
+        dims = self.dims[:index] + tuple(ranges_dict.keys()) + self.dims[index + 1 :]
         # remove duplicate dims
         unique_dims = dict.fromkeys(dims)
-        ranges_dict = dict(named_ranges)
         # extract ranges in equivalent order as unique_dims from either named_ranges or self.ranges
         ranges = map(
             lambda r: ranges_dict[r] if r in ranges_dict else self.ranges[self.dims.index(r)],
