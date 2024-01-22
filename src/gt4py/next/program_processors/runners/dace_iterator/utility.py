@@ -174,8 +174,8 @@ def map_field_dimensions_to_sdfg_symbols(
     shape = [
         neighbor_tables[dim.value].max_neighbors
         if dim.kind == DimensionKind.LOCAL
-        else dace.symbol(f"__dimension_{dim.value}", dtype)
-        for dim in sorted_dims
+        else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+        for i, dim in enumerate(sorted_dims)
     ]
     strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
     return shape, strides

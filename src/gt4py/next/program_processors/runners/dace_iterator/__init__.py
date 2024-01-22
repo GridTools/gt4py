@@ -124,10 +124,8 @@ def get_shape_args(
     for name, value in args.items():
         for sym, size in zip(arrays[name].shape, value.shape):
             if isinstance(sym, dace.symbol):
-                if sym.name in shape_args:
-                    assert shape_args[sym.name] == size
-                else:
-                    shape_args[sym.name] = size
+                assert sym.name not in shape_args
+                shape_args[sym.name] = size
             else:
                 assert isinstance(sym, int) and sym == size
     return shape_args
