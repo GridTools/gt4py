@@ -164,14 +164,18 @@ def unique_var_name():
 
 
 def map_field_dimensions_to_sdfg_symbols(
-    name: str, dims: Sequence[Dimension], neighbor_tables: Mapping[str, NeighborTableOffsetProvider]
+    name: str,
+    dims: Sequence[Dimension],
+    neighbor_tables: Mapping[str, NeighborTableOffsetProvider],
+    sort_dims: bool,
 ) -> tuple[list[dace.symbol], list[dace.symbol]]:
     dtype = dace.int64
+    sorted_dims = [dim for _, dim in get_sorted_dims(dims)] if sort_dims else dims
     shape = [
         neighbor_tables[dim.value].max_neighbors
         if dim.kind == DimensionKind.LOCAL
-        else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
-        for i, dim in enumerate(dims)
+        else dace.symbol(unique_name(f"{dim.value}_dim"), dtype)
+        for dim in sorted_dims
     ]
     strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
     return shape, strides

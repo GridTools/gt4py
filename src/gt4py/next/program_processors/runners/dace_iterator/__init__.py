@@ -120,12 +120,17 @@ def get_connectivity_args(
 def get_shape_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
-    return {
-        str(sym): size
-        for name, value in args.items()
-        for sym, size in zip(arrays[name].shape, value.shape)
-        if isinstance(sym, dace.symbol)
-    }
+    shape_args: dict[str, int] = {}
+    for name, value in args.items():
+        for sym, size in zip(arrays[name].shape, value.shape):
+            if isinstance(sym, dace.symbol):
+                if sym.name in shape_args:
+                    assert shape_args[sym.name] == size
+                else:
+                    shape_args[sym.name] = size
+            else:
+                assert isinstance(sym, int) and sym == size
+    return shape_args
 
 
 def get_offset_args(

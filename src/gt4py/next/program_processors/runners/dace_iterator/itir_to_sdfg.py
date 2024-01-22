@@ -118,9 +118,12 @@ class ItirToSDFG(eve.NodeVisitor):
         type_: ts.TypeSpec,
         neighbor_tables: Mapping[str, NeighborTableOffsetProvider],
         has_offset: bool = True,
+        sort_dimensions: bool = True,
     ):
         if isinstance(type_, ts.FieldType):
-            shape, strides = map_field_dimensions_to_sdfg_symbols(name, type_.dims, neighbor_tables)
+            shape, strides = map_field_dimensions_to_sdfg_symbols(
+                name, type_.dims, neighbor_tables, sort_dimensions
+            )
             offset = (
                 [dace.symbol(unique_name(f"{name}_offset{i}_")) for i in range(len(type_.dims))]
                 if has_offset
@@ -171,6 +174,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 type_,
                 neighbor_tables,
                 has_offset=False,
+                sort_dimensions=False,
             )
 
         # Create a nested SDFG for all stencil closures.
