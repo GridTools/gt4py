@@ -14,16 +14,30 @@
 
 """Test the backend-agnostic build system."""
 
+
+import time
+
 import pytest
 
 import gt4py
 from gt4py import cartesian as gt4pyc
+from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend.gtscript_frontend import GTScriptDefinitionError
 from gt4py.cartesian.gtscript import PARALLEL, Field, computation, interval
 from gt4py.cartesian.lazy_stencil import LazyStencil
-from gt4py.cartesian.stencil_builder import StencilBuilder
+from gt4py.cartesian.stencil_builder import FUTURES_REGISTRY, StencilBuilder, wait_all
 
 from ..definitions import ALL_BACKENDS
+
+
+@pytest.fixture(scope="function")
+def reset_async_executor():
+    for f in FUTURES_REGISTRY.values():
+        if f is not None:
+            f.cancel()
+            if not f.cancelled():
+                f.wait()
+    FUTURES_REGISTRY.clear()
 
 
 def copy_stencil_definition(out_f: Field[float], in_f: Field[float]):  # type: ignore
@@ -77,7 +91,8 @@ def test_lazy_syntax_check(frontend, backend):
         )
 
 
-def test_lazy_call(frontend, backend):
+@pytest.mark.parametrize("build_async", [False, True])
+def test_lazy_call(frontend, backend, build_async):
     """Test that the lazy stencil is callable like the compiled stencil object."""
     import numpy
 
@@ -89,8 +104,82 @@ def test_lazy_call(frontend, backend):
     )
     lazy_s = LazyStencil(
         StencilBuilder(copy_stencil_definition, frontend=frontend, backend=backend).with_options(
-            name="copy", module=copy_stencil_definition.__module__, rebuild=True
+            name="copy",
+            module=copy_stencil_definition.__module__,
+            rebuild=True,
+            build_async=build_async,
         )
     )
     lazy_s(b, a)
     assert b[0, 0, 0] == 1.0
+
+
+class TestAsyncConsistency:
+    def test_same_key(self, backend, reset_async_executor):
+        assert len(FUTURES_REGISTRY) == 0
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="numpy", rebuild=True, eager="async"
+        )
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="numpy", rebuild=True, eager="async"
+        )
+        assert len(FUTURES_REGISTRY) == 1
+
+    def test_separate_keys(self, backend, reset_async_executor):
+        assert len(FUTURES_REGISTRY) == 0
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="numpy", rebuild=True, eager="async"
+        )
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="dace:cpu", rebuild=True, eager="async"
+        )
+        assert len(FUTURES_REGISTRY) == 2
+
+    def test_barrier(self, reset_async_executor):
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="gt:cpu_kfirst", rebuild=True, eager="async"
+        )
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend="dace:cpu", rebuild=True, eager="async"
+        )
+
+        wait_all()
+
+        assert all(f.future.done() for f in FUTURES_REGISTRY.values())
+
+
+class TestAsyncTiming:
+    def test_async_submit_fast(self, backend, reset_async_executor):
+        """Test that the async lazy_stencil call actually only schedules the build by comparing time to a full build."""
+        start = time.perf_counter()
+        gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend=backend.name, rebuild=True, eager="async"
+        )
+        mid = time.perf_counter()
+        gtscript.stencil(
+            definition=copy_stencil_definition, backend=backend.name, rebuild=True, eager=True
+        )
+        end = time.perf_counter()
+
+        submit_time = mid - start
+        full_build_time = end - mid
+        assert full_build_time > 5 * submit_time
+
+    def test_async_finished_fast(self, backend, reset_async_executor):
+        """Test caching after waiting for async lazy_stencil call."""
+        start = time.perf_counter()
+        ls = gtscript.lazy_stencil(
+            definition=copy_stencil_definition, backend=backend.name, rebuild=True, eager=False
+        )
+        mid1 = time.perf_counter()
+        future = ls.builder.build_async()
+        future.wait()
+        mid2 = time.perf_counter()
+        gtscript.stencil(definition=copy_stencil_definition, backend=backend.name, eager=True)
+        end = time.perf_counter()
+
+        submit_time = mid1 - start
+        wait_time = mid2 - mid1
+        cached_build_time = end - mid2
+        assert wait_time > 5 * submit_time
+        assert wait_time > 5 * cached_build_time

@@ -107,6 +107,7 @@ class BuildOptions(AttributeClassLike):
     rebuild = attribute(of=bool, default=False)
     raise_if_not_cached = attribute(of=bool, default=False)
     cache_settings = attribute(of=DictOf[str, Any], factory=dict)
+    build_async = attribute(of=bool, default=False)
     _impl_opts = attribute(of=DictOf[str, Any], factory=dict)
 
     @property

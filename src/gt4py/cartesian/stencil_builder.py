@@ -12,20 +12,57 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import concurrent.futures
 import pathlib
-from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
+from typing import TYPE_CHECKING, Any, Dict, Hashable, Optional, Tuple, Type, Union
 
 from gt4py import cartesian as gt4pyc
+from gt4py.cartesian.config import build_settings
 from gt4py.cartesian.definitions import BuildOptions, StencilID
 from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.type_hints import AnnotatedStencilFunc, StencilFunc
 
 
+FUTURES_REGISTRY: Dict[Tuple[Tuple[str, Hashable], ...], Optional["FutureStencil"]] = dict()
+build_process_executor = concurrent.futures.ProcessPoolExecutor(
+    build_settings["max_async_build_proc"]
+)
+
+
+def hashable_cache_info(cache_info: Dict[str, Hashable]) -> Tuple[Tuple[str, Hashable], ...]:
+    return tuple((k, v) for k, v in cache_info.items())
+
+
+def wait_all():
+    for f in FUTURES_REGISTRY.values():
+        if f is not None:
+            f.wait()
+            f.builder.build()()  # makes sure the load step is also executed
+
+
 if TYPE_CHECKING:
     from gt4py.cartesian.backend.base import Backend as BackendType, CLIBackendMixin
     from gt4py.cartesian.frontend.base import Frontend as FrontendType
     from gt4py.cartesian.stencil_object import StencilObject
+
+
+class FutureStencil:
+    future: concurrent.futures.Future
+    builder: "StencilBuilder"
+
+    def __init__(self, future: concurrent.futures.Future, builder: "StencilBuilder"):
+        self.future = future
+        self.builder = builder
+
+    def wait(self, *args, **kwargs):
+        self.future.result(*args, **kwargs)
+
+    def cancel(self):
+        return self.future.cancel()
+
+    def cancelled(self):
+        return self.future.cancelled()
 
 
 class StencilBuilder:
@@ -81,8 +118,7 @@ class StencilBuilder:
         self._externals: Dict[str, Any] = {}
         self._dtypes: Dict[Type, Type] = {}
 
-    def build(self) -> Type["StencilObject"]:
-        """Generate, compile and/or load everything necessary to provide a usable stencil class."""
+    def _build(self) -> Type["StencilObject"]:
         # load or generate
         stencil_class = None if self.options.rebuild else self.backend.load()
         if stencil_class is None:
@@ -92,6 +128,37 @@ class StencilBuilder:
                 )
             stencil_class = self.backend.generate()
         return stencil_class
+
+    def _generate_no_return(self):
+        # leads to loading twice, but result of load can't be pickled and therefore not returned when multiprocessing.
+        stencil_class = None if self.options.rebuild else self.backend.load()
+        if stencil_class is None:
+            self.backend.generate()
+
+    def build_async(self):
+        """Return a future that will hold a usable stencil class as result."""
+        key = hashable_cache_info(self.caching.generate_cache_info())
+        if key in FUTURES_REGISTRY:
+            print("found")
+            return FUTURES_REGISTRY[key]
+        else:
+            print("not found")
+            future = FutureStencil(build_process_executor.submit(self._generate_no_return), self)
+            FUTURES_REGISTRY[key] = future
+            return future
+
+    def build(self) -> Type["StencilObject"]:
+        """Generate, compile and/or load everything necessary to provide a usable stencil class."""
+        key = hashable_cache_info(self.caching.generate_cache_info())
+        if FUTURES_REGISTRY.get(key, None) is not None:
+            future = FUTURES_REGISTRY[key]
+            assert future is not None
+            future.cancel()
+            if not future.cancelled():
+                future.wait()
+            else:
+                FUTURES_REGISTRY[key] = None
+        return self._build()
 
     def generate_computation(self) -> Dict[str, Union[str, Dict]]:
         """Generate the stencil source code, fail if backend does not support CLI."""
