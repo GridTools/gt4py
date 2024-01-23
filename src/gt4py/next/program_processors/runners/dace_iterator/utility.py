@@ -17,7 +17,7 @@ from typing import Any, Mapping, Sequence
 import dace
 
 from gt4py.next import Dimension, DimensionKind
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import NeighborTable
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -39,7 +39,7 @@ def filter_neighbor_tables(offset_provider: dict[str, Any]):
     return {
         offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
+        if isinstance(table, NeighborTable)
     }
 
 
@@ -166,7 +166,7 @@ def unique_var_name():
 def map_field_dimensions_to_sdfg_symbols(
     name: str,
     dims: Sequence[Dimension],
-    neighbor_tables: Mapping[str, NeighborTableOffsetProvider],
+    neighbor_tables: Mapping[str, NeighborTable],
     sort_dims: bool,
 ) -> tuple[list[dace.symbol], list[dace.symbol]]:
     dtype = dace.int64

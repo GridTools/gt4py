@@ -25,7 +25,7 @@ import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.otf_compile_executor as otf_exec
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next import common
-from gt4py.next.iterator import embedded as itir_embedded, transforms as itir_transforms
+from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -109,18 +109,18 @@ def _ensure_is_on_device(
 
 def get_connectivity_args(
     sdfg_sig: Sequence[str],
-    neighbor_tables: Mapping[str, itir_embedded.NeighborTableOffsetProvider],
+    neighbor_tables: Mapping[str, common.NeighborTable],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
     # keep only neighbor tables that are used by the SDFG to reduce the copy to device
     sdfg_neighbor_tables = [
-        (offset, table)
-        for offset, table in neighbor_tables.items()
+        (offset, offset_provider)
+        for offset, offset_provider in neighbor_tables.items()
         if connectivity_identifier(offset) in sdfg_sig
     ]
     return {
-        connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
-        for offset, table in sdfg_neighbor_tables
+        connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
+        for offset, offset_provider in sdfg_neighbor_tables
     }
 
 
@@ -179,13 +179,7 @@ def get_cache_id(
     offset_provider: Mapping[str, Any],
 ) -> str:
     def offset_invariants(offset):
-        if isinstance(
-            offset,
-            (
-                itir_embedded.NeighborTableOffsetProvider,
-                itir_embedded.StridedNeighborOffsetProvider,
-            ),
-        ):
+        if isinstance(offset, common.Connectivity):
             return (
                 offset.origin_axis,
                 offset.neighbor_axis,

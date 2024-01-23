@@ -17,8 +17,8 @@ import dace
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
+from gt4py.next.common import NeighborTable
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, SymRef
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -103,7 +103,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
-        offset_provider: dict[str, NeighborTableOffsetProvider],
+        offset_provider: dict[str, NeighborTable],
         column_axis: Optional[Dimension] = None,
     ):
         self.param_types = param_types
@@ -116,7 +116,7 @@ class ItirToSDFG(eve.NodeVisitor):
         sdfg: dace.SDFG,
         name: str,
         type_: ts.TypeSpec,
-        neighbor_tables: Mapping[str, NeighborTableOffsetProvider],
+        neighbor_tables: Mapping[str, NeighborTable],
         has_offset: bool = True,
         sort_dimensions: bool = True,
     ):
