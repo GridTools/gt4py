@@ -108,19 +108,12 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    sdfg_sig: Sequence[str],
     neighbor_tables: Mapping[str, common.NeighborTable],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
-    # keep only neighbor tables that are used by the SDFG to reduce the copy to device
-    sdfg_neighbor_tables = [
-        (offset, offset_provider)
-        for offset, offset_provider in neighbor_tables.items()
-        if connectivity_identifier(offset) in sdfg_sig
-    ]
     return {
         connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
-        for offset, offset_provider in sdfg_neighbor_tables
+        for offset, offset_provider in neighbor_tables.items()
     }
 
 
@@ -227,7 +220,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     sdfg_sig = sdfg.signature_arglist(with_types=False)
     dace_args = get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(sdfg_sig, neighbor_tables, device)
+    dace_conn_args = get_connectivity_args(neighbor_tables, device)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
@@ -320,15 +313,21 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         sdfg = sdfg_program.sdfg
 
     else:
-        sdfg = build_sdfg_from_itir(
-            program,
-            *args,
-            offset_provider=offset_provider,
-            auto_optimize=auto_optimize,
-            on_gpu=on_gpu,
-            column_axis=column_axis,
-            lift_mode=lift_mode,
-        )
+        generate_sdfg = True
+        sdfg_filename = f"/repo/icon4py/{program.id}.sdfg"
+
+        if generate_sdfg:
+            sdfg = build_sdfg_from_itir(
+                program,
+                *args,
+                offset_provider=offset_provider,
+                auto_optimize=auto_optimize,
+                on_gpu=on_gpu,
+                column_axis=column_axis,
+                lift_mode=lift_mode,
+            )
+        else:
+            sdfg = dace.SDFG.from_file(sdfg_filename)
 
         sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
