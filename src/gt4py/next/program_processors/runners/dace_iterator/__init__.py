@@ -285,8 +285,8 @@ def build_sdfg_from_itir(
 
     # run DaCe auto-optimization heuristics
     if auto_optimize:
-        # TODO: Investigate how symbol definitions improve autoopt transformations,
-        #       in which case the cache table should take the symbols map into account.
+        # TODO: Investigate performance improvement from SDFG specialization with constant symbols,
+        #       for array shape and strides, although this would imply JIT compilation.
         symbols: dict[str, int] = {}
         device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
