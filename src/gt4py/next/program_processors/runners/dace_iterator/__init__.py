@@ -133,8 +133,10 @@ def get_shape_args(
             if isinstance(sym, dace.symbol):
                 assert sym.name not in shape_args
                 shape_args[sym.name] = size
-            else:
-                assert isinstance(sym, int) and sym == size
+            elif sym != size:
+                raise RuntimeError(
+                    f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
+                )
     return shape_args
 
 
