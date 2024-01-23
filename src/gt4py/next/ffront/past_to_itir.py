@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Optional, cast
 
-from gt4py.eve import NodeTranslator, PreserveLocationVisitor, concepts, traits
+from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
@@ -40,7 +40,9 @@ def _flatten_tuple_expr(
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 

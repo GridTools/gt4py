@@ -58,7 +58,12 @@ from .datamodels import (
     field,
     frozenmodel,
 )
-from .traits import SymbolTableTrait, ValidatedSymbolTableTrait, VisitorWithSymbolTableTrait
+from .traits import (
+    PreserveLocationVisitor,
+    SymbolTableTrait,
+    ValidatedSymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+)
 from .trees import (
     bfs_walk_items,
     bfs_walk_values,
@@ -70,7 +75,7 @@ from .trees import (
     walk_values,
 )
 from .type_definitions import NOTHING, ConstrainedStr, Enum, IntEnum, NothingType, StrEnum
-from .visitors import NodeTranslator, NodeVisitor, PreserveLocationVisitor
+from .visitors import NodeTranslator, NodeVisitor
 
 
 __all__ = [
@@ -113,6 +118,7 @@ __all__ = [
     "SymbolTableTrait",
     "ValidatedSymbolTableTrait",
     "VisitorWithSymbolTableTrait",
+    "PreserveLocationVisitor",
     # trees
     "bfs_walk_items",
     "bfs_walk_values",
@@ -132,5 +138,4 @@ __all__ = [
     # visitors
     "NodeTranslator",
     "NodeVisitor",
-    "PreserveLocationVisitor",
 ]

@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from gt4py import eve
-from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
 
@@ -49,7 +48,7 @@ def _get_tuple_size(elem: ir.Node, node_types: Optional[dict] = None) -> int | t
 
 
 @dataclass(frozen=True)
-class CollapseTuple(PreserveLocationVisitor, eve.NodeTranslator):
+class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 

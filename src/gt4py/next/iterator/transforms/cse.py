@@ -17,9 +17,14 @@ import math
 import operator
 import typing
 
-from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
+from gt4py.eve import (
+    NodeTranslator,
+    NodeVisitor,
+    PreserveLocationVisitor,
+    SymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+)
 from gt4py.eve.utils import UIDGenerator
-from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 

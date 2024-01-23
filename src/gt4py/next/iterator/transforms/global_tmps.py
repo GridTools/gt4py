@@ -19,10 +19,9 @@ from typing import Any, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.eve as eve
 import gt4py.next as gtx
-from gt4py.eve import Coerced, NodeTranslator
+from gt4py.eve import Coerced, NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
-from gt4py.eve.visitors import PreserveLocationVisitor
 from gt4py.next import common
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im

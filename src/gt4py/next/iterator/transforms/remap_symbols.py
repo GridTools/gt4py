@@ -14,8 +14,7 @@
 
 from typing import Any, Dict, Optional, Set
 
-from gt4py.eve import NodeTranslator, SymbolTableTrait
-from gt4py.eve.visitors import PreserveLocationVisitor
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor, SymbolTableTrait
 from gt4py.next.iterator import ir
 
 

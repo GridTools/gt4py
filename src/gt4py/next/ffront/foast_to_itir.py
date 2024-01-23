@@ -66,11 +66,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
 
     uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
-    preserve_location: bool = True
 
     @classmethod
-    def apply(cls, node: foast.LocatedNode, preserve_location: bool = True) -> itir.Expr:
-        return cls(preserve_location=preserve_location).visit(node)
+    def apply(cls, node: foast.LocatedNode) -> itir.Expr:
+        return cls().visit(node)
 
     def visit_FunctionDefinition(
         self, node: foast.FunctionDefinition, **kwargs

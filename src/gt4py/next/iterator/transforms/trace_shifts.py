@@ -16,8 +16,7 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
-from gt4py.eve import NodeTranslator
-from gt4py.eve.visitors import PreserveLocationVisitor
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 

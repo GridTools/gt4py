@@ -18,7 +18,7 @@ from collections.abc import Callable
 from typing import Optional
 
 import gt4py.eve as eve
-from gt4py.eve import NodeTranslator, PreserveLocationVisitor, traits
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -112,7 +112,9 @@ def _transform_and_extract_lift_args(
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific
