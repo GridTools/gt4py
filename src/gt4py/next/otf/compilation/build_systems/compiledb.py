@@ -44,7 +44,7 @@ class CompiledbFactory(
     Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
     """
 
-    cmake_build_type: cmake.BuildType = cmake.BuildType.DEBUG
+    cmake_build_type: cmake.BuildType = cmake.BuildType.RELEASE
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
