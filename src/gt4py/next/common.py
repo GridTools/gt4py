@@ -189,11 +189,12 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
-        return (
-            isinstance(value, core_defs.INTEGRAL_TYPES)
-            and value >= self.start
-            and value < self.stop
-        )
+        # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+        #   and remove int cast, once the related mypy bug (#16358) gets fixed
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return self.start <= cast(int, value) < self.stop
+        else:
+            return False
 
     def __le__(self, other: UnitRange) -> bool:
         return self.start >= other.start and self.stop <= other.stop
@@ -574,37 +575,38 @@ if TYPE_CHECKING:
             ...
 
 
-# TODO(havogt): replace this protocol with the new `GTFieldInterface` protocol
-class NextGTDimsInterface(Protocol):
+# TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
+class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol):
     """
-    Protocol for objects providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+    Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to
-    :mod:`gt4py.cartesian`, where the labels are `str` s with implied semantics,
-    see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    Note:
+    - A default implementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
+    - No implementation of `__gt_origin__` is provided because of infinite fields.
     """
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        ...
-
-
-# TODO(egparedes): add support for this new protocol in the cartesian module
-class GTFieldInterface(Protocol):
-    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
 
     @property
     def __gt_domain__(self) -> Domain:
+        # TODO probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
+        # to allow implementations without having to import gtx.Domain.
         ...
+
+    @property
+    def __gt_dims__(self) -> tuple[str, ...]:
+        return tuple(d.value for d in self.__gt_domain__.dims)
 
 
 @extended_runtime_checkable
-class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
+class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
     def domain(self) -> Domain:
         ...
+
+    @property
+    def __gt_domain__(self) -> Domain:
+        return self.domain
 
     @property
     def codomain(self) -> type[core_defs.ScalarT] | Dimension:
@@ -922,10 +924,6 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def domain(self) -> Domain:
         return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        return self.domain.dims
 
     @property
     def __gt_origin__(self) -> Never:

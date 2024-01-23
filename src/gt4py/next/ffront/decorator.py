@@ -344,7 +344,9 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
+            raise errors.DSLError(
+                None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
+            ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -453,27 +455,32 @@ class ProgramWithBoundArgs(Program):
             ) from err
 
         full_args = [*args]
+        full_kwargs = {**kwargs}
         for index, param in enumerate(self.past_node.params):
             if param.id in self.bound_args.keys():
-                full_args.insert(index, self.bound_args[param.id])
+                if index < len(full_args):
+                    full_args.insert(index, self.bound_args[param.id])
+                else:
+                    full_kwargs[str(param.id)] = self.bound_args[param.id]
 
-        return super()._process_args(tuple(full_args), kwargs)
+        return super()._process_args(tuple(full_args), full_kwargs)
 
     @functools.cached_property
     def itir(self):
         new_itir = super().itir
         for new_clos in new_itir.closures:
-            for key in self.bound_args.keys():
+            new_args = [ref(inp.id) for inp in new_clos.inputs]
+            for key, value in self.bound_args.items():
                 index = next(
                     index
                     for index, closure_input in enumerate(new_clos.inputs)
                     if closure_input.id == key
                 )
+                new_args[new_args.index(new_clos.inputs[index])] = promote_to_const_iterator(
+                    literal_from_value(value)
+                )
                 new_clos.inputs.pop(index)
-            new_args = [ref(inp.id) for inp in new_clos.inputs]
             params = [sym(inp.id) for inp in new_clos.inputs]
-            for value in self.bound_args.values():
-                new_args.append(promote_to_const_iterator(literal_from_value(value)))
             expr = itir.FunCall(
                 fun=new_clos.stencil,
                 args=new_args,
@@ -847,6 +854,7 @@ def scan_operator(
         return FieldOperator.from_function(
             definition,
             DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
             operator_node_cls=foast.ScanOperator,
             operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
