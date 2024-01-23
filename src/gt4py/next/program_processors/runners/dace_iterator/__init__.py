@@ -108,12 +108,19 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
+    sdfg_sig: Sequence[str],
     neighbor_tables: Mapping[str, itir_embedded.NeighborTableOffsetProvider],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
+    # keep only neighbor tables that are used by the SDFG to reduce the copy to device
+    sdfg_neighbor_tables = [
+        (offset, table)
+        for offset, table in neighbor_tables.items()
+        if connectivity_identifier(offset) in sdfg_sig
+    ]
     return {
         connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
-        for offset, table in neighbor_tables.items()
+        for offset, table in sdfg_neighbor_tables
     }
 
 
@@ -224,7 +231,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     sdfg_sig = sdfg.signature_arglist(with_types=False)
     dace_args = get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables, device)
+    dace_conn_args = get_connectivity_args(sdfg_sig, neighbor_tables, device)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
