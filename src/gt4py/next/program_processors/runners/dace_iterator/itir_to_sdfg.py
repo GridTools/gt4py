@@ -449,12 +449,12 @@ class ItirToSDFG(eve.NodeVisitor):
             inverted=False,
         )
 
+        scan_sdfg.add_node(scan_loop)
         lambda_state = scan_loop.add_state("lambda_compute", is_start_block=True)
         lambda_update_state = scan_loop.add_state("lambda_update")
         scan_loop.add_edge(lambda_state, lambda_update_state, dace.InterstateEdge())
 
         start_state = scan_sdfg.add_state("start", is_start_block=True)
-        scan_sdfg.add_node(scan_loop)
         scan_sdfg.add_edge(start_state, scan_loop, dace.InterstateEdge())
 
         # tasklet for initialization of carry
@@ -552,9 +552,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 None,
                 dace.Memlet.simple(name, f"i_{scan_dim}"),
             )
-
-        # add state to scan SDFG to update the carry value at each loop iteration
-        lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
 
         lambda_update_state.add_memlet_path(
             lambda_update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
