@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import hashlib
 import warnings
+from inspect import currentframe, getframeinfo
 from typing import Any, Mapping, Optional, Sequence
 
 import dace
@@ -276,6 +277,19 @@ def build_sdfg_from_itir(
     sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
+
+    for nested_sdfg in sdfg.all_sdfgs_recursive():
+        if not nested_sdfg.debuginfo:
+            _, frameinfo = warnings.warn(
+                f"{nested_sdfg} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
+            ), getframeinfo(
+                currentframe()  # type: ignore
+            )
+            nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
+                start_line=frameinfo.lineno,
+                end_line=frameinfo.lineno,
+                filename=frameinfo.filename,
+            )
 
     # run DaCe transformations to simplify the SDFG
     sdfg.simplify()

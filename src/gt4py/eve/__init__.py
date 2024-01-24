@@ -58,7 +58,12 @@ from .datamodels import (
     field,
     frozenmodel,
 )
-from .traits import SymbolTableTrait, ValidatedSymbolTableTrait, VisitorWithSymbolTableTrait
+from .traits import (
+    PreserveLocationVisitor,
+    SymbolTableTrait,
+    ValidatedSymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+)
 from .trees import (
     bfs_walk_items,
     bfs_walk_values,
@@ -113,6 +118,7 @@ __all__ = [
     "SymbolTableTrait",
     "ValidatedSymbolTableTrait",
     "VisitorWithSymbolTableTrait",
+    "PreserveLocationVisitor",
     # trees
     "bfs_walk_items",
     "bfs_walk_values",

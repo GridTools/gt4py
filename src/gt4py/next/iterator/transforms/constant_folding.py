@@ -12,12 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import embedded, ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
-class ConstantFolding(NodeTranslator):
+class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node) -> ir.Node:
         return cls().visit(node)
