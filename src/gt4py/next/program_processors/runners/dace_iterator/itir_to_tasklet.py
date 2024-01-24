@@ -576,7 +576,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         neighbor_tables = (
             filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else {}
         )
-        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
+        connectivity_names = [
+            connectivity_identifier(offset) for offset, _ in neighbor_tables.items()
+        ]
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
