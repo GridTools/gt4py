@@ -19,6 +19,7 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 from next_tests.integration_tests import cases
@@ -195,10 +196,11 @@ def reference(
 @pytest.fixture
 def test_setup(fieldview_backend):
     test_case = cases.Case(
-        fieldview_backend,
+        fieldview_backend if isinstance(fieldview_backend, ppi.ProgramExecutor) else None,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=fieldview_backend,
     )
 
     @dataclass(frozen=True)

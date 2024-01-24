@@ -25,7 +25,7 @@ from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
-from gt4py.next import common
+from gt4py.next import allocators, common, constructors
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
 
@@ -94,6 +94,7 @@ class NdArrayField(
 
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
+    _allocator: Optional[allocators.FieldBufferAllocationUtil]
 
     array_ns: ClassVar[
         ModuleType
@@ -143,6 +144,7 @@ class NdArrayField(
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
+        allocator: Optional[allocators.FieldBufferAllocationUtil] = None,
     ) -> NdArrayField:
         domain = common.domain(domain)
         xp = cls.array_ns
@@ -159,7 +161,7 @@ class NdArrayField(
         assert len(domain) == array.ndim
         assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
-        return cls(domain, array)
+        return cls(domain, array, allocator)
 
     def remap(
         self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
@@ -201,7 +203,9 @@ class NdArrayField(
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+        return self.__class__.from_array(
+            new_buffer, domain=new_domain, dtype=self.dtype, allocator=self._allocator
+        )  # TODO
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -213,7 +217,9 @@ class NdArrayField(
             # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
             return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
         else:
-            return self.__class__.from_array(new_buffer, domain=new_domain)
+            return self.__class__.from_array(
+                new_buffer, domain=new_domain, allocator=self._allocator
+            )  # TODO
 
     __getitem__ = restrict
 
@@ -347,6 +353,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
+        allocator: Optional[allocators.FieldBufferAllocationUtil] = None,
     ) -> NdArrayConnectivityField:
         domain = common.domain(domain)
         xp = cls.array_ns
@@ -365,7 +372,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain)
+        return cls(domain, array, allocator, codomain)
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -435,11 +442,14 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
-            cls = self.__class__
-            xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
-            new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            restricted_connectivity = constructors.as_connectivity(
+                new_domain,
+                self.codomain,
+                self.ndarray[buffer_slice],
+                self.dtype,
+                allocator=self._allocator,
+            )  # TODO does it make sense to go through constructors here which does a lot of checks?
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
