@@ -168,6 +168,7 @@ _build_cache_gpu: dict[str, CompiledSDFG] = {}
 
 
 def get_cache_id(
+    build_type: str,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -191,6 +192,7 @@ def get_cache_id(
     cache_id_args = [
         str(arg)
         for arg in (
+            build_type,
             program,
             *arg_types,
             column_axis,
@@ -306,7 +308,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
-    cache_id = get_cache_id(program, arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(build_type, program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
