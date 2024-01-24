@@ -313,8 +313,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         sdfg = sdfg_program.sdfg
 
     else:
+        # debug: test large icon4py stencils without regenerating the SDFG at each run
         generate_sdfg = True
-        sdfg_filename = f"/repo/icon4py/{program.id}.sdfg"
+        sdfg_filename = f"_dacegraphs/{program.id}.sdfg"
 
         if generate_sdfg:
             sdfg = build_sdfg_from_itir(
@@ -326,6 +327,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
                 column_axis=column_axis,
                 lift_mode=lift_mode,
             )
+            sdfg.save(sdfg_filename)
         else:
             sdfg = dace.SDFG.from_file(sdfg_filename)
 
