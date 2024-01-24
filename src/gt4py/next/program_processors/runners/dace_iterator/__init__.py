@@ -317,7 +317,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     else:
         # debug: test large icon4py stencils without regenerating the SDFG at each run
         generate_sdfg = True
-        sdfg_filename = f"_dacegraphs/{program.id}.sdfg"
+        target = "gpu" if on_gpu else "cpu"
+        sdfg_filename = f"_dacegraphs/{target}/{program.id}.sdfg"
 
         if generate_sdfg:
             sdfg = build_sdfg_from_itir(
