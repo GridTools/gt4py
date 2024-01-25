@@ -338,7 +338,7 @@ class ItirToSDFG(eve.NodeVisitor):
                         out_name, debuginfo=closure_sdfg.debuginfo
                     )
                     value = ValueExpr(access, dtype)
-                    memlet = dace.Memlet.simple(out_name, "0")
+                    memlet = dace.Memlet(data=out_name, subset="0")
                     closure_init_state.add_edge(out_tasklet, "__result", access, None, memlet)
                     program_arg_syms[name] = value
                 else:
@@ -427,10 +427,10 @@ class ItirToSDFG(eve.NodeVisitor):
                 edge.src_conn,
                 transient_access,
                 None,
-                dace.Memlet.simple(memlet.data, output_subset, debuginfo=nsdfg.debuginfo),
+                dace.Memlet(data=memlet.data, subset=output_subset, debuginfo=nsdfg.debuginfo),
             )
-            inner_memlet = dace.Memlet.simple(
-                memlet.data, output_subset, other_subset_str=memlet.subset
+            inner_memlet = dace.Memlet(
+                data=memlet.data, subset=output_subset, other_subset=memlet.subset
             )
             closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
             closure_state.remove_edge(edge)
@@ -523,7 +523,7 @@ class ItirToSDFG(eve.NodeVisitor):
             "__result",
             start_state.add_access(scan_carry_name, debuginfo=scan_sdfg.debuginfo),
             None,
-            dace.Memlet.simple(scan_carry_name, "0"),
+            dace.Memlet(data=scan_carry_name, subset="0"),
         )
 
         # add storage to scan SDFG for inputs
@@ -603,13 +603,13 @@ class ItirToSDFG(eve.NodeVisitor):
                 connector,
                 compute_state.add_access(name, debuginfo=lambda_context.body.debuginfo),
                 None,
-                dace.Memlet.simple(name, scan_loop_var),
+                dace.Memlet(data=name, subset=scan_loop_var),
             )
 
         update_state.add_nedge(
             update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
             update_state.add_access(scan_carry_name, debuginfo=lambda_context.body.debuginfo),
-            dace.Memlet.simple(output_names[0], scan_loop_var, other_subset_str="0"),
+            dace.Memlet(data=output_name, subset=scan_loop_var, other_subset="0"),
         )
 
         return scan_sdfg, map_ranges, scan_dim_index
