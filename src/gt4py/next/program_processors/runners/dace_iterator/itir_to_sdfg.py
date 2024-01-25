@@ -559,10 +559,10 @@ class ItirToSDFG(eve.NodeVisitor):
                 dace.Memlet.simple(name, scan_loop_var),
             )
 
-        update_state.add_memlet_path(
+        update_state.add_nedge(
             update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
             update_state.add_access(scan_carry_name, debuginfo=lambda_context.body.debuginfo),
-            memlet=dace.Memlet.simple(output_names[0], scan_loop_var, other_subset_str="0"),
+            dace.Memlet.simple(output_names[0], scan_loop_var, other_subset_str="0"),
         )
 
         return scan_sdfg, map_ranges, scan_dim_index
