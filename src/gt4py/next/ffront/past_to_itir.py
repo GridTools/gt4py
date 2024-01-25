@@ -87,7 +87,7 @@ def _process_elements(
     return result
 
 
-class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -219,6 +219,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
+            location=node.location,
         )
 
     def _visit_slice_bound(
@@ -243,17 +244,22 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 lowered_bound = self.visit(slice_bound, **kwargs)
         else:
             raise AssertionError("Expected 'None' or 'past.Constant'.")
+        if slice_bound:
+            lowered_bound.location = slice_bound.location
         return lowered_bound
 
     def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
         if isinstance(node, past.Name):
-            return itir.SymRef(id=node.id)
+            return itir.SymRef(id=node.id, location=node.location)
         elif isinstance(node, past.Subscript):
-            return self._construct_itir_out_arg(node.value)
+            itir_node = self._construct_itir_out_arg(node.value)
+            itir_node.location = node.location
+            return itir_node
         elif isinstance(node, past.TupleExpr):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
+                location=node.location,
             )
         else:
             raise ValueError(
@@ -315,7 +321,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+        return itir.FunCall(
+            fun=itir.SymRef(id=domain_builtin),
+            args=domain_args,
+            location=(node_domain or out_field).location,
+        )
 
     def _construct_itir_initialized_domain_arg(
         self,

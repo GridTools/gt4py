@@ -17,7 +17,7 @@ from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, utils
+from gt4py.next import common, constructors, errors, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
@@ -77,17 +77,20 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
 def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
     if "out" in kwargs:
         # called from program or direct field_operator as program
-        offset_provider = kwargs.pop("offset_provider", None)
-
         new_context_kwargs = {}
         if embedded_context.within_context():
             # called from program
-            assert offset_provider is None
+            assert "offset_provider" not in kwargs
         else:
             # field_operator as program
+            if "offset_provider" not in kwargs:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
+            offset_provider = kwargs.pop("offset_provider", None)
+
             new_context_kwargs["offset_provider"] = offset_provider
 
         out = kwargs.pop("out")
+
         domain = kwargs.pop("domain", None)
 
         flattened_out: tuple[common.Field, ...] = utils.flatten_nested_tuple((out,))
@@ -105,7 +108,10 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
                 domain=out_domain,
             )
     else:
-        # called from other field_operator
+        # called from other field_operator or missing `out` argument
+        if "offset_provider" in kwargs:
+            # assuming we wanted to call the field_operator as program, otherwise `offset_provider` would not be there
+            raise errors.MissingArgumentError(None, "out", True)
         return op(*args, **kwargs)
 
 

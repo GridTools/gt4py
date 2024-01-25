@@ -196,6 +196,7 @@ def apply_common_transforms(
     temporary_extraction_heuristics: Optional[
         Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
     ] = None,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     lift_mode = LiftMode.FORCE_TEMPORARIES
 
@@ -221,6 +222,7 @@ def apply_common_transforms(
             ir,
             offset_provider=offset_provider,
             extraction_heuristics=temporary_extraction_heuristics,
+            symbolic_sizes=symbolic_domain_sizes,
         )
         ir = ConstantFolding.apply(ir)
 
@@ -235,7 +237,7 @@ def apply_common_transforms(
                 break
             ir = inlined
         else:
-            raise RuntimeError("Inlining lift and lambdas did not converge.")
+            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
         # If after creating temporaries, the scan is not at the top, we inline.
         # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.

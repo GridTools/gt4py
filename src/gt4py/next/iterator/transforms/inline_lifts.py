@@ -139,6 +139,7 @@ def _transform_and_extract_lift_args(
     new_lift = im.lift(inner_stencil)(*new_args)
     if hasattr(node.annex, "recorded_shifts"):
         new_lift.annex.recorded_shifts = node.annex.recorded_shifts
+    new_lift.location = node.location
     return (new_lift, extracted_args)
 
 
@@ -161,7 +162,9 @@ def validate_recorded_shifts_annex(node):
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific

@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -23,7 +23,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 #  `(λ(...) → plus(multiplies(...), ...))(...)`.
 
 
-class PropagateDeref(NodeTranslator):
+class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
     @classmethod
     def apply(cls, node: ir.Node):
         """

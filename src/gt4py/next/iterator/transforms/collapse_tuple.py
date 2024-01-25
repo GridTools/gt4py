@@ -71,7 +71,7 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
 
 
 @dataclasses.dataclass(frozen=True)
-class CollapseTuple(eve.NodeTranslator):
+class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 

@@ -16,7 +16,7 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
@@ -260,7 +260,7 @@ import sys
 sys.setrecursionlimit(100000000)
 
 @dataclasses.dataclass(frozen=True)
-class TraceShifts(NodeTranslator):
+class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("recorded_shifts1",)
 
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
