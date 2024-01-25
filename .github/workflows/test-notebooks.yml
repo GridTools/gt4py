@@ -9,7 +9,7 @@ on:
     - main
 
 jobs:
-  test-eve:
+  test-notebooks:
     strategy:
       matrix:
         python-version: ["3.10", "3.11"]
