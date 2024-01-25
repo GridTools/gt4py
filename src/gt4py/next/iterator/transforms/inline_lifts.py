@@ -103,14 +103,18 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific

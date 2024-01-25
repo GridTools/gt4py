@@ -12,13 +12,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import dace
 
 from gt4py.next import Dimension
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
+
+
+def dace_debuginfo(
+    node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    location = node.location
+    if location:
+        return dace.dtypes.DebugInfo(
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
+        )
+    return debuginfo
 
 
 def as_dace_type(type_: ts.ScalarType):
@@ -119,11 +135,13 @@ def add_mapped_nested_sdfg(
 
     if input_nodes is None:
         input_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in inputs.items()
         }
     if output_nodes is None:
         output_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in outputs.items()
         }
     if not inputs:
         state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())

@@ -38,6 +38,7 @@ from .utility import (
     connectivity_identifier,
     create_memlet_at,
     create_memlet_full,
+    dace_debuginfo,
     filter_neighbor_tables,
     flatten_list,
     get_sorted_dims,
@@ -99,20 +100,17 @@ class ItirToSDFG(eve.NodeVisitor):
     offset_provider: dict[str, Any]
     node_types: dict[int, next_typing.Type]
     unique_id: int
-    use_gpu_storage: bool
 
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
         offset_provider: dict[str, NeighborTableOffsetProvider],
         column_axis: Optional[Dimension] = None,
-        use_gpu_storage: bool = False,
     ):
         self.param_types = param_types
         self.column_axis = column_axis
         self.offset_provider = offset_provider
         self.storage_types = {}
-        self.use_gpu_storage = use_gpu_storage
 
     def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
         if isinstance(type_, ts.FieldType):
@@ -123,14 +121,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 else None
             )
             dtype = as_dace_type(type_.dtype)
-            storage = (
-                dace.dtypes.StorageType.GPU_Global
-                if self.use_gpu_storage
-                else dace.dtypes.StorageType.Default
-            )
-            sdfg.add_array(
-                name, shape=shape, strides=strides, offset=offset, dtype=dtype, storage=storage
-            )
+            sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
 
         elif isinstance(type_, ts.ScalarType):
             sdfg.add_symbol(name, as_dace_type(type_))
@@ -153,6 +144,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
+        program_sdfg.debuginfo = dace_debuginfo(node)
         last_state = program_sdfg.add_state("program_entry", True)
         self.node_types = itir_typing.infer_all(node)
 
@@ -197,15 +189,16 @@ class ItirToSDFG(eve.NodeVisitor):
                 inputs=set(input_names),
                 outputs=set(output_names),
                 symbol_mapping=symbol_mapping,
+                debuginfo=closure_sdfg.debuginfo,
             )
 
             # Add access nodes for the program parameters and connect them to the nested SDFG's inputs via edges.
             for inner_name, memlet in input_mapping.items():
-                access_node = last_state.add_access(inner_name)
+                access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, memlet)
 
             for inner_name, memlet in output_mapping.items():
-                access_node = last_state.add_access(inner_name)
+                access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
         # Create the call signature for the SDFG.
@@ -223,6 +216,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
+        closure_sdfg.debuginfo = dace_debuginfo(node)
         closure_state = closure_sdfg.add_state("closure_entry")
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
@@ -246,12 +240,11 @@ class ItirToSDFG(eve.NodeVisitor):
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
-                    storage=array_table[name].storage,
                     transient=True,
                 )
                 closure_init_state.add_nedge(
-                    closure_init_state.add_access(name),
-                    closure_init_state.add_access(transient_name),
+                    closure_init_state.add_access(name, debuginfo=closure_sdfg.debuginfo),
+                    closure_init_state.add_access(transient_name, debuginfo=closure_sdfg.debuginfo),
                     create_memlet_full(name, closure_sdfg.arrays[name]),
                 )
                 input_transients_mapping[name] = transient_name
@@ -261,7 +254,6 @@ class ItirToSDFG(eve.NodeVisitor):
                     shape=array_table[name].shape,
                     strides=array_table[name].strides,
                     dtype=array_table[name].dtype,
-                    storage=array_table[name].storage,
                 )
             else:
                 assert isinstance(self.storage_types[name], ts.ScalarType)
@@ -288,9 +280,15 @@ class ItirToSDFG(eve.NodeVisitor):
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
                     out_tasklet = closure_init_state.add_tasklet(
-                        f"get_{name}", {}, {"__result"}, f"__result = {name}"
+                        f"get_{name}",
+                        {},
+                        {"__result"},
+                        f"__result = {name}",
+                        debuginfo=closure_sdfg.debuginfo,
                     )
-                    access = closure_init_state.add_access(out_name)
+                    access = closure_init_state.add_access(
+                        out_name, debuginfo=closure_sdfg.debuginfo
+                    )
                     value = ValueExpr(access, dtype)
                     memlet = dace.Memlet.simple(out_name, "0")
                     closure_init_state.add_edge(out_tasklet, "__result", access, None, memlet)
@@ -368,19 +366,20 @@ class ItirToSDFG(eve.NodeVisitor):
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
             output_nodes=output_nodes,
+            debuginfo=nsdfg.debuginfo,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):
             memlet = edge.data
             if memlet.data not in output_connectors_mapping:
                 continue
-            transient_access = closure_state.add_access(memlet.data)
+            transient_access = closure_state.add_access(memlet.data, debuginfo=nsdfg.debuginfo)
             closure_state.add_edge(
                 nsdfg_node,
                 edge.src_conn,
                 transient_access,
                 None,
-                dace.Memlet.simple(memlet.data, output_subset),
+                dace.Memlet.simple(memlet.data, output_subset, debuginfo=nsdfg.debuginfo),
             )
             inner_memlet = dace.Memlet.simple(
                 memlet.data, output_subset, other_subset_str=memlet.subset
@@ -429,6 +428,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # the scan operator is implemented as an SDFG to be nested in the closure SDFG
         scan_sdfg = dace.SDFG(name="scan")
+        scan_sdfg.debuginfo = dace_debuginfo(node)
 
         # create a state machine for lambda call over the scan dimension
         start_state = scan_sdfg.add_state("start", True)
@@ -441,12 +441,16 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # tasklet for initialization of carry
         carry_init_tasklet = start_state.add_tasklet(
-            "get_carry_init_value", {}, {"__result"}, f"__result = {init_carry_value}"
+            "get_carry_init_value",
+            {},
+            {"__result"},
+            f"__result = {init_carry_value}",
+            debuginfo=scan_sdfg.debuginfo,
         )
         start_state.add_edge(
             carry_init_tasklet,
             "__result",
-            start_state.add_access(scan_carry_name),
+            start_state.add_access(scan_carry_name, debuginfo=scan_sdfg.debuginfo),
             None,
             dace.Memlet.simple(scan_carry_name, "0"),
         )
@@ -524,11 +528,12 @@ class ItirToSDFG(eve.NodeVisitor):
             inputs=set(lambda_input_names) | set(connectivity_names),
             outputs=set(lambda_output_names),
             symbol_mapping=symbol_mapping,
+            debuginfo=lambda_context.body.debuginfo,
         )
 
         # connect scan SDFG to lambda inputs
         for name, memlet in array_mapping.items():
-            access_node = lambda_state.add_access(name)
+            access_node = lambda_state.add_access(name, debuginfo=lambda_context.body.debuginfo)
             lambda_state.add_edge(access_node, None, scan_inner_node, name, memlet)
 
         output_names = [output_name]
@@ -538,7 +543,7 @@ class ItirToSDFG(eve.NodeVisitor):
             lambda_state.add_edge(
                 scan_inner_node,
                 connector,
-                lambda_state.add_access(name),
+                lambda_state.add_access(name, debuginfo=lambda_context.body.debuginfo),
                 None,
                 dace.Memlet.simple(name, f"i_{scan_dim}"),
             )
@@ -546,8 +551,10 @@ class ItirToSDFG(eve.NodeVisitor):
         # add state to scan SDFG to update the carry value at each loop iteration
         lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
         lambda_update_state.add_memlet_path(
-            lambda_update_state.add_access(output_name),
-            lambda_update_state.add_access(scan_carry_name),
+            lambda_update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
+            lambda_update_state.add_access(
+                scan_carry_name, debuginfo=lambda_context.body.debuginfo
+            ),
             memlet=dace.Memlet.simple(output_names[0], f"i_{scan_dim}", other_subset_str="0"),
         )
 

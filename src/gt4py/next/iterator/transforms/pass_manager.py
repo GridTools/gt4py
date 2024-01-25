@@ -85,6 +85,7 @@ def apply_common_transforms(
     temporary_extraction_heuristics: Optional[
         Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
     ] = None,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -129,6 +130,7 @@ def apply_common_transforms(
             ir,
             offset_provider=offset_provider,
             extraction_heuristics=temporary_extraction_heuristics,
+            symbolic_sizes=symbolic_domain_sizes,
         )
 
         for _ in range(10):
