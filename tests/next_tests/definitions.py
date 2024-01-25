@@ -19,6 +19,8 @@ import importlib
 
 import pytest
 
+from gt4py.next import allocators as next_allocators
+
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -55,9 +57,13 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-class AllocatorId(_PythonObjectIdMixin, str, enum.Enum):
-    CPU_ALLOCATOR = "gt4py.next.allocators.default_cpu_allocator"
-    GPU_ALLOCATOR = "gt4py.next.allocators.default_gpu_allocator"
+numpy_execution = (None, next_allocators.default_cpu_allocator)
+cupy_execution = (None, next_allocators.default_gpu_allocator)
+
+
+class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
+    NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
+    CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -140,6 +146,11 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
+    (
+        USES_SCAN_WITHOUT_FIELD_ARGS,
+        XFAIL,
+        UNSUPPORTED_MESSAGE,
+    ),  # we can't extract the field type from scan args
 ]
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
@@ -150,12 +161,8 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
 #: (<test_marker>, <skip_definition, <skip_message>)
 BACKEND_SKIP_TEST_MATRIX = {
-    AllocatorId.CPU_ALLOCATOR: EMBEDDED_SKIP_LIST,
-    AllocatorId.GPU_ALLOCATOR: EMBEDDED_SKIP_LIST
-    + [
-        # we can't extract the type of the output field
-        (USES_SCAN_WITHOUT_FIELD_ARGS, XFAIL, UNSUPPORTED_MESSAGE)
-    ],
+    EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [

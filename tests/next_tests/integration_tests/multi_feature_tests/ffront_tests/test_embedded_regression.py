@@ -51,7 +51,7 @@ def test_default_backend_is_respected_scan_operator(cartesian_case):  # noqa: F8
     def sum(state: float, a: float) -> float:
         return state + a
 
-    a = gtx.ones({KDim: 10}, allocator=cartesian_case.backend)
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
 
     with pytest.raises(ValueError, match="No backend selected!"):
         # see comment in field_operator test

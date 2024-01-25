@@ -851,6 +851,8 @@ def _field(
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
 ) -> Field:
+    # Utility function to construct a `Field` from different buffer representations.
+    # Consider removing this function and using `Field` constructor directly.
     raise NotImplementedError
 
 
