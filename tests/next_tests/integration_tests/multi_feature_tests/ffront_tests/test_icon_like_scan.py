@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
+import dataclasses
 
 import numpy as np
 import pytest
@@ -203,22 +203,26 @@ def test_setup(fieldview_backend):
         allocator=fieldview_backend,
     )
 
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class setup:
-        case: cases.Case = test_case
-        cell_size = case.default_sizes[Cell]
-        k_size = case.default_sizes[KDim]
-        z_alpha = case.as_field(
+        case: cases.Case = dataclasses.field(default_factory=lambda: test_case)
+        cell_size = test_case.default_sizes[Cell]
+        k_size = test_case.default_sizes[KDim]
+        z_alpha = test_case.as_field(
             [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size + 1))
         )
-        z_beta = case.as_field(
+        z_beta = test_case.as_field(
             [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q = case.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
-        w = case.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
+        z_q = test_case.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+        )
+        w = test_case.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+        )
         z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
-        dummy = case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
+        dummy = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
 
     return setup()
 

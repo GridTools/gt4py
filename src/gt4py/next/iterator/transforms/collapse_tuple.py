@@ -48,7 +48,7 @@ def _get_tuple_size(elem: ir.Node, node_types: Optional[dict] = None) -> int | t
 
 
 @dataclass(frozen=True)
-class CollapseTuple(eve.NodeTranslator):
+class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 
@@ -86,13 +86,6 @@ class CollapseTuple(eve.NodeTranslator):
             collapse_tuple_get_make_tuple,
             use_global_type_inference,
             node_types,
-        ).visit(node)
-
-        return cls(
-            ignore_tuple_size,
-            collapse_make_tuple_tuple_get,
-            collapse_tuple_get_make_tuple,
-            use_global_type_inference,
         ).visit(node)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:

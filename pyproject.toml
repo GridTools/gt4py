@@ -69,15 +69,15 @@ requires-python = '>=3.8'
 cuda = ['cupy>=12.0']
 cuda11x = ['cupy-cuda11x>=12.0']
 cuda12x = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
+dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
 # Always add all extra packages to 'full' for a simple full gt4py installation
 full = [
   'clang-format>=9.0',
-  'dace>=0.14.2,<0.15',
+  'dace>=0.15.1,<0.16',
   'hypothesis>=6.0.0',
   'pytest>=7.0',
-  'sympy>=1.7',
+  'sympy>=1.9',
   'scipy>=1.7.2',
   'jax[cpu]>=0.4.13'
 ]

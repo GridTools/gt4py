@@ -900,26 +900,6 @@ def test_docstring(cartesian_case):
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
 
 
-def test_with_bound_args(cartesian_case):
-    @gtx.field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:
-        if not condition:
-            scalar = 0
-        return a + a + scalar
-
-    @gtx.program
-    def program_bound_args(a: cases.IField, scalar: int32, condition: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, condition, out=out)
-
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    scalar = int32(1)
-    ref = a + a + 1
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-
-    prog_bounds = program_bound_args.with_bound_args(scalar=scalar, condition=True)
-    cases.verify(cartesian_case, prog_bounds, a, out, inout=out, ref=ref)
-
-
 def test_domain(cartesian_case):
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:

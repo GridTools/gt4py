@@ -38,7 +38,7 @@ def _is_reduce(node: ir.Node) -> TypeGuard[ir.FunCall]:
 
 
 @dataclasses.dataclass(frozen=True)
-class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class FuseMaps(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
     """
     Fuses nested `map_`s.
 
@@ -66,6 +66,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         return ir.Lambda(
             params=params,
             expr=ir.FunCall(fun=fun, args=[ir.SymRef(id=p.id) for p in params]),
+            location=fun.location,
         )
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -99,6 +100,7 @@ class FuseMaps(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                                 ir.FunCall(
                                     fun=inner_op,
                                     args=[ir.SymRef(id=param.id) for param in inner_op.params],
+                                    location=node.location,
                                 )
                             )
                         )
