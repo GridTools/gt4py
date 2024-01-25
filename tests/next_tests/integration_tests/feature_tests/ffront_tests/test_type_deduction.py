@@ -22,6 +22,7 @@ from gt4py.next import (
     DimensionKind,
     Field,
     FieldOffset,
+    as_scalar,
     astype,
     broadcast,
     common,
@@ -616,6 +617,18 @@ def test_mismatched_literals():
         match=(r"Could not promote 'float32' and 'float64' to common type in call to +."),
     ):
         _ = FieldOperatorParser.apply_to_function(mismatched_lit)
+
+
+def test_as_scalar():
+
+    def simple_as_scalar(a: Field[[], float64]):
+        return as_scalar(a)
+
+    parsed = FieldOperatorParser.apply_to_function(simple_as_scalar)
+
+    assert parsed.body.stmts[0].value.type == ts.FieldType(
+        dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
 
 
 def test_broadcast_multi_dim():

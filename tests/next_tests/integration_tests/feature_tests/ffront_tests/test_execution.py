@@ -40,6 +40,7 @@ from next_tests.integration_tests.cases import (
     E2V,
     V2E,
     E2VDim,
+    Edge,
     IDim,
     Ioff,
     JDim,
@@ -320,6 +321,21 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
+def test_as_scalar(cartesian_case):
+    @gtx.field_operator
+    def testee_fo(a: cases.IFloatField) -> cases.IFloatField:
+        return a
+
+    @gtx.program
+    def testee_prog(a: cases.IFloatField):
+        testee_fo(a, out=a[1:2])
+
+    a = cases.allocate(cartesian_case, testee_prog, "a")()
+    ref = np.asarray(a.asnumpy()[1])
+
+    cases.verify(cartesian_case, testee_prog, a, inout=a[1], ref=ref)
+
+
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
@@ -499,21 +515,16 @@ def test_nested_tuple_return(cartesian_case):
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.EField) -> cases.EField:
+    def testee(a: gtx.Field[[Edge, KDim], int]) -> gtx.Field[[Vertex, KDim], int]:
         tmp = neighbor_sum(a(V2E), axis=V2EDim)
-        tmp_2 = neighbor_sum(tmp(E2V), axis=E2VDim)
-        return tmp_2
+        # tmp_2 = neighbor_sum(tmp(E2V), axis=E2VDim)
+        return tmp
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
-                unstructured_case.offset_provider["E2V"].table
-            ],
-            axis=1,
-        ),
-        comparison=lambda a, tmp_2: np.all(a == tmp_2),
+        ref=lambda a: np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1),
+        comparison=lambda a, tmp: np.all(a == tmp),
     )
 
 

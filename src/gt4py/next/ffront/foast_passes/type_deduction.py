@@ -931,6 +931,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             location=node.location,
         )
 
+    def _visit_as_scalar(self, node: foast.Call, **kwargs) -> foast.Call:
+        return foast.Call(
+            func=node.func,
+            args=node.args,
+            kwargs=node.kwargs,
+            location=node.location,
+            type=node.args[0].type,
+        )
+
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> foast.Call:
         arg_type = cast(ts.FieldType | ts.ScalarType, node.args[0].type)
         broadcast_dims_expr = cast(foast.TupleExpr, node.args[1]).elts

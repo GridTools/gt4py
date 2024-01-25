@@ -204,12 +204,14 @@ class NdArrayField(
     def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
 
-        new_buffer = self.ndarray[buffer_slice]
-        if len(new_domain) == 0:
-            # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
-            return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
+        if new_domain.ndim == 0:
+            buffer_val = self.ndarray[buffer_slice]
+            assert core_defs.is_scalar_type(buffer_val)
+            new_buffer = self._scalar_to_field(buffer_val)
         else:
-            return self.__class__.from_array(new_buffer, domain=new_domain)
+            new_buffer = self.ndarray[buffer_slice]
+
+        return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
 
@@ -301,6 +303,12 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    def _scalar_to_field(self, value: core_defs.ScalarT) -> NdArrayField:
+        if self.array_ns == cp:
+            return cp.asarray(value)
+        else:
+            return np.asarray(value)
 
 
 @dataclasses.dataclass(frozen=True)

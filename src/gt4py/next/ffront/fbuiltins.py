@@ -196,6 +196,14 @@ def broadcast(
     )
 
 
+@BuiltInFunction
+def as_scalar(
+    zero_d_field: common.Field,
+    /,
+) -> common.Field:
+    return common.field(np.asarray(zero_d_field.ndarray), domain=common.Domain(dims=(), ranges=()))
+
+
 @WhereBuiltinFunction
 def where(
     mask: common.Field,
@@ -301,6 +309,7 @@ FUN_BUILTIN_NAMES = [
     "where",
     "astype",
     "as_offset",
+    "as_scalar",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
