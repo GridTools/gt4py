@@ -152,7 +152,7 @@ def _intersect_scan_args(
 
 def _get_array_ns(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
-):
+) -> ModuleType:
     for arg in utils.flatten_nested_tuple(args):
         if hasattr(arg, "array_ns"):
             return arg.array_ns

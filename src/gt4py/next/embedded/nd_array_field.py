@@ -25,7 +25,7 @@ from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
-from gt4py.next import common, constructors
+from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
 
@@ -437,13 +437,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
+            cls = self.__class__
+            xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
-            restricted_connectivity = constructors.as_connectivity(
-                new_domain,
-                self.codomain,
-                self.ndarray[buffer_slice],
-                self.dtype,
-            )  # TODO does it make sense to go through constructors here which does a lot of checks?
+            new_buffer = xp.asarray(self.ndarray[buffer_slice])
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
