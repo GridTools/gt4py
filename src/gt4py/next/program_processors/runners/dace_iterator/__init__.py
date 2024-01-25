@@ -14,6 +14,7 @@
 import hashlib
 import warnings
 from inspect import currentframe, getframeinfo
+from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
 import dace
@@ -329,12 +330,12 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         sdfg = sdfg_program.sdfg
 
     else:
-        # debug: test large icon4py stencils without regenerating the SDFG at each run
-        generate_sdfg = True
+        # useful for debug: run gt4py program without regenerating the SDFG at each run
+        skip_itir_lowering_to_sdfg = False
         target = "gpu" if on_gpu else "cpu"
-        sdfg_filename = f"_dacegraphs/{target}/{program.id}.sdfg"
+        sdfg_filename = f"_dacegraphs/gt4py/{target}/{program.id}.sdfg"
 
-        if generate_sdfg:
+        if not (skip_itir_lowering_to_sdfg and Path(sdfg_filename).exists()):
             sdfg = build_sdfg_from_itir(
                 program,
                 *args,

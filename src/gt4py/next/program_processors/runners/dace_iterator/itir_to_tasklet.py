@@ -382,11 +382,9 @@ def builtin_list_get(
         result_name = unique_var_name()
         transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
         result_node = transformer.context.state.add_access(result_name)
-        transformer.context.state.add_edge(
+        transformer.context.state.add_nedge(
             args[1].value,
-            None,
             result_node,
-            None,
             dace.Memlet.simple(args[1].value.data, index_value),
         )
         return [ValueExpr(result_node, args[1].dtype)]
@@ -576,9 +574,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         neighbor_tables = (
             filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else {}
         )
-        connectivity_names = [
-            connectivity_identifier(offset) for offset, _ in neighbor_tables.items()
-        ]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
@@ -714,8 +710,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
-        for conn, _ in neighbor_tables.items():
-            var = connectivity_identifier(conn)
+        for offset in neighbor_tables.keys():
+            var = connectivity_identifier(offset)
             nsdfg_inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
 
         symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
@@ -743,8 +739,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     store = value.indices[dim]
                     idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
-        for conn, _ in neighbor_tables.items():
-            var = connectivity_identifier(conn)
+        for offset in neighbor_tables.keys():
+            var = connectivity_identifier(offset)
             memlet = nsdfg_inputs[var]
             access = self.context.state.add_access(var, debuginfo=nsdfg_node.debuginfo)
             self.context.state.add_edge(access, None, nsdfg_node, var, memlet)

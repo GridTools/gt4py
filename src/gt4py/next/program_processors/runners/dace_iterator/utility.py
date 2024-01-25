@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 import dace
 
-from gt4py.next import Dimension, DimensionKind
+from gt4py.next import Dimension
 from gt4py.next.common import NeighborTable
 from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
@@ -179,24 +179,6 @@ def unique_name(prefix):
 
 def unique_var_name():
     return unique_name("_var")
-
-
-def map_field_dimensions_to_sdfg_symbols(
-    name: str,
-    dims: Sequence[Dimension],
-    neighbor_tables: Mapping[str, NeighborTable],
-    sort_dims: bool,
-) -> tuple[list[dace.symbol], list[dace.symbol]]:
-    dtype = dace.int64
-    sorted_dims = [dim for _, dim in get_sorted_dims(dims)] if sort_dims else dims
-    shape = [
-        neighbor_tables[dim.value].max_neighbors
-        if dim.kind == DimensionKind.LOCAL
-        else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
-        for i, dim in enumerate(sorted_dims)
-    ]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
-    return shape, strides
 
 
 def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
