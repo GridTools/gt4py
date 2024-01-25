@@ -40,23 +40,3 @@ jobs:
         pyversion=${{ matrix.python-version }}
         pyversion_no_dot=${pyversion//./}
         tox run -e notebooks-py${pyversion_no_dot}
-    #     mv coverage.json coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
-    # - name: Upload coverage.json artifact
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: coverage-py${{ matrix.python-version }}-${{ matrix.os }}
-    #     path: coverage-py${{ matrix.python-version }}-${{ matrix.os }}.json
-    # - name: Gather info
-    #   run: |
-    #     echo ${{ github.ref_type }} >> info.txt
-    #     echo ${{ github.ref }} >> info.txt
-    #     echo ${{ github.sha }} >> info.txt
-    #     echo ${{ github.event.number }} >> info.txt
-    #     echo ${{ github.event.pull_request.head.ref }} >> info.txt
-    #     echo ${{ github.event.pull_request.head.sha }} >> info.txt
-    #     echo ${{ github.run_id }} >> info.txt
-    # - name: Upload info artifact
-    #   uses: actions/upload-artifact@v3
-    #   with:
-    #     name: info-py${{ matrix.python-version }}-${{ matrix.os }}
-    #     path: info.txt
