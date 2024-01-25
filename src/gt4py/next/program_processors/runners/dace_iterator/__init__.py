@@ -165,12 +165,12 @@ def get_stride_args(
     return stride_args
 
 
-_build_cache_cpu: dict[str, CompiledSDFG] = {}
-_build_cache_gpu: dict[str, CompiledSDFG] = {}
+_build_cache: dict[str, CompiledSDFG] = {}
 
 
 def get_cache_id(
     build_type: str,
+    run_on_gpu: bool,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -195,6 +195,7 @@ def get_cache_id(
         str(arg)
         for arg in (
             build_type,
+            run_on_gpu,
             program,
             *arg_types,
             column_axis,
@@ -320,21 +321,18 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
+    # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
+    skip_itir_lowering_to_sdfg = kwargs.get("skip_itir_lowering_to_sdfg", False)
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
-    cache_id = get_cache_id(build_type, program, arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(build_type, on_gpu, program, arg_types, column_axis, offset_provider)
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
-
     else:
-        # useful for debug: run gt4py program without regenerating the SDFG at each run
-        skip_itir_lowering_to_sdfg = False
-        target = "gpu" if on_gpu else "cpu"
-        sdfg_filename = f"_dacegraphs/gt4py/{target}/{program.id}.sdfg"
-
+        sdfg_filename = f"_dacegraphs/gt4py/{cache_id}/{program.id}.sdfg"
         if not (skip_itir_lowering_to_sdfg and Path(sdfg_filename).exists()):
             sdfg = build_sdfg_from_itir(
                 program,
@@ -383,7 +381,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
         program,
         *args,
         **kwargs,
-        build_cache=_build_cache_cpu,
+        build_cache=_build_cache,
         build_type=_build_type,
         compiler_args=compiler_args,
         on_gpu=False,
@@ -402,7 +400,7 @@ if cp:
             program,
             *args,
             **kwargs,
-            build_cache=_build_cache_gpu,
+            build_cache=_build_cache,
             build_type=_build_type,
             on_gpu=True,
         )
