@@ -848,7 +848,6 @@ def _field(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
-    allocator=None,  #: Optional[next_allocators.FieldBufferAllocationUtil] = None,
 ) -> Field:
     raise NotImplementedError
 
@@ -861,7 +860,6 @@ def _connectivity(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
-    allocator=None,  #: Optional[next_allocators.FieldBufferAllocationUtil] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 

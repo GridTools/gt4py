@@ -15,18 +15,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Optional, cast
+from typing import Optional, cast
 
 import gt4py._core.definitions as core_defs
 import gt4py.eve as eve
 import gt4py.eve.extended_typing as xtyping
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
+import gt4py.next.embedded.nd_array_field as nd_array_field
 import gt4py.storage.cartesian.utils as storage_utils
-
-
-if TYPE_CHECKING:
-    import gt4py.next.embedded.nd_array_field as nd_array_field
 
 
 @eve.utils.with_fluid_partial
@@ -92,7 +89,7 @@ def empty(
     )
     res = common._field(buffer.ndarray, domain=domain)
     assert common.is_mutable_field(res)
-    # assert isinstance(res, nd_array_field.NdArrayField)
+    assert isinstance(res, nd_array_field.NdArrayField)
     return res
 
 
@@ -364,6 +361,6 @@ def as_connectivity(
     connectivity_field = common._connectivity(
         buffer.ndarray, codomain=codomain, domain=actual_domain
     )
-    # assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
+    assert isinstance(connectivity_field, nd_array_field.NdArrayConnectivityField)
 
     return connectivity_field

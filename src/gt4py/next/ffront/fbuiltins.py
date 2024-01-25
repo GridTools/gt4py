@@ -188,12 +188,8 @@ def broadcast(
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    return common._field(
-        np.asarray(field)[
-            tuple([np.newaxis] * len(dims))
-        ],  # TODO(havogt) use FunctionField once available
-        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.infinite()] * len(dims))),
-    )
+    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
+    return field  # type: ignore[return-value] # see comment above
 
 
 @WhereBuiltinFunction

@@ -340,7 +340,9 @@ markers = [
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
+  'uses_scan: tests that uses scan',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
+  'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
   'uses_sparse_fields: tests that require backend support for sparse fields',
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
@@ -349,7 +351,6 @@ markers = [
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
-  'uses_scan: tests that uses scan',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

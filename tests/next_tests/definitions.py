@@ -109,7 +109,9 @@ USES_LIFT_EXPRESSIONS = "uses_lift_expressions"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
 USES_ORIGIN = "uses_origin"
 USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
+USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
+USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -119,7 +121,6 @@ USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
-USES_SCAN = "uses_scan"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -161,7 +162,11 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 #: (<test_marker>, <skip_definition, <skip_message>)
 BACKEND_SKIP_TEST_MATRIX = {
     AllocatorId.CPU_ALLOCATOR: EMBEDDED_SKIP_LIST,
-    AllocatorId.GPU_ALLOCATOR: EMBEDDED_SKIP_LIST,
+    AllocatorId.GPU_ALLOCATOR: EMBEDDED_SKIP_LIST
+    + [
+        # we can't extract the type of the output field
+        (USES_SCAN_WITHOUT_FIELD_ARGS, XFAIL, UNSUPPORTED_MESSAGE)
+    ],
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [

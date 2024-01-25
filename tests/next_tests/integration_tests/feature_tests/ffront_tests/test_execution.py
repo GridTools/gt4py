@@ -589,6 +589,7 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
@@ -743,6 +744,7 @@ def test_ternary_scan(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
     if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
