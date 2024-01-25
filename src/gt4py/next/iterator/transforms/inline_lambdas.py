@@ -15,7 +15,7 @@
 import dataclasses
 from typing import Optional
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
@@ -104,6 +104,7 @@ def inline_lambda(  # noqa: C901  # see todo above
     new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
 
     if all(eligible_params):
+        new_expr.location = node.location
         return new_expr
     else:
         return ir.FunCall(
@@ -116,11 +117,12 @@ def inline_lambda(  # noqa: C901  # see todo above
                 expr=new_expr,
             ),
             args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
+            location=node.location,
         )
 
 
 @dataclasses.dataclass
-class InlineLambdas(NodeTranslator):
+class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
     PRESERVED_ANNEX_ATTRS = ("type",)

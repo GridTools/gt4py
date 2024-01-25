@@ -694,7 +694,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except ValueError as err:
             raise errors.DSLError(
-                node.location, f"Invalid argument types in call to '{new_func}'."
+                node.location, f"Invalid argument types in call to '{new_func}'.\n{err}"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)

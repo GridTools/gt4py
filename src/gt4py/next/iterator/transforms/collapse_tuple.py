@@ -71,7 +71,7 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
 
 
 @dataclasses.dataclass(frozen=True)
-class CollapseTuple(eve.NodeTranslator):
+class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Simplifies `make_tuple`, `tuple_get` calls.
 
@@ -145,9 +145,7 @@ class CollapseTuple(eve.NodeTranslator):
 
         # TODO(tehrengruber): We don't want neither opcount preserving nor unconditionally inlining,
         #  but only force inline of lambda args.
-        new_node = InlineLambdas.apply(
-            node, opcount_preserving=True, force_inline_lambda_args=True
-        )
+        new_node = InlineLambdas.apply(node, opcount_preserving=True, force_inline_lambda_args=True)
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
@@ -185,8 +183,7 @@ class CollapseTuple(eve.NodeTranslator):
                 assert isinstance(v, ir.FunCall)
                 assert isinstance(v.args[0], ir.Literal)
                 if not (
-                    int(v.args[0].value) == i
-                    and ir_misc.is_provable_equal(v.args[1], first_expr)
+                    int(v.args[0].value) == i and ir_misc.is_provable_equal(v.args[1], first_expr)
                 ):
                     # tuple argument differs, just continue with the rest of the tree
                     return self.generic_visit(node)

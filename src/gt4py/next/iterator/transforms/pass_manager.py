@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Optional
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
@@ -81,6 +82,7 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -148,7 +150,9 @@ def apply_common_transforms(
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
+        ir = CreateGlobalTmps().visit(
+            ir, offset_provider=offset_provider, symbolic_sizes=symbolic_domain_sizes
+        )
         ir = InlineLifts().visit(ir)
         # If after creating temporaries, the scan is not at the top, we inline.
         # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.

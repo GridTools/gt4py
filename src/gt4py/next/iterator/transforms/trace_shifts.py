@@ -16,7 +16,7 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 
 
@@ -235,7 +235,7 @@ _START_CTX: Final = {
 
 
 @dataclasses.dataclass(frozen=True)
-class TraceShifts(NodeTranslator):
+class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
 
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:

@@ -312,7 +312,7 @@ def test_symbolref_validation_for_valid_tree():
     SymbolTableRootNode(
         nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
     )
-    SymbolTableRootNode(
+    SymbolTableRootNode(  # noqa: B018
         nodes=[
             SymbolChildNode(name="foo"),
             SymbolRefChildNode(name="foo"),
