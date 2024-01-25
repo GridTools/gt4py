@@ -170,7 +170,7 @@ _build_cache: dict[str, CompiledSDFG] = {}
 
 def get_cache_id(
     build_type: str,
-    run_on_gpu: bool,
+    build_for_gpu: bool,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -195,7 +195,7 @@ def get_cache_id(
         str(arg)
         for arg in (
             build_type,
-            run_on_gpu,
+            build_for_gpu,
             program,
             *arg_types,
             column_axis,
