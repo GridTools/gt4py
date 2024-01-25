@@ -19,6 +19,7 @@ from typing import Optional
 
 import gt4py.eve as eve
 import gt4py.next as gtx
+from gt4py.eve import datamodels
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
@@ -99,10 +100,20 @@ class FunctionType(Type):
     ret: Type = eve.field(default_factory=TypeVar.fresh)
 
 
+import traceback
+
+
 class Location(Type):
     """Location type."""
 
     name: str
+    #stack_trace: typing.Any = None
+
+    #@datamodels.root_validator
+    #@classmethod
+    #def save_stack_trace(cls, instance) -> None:
+    #    if not instance.stack_trace:
+    #        instance.stack_trace = tuple(traceback.format_stack())
 
 
 ANYWHERE = Location(name="ANYWHERE")
@@ -747,9 +758,10 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             assert isinstance(connectivity, Connectivity)
             max_length = Length(length=connectivity.max_neighbors)
             has_skip_values = BoolType(value=connectivity.has_skip_values)
-        current_loc_in, current_loc_out = _infer_shift_location_types(
-            [node.args[0]], self.offset_provider, self.constraints
-        )
+        #current_loc_in, current_loc_out = _infer_shift_location_types(
+        #    [node.args[0]], self.offset_provider, self.constraints
+        #)
+        current_loc_in, current_loc_out = TypeVar.fresh(), TypeVar.fresh()
         dtype_ = TypeVar.fresh()
         size = TypeVar.fresh()
         it = self.visit(node.args[1], **kwargs)

@@ -284,14 +284,14 @@ class CollapseTuple(eve.NodeTranslator):
             # `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
             # let (b, (if(...))) b[0]
             # (lambda b, c: b[0])(if(...), c)
-        #    for i, arg in enumerate(node.args):
-        #        if is_if_call(arg):
-        #            cond, true_branch, false_branch = arg.args
-        #            new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch), **kwargs)
-        #            new_false_branch = self.fp_transform(
-        #                _with_altered_arg(node, i, false_branch), **kwargs
-        #            )
-        #            return im.if_(cond, new_true_branch, new_false_branch)
+            #for i, arg in enumerate(node.args):
+            #    if is_if_call(arg):
+            #        cond, true_branch, false_branch = arg.args
+            #        new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch), **kwargs)
+            #        new_false_branch = self.fp_transform(
+            #            _with_altered_arg(node, i, false_branch), **kwargs
+            #        )
+            #        return im.if_(cond, new_true_branch, new_false_branch)
 
         if self.flags & self.Flag.PROPAGATE_NESTED_LET and is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`

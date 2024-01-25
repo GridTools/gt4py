@@ -14,7 +14,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+from typing import Optional, cast, Callable
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
@@ -38,6 +38,53 @@ def _flatten_tuple_expr(
             result.extend(_flatten_tuple_expr(e))
         return result
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
+
+
+from gt4py.next.iterator.ir_utils import ir_makers as im
+def to_tuples_of_iterator(param: str, arg_type: ts.TypeSpec):
+    """
+    Convert iterator of tuples into tuples of iterator
+
+    >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    """
+    def fun(primitive_type, path):
+        inner_expr = im.deref("it")
+        for path_part in path:
+            inner_expr = im.tuple_get(path_part, inner_expr)
+
+        return im.lift(im.lambda_("it")(inner_expr))(param)
+
+    return type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple)
+
+
+def _process_elements(
+    process_func: Callable[[itir.Expr], itir.Expr],
+    obj: Optional[itir.Expr],
+    current_el_type: ts.TypeSpec,
+    current_el_expr: itir.Expr = im.ref("_tuple_wtf"),
+):
+    """Recursively applies a processing function to all primitive constituents of a tuple."""
+    if isinstance(current_el_type, ts.TupleType):
+        # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
+        result = im.make_tuple(
+            *[
+                _process_elements(
+                    process_func,
+                    None,
+                    current_el_type.types[i],
+                    im.tuple_get(i, current_el_expr),
+                )
+                for i in range(len(current_el_type.types))
+            ]
+        )
+    elif type_info.contains_local_field(current_el_type):
+        raise NotImplementedError("Processing fields with local dimension is not implemented.")
+    else:
+        result = process_func(current_el_expr)
+
+    if obj is not None:
+        return im.let("_tuple_wtf", obj)(result)
+    return result
 
 
 class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -139,16 +186,37 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+        args, node_kwargs = type_info.canonicalize_arguments(
             node.func.type,
-            self.visit(node.args, **kwargs),
-            self.visit(node_kwargs, **kwargs),
+            node.args,
+            node_kwargs,
             use_signature_ordering=True,
         )
 
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        stencil_params = []
+        stencil_args = []
+        for i, arg in enumerate([*args, *node_kwargs]):
+            stencil_params.append(f"__sarg{i}")
+            if isinstance(arg.type, ts.TupleType):
+                # convert into tuple of iterators
+                stencil_args.append(to_tuples_of_iterator(f"__sarg{i}", arg.type))
+            else:
+                stencil_args.append(f"__sarg{i}")
+        #stencil_body = _process_elements(lambda x: im.deref(x), im.call(node.func.id)(*stencil_args), node.func.type.definition.returns)
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # scan operators return an iterator of tuples
+            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+        else:
+            # field operators return a tuple of iterators
+            stencil_body = _process_elements(lambda x: im.deref(x),
+                                             im.call(node.func.id)(*stencil_args),
+                                             node.func.type.definition.returns)
+
         return itir.StencilClosure(
             domain=lowered_domain,
-            stencil=itir.SymRef(id=node.func.id),
+            stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
         )

@@ -126,7 +126,7 @@ class SymbolRefsValidatorTrait:
                 ):
                     symbol_name = getattr(node, field_name)
                     if symbol_name not in symtable:
-                        breakpoint()
+                        #breakpoint()
                         self.missing_symbols.add(symbol_name)
 
             if isinstance(node, SymbolTableTrait):

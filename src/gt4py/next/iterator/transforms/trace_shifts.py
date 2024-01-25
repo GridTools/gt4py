@@ -37,6 +37,9 @@ class ShiftRecorder:
         self.recorded_shifts.setdefault(id(inp), set())
 
     def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]) -> None:
+        recorded_shifts = getattr(inp.annex, "recorded_shifts1", set())
+        recorded_shifts.add(offsets)
+        inp.annex.recorded_shifts1 = recorded_shifts
         self.recorded_shifts[id(inp)].add(offsets)
 
 
@@ -68,6 +71,9 @@ class IteratorArgTracer(IteratorTracer):
 
     already_derefed: bool = False
 
+    def mark_used_in_scan(self):
+        self.arg.annex.mark_used_in_scan = True
+
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return IteratorArgTracer(
             arg=self.arg,
@@ -89,6 +95,10 @@ class IteratorArgTracer(IteratorTracer):
 @dataclasses.dataclass(frozen=True)
 class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
+
+    def mark_used_in_scan(self):
+        for it in self.its:
+            it.mark_used_in_scan()
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
@@ -112,6 +122,8 @@ def _combine(*values):
 
 # implementations of builtins
 def _deref(x):
+    if isinstance(x, tuple) or x is Sentinel.VALUE:
+        breakpoint()
     return x.deref()
 
 
@@ -131,11 +143,14 @@ def _shift(*offsets):
 class AppliedLift(IteratorTracer):
     stencil: Callable
     its: tuple[IteratorTracer, ...]
+    break_on_deref: bool = False
 
     def shift(self, offsets):
-        return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its))
+        return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its), self.break_on_deref)
 
     def deref(self):
+        if self.break_on_deref:
+            breakpoint()
         return self.stencil(*self.its)
 
 
@@ -162,6 +177,8 @@ def _neighbors(o, x):
 
 def _scan(f, forward, init):
     def apply(*args):
+        for arg in args:
+            arg.mark_used_in_scan()
         return f(init, *args)
 
     return apply
@@ -244,6 +261,8 @@ sys.setrecursionlimit(100000000)
 
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("recorded_shifts1",)
+
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
 
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
@@ -260,11 +279,16 @@ class TraceShifts(NodeTranslator):
         if node.fun == ir.SymRef(id="tuple_get"):
             assert isinstance(node.args[0], ir.Literal)
             index = int(node.args[0].value)
-            return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
+            try:
+               return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
+            except Exception as e:
+                breakpoint()
+                raise e
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-        return fun(*args)
+        result = fun(*args)
+        return result
 
     def visit(self, node, **kwargs):
         result = super().visit(node, **kwargs)

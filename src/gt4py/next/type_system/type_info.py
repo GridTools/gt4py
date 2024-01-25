@@ -88,6 +88,7 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec,
+    with_path_arg: bool = False,
 ) -> XIterable[ts.TypeSpec]:
     """
     Return the primitive types contained in a composite type.
@@ -106,22 +107,27 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.TypeSpec):
+    def constituents_yielder(symbol_type: ts.TypeSpec, path: tuple[int, ...]):
         if isinstance(symbol_type, ts.TupleType):
-            for el_type in symbol_type.types:
-                yield from constituents_yielder(el_type)
+            for i, el_type in enumerate(symbol_type.types):
+                yield from constituents_yielder(el_type, (*path, i))
         else:
-            yield symbol_type
+            if with_path_arg:
+                yield (symbol_type, path)
+            else:
+                yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type))
+    return xiter(constituents_yielder(symbol_type, ()))
 
 
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
     fun: Callable[[ts.TypeSpec], ts.TypeSpec]
     | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec],
-    with_path_arg=False,
     _path=(),
+    *,
+    with_path_arg=False,
+    tuple_constructor=lambda *elements: ts.TupleType(types=[*elements]),
 ):
     """
     Apply function to all primitive constituents of a type.
@@ -132,10 +138,9 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return ts.TupleType(
-            types=[
+        return tuple_constructor(*[
                 apply_to_primitive_constituents(
-                    el, fun, _path=(*_path, i), with_path_arg=with_path_arg
+                    el, fun, _path=(*_path, i), with_path_arg=with_path_arg, tuple_constructor=tuple_constructor
                 )
                 for i, el in enumerate(symbol_type.types)
             ]
@@ -642,6 +647,7 @@ def function_signature_incompatibilities_func(  # noqa: C901
                 arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
             else:
                 arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
+            breakpoint()
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):

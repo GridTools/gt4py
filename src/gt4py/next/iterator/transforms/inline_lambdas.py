@@ -124,7 +124,7 @@ def inline_lambda(  # noqa: C901  # see todo above
 class InlineLambdas(NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "used_in_scan")
 
     opcount_preserving: bool
 

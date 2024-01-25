@@ -592,7 +592,18 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
         if isinstance(dtype, type_inference.Primitive):
             return dtype.name
         elif isinstance(dtype, type_inference.Tuple):
-            return tuple(convert_type(el) for el in dtype)
+            # this special handling is currently needed for test_tuple_scalar_scan where
+            #  a temporary occurs which is only a deref of an input. after inlining into the
+            #  scan this shouldn't be needed anymore. This is likely wrong if not every
+            #  element of the input is used.
+            # scan(λ(state, qc_in, tuple_scalar_) →
+            #     (·qc_in + state + (·tuple_scalar_)[1][0] + (·tuple_scalar_)[1][1]) / (·tuple_scalar_)[0], True, 0.0
+            # )(__sarg0, (↑(λ(__sarg1) → ·__sarg1))(__sarg1))
+            element_types = []
+            while not isinstance(dtype, (type_inference.TypeVar, type_inference.EmptyTuple)):
+                element_types.append(dtype.front)
+                dtype = dtype.others
+            return tuple(convert_type(el) for el in element_types)
         elif isinstance(dtype, type_inference.List):
             raise NotImplementedError("Temporaries with dtype list not supported.")
         raise AssertionError()

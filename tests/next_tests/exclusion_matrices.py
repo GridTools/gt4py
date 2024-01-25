@@ -56,8 +56,8 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_cpu"
-    DACE_GPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_gpu"
+    DACE_CPU = "gt4py.next.program_processors.runners.roundtrip.backend"
+    DACE_GPU = "gt4py.next.program_processors.runners.roundtrip.backend"
 
 
 class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
@@ -119,7 +119,6 @@ COMMON_SKIP_TEST_LIST = [
     # (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
-    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
@@ -130,15 +129,20 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
     (CHECKS_SPECIFIC_ERROR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
     (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+]
+GTFN_NO_TEMPORARIES_SKIP_LIST = GTFN_SKIP_TEST_LIST + [
+    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
@@ -151,9 +155,9 @@ BACKEND_SKIP_TEST_MATRIX = {
         # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
         (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
-    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST,
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
-    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST,
+    ProgramBackendId.GTFN_CPU: GTFN_NO_TEMPORARIES_SKIP_LIST,
+    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_NO_TEMPORARIES_SKIP_LIST,
+    ProgramBackendId.GTFN_GPU: GTFN_NO_TEMPORARIES_SKIP_LIST,
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
     + [
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),

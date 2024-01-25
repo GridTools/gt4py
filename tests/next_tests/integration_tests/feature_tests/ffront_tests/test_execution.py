@@ -612,6 +612,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
 def test_solve_triag(cartesian_case):
+    # TODO: there still appears to be a duplication of the scan
     if cartesian_case.backend in [
         gtfn.run_gtfn,
         gtfn.run_gtfn_gpu,

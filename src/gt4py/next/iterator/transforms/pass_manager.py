@@ -27,7 +27,7 @@ from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
-from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
+from gt4py.next.iterator.transforms.inline_lifts import InlineLifts, ValidateRecordedShiftsAnnex
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
@@ -53,6 +53,7 @@ def _inline_lifts(ir, lift_mode):
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
             | InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS
+                  | InlineLifts.Flag.REMOVE_UNUSED_LIFT_ARGS
         ).visit(ir)
     else:
         raise ValueError()
@@ -90,15 +91,19 @@ unique_id = 0
 
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
+
 class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("recorded_shifts",)
+    PRESERVED_ANNEX_ATTRS = ("recorded_shifts", "used_in_scan")
 
     def visit_StencilClosure(self, node: ir.StencilClosure):
         TraceShifts.apply(node, save_to_annex=True)
+        ValidateRecordedShiftsAnnex().visit(node)
         return self.generic_visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
+        old_node = node
         node = self.generic_visit(node)
+        #ValidateRecordedShiftsAnnex().visit(node)
         if isinstance(node.fun, ir.Lambda):
             eligible_params = [False] * len(node.fun.params)
 
@@ -114,7 +119,9 @@ class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
                     global unique_id
                     bound_arg_name = f"__wtf{unique_id}"
                     unique_id+=1
-                    new_args.append(im.lift(im.lambda_()(bound_arg_name))())
+                    capture_lift = im.lift(im.lambda_()(bound_arg_name))()
+                    capture_lift.annex.recorded_shifts = param.annex.recorded_shifts
+                    new_args.append(capture_lift)
                     bound_scalars[bound_arg_name] = InlineLifts(flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(im.deref(arg), recurse=False)
                 else:
                     new_args.append(arg)
@@ -202,7 +209,7 @@ def apply_common_transforms(
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
-    #EnsureNoLiftCapture().visit(ir)
+    #EnsureNoLiftCapture().visit(ir)  # disabled since it breaks no offset
     #InlineLifts(flags=InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS | InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(ir)
     #traced_shifts = TraceShifts.apply(ir.closures[0], inputs_only=False)
 
