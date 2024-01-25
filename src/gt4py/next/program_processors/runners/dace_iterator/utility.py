@@ -17,7 +17,7 @@ from typing import Any, Optional, Sequence
 import dace
 
 from gt4py.next import Dimension
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import NeighborTable
 from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
 
@@ -52,11 +52,11 @@ def as_dace_type(type_: ts.ScalarType):
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
-    return [
-        (offset, table)
+    return {
+        offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
-    ]
+        if isinstance(table, NeighborTable)
+    }
 
 
 def connectivity_identifier(name: str):

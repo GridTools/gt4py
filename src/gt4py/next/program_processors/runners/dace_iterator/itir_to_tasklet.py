@@ -237,7 +237,12 @@ def builtin_neighbors(
     )
     data_access_tasklet = state.add_tasklet(
         "data_access",
-        code=f"__result = __field[{field_index}] if {neighbor_check} else {transformer.context.reduce_identity.value}",
+        code=f"__result = __field[{field_index}]"
+        + (
+            f" if {neighbor_check} else {transformer.context.reduce_identity.value}"
+            if offset_provider.has_skip_values
+            else ""
+        ),
         inputs={"__field", field_index},
         outputs={"__result"},
         debuginfo=di,
@@ -372,20 +377,25 @@ def builtin_list_get(
     args = list(itertools.chain(*transformer.visit(node_args)))
     assert len(args) == 2
     # index node
-    assert isinstance(args[0], (SymbolExpr, ValueExpr))
-    # 1D-array node
-    assert isinstance(args[1], ValueExpr)
-    # source node should be a 1D array
-    assert len(transformer.context.body.arrays[args[1].value.data].shape) == 1
+    if isinstance(args[0], SymbolExpr):
+        index_value = args[0].value
+        result_name = unique_var_name()
+        transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
+        result_node = transformer.context.state.add_access(result_name)
+        transformer.context.state.add_nedge(
+            args[1].value,
+            result_node,
+            dace.Memlet.simple(args[1].value.data, index_value),
+        )
+        return [ValueExpr(result_node, args[1].dtype)]
 
-    expr_args = [(arg, f"{arg.value.data}_v") for arg in args if not isinstance(arg, SymbolExpr)]
-    internals = [
-        arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in args
-    ]
-    expr = f"{internals[1]}[{internals[0]}]"
-    return transformer.add_expr_tasklet(
-        expr_args, expr, args[1].dtype, "list_get", dace_debuginfo=di
-    )
+    else:
+        expr_args = [(arg, f"{arg.value.data}_v") for arg in args]
+        internals = [f"{arg.value.data}_v" for arg in args]
+        expr = f"{internals[1]}[{internals[0]}]"
+        return transformer.add_expr_tasklet(
+            expr_args, expr, args[1].dtype, "list_get", dace_debuginfo=di
+        )
 
 
 def builtin_cast(
@@ -562,9 +572,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = (
-            filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else []
+            filter_neighbor_tables(self.offset_provider) if use_neighbor_tables else {}
         )
-        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
@@ -700,8 +710,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
-        for conn, _ in neighbor_tables:
-            var = connectivity_identifier(conn)
+        for offset in neighbor_tables.keys():
+            var = connectivity_identifier(offset)
             nsdfg_inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
 
         symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
@@ -729,8 +739,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     store = value.indices[dim]
                     idx_memlet = nsdfg_inputs[var]
                     self.context.state.add_edge(store, None, nsdfg_node, var, idx_memlet)
-        for conn, _ in neighbor_tables:
-            var = connectivity_identifier(conn)
+        for offset in neighbor_tables.keys():
+            var = connectivity_identifier(offset)
             memlet = nsdfg_inputs[var]
             access = self.context.state.add_access(var, debuginfo=nsdfg_node.debuginfo)
             self.context.state.add_edge(access, None, nsdfg_node, var, memlet)
