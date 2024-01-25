@@ -196,11 +196,11 @@ def reference(
 @pytest.fixture
 def test_setup(fieldview_backend):
     test_case = cases.Case(
-        fieldview_backend if isinstance(fieldview_backend, ppi.ProgramExecutor) else None,
+        fieldview_backend.executor,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=fieldview_backend,
+        allocator=fieldview_backend.allocator,
     )
 
     @dataclasses.dataclass(frozen=True)

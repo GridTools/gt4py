@@ -231,6 +231,7 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
 
+
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
 
@@ -349,3 +350,15 @@ def allocate(
         device_id=device.device_id,
         aligned_index=aligned_index,
     )
+
+
+def __getattr__(name: str) -> Any:
+    if name == "default_cpu_allocator":
+        return device_allocators[core_defs.DeviceType.CPU]
+    if name == "default_gpu_allocator":
+        if CUPY_DEVICE is core_defs.DeviceType.CUDA:
+            return device_allocators[core_defs.DeviceType.CUDA]
+        elif CUPY_DEVICE is core_defs.DeviceType.ROCM:
+            return device_allocators[core_defs.DeviceType.ROCM]
+        # else: fall through
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

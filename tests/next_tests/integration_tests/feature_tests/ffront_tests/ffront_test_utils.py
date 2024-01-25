@@ -14,7 +14,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from collections import namedtuple
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 import numpy as np
 import pytest
@@ -52,6 +52,23 @@ if dace_iterator:
         )
     ),
 
+_ExecutorAndAllocator = namedtuple("_ExecutorAndAllocator", ["executor", "allocator"])
+
+
+def _backend_name(
+    p: next_tests.definitions._PythonObjectIdMixin
+    | tuple[
+        Optional[next_tests.definitions._PythonObjectIdMixin],
+        next_tests.definitions._PythonObjectIdMixin,
+    ]
+):
+    if isinstance(p, tuple):
+        executor = p[0].short_id() if p[0] is not None else "None"
+        allocator = p[1].short_id()
+        return f"{executor}-{allocator}"
+    else:
+        return p.short_id()
+
 
 @pytest.fixture(
     params=[
@@ -63,13 +80,13 @@ if dace_iterator:
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
         # will use the default (embedded) execution, but input/output allocated with the provided allocator
-        next_tests.definitions.AllocatorId.CPU_ALLOCATOR,
+        (None, next_tests.definitions.AllocatorId.CPU_ALLOCATOR),
         pytest.param(
-            next_tests.definitions.AllocatorId.GPU_ALLOCATOR, marks=pytest.mark.requires_gpu
+            (None, next_tests.definitions.AllocatorId.GPU_ALLOCATOR), marks=pytest.mark.requires_gpu
         ),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: p.short_id() if p is not None else "None",
+    ids=_backend_name,
 )
 def fieldview_backend(request):
     """
@@ -79,17 +96,27 @@ def fieldview_backend(request):
         Check ADR 15 for details on the test-exclusion matrices.
     """
     backend_or_allocator_id = request.param
-    backend_or_allocator = backend_or_allocator_id.load()
+    if isinstance(backend_or_allocator_id, tuple):
+        backend_id, allocator_id = backend_or_allocator_id
+        assert backend_id is None  # revisit if we have need for backend_id != None
+        executor = None
+        allocator = allocator_id.load()
+        exclusion_matrix_id = backend_or_allocator_id[1]
+    else:
+        backend = backend_or_allocator_id.load()
+        executor = backend.executor
+        allocator = backend
+        exclusion_matrix_id = backend_or_allocator_id
 
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
-        backend_or_allocator_id, []
+        exclusion_matrix_id, []
     ):
         if request.node.get_closest_marker(marker):
-            skip_mark(msg.format(marker=marker, backend=backend_or_allocator_id))
+            skip_mark(msg.format(marker=marker, backend=_backend_name(backend_or_allocator_id)))
 
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
-    yield backend_or_allocator
+    yield _ExecutorAndAllocator(executor, allocator)
     decorator.DEFAULT_BACKEND = backup_backend
 
 

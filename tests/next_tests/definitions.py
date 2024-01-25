@@ -19,8 +19,6 @@ import importlib
 
 import pytest
 
-from gt4py.next import allocators as next_allocators
-
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -46,11 +44,6 @@ class _PythonObjectIdMixin:
         return ".".join(self.value.split(".")[-num_components:])
 
 
-class _PythonObjectIdMixinForAllocator(_PythonObjectIdMixin):
-    def short_id(self, num_components: int = 1) -> str:
-        return "None-" + super().short_id(num_components)
-
-
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
     GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
@@ -62,13 +55,9 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-cpu_allocator = next_allocators.StandardCPUFieldBufferAllocator()
-gpu_allocator = next_allocators.StandardGPUFieldBufferAllocator()
-
-
-class AllocatorId(_PythonObjectIdMixinForAllocator, str, enum.Enum):
-    CPU_ALLOCATOR = "next_tests.definitions.cpu_allocator"
-    GPU_ALLOCATOR = "next_tests.definitions.gpu_allocator"
+class AllocatorId(_PythonObjectIdMixin, str, enum.Enum):
+    CPU_ALLOCATOR = "gt4py.next.allocators.default_cpu_allocator"
+    GPU_ALLOCATOR = "gt4py.next.allocators.default_gpu_allocator"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):

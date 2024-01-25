@@ -1,5 +1,5 @@
 ---
-tags: []
+tags: [testing]
 ---
 
 # Test-Exclusion Matrices
@@ -7,7 +7,7 @@ tags: []
 - **Status**: valid
 - **Authors**: Edoardo Paone (@edopao), Enrique G. Paredes (@egparedes)
 - **Created**: 2023-09-21
-- **Updated**: 2023-09-21
+- **Updated**: 2024-01-25
 
 In the context of Field View testing, lacking support for specific ITIR features while a certain backend
 is being developed, we decided to use `pytest` fixtures to exclude unsupported tests.
@@ -33,7 +33,7 @@ In the example below, `test_offset_field` requires the backend to support dynami
 def test_offset_field(cartesian_case):
 ```
 
-In order to selectively enable the backends, the dictionary `next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX`
+In order to selectively enable the backends, the dictionary `next_tests.definitions.BACKEND_SKIP_TEST_MATRIX`
 lists for each backend the features that are not supported.
 The fixture will check if the annotated feature is present in the exclusion-matrix for the selected backend.
 If so, the exclusion matrix will also specify the action `pytest` should take (e.g. `SKIP` or `XFAIL`).
