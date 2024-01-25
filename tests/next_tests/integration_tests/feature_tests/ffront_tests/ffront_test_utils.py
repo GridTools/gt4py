@@ -64,7 +64,9 @@ if dace_iterator:
         ),
         # will use the default (embedded) execution, but input/output allocated with the provided allocator
         next_tests.definitions.AllocatorId.CPU_ALLOCATOR,
-        next_tests.definitions.AllocatorId.GPU_ALLOCATOR,
+        pytest.param(
+            next_tests.definitions.AllocatorId.GPU_ALLOCATOR, marks=pytest.mark.requires_gpu
+        ),
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id() if p is not None else "None",
