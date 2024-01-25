@@ -431,28 +431,34 @@ class ItirToSDFG(eve.NodeVisitor):
         scan_sdfg = dace.SDFG(name="scan")
         scan_sdfg.debuginfo = dace_debuginfo(node)
 
-        # create a state machine for lambda call over the scan dimension
-
         # the carry value of the scan operator exists only in the scope of the scan sdfg
         scan_carry_name = unique_var_name()
         scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
 
         # create a loop region for lambda call over the scan dimension
-        scan_loop = LoopRegion(
-            label="scan",
-            condition_expr=f"i_{scan_dim} < {scan_ub_str}"
-            if is_forward
-            else f"i_{scan_dim} >= {scan_lb_str}",
-            loop_var=f"i_{scan_dim}",
-            initialize_expr=f"i_{scan_dim} = {scan_lb_str}" if is_forward else f"{scan_ub_str} - 1",
-            update_expr=f"i_{scan_dim} = i_{scan_dim} + 1" if is_forward else f"i_{scan_dim} - 1",
-            inverted=False,
-        )
-
+        scan_loop_var = f"i_{scan_dim}"
+        if is_forward:
+            scan_loop = LoopRegion(
+                label="scan",
+                condition_expr=f"{scan_loop_var} < {scan_ub_str}",
+                loop_var=scan_loop_var,
+                initialize_expr=f"{scan_loop_var} = {scan_lb_str}",
+                update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
+                inverted=False,
+            )
+        else:
+            scan_loop = LoopRegion(
+                label="scan",
+                condition_expr=f"{scan_loop_var} >= {scan_lb_str}",
+                loop_var=scan_loop_var,
+                initialize_expr=f"{scan_loop_var} = {scan_ub_str} - 1",
+                update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
+                inverted=False,
+            )
         scan_sdfg.add_node(scan_loop)
-        lambda_state = scan_loop.add_state("lambda_compute", is_start_block=True)
-        lambda_update_state = scan_loop.add_state("lambda_update")
-        scan_loop.add_edge(lambda_state, lambda_update_state, dace.InterstateEdge())
+        compute_state = scan_loop.add_state("lambda_compute", is_start_block=True)
+        update_state = scan_loop.add_state("lambda_update")
+        scan_loop.add_edge(compute_state, update_state, dace.InterstateEdge())
 
         start_state = scan_sdfg.add_state("start", is_start_block=True)
         scan_sdfg.add_edge(start_state, scan_loop, dace.InterstateEdge())
@@ -527,7 +533,7 @@ class ItirToSDFG(eve.NodeVisitor):
         array_mapping = {**input_mapping, **connectivity_mapping}
         symbol_mapping = map_nested_sdfg_symbols(scan_sdfg, lambda_context.body, array_mapping)
 
-        scan_inner_node = lambda_state.add_nested_sdfg(
+        scan_inner_node = compute_state.add_nested_sdfg(
             lambda_context.body,
             parent=scan_sdfg,
             inputs=set(lambda_input_names) | set(connectivity_names),
@@ -538,27 +544,25 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # connect scan SDFG to lambda inputs
         for name, memlet in array_mapping.items():
-            access_node = lambda_state.add_access(name, debuginfo=lambda_context.body.debuginfo)
-            lambda_state.add_edge(access_node, None, scan_inner_node, name, memlet)
+            access_node = compute_state.add_access(name, debuginfo=lambda_context.body.debuginfo)
+            compute_state.add_edge(access_node, None, scan_inner_node, name, memlet)
 
         output_names = [output_name]
         assert len(lambda_output_names) == 1
         # connect lambda output to scan SDFG
         for name, connector in zip(output_names, lambda_output_names):
-            lambda_state.add_edge(
+            compute_state.add_edge(
                 scan_inner_node,
                 connector,
-                lambda_state.add_access(name, debuginfo=lambda_context.body.debuginfo),
+                compute_state.add_access(name, debuginfo=lambda_context.body.debuginfo),
                 None,
-                dace.Memlet.simple(name, f"i_{scan_dim}"),
+                dace.Memlet.simple(name, scan_loop_var),
             )
 
-        lambda_update_state.add_memlet_path(
-            lambda_update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
-            lambda_update_state.add_access(
-                scan_carry_name, debuginfo=lambda_context.body.debuginfo
-            ),
-            memlet=dace.Memlet.simple(output_names[0], f"i_{scan_dim}", other_subset_str="0"),
+        update_state.add_memlet_path(
+            update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
+            update_state.add_access(scan_carry_name, debuginfo=lambda_context.body.debuginfo),
+            memlet=dace.Memlet.simple(output_names[0], scan_loop_var, other_subset_str="0"),
         )
 
         return scan_sdfg, map_ranges, scan_dim_index

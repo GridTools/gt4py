@@ -263,12 +263,9 @@ def build_sdfg_from_itir(
     # visit ITIR and generate SDFG
     program = preprocess_program(program, offset_provider, lift_mode)
     sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
-    sdfg = sdfg_genenerator.visit(program)
+    sdfg: dace.SDFG = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
-    assert isinstance(sdfg, dace.SDFG)
-    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
-    sdutils.inline_loop_blocks(sdfg)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
@@ -282,6 +279,9 @@ def build_sdfg_from_itir(
                 end_line=frameinfo.lineno,
                 filename=frameinfo.filename,
             )
+
+    # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct
+    sdutils.inline_loop_blocks(sdfg)
 
     # run DaCe transformations to simplify the SDFG
     sdfg.simplify()
