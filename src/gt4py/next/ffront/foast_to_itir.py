@@ -73,12 +73,13 @@ def _process_elements(
 
     return result
 
-def to_tuples_of_iterator(param: str, arg_type: ts.TypeSpec):
+def to_tuples_of_iterator(expr: itir.Expr, arg_type: ts.TypeSpec):
     """
     Convert iterator of tuples into tuples of iterator
 
     >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
+    param = f"__param_{abs(hash(expr))}"
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
         for path_part in path:
@@ -86,14 +87,18 @@ def to_tuples_of_iterator(param: str, arg_type: ts.TypeSpec):
 
         return im.lift(im.lambda_("it")(inner_expr))(param)
 
-    return type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple)
+    return im.let(param, expr)(
+        type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
+                                                  tuple_constructor=im.make_tuple)
+    )
 
-def to_iterator_of_tuples(param: str, arg_type: ts.TypeSpec):
+def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
     """
     Convert tuples of iterator into iterator of tuples
 
     >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
+    param = f"__param_{abs(hash(expr))}"
 
     def fun(primitive_type, path):
         param_name = "__tuple_el"
@@ -113,7 +118,7 @@ def to_iterator_of_tuples(param: str, arg_type: ts.TypeSpec):
 
     stencil_expr = type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
                                                      tuple_constructor=im.make_tuple)
-    return im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args)
+    return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
 @dataclasses.dataclass
