@@ -302,7 +302,7 @@ def build_sdfg_from_itir(
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics
-    if False and auto_optimize:
+    if auto_optimize:
         # TODO: Investigate performance improvement from SDFG specialization with constant symbols,
         #       for array shape and strides, although this would imply JIT compilation.
         symbols: dict[str, int] = {}
