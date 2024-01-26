@@ -71,7 +71,7 @@ if dace_iterator:
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id(),
 )
-def fieldview_backend(request):
+def exec_alloc_descriptor(request):
     """
     Fixture creating field-view operator backend on-demand for tests.
 
@@ -232,7 +232,7 @@ def reduction_setup():
 
 
 __all__ = [
-    "fieldview_backend",
+    "exec_alloc_descriptor",
     "reduction_setup",
     "debug_itir",
     "DimsType",

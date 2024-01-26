@@ -23,7 +23,13 @@ import gt4py.next as gtx
 from gt4py.next import errors
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
+from next_tests.integration_tests.cases import (
+    IDim,
+    Ioff,
+    JDim,
+    cartesian_case,
+    exec_alloc_descriptor,
+)
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,

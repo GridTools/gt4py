@@ -24,7 +24,7 @@ from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import Cell, KDim, Koff
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -193,13 +193,13 @@ def reference(
 
 
 @pytest.fixture
-def test_setup(fieldview_backend):
+def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        fieldview_backend.executor,
+        exec_alloc_descriptor.executor,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=fieldview_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
     @dataclasses.dataclass(frozen=True)

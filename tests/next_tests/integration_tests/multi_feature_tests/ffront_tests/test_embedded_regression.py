@@ -22,7 +22,7 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 # fixtures
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # fixtures
     KDim,
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -38,7 +38,7 @@ def test_default_backend_is_respected_field_operator(cartesian_case):  # noqa: F
 
     with pytest.raises(ValueError, match="No backend selected!"):
         # Calling this should fail if the default backend is respected
-        # due to `fieldview_backend` fixture (dependency of `cartesian_case`)
+        # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
         # setting the default backend to something invalid.
         _ = copy(a, out=a, offset_provider={})
 

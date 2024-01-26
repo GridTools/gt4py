@@ -26,7 +26,7 @@ from gt4py.next.ffront.fbuiltins import broadcast, int32
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, IField, IJKFloatField, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 

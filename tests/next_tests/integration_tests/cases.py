@@ -44,7 +44,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     KDim,
     Koff,
     Vertex,
-    fieldview_backend,
+    exec_alloc_descriptor,
     reduction_setup,
 )
 
@@ -482,24 +482,24 @@ def verify_with_default_data(
 
 @pytest.fixture
 def cartesian_case(
-    fieldview_backend: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
 ):
     yield Case(
-        fieldview_backend.executor,
+        exec_alloc_descriptor.executor,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
-        allocator=fieldview_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 
 @pytest.fixture
 def unstructured_case(
     reduction_setup,  # noqa: F811 # fixtures
-    fieldview_backend: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
 ):
     yield Case(
-        fieldview_backend.executor,
+        exec_alloc_descriptor.executor,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
@@ -508,7 +508,7 @@ def unstructured_case(
             KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
-        allocator=fieldview_backend.allocator,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
 

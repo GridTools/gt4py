@@ -22,7 +22,7 @@ the supported backends, while keeping the test code clean.
 ## Decision
 
 It was decided to apply fixtures and markers from `pytest` module. The fixture is the same used to execute the test
-on different backends (`fieldview_backend` and `program_processor`), but it is extended with a check on the available feature markers.
+on different backends (`exec_alloc_descriptor` and `program_processor`), but it is extended with a check on the available feature markers.
 If a test is annotated with a feature marker, the fixture will check if this feature is supported on the selected backend.
 If no marker is specified, the test is supposed to run on all backends.
 
