@@ -383,7 +383,7 @@ def run(
     """Run fieldview code in the context of a given test case."""
     if kwargs.get("offset_provider", None) is None:
         kwargs["offset_provider"] = case.offset_provider
-    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.backend)(*args, **kwargs)
+    fieldview_prog.with_grid_type(case.grid_type).with_backend(case.executor)(*args, **kwargs)
 
 
 def verify(
@@ -609,7 +609,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    backend: Optional[ppi.ProgramProcessor]
+    executor: Optional[ppi.ProgramProcessor]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
