@@ -81,7 +81,7 @@ def test_default_backend_is_respected_program(cartesian_case):  # noqa: F811 # f
 def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that calling a field_operator without required args raises an error."""
 
-    @gtx.field_operator(backend=cartesian_case.backend)
+    @gtx.field_operator(backend=cartesian_case.executor)
     def copy(a: IField) -> IField:
         return a
 
@@ -97,7 +97,7 @@ def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
 def test_missing_arg_scan_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that calling a scan_operator without required args raises an error."""
 
-    @gtx.scan_operator(backend=cartesian_case.backend, axis=KDim, init=0.0, forward=True)
+    @gtx.scan_operator(backend=cartesian_case.executor, axis=KDim, init=0.0, forward=True)
     def sum(state: float, a: float) -> float:
         return state + a
 
@@ -122,7 +122,7 @@ def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
 
     with pytest.raises(errors.DSLError, match="Invalid call"):
 
-        @gtx.program(backend=cartesian_case.backend)
+        @gtx.program(backend=cartesian_case.executor)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a)
 
@@ -130,7 +130,7 @@ def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
 
     with pytest.raises(TypeError, match="'offset_provider'"):
 
-        @gtx.program(backend=cartesian_case.backend)
+        @gtx.program(backend=cartesian_case.executor)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a, out=b)
 
