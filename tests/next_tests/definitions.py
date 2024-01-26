@@ -58,7 +58,8 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 
 
 numpy_execution = (None, next_allocators.default_cpu_allocator)
-cupy_execution = (None, next_allocators.default_gpu_allocator)
+if hasattr(next_allocators, "default_gpu_allocator"):
+    cupy_execution = (None, next_allocators.default_gpu_allocator)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
