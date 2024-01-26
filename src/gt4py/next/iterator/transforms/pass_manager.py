@@ -100,9 +100,10 @@ class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
         ValidateRecordedShiftsAnnex().visit(node)
         return self.generic_visit(node)
 
-    def visit_FunCall(self, node: ir.FunCall):
+    def visit_FunCall(self, node: ir.FunCall, **kwargs):
         old_node = node
-        node = self.generic_visit(node)
+        node = self.generic_visit(node,
+                                  ignore_recorded_shifts_missing=(kwargs.get("ignore_recorded_shifts_missing", False) or (hasattr(node.annex, "recorded_shifts") and len(node.annex.recorded_shifts) == 0)))
         #ValidateRecordedShiftsAnnex().visit(node)
         if isinstance(node.fun, ir.Lambda):
             eligible_params = [False] * len(node.fun.params)
@@ -110,11 +111,11 @@ class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
             # force inline lift args derefed at at most a single position
             new_args = []
             bound_scalars = {}
-            # TODO: what is node.fun is not a lambda? e.g. directly deref?
+            # TODO: what if node.fun is not a lambda? e.g. directly deref?
             for i, (param, arg) in enumerate(zip(node.fun.params, node.args)):
-                if common_pattern_matcher.is_applied_lift(arg) and not hasattr(param.annex, "recorded_shifts"):
+                if not kwargs.get("ignore_recorded_shifts_missing", False) and common_pattern_matcher.is_applied_lift(arg) and not hasattr(param.annex, "recorded_shifts"):
                     breakpoint()
-                if common_pattern_matcher.is_applied_lift(arg) and param.annex.recorded_shifts in [set(), {()}]:
+                if not kwargs.get("ignore_recorded_shifts_missing", False) and common_pattern_matcher.is_applied_lift(arg) and param.annex.recorded_shifts in [set(), {()}]:
                     eligible_params[i] = True
                     global unique_id
                     bound_arg_name = f"__wtf{unique_id}"
@@ -123,6 +124,7 @@ class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
                     capture_lift.annex.recorded_shifts = param.annex.recorded_shifts
                     new_args.append(capture_lift)
                     bound_scalars[bound_arg_name] = InlineLifts(flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(im.deref(arg), recurse=False)
+                    ValidateRecordedShiftsAnnex().visit(bound_scalars[bound_arg_name])
                 else:
                     new_args.append(arg)
 
@@ -198,7 +200,7 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
-    lift_mode = LiftMode.FORCE_TEMPORARIES
+    #lift_mode = LiftMode.FORCE_TEMPORARIES
 
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -231,7 +233,7 @@ def apply_common_transforms(
             inlined = InlineLambdas.apply(
                 inlined,
                 opcount_preserving=True,
-                force_inline_lift_args=True,
+                force_inline_lift_args=True,  # todo: this is still needed as we can not extract a lift from a conditional
             )
             if inlined == ir:
                 break

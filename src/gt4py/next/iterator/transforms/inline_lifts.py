@@ -218,6 +218,11 @@ class InlineLifts(
     ):
         symtable = kwargs["symtable"]
 
+        ignore_recorded_shifts_missing = (kwargs.get("ignore_recorded_shifts_missing", False) or (
+                    hasattr(node.annex, "recorded_shifts") and len(
+                node.annex.recorded_shifts) == 0))
+        kwargs = {**kwargs, "ignore_recorded_shifts_missing": ignore_recorded_shifts_missing}
+
         recorded_shifts_annex = getattr(node.annex, "recorded_shifts", None)
         old_node = node
         node = (
@@ -306,13 +311,13 @@ class InlineLifts(
             and len(node.args) > 0
             and self.predicate(node, is_scan_pass_context)
         ):
-            if not hasattr(node.annex, "recorded_shifts"):
+            if not ignore_recorded_shifts_missing and not hasattr(node.annex, "recorded_shifts"):
                 breakpoint()
 
             # if the lift is never derefed its params also don't have a recorded_shifts attr and the
             #  following will fail. we don't care about such lifts anyway as they are later on and
             #  disappear
-            if len(node.annex.recorded_shifts) == 0:
+            if ignore_recorded_shifts_missing or len(node.annex.recorded_shifts) == 0:
                 return node
 
             stencil = node.fun.args[0]  # type: ignore[attr-defined] # node already asserted to be of type ir.FunCall

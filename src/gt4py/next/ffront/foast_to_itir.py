@@ -342,7 +342,17 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
-        return im.if_(im.deref(self.visit(node.condition, **kwargs)), self.visit(node.true_expr, **kwargs), self.visit(node.false_expr, **kwargs))
+        op = "if_"
+        args = (node.condition, node.true_expr, node.false_expr)
+        lowered_args = [to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type) for arg in args]
+        if any(type_info.contains_local_field(arg.type) for arg in args):
+            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+            op = im.call("map_")(op)
+
+        return to_tuples_of_iterator(im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type)
+
+        # TODO: iterator of tuples?
+        #return im.if_(im.deref(self.visit(node.condition, **kwargs)), self.visit(node.true_expr, **kwargs), self.visit(node.false_expr, **kwargs))
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)

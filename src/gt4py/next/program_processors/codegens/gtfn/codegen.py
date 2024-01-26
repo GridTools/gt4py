@@ -108,7 +108,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case _:
                 result = node.value
         # TODO: isn't this wrong and int32 should also be casted to int32?
-        if node.type in ["float64", "float32", "int32", "int64"]:
+        if node.type in ["float64", "float32", "int32", "int64", "bool"]:
             result = f"({result})"
         elif node.type == "axis_literal":
             pass
