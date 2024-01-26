@@ -86,6 +86,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
             KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=run_gtfn_with_temporaries_and_symbolic_sizes,
     )
 
     a = cases.allocate(unstructured_case, testee, "a")()
