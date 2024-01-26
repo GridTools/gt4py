@@ -612,14 +612,8 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
+@pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Nested `scan`s requires creating temporaries.")
     if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
@@ -918,15 +912,8 @@ def test_domain(cartesian_case):
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
 
 
+@pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("FloorDiv not fully supported in gtfn.")
-
     lower_i = 1
     upper_i = 10
 

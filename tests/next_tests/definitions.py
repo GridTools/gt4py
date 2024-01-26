@@ -70,16 +70,14 @@ class ExecutionAndAllocatorDescriptor(Protocol):
         ...
 
 
-@dataclasses.dataclass  # (frozen=True)
+@dataclasses.dataclass(frozen=True)
 class EmbeddedExecutionDescriptor:
     allocator: next_allocators.FieldBufferAllocatorProtocol
     executor: NoneType = dataclasses.field(default=None, init=False)
 
 
-numpy_execution = EmbeddedExecutionDescriptor(allocator=next_allocators.default_cpu_allocator)
-
-if hasattr(next_allocators, "default_gpu_allocator"):
-    cupy_execution = EmbeddedExecutionDescriptor(next_allocators.default_gpu_allocator)
+numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
+cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
@@ -128,6 +126,8 @@ USES_REDUCTION_OVER_LIFT_EXPRESSIONS = "uses_reduction_over_lift_expressions"
 USES_SCAN = "uses_scan"
 USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
+USES_SCAN_NESTED = "uses_scan_nested"
+USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -137,6 +137,7 @@ USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
+USES_MAX_OVER = "uses_max_over"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -177,6 +178,9 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
     (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+    # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
+    (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN_REQUIRING_PROJECTOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
@@ -190,9 +194,12 @@ BACKEND_SKIP_TEST_MATRIX = {
         # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
         (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
-    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST,
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST,
-    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST,
+    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
+    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
+    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
+    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
+    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
+    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
     + [
         (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),

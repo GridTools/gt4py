@@ -40,20 +40,13 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_max_over
 @pytest.mark.parametrize(
     "strategy",
     [cases.UniqueInitializer(1), cases.UniqueInitializer(-100)],
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
-    if unstructured_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("`maxover` broken in gtfn, see #1289.")
-
     @gtx.field_operator
     def testee(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
