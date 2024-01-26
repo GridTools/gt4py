@@ -69,19 +69,9 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    unroll_reduce: bool = False,
 ):
-    node = itir_transforms.apply_common_transforms(
-        program,
-        common_subexpression_elimination=False,
-        lift_mode=lift_mode,
-        offset_provider=offset_provider,
-        unroll_reduce=False,
-    )
-    # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
-    # In this case, just retry with unrolled reductions.
-    if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
-        fencil_definition = node
-    else:
+    if unroll_reduce:
         fencil_definition = itir_transforms.apply_common_transforms(
             program,
             common_subexpression_elimination=False,
@@ -90,6 +80,17 @@ def preprocess_program(
             offset_provider=offset_provider,
             unroll_reduce=True,
         )
+        assert all([ItirToSDFG._check_no_lifts(closure) for closure in fencil_definition.closures])
+
+    else:
+        fencil_definition = itir_transforms.apply_common_transforms(
+            program,
+            common_subexpression_elimination=False,
+            lift_mode=lift_mode,
+            offset_provider=offset_provider,
+            unroll_reduce=False,
+        )
+
     return fencil_definition
 
 
@@ -301,7 +302,7 @@ def build_sdfg_from_itir(
     sdfg.simplify()
 
     # run DaCe auto-optimization heuristics
-    if auto_optimize:
+    if False and auto_optimize:
         # TODO: Investigate performance improvement from SDFG specialization with constant symbols,
         #       for array shape and strides, although this would imply JIT compilation.
         symbols: dict[str, int] = {}
