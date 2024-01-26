@@ -53,12 +53,13 @@ class RemoveDocstrings(ast.NodeTransformer):
         return cls().visit(node)
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> ast.AST:
-        for obj in node.body:
-            if (
-                isinstance(obj, ast.Expr)
-                and isinstance(obj.value, ast.Constant)
-                and isinstance(obj.value.value, str)
-            ):
-                node.body.remove(obj)
-
+        node.body = [obj for obj in node.body if not _is_const_str_expr(obj)]
         return self.generic_visit(node)
+
+
+def _is_const_str_expr(obj: ast.stmt) -> bool:
+    return (
+        isinstance(obj, ast.Expr)
+        and isinstance(obj.value, ast.Constant)
+        and isinstance(obj.value.value, str)
+    )
