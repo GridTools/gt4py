@@ -33,6 +33,7 @@ from gt4py.next.ffront import decorator
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
+from next_tests import definitions as test_definitions
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
     Cell,
     Edge,
@@ -480,7 +481,9 @@ def verify_with_default_data(
 
 
 @pytest.fixture
-def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
+def cartesian_case(
+    fieldview_backend: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+):
     yield Case(
         fieldview_backend.executor,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
@@ -491,7 +494,10 @@ def cartesian_case(fieldview_backend):  # noqa: F811 # fixtures
 
 
 @pytest.fixture
-def unstructured_case(reduction_setup, fieldview_backend):  # noqa: F811 # fixtures
+def unstructured_case(
+    reduction_setup,  # noqa: F811 # fixtures
+    fieldview_backend: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+):
     yield Case(
         fieldview_backend.executor,
         offset_provider=reduction_setup.offset_provider,

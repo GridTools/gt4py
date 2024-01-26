@@ -24,7 +24,6 @@ from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
     fieldview_backend,
 )
-from next_tests.integration_tests.feature_tests.ffront_tests import ffront_test_utils
 
 
 @gtx.field_operator
@@ -71,13 +70,7 @@ def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
     assert b == 42.0
 
 
-_roundtrip_executor_and_allocator = ffront_test_utils._ExecutorAndAllocator(
-    definitions.ProgramBackendId.ROUNDTRIP.load().executor,
-    definitions.ProgramBackendId.ROUNDTRIP.load(),
-)
-
-
-@pytest.mark.parametrize("fieldview_backend", [_roundtrip_executor_and_allocator])
+@pytest.mark.parametrize("fieldview_backend", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a")()
     b = cases.allocate(cartesian_case, addition, "b")()
@@ -88,7 +81,7 @@ def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixt
         cases.verify(cartesian_case, addition, a, b, out=out, ref=wrong_ref)
 
 
-@pytest.mark.parametrize("fieldview_backend", [_roundtrip_executor_and_allocator])
+@pytest.mark.parametrize("fieldview_backend", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a").dtype(np.float32)()
     b = cases.allocate(cartesian_case, addition, "b")()
@@ -98,7 +91,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
         cases.verify(cartesian_case, addition, a, b, out=out, ref=a + b)
 
 
-@pytest.mark.parametrize("fieldview_backend", [_roundtrip_executor_and_allocator])
+@pytest.mark.parametrize("fieldview_backend", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_with_default_data_fails_with_wrong_reference(
     cartesian_case,  # noqa: F811 # fixtures
 ):

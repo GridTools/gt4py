@@ -52,8 +52,6 @@ if dace_iterator:
         )
     ),
 
-_ExecutorAndAllocator = namedtuple("_ExecutorAndAllocator", ["executor", "allocator"])
-
 
 @pytest.fixture(
     params=[
@@ -82,13 +80,6 @@ def fieldview_backend(request):
     """
     backend_id = request.param
     backend = backend_id.load()
-    # we support ppi.ProgramBackends and a tuple of executor and allocator
-    # the use case for the latter is embedded with executor == None
-    if isinstance(backend, tuple):
-        executor, allocator = backend
-    else:
-        executor = backend
-        allocator = backend
 
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
@@ -98,7 +89,7 @@ def fieldview_backend(request):
 
     backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
-    yield _ExecutorAndAllocator(executor, allocator)
+    yield backend
     decorator.DEFAULT_BACKEND = backup_backend
 
 

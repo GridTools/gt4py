@@ -14,12 +14,16 @@
 
 """Contains definition of test-exclusion matrices, see ADR 15."""
 
+import dataclasses
 import enum
 import importlib
+from types import NoneType
+from typing import Optional, Protocol
 
 import pytest
 
 from gt4py.next import allocators as next_allocators
+from gt4py.next.program_processors import processor_interface as ppi
 
 
 # Skip definitions
@@ -40,8 +44,6 @@ class _PythonObjectIdMixin:
         obj = eval(f"_m.{obj}", globs)
         return obj
 
-    __invert__ = load
-
     def short_id(self, num_components: int = 2) -> str:
         return ".".join(self.value.split(".")[-num_components:])
 
@@ -57,9 +59,27 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
-numpy_execution = (None, next_allocators.default_cpu_allocator)
+class ExecutionAndAllocatorDescriptor(Protocol):
+    # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
+    @property
+    def executor(self) -> Optional[ppi.ProgramExecutor]:
+        ...
+
+    @property
+    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        ...
+
+
+@dataclasses.dataclass  # (frozen=True)
+class EmbeddedExecutionDescriptor:
+    allocator: next_allocators.FieldBufferAllocatorProtocol
+    executor: NoneType = dataclasses.field(default=None, init=False)
+
+
+numpy_execution = EmbeddedExecutionDescriptor(allocator=next_allocators.default_cpu_allocator)
+
 if hasattr(next_allocators, "default_gpu_allocator"):
-    cupy_execution = (None, next_allocators.default_gpu_allocator)
+    cupy_execution = EmbeddedExecutionDescriptor(next_allocators.default_gpu_allocator)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
