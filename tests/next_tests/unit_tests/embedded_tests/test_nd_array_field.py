@@ -632,3 +632,59 @@ def test_setitem_wrong_domain():
 
     with pytest.raises(ValueError, match=r"Incompatible 'Domain'.*"):
         field[(1, slice(None))] = value_incompatible
+
+
+def test_connectivity_field_inverse_image_implementation():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    V_START, V_STOP = 2, 7
+    E_START, E_STOP = 0, 10
+
+    e2v_conn = common.connectivity(
+        np.roll(np.arange(E_START, E_STOP), 1),
+        domain=common.Domain(
+            dims=(E,),
+            ranges=[
+                UnitRange(E_START, E_STOP),
+            ],
+        ),
+        codomain=V,
+    )
+
+    # Test codomain
+    with pytest.raises(ValueError, match="does not match the codomain dimension"):
+        e2v_conn.inverse_image((E, UnitRange(1, 2)))
+
+    # Test range
+    image_range = UnitRange(V_START, V_STOP)
+    result = e2v_conn.inverse_image(image_range)
+
+    assert len(result) == 1
+    assert result[0] == (E, UnitRange(V_START + 1, V_STOP + 1))
+
+    # Test cache
+    cached_result = e2v_conn.inverse_image(image_range)
+
+    assert result is cached_result
+
+    # Test non-contiguous range
+    e2v_conn = common.connectivity(
+        np.asarray([0, 1, 2, 3, 4, 9, 7, 5, 8, 6]),
+        domain=common.Domain(
+            dims=(E,),
+            ranges=[
+                UnitRange(E_START, E_STOP),
+            ],
+        ),
+        codomain=V,
+    )
+
+    result = e2v_conn.inverse_image(UnitRange(V_START, 5))
+    assert result[0] == (E, UnitRange(V_START, 5))
+
+    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+        e2v_conn.inverse_image(UnitRange(V_START, 6))
+
+    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+        e2v_conn.inverse_image(UnitRange(V_START, V_STOP))

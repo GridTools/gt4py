@@ -400,10 +400,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 last_data_index = dim_nnz_indices[-1]
                 assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
                 indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
+                dim_range = self._domain[i]
+
                 if len(xp.unique(counts)) == 1 and (
                     len(indices) == last_data_index - first_data_index + 1
                 ):
-                    dim_range = self._domain[i]
                     idx_offset = dim_range[1].start
                     start = idx_offset + first_data_index
                     assert common.is_int_index(start)
@@ -424,6 +425,8 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 raise ValueError(
                     f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
                 )
+
+            self._cache[cache_key] = new_dims
 
         return new_dims
 
