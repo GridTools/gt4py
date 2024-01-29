@@ -77,11 +77,13 @@ class EmbeddedExecutionDescriptor:
 
 numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
 cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
+jax_execution = EmbeddedExecutionDescriptor(next_allocators.StandardJAXCPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_EXECUTION = "next_tests.definitions.jax_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):

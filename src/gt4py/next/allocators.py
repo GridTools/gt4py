@@ -205,6 +205,13 @@ def horizontal_first_layout_mapper(
     return valid_layout_map
 
 
+def c_layout_mapper(dims: Sequence[common.Dimension]) -> core_allocators.BufferLayoutMap:
+    layout_map = tuple(range(len(dims)))
+    assert core_allocators.is_valid_layout_map(layout_map)
+
+    return layout_map
+
+
 if TYPE_CHECKING:
     __horizontal_first_layout_mapper: FieldLayoutMapper = horizontal_first_layout_mapper
 
@@ -215,6 +222,18 @@ device_allocators: dict[core_defs.DeviceType, FieldBufferAllocatorProtocol] = {}
 
 assert core_allocators.is_valid_nplike_allocation_ns(np)
 np_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = np  # Just for static type checking
+
+
+class CLayoutCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
+    """A field buffer allocator for CPU devices that uses a C-style layout."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            device_type=core_defs.DeviceType.CPU,
+            array_ns=np_alloc_ns,
+            layout_mapper=c_layout_mapper,
+            byte_alignment=1,
+        )
 
 
 class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDeviceTyping]):
@@ -231,8 +250,43 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
 
-
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
+
+try:
+    # TODO use pattern from GPU allocation (InvalidBufferAllocator)
+    import jax.numpy as jnp
+except ImportError:
+    jnp = None
+
+if jnp:
+    from jax import config
+
+    config.update("jax_enable_x64", True)
+
+    jax_alloc_ns: core_allocators.ValidNumPyLikeAllocationNS = jnp  # Just for static type checking
+    assert core_allocators.is_valid_nplike_allocation_ns(jax_alloc_ns)
+
+    class StandardJAXCPUFieldBufferAllocator(
+        FieldBufferAllocatorProtocol[core_defs.CPUDeviceTyping]
+    ):
+        @property
+        def __gt_device_type__(self) -> core_defs.CPUDeviceTyping:
+            return core_defs.DeviceType.CPU
+
+        def __gt_allocate__(
+            self,
+            domain: common.Domain,
+            dtype: core_defs.DType[core_defs.ScalarT],
+            device_id: int = 0,
+            aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
+        ) -> core_allocators.TensorBuffer[core_defs.CPUDeviceTyping, core_defs.ScalarT]:
+            tensor_buffer = CLayoutCPUFieldBufferAllocator().__gt_allocate__(
+                domain, dtype, device_id, aligned_index
+            )
+            object.__setattr__(
+                tensor_buffer, "ndarray", jnp.from_dlpack(tensor_buffer.ndarray)
+            )  # TODO mutating a frozen object
+            return tensor_buffer
 
 
 @dataclasses.dataclass(frozen=True)
