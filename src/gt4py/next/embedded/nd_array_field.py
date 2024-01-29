@@ -206,6 +206,7 @@ class NdArrayField(
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
             assert core_defs.is_scalar_type(new_buffer)
+            index = tuple([index]) if not isinstance(index, tuple) else index  # type: ignore[assignment]
             if all([isinstance(i, core_defs.IntegralScalar) for i in index]):  # type: ignore[arg-type, union-attr]
                 new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
             else:
