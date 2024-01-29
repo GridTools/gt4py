@@ -33,8 +33,8 @@ from gt4py.next import (
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
-from tests.next_tests.integration_tests import cases
-from tests.next_tests.integration_tests.cases import (
+from next_tests.integration_tests import cases
+from next_tests.integration_tests.cases import (
     C2E,
     E2V,
     V2E,
@@ -49,7 +49,7 @@ from tests.next_tests.integration_tests.cases import (
     cartesian_case,
     unstructured_case,
 )
-from tests.next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     fieldview_backend,
     reduction_setup,
 )
