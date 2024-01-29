@@ -22,7 +22,7 @@ from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 # fixtures
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # fixtures
     KDim,
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -38,7 +38,7 @@ def test_default_backend_is_respected_field_operator(cartesian_case):  # noqa: F
 
     with pytest.raises(ValueError, match="No backend selected!"):
         # Calling this should fail if the default backend is respected
-        # due to `fieldview_backend` fixture (dependency of `cartesian_case`)
+        # due to `exec_alloc_descriptor` fixture (dependency of `cartesian_case`)
         # setting the default backend to something invalid.
         _ = copy(a, out=a, offset_provider={})
 
@@ -51,7 +51,7 @@ def test_default_backend_is_respected_scan_operator(cartesian_case):  # noqa: F8
     def sum(state: float, a: float) -> float:
         return state + a
 
-    a = gtx.ones({KDim: 10}, allocator=cartesian_case.backend)
+    a = gtx.ones({KDim: 10}, allocator=cartesian_case.allocator)
 
     with pytest.raises(ValueError, match="No backend selected!"):
         # see comment in field_operator test
@@ -81,7 +81,7 @@ def test_default_backend_is_respected_program(cartesian_case):  # noqa: F811 # f
 def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that calling a field_operator without required args raises an error."""
 
-    @gtx.field_operator(backend=cartesian_case.backend)
+    @gtx.field_operator(backend=cartesian_case.executor)
     def copy(a: IField) -> IField:
         return a
 
@@ -97,7 +97,7 @@ def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
 def test_missing_arg_scan_operator(cartesian_case):  # noqa: F811 # fixtures
     """Test that calling a scan_operator without required args raises an error."""
 
-    @gtx.scan_operator(backend=cartesian_case.backend, axis=KDim, init=0.0, forward=True)
+    @gtx.scan_operator(backend=cartesian_case.executor, axis=KDim, init=0.0, forward=True)
     def sum(state: float, a: float) -> float:
         return state + a
 
@@ -122,7 +122,7 @@ def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
 
     with pytest.raises(errors.DSLError, match="Invalid call"):
 
-        @gtx.program(backend=cartesian_case.backend)
+        @gtx.program(backend=cartesian_case.executor)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a)
 
@@ -130,7 +130,7 @@ def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
 
     with pytest.raises(TypeError, match="'offset_provider'"):
 
-        @gtx.program(backend=cartesian_case.backend)
+        @gtx.program(backend=cartesian_case.executor)
         def copy_program(a: IField, b: IField) -> IField:
             copy(a, out=b)
 

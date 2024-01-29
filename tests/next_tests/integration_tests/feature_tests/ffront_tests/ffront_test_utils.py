@@ -14,7 +14,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from collections import namedtuple
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 import numpy as np
 import pytest
@@ -35,7 +35,6 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
-import next_tests.exclusion_matrices as definitions
 
 
 @ppi.program_executor
@@ -46,25 +45,33 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
     OPTIONAL_PROCESSORS.append(
-        pytest.param(definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu)
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
+        )
     ),
 
 
 @pytest.fixture(
     params=[
-        definitions.ProgramBackendId.ROUNDTRIP,
-        definitions.ProgramBackendId.GTFN_CPU,
-        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
-        pytest.param(definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu),
-        None,
+        next_tests.definitions.ProgramBackendId.ROUNDTRIP,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(
+            next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
+        ),
+        # will use the default (embedded) execution, but input/output allocated with the provided allocator
+        next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
+        ),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: p.short_id() if p is not None else "None",
+    ids=lambda p: p.short_id(),
 )
-def fieldview_backend(request):
+def exec_alloc_descriptor(request):
     """
     Fixture creating field-view operator backend on-demand for tests.
 
@@ -72,9 +79,9 @@ def fieldview_backend(request):
         Check ADR 15 for details on the test-exclusion matrices.
     """
     backend_id = request.param
-    backend = None if backend_id is None else backend_id.load()
+    backend = backend_id.load()
 
-    for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
+    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         backend_id, []
     ):
         if request.node.get_closest_marker(marker):
@@ -225,7 +232,7 @@ def reduction_setup():
 
 
 __all__ = [
-    "fieldview_backend",
+    "exec_alloc_descriptor",
     "reduction_setup",
     "debug_itir",
     "DimsType",

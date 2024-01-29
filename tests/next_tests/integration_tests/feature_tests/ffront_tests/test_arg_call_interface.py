@@ -26,7 +26,7 @@ from gt4py.next.ffront.fbuiltins import broadcast, int32
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, IField, IJKFloatField, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -59,7 +59,7 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
+    testee.with_backend(cartesian_case.executor)(
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
@@ -85,7 +85,7 @@ def test_call_program_from_python(cartesian_case, arg_spec):
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
+    testee.with_backend(cartesian_case.executor)(
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 

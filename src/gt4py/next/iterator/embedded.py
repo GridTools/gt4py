@@ -1035,7 +1035,7 @@ def np_as_located_field(
             offset = origin.get(d, 0)
             ranges.append(common.UnitRange(-offset, s - offset))
 
-        res = common.field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
+        res = common._field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
         return res
 
     return _maker
