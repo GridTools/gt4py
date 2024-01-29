@@ -329,6 +329,7 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_dace: tests that require `dace` package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
+  'requires_jax: tests that require the `jax` package',
   'uses_applied_shifts: tests that require backend support for applied-shifts',
   'uses_constant_fields: tests that require backend support for constant fields',
   'uses_dynamic_offsets: tests that require backend support for dynamic offsets',
@@ -354,6 +355,7 @@ markers = [
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
+  'uses_bool_field: tests that use a bool field',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
