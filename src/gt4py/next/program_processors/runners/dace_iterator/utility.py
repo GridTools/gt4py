@@ -69,7 +69,7 @@ def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
-    return dace.Memlet.simple(source_identifier, subset)
+    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
