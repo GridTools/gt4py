@@ -569,16 +569,16 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
 @pytest.mark.parametrize(
     "index, expected_value",
     [
-        ((1, 0), common.field(np.asarray(10), domain=common.Domain(dims=(), ranges=()))),
-        ((0, 1), common.field(np.asarray(1), domain=common.Domain(dims=(), ranges=()))),
+        ((1, 0), 10),
+        ((0, 1), 1),
     ],
 )
 def test_relative_indexing_value_return(index, expected_value):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common.field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
-    indexed_field = fbuiltins.as_scalar(field[index])
+    indexed_field = field[index]
 
-    assert indexed_field == expected_value
+    assert indexed_field.asnumpy() == np.asarray(expected_value)
 
 
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])

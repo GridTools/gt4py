@@ -390,5 +390,5 @@ class ProgramLowering(
             )
         else:
             raise AssertionError(
-                "Only 'as_scalar', 'minimum', and 'maximum' builtins supported currently."
+                "Only 'minimum', and 'maximum' builtins supported currently."
             )

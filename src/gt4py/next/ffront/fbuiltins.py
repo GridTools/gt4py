@@ -301,7 +301,6 @@ FUN_BUILTIN_NAMES = [
     "where",
     "astype",
     "as_offset",
-    "as_scalar",
 ] + MATH_BUILTIN_NAMES
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
