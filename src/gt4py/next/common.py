@@ -843,6 +843,8 @@ def is_connectivity_field(
     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
 def _field(
     definition: Any,
@@ -851,11 +853,10 @@ def _field(
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
 ) -> Field:
-    # Utility function to construct a `Field` from different buffer representations.
-    # Consider removing this function and using `Field` constructor directly.
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
 def _connectivity(
     definition: Any,
