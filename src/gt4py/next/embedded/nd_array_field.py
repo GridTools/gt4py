@@ -201,12 +201,15 @@ class NdArrayField(
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
             assert core_defs.is_scalar_type(new_buffer)
-            new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
+            if isinstance(index, int):
+                new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
+            else:
+                return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
 
         return self.__class__.from_array(new_buffer, domain=new_domain)
 
@@ -432,7 +435,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.IntegralScalar:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
