@@ -188,32 +188,56 @@ def _visit_lift_in_neighbors_reduction(
     offset_provider: NeighborTableOffsetProvider,
     map_entry: dace.nodes.MapEntry,
     map_exit: dace.nodes.MapExit,
-    index_node: dace.nodes.AccessNode,
+    neighbor_index_node: dace.nodes.AccessNode,
     result_node: dace.nodes.AccessNode,
 ) -> list[ValueExpr]:
     neighbor_dim = offset_provider.neighbor_axis.value
-    lifted_args = [
-        IteratorExpr(
-            arg.field,
-            {
-                neighbor_dim: index_node,
-            },
-            arg.dtype,
-            arg.dimensions,
-        )
-        if isinstance(arg, IteratorExpr)
-        else arg[0]
-        for arg in node_args
-    ]
+    origin_dim = offset_provider.origin_axis.value
+
+    lifted_args: list[IteratorExpr | ValueExpr] = []
+    iterator_index_nodes: list[dace.nodes.AccessNode] = []
+    for arg in node_args:
+        if isinstance(arg, IteratorExpr):
+            iterator_index_nodes += arg.indices.values()
+            if origin_dim in arg.indices:
+                lifted_indices = arg.indices.copy()
+                lifted_indices.pop(origin_dim)
+                lifted_indices[neighbor_dim] = neighbor_index_node
+                lifted_args.append(
+                    IteratorExpr(
+                        arg.field,
+                        lifted_indices,
+                        arg.dtype,
+                        arg.dimensions,
+                    )
+                )
+            else:
+                lifted_args.append(arg)
+        else:
+            lifted_args.append(arg[0])
+
     lift_context, inner_inputs, inner_outputs = transformer.visit(node.args[0], args=lifted_args)
     assert len(inner_outputs) == 1
     inner_out_connector = inner_outputs[0].value.data
 
-    inner_index_connectors = [
-        inner_index_table[neighbor_dim] for (_, inner_index_table), _ in inner_inputs
-    ]
+    iterator_field_nodes = {}
+    iterator_index_mapping = {}
+    lifted_index_connectors = []
+    for (field_connector, inner_index_table), iterator in filter(
+        lambda x: isinstance(x[1], IteratorExpr), inner_inputs
+    ):
+        iterator_field_nodes[field_connector] = iterator.field
+        for dim, connector in inner_index_table.items():
+            if dim == neighbor_dim:
+                lifted_index_connectors.append(connector)
+            iterator_index_mapping[connector] = iterator.indices[dim]
 
-    arg_field_nodes = [inner_iterator.field for _, inner_iterator in inner_inputs]
+    input_value_nodes = {
+        connector: expr.value
+        for connector, expr in filter(lambda x: isinstance(x[1], ValueExpr), inner_inputs)
+    }
+
+    input_nodes = {**iterator_field_nodes, **input_value_nodes}
 
     neighbor_tables = filter_neighbor_tables(transformer.offset_provider)
     connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
@@ -222,10 +246,8 @@ def _visit_lift_in_neighbors_reduction(
     parent_state = transformer.context.state
 
     input_mapping = {
-        inner_inp_connector: create_memlet_full(
-            inner_iterator.field.data, inner_iterator.field.desc(parent_sdfg)
-        )
-        for (inner_inp_connector, _), inner_iterator in inner_inputs
+        connector: create_memlet_full(node.data, node.desc(parent_sdfg))
+        for connector, node in input_nodes.items()
     }
     connectivity_mapping = {
         name: create_memlet_full(name, parent_sdfg.arrays[name]) for name in connectivity_names
@@ -236,7 +258,7 @@ def _visit_lift_in_neighbors_reduction(
     nested_sdfg_node = parent_state.add_nested_sdfg(
         lift_context.body,
         parent_sdfg,
-        inputs={*input_mapping.keys(), *inner_index_connectors, *connectivity_names},
+        inputs={*input_mapping.keys(), *iterator_index_mapping.keys(), *connectivity_names},
         outputs={inner_out_connector},
         symbol_mapping=symbol_mapping,
     )
@@ -250,23 +272,32 @@ def _visit_lift_in_neighbors_reduction(
             memlet=memlet,
         )
 
-    for field_node, (inner_inp_connector, memlet) in zip(arg_field_nodes, input_mapping.items()):
+    for inner_connector, access_node in input_nodes.items():
         parent_state.add_memlet_path(
-            field_node,
+            access_node,
             map_entry,
             nested_sdfg_node,
-            dst_conn=inner_inp_connector,
-            memlet=memlet,
+            dst_conn=inner_connector,
+            memlet=input_mapping[inner_connector],
         )
 
-    for inner_index_connector in inner_index_connectors:
-        parent_state.add_edge(
-            index_node,
-            None,
-            nested_sdfg_node,
-            inner_index_connector,
-            memlet=dace.Memlet(data=index_node.data, subset="0"),
-        )
+    for inner_connector, access_node in iterator_index_mapping.items():
+        if inner_connector in lifted_index_connectors:
+            parent_state.add_edge(
+                access_node,
+                None,
+                nested_sdfg_node,
+                inner_connector,
+                memlet=dace.Memlet(data=access_node.data, subset="0"),
+            )
+        else:
+            parent_state.add_memlet_path(
+                access_node,
+                map_entry,
+                nested_sdfg_node,
+                dst_conn=inner_connector,
+                memlet=dace.Memlet(data=access_node.data, subset="0"),
+            )
 
     parent_state.add_memlet_path(
         nested_sdfg_node,
@@ -294,15 +325,15 @@ def builtin_neighbors(
     assert isinstance(offset_dim, str)
     offset_provider = transformer.offset_provider[offset_dim]
 
+    lift_node = None
     if isinstance(data, FunCall):
         assert isinstance(data.fun, itir.FunCall)
-        lift_node = data.fun
-        assert isinstance(lift_node.fun, itir.SymRef) and lift_node.fun.id == "lift"
-        lift_args = transformer.visit(data.args)
-        iterator = next(filter(lambda x: isinstance(x, IteratorExpr), lift_args), None)
-        assert iterator is not None
-    else:
-        lift_node = None
+        fun_node = data.fun
+        if isinstance(fun_node.fun, itir.SymRef) and fun_node.fun.id == "lift":
+            lift_node = fun_node
+            lift_args = transformer.visit(data.args)
+            iterator = next(filter(lambda x: isinstance(x, IteratorExpr), lift_args), None)
+    if lift_node is None:
         iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
     table_index_node = iterator.indices[offset_provider.origin_axis.value]
@@ -437,32 +468,13 @@ def builtin_can_deref(
     assert isinstance(shift_callable.fun, itir.SymRef)
     assert shift_callable.fun.id == "shift"
     iterator = transformer._visit_shift(can_deref_callable)
-
-    # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
-    if not isinstance(iterator, IteratorExpr):
-        assert len(iterator) == 1 and isinstance(iterator[0], ValueExpr)
-        # We can always deref a value expression, therefore hard-code `can_deref` to True.
-        # Returning a SymbolExpr would be preferable, but it requires update to type-checking.
-        result_name = unique_var_name()
-        transformer.context.body.add_scalar(result_name, dace.dtypes.bool, transient=True)
-        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
-        transformer.context.state.add_edge(
-            transformer.context.state.add_tasklet(
-                "can_always_deref", {}, {"_out"}, "_out = True", debuginfo=di
-            ),
-            "_out",
-            result_node,
-            None,
-            dace.Memlet(data=result_name, subset="0", debuginfo=di),
-        )
-        return [ValueExpr(result_node, dace.dtypes.bool)]
+    assert isinstance(iterator, IteratorExpr)
 
     # create tasklet to check that field indices are non-negative (-1 is invalid)
     args = [ValueExpr(access_node, _INDEX_DTYPE) for access_node in iterator.indices.values()]
     internals = [f"{arg.value.data}_v" for arg in args]
     expr_code = " and ".join([f"{v} >= 0" for v in internals])
 
-    # TODO(edopao): select-memlet could maybe allow to efficiently translate can_deref to predicative execution
     return transformer.add_expr_tasklet(
         list(zip(args, internals)),
         expr_code,
@@ -901,73 +913,89 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
-        args: list[ValueExpr]
+        args: Sequence[SymbolExpr | ValueExpr]
         sorted_dims = sorted(iterator.dimensions)
         if all([dim in iterator.indices for dim in iterator.dimensions]):
-            # The deref iterator has index values on all dimensions: the result will be a scalar
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
                 ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
             ]
-            internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]}[{', '.join(internals[1:])}]"
-            return self.add_expr_tasklet(
-                list(zip(args, internals)),
-                expr,
-                iterator.dtype,
-                "deref",
-                dace_debuginfo=di,
-            )
 
         else:
-            # Not all dimensions are included in the deref index list:
-            # this means the ND-field will be sliced along one or more dimensions and the result will be an array
-            field_array = self.context.body.arrays[iterator.field.data]
-            result_shape = tuple(
-                dim_size
-                for dim, dim_size in zip(sorted_dims, field_array.shape)
-                if dim not in iterator.indices
-            )
-            result_name = unique_var_name()
-            self.context.body.add_array(result_name, result_shape, iterator.dtype, transient=True)
-            result_array = self.context.body.arrays[result_name]
-            result_node = self.context.state.add_access(result_name, debuginfo=di)
+            dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
+            assert len(dims_not_indexed) == 1
+            dim = dims_not_indexed[0]
+            if dim in self.offset_provider:
+                offset_provider = self.offset_provider[dim]
+                neighbor_dim = offset_provider.neighbor_axis.value
 
-            deref_connectors = ["_inp"] + [
-                f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
-            ]
-            deref_nodes = [iterator.field] + [
-                iterator.indices[dim] for dim in sorted_dims if dim in iterator.indices
-            ]
-            deref_memlets = [dace.Memlet.from_array(iterator.field.data, field_array)] + [
-                dace.Memlet(data=node.data, subset="0") for node in deref_nodes[1:]
+                result_name = unique_var_name()
+                self.context.body.add_array(
+                    result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
+                )
+                result_array = self.context.body.arrays[result_name]
+                result_node = self.context.state.add_access(result_name)
+
+                deref_connectors = ["_inp"] + [
+                    f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
+                ]
+                deref_nodes = [iterator.field] + [
+                    iterator.indices[dim] for dim in sorted_dims if dim in iterator.indices
+                ]
+                deref_memlets = [
+                    dace.Memlet.from_array(
+                        iterator.field.data, iterator.field.desc(self.context.body)
+                    )
+                ] + [dace.Memlet(data=node.data, subset="0") for node in deref_nodes[1:]]
+
+                # we create a mapped tasklet for array slicing
+                index_name = unique_name(f"_i_{neighbor_dim}")
+                map_ranges = {
+                    index_name: f"0:{offset_provider.max_neighbors}",
+                }
+                src_subset = ",".join(
+                    [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
+                )
+                self.context.state.add_mapped_tasklet(
+                    "deref",
+                    map_ranges,
+                    inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
+                    outputs={
+                        "_out": dace.Memlet.from_array(result_name, result_array),
+                    },
+                    code=f"_out[{index_name}] = _inp[{src_subset}]",
+                    external_edges=True,
+                    input_nodes={node.data: node for node in deref_nodes},
+                    output_nodes={
+                        result_name: result_node,
+                    },
+                    debuginfo=di,
+                )
+                return [ValueExpr(result_node, iterator.dtype)]
+
+            else:
+                index_name = f"i_{dim}"
+
+            args = [ValueExpr(iterator.field, iterator.dtype)] + [
+                ValueExpr(iterator.indices[dim], _INDEX_DTYPE)
+                if dim in iterator.indices
+                else SymbolExpr(index_name, _INDEX_DTYPE)
+                for dim in sorted_dims
             ]
 
-            # we create a mapped tasklet for array slicing
-            map_ranges = {
-                f"_i_{dim}": f"0:{size}"
-                for dim, size in zip(sorted_dims, field_array.shape)
-                if dim not in iterator.indices
-            }
-            src_subset = ",".join([f"_i_{dim}" for dim in sorted_dims])
-            dst_subset = ",".join(
-                [f"_i_{dim}" for dim in sorted_dims if dim not in iterator.indices]
-            )
-            self.context.state.add_mapped_tasklet(
-                "deref",
-                map_ranges,
-                inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
-                outputs={
-                    "_out": dace.Memlet.from_array(result_name, result_array),
-                },
-                code=f"_out[{dst_subset}] = _inp[{src_subset}]",
-                external_edges=True,
-                input_nodes={node.data: node for node in deref_nodes},
-                output_nodes={
-                    result_name: result_node,
-                },
-                debuginfo=di,
-            )
-            return [ValueExpr(result_node, iterator.dtype)]
+        value_args = [arg for arg in args if isinstance(arg, ValueExpr)]
+        internals = [f"{arg.value.data}_v" for arg in value_args]
+        indexes = [
+            f"{arg.value.data}_v" if isinstance(arg, ValueExpr) else arg.value for arg in args[1:]
+        ]
+        expr = f"{internals[0]}[{', '.join(indexes)}]"
+
+        return self.add_expr_tasklet(
+            list(zip(value_args, internals)),
+            expr,
+            iterator.dtype,
+            "deref",
+            dace_debuginfo=di,
+        )
 
     def _split_shift_args(
         self, args: list[itir.Expr]
@@ -995,7 +1023,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             iterator = self.visit(node.args[0])
         if not isinstance(iterator, IteratorExpr):
             # shift cannot be applied because the argument is not iterable
-            # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
+            # TODO: remove this special case when ITIR pass is able to catch it
             assert isinstance(iterator, list) and len(iterator) == 1
             assert isinstance(iterator[0], ValueExpr)
             return iterator
