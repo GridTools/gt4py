@@ -17,8 +17,7 @@
 import dataclasses
 import enum
 import importlib
-from types import NoneType
-from typing import Optional, Protocol
+from typing import Final, Optional, Protocol
 
 import pytest
 
