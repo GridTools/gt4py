@@ -73,7 +73,7 @@ class ExecutionAndAllocatorDescriptor(Protocol):
 @dataclasses.dataclass(frozen=True)
 class EmbeddedExecutionDescriptor:
     allocator: next_allocators.FieldBufferAllocatorProtocol
-    executor: NoneType = dataclasses.field(default=None, init=False)
+    executor: Final = None
 
 
 numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
