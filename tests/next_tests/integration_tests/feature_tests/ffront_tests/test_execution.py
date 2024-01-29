@@ -320,19 +320,19 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
-def test_single_slice(cartesian_case):
+def test_single_field_value(cartesian_case):
     @gtx.field_operator
-    def testee_fo(a: cases.IFloatField) -> cases.IFloatField:
+    def testee_fo(a: cases.IKField) -> cases.IKField:
         return a
 
     @gtx.program
-    def testee_prog(a: cases.IFloatField):
-        testee_fo(a, out=a[1:2])
+    def testee_prog(a: cases.IKField):
+        testee_fo(a, out=a[1:2, 3:4])
 
     a = cases.allocate(cartesian_case, testee_prog, "a")()
-    ref = np.asarray(a.asnumpy()[1])
+    ref = np.asarray(a.asnumpy()[1, 3])
 
-    cases.verify(cartesian_case, testee_prog, a, inout=a[1], ref=ref)
+    cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
 
 
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
