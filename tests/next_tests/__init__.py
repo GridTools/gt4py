@@ -12,10 +12,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import exclusion_matrices
+from . import definitions
 
 
-__all__ = ["exclusion_matrices", "get_processor_id"]
+__all__ = ["definitions", "get_processor_id"]
 
 
 def get_processor_id(processor):

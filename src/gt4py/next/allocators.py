@@ -231,6 +231,7 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
 
+
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
 
