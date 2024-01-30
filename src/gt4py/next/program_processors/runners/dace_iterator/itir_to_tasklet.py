@@ -926,7 +926,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
             )
             result_array = self.context.body.arrays[result_name]
-            result_node = self.context.state.add_access(result_name)
+            result_node = self.context.state.add_access(result_name, debuginfo=di)
 
             deref_connectors = ["_inp"] + [
                 f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
