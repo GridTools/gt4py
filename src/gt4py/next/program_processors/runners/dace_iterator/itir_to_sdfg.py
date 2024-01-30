@@ -260,6 +260,8 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> tuple[dace.SDFG, list[str], list[str]]:
+        assert ItirToSDFG._check_no_lifts(node)
+
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
         closure_sdfg.debuginfo = dace_debuginfo(node)
@@ -673,11 +675,14 @@ class ItirToSDFG(eve.NodeVisitor):
 
     @staticmethod
     def _check_no_lifts(node: itir.StencilClosure):
-        if any(
-            getattr(fun, "id", "") == "lift"
-            for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
-        ):
-            return False
+        # allow lift only to appear as child node in neighbor reductions
+        neighbors_call_count = 0
+        for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun"):
+            if getattr(fun, "id", "") == "neighbors":
+                neighbors_call_count = 3
+            elif getattr(fun, "id", "") == "lift" and neighbors_call_count != 1:
+                return False
+            neighbors_call_count = max(0, neighbors_call_count - 1)
         return True
 
     @staticmethod

@@ -69,29 +69,14 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
-    unroll_reduce: bool = False,
 ):
-    if unroll_reduce:
-        fencil_definition = itir_transforms.apply_common_transforms(
-            program,
-            common_subexpression_elimination=False,
-            force_inline_lambda_args=True,
-            lift_mode=lift_mode,
-            offset_provider=offset_provider,
-            unroll_reduce=True,
-        )
-        assert all([ItirToSDFG._check_no_lifts(closure) for closure in fencil_definition.closures])
-
-    else:
-        fencil_definition = itir_transforms.apply_common_transforms(
-            program,
-            common_subexpression_elimination=False,
-            lift_mode=lift_mode,
-            offset_provider=offset_provider,
-            unroll_reduce=False,
-        )
-
-    return fencil_definition
+    return itir_transforms.apply_common_transforms(
+        program,
+        common_subexpression_elimination=False,
+        lift_mode=lift_mode,
+        offset_provider=offset_provider,
+        unroll_reduce=False,
+    )
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
