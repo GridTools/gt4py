@@ -14,12 +14,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from collections import namedtuple
-from typing import Any, Optional, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
@@ -121,15 +122,32 @@ EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 size = 10
 
 
-@pytest.fixture
-def reduction_setup():
+class MeshDescriptor(Protocol):
+    @property
+    def num_vertices(self) -> int:
+        ...
+
+    @property
+    def num_cells(self) -> int:
+        ...
+
+    @property
+    def num_edges(self) -> int:
+        ...
+
+    @property
+    def num_levels(self) -> int:
+        ...
+
+    @property
+    def offset_provider(self) -> dict[str, common.Connectivity]:
+        ...
+
+
+def simple_mesh() -> MeshDescriptor:
     num_vertices = 9
     num_cells = 8
-    k_levels = 10
-    v2edim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-    e2vdim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-    c2vdim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
-    c2edim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+    num_levels = 10
 
     v2e_arr = np.array(
         [
@@ -183,57 +201,114 @@ def reduction_setup():
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
-    yield namedtuple(
-        "ReductionSetup",
+    return namedtuple(
+        "SimpleMesh",
         [
             "num_vertices",
             "num_edges",
             "num_cells",
-            "k_levels",
-            "V2EDim",
-            "E2VDim",
-            "C2VDim",
-            "C2EDim",
-            "V2E",
-            "E2V",
-            "C2V",
-            "C2E",
-            "inp",
-            "out",
             "offset_provider",
-            "v2e_table",
-            "e2v_table",
         ],
     )(
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
-        k_levels=k_levels,
-        V2EDim=v2edim,
-        E2VDim=e2vdim,
-        C2VDim=c2vdim,
-        C2EDim=c2edim,
-        V2E=gtx.FieldOffset("V2E", source=Edge, target=(Vertex, v2edim)),
-        E2V=gtx.FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
-        C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
-        C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
-        # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
-        inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
-        out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
             "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4, has_skip_values=False),
             "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
             "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
             "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
         },
-        v2e_table=v2e_arr,
-        e2v_table=e2v_arr,
+    )  # type: ignore
+
+
+def skip_value_mesh() -> MeshDescriptor:
+    """Mesh with skip values from the GT4Py quickstart guide."""
+
+    num_vertices = 7
+    num_cells = 6
+    num_edges = 12
+    num_levels = 10
+
+    v2e_arr = np.array(
+        [
+            [1, 8, 7, 0, -1],
+            [2, 8, 1, -1, -1],
+            [3, 9, 8, 2, -1],
+            [4, 10, 3, -1, -1],
+            [5, 11, 4, -1, -1],
+            [0, 6, 4, -1, -1],
+            [6, 7, 9, 10, 11],
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    e2v_arr = np.array(
+        [
+            [0, 5],
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 0],
+            [0, 2],
+            [2, 6],
+            [3, 6],
+            [4, 6],
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    c2v_arr = np.array(
+        [
+            [0, 6, 5],
+            [0, 2, 6],
+            [0, 1, 2],
+            [2, 3, 6],
+            [3, 4, 6],
+            [4, 5, 6],
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    c2e_arr = np.array(
+        [
+            [0, 6, 7],  # cell 0 (neighbors: edge 0, edge 6, edge 7)
+            [7, 8, 9],  # cell 1
+            [1, 2, 8],  # cell 2
+            [3, 9, 10],  # cell 3
+            [4, 10, 11],  # cell 4
+            [5, 6, 11],  # cell 5
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    return namedtuple(
+        "SkipValueMesh",
+        [
+            "num_vertices",
+            "num_edges",
+            "num_cells",
+            "offset_provider",
+        ],
+    )(
+        num_vertices=num_vertices,
+        num_edges=num_edges,
+        num_cells=num_cells,
+        offset_provider={
+            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 5, has_skip_values=True),
+            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
+            "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 3, has_skip_values=False),
+            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 3, has_skip_values=False),
+        },
     )  # type: ignore
 
 
 __all__ = [
     "exec_alloc_descriptor",
-    "reduction_setup",
+    "mesh_descriptor",
     "debug_itir",
     "DimsType",
     "DType",
@@ -249,3 +324,14 @@ __all__ = [
     "EdgeOffset",
     "size",
 ]
+
+
+@pytest.fixture(
+    params=[
+        simple_mesh(),
+        pytest.param(skip_value_mesh(), marks=pytest.mark.uses_mesh_with_skip_values),
+    ],
+    ids=lambda p: p.__class__.__name__,
+)
+def mesh_descriptor(request) -> MeshDescriptor:
+    yield request.param

@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
+    Final,
     Generic,
     Never,
     Optional,
@@ -1102,4 +1103,8 @@ class FieldBuiltinFuncRegistry:
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
-        return cls._builtin_func_map.get(func, NotImplemented)
+
+
+#: Numeric value used to represent missing values in connectivities.
+#: Adopted from UGRID Conventions (http://ugrid-conventions.github.io/ugrid-conventions/)
+FILL_CONNECTIVITY_VALUE: Final[int] = -1
