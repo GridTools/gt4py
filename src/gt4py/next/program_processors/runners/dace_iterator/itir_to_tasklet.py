@@ -913,85 +913,72 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
-        args: Sequence[SymbolExpr | ValueExpr]
         sorted_dims = sorted(iterator.dimensions)
-        if all([dim in iterator.indices for dim in iterator.dimensions]):
-            args = [ValueExpr(iterator.field, iterator.dtype)] + [
-                ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
+        dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
+
+        if len(dims_not_indexed) == 1 and dims_not_indexed[0] in self.offset_provider:
+            offset = dims_not_indexed[0]
+            offset_provider = self.offset_provider[offset]
+            neighbor_dim = offset_provider.neighbor_axis.value
+
+            result_name = unique_var_name()
+            self.context.body.add_array(
+                result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
+            )
+            result_array = self.context.body.arrays[result_name]
+            result_node = self.context.state.add_access(result_name)
+
+            deref_connectors = ["_inp"] + [
+                f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
             ]
-
-        else:
-            dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
-            assert len(dims_not_indexed) == 1
-            dim = dims_not_indexed[0]
-            if dim in self.offset_provider:
-                offset_provider = self.offset_provider[dim]
-                neighbor_dim = offset_provider.neighbor_axis.value
-
-                result_name = unique_var_name()
-                self.context.body.add_array(
-                    result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
-                )
-                result_array = self.context.body.arrays[result_name]
-                result_node = self.context.state.add_access(result_name)
-
-                deref_connectors = ["_inp"] + [
-                    f"_i_{dim}" for dim in sorted_dims if dim in iterator.indices
-                ]
-                deref_nodes = [iterator.field] + [
-                    iterator.indices[dim] for dim in sorted_dims if dim in iterator.indices
-                ]
-                deref_memlets = [
-                    dace.Memlet.from_array(
-                        iterator.field.data, iterator.field.desc(self.context.body)
-                    )
-                ] + [dace.Memlet(data=node.data, subset="0") for node in deref_nodes[1:]]
-
-                # we create a mapped tasklet for array slicing
-                index_name = unique_name(f"_i_{neighbor_dim}")
-                map_ranges = {
-                    index_name: f"0:{offset_provider.max_neighbors}",
-                }
-                src_subset = ",".join(
-                    [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
-                )
-                self.context.state.add_mapped_tasklet(
-                    "deref",
-                    map_ranges,
-                    inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
-                    outputs={
-                        "_out": dace.Memlet.from_array(result_name, result_array),
-                    },
-                    code=f"_out[{index_name}] = _inp[{src_subset}]",
-                    external_edges=True,
-                    input_nodes={node.data: node for node in deref_nodes},
-                    output_nodes={
-                        result_name: result_node,
-                    },
-                    debuginfo=di,
-                )
-                return [ValueExpr(result_node, iterator.dtype)]
-
-            else:
-                index_name = f"i_{dim}"
-
-            args = [ValueExpr(iterator.field, iterator.dtype)] + [
-                ValueExpr(iterator.indices[dim], _INDEX_DTYPE)
-                if dim in iterator.indices
-                else SymbolExpr(index_name, _INDEX_DTYPE)
-                for dim in sorted_dims
+            deref_nodes = [iterator.field] + [
+                iterator.indices[dim] for dim in sorted_dims if dim in iterator.indices
             ]
+            deref_memlets = [
+                dace.Memlet.from_array(iterator.field.data, iterator.field.desc(self.context.body))
+            ] + [dace.Memlet(data=node.data, subset="0") for node in deref_nodes[1:]]
+
+            # we create a mapped tasklet for array slicing
+            index_name = unique_name(f"_i_{neighbor_dim}")
+            map_ranges = {
+                index_name: f"0:{offset_provider.max_neighbors}",
+            }
+            src_subset = ",".join(
+                [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
+            )
+            self.context.state.add_mapped_tasklet(
+                "deref",
+                map_ranges,
+                inputs={k: v for k, v in zip(deref_connectors, deref_memlets)},
+                outputs={
+                    "_out": dace.Memlet.from_array(result_name, result_array),
+                },
+                code=f"_out[{index_name}] = _inp[{src_subset}]",
+                external_edges=True,
+                input_nodes={node.data: node for node in deref_nodes},
+                output_nodes={
+                    result_name: result_node,
+                },
+                debuginfo=di,
+            )
+            return [ValueExpr(result_node, iterator.dtype)]
+
+        args: Sequence[SymbolExpr | ValueExpr] = [ValueExpr(iterator.field, iterator.dtype)] + [
+            ValueExpr(iterator.indices[dim], _INDEX_DTYPE)
+            if dim in iterator.indices
+            else SymbolExpr(f"i_{dim}", _INDEX_DTYPE)
+            for dim in sorted_dims
+        ]
 
         value_args = [arg for arg in args if isinstance(arg, ValueExpr)]
         internals = [f"{arg.value.data}_v" for arg in value_args]
         indexes = [
             f"{arg.value.data}_v" if isinstance(arg, ValueExpr) else arg.value for arg in args[1:]
         ]
-        expr = f"{internals[0]}[{', '.join(indexes)}]"
 
         return self.add_expr_tasklet(
             list(zip(value_args, internals)),
-            expr,
+            f"{internals[0]}[{', '.join(indexes)}]",
             iterator.dtype,
             "deref",
             dace_debuginfo=di,
