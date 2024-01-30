@@ -77,7 +77,7 @@ def testee():
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, reduction_setup):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes,
+        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
@@ -86,6 +86,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
             KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=run_gtfn_with_temporaries_and_symbolic_sizes.allocator,
     )
 
     a = cases.allocate(unstructured_case, testee, "a")()

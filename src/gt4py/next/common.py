@@ -843,8 +843,10 @@ def is_connectivity_field(
     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -854,8 +856,9 @@ def field(
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
@@ -980,7 +983,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     __getitem__ = restrict
 
 
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique
