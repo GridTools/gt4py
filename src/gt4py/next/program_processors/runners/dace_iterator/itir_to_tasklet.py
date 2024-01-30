@@ -915,9 +915,24 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             return iterator
 
         sorted_dims = sorted(iterator.dimensions)
-        dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
+        if all([dim in iterator.indices for dim in iterator.dimensions]):
+            # The deref iterator has index values on all dimensions: the result will be a scalar
+            args = [ValueExpr(iterator.field, iterator.dtype)] + [
+                ValueExpr(iterator.indices[dim], _INDEX_DTYPE) for dim in sorted_dims
+            ]
+            internals = [f"{arg.value.data}_v" for arg in args]
+            expr = f"{internals[0]}[{', '.join(internals[1:])}]"
+            return self.add_expr_tasklet(
+                list(zip(args, internals)),
+                expr,
+                iterator.dtype,
+                "deref",
+                dace_debuginfo=di,
+            )
 
-        if len(dims_not_indexed) == 1 and dims_not_indexed[0] in self.offset_provider:
+        else:
+            dims_not_indexed = [dim for dim in iterator.dimensions if dim not in iterator.indices]
+            assert len(dims_not_indexed) == 1
             offset = dims_not_indexed[0]
             offset_provider = self.offset_provider[offset]
             neighbor_dim = offset_provider.neighbor_axis.value
@@ -963,27 +978,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 debuginfo=di,
             )
             return [ValueExpr(result_node, iterator.dtype)]
-
-        args: Sequence[SymbolExpr | ValueExpr] = [ValueExpr(iterator.field, iterator.dtype)] + [
-            ValueExpr(iterator.indices[dim], _INDEX_DTYPE)
-            if dim in iterator.indices
-            else SymbolExpr(f"i_{dim}", _INDEX_DTYPE)
-            for dim in sorted_dims
-        ]
-
-        value_args = [arg for arg in args if isinstance(arg, ValueExpr)]
-        internals = [f"{arg.value.data}_v" for arg in value_args]
-        indexes = [
-            f"{arg.value.data}_v" if isinstance(arg, ValueExpr) else arg.value for arg in args[1:]
-        ]
-
-        return self.add_expr_tasklet(
-            list(zip(value_args, internals)),
-            f"{internals[0]}[{', '.join(indexes)}]",
-            iterator.dtype,
-            "deref",
-            dace_debuginfo=di,
-        )
 
     def _split_shift_args(
         self, args: list[itir.Expr]
