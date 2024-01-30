@@ -147,7 +147,6 @@ class MeshDescriptor(Protocol):
 def simple_mesh() -> MeshDescriptor:
     num_vertices = 9
     num_cells = 8
-    num_levels = 10
 
     v2e_arr = np.array(
         [
@@ -211,7 +210,7 @@ def simple_mesh() -> MeshDescriptor:
         ],
     )(
         num_vertices=num_vertices,
-        num_edges=num_edges,
+        num_edges=np.int32(num_edges),
         num_cells=num_cells,
         offset_provider={
             "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4, has_skip_values=False),
@@ -228,7 +227,6 @@ def skip_value_mesh() -> MeshDescriptor:
     num_vertices = 7
     num_cells = 6
     num_edges = 12
-    num_levels = 10
 
     v2e_arr = np.array(
         [

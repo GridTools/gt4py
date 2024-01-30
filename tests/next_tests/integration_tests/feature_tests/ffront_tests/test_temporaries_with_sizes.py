@@ -67,7 +67,7 @@ def testee():
         a: cases.VField,
         out: cases.EField,
         num_vertices: int32,
-        num_edges: int64,
+        num_edges: int32,
         num_cells: int32,
     ):
         testee_op(a, out=out)
