@@ -69,7 +69,10 @@ def naive_lap(inp):
         for j in range(1, shape[1] + 1):
             for k in range(0, shape[2]):
                 out[i - 1, j - 1, k] = -4 * inp.asnumpy()[i, j, k] + (
-                    inp.asnumpy()[i + 1, j, k] + inp.asnumpy()[i - 1, j, k] + inp.asnumpy()[i, j + 1, k] + inp.asnumpy()[i, j - 1, k]
+                    inp.asnumpy()[i + 1, j, k]
+                    + inp.asnumpy()[i - 1, j, k]
+                    + inp.asnumpy()[i, j + 1, k]
+                    + inp.asnumpy()[i, j - 1, k]
                 )
     return out
 
