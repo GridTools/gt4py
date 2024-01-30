@@ -550,6 +550,7 @@ def update_domains(
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
 
+                        assert old_axis in consumed_domain.ranges.keys()
                         assert new_axis not in consumed_domain.ranges or old_axis == new_axis
 
                         if symbolic_sizes is None:
@@ -564,10 +565,6 @@ def update_domains(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.ref(symbolic_sizes[new_axis]),
                             )
-                        consumed_domain.ranges = dict(
-                            (axis, range_) if axis != old_axis else (new_axis, new_range)
-                            for axis, range_ in consumed_domain.ranges.items()
-                        )
                         # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)

@@ -259,7 +259,6 @@ def apply_common_transforms(
 
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
-
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
