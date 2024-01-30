@@ -461,7 +461,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}
