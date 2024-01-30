@@ -336,22 +336,29 @@ def builtin_neighbors(
     if lift_node is None:
         iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
-    table_index_node = iterator.indices[offset_provider.origin_axis.value]
+    field_desc = iterator.field.desc(transformer.context.body)
+    origin_index_node = iterator.indices[offset_provider.origin_axis.value]
 
-    # allocate scalar to store index for direct addressing
+    # gather the neighbors in a result array dimensioned for `max_neighbors`
+    result_name = unique_var_name()
+    sdfg.add_array(
+        result_name, dtype=iterator.dtype, shape=(offset_provider.max_neighbors,), transient=True
+    )
+    result_node = state.add_access(result_name, debuginfo=di)
+
+    # allocate scalar to store index for direct addressing of neighbor field
     neighbor_dim = offset_provider.neighbor_axis.value
     neighbor_index_name = unique_var_name()
     sdfg.add_scalar(neighbor_index_name, _INDEX_DTYPE, transient=True)
     neighbor_index_node = state.add_access(neighbor_index_name)
 
     # generate unique map index name to avoid conflict with other maps inside same state
-    neighbor_index = unique_name(f"neighbor_idx_{neighbor_dim}")
+    neighbor_index = unique_name(f"{offset_dim}_neighbor_idx")
     me, mx = state.add_map(
         f"{offset_dim}_neighbors_map",
         ndrange={neighbor_index: f"0:{offset_provider.max_neighbors}"},
         debuginfo=di,
     )
-
     table_name = connectivity_identifier(offset_dim)
     table_subset = (f"0:{sdfg.arrays[table_name].shape[0]}", neighbor_index)
 
@@ -370,10 +377,10 @@ def builtin_neighbors(
         dst_conn="__table",
     )
     state.add_memlet_path(
-        table_index_node,
+        origin_index_node,
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=table_index_node.data, subset="0", debuginfo=di),
+        memlet=dace.Memlet(data=origin_index_node.data, subset="0", debuginfo=di),
         dst_conn="__idx",
     )
     state.add_edge(
@@ -383,24 +390,6 @@ def builtin_neighbors(
         None,
         dace.Memlet(data=neighbor_index_name, subset="0"),
     )
-
-    field_desc = iterator.field.desc(transformer.context.body)
-    field_index = "__field_idx"
-    if isinstance(offset_provider, NeighborTableOffsetProvider):
-        neighbor_check = f"{field_index} >= 0"
-    elif isinstance(offset_provider, StridedNeighborOffsetProvider):
-        neighbor_check = f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
-    else:
-        assert isinstance(offset_provider, Dimension)
-        raise NotImplementedError(
-            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
-        )
-
-    result_name = unique_var_name()
-    sdfg.add_array(
-        result_name, dtype=iterator.dtype, shape=(offset_provider.max_neighbors,), transient=True
-    )
-    result_node = state.add_access(result_name, debuginfo=di)
 
     if lift_node is not None:
         _visit_lift_in_neighbors_reduction(
@@ -414,6 +403,18 @@ def builtin_neighbors(
             result_node,
         )
     else:
+        field_index = "__field_idx"
+        if isinstance(offset_provider, NeighborTableOffsetProvider):
+            neighbor_check = f"{field_index} >= 0"
+        elif isinstance(offset_provider, StridedNeighborOffsetProvider):
+            neighbor_check = (
+                f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
+            )
+        else:
+            assert isinstance(offset_provider, Dimension)
+            raise NotImplementedError(
+                "Neighbor reductions for cartesian grids not implemented in DaCe backend."
+            )
         data_access_tasklet = state.add_tasklet(
             "data_access",
             code=f"__result = __field[{field_index}]"
