@@ -470,8 +470,8 @@ def test_absolute_indexing_value_return():
     named_index = ((IDim, 12), (JDim, 6))
     value = field[named_index]
 
-    assert isinstance(value.asnumpy(), np.ndarray)
-    assert value.asnumpy() == np.asarray(21)
+    assert isinstance(value, np.int32)
+    assert value == 21
 
 
 @pytest.mark.parametrize(
