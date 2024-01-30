@@ -652,10 +652,6 @@ def test_connectivity_field_inverse_image_implementation():
         codomain=V,
     )
 
-    # Test codomain
-    with pytest.raises(ValueError, match="does not match the codomain dimension"):
-        e2v_conn.inverse_image((E, UnitRange(1, 2)))
-
     # Test range
     image_range = UnitRange(V_START, V_STOP)
     result = e2v_conn.inverse_image(image_range)
@@ -667,6 +663,10 @@ def test_connectivity_field_inverse_image_implementation():
     cached_result = e2v_conn.inverse_image(image_range)
 
     assert result is cached_result
+
+    # Test codomain
+    with pytest.raises(ValueError, match="does not match the codomain dimension"):
+        e2v_conn.inverse_image((E, UnitRange(1, 2)))
 
     # Test non-contiguous range
     e2v_conn = common.connectivity(
