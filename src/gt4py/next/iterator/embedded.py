@@ -541,7 +541,7 @@ def execute_shift(
                 assert common.is_int_index(cur_index)
                 if offset_implementation.mapped_index(cur_index, index) in [
                     None,
-                    -1,
+                    common.SKIP_VALUE,
                 ]:
                     return None
 
@@ -568,7 +568,7 @@ def execute_shift(
         assert common.is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
-            -1,
+            common.SKIP_VALUE,
         ]:
             return None
         else:

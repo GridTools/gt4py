@@ -43,6 +43,7 @@ def test_external_local_field(unstructured_case):
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify(
         unstructured_case,
         testee,
@@ -50,10 +51,10 @@ def test_external_local_field(unstructured_case):
         ones,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
         ref=np.sum(
-            unstructured_case.offset_provider["V2E"].table,
+            v2e_table,
             axis=1,
             initial=0,
-            where=unstructured_case.offset_provider["V2E"].table != common.FILL_CONNECTIVITY_VALUE,
+            where=v2e_table != common.SKIP_VALUE,
         ),
     )
 

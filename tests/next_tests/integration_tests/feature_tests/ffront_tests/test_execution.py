@@ -572,16 +572,15 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         tmp = red(E2V[0])
         return tmp
 
+    v2e = unstructured_case.offset_provider["V2E"]
     cases.verify_with_default_data(
         unstructured_case,
         reduce_tuple_element,
-        # TODO think about the reference
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table]
-            + np.tile(v, (unstructured_case.offset_provider["V2E"].max_neighbors, 1)).T,
+            e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
             axis=1,
             initial=0,
-            where=unstructured_case.offset_provider["V2E"].table > common.FILL_CONNECTIVITY_VALUE,
+            where=v2e.table != common.SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -712,15 +711,16 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b: (
             np.sum(
-                b[unstructured_case.offset_provider["V2E"].table],
+                b[v2e_table],
                 axis=1,
                 initial=0,
-                where=unstructured_case.offset_provider["V2E"].table != -1,
+                where=v2e_table != common.SKIP_VALUE,
             )
         ),
     )
