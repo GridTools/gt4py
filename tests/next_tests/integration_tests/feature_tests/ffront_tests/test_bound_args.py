@@ -21,7 +21,7 @@ from gt4py.next import int32
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
     reduction_setup,
 )
 
@@ -52,7 +52,7 @@ def test_with_bound_args_order_args(cartesian_case):
         scalar = 0 if not condition else scalar
         return a + scalar
 
-    @gtx.program(backend=cartesian_case.backend)
+    @gtx.program(backend=cartesian_case.executor)
     def program_args(a: cases.IField, condition: bool, scalar: int32, out: cases.IField):
         fieldop_args(a, condition, scalar, out=out)
 

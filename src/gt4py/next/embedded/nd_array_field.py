@@ -95,9 +95,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[
-        ModuleType
-    ]  # TODO(havogt) after storage PR is merged, update to the NDArrayNamespace protocol
+    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
 
     @property
     def domain(self) -> common.Domain:
@@ -197,7 +195,11 @@ class NdArrayField(
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+        return self.__class__.from_array(
+            new_buffer,
+            domain=new_domain,
+            dtype=self.dtype,
+        )
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -519,7 +521,7 @@ class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
 
-common.field.register(np.ndarray, NumPyArrayField.from_array)
+common._field.register(np.ndarray, NumPyArrayField.from_array)
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -527,7 +529,7 @@ class NumPyArrayConnectivityField(NdArrayConnectivityField):
     array_ns: ClassVar[ModuleType] = np
 
 
-common.connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
+common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
 
 # CuPy
 if cp:
@@ -537,13 +539,13 @@ if cp:
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
-    common.field.register(cp.ndarray, CuPyArrayField.from_array)
+    common._field.register(cp.ndarray, CuPyArrayField.from_array)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = cp
 
-    common.connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
+    common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
 # JAX
 if jnp:
@@ -561,7 +563,7 @@ if jnp:
             # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
             raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
 
-    common.field.register(jnp.ndarray, JaxArrayField.from_array)
+    common._field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
@@ -574,7 +576,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
         else:
             domain_slice.append(np.newaxis)
             named_ranges.append((dim, common.UnitRange.infinite()))
-    return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+    return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(

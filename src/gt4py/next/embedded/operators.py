@@ -13,11 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+from types import ModuleType
 from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
+
+import numpy as np
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, errors, utils
+from gt4py.next import common, errors, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
@@ -43,7 +46,8 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
-        domain_intersection = _intersect_scan_args(*args, *kwargs.values())
+        all_args = [*args, *kwargs.values()]
+        domain_intersection = _intersect_scan_args(*all_args)
         non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
         out_domain = common.Domain(
@@ -53,7 +57,8 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
 
-        res = _construct_scan_array(out_domain)(self.init)
+        xp = _get_array_ns(*all_args)
+        res = _construct_scan_array(out_domain, xp)(self.init)
 
         def scan_loop(hpos):
             acc = self.init
@@ -128,7 +133,11 @@ def _tuple_assign_field(
 ):
     @utils.tree_map
     def impl(target: common.MutableField, source: common.Field):
-        target[domain] = source[domain]
+        if common.is_field(source):
+            target[domain] = source[domain]
+        else:
+            assert core_defs.is_scalar_type(source)
+            target[domain] = source
 
     impl(target, source)
 
@@ -141,10 +150,21 @@ def _intersect_scan_args(
     )
 
 
-def _construct_scan_array(domain: common.Domain):
+def _get_array_ns(
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+) -> ModuleType:
+    for arg in utils.flatten_nested_tuple(args):
+        if hasattr(arg, "array_ns"):
+            return arg.array_ns
+    return np
+
+
+def _construct_scan_array(
+    domain: common.Domain, xp: ModuleType
+):  # TODO(havogt) introduce a NDArrayNamespace protocol
     @utils.tree_map
     def impl(init: core_defs.Scalar) -> common.Field:
-        return constructors.empty(domain, dtype=type(init))
+        return common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
 
     return impl
 
@@ -168,6 +188,7 @@ def _tuple_at(
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
         res = field[pos] if common.is_field(field) else field
+        res = res.item() if hasattr(res, "item") else res  # extract scalar value from array
         assert core_defs.is_scalar_type(res)
         return res
 

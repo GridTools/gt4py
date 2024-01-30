@@ -77,7 +77,7 @@ def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=No
         domain = tuple(
             (common.Dimension(f"D{i}"), common.UnitRange(0, s)) for i, s in enumerate(buffer.shape)
         )
-    return common.field(
+    return common._field(
         buffer,
         domain=domain,
     )
@@ -119,14 +119,14 @@ def test_where_builtin_different_domain(nd_array_implementation):
     true_ = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=np.float32)
     false_ = np.asarray([7.0, 8.0, 9.0, 10.0], dtype=np.float32)
 
-    cond_field = common.field(
+    cond_field = common._field(
         nd_array_implementation.asarray(cond), domain=common.domain({JDim: 2})
     )
-    true_field = common.field(
+    true_field = common._field(
         nd_array_implementation.asarray(true_),
         domain=common.domain({IDim: common.UnitRange(0, 2), JDim: common.UnitRange(-1, 2)}),
     )
-    false_field = common.field(
+    false_field = common._field(
         nd_array_implementation.asarray(false_),
         domain=common.domain({JDim: common.UnitRange(-1, 3)}),
     )
@@ -225,8 +225,8 @@ def test_binary_operations_with_intersection(binary_arithmetic_op, dims, expecte
     arr2 = np.ones((5, 5))
     arr2_domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 10), UnitRange(5, 10)))
 
-    field1 = common.field(arr1, domain=arr1_domain)
-    field2 = common.field(arr2, domain=arr2_domain)
+    field1 = common._field(arr1, domain=arr1_domain)
+    field2 = common._field(arr2, domain=arr2_domain)
 
     op_result = binary_arithmetic_op(field1, field2)
     expected_result = binary_arithmetic_op(arr1[expected_indices[0], expected_indices[1]], arr2)
@@ -287,11 +287,11 @@ def test_remap_implementation():
 
     V_START, V_STOP = 2, 7
     E_START, E_STOP = 0, 10
-    v_field = common.field(
+    v_field = common._field(
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    e2v_conn = common.connectivity(
+    e2v_conn = common._connectivity(
         np.arange(E_START, E_STOP),
         domain=common.Domain(
             dims=(E,),
@@ -303,7 +303,7 @@ def test_remap_implementation():
     )
 
     result = v_field.remap(e2v_conn)
-    expected = common.field(
+    expected = common._field(
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
     )
@@ -318,14 +318,14 @@ def test_cartesian_remap_implementation():
 
     V_START, V_STOP = 2, 7
     OFFSET = 2
-    v_field = common.field(
+    v_field = common._field(
         -0.1 * np.arange(V_START, V_STOP),
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
     )
-    v2_conn = common.connectivity(OFFSET, V)
+    v2_conn = common._connectivity(OFFSET, V)
 
     result = v_field.remap(v2_conn)
-    expected = common.field(
+    expected = common._field(
         v_field.ndarray,
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
     )
@@ -340,7 +340,7 @@ def test_cartesian_remap_implementation():
         (
             (
                 (IDim,),
-                common.field(
+                common._field(
                     np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
                 ),
                 Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
@@ -349,7 +349,7 @@ def test_cartesian_remap_implementation():
         (
             (
                 (IDim, JDim),
-                common.field(
+                common._field(
                     np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
                 ),
                 Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinite())),
@@ -358,7 +358,7 @@ def test_cartesian_remap_implementation():
         (
             (
                 (IDim, JDim),
-                common.field(
+                common._field(
                     np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
                 ),
                 Domain(dims=(IDim, JDim), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
@@ -367,7 +367,7 @@ def test_cartesian_remap_implementation():
         (
             (
                 (IDim, JDim, KDim),
-                common.field(
+                common._field(
                     np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
                 ),
                 Domain(
@@ -455,7 +455,7 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     domain = common.Domain(
         dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
-    field = common.field(np.ones((5, 10, 15)), domain=domain)
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
     assert common.is_field(indexed_field)
@@ -465,7 +465,7 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
 
 def test_absolute_indexing_value_return():
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
-    field = common.field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
+    field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
     named_index = ((IDim, 12), (JDim, 6))
     value = field[named_index]
@@ -502,7 +502,7 @@ def test_absolute_indexing_value_return():
 )
 def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
-    field = common.field(np.ones((10, 10)), domain=domain)
+    field = common._field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
     assert common.is_field(indexed_field)
@@ -558,7 +558,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
     domain = common.Domain(
         dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 15), UnitRange(10, 25), UnitRange(10, 20))
     )
-    field = common.field(np.ones((10, 15, 10)), domain=domain)
+    field = common._field(np.ones((10, 15, 10)), domain=domain)
     indexed_field = field[index]
 
     assert common.is_field(indexed_field)
@@ -575,7 +575,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
 )
 def test_relative_indexing_value_return(index, expected_value):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
-    field = common.field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
+    field = common._field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
     indexed_field = field[index]
 
     assert indexed_field.asnumpy() == np.asarray(expected_value)
@@ -584,7 +584,7 @@ def test_relative_indexing_value_return(index, expected_value):
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])
 def test_relative_indexing_out_of_bounds(lazy_slice):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(3, 13), UnitRange(-5, 5)))
-    field = common.field(np.ones((10, 10)), domain=domain)
+    field = common._field(np.ones((10, 10)), domain=domain)
 
     with pytest.raises((embedded_exceptions.IndexOutOfBounds, IndexError)):
         lazy_slice(field)
@@ -593,7 +593,7 @@ def test_relative_indexing_out_of_bounds(lazy_slice):
 @pytest.mark.parametrize("index", [IDim, "1", (IDim, JDim)])
 def test_field_unsupported_index(index):
     domain = common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-    field = common.field(np.ones((10,)), domain=domain)
+    field = common._field(np.ones((10,)), domain=domain)
     with pytest.raises(IndexError, match="Unsupported index type"):
         field[index]
 
@@ -605,12 +605,12 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common.field(np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(0, 10)))),
+            common._field(np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(0, 10)))),
         ),
     ],
 )
 def test_setitem(index, value):
-    field = common.field(
+    field = common._field(
         np.arange(100).reshape(10, 10),
         domain=common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
@@ -624,12 +624,12 @@ def test_setitem(index, value):
 
 
 def test_setitem_wrong_domain():
-    field = common.field(
+    field = common._field(
         np.arange(100).reshape(10, 10),
         domain=common.Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange(0, 10))),
     )
 
-    value_incompatible = common.field(
+    value_incompatible = common._field(
         np.ones((10,)) * 42.0, domain=common.Domain((JDim, UnitRange(-5, 5)))
     )
 

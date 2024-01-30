@@ -49,8 +49,10 @@ jinja2==3.0.0
 jupytext==1.14
 lark==1.1.2
 mako==1.1
+matplotlib==3.3
 mypy==1.0
 nanobind==1.4.0
+nbmake==1.4.6
 ninja==1.10
 numpy==1.21.2
 packaging==20.0

@@ -51,7 +51,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
     reduction_setup,
 )
 
@@ -604,6 +604,7 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
@@ -626,15 +627,9 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
+@pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Nested `scan`s requires creating temporaries.")
-    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -736,7 +731,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
 
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -758,9 +753,10 @@ def test_ternary_scan(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     init = (1, (2, 3))
@@ -931,15 +927,8 @@ def test_domain(cartesian_case):
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
 
 
+@pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("FloorDiv not fully supported in gtfn.")
-
     lower_i = 1
     upper_i = 10
 
@@ -985,7 +974,7 @@ def test_domain_input_bounds_1(cartesian_case):
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
         return a + a
 
-    @gtx.program(backend=cartesian_case.backend)
+    @gtx.program(backend=cartesian_case.executor)
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
@@ -1086,7 +1075,7 @@ def test_where_k_offset(cartesian_case):
 def test_undefined_symbols(cartesian_case):
     with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def return_undefined():
             return undefined_symbol
 
@@ -1186,7 +1175,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
         match=(r"Too many values to unpack \(expected 3\)."),
     ):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def _star_unpack() -> tuple[int32, float64, int32]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -1197,7 +1186,7 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
         errors.DSLError, match=(r"Assignment value must be of type tuple, got 'int32'.")
     ):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def _invalid_unpack() -> tuple[int32, float64, int32]:
             a, b, c = 1
             return a
