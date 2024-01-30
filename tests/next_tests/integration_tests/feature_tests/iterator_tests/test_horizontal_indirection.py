@@ -70,7 +70,7 @@ def test_simple_indirection(program_processor):
 
     ref = np.zeros(shape, dtype=inp.dtype)
     for i in range(shape[0]):
-        ref[i] = inp.ndarray[i + 1 - 1] if cond[i] < 0.0 else inp.ndarray[i + 1 + 1]
+        ref[i] = inp.ndarray[i + 1 - 1] if cond[i].ndarray < 0.0 else inp.ndarray[i + 1 + 1]
 
     run_processor(
         conditional_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
@@ -101,7 +101,7 @@ def test_direct_offset_for_indirection(program_processor):
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
-        ref[i] = inp[i + cond[i]]
+        ref[i] = inp.ndarray[i + cond[i].asnumpy().item()]
 
     run_processor(
         direct_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
@@ -114,3 +114,4 @@ def test_direct_offset_for_indirection(program_processor):
 
     if validate:
         assert np.allclose(ref, out.asnumpy())
+
