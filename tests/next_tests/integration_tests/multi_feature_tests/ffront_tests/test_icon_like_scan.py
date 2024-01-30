@@ -12,19 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
+import dataclasses
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
+from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import Cell, KDim, Koff
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -193,44 +193,42 @@ def reference(
 
 
 @pytest.fixture
-def test_setup(fieldview_backend):
+def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        fieldview_backend,
+        exec_alloc_descriptor.executor,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
-    @dataclass(frozen=True)
+    @dataclasses.dataclass(frozen=True)
     class setup:
-        case: cases.Case = test_case
-        cell_size = case.default_sizes[Cell]
-        k_size = case.default_sizes[KDim]
-        z_alpha = case.as_field(
+        case: cases.Case = dataclasses.field(default_factory=lambda: test_case)
+        cell_size = test_case.default_sizes[Cell]
+        k_size = test_case.default_sizes[KDim]
+        z_alpha = test_case.as_field(
             [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size + 1))
         )
-        z_beta = case.as_field(
+        z_beta = test_case.as_field(
             [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
         )
-        z_q = case.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
-        w = case.as_field([Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size)))
+        z_q = test_case.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+        )
+        w = test_case.as_field(
+            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+        )
         z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
-        dummy = case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
+        dummy = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
 
     return setup()
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_requiring_projector
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
-    if test_setup.case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Needs implementation of scan projector.")
-
     cases.verify(
         test_setup.case,
         solve_nonhydro_stencil_52_like_z_q,
@@ -249,12 +247,15 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail(
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
         )
-    if test_setup.case.backend == roundtrip.backend:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.verify(
@@ -273,7 +274,10 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     cases.run(
@@ -292,9 +296,12 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-    if test_setup.case.backend == roundtrip.backend:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.run(

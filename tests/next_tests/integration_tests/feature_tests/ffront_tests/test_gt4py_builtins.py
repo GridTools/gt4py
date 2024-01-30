@@ -34,36 +34,19 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
     reduction_setup,
 )
 
 
 @pytest.mark.uses_unstructured_shift
+@pytest.mark.uses_max_over
 @pytest.mark.parametrize(
     "strategy",
     [cases.UniqueInitializer(1), cases.UniqueInitializer(-100)],
     ids=["positive_values", "negative_values"],
 )
 def test_maxover_execution_(unstructured_case, strategy):
-    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
-
-        if unstructured_case.backend == run_dace_gpu:
-            # see https://github.com/spcl/dace/pull/1442
-            pytest.xfail("requires fix in dace module for cuda codegen")
-    except ImportError:
-        pass
-
-    if unstructured_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("`maxover` broken in gtfn, see #1289.")
-
     @gtx.field_operator
     def testee(edge_f: cases.EField) -> cases.VField:
         out = max_over(edge_f(V2E), axis=V2EDim)
@@ -79,16 +62,6 @@ def test_maxover_execution_(unstructured_case, strategy):
 
 @pytest.mark.uses_unstructured_shift
 def test_minover_execution(unstructured_case):
-    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
-
-        if unstructured_case.backend == run_dace_gpu:
-            # see https://github.com/spcl/dace/pull/1442
-            pytest.xfail("requires fix in dace module for cuda codegen")
-    except ImportError:
-        pass
-
     @gtx.field_operator
     def minover(edge_f: cases.EField) -> cases.VField:
         out = min_over(edge_f(V2E), axis=V2EDim)
@@ -102,16 +75,6 @@ def test_minover_execution(unstructured_case):
 
 @pytest.mark.uses_unstructured_shift
 def test_reduction_execution(unstructured_case):
-    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
-
-        if unstructured_case.backend == run_dace_gpu:
-            # see https://github.com/spcl/dace/pull/1442
-            pytest.xfail("requires fix in dace module for cuda codegen")
-    except ImportError:
-        pass
-
     @gtx.field_operator
     def reduction(edge_f: cases.EField) -> cases.VField:
         return neighbor_sum(edge_f(V2E), axis=V2EDim)
@@ -150,16 +113,6 @@ def test_reduction_expression_in_call(unstructured_case):
 
 @pytest.mark.uses_unstructured_shift
 def test_reduction_with_common_expression(unstructured_case):
-    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
-
-        if unstructured_case.backend == run_dace_gpu:
-            # see https://github.com/spcl/dace/pull/1442
-            pytest.xfail("requires fix in dace module for cuda codegen")
-    except ImportError:
-        pass
-
     @gtx.field_operator
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)

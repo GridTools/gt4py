@@ -20,14 +20,20 @@ from gt4py.next import common
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
-from tests.next_tests.integration_tests.cases import Case
-from tests.next_tests.toy_connectivity import Cell, Edge
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import E2V, KDim, Vertex, cartesian_case, unstructured_case
+from next_tests.integration_tests.cases import (
+    E2V,
+    Case,
+    KDim,
+    Vertex,
+    cartesian_case,
+    unstructured_case,
+)
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     reduction_setup,
 )
+from next_tests.toy_connectivity import Cell, Edge
 
 
 @pytest.fixture
@@ -71,7 +77,7 @@ def testee():
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, reduction_setup):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes,
+        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
         offset_provider=reduction_setup.offset_provider,
         default_sizes={
             Vertex: reduction_setup.num_vertices,
@@ -80,6 +86,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
             KDim: reduction_setup.k_levels,
         },
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=run_gtfn_with_temporaries_and_symbolic_sizes.allocator,
     )
 
     a = cases.allocate(unstructured_case, testee, "a")()

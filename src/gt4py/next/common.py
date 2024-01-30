@@ -189,11 +189,12 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
-        return (
-            isinstance(value, core_defs.INTEGRAL_TYPES)
-            and value >= self.start
-            and value < self.stop
-        )
+        # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+        #   and remove int cast, once the related mypy bug (#16358) gets fixed
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return self.start <= cast(int, value) < self.stop
+        else:
+            return False
 
     def __le__(self, other: UnitRange) -> bool:
         return self.start >= other.start and self.stop <= other.stop
@@ -842,8 +843,10 @@ def is_connectivity_field(
     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -853,8 +856,9 @@ def field(
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
@@ -979,7 +983,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     __getitem__ = restrict
 
 
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique

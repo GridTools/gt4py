@@ -21,7 +21,7 @@ from gt4py.next import int32, neighbor_sum
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
     reduction_setup,
 )
 
@@ -30,16 +30,6 @@ pytestmark = pytest.mark.uses_unstructured_shift
 
 
 def test_external_local_field(unstructured_case):
-    # TODO(edopao): remove try/catch after uplift of dace module to version > 0.15
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_gpu
-
-        if unstructured_case.backend == run_dace_gpu:
-            # see https://github.com/spcl/dace/pull/1442
-            pytest.xfail("requires fix in dace module for cuda codegen")
-    except ImportError:
-        pass
-
     @gtx.field_operator
     def testee(
         inp: gtx.Field[[Vertex, V2EDim], int32], ones: gtx.Field[[Edge], int32]

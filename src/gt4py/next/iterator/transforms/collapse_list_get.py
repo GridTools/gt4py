@@ -16,7 +16,7 @@ from gt4py import eve
 from gt4py.next.iterator import ir
 
 
-class CollapseListGet(eve.NodeTranslator):
+class CollapseListGet(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """Simplifies expressions containing `list_get`.
 
     Examples
