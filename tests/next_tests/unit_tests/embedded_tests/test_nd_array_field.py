@@ -682,6 +682,7 @@ def test_connectivity_field_inverse_image_2d_domain():
         ),
         codomain=V,
     )
+
     # e2c_conn:
     #  ---E2V----
     #  |[[0 0 2]
@@ -689,9 +690,8 @@ def test_connectivity_field_inverse_image_2d_domain():
     #  | [2 2 2]]
 
     # Test contiguous and non-contiguous ranges.
-    # The only valid range including 2 is (0, 3),
-    # Otherwise, the inverse image would be non-contiguous.
-
+    # For the 'e2c_conn' defined above, the only valid range including 2
+    # is [0, 3). Otherwise, the inverse image would be non-contiguous.
     image_range = UnitRange(V_START, V_STOP)
     result = e2v_conn.inverse_image(image_range)
 
