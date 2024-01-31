@@ -227,7 +227,7 @@ def simple_mesh() -> MeshDescriptor:
                 c2e_arr, Cell, Edge, 4, has_skip_values=False
             ),
         },
-    )  # type: ignore
+    )
 
 
 def skip_value_mesh() -> MeshDescriptor:
@@ -311,7 +311,7 @@ def skip_value_mesh() -> MeshDescriptor:
                 c2e_arr, Cell, Edge, 3, has_skip_values=False
             ),
         },
-    )  # type: ignore
+    )
 
 
 __all__ = [
