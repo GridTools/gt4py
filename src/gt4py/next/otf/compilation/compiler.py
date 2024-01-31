@@ -18,6 +18,8 @@ import dataclasses
 import pathlib
 from typing import Protocol, TypeVar
 
+import factory
+
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.step_types import LS, SrcL, TgtL
@@ -86,6 +88,11 @@ class Compiler(
         return getattr(
             importer.import_from_path(src_dir / new_data.module), new_data.entry_point_name
         )
+
+
+class CompilerFactory(factory.Factory):
+    class Meta:
+        model = Compiler
 
 
 class CompilationError(RuntimeError):
