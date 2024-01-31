@@ -1099,7 +1099,12 @@ def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
-    ) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField,]:
+    ) -> tuple[
+        cases.IField,
+        cases.IField,
+        cases.IField,
+        cases.IField,
+    ]:
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
