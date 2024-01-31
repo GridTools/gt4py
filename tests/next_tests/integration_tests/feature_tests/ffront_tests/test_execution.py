@@ -513,7 +513,7 @@ def test_nested_reduction(unstructured_case):
                 a[unstructured_case.offset_provider["V2E"].table],
                 axis=1,
                 initial=0,
-                where=unstructured_case.offset_provider["V2E"].table > 0,
+                where=unstructured_case.offset_provider["V2E"].table != common.SKIP_VALUE,
             )[unstructured_case.offset_provider["E2V"].table],
             axis=1,
         ),

@@ -59,7 +59,7 @@ def test_maxover_execution_(unstructured_case, strategy):
     ref = np.max(
         inp.asnumpy()[v2e_table],
         axis=1,
-        initial=np.iinfo(np.int32).min,
+        initial=np.min(inp.asnumpy()),
         where=v2e_table != common.SKIP_VALUE,
     )
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
@@ -79,7 +79,7 @@ def test_minover_execution(unstructured_case):
         ref=lambda edge_f: np.min(
             edge_f[v2e_table],
             axis=1,
-            initial=np.iinfo(np.int32).max,
+            initial=np.max(edge_f),
             where=v2e_table != common.SKIP_VALUE,
         ),
     )
