@@ -413,12 +413,10 @@ class TestHashableTypings:
 
 def test_is_protocol():
     class AProtocol(typing.Protocol):
-        def do_something(self, value: int) -> int:
-            ...
+        def do_something(self, value: int) -> int: ...
 
     class NotProtocol(AProtocol):
-        def do_something_else(self, value: float) -> float:
-            ...
+        def do_something_else(self, value: float) -> float: ...
 
     class AXProtocol(xtyping.Protocol):
         A = 1
@@ -427,8 +425,7 @@ def test_is_protocol():
         A = 1
 
     class AgainProtocol(AProtocol, xtyping.Protocol):
-        def do_something_else(self, value: float) -> float:
-            ...
+        def do_something_else(self, value: float) -> float: ...
 
     assert xtyping.is_protocol(AProtocol)
     assert xtyping.is_protocol(AXProtocol)
@@ -440,16 +437,13 @@ def test_is_protocol():
 
 
 def test_get_partial_type_hints():
-    def f1(a: int) -> float:
-        ...
+    def f1(a: int) -> float: ...
 
     assert xtyping.get_partial_type_hints(f1) == {"a": int, "return": float}
 
-    class MissingRef:
-        ...
+    class MissingRef: ...
 
-    def f_partial(a: int) -> MissingRef:
-        ...
+    def f_partial(a: int) -> MissingRef: ...
 
     # This is expected behavior because this test file uses
     # 'from __future__ import annotations' and therefore local
@@ -467,8 +461,7 @@ def test_get_partial_type_hints():
         "return": int,
     }
 
-    def f_nested_partial(a: int) -> Dict[str, MissingRef]:
-        ...
+    def f_nested_partial(a: int) -> Dict[str, MissingRef]: ...
 
     assert xtyping.get_partial_type_hints(f_nested_partial) == {
         "a": int,
@@ -500,8 +493,7 @@ def test_eval_forward_ref():
         == Dict[str, Tuple[int, float]]
     )
 
-    class MissingRef:
-        ...
+    class MissingRef: ...
 
     assert (
         xtyping.eval_forward_ref("Callable[[int], MissingRef]", localns={"MissingRef": MissingRef})
@@ -559,19 +551,16 @@ def test_infer_type():
 
     assert xtyping.infer_type(str) == Type[str]
 
-    class A:
-        ...
+    class A: ...
 
     assert xtyping.infer_type(A()) == A
     assert xtyping.infer_type(A) == Type[A]
 
-    def f1():
-        ...
+    def f1(): ...
 
     assert xtyping.infer_type(f1) == Callable[[], Any]
 
-    def f2(a: int, b: float) -> None:
-        ...
+    def f2(a: int, b: float) -> None: ...
 
     assert xtyping.infer_type(f2) == Callable[[int, float], type(None)]
 
@@ -579,8 +568,7 @@ def test_infer_type():
         a: Dict[Tuple[str, ...], List[int]],
         b: List[Callable[[List[int]], Set[Set[int]]]],
         c: Type[List[int]],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
     assert (
         xtyping.infer_type(f3)
@@ -594,8 +582,7 @@ def test_infer_type():
         ]
     )
 
-    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None:
-        ...
+    def f4(a: int, b: float, *, foo: Tuple[str, ...] = ()) -> None: ...
 
     assert xtyping.infer_type(f4) == Callable[[int, float], type(None)]
     assert (

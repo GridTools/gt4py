@@ -153,8 +153,7 @@ class Call(Expr):
     kwargs: dict[str, Expr]
 
 
-class Stmt(LocatedNode):
-    ...
+class Stmt(LocatedNode): ...
 
 
 class Starred(Expr):

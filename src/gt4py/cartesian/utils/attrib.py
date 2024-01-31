@@ -240,16 +240,13 @@ def attribute(of, optional=False, **kwargs):
 
 
 class AttributeClassLike:
-    def validate(self):
-        ...
+    def validate(self): ...
 
     @property
-    def attributes(self):
-        ...
+    def attributes(self): ...
 
     @property
-    def as_dict(self):
-        ...
+    def as_dict(self): ...
 
 
 def attribclass(cls_or_none=None, **kwargs):

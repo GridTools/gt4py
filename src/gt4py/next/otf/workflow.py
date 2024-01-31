@@ -61,8 +61,7 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
     - take a single input argument
     """
 
-    def __call__(self, inp: StartT_contra) -> EndT_co:
-        ...
+    def __call__(self, inp: StartT_contra) -> EndT_co: ...
 
 
 class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):

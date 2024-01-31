@@ -684,14 +684,14 @@ class DaCeBindingsCodegen:
             if name in sdfg.arrays:
                 data = sdfg.arrays[name]
                 assert isinstance(data, dace.data.Array)
-                res[
-                    name
-                ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
-                    name=name,
-                    ndim=len(data.shape),
+                res[name] = (
+                    "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
+                        pybind_type=(
+                            "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                        ),
+                        name=name,
+                        ndim=len(data.shape),
+                    )
                 )
             elif name in sdfg.symbols and not name.startswith("__"):
                 assert name in sdfg.symbols

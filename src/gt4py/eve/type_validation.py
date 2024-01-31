@@ -110,8 +110,7 @@ class TypeValidatorFactory(Protocol):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> FixedTypeValidator:
-        ...
+    ) -> FixedTypeValidator: ...
 
     @overload
     def __call__(  # noqa: F811  # redefinion of unused member
@@ -123,8 +122,7 @@ class TypeValidatorFactory(Protocol):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> Optional[FixedTypeValidator]:
-        ...
+    ) -> Optional[FixedTypeValidator]: ...
 
     @abc.abstractmethod
     def __call__(  # noqa: F811  # redefinion of unused member
@@ -169,8 +167,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> FixedTypeValidator:
-        ...
+    ) -> FixedTypeValidator: ...
 
     @overload
     def __call__(  # noqa: F811  # redefinion of unused member
@@ -182,8 +179,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         globalns: Optional[Dict[str, Any]] = None,
         localns: Optional[Dict[str, Any]] = None,
         **kwargs: Any,
-    ) -> Optional[FixedTypeValidator]:
-        ...
+    ) -> Optional[FixedTypeValidator]: ...
 
     def __call__(  # noqa: F811,C901  # redefinion of unused member / complex but well organized in cases
         self,
