@@ -1,6 +1,10 @@
 name: Deploy Python Distribution
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   release:
     types: [published]
   workflow_dispatch:
@@ -21,6 +25,11 @@ jobs:
     - name: Build a wheel and a source tarball
       run: |
         python -m build --sdist --wheel --outdir dist/
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: gt4py-dist
+        path: ./dist/**
   publish-pypi:
     name: Publish Python distribution to pypi.org
     runs-on: ubuntu-latest
@@ -32,6 +41,11 @@ jobs:
     permissions:
       id-token: write
     steps:
+    - name: Download wheel
+      uses: actions/download-artifact@v3
+      with:
+        name: gt4py-dist
+        path: dist
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
   publish-test-pypi:
@@ -45,5 +59,12 @@ jobs:
     permissions:
       id-token: write
     steps:
+    - name: Download wheel
+      uses: actions/download-artifact@v3
+      with:
+        name: gt4py-dist
+        path: dist
     - name: Publish distribution to Test PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
