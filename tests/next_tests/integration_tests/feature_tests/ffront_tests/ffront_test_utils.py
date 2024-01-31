@@ -67,6 +67,9 @@ if dace_iterator:
         pytest.param(
             next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
         ),
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.JAX_EXECUTION, marks=pytest.mark.requires_jax
+        ),
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p.short_id(),

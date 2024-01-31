@@ -87,6 +87,7 @@ def test_mod(cartesian_case):
     cases.verify(cartesian_case, mod_fieldop, inp1, out=out, ref=inp1 % 2)
 
 
+@pytest.mark.uses_bool_field
 def test_bit_xor(cartesian_case):
     @gtx.field_operator
     def binary_xor(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
@@ -99,6 +100,7 @@ def test_bit_xor(cartesian_case):
     cases.verify(cartesian_case, binary_xor, inp1, inp2, out=out, ref=inp1 ^ inp2)
 
 
+@pytest.mark.uses_bool_field
 def test_bit_and(cartesian_case):
     @gtx.field_operator
     def bit_and(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
@@ -111,6 +113,7 @@ def test_bit_and(cartesian_case):
     cases.verify(cartesian_case, bit_and, inp1, inp2, out=out, ref=inp1 & inp2)
 
 
+@pytest.mark.uses_bool_field
 def test_bit_or(cartesian_case):
     @gtx.field_operator
     def bit_or(inp1: cases.IBoolField, inp2: cases.IBoolField) -> cases.IBoolField:
@@ -134,6 +137,7 @@ def test_unary_neg(cartesian_case):
     cases.verify_with_default_data(cartesian_case, uneg, ref=lambda inp1: -inp1)
 
 
+@pytest.mark.uses_bool_field
 def test_unary_invert(cartesian_case):
     @gtx.field_operator
     def tilde_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:
@@ -194,6 +198,7 @@ def test_roots(cartesian_case):
     )
 
 
+@pytest.mark.uses_bool_field
 def test_is_values(cartesian_case):
     @gtx.field_operator
     def is_isinf_fieldop(inp1: cases.IFloatField) -> cases.IBoolField:

@@ -75,11 +75,13 @@ class EmbeddedExecutionDescriptor:
 
 numpy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardCPUFieldBufferAllocator())
 cupy_execution = EmbeddedExecutionDescriptor(next_allocators.StandardGPUFieldBufferAllocator())
+jax_execution = EmbeddedExecutionDescriptor(next_allocators.StandardJAXCPUFieldBufferAllocator())
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
+    JAX_EXECUTION = "next_tests.definitions.jax_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -135,6 +137,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
+USES_BOOL_FIELD = "uses_bool_field"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -185,6 +188,11 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.JAX_EXECUTION: EMBEDDED_SKIP_LIST
+    + [
+        # dlpack support for `bool` arrays is not yet available in jax, see https://github.com/google/jax/issues/19352
+        (USES_BOOL_FIELD, XFAIL, UNSUPPORTED_MESSAGE)
+    ],
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [
