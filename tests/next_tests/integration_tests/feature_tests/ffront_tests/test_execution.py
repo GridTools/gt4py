@@ -473,7 +473,7 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field, True, dtype=bool),
+        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
         comparison=lambda out, ref: np.all(out == ref),
     )
 
@@ -764,9 +764,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(np.asarray(out[0]) == ref[0])
-        and np.all(np.asarray(out[1][0]) == ref[1][0])
-        and np.all(np.asarray(out[1][1]) == ref[1][1]),
+        comparison=lambda ref, out: np.all(out[0] == ref[0])
+        and np.all(out[1][0] == ref[1][0])
+        and np.all(out[1][1] == ref[1][1]),
     )
 
 
