@@ -254,23 +254,23 @@ def build_sdfg_from_itir(
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
-    skip_itir_lowering_to_sdfg: bool = False,
+    load_sdfg_from_file: bool = False,
     cache_id: Optional[str] = None,
-    disable_cache: bool = False,
+    save_sdfg: bool = True,
 ) -> dace.SDFG:
     """Translate a Fencil into an SDFG.
 
     Args:
-        program:	                The Fencil that should be translated.
-        *args:		                Arguments for which the fencil should be called.
-        offset_provider:	        The set of offset providers that should be used.
-        auto_optimize:	            Apply DaCe's `auto_optimize` heuristic.
-        on_gpu:		                Performs the translation for GPU, defaults to `False`.
-        column_axis:		        The column axis to be used, defaults to `None`.
-        lift_mode:		            Which lift mode should be used, defaults `FORCE_INLINE`.
-        skip_itir_lowering_to_sdfg: Allows to use an SDFG from file, for debug only.
-        cache_id:                   The if of teh cache entry, used to disambiguate, caching on file.
-        disable_cache:              If set then the SDFG is not cached on disc, this disables the `skip_itir_lowering_to_sdfg` feature.
+        program:             The Fencil that should be translated.
+        *args:               Arguments for which the fencil should be called.
+        offset_provider:     The set of offset providers that should be used.
+        auto_optimize:       Apply DaCe's `auto_optimize` heuristic.
+        on_gpu:              Performs the translation for GPU, defaults to `False`.
+        column_axis:         The column axis to be used, defaults to `None`.
+        lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
+        load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
+        cache_id:            The id of the cache entry, used to disambiguate stored sdfgs.
+        save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
@@ -279,7 +279,7 @@ def build_sdfg_from_itir(
     sdfg_filename = (
         f"_dacegraphs/gt4py/{cache_id if cache_id is not None else '.'}/{program.id}.sdfg"
     )
-    if skip_itir_lowering_to_sdfg and Path(sdfg_filename).exists():
+    if load_sdfg_from_file and Path(sdfg_filename).exists():
         sdfg: dace.SDFG = dace.SDFG.from_file(sdfg_filename)
         sdfg.validate()
         return sdfg
@@ -327,7 +327,7 @@ def build_sdfg_from_itir(
         sdfg.apply_gpu_transformations()
 
     # Store the sdfg such that we can later reuse it.
-    if not disable_cache:
+    if save_sdfg:
         sdfg.save(sdfg_filename)
 
     return sdfg
@@ -345,8 +345,8 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
-    skip_itir_lowering_to_sdfg = kwargs.get("skip_itir_lowering_to_sdfg", False)
-    disable_cache = kwargs.get("disable_cache", False)
+    load_sdfg_from_file = kwargs.get("load_sdfg_from_file", False)
+    save_sdfg = kwargs.get("save_sdfg", False)
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
@@ -364,9 +364,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             on_gpu=on_gpu,
             column_axis=column_axis,
             lift_mode=lift_mode,
-            skip_itir_lowering_to_sdfg=skip_itir_lowering_to_sdfg,
+            load_sdfg_from_file=load_sdfg_from_file,
             cache_id=cache_id,
-            disable_cache=disable_cache,
+            save_sdfg=save_sdfg,
         )
 
         sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
