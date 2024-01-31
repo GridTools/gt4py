@@ -207,8 +207,8 @@ class NdArrayField(
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
-            assert core_defs.is_scalar_type(new_buffer)
-            return self._scalar_to_field(new_buffer)  # type: ignore[return-value]
+            assert issubclass(self.array_ns.dtype(type(new_buffer)), core_defs.SCALAR_TYPES)
+            return self._scalar_to_field(new_buffer)  # type: ignore[return-value, arg-type]
         return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
