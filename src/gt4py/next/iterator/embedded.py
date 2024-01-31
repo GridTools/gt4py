@@ -310,8 +310,6 @@ def or_(a, b):
 
 @builtins.xor_.register(EMBEDDED)
 def xor_(a, b):
-    if isinstance(a, Column):
-        return np.logical_xor(a, b)
     return a ^ b
 
 

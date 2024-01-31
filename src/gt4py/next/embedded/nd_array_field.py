@@ -203,13 +203,12 @@ class NdArrayField(
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
             assert core_defs.is_scalar_type(new_buffer)
-            new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
-
+            return self._scalar_to_field(new_buffer)
         return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
@@ -303,7 +302,7 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
-    def _scalar_to_field(self, value: core_defs.Scalar) -> np.ndarray:
+    def _scalar_to_field(self, value: core_defs.Scalar) -> common.Field:
         if self.array_ns == cp:
             return cp.asarray(value)
         else:
