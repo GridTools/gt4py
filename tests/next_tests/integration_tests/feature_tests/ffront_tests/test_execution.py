@@ -665,7 +665,7 @@ def test_ternary_operator(cartesian_case, left, right):
     def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
-    e = np.asarray(a) if left < right else np.asarray(b)
+    e = a if left < right else b
     cases.verify(
         cartesian_case,
         testee,
@@ -1190,5 +1190,7 @@ def test_constant_closure_vars(cartesian_case):
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(
-        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+        cartesian_case,
+        consume_constants,
+        ref=lambda input: constants.PI * constants.E * input.asnumpy(),
     )
