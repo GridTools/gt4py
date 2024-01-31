@@ -346,7 +346,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     offset_provider = kwargs["offset_provider"]
     # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
     load_sdfg_from_file = kwargs.get("load_sdfg_from_file", False)
-    save_sdfg = kwargs.get("save_sdfg", False)
+    save_sdfg = kwargs.get("save_sdfg", True)
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
