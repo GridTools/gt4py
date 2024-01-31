@@ -470,8 +470,8 @@ def test_absolute_indexing_value_return():
     named_index = ((IDim, 12), (JDim, 6))
     value = field[named_index]
 
-    assert isinstance(value, np.int32)
-    assert value == 21
+    assert isinstance(value, np.ndarray)
+    assert value == np.asarray([21])
 
 
 @pytest.mark.parametrize(
@@ -578,7 +578,7 @@ def test_relative_indexing_value_return(index, expected_value):
     field = common._field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert indexed_field.asnumpy() == np.asarray(expected_value)
+    assert indexed_field == np.asarray(expected_value)
 
 
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])
