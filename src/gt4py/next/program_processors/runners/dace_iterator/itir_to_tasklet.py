@@ -256,12 +256,12 @@ def _visit_lift_in_neighbors_reduction(
         inputs={*array_mapping.keys(), *iterator_index_nodes.keys()},
         outputs={inner_out_connector},
         symbol_mapping=symbol_mapping,
-        debuginfo=parent_sdfg.debuginfo,
+        debuginfo=lift_context.body.debuginfo,
     )
 
     for connectivity_connector, memlet in connectivity_mapping.items():
         parent_state.add_memlet_path(
-            parent_state.add_access(memlet.data, debuginfo=parent_sdfg.debuginfo),
+            parent_state.add_access(memlet.data, debuginfo=lift_context.body.debuginfo),
             map_entry,
             nested_sdfg_node,
             dst_conn=connectivity_connector,
@@ -773,7 +773,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
-        lambda_sdfg.debuginfo = dace_debuginfo(node)
+        lambda_sdfg.debuginfo = dace_debuginfo(node, self.context.body.debuginfo)
         lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
