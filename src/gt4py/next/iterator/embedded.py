@@ -528,8 +528,6 @@ def execute_shift(
             if p is None:
                 offset_implementation = offset_provider[tag]
                 assert isinstance(offset_implementation, common.Connectivity)
-                new_pos = pos.copy()
-                new_pos.pop(offset_implementation.origin_axis.value)
                 cur_index = pos[offset_implementation.origin_axis.value]
                 assert common.is_int_index(cur_index)
                 if offset_implementation.mapped_index(cur_index, index) in [
