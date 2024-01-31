@@ -61,12 +61,10 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 class ExecutionAndAllocatorDescriptor(Protocol):
     # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
     @property
-    def executor(self) -> Optional[ppi.ProgramExecutor]:
-        ...
+    def executor(self) -> Optional[ppi.ProgramExecutor]: ...
 
     @property
-    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
-        ...
+    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -137,6 +135,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
+USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -172,6 +171,7 @@ EMBEDDED_SKIP_LIST = [
         XFAIL,
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
+    (USES_MESH_WITH_SKIP_VALUES, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136

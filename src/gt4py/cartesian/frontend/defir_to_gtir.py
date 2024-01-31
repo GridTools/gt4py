@@ -489,18 +489,18 @@ class DefIRToGTIR(IRNodeVisitor):
             return gtir.FieldIfStmt(
                 cond=cond,
                 true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
-                if node.else_body
-                else None,
+                false_branch=(
+                    gtir.BlockStmt(body=self.visit(node.else_body)) if node.else_body else None
+                ),
                 loc=location_to_source_location(node.loc),
             )
         else:
             return gtir.ScalarIfStmt(
                 cond=cond,
                 true_branch=gtir.BlockStmt(body=self.visit(node.main_body)),
-                false_branch=gtir.BlockStmt(body=self.visit(node.else_body))
-                if node.else_body
-                else None,
+                false_branch=(
+                    gtir.BlockStmt(body=self.visit(node.else_body)) if node.else_body else None
+                ),
                 loc=location_to_source_location(node.loc),
             )
 

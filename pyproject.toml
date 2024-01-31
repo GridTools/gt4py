@@ -34,7 +34,7 @@ dependencies = [
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.1,==2.*',
+  'gridtools-cpp>=2.3.2,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
@@ -162,7 +162,9 @@ ignore = [
   'DAR',  # Disable dargling errors by default
   'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
+  'W503',  # Line break occurred before a binary operator
+  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above
@@ -354,6 +356,7 @@ markers = [
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
+  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

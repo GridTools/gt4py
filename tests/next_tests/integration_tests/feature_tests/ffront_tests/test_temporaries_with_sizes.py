@@ -31,7 +31,7 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    reduction_setup,
+    mesh_descriptor,
 )
 from next_tests.toy_connectivity import Cell, Edge
 
@@ -67,7 +67,7 @@ def testee():
         a: cases.VField,
         out: cases.EField,
         num_vertices: int32,
-        num_edges: int64,
+        num_edges: int32,
         num_cells: int32,
     ):
         testee_op(a, out=out)
@@ -75,15 +75,15 @@ def testee():
     return prog
 
 
-def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, reduction_setup):
+def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
     unstructured_case = Case(
         run_gtfn_with_temporaries_and_symbolic_sizes.executor,
-        offset_provider=reduction_setup.offset_provider,
+        offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
-            Vertex: reduction_setup.num_vertices,
-            Edge: reduction_setup.num_edges,
-            Cell: reduction_setup.num_cells,
-            KDim: reduction_setup.k_levels,
+            Vertex: mesh_descriptor.num_vertices,
+            Edge: mesh_descriptor.num_edges,
+            Cell: mesh_descriptor.num_cells,
+            KDim: 10,
         },
         grid_type=common.GridType.UNSTRUCTURED,
         allocator=run_gtfn_with_temporaries_and_symbolic_sizes.allocator,
@@ -92,7 +92,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (reduction_setup.offset_provider["E2V"].table[:, i] for i in [0, 1])
+    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].table[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(
@@ -100,19 +100,19 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, redu
         testee,
         a,
         out,
-        reduction_setup.num_vertices,
-        reduction_setup.num_edges,
-        reduction_setup.num_cells,
+        mesh_descriptor.num_vertices,
+        mesh_descriptor.num_edges,
+        mesh_descriptor.num_cells,
         inout=out,
         ref=ref,
     )
 
 
-def test_temporary_symbols(testee, reduction_setup):
+def test_temporary_symbols(testee, mesh_descriptor):
     itir_with_tmp = apply_common_transforms(
         testee.itir,
         lift_mode=LiftMode.FORCE_TEMPORARIES,
-        offset_provider=reduction_setup.offset_provider,
+        offset_provider=mesh_descriptor.offset_provider,
     )
 
     params = ["num_vertices", "num_edges", "num_cells"]
