@@ -1192,5 +1192,5 @@ def test_constant_closure_vars(cartesian_case):
     cases.verify_with_default_data(
         cartesian_case,
         consume_constants,
-        ref=lambda input: constants.PI * constants.E * input.asnumpy(),
+        ref=lambda input: constants.PI * constants.E * input,
     )
