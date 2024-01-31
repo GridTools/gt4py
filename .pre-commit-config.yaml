@@ -62,7 +62,7 @@ repos:
   ## version = re.search('black==([0-9\.]*)', open("constraints.txt").read())[1] 
   ## print(f"rev: '{version}'  # version from constraints.txt")
   ##]]]
-  rev: '23.12.1'  # version from constraints.txt
+  rev: '24.1.1'  # version from constraints.txt
   ##[[[end]]]
   hooks:
   - id: black
@@ -162,7 +162,7 @@ repos:
     ##]]]
     - astunparse==1.6.3
     - attrs==23.2.0
-    - black==23.12.1
+    - black==24.1.1
     - boltons==23.1.1
     - cached-property==1.5.2
     - click==8.1.7
@@ -175,7 +175,7 @@ repos:
     - importlib-resources==6.1.1
     - jinja2==3.1.3
     - lark==1.1.9
-    - mako==1.3.1
+    - mako==1.3.2
     - nanobind==1.8.0
     - ninja==1.11.1.1
     - numpy==1.24.4

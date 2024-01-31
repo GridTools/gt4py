@@ -473,7 +473,7 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field, True, dtype=bool),
+        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
         comparison=lambda out, ref: np.all(out == ref),
     )
 
@@ -665,7 +665,7 @@ def test_ternary_operator(cartesian_case, left, right):
     def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
-    e = np.asarray(a) if left < right else np.asarray(b)
+    e = a if left < right else b
     cases.verify(
         cartesian_case,
         testee,
@@ -764,9 +764,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(np.asarray(out[0]) == ref[0])
-        and np.all(np.asarray(out[1][0]) == ref[1][0])
-        and np.all(np.asarray(out[1][1]) == ref[1][1]),
+        comparison=lambda ref, out: np.all(out[0] == ref[0])
+        and np.all(out[1][0] == ref[1][0])
+        and np.all(out[1][1] == ref[1][1]),
     )
 
 
@@ -1099,7 +1099,12 @@ def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
-    ) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField,]:
+    ) -> tuple[
+        cases.IField,
+        cases.IField,
+        cases.IField,
+        cases.IField,
+    ]:
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
@@ -1190,5 +1195,7 @@ def test_constant_closure_vars(cartesian_case):
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(
-        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+        cartesian_case,
+        consume_constants,
+        ref=lambda input: constants.PI * constants.E * input,
     )

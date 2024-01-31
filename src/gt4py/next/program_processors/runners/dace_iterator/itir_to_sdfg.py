@@ -113,9 +113,11 @@ def _make_array_shape_and_strides(
     dtype = dace.int64
     sorted_dims = [dim for _, dim in get_sorted_dims(dims)] if sort_dims else dims
     shape = [
-        neighbor_tables[dim.value].max_neighbors
-        if dim.kind == DimensionKind.LOCAL
-        else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+        (
+            neighbor_tables[dim.value].max_neighbors
+            if dim.kind == DimensionKind.LOCAL
+            else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+        )
         for i, dim in enumerate(sorted_dims)
     ]
     strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
@@ -366,11 +368,15 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Map SDFG tasklet arguments to parameters
         input_local_names = [
-            input_transients_mapping[input_name]
-            if input_name in input_transients_mapping
-            else input_name
-            if input_name in input_field_names
-            else cast(ValueExpr, program_arg_syms[input_name]).value.data
+            (
+                input_transients_mapping[input_name]
+                if input_name in input_transients_mapping
+                else (
+                    input_name
+                    if input_name in input_field_names
+                    else cast(ValueExpr, program_arg_syms[input_name]).value.data
+                )
+            )
             for input_name in input_names
         ]
         input_memlets = [
@@ -398,9 +404,11 @@ class ItirToSDFG(eve.NodeVisitor):
                 create_memlet_at(
                     output_name,
                     tuple(
-                        f"i_{dim}"
-                        if f"i_{dim}" in map_ranges
-                        else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
+                        (
+                            f"i_{dim}"
+                            if f"i_{dim}" in map_ranges
+                            else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
+                        )
                         for dim, _ in closure_domain
                     ),
                 )
