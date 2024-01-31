@@ -195,10 +195,8 @@ def _visit_lift_in_neighbors_reduction(
     origin_dim = offset_provider.origin_axis.value
 
     lifted_args: list[IteratorExpr | ValueExpr] = []
-    iterator_index_nodes: list[dace.nodes.AccessNode] = []
     for arg in node_args:
         if isinstance(arg, IteratorExpr):
-            iterator_index_nodes += arg.indices.values()
             if origin_dim in arg.indices:
                 lifted_indices = arg.indices.copy()
                 lifted_indices.pop(origin_dim)
@@ -220,24 +218,21 @@ def _visit_lift_in_neighbors_reduction(
     assert len(inner_outputs) == 1
     inner_out_connector = inner_outputs[0].value.data
 
-    iterator_field_nodes = {}
-    iterator_index_mapping = {}
-    lifted_index_connectors = []
-    for (field_connector, inner_index_table), iterator in filter(
-        lambda x: isinstance(x[1], IteratorExpr), inner_inputs
-    ):
-        iterator_field_nodes[field_connector] = iterator.field
-        for dim, connector in inner_index_table.items():
-            if dim == neighbor_dim:
-                lifted_index_connectors.append(connector)
-            iterator_index_mapping[connector] = iterator.indices[dim]
+    input_nodes = {}
+    iterator_index_nodes = {}
+    lifted_index_connectors = set()
 
-    input_value_nodes = {
-        connector: expr.value
-        for connector, expr in filter(lambda x: isinstance(x[1], ValueExpr), inner_inputs)
-    }
-
-    input_nodes = {**iterator_field_nodes, **input_value_nodes}
+    for x, y in inner_inputs:
+        if isinstance(y, IteratorExpr):
+            field_connector, inner_index_table = x
+            input_nodes[field_connector] = y.field
+            for dim, connector in inner_index_table.items():
+                if dim == neighbor_dim:
+                    lifted_index_connectors.add(connector)
+                iterator_index_nodes[connector] = y.indices[dim]
+        else:
+            assert isinstance(y, ValueExpr)
+            input_nodes[x] = y.value
 
     neighbor_tables = filter_neighbor_tables(transformer.offset_provider)
     connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
@@ -258,9 +253,10 @@ def _visit_lift_in_neighbors_reduction(
     nested_sdfg_node = parent_state.add_nested_sdfg(
         lift_context.body,
         parent_sdfg,
-        inputs={*input_mapping.keys(), *iterator_index_mapping.keys(), *connectivity_names},
+        inputs={*array_mapping.keys(), *iterator_index_nodes.keys()},
         outputs={inner_out_connector},
         symbol_mapping=symbol_mapping,
+        debuginfo=parent_sdfg.debuginfo,
     )
 
     for connectivity_connector, memlet in connectivity_mapping.items():
@@ -281,22 +277,17 @@ def _visit_lift_in_neighbors_reduction(
             memlet=input_mapping[inner_connector],
         )
 
-    for inner_connector, access_node in iterator_index_mapping.items():
+    for inner_connector, access_node in iterator_index_nodes.items():
+        memlet = dace.Memlet(data=access_node.data, subset="0")
         if inner_connector in lifted_index_connectors:
-            parent_state.add_edge(
-                access_node,
-                None,
-                nested_sdfg_node,
-                inner_connector,
-                memlet=dace.Memlet(data=access_node.data, subset="0"),
-            )
+            parent_state.add_edge(access_node, None, nested_sdfg_node, inner_connector, memlet)
         else:
             parent_state.add_memlet_path(
                 access_node,
                 map_entry,
                 nested_sdfg_node,
                 dst_conn=inner_connector,
-                memlet=dace.Memlet(data=access_node.data, subset="0"),
+                memlet=memlet,
             )
 
     parent_state.add_memlet_path(
@@ -350,17 +341,17 @@ def builtin_neighbors(
     neighbor_dim = offset_provider.neighbor_axis.value
     neighbor_index_name = unique_var_name()
     sdfg.add_scalar(neighbor_index_name, _INDEX_DTYPE, transient=True)
-    neighbor_index_node = state.add_access(neighbor_index_name)
+    neighbor_index_node = state.add_access(neighbor_index_name, debuginfo=di)
 
     # generate unique map index name to avoid conflict with other maps inside same state
-    neighbor_index = unique_name(f"{offset_dim}_neighbor_idx")
+    neighbor_map_index = unique_name(f"{offset_dim}_neighbor_map_idx")
     me, mx = state.add_map(
-        f"{offset_dim}_neighbors_map",
-        ndrange={neighbor_index: f"0:{offset_provider.max_neighbors}"},
+        f"{offset_dim}_neighbor_map",
+        ndrange={neighbor_map_index: f"0:{offset_provider.max_neighbors}"},
         debuginfo=di,
     )
     table_name = connectivity_identifier(offset_dim)
-    table_subset = (f"0:{sdfg.arrays[table_name].shape[0]}", neighbor_index)
+    table_subset = (f"0:{sdfg.arrays[table_name].shape[0]}", neighbor_map_index)
 
     shift_tasklet = state.add_tasklet(
         "shift",
@@ -450,7 +441,7 @@ def builtin_neighbors(
             data_access_tasklet,
             mx,
             result_node,
-            memlet=dace.Memlet.simple(result_name, neighbor_index, debuginfo=di),
+            memlet=dace.Memlet(data=result_name, subset=neighbor_map_index, debuginfo=di),
             src_conn="__result",
         )
 
@@ -461,13 +452,31 @@ def builtin_can_deref(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
-    # first visit shift, to get set of indices for deref
+
+    # extract shift node from arguments
     can_deref_callable = node_args[0]
     assert isinstance(can_deref_callable, itir.FunCall)
     shift_callable = can_deref_callable.fun
     assert isinstance(shift_callable, itir.FunCall)
     assert isinstance(shift_callable.fun, itir.SymRef)
     assert shift_callable.fun.id == "shift"
+
+    # limit support to shift in single dimension
+    assert len(shift_callable.args) == 2
+    assert isinstance(shift_callable.args[0], itir.OffsetLiteral)
+    offset_dim = shift_callable.args[0].value
+    assert isinstance(offset_dim, str)
+    offset_provider = transformer.offset_provider[offset_dim]
+
+    # limit support to offset providers based on neighbor tables
+    assert isinstance(offset_provider, NeighborTableOffsetProvider)
+    if not offset_provider.has_skip_values:
+        # optimize trivial case of full connectivity
+        return transformer.add_expr_tasklet(
+            [], "True", dace.dtypes.bool, "can_deref", dace_debuginfo=di
+        )
+
+    # for non-trivial case, visit shift to get set of indices for deref
     iterator = transformer._visit_shift(can_deref_callable)
     assert isinstance(iterator, IteratorExpr)
 
@@ -532,7 +541,7 @@ def builtin_list_get(
         index_value = args[0].value
         result_name = unique_var_name()
         transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
-        result_node = transformer.context.state.add_access(result_name)
+        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
         transformer.context.state.add_nedge(
             args[1].value,
             result_node,
@@ -573,39 +582,34 @@ def builtin_cast(
 def builtin_make_const_list(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
+    di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = [transformer.visit(arg)[0] for arg in node_args]
     assert all([isinstance(x, (SymbolExpr, ValueExpr)) for x in args])
-    args_dtype = set([x.dtype for x in args])
-    assert len(args_dtype) == 1
-    dtype = next(iter(args_dtype))
+    args_dtype = [x.dtype for x in args]
+    assert len(set(args_dtype)) == 1
+    dtype = args_dtype[0]
 
     var_name = unique_var_name()
     transformer.context.body.add_array(var_name, (len(args),), dtype, transient=True)
-    var_array = transformer.context.body.arrays[var_name]
-    var_node = transformer.context.state.add_access(var_name)
+    var_node = transformer.context.state.add_access(var_name, debuginfo=di)
 
-    code = ""
-    tasklet_input_mapping = {}
     for i, arg in enumerate(args):
-        rhs = "out" if len(args) == 1 else f"out[{i}]"
         if isinstance(arg, SymbolExpr):
-            code += f"{rhs} = {arg.value}\n"
+            transformer.context.state.add_edge(
+                transformer.context.state.add_tasklet(
+                    f"get_arg{i}", {}, {"val"}, f"val = {arg.value}"
+                ),
+                "val",
+                var_node,
+                None,
+                dace.Memlet(data=var_name, subset=f"{i}"),
+            )
         else:
-            connector = f"{arg.value.data}_v"
-            code += f"{rhs} = {connector}\n"
-            tasklet_input_mapping[connector] = arg.value
+            assert arg.value.desc(transformer.context.body).shape == (1,)
+            transformer.context.state.add_nedge(
+                arg.value, var_node, dace.Memlet(data=var_name, subset=f"{i}", other_subset="0")
+            )
 
-    tasklet = transformer.context.state.add_tasklet(
-        "make_const_list", set(tasklet_input_mapping.keys()), {"out"}, code
-    )
-    for connector, access_node in tasklet_input_mapping.items():
-        assert access_node.desc(transformer.context.body).shape == (1,)
-        transformer.context.state.add_edge(
-            access_node, None, tasklet, connector, dace.Memlet(access_node.data, "0")
-        )
-    transformer.context.state.add_edge(
-        tasklet, "out", var_node, None, dace.Memlet.from_array(var_name, var_array)
-    )
     return [ValueExpr(var_node, dtype)]
 
 
@@ -1164,15 +1168,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             self.context.reduce_identity = None
 
             # check that all neighbor expressions have the same shape
-            args_shape = set(
-                [
-                    arg.value.desc(self.context.body).shape
-                    for arg in args
-                    if arg.value.desc(self.context.body).shape != (1,)
-                ]
-            )
-            assert len(args_shape) == 1
-            nreduce_shape = next(iter(args_shape))
+            args_shape = [
+                arg.value.desc(self.context.body).shape
+                for arg in args
+                if arg.value.desc(self.context.body).shape != (1,)
+            ]
+            assert len(set(args_shape)) == 1
+            nreduce_shape = args_shape[0]
 
             nreduce_index = tuple(f"_i{i}" for i in range(len(nreduce_shape)))
             nreduce_domain = {idx: f"0:{size}" for idx, size in zip(nreduce_index, nreduce_shape)}

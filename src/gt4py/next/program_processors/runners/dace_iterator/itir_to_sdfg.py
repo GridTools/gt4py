@@ -122,6 +122,24 @@ def _make_array_shape_and_strides(
     return shape, strides
 
 
+def _check_no_lifts(node: itir.StencilClosure):
+    """
+    Parse stencil closure ITIR to check that lift expressions only appear as child nodes in neighbor reductions.
+
+    Returns
+    -------
+    True if lifts do not appear in the ITIR exception lift expressions in neighbor reductions. False otherwise.
+    """
+    neighbors_call_count = 0
+    for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun"):
+        if getattr(fun, "id", "") == "neighbors":
+            neighbors_call_count = 3
+        elif getattr(fun, "id", "") == "lift" and neighbors_call_count != 1:
+            return False
+        neighbors_call_count = max(0, neighbors_call_count - 1)
+    return True
+
+
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storage_types: dict[str, ts.TypeSpec]
@@ -260,7 +278,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> tuple[dace.SDFG, list[str], list[str]]:
-        assert ItirToSDFG._check_no_lifts(node)
+        assert _check_no_lifts(node)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
@@ -672,18 +690,6 @@ class ItirToSDFG(eve.NodeVisitor):
             bounds.append((dimension.value, (lb, ub)))
 
         return tuple(sorted(bounds, key=lambda item: item[0]))
-
-    @staticmethod
-    def _check_no_lifts(node: itir.StencilClosure):
-        # allow lift only to appear as child node in neighbor reductions
-        neighbors_call_count = 0
-        for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun"):
-            if getattr(fun, "id", "") == "neighbors":
-                neighbors_call_count = 3
-            elif getattr(fun, "id", "") == "lift" and neighbors_call_count != 1:
-                return False
-            neighbors_call_count = max(0, neighbors_call_count - 1)
-        return True
 
     @staticmethod
     def _check_shift_offsets_are_literals(node: itir.StencilClosure):
