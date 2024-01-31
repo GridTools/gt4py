@@ -746,7 +746,8 @@ def _make_tuple(
         else:
             try:
                 data = field_or_tuple.field_getitem(named_indices)
-                return data
+                assert data.ndim == 0
+                return data.item()
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
