@@ -570,6 +570,45 @@ def builtin_cast(
     )
 
 
+def builtin_make_const_list(
+    transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
+) -> list[ValueExpr]:
+    args = [transformer.visit(arg)[0] for arg in node_args]
+    assert all([isinstance(x, (SymbolExpr, ValueExpr)) for x in args])
+    args_dtype = set([x.dtype for x in args])
+    assert len(args_dtype) == 1
+    dtype = next(iter(args_dtype))
+
+    var_name = unique_var_name()
+    transformer.context.body.add_array(var_name, (len(args),), dtype, transient=True)
+    var_array = transformer.context.body.arrays[var_name]
+    var_node = transformer.context.state.add_access(var_name)
+
+    code = ""
+    tasklet_input_mapping = {}
+    for i, arg in enumerate(args):
+        rhs = "out" if len(args) == 1 else f"out[{i}]"
+        if isinstance(arg, SymbolExpr):
+            code += f"{rhs} = {arg.value}\n"
+        else:
+            connector = f"{arg.value.data}_v"
+            code += f"{rhs} = {connector}\n"
+            tasklet_input_mapping[connector] = arg.value
+
+    tasklet = transformer.context.state.add_tasklet(
+        "make_const_list", set(tasklet_input_mapping.keys()), {"out"}, code
+    )
+    for connector, access_node in tasklet_input_mapping.items():
+        assert access_node.desc(transformer.context.body).shape == (1,)
+        transformer.context.state.add_edge(
+            access_node, None, tasklet, connector, dace.Memlet(access_node.data, "0")
+        )
+    transformer.context.state.add_edge(
+        tasklet, "out", var_node, None, dace.Memlet.from_array(var_name, var_array)
+    )
+    return [ValueExpr(var_node, dtype)]
+
+
 def builtin_make_tuple(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
@@ -594,6 +633,7 @@ _GENERAL_BUILTIN_MAPPING: dict[
     "cast_": builtin_cast,
     "if_": builtin_if,
     "list_get": builtin_list_get,
+    "make_const_list": builtin_make_const_list,
     "make_tuple": builtin_make_tuple,
     "neighbors": builtin_neighbors,
     "tuple_get": builtin_tuple_get,
@@ -1124,10 +1164,15 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             self.context.reduce_identity = None
 
             # check that all neighbor expressions have the same shape
-            nreduce_shape = args[1].value.desc(self.context.body).shape
-            assert all(
-                [arg.value.desc(self.context.body).shape == nreduce_shape for arg in args[2:]]
+            args_shape = set(
+                [
+                    arg.value.desc(self.context.body).shape
+                    for arg in args
+                    if arg.value.desc(self.context.body).shape != (1,)
+                ]
             )
+            assert len(args_shape) == 1
+            nreduce_shape = next(iter(args_shape))
 
             nreduce_index = tuple(f"_i{i}" for i in range(len(nreduce_shape)))
             nreduce_domain = {idx: f"0:{size}" for idx, size in zip(nreduce_index, nreduce_shape)}
@@ -1145,7 +1190,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             input_mapping = {
-                param: create_memlet_at(arg.value.data, nreduce_index)
+                param: dace.Memlet(data=arg.value.data, subset="0")
+                if arg.value.desc(self.context.body).shape == (1,)
+                else create_memlet_at(arg.value.data, nreduce_index)
                 for (param, _), arg in zip(inner_inputs, args)
             }
             output_mapping = {
