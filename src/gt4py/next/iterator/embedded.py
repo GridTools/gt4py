@@ -80,8 +80,7 @@ Scalar: TypeAlias = (
 )
 
 
-class SparseTag(Tag):
-    ...
+class SparseTag(Tag): ...
 
 
 class NeighborTableOffsetProvider:
@@ -156,14 +155,11 @@ class ItIterator(Protocol):
     `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
     """
 
-    def shift(self, *offsets: OffsetPart) -> ItIterator:
-        ...
+    def shift(self, *offsets: OffsetPart) -> ItIterator: ...
 
-    def can_deref(self) -> bool:
-        ...
+    def can_deref(self) -> bool: ...
 
-    def deref(self) -> Any:
-        ...
+    def deref(self) -> Any: ...
 
 
 @runtime_checkable
@@ -172,13 +168,11 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_domain__(self) -> common.Domain:
-        ...
+    def __gt_domain__(self) -> common.Domain: ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: NamedFieldIndices) -> Any:
-        ...
+    def field_getitem(self, indices: NamedFieldIndices) -> Any: ...
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -191,8 +185,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
-        ...
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None: ...
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
@@ -717,8 +710,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
-) -> tuple[tuple | Column, ...]:
-    ...
+) -> tuple[tuple | Column, ...]: ...
 
 
 @overload
@@ -734,8 +726,7 @@ def _make_tuple(
 @overload
 def _make_tuple(
     field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
-) -> Column:
-    ...
+) -> Column: ...
 
 
 @overload
@@ -744,8 +735,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> npt.DTypeLike | Undefined:
-    ...
+) -> npt.DTypeLike | Undefined: ...
 
 
 def _make_tuple(
@@ -986,13 +976,11 @@ def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[F
 
 
 @overload
-def _shift_range(range_or_index: range, offset: int) -> slice:
-    ...
+def _shift_range(range_or_index: range, offset: int) -> slice: ...
 
 
 @overload
-def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex:
-    ...
+def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex: ...
 
 
 def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayIndex:
@@ -1006,13 +994,11 @@ def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayI
 
 
 @overload
-def _range2slice(r: range) -> slice:
-    ...
+def _range2slice(r: range) -> slice: ...
 
 
 @overload
-def _range2slice(r: common.IntIndex) -> common.IntIndex:
-    ...
+def _range2slice(r: common.IntIndex) -> common.IntIndex: ...
 
 
 def _range2slice(r: range | common.IntIndex) -> slice | common.IntIndex:
@@ -1300,8 +1286,7 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-class _List(tuple, Generic[DT]):
-    ...
+class _List(tuple, Generic[DT]): ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1436,8 +1421,7 @@ def is_tuple_of_field(field) -> bool:
     )
 
 
-class TupleFieldMeta(type):
-    ...
+class TupleFieldMeta(type): ...
 
 
 class TupleField(metaclass=TupleFieldMeta):

@@ -95,8 +95,7 @@ RETURN = "return"
 
 class DataInitializer(Protocol):
     @property
-    def scalar_value(self) -> ScalarValue:
-        ...
+    def scalar_value(self) -> ScalarValue: ...
 
     def scalar(self, dtype: np.typing.DTypeLike) -> ScalarValue:
         # some unlikely numpy dtypes are picky about arguments
@@ -107,8 +106,7 @@ class DataInitializer(Protocol):
         allocator: next_allocators.FieldBufferAllocatorProtocol,
         sizes: dict[gtx.Dimension, int],
         dtype: np.typing.DTypeLike,
-    ) -> FieldValue:
-        ...
+    ) -> FieldValue: ...
 
     def from_case(
         self: Self,
@@ -249,22 +247,19 @@ class Builder:
 
 
 @typing.overload
-def make_builder(*args: Callable) -> Callable[..., Builder]:
-    ...
+def make_builder(*args: Callable) -> Callable[..., Builder]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Literal[None], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]]: ...
 
 
 @typing.overload
 def make_builder(
     *args: Optional[Callable], **kwargs: dict[str, Any]
-) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]:
-    ...
+) -> Callable[[Callable], Callable[..., Builder]] | Callable[..., Builder]: ...
 
 
 # TODO(ricoh): Think about improving the type hints using `typing.ParamSpec`.
@@ -305,8 +300,7 @@ def make_builder(
         argspec = inspect.getfullargspec(func)
 
         @dataclasses.dataclass(frozen=True)
-        class NewBuilder(Builder):
-            ...
+        class NewBuilder(Builder): ...
 
         for argname in argspec.args + argspec.kwonlyargs:
             setattr(NewBuilder, argname, make_setter(argname))

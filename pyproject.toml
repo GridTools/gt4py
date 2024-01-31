@@ -162,7 +162,9 @@ ignore = [
   'DAR',  # Disable dargling errors by default
   'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
+  'W503',  # Line break occurred before a binary operator
+  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above

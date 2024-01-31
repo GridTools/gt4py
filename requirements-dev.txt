@@ -11,7 +11,7 @@ astunparse==1.6.3 ; python_version < "3.9"  # via dace, gt4py (pyproject.toml)
 attrs==23.2.0             # via flake8-bugbear, flake8-eradicate, gt4py (pyproject.toml), hypothesis, jsonschema, referencing
 babel==2.14.0             # via sphinx
 backcall==0.2.0           # via ipython
-black==23.12.1            # via gt4py (pyproject.toml)
+black==24.1.1             # via gt4py (pyproject.toml)
 blinker==1.7.0            # via flask
 boltons==23.1.1           # via gt4py (pyproject.toml)
 build==1.0.3              # via pip-tools
@@ -29,8 +29,8 @@ cogapp==3.3.0             # via -r requirements-dev.in
 colorama==0.4.6           # via tox
 comm==0.2.1               # via ipykernel
 contourpy==1.1.1          # via matplotlib
-coverage[toml]==7.4.0     # via -r requirements-dev.in, coverage, pytest-cov
-cryptography==42.0.1      # via types-paramiko, types-pyopenssl, types-redis
+coverage[toml]==7.4.1     # via -r requirements-dev.in, coverage, pytest-cov
+cryptography==42.0.2      # via types-paramiko, types-pyopenssl, types-redis
 cycler==0.12.1            # via matplotlib
 cytoolz==0.12.3           # via gt4py (pyproject.toml)
 dace==0.15.1              # via gt4py (pyproject.toml)
@@ -39,7 +39,7 @@ debugpy==1.8.0            # via ipykernel
 decorator==5.1.1          # via ipython
 deepdiff==6.7.1           # via gt4py (pyproject.toml)
 devtools==0.12.2          # via gt4py (pyproject.toml)
-dill==0.3.7               # via dace
+dill==0.3.8               # via dace
 distlib==0.3.8            # via virtualenv
 docutils==0.20.1          # via restructuredtext-lint, sphinx, sphinx-rtd-theme
 eradicate==2.3.0          # via flake8-eradicate
@@ -47,7 +47,7 @@ exceptiongroup==1.2.0     # via hypothesis, pytest
 execnet==2.0.2            # via pytest-cache, pytest-xdist
 executing==2.0.1          # via devtools, stack-data
 factory-boy==3.3.0        # via -r requirements-dev.in, pytest-factoryboy
-faker==22.5.1             # via factory-boy
+faker==22.6.0             # via factory-boy
 fastjsonschema==2.19.1    # via nbformat
 filelock==3.13.1          # via tox, virtualenv
 flake8==7.0.0             # via -r requirements-dev.in, flake8-bugbear, flake8-builtins, flake8-debugger, flake8-docstrings, flake8-eradicate, flake8-mutable, flake8-pyproject, flake8-rst-docstrings
@@ -64,7 +64,7 @@ fonttools==4.47.2         # via matplotlib
 fparser==0.1.3            # via dace
 frozendict==2.4.0         # via gt4py (pyproject.toml)
 gridtools-cpp==2.3.1      # via gt4py (pyproject.toml)
-hypothesis==6.97.0        # via -r requirements-dev.in, gt4py (pyproject.toml)
+hypothesis==6.97.3        # via -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.5.33          # via pre-commit
 idna==3.6                 # via requests
 imagesize==1.4.1          # via sphinx
@@ -85,7 +85,7 @@ jupyter-core==5.7.1       # via ipykernel, jupyter-client, nbformat
 jupytext==1.16.1          # via -r requirements-dev.in
 kiwisolver==1.4.5         # via matplotlib
 lark==1.1.9               # via gt4py (pyproject.toml)
-mako==1.3.1               # via gt4py (pyproject.toml)
+mako==1.3.2               # via gt4py (pyproject.toml)
 markdown-it-py==3.0.0     # via jupytext, mdit-py-plugins
 markupsafe==2.1.4         # via jinja2, mako, werkzeug
 matplotlib==3.7.4         # via -r requirements-dev.in
@@ -99,7 +99,7 @@ mypy-extensions==1.0.0    # via black, mypy
 nanobind==1.8.0           # via gt4py (pyproject.toml)
 nbclient==0.6.8           # via nbmake
 nbformat==5.9.2           # via jupytext, nbclient, nbmake
-nbmake==1.4.6             # via -r requirements-dev.in
+nbmake==1.5.0             # via -r requirements-dev.in
 nest-asyncio==1.6.0       # via ipykernel, nbclient
 networkx==3.1             # via dace
 ninja==1.11.1.1           # via gt4py (pyproject.toml)
@@ -115,7 +115,7 @@ pillow==10.2.0            # via matplotlib
 pip-tools==7.3.0          # via -r requirements-dev.in
 pipdeptree==2.13.2        # via -r requirements-dev.in
 pkgutil-resolve-name==1.3.10  # via jsonschema
-platformdirs==4.1.0       # via black, jupyter-core, tox, virtualenv
+platformdirs==4.2.0       # via black, jupyter-core, tox, virtualenv
 pluggy==1.4.0             # via pytest, tox
 ply==3.11                 # via dace
 pre-commit==3.5.0         # via -r requirements-dev.in
@@ -132,20 +132,20 @@ pygments==2.17.2          # via -r requirements-dev.in, devtools, flake8-rst-doc
 pyparsing==3.1.1          # via matplotlib
 pyproject-api==1.6.1      # via tox
 pyproject-hooks==1.0.0    # via build
-pytest==7.4.4             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-factoryboy, pytest-xdist
+pytest==8.0.0             # via -r requirements-dev.in, gt4py (pyproject.toml), nbmake, pytest-cache, pytest-cov, pytest-factoryboy, pytest-xdist
 pytest-cache==1.0         # via -r requirements-dev.in
 pytest-cov==4.1.0         # via -r requirements-dev.in
 pytest-factoryboy==2.6.0  # via -r requirements-dev.in
 pytest-xdist[psutil]==3.5.0  # via -r requirements-dev.in, pytest-xdist
 python-dateutil==2.8.2    # via faker, jupyter-client, matplotlib
-pytz==2023.3.post1        # via babel
+pytz==2023.4              # via babel
 pyyaml==6.0.1             # via dace, jupytext, pre-commit
 pyzmq==25.1.2             # via ipykernel, jupyter-client
-referencing==0.32.1       # via jsonschema, jsonschema-specifications
+referencing==0.33.0       # via jsonschema, jsonschema-specifications
 requests==2.31.0          # via dace, sphinx
 restructuredtext-lint==1.4.0  # via flake8-rst-docstrings
 rpds-py==0.17.1           # via jsonschema, referencing
-ruff==0.1.14              # via -r requirements-dev.in
+ruff==0.1.15              # via -r requirements-dev.in
 setuptools-scm==8.0.4     # via fparser
 six==1.16.0               # via asttokens, astunparse, python-dateutil
 snowballstemmer==2.2.0    # via pydocstyle, sphinx
@@ -193,7 +193,7 @@ types-datetimerange==2.0.0.6  # via types-all
 types-decorator==5.1.8.20240106  # via types-all
 types-deprecated==1.2.9.20240106  # via types-all
 types-docopt==0.6.11.4    # via types-all
-types-docutils==0.20.0.20240125  # via types-all
+types-docutils==0.20.0.20240126  # via types-all
 types-emoji==2.1.0.3      # via types-all
 types-enum34==1.1.8       # via types-all
 types-fb303==1.0.0        # via types-all, types-scribe
@@ -209,7 +209,7 @@ types-itsdangerous==1.1.6  # via types-all
 types-jack-client==0.5.10.20240106  # via types-all
 types-jinja2==2.11.9      # via types-all, types-flask
 types-kazoo==0.1.3        # via types-all
-types-markdown==3.5.0.20240106  # via types-all
+types-markdown==3.5.0.20240129  # via types-all
 types-markupsafe==1.1.10  # via types-all, types-jinja2
 types-maxminddb==1.5.0    # via types-all, types-geoip2
 types-mock==5.1.0.20240106  # via types-all
@@ -222,20 +222,20 @@ types-pathlib2==2.3.0     # via types-all
 types-pillow==10.2.0.20240125  # via types-all
 types-pkg-resources==0.1.3  # via types-all
 types-polib==1.2.0.20240115  # via types-all
-types-protobuf==4.24.0.20240106  # via types-all
+types-protobuf==4.24.0.20240129  # via types-all
 types-pyaudio==0.2.16.20240106  # via types-all
 types-pycurl==7.45.2.20240106  # via types-all
 types-pyfarmhash==0.3.1.2  # via types-all
 types-pyjwt==1.7.1        # via types-all
 types-pymssql==2.1.0      # via types-all
 types-pymysql==1.1.0.1    # via types-all
-types-pyopenssl==23.3.0.20240106  # via types-redis
+types-pyopenssl==24.0.0.20240130  # via types-redis
 types-pyrfc3339==1.1.1.5  # via types-all
 types-pysftp==0.2.17.20240106  # via types-all
 types-python-dateutil==2.8.19.20240106  # via types-all, types-datetimerange
 types-python-gflags==3.1.7.3  # via types-all
-types-python-slugify==8.0.0.3  # via types-all
-types-pytz==2023.3.1.1    # via types-all, types-tzlocal
+types-python-slugify==8.0.2.20240127  # via types-all
+types-pytz==2023.4.0.20240130  # via types-all, types-tzlocal
 types-pyvmomi==8.0.0.6    # via types-all
 types-pyyaml==6.0.12.12   # via types-all
 types-redis==4.6.0.20240106  # via types-all
@@ -258,7 +258,7 @@ types-waitress==2.1.4.20240106  # via types-all
 types-werkzeug==1.0.9     # via types-all, types-flask
 types-xxhash==3.0.5.2     # via types-all
 typing-extensions==4.5.0  # via black, faker, gt4py (pyproject.toml), ipython, mypy, pytest-factoryboy, setuptools-scm
-urllib3==2.1.0            # via requests, types-requests
+urllib3==2.2.0            # via requests, types-requests
 virtualenv==20.25.0       # via pre-commit, tox
 wcwidth==0.2.13           # via prompt-toolkit
 websockets==12.0          # via dace

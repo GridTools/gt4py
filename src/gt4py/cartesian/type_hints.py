@@ -21,8 +21,7 @@ class StencilFunc(Protocol):
     __name__: str
     __module__: str
 
-    def __call__(self, *args: Any, **kwargs: Dict[str, Any]) -> None:
-        ...
+    def __call__(self, *args: Any, **kwargs: Dict[str, Any]) -> None: ...
 
 
 class AnnotatedStencilFunc(StencilFunc, Protocol):

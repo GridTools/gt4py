@@ -131,8 +131,9 @@ class NdArrayField(
     @classmethod
     def from_array(
         cls,
-        data: npt.ArrayLike
-        | core_defs.NDArrayObject,  # TODO: NDArrayObject should be part of ArrayLike
+        data: (
+            npt.ArrayLike | core_defs.NDArrayObject
+        ),  # TODO: NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.DomainLike,
@@ -476,9 +477,10 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _make_reduction(
-    builtin_name: str, array_builtin_name: str
-) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
+def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
+    ...,
+    NdArrayField[common.DimsT, core_defs.ScalarT],
+]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:

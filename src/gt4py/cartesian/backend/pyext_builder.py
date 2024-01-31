@@ -179,8 +179,7 @@ def build_pybind_ext(
     build_path: str,
     target_path: str,
     **kwargs: str,
-) -> Tuple[str, str]:
-    ...
+) -> Tuple[str, str]: ...
 
 
 @overload
@@ -198,8 +197,7 @@ def build_pybind_ext(
     build_ext_class: Type = None,
     verbose: bool = False,
     clean: bool = False,
-) -> Tuple[str, str]:
-    ...
+) -> Tuple[str, str]: ...
 
 
 def build_pybind_ext(
