@@ -1192,9 +1192,11 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             input_mapping = {
-                param: dace.Memlet(data=arg.value.data, subset="0")
-                if arg.value.desc(self.context.body).shape == (1,)
-                else create_memlet_at(arg.value.data, nreduce_index)
+                param: (
+                    dace.Memlet(data=arg.value.data, subset="0")
+                    if arg.value.desc(self.context.body).shape == (1,)
+                    else create_memlet_at(arg.value.data, nreduce_index)
+                )
                 for (param, _), arg in zip(inner_inputs, args)
             }
             output_mapping = {
