@@ -13,6 +13,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import types
 from collections import namedtuple
 from typing import Any, Protocol, TypeVar
 
@@ -133,6 +134,9 @@ size = 10
 
 class MeshDescriptor(Protocol):
     @property
+    def name(self) -> str: ...
+
+    @property
     def num_vertices(self) -> int: ...
 
     @property
@@ -204,15 +208,8 @@ def simple_mesh() -> MeshDescriptor:
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
-    return namedtuple(
-        "SimpleMesh",
-        [
-            "num_vertices",
-            "num_edges",
-            "num_cells",
-            "offset_provider",
-        ],
-    )(
+    return types.SimpleNamespace(
+        name="simple_mesh",
         num_vertices=num_vertices,
         num_edges=np.int32(num_edges),
         num_cells=num_cells,
@@ -295,15 +292,8 @@ def skip_value_mesh() -> MeshDescriptor:
         dtype=gtx.IndexType,
     )
 
-    return namedtuple(
-        "SkipValueMesh",
-        [
-            "num_vertices",
-            "num_edges",
-            "num_cells",
-            "offset_provider",
-        ],
-    )(
+    return types.SimpleNamespace(
+        name="skip_value_mesh",
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
@@ -349,7 +339,7 @@ __all__ = [
         simple_mesh(),
         pytest.param(skip_value_mesh(), marks=pytest.mark.uses_mesh_with_skip_values),
     ],
-    ids=lambda p: p.__class__.__name__,
+    ids=lambda p: p.name,
 )
 def mesh_descriptor(request) -> MeshDescriptor:
     yield request.param

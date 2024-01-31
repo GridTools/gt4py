@@ -1077,5 +1077,6 @@ class FieldBuiltinFuncRegistry:
 
 
 #: Numeric value used to represent missing values in connectivities.
-#: Adopted from UGRID Conventions (http://ugrid-conventions.github.io/ugrid-conventions/)
+#: Equivalent to the `_FillValue` attribute in the UGRID Conventions
+#: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
 SKIP_VALUE: Final[int] = -1
