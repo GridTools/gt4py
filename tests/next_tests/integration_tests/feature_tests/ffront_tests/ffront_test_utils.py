@@ -119,29 +119,33 @@ Edge = gtx.Dimension("Edge")
 Cell = gtx.Dimension("Cell")
 EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+C2VDim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
+C2V = gtx.FieldOffset("C2V", source=Vertex, target=(Cell, C2VDim))
+
 size = 10
 
 
 class MeshDescriptor(Protocol):
     @property
-    def num_vertices(self) -> int:
-        ...
+    def num_vertices(self) -> int: ...
 
     @property
-    def num_cells(self) -> int:
-        ...
+    def num_cells(self) -> int: ...
 
     @property
-    def num_edges(self) -> int:
-        ...
+    def num_edges(self) -> int: ...
 
     @property
-    def num_levels(self) -> int:
-        ...
+    def num_levels(self) -> int: ...
 
     @property
-    def offset_provider(self) -> dict[str, common.Connectivity]:
-        ...
+    def offset_provider(self) -> dict[str, common.Connectivity]: ...
 
 
 def simple_mesh() -> MeshDescriptor:
@@ -213,10 +217,18 @@ def simple_mesh() -> MeshDescriptor:
         num_edges=np.int32(num_edges),
         num_cells=num_cells,
         offset_provider={
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4, has_skip_values=False),
-            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
-            "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
-            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
+            V2E.value: gtx.NeighborTableOffsetProvider(
+                v2e_arr, Vertex, Edge, 4, has_skip_values=False
+            ),
+            E2V.value: gtx.NeighborTableOffsetProvider(
+                e2v_arr, Edge, Vertex, 2, has_skip_values=False
+            ),
+            C2V.value: gtx.NeighborTableOffsetProvider(
+                c2v_arr, Cell, Vertex, 4, has_skip_values=False
+            ),
+            C2E.value: gtx.NeighborTableOffsetProvider(
+                c2e_arr, Cell, Edge, 4, has_skip_values=False
+            ),
         },
     )  # type: ignore
 
@@ -296,10 +308,18 @@ def skip_value_mesh() -> MeshDescriptor:
         num_edges=num_edges,
         num_cells=num_cells,
         offset_provider={
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 5, has_skip_values=True),
-            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
-            "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 3, has_skip_values=False),
-            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 3, has_skip_values=False),
+            V2E.value: gtx.NeighborTableOffsetProvider(
+                v2e_arr, Vertex, Edge, 5, has_skip_values=True
+            ),
+            E2V.value: gtx.NeighborTableOffsetProvider(
+                e2v_arr, Edge, Vertex, 2, has_skip_values=False
+            ),
+            C2V.value: gtx.NeighborTableOffsetProvider(
+                c2v_arr, Cell, Vertex, 3, has_skip_values=False
+            ),
+            C2E.value: gtx.NeighborTableOffsetProvider(
+                c2e_arr, Cell, Edge, 3, has_skip_values=False
+            ),
         },
     )  # type: ignore
 

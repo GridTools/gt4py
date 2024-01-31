@@ -35,7 +35,14 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+    C2E,
+    C2V,
+    E2V,
+    V2E,
+    C2EDim,
+    C2VDim,
     Cell,
+    E2VDim,
     Edge,
     IDim,
     Ioff,
@@ -43,6 +50,7 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     Joff,
     KDim,
     Koff,
+    V2EDim,
     Vertex,
     exec_alloc_descriptor,
     mesh_descriptor,
@@ -64,16 +72,6 @@ VField: TypeAlias = gtx.Field[[Vertex], np.int32]  # type: ignore [valid-type]
 EField: TypeAlias = gtx.Field[[Edge], np.int32]  # type: ignore [valid-type]
 CField: TypeAlias = gtx.Field[[Cell], np.int32]  # type: ignore [valid-type]
 EmptyField: TypeAlias = gtx.Field[[], np.int32]  # type: ignore [valid-type]
-
-# TODO(ricoh): unify the following with the `ffront_test_utils.mesh_descriptor`
-#   fixture if `ffront_test_utils.mesh_descriptor` is not completely superseded
-#   by `unstructured_case`.
-V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
-V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
-E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
-C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
 
 ScalarValue: TypeAlias = core_defs.Scalar
 FieldValue: TypeAlias = gtx.Field
