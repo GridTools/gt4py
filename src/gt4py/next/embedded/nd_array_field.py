@@ -208,11 +208,7 @@ class NdArrayField(
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
             assert core_defs.is_scalar_type(new_buffer)
-            index_tuple = index if isinstance(index, tuple) else tuple([index])
-            if all([isinstance(i, core_defs.IntegralScalar) for i in index_tuple]):  # type: ignore[arg-type]
-                new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
-            else:
-                return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
+            new_buffer: npt.ArrayLike = self._scalar_to_field(new_buffer)  # type: ignore[no-redef] # redefinition is minimal
 
         return self.__class__.from_array(new_buffer, domain=new_domain)
 
