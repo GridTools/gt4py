@@ -28,6 +28,7 @@ from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 from gt4py.next.ffront import fbuiltins
+from gt4py.next.iterator import embedded as itir_embedded
 
 
 try:
@@ -390,55 +391,21 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             assert common.UnitRange.is_finite(image_range)
 
-            # HANNES HACK
-            # map all negative indices (skip_values) to the smallest positiv index
-            smallest = xp.min(
-                self._ndarray, initial=xp.iinfo(xp.int32).max, where=self._ndarray >= 0
-            )
-            clipped_array = xp.where(self._ndarray < 0, smallest, self._ndarray)
-            # END HANNES HACK
-
-            restricted_mask = (clipped_array >= image_range.start) & (
+            restricted_mask = (self._ndarray >= image_range.start) & (
                 self._ndarray < image_range.stop
             )
-            # indices of non-zero elements in each dimension
-            nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
 
-            new_dims = []
-            non_contiguous_dims = []
+            relative_ranges = _hypercube(
+                restricted_mask, xp, ignore_mask=self._ndarray == common.SKIP_VALUE
+            )
 
-            for i, dim_nnz_indices in enumerate(nnz):
-                # Check if the indices are contiguous
-                first_data_index = dim_nnz_indices[0]
-                assert isinstance(first_data_index, core_defs.INTEGRAL_TYPES)
-                last_data_index = dim_nnz_indices[-1]
-                assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
-                indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
-                dim_range = self._domain[i]
+            if relative_ranges is None:
+                raise ValueError("Restriction generates non-contiguous dimensions.")
 
-                if len(xp.unique(counts)) == 1 and (
-                    len(indices) == last_data_index - first_data_index + 1
-                ):
-                    idx_offset = dim_range[1].start
-                    start = idx_offset + first_data_index
-                    assert common.is_int_index(start)
-                    stop = idx_offset + last_data_index + 1
-                    assert common.is_int_index(stop)
-                    new_dims.append(
-                        common.named_range(
-                            (
-                                dim_range[0],
-                                (start, stop),
-                            )
-                        )
-                    )
-                else:
-                    non_contiguous_dims.append(dim_range[0])
-
-            if non_contiguous_dims:
-                raise ValueError(
-                    f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
-                )
+            new_dims = [
+                common.named_range((d, rr + ar.start))
+                for d, ar, rr in zip(self.domain.dims, self.domain.ranges, relative_ranges)
+            ]
 
             self._cache[cache_key] = new_dims
 
@@ -458,6 +425,30 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         return restricted_connectivity
 
     __getitem__ = restrict
+
+
+def _hypercube(
+    select: core_defs.NDArrayObject,
+    xp: ModuleType,
+    ignore_mask: Optional[core_defs.NDArrayObject] = None,
+) -> Optional[list[common.UnitRange]]:
+    """
+    Return the hypercube that contains all True values and no False values or `None` if no such hypercube exists.
+
+    If `ignore_mask` is given, the selected values are ignored.
+    """
+    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select)
+
+    slices = tuple(
+        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
+    )
+    hcube = select[tuple(slices)]
+    if ignore_mask is not None:
+        hcube |= ignore_mask[tuple(slices)]
+    if not xp.all(hcube):
+        return None
+
+    return [common.UnitRange(s.start, s.stop) for s in slices]
 
 
 # -- Specialized implementations for builtin operations on array fields --
@@ -491,7 +482,9 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
+def _make_reduction(
+    builtin_name: str, array_builtin_name: str, initial_value_op: Callable
+) -> Callable[
     ...,
     NdArrayField[common.DimsT, core_defs.ScalarT],
 ]:
@@ -503,23 +496,26 @@ def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
         reduce_dim_index = field.domain.dims.index(axis)
-        # HANNES HACK
         current_offset_provider = embedded_context.offset_provider.get(None)
         assert current_offset_provider is not None
         offset_definition = current_offset_provider[
             axis.value
         ]  # assumes offset and local dimension have same name
-        # TODO mapping of connectivity to field dimensions
+        assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
         # TODO unclear in case of multiple local dimensions (probably just chain)
-        # END HANNES HACK
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+
+        # TODO add test that requires broadcasting
+        masked_array = field.array_ns.where(
+            field.array_ns.asarray(offset_definition.table) != common.SKIP_VALUE,
+            field.ndarray,
+            initial_value_op(field),
+        )
 
         return field.__class__.from_array(
             getattr(field.array_ns, array_builtin_name)(
-                field.ndarray,
+                masked_array,
                 axis=reduce_dim_index,
-                initial=0,  # set proper inital value
-                where=offset_definition.table >= 0,
             ),
             domain=new_domain,
         )
@@ -528,9 +524,15 @@ def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
     return _builtin_op
 
 
-NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))
-NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))
-NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))
+NdArrayField.register_builtin_func(
+    fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum", lambda x: x.dtype.scalar_type(0))
+)
+NdArrayField.register_builtin_func(
+    fbuiltins.max_over, _make_reduction("max_over", "max", lambda x: x.array_ns.min(x._ndarray))
+)
+NdArrayField.register_builtin_func(
+    fbuiltins.min_over, _make_reduction("min_over", "min", lambda x: x.array_ns.max(x._ndarray))
+)
 
 
 # -- Concrete array implementations --

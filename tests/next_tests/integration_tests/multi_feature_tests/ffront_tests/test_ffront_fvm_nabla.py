@@ -23,7 +23,7 @@ from gt4py.next.iterator import atlas_utils
 from gt4py.next.program_processors import processor_interface as ppi
 
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
@@ -70,11 +70,8 @@ def pnabla(
     return compute_pnabla(pp, S_M[0], sign, vol), compute_pnabla(pp, S_M[1], sign, vol)
 
 
-def test_ffront_compute_zavgS(fieldview_backend):
-    allocator = fieldview_backend
-    fieldview_backend = (
-        fieldview_backend if hasattr(fieldview_backend, "executor") else None
-    )  # TODO this pattern is dangerous
+def test_ffront_compute_zavgS(exec_alloc_descriptor):
+    executor, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
 
     setup = nabla_setup()
 
@@ -87,26 +84,24 @@ def test_ffront_compute_zavgS(fieldview_backend):
         atlas_utils.AtlasTable(setup.edges2node_connectivity).asnumpy(), Edge, Vertex, 2, False
     )
 
-    compute_zavgS.with_backend(fieldview_backend)(
-        pp, S_M[0], out=zavgS, offset_provider={"E2V": e2v}
-    )
+    compute_zavgS.with_backend(executor)(pp, S_M[0], out=zavgS, offset_provider={"E2V": e2v})
 
     assert_close(-199755464.25741270, np.min(zavgS.asnumpy()))
     assert_close(388241977.58389181, np.max(zavgS.asnumpy()))
 
 
-def test_ffront_nabla(fieldview_backend):
-    fieldview_backend = fieldview_backend if hasattr(fieldview_backend, "executor") else None
+def test_ffront_nabla(exec_alloc_descriptor):
+    executor, allocator = exec_alloc_descriptor.executor, exec_alloc_descriptor.allocator
 
     setup = nabla_setup()
 
-    sign = gtx.as_field([Vertex, V2EDim], setup.sign_field)
-    pp = gtx.as_field([Vertex], setup.input_field)
-    S_M = tuple(map(gtx.as_field.partial([Edge]), setup.S_fields))
-    vol = gtx.as_field([Vertex], setup.vol_field)
+    sign = gtx.as_field([Vertex, V2EDim], setup.sign_field, allocator=allocator)
+    pp = gtx.as_field([Vertex], setup.input_field, allocator=allocator)
+    S_M = tuple(map(gtx.as_field.partial([Edge], allocator=allocator), setup.S_fields))
+    vol = gtx.as_field([Vertex], setup.vol_field, allocator=allocator)
 
-    pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
-    pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
+    pnabla_MXX = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
+    pnabla_MYY = gtx.zeros({Vertex: setup.nodes_size}, allocator=allocator)
 
     e2v = gtx.NeighborTableOffsetProvider(
         atlas_utils.AtlasTable(setup.edges2node_connectivity).asnumpy(), Edge, Vertex, 2, False
@@ -115,7 +110,7 @@ def test_ffront_nabla(fieldview_backend):
         atlas_utils.AtlasTable(setup.nodes2edge_connectivity).asnumpy(), Vertex, Edge, 7
     )
 
-    pnabla.with_backend(fieldview_backend)(
+    pnabla.with_backend(executor)(
         pp, S_M, sign, vol, out=(pnabla_MXX, pnabla_MYY), offset_provider={"E2V": e2v, "V2E": v2e}
     )
 
