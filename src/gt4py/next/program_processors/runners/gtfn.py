@@ -124,9 +124,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     translation = factory.SubFactory(
         gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
     )
-    bindings: workflow.Workflow[
-        stages.ProgramSource, stages.CompilableSource
-    ] = nanobind.bind_source
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+        nanobind.bind_source
+    )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
         cache_strategy=cache.Strategy.SESSION,
@@ -142,12 +142,13 @@ class GTFNBackendFactory(factory.Factory):
         model = otf_compile_executor.OTFBackend
 
     class Params:
-        device_name = "cpu"
-        cached_name = ""
+        name_device = "cpu"
+        name_cached = ""
+        name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
             device_type=core_defs.DeviceType.CUDA,
-            device_name="gpu",
+            name_device="gpu",
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
@@ -156,14 +157,16 @@ class GTFNBackendFactory(factory.Factory):
                     name=o.name,
                 )
             ),
-            cached_name="_cached",
+            name_cached="_cached",
         )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
-        name = factory.LazyAttribute(lambda o: f"run_gtfn_{o.device_name}{o.cached_name}")
+        name = factory.LazyAttribute(
+            lambda o: f"run_gtfn_{o.name_device}{o.name_cached}{o.name_postfix}"
+        )
 
     executor = factory.LazyAttribute(
         lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=o.otf_workflow, name=o.name)
@@ -181,13 +184,15 @@ __user_defaults = {
 run_gtfn = GTFNBackendFactory(**__user_defaults)
 
 run_gtfn_imperative = GTFNBackendFactory(
-    otf_workflow__translation__use_imperative_backend=True, **__user_defaults
+    name_postfix="_imperative",
+    otf_workflow__translation__use_imperative_backend=True,
+    **__user_defaults,
 )
 
 run_gtfn_cached = GTFNBackendFactory(**__user_defaults | {"cached": True})
 
 run_gtfn_with_temporaries = GTFNBackendFactory(
-    name="run_gtfn_with_temporaries",
+    name_postfix="_with_temporaries",
     otf_workflow__translation__lift_mode=LiftMode.FORCE_TEMPORARIES,
     **__user_defaults,
 )
