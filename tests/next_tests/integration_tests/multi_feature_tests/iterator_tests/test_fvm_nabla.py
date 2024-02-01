@@ -383,6 +383,8 @@ def test_nabla_sign(program_processor, lift_mode):
     pnabla_MXX = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
     pnabla_MYY = gtx.as_field([Vertex], np.zeros((setup.nodes_size)))
 
+    node_sizes = gtx.as_field([], np.asarray((setup.nodes_size)))
+
     e2v = gtx.NeighborTableOffsetProvider(
         AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
     )
@@ -393,7 +395,7 @@ def test_nabla_sign(program_processor, lift_mode):
     run_processor(
         nabla_sign,
         program_processor,
-        setup.nodes_size,
+        node_sizes,
         pnabla_MXX,
         pnabla_MYY,
         pp,
