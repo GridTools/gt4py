@@ -203,7 +203,7 @@ class NdArrayField(
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> NdArrayField:
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         if new_domain.ndim == 0:
@@ -426,7 +426,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:

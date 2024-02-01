@@ -749,7 +749,7 @@ def _make_tuple(
             try:
                 data = field_or_tuple.field_getitem(named_indices)
                 if core_defs.is_scalar_type(data):
-                    return data
+                    return data  # type: ignore[return-value] # type assesed in if
                 assert data.domain.ndim == 0
                 return data.ndarray.item()
             except embedded_exceptions.IndexOutOfBounds:
