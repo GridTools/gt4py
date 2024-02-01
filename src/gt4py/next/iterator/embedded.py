@@ -748,6 +748,8 @@ def _make_tuple(
         else:
             try:
                 data = field_or_tuple.field_getitem(named_indices)
+                if core_defs.is_scalar_type(data):
+                    return data
                 assert data.domain.ndim == 0
                 return data.ndarray.item()
             except embedded_exceptions.IndexOutOfBounds:
