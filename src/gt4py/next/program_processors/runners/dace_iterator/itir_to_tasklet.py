@@ -428,6 +428,7 @@ def builtin_neighbors(
         # select full shape only in the neighbor-axis dimension
         field_subset = tuple(
             f"0:{shape}" if dim == neighbor_dim else f"i_{dim}"
+            # dace array shaped at construction time based on field dimensions sorted in alphabetical order
             for dim, shape in zip(sorted(iterator.dimensions), field_desc.shape)
         )
         state.add_memlet_path(
@@ -607,7 +608,9 @@ def builtin_make_const_list(
         else:
             assert arg.value.desc(transformer.context.body).shape == (1,)
             transformer.context.state.add_nedge(
-                arg.value, var_node, dace.Memlet(data=var_name, subset=f"{i}", other_subset="0")
+                arg.value,
+                var_node,
+                dace.Memlet(data=arg.value.data, subset="0", other_subset=f"{i}"),
             )
 
     return [ValueExpr(var_node, dtype)]
