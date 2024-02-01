@@ -16,7 +16,7 @@ import itertools
 from collections.abc import Sequence
 from typing import Optional
 
-from . import traits, types as ts
+from . import types as ts
 
 
 def flatten_tuples(ty: ts.Type) -> list[ts.Type]:
@@ -45,14 +45,14 @@ def unflatten_tuples(tys: Sequence[ts.Type], structure: ts.Type) -> ts.Type:
 
 
 def assign_arguments(
-    parameters: Sequence[ts.FunctionParameter], arguments: Sequence[traits.FunctionArgument]
-) -> list[traits.FunctionArgument]:
+    parameters: Sequence[ts.FunctionParameter], arguments: Sequence[ts.FunctionArgument]
+) -> list[ts.FunctionArgument]:
     by_index = {arg.location: arg for arg in arguments if isinstance(arg.location, int)}
     by_name = {arg.location: arg for arg in arguments if isinstance(arg.location, str)}
 
-    assignment: dict[int, traits.FunctionArgument] = {}
+    assignment: dict[int, ts.FunctionArgument] = {}
     for index, param in enumerate(parameters):
-        arg: Optional[traits.FunctionArgument] = None
+        arg: Optional[ts.FunctionArgument] = None
         if param.positional and index in by_index:
             arg = by_index[index]
         elif param.keyword and param.name in by_name:

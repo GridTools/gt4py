@@ -16,12 +16,14 @@ from __future__ import annotations
 
 import abc
 import dataclasses
+import typing
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Optional
+
+from .base import FunctionArgument, Trait, Type
 
 
-class Trait:
-    ...
+__all__ = ["Trait"]
 
 
 class SignednessTrait(Trait):
@@ -41,7 +43,7 @@ class FromTrait(Trait):
     """
 
     @abc.abstractmethod
-    def is_constructible_from(self, ty: Any) -> bool:
+    def is_constructible_from(self, ty: Type) -> bool:
         ...
 
 
@@ -54,7 +56,7 @@ class ToTrait(Trait):
     """
 
     @abc.abstractmethod
-    def is_convertible_to(self, ty: Any) -> bool:
+    def is_convertible_to(self, ty: Type) -> bool:
         ...
 
 
@@ -68,7 +70,7 @@ class FromImplicitTrait(Trait):
     """
 
     @abc.abstractmethod
-    def is_implicitly_constructible_from(self, ty: Any) -> bool:
+    def is_implicitly_constructible_from(self, ty: Type) -> bool:
         ...
 
 
@@ -82,7 +84,7 @@ class ToImplicitTrait(Trait):
     """
 
     @abc.abstractmethod
-    def is_implicitly_convertible_to(self, ty: Any) -> bool:
+    def is_implicitly_convertible_to(self, ty: Type) -> bool:
         ...
 
 
@@ -98,14 +100,14 @@ class ArithmeticTrait(Trait):
         """Check if the type supports arithmetic operations."""
         return True
 
-    def common_arithmetic_type(self, other: Any) -> Optional[Any]:
+    def common_arithmetic_type(self, other: Type) -> Optional[Type]:
         """
         Find a common type that can store the result without losing precision.
 
         If no such type exists or the operation cannot be performed, None is
         returned.
         """
-        return self if self == other else None
+        return self if self == other and isinstance(self, Type) else None
 
 
 class BitwiseTrait(Trait):
@@ -120,38 +122,21 @@ class BitwiseTrait(Trait):
         """Check if the type supports bitwise operations."""
         return True
 
-    def common_bitwise_type(self, other: Any) -> Optional[Any]:
+    def common_bitwise_type(self, other: Type) -> Optional[Type]:
         """
         Find a common type that can store the result without losing precision.
 
         If no such type exists or the operation cannot be performed, None is
         returned.
         """
-        return self if self == other else None
-
-
-@dataclasses.dataclass(frozen=True)
-class FunctionArgument:
-    """Represents an argument to a function call."""
-
-    ty: Any
-    """The type of the function call argument."""
-
-    location: int | str
-    """
-    The position of keyword of the function argument.
-
-    For positional arguments, location is an integer equal to the parameter's
-    index. For keyword arguments, location is a string equal to the parameter's
-    name.
-    """
+        return self if self == other and isinstance(self, Type) else None
 
 
 @dataclasses.dataclass(frozen=True)
 class CallValidity:
     """Holds information about the validity of a function call."""
 
-    _value: Any | list[str]
+    _value: Optional[Type] | list[str]
     """
     Either the returned type or the list of errors.
 
@@ -163,21 +148,19 @@ class CallValidity:
 
     def __bool__(self):
         """Check if the function call is valid."""
-        from gt4py.next.new_type_system import types
-
-        return isinstance(self._value, types.Type)
+        return isinstance(self._value, Type) or self._value is None
 
     @property
-    def result(self) -> Any:
+    def result(self) -> Optional[Type]:
         """If the call is valid, return the result's type."""
         assert bool(self)
-        return self._value
+        return typing.cast(Optional[Type], self._value)
 
     @property
     def errors(self) -> list[str]:
         """If the call is invalid, return the error diagnostics."""
         assert not bool(self)
-        return self._value
+        return typing.cast(list[str], self._value)
 
 
 class CallableTrait(Trait):
@@ -189,7 +172,7 @@ class CallableTrait(Trait):
         ...
 
 
-def is_convertible(from_: Any, to: Any) -> bool:
+def is_convertible(from_: Type, to: Type) -> bool:
     """
     Check if a type is convertible to another.
 
@@ -204,7 +187,7 @@ def is_convertible(from_: Any, to: Any) -> bool:
         return False
 
 
-def is_implicitly_convertible(from_: Any, to: Any) -> bool:
+def is_implicitly_convertible(from_: Type, to: Type) -> bool:
     """
     Check if a type is IMPLICITLY convertible to another.
 
@@ -219,7 +202,7 @@ def is_implicitly_convertible(from_: Any, to: Any) -> bool:
         return False
 
 
-def common_type(lhs: Any, rhs: Any) -> Optional[Any]:
+def common_type(lhs: Type, rhs: Type) -> Optional[Type]:
     """
     Find a type that both arguments can be converted to.
 
@@ -233,7 +216,7 @@ def common_type(lhs: Any, rhs: Any) -> Optional[Any]:
     return None
 
 
-def common_arithmetic_type(lhs: Any, rhs: Any) -> Optional[Any]:
+def common_arithmetic_type(lhs: Type, rhs: Type) -> Optional[Type]:
     """
     Find a type that can store the result of an arithmetic operation.
 
@@ -249,7 +232,7 @@ def common_arithmetic_type(lhs: Any, rhs: Any) -> Optional[Any]:
     return None
 
 
-def common_bitwise_type(lhs: Any, rhs: Any) -> Optional[Any]:
+def common_bitwise_type(lhs: Type, rhs: Type) -> Optional[Type]:
     """
     Find a type that can store the result of a bitwise operation.
 

@@ -21,7 +21,7 @@ from typing import Optional, Sequence
 import gt4py.next.common as gtx_common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.new_type_system import traits, types as ts, utils as ts_utils
-from gt4py.next.new_type_system.traits import FunctionArgument
+from gt4py.next.new_type_system.types import FunctionArgument
 
 
 @dataclasses.dataclass
@@ -68,6 +68,8 @@ class ScanOperatorType(ts.Type, traits.CallableTrait):
         valid = ts.FunctionType(self.parameters, self.result).is_callable(scalar_args)
         if not valid:
             return valid
+        if valid.result is None:
+            return traits.CallValidity(None)
         dimensions = list(itertools.chain(*[[get_dimensions(ty) for ty in fl] for fl in flats]))
         merged = set(itertools.chain(*dimensions))
         if merged:

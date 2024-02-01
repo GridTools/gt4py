@@ -16,14 +16,10 @@ import dataclasses
 from typing import Any, Optional, Sequence
 
 from . import traits
-from .traits import FunctionArgument
+from .base import FunctionArgument, FunctionParameter, Type
 
 
-__all__ = ["FunctionArgument"]
-
-
-class Type:
-    ...
+__all__ = ["FunctionArgument", "FunctionParameter", "Type"]
 
 
 @dataclasses.dataclass
@@ -201,29 +197,6 @@ class StructType(Type):
         if isinstance(other, StructType):
             return self.fields == other.fields
         return False
-
-
-@dataclasses.dataclass(frozen=True)
-class FunctionParameter:
-    """Represents a function parameter within callable types."""
-
-    ty: Type
-    """The type of the function parameter."""
-
-    name: str
-    """The name of the function parameter."""
-
-    positional: bool
-    """
-    Whether the corresponding argument can be supplied as a positional in a
-    function call.
-    """
-
-    keyword: bool
-    """
-    Whether the corresponding argument can be supplied as a keyword argument
-    in a function call.
-    """
 
 
 @dataclasses.dataclass
