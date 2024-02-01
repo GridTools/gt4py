@@ -54,7 +54,7 @@ def test_unflatten_tuples_nested():
     assert utils.unflatten_tuples(tys, structure) == expected
 
 
-def test_unflatten_tuples_underflow():
+def test_unflatten_tuples_too_few():
     marker = types.Type()
     tys = [f16, f32]
     structure = types.TupleType([marker, marker, marker])
@@ -62,7 +62,7 @@ def test_unflatten_tuples_underflow():
         utils.unflatten_tuples(tys, structure)
 
 
-def test_unflatten_tuples_overflow():
+def test_unflatten_tuples_too_many():
     marker = types.Type()
     tys = [f16, f32, f16]
     structure = types.TupleType([marker, marker])

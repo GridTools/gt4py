@@ -93,15 +93,17 @@ class FieldType(
             return element_convertible and dims_superset
         return traits.is_implicitly_convertible(ty, self.element_type)
 
-    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | ts.Type]:
+    def is_callable(self, args: Sequence[FunctionArgument]) -> traits.CallValidity:
         if len(args) != 1 or not isinstance(args[0].ty, FieldOffsetType):
-            return False, "expected a single argument of FieldOffset type"
+            return traits.CallValidity(["expected a single argument of FieldOffset type"])
         arg_t = typing.cast(FieldOffsetType, args[0].ty)
+        if arg_t.field_offset.source not in self.dimensions:
+            return  traits.CallValidity(["source dimension not in field"])
         result_dimensions = copy.copy(self.dimensions)
         result_dimensions.remove(arg_t.field_offset.source)
         for target_dim in arg_t.field_offset.target:
             result_dimensions.add(target_dim)
-        return True, FieldType(self.element_type, result_dimensions)
+        return traits.CallValidity(FieldType(self.element_type, result_dimensions))
 
     def supports_bitwise(self) -> bool:
         return isinstance(self.element_type, traits.BitwiseTrait) and self.element_type.supports_bitwise()
@@ -164,15 +166,15 @@ class FieldOffsetType(ts.Type):
 class CastFunctionType(ts.Type, traits.CallableTrait):
     result: ts.Type
 
-    def is_callable(self, args: Sequence[FunctionArgument]) -> tuple[bool, str | Any]:
+    def is_callable(self, args: Sequence[FunctionArgument]) -> traits.CallValidity:
         if len(args) != 1:
-            return False, "expected exactly one argument"
+            return traits.CallValidity(["expected exactly one argument"])
         if not traits.is_convertible(args[0].ty, self.result):
-            return False, f"could not convert '{args[0].ty}' to '{self.result}'"
-        return True, self.result
+            return traits.CallValidity(["could not convert '{args[0].ty}' to '{self.result}'"])
+        return traits.CallValidity(self.result)
 
     def __str__(self):
-        return f"(Any) -> {self.result}"
+        return f"(To[{self.result}]) -> {self.result}"
 
 
 @dataclasses.dataclass
@@ -214,10 +216,10 @@ class BuiltinFunctionType(ts.Type, traits.CallableTrait):
 
     def is_callable_as_type(self, args: Sequence[FunctionArgument]) -> traits.CallValidity:
         if len(args) != 2:
-            return False, "expected an object and a type as arguments"
+            return traits.CallValidity(["expected an object and a type as arguments"])
         value_arg, ty_args = args
         if not isinstance(ty_args.ty, CastFunctionType):
-            return False, f"could not convert {ty_args.ty} to type literal"
+            return traits.CallValidity([f"could not convert {ty_args.ty} to type literal"])
 
         def can_cast_element(ty):
             element_ty = get_element_type(ty)
@@ -232,7 +234,7 @@ class BuiltinFunctionType(ts.Type, traits.CallableTrait):
         for valid in results:
             if not valid:
                 return traits.CallValidity([f"{', '.join(valid.errors)}; while converting {structure_ty} to {ty_args.ty.result}"])
-        result_tys = [r[1] for r in results]
+        result_tys = [r.result for r in results]
         result_ty = ts_utils.unflatten_tuples(result_tys, structure_ty)
         return traits.CallValidity(result_ty)
 
@@ -248,6 +250,8 @@ class BuiltinFunctionType(ts.Type, traits.CallableTrait):
             return traits.CallValidity([f"expected a field, got {field_ty}"])
         if not isinstance(axis, DimensionType):
             return traits.CallValidity([f"expected a dimension, got {axis}"])
+        if axis.dimension.kind != gtx_common.DimensionKind.LOCAL:
+            return traits.CallValidity([f"reduction dimension {axis.dimension} must be a local dimension"])
         if axis.dimension not in field_ty.dimensions:
             return traits.CallValidity([f"field {field_ty} is missing reduction dimension {axis.dimension}"])
         dimensions = {dim for dim in field_ty.dimensions if dim != axis.dimension}

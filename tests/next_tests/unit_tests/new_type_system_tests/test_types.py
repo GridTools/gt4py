@@ -3,6 +3,10 @@ import pytest
 from gt4py.next.new_type_system import types
 from gt4py.next.new_type_system import traits
 
+f16 = types.Float16Type()
+f32 = types.Float32Type()
+f64 = types.Float64Type()
+
 scalar_types = [
     types.BoolType(),
     types.Int8Type(),
@@ -203,10 +207,18 @@ def test_struct_eq():
     assert ty != diff_size
 
 
+def test_function_type_str():
+    ty = types.FunctionType(
+        parameters=[
+            types.FunctionParameter(f32, "a", True, False),
+            types.FunctionParameter(f32, "b", False, True),
+        ],
+        result=f32,
+    )
+    assert str(ty) == "(float32, float32) -> float32"
+
+
 def test_function_type_callability():
-    f16 = types.Float16Type()
-    f32 = types.Float32Type()
-    f64 = types.Float64Type()
     ty = types.FunctionType(
         parameters=[
             types.FunctionParameter(f32, "a", True, False),

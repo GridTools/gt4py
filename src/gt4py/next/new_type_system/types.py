@@ -226,6 +226,9 @@ class FunctionType(Type, traits.CallableTrait):
         self.parameters = parameters
         self.result = result
 
+    def __str__(self):
+        return f"({', '.join([str(param.ty) for param in self.parameters])}) -> {self.result}"
+
     def is_callable(self, args: Sequence[FunctionArgument]) -> traits.CallValidity:
         from gt4py.next.new_type_system import utils
         try:
