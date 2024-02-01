@@ -1,8 +1,25 @@
-from . import traits
-import dataclasses
-from typing import Optional, Any, Sequence
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
+from typing import Any, Optional, Sequence
+
+from . import traits
 from .traits import FunctionArgument
+
+
+__all__ = ["FunctionArgument"]
 
 
 class Type:
@@ -16,7 +33,7 @@ class IntegerType(
     traits.FromTrait,
     traits.FromImplicitTrait,
     traits.ArithmeticTrait,
-    traits.BitwiseTrait
+    traits.BitwiseTrait,
 ):
     """
     Integer type.
@@ -34,7 +51,7 @@ class IntegerType(
     def __init__(self, width: int, signed: bool):
         assert width in [1, 8, 16, 32, 64]
         if width == 1:
-            assert signed == False, "booleans must be unsigned"
+            assert not signed, "booleans must be unsigned"
         self.width = width
         self.signed = signed
 
@@ -56,7 +73,9 @@ class IntegerType(
     def is_implicitly_constructible_from(self, ty: Any) -> bool:
         if isinstance(ty, IntegerType):
             if self.signed:
-                return (ty.signed and ty.width <= self.width) or (not ty.signed and ty.width < self.width)
+                return (ty.signed and ty.width <= self.width) or (
+                    not ty.signed and ty.width < self.width
+                )
             else:
                 return not ty.signed and ty.width <= self.width
         return False
@@ -79,11 +98,7 @@ class IntegerType(
 
 @dataclasses.dataclass
 class FloatType(
-    Type,
-    traits.SignednessTrait,
-    traits.FromTrait,
-    traits.FromImplicitTrait,
-    traits.ArithmeticTrait
+    Type, traits.SignednessTrait, traits.FromTrait, traits.FromImplicitTrait, traits.ArithmeticTrait
 ):
     """
     Floating point type.
@@ -95,7 +110,7 @@ class FloatType(
     """The number of bits of the floating point type."""
 
     def __init__(self, width: int):
-        assert (width in [16, 32, 64])
+        assert width in [16, 32, 64]
         self.width = width
 
     def __str__(self):
@@ -150,14 +165,19 @@ class TupleType(Type, traits.FromTrait, traits.FromImplicitTrait):
             return False
         if len(self.elements) != len(ty.elements):
             return False
-        return all(traits.is_convertible(oth_el, el) for el, oth_el in zip(self.elements, ty.elements))
+        return all(
+            traits.is_convertible(oth_el, el) for el, oth_el in zip(self.elements, ty.elements)
+        )
 
     def is_implicitly_constructible_from(self, ty: Type) -> bool:
         if not isinstance(ty, TupleType):
             return False
         if len(self.elements) != len(ty.elements):
             return False
-        return all(traits.is_implicitly_convertible(oth_el, el) for el, oth_el in zip(self.elements, ty.elements))
+        return all(
+            traits.is_implicitly_convertible(oth_el, el)
+            for el, oth_el in zip(self.elements, ty.elements)
+        )
 
 
 @dataclasses.dataclass
@@ -219,7 +239,7 @@ class FunctionType(Type, traits.CallableTrait):
     result: Optional[Type]
     """
     The return type of this function. Result is omitted (i.e. None) for a
-    function that returns nothing (i.e. void). 
+    function that returns nothing (i.e. void).
     """
 
     def __init__(self, parameters: list[FunctionParameter], result: Optional[Type]):
@@ -231,14 +251,17 @@ class FunctionType(Type, traits.CallableTrait):
 
     def is_callable(self, args: Sequence[FunctionArgument]) -> traits.CallValidity:
         from gt4py.next.new_type_system import utils
+
         try:
             assigned = utils.assign_arguments(self.parameters, args)
             for param, arg in zip(self.parameters, assigned):
                 if not traits.is_implicitly_convertible(arg.ty, param.ty):
                     return traits.CallValidity(
                         [
-                            (f"argument cannot be implicitly converted from '{arg.ty}' to '{param.ty}' "
-                             f"for parameter '{param.name}'")
+                            (
+                                f"argument cannot be implicitly converted from '{arg.ty}' to '{param.ty}' "
+                                f"for parameter '{param.name}'"
+                            )
                         ]
                     )
             return traits.CallValidity(self.result)
@@ -249,6 +272,7 @@ class FunctionType(Type, traits.CallableTrait):
 # -------------------------------------------------------------------------------
 # Aliases
 # -------------------------------------------------------------------------------
+
 
 @dataclasses.dataclass
 class BoolType(IntegerType):

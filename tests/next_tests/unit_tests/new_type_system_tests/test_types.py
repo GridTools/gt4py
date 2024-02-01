@@ -1,7 +1,21 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import pytest
 
-from gt4py.next.new_type_system import types
-from gt4py.next.new_type_system import traits
+from gt4py.next.new_type_system import traits, types
+
 
 f16 = types.Float16Type()
 f32 = types.Float32Type()
@@ -227,20 +241,26 @@ def test_function_type_callability():
         result=f32,
     )
 
-    assert ty.is_callable([
-        types.FunctionArgument(f16, 0),
-        types.FunctionArgument(f16, "b"),
-    ])
+    assert ty.is_callable(
+        [
+            types.FunctionArgument(f16, 0),
+            types.FunctionArgument(f16, "b"),
+        ]
+    )
 
-    assert not ty.is_callable([
-        types.FunctionArgument(f64, 0),
-        types.FunctionArgument(f16, "b"),
-    ])
+    assert not ty.is_callable(
+        [
+            types.FunctionArgument(f64, 0),
+            types.FunctionArgument(f16, "b"),
+        ]
+    )
 
-    assert not ty.is_callable([
-        types.FunctionArgument(f16, 0),
-        types.FunctionArgument(f64, "b"),
-    ])
+    assert not ty.is_callable(
+        [
+            types.FunctionArgument(f16, 0),
+            types.FunctionArgument(f64, "b"),
+        ]
+    )
 
 
 def test_common_bitwise_type():
@@ -271,10 +291,14 @@ def test_common_artihmetic_type_integer():
     assert traits.common_arithmetic_type(types.Int16Type(), types.Int32Type()) == types.Int32Type()
 
     # Same unsigned: no extension.
-    assert traits.common_arithmetic_type(types.Uint16Type(), types.Uint16Type()) == types.Uint16Type()
+    assert (
+        traits.common_arithmetic_type(types.Uint16Type(), types.Uint16Type()) == types.Uint16Type()
+    )
 
     # Same sign, different width: extension.
-    assert traits.common_arithmetic_type(types.Uint16Type(), types.Uint32Type()) == types.Uint32Type()
+    assert (
+        traits.common_arithmetic_type(types.Uint16Type(), types.Uint32Type()) == types.Uint32Type()
+    )
 
     # Same width mixed sign: extension + signed.
     assert traits.common_arithmetic_type(types.Int16Type(), types.Uint16Type()) == types.Int32Type()
@@ -284,22 +308,42 @@ def test_common_artihmetic_type_integer():
 
 
 def test_common_artihmetic_type_float():
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Float16Type()) == types.Float16Type()
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Float64Type()) == types.Float64Type()
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Float16Type())
+        == types.Float16Type()
+    )
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Float64Type())
+        == types.Float64Type()
+    )
 
 
 def test_common_artihmetic_type_mixed():
     # Float mantissa can store entire integer.
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Int8Type()) == types.Float16Type()
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Uint8Type()) == types.Float16Type()
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Int8Type()) == types.Float16Type()
+    )
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Uint8Type()) == types.Float16Type()
+    )
 
     # Float mantissa cannot store entire integer.
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Int16Type()) == types.Float32Type()
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Uint16Type()) == types.Float32Type()
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Int16Type()) == types.Float32Type()
+    )
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Uint16Type())
+        == types.Float32Type()
+    )
 
     # Integer is larger than float
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Int32Type()) == types.Float64Type()
-    assert traits.common_arithmetic_type(types.Float16Type(), types.Uint32Type()) == types.Float64Type()
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Int32Type()) == types.Float64Type()
+    )
+    assert (
+        traits.common_arithmetic_type(types.Float16Type(), types.Uint32Type())
+        == types.Float64Type()
+    )
 
     # Result would exceed 64 bit precision
     assert traits.common_arithmetic_type(types.Float64Type(), types.Int64Type()) is None

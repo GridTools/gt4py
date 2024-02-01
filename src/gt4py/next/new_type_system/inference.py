@@ -1,11 +1,26 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations
 
 import dataclasses
 import typing
+from typing import Any, Callable, Optional
 
 import numpy as np
+
 from . import types
-from typing import Any, Optional, Callable
 
 
 @dataclasses.dataclass
@@ -42,27 +57,26 @@ class TypeInferrer:
     patterns: list[Pattern]
     """The list of patterns this inferrer tries to match."""
 
-    def from_annotation(
-            self,
-            annotation: Any
-    ) -> types.Type:
+    def from_annotation(self, annotation: Any) -> Optional[types.Type]:
         """Infer the type from an annotation (type hint)."""
         for pattern in self.patterns:
             if pattern.annotation is not None:
                 maybe_type = pattern.annotation(self, annotation)
                 if maybe_type is not None:
                     return maybe_type
+        return None
 
     def from_instance(
-            self,
-            instance: Any,
-    ) -> types.Type:
+        self,
+        instance: Any,
+    ) -> Optional[types.Type]:
         """Infer the type from an instance (object)."""
         for pattern in self.patterns:
             if pattern.instance is not None:
                 maybe_type = pattern.instance(self, instance)
                 if maybe_type is not None:
                     return maybe_type
+        return None
 
 
 def primitive_from_annotation(_: TypeInferrer, annotation: Any) -> Optional[types.Type]:
@@ -71,21 +85,23 @@ def primitive_from_annotation(_: TypeInferrer, annotation: Any) -> Optional[type
         dtype = np.dtype(annotation)
         if not np.issctype(annotation):
             return None
-        if dtype.kind == 'i':
+        if dtype.kind == "i":
             if dtype.itemsize not in [1, 2, 4, 8]:
                 return None
             return types.IntegerType(8 * dtype.itemsize, True)
-        if dtype.kind == 'u':
+        if dtype.kind == "u":
             if dtype.itemsize not in [1, 2, 4, 8]:
                 return None
             return types.IntegerType(8 * dtype.itemsize, False)
-        if dtype.kind == 'f':
+        if dtype.kind == "f":
             if dtype.itemsize not in [2, 4, 8]:
                 return None
             return types.FloatType(8 * dtype.itemsize)
-        if dtype.kind == 'b':
+        if dtype.kind == "b":
             return types.IntegerType(1, False)
-    except:
+    except ValueError:
+        return None
+    except TypeError:
         return None
     return None
 
@@ -101,7 +117,8 @@ def tuple_from_annotation(inferrer: TypeInferrer, annotation: Any) -> Optional[t
         elements = [inferrer.from_annotation(element) for element in typing.get_args(annotation)]
         if not all(elements):
             return None
-        return types.TupleType(elements)
+        return types.TupleType(typing.cast(list[types.Type], elements))
+    return None
 
 
 def tuple_from_instance(inferrer: TypeInferrer, instance: Any) -> Optional[types.TupleType]:
@@ -110,7 +127,8 @@ def tuple_from_instance(inferrer: TypeInferrer, instance: Any) -> Optional[types
         elements = [inferrer.from_instance(element) for element in instance]
         if not all(elements):
             return None
-        return types.TupleType(elements)
+        return types.TupleType(typing.cast(list[types.Type], elements))
+    return None
 
 
 inferrer = TypeInferrer(

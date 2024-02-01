@@ -1,10 +1,23 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import pytest
 
-from gt4py.next.ffront.new_type_system import types as types_f
-from gt4py.next.new_type_system import types, traits
-from gt4py.next import Dimension, DimensionKind
-from gt4py.next import FieldOffset
+from gt4py.next import Dimension, DimensionKind, FieldOffset
 from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront.new_type_system import types as types_f
+from gt4py.next.new_type_system import traits, types
 
 
 i32 = types.Int32Type()
@@ -36,7 +49,7 @@ def test_field_operator_type_callability():
         [
             types.FunctionParameter(f32, "a", True, True),
         ],
-        f32
+        f32,
     )
     assert ty.is_callable([types.FunctionArgument(f32, 0)])
 
@@ -191,18 +204,31 @@ def test_cast_function_callability():
 
 def test_builtin_broadcast_callability():
     ty = types_f.BuiltinFunctionType(fbuiltins.broadcast)
-    superset_dims = types.TupleType([
-        types_f.DimensionType(IDim),
-        types_f.DimensionType(JDim),
-    ])
+    superset_dims = types.TupleType(
+        [
+            types_f.DimensionType(IDim),
+            types_f.DimensionType(JDim),
+        ]
+    )
     subset_dims = types.TupleType([])
     independent_dims = types.TupleType([types_f.DimensionType(JDim)])
 
-    assert ty.is_callable([types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(superset_dims, 1)])
-    assert ty.is_callable([types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(superset_dims, 1)]).result == ij_field_f32
+    assert ty.is_callable(
+        [types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(superset_dims, 1)]
+    )
+    assert (
+        ty.is_callable(
+            [types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(superset_dims, 1)]
+        ).result
+        == ij_field_f32
+    )
 
-    assert not ty.is_callable([types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(subset_dims, 1)])
-    assert not ty.is_callable([types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(independent_dims, 1)])
+    assert not ty.is_callable(
+        [types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(subset_dims, 1)]
+    )
+    assert not ty.is_callable(
+        [types.FunctionArgument(i_field_f32, 0), types.FunctionArgument(independent_dims, 1)]
+    )
 
 
 def test_builtin_as_type_callability():
@@ -256,9 +282,14 @@ def test_builtin_arithmetic_binop_callability():
     ty = types_f.BuiltinFunctionType(getattr(fbuiltins, "maximum"))
 
     assert ty.is_callable([types.FunctionArgument(f32, 0), types.FunctionArgument(f64, 1)])
-    assert ty.is_callable([types.FunctionArgument(f32, 0), types.FunctionArgument(f64, 1)]).result == f64
+    assert (
+        ty.is_callable([types.FunctionArgument(f32, 0), types.FunctionArgument(f64, 1)]).result
+        == f64
+    )
 
-    assert not ty.is_callable([types.FunctionArgument(types.TupleType([]), 0), types.FunctionArgument(f32, 1)])
+    assert not ty.is_callable(
+        [types.FunctionArgument(types.TupleType([]), 0), types.FunctionArgument(f32, 1)]
+    )
 
 
 def test_builtin_where_callability():
@@ -285,5 +316,3 @@ def test_builtin_where_callability():
     assert ty.is_callable(make_args(j_cond_ty, i_field_f32, i_field_f32)).result == ij_field_f32
 
     assert not ty.is_callable(make_args(invalid_cond_ty, i_field_f32, i_field_f32))
-
-

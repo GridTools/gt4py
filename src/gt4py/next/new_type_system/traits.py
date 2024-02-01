@@ -1,10 +1,23 @@
+# GT4Py - GridTools Framework
+#
+# Copyright (c) 2014-2023, ETH Zurich
+# All rights reserved.
+#
+# This file is part of the GT4Py project and the GridTools framework.
+# GT4Py is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or any later
+# version. See the LICENSE.txt file at the top-level directory of this
+# distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 from __future__ import annotations
 
 import abc
-from typing import Any, Optional
-from collections.abc import Sequence
-
 import dataclasses
+from collections.abc import Sequence
+from typing import Any, Optional
 
 
 class Trait:
@@ -13,6 +26,7 @@ class Trait:
 
 class SignednessTrait(Trait):
     """Specifies the signedness of a type."""
+
     @abc.abstractmethod
     def is_signed(self) -> bool:
         ...
@@ -75,11 +89,11 @@ class ToImplicitTrait(Trait):
 class ArithmeticTrait(Trait):
     """
     Specifies if a type supports arithmetic operations (i.e. +, -).
-    
+
     A type that implements this trait does NOT necessarily support arithmetic.
-    Actual support is determined via the member functions. 
+    Actual support is determined via the member functions.
     """
-    
+
     def supports_arithmetic(self) -> bool:
         """Check if the type supports arithmetic operations."""
         return True
@@ -87,7 +101,7 @@ class ArithmeticTrait(Trait):
     def common_arithmetic_type(self, other: Any) -> Optional[Any]:
         """
         Find a common type that can store the result without losing precision.
-        
+
         If no such type exists or the operation cannot be performed, None is
         returned.
         """
@@ -99,9 +113,9 @@ class BitwiseTrait(Trait):
     Specifies if a type supports bitwise operations (i.e. &, |).
 
     A type that implements this trait does NOT necessarily support bitwise ops.
-    Actual support is determined via the member functions. 
+    Actual support is determined via the member functions.
     """
-    
+
     def supports_bitwise(self) -> bool:
         """Check if the type supports bitwise operations."""
         return True
@@ -119,14 +133,14 @@ class BitwiseTrait(Trait):
 @dataclasses.dataclass(frozen=True)
 class FunctionArgument:
     """Represents an argument to a function call."""
-    
+
     ty: Any
     """The type of the function call argument."""
-    
+
     location: int | str
     """
     The position of keyword of the function argument.
-    
+
     For positional arguments, location is an integer equal to the parameter's
     index. For keyword arguments, location is a string equal to the parameter's
     name.
@@ -140,16 +154,17 @@ class CallValidity:
     _value: Any | list[str]
     """
     Either the returned type or the list of errors.
-    
+
     In case the function call is valid, it contains the result produced by the
-    call. In case the function call is NOT valid, it contains the list of 
+    call. In case the function call is NOT valid, it contains the list of
     error diagnostics that make the function call invalid, such as incorrect
-    argument types. 
+    argument types.
     """
 
     def __bool__(self):
         """Check if the function call is valid."""
         from gt4py.next.new_type_system import types
+
         return isinstance(self._value, types.Type)
 
     @property
@@ -176,7 +191,7 @@ class CallableTrait(Trait):
 
 def is_convertible(from_: Any, to: Any) -> bool:
     """
-    A utility function to check conversion of types.
+    Check if a type is convertible to another.
 
     Check if the types implement the conversion traits and queries if either
     type reports conversion compatibility with the other.
@@ -191,7 +206,7 @@ def is_convertible(from_: Any, to: Any) -> bool:
 
 def is_implicitly_convertible(from_: Any, to: Any) -> bool:
     """
-    A utility function to check IMPLICIT conversion of types.
+    Check if a type is IMPLICITLY convertible to another.
 
     Check if the types implement the conversion traits and queries if either
     type reports IMPLICIT conversion compatibility with the other.
