@@ -468,7 +468,7 @@ def test_absolute_indexing_value_return():
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
     named_index = ((IDim, 12), (JDim, 6))
-    value = field[named_index]
+    value = field[named_index].ndarray
 
     assert isinstance(value, np.ndarray)
     assert value == np.asarray([21])
@@ -576,7 +576,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
 def test_relative_indexing_value_return(index, expected_value):
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(5, 15), UnitRange(2, 12)))
     field = common._field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
-    indexed_field = field[index]
+    indexed_field = field[index].ndarray
 
     assert indexed_field == np.asarray(expected_value)
 

@@ -330,7 +330,7 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
 
     inp = field_maker(np.array([input_value]))[0]
 
-    casted_valued = np_dtype(input_value)
+    casted_valued = field_maker(np.array([np_dtype(input_value)]))[0]
 
     @fundef
     def sten_cast(it, casted_valued):
