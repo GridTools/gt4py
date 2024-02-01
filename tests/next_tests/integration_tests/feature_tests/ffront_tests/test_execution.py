@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    common,
     errors,
     float32,
     float64,
@@ -52,7 +53,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
-    reduction_setup,
+    mesh_descriptor,
 )
 
 
@@ -508,9 +509,12 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
-                unstructured_case.offset_provider["E2V"].table
-            ],
+            np.sum(
+                a[unstructured_case.offset_provider["V2E"].table],
+                axis=1,
+                initial=0,
+                where=unstructured_case.offset_provider["V2E"].table != common.SKIP_VALUE,
+            )[unstructured_case.offset_provider["E2V"].table],
             axis=1,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
@@ -568,11 +572,15 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         tmp = red(E2V[0])
         return tmp
 
+    v2e = unstructured_case.offset_provider["V2E"]
     cases.verify_with_default_data(
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table] + np.tile(v, (4, 1)).T, axis=1
+            e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
+            axis=1,
+            initial=0,
+            where=v2e.table != common.SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -703,13 +711,17 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1)
-            if 2 < 3
-            else np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)
+            np.sum(
+                b[v2e_table],
+                axis=1,
+                initial=0,
+                where=v2e_table != common.SKIP_VALUE,
+            )
         ),
     )
 

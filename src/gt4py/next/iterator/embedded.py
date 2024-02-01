@@ -526,6 +526,16 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
+                offset_implementation = offset_provider[tag]
+                assert isinstance(offset_implementation, common.Connectivity)
+                cur_index = pos[offset_implementation.origin_axis.value]
+                assert common.is_int_index(cur_index)
+                if offset_implementation.mapped_index(cur_index, index) in [
+                    None,
+                    common.SKIP_VALUE,
+                ]:
+                    return None
+
                 new_entry[i] = index
                 break
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
@@ -549,7 +559,7 @@ def execute_shift(
         assert common.is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
-            -1,
+            common.SKIP_VALUE,
         ]:
             return None
         else:

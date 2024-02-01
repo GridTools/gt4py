@@ -34,7 +34,7 @@ dependencies = [
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.1,==2.*',
+  'gridtools-cpp>=2.3.2,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
@@ -356,6 +356,7 @@ markers = [
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
+  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

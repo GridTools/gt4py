@@ -171,7 +171,7 @@ repos:
     - deepdiff==6.7.1
     - devtools==0.12.2
     - frozendict==2.4.0
-    - gridtools-cpp==2.3.1
+    - gridtools-cpp==2.3.2
     - importlib-resources==6.1.1
     - jinja2==3.1.3
     - lark==1.1.9
