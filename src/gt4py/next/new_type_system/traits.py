@@ -26,7 +26,7 @@ from .base import FunctionArgument, Trait, Type
 __all__ = ["Trait"]
 
 
-class SignednessTrait(Trait):
+class SignednessTrait(Trait, abc.ABC):
     """Specifies the signedness of a type."""
 
     @abc.abstractmethod
@@ -34,7 +34,7 @@ class SignednessTrait(Trait):
         ...
 
 
-class FromTrait(Trait):
+class FromTrait(Trait, abc.ABC):
     """
     Specifies if a type is constructible FROM another type.
 
@@ -47,7 +47,7 @@ class FromTrait(Trait):
         ...
 
 
-class ToTrait(Trait):
+class ToTrait(Trait, abc.ABC):
     """
     Specifies if a type is convertible TO another type.
 
@@ -60,7 +60,7 @@ class ToTrait(Trait):
         ...
 
 
-class FromImplicitTrait(Trait):
+class FromImplicitTrait(Trait, abc.ABC):
     """
     Specifies if a type is IMPLICITLY constructible FROM another type.
 
@@ -74,7 +74,7 @@ class FromImplicitTrait(Trait):
         ...
 
 
-class ToImplicitTrait(Trait):
+class ToImplicitTrait(Trait, abc.ABC):
     """
     Specifies if a type is IMPLICITLY convertible TO another type.
 
@@ -163,7 +163,7 @@ class CallValidity:
         return typing.cast(list[str], self._value)
 
 
-class CallableTrait(Trait):
+class CallableTrait(Trait, abc.ABC):
     """Specifies if a type is callable with a given set of arguments."""
 
     @abc.abstractmethod
