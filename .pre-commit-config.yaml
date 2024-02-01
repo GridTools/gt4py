@@ -67,6 +67,18 @@ repos:
   hooks:
   - id: black
 
+# - repo: https://github.com/charliermarsh/ruff-pre-commit
+#   ##[[[cog
+#   ## import re
+#   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1] 
+#   ## print(f"rev: 'v{version}'  # version from constraints.txt")
+#   ##]]]
+#   rev: 'v0.0.265'  # version from constraints.txt
+#   ##[[[end]]]
+#   hooks:
+#   - id: ruff
+#     #  args: [ --fix, --exit-non-zero-on-fix ]
+
 - repo: https://github.com/PyCQA/isort
   ##[[[cog
   ## import re
