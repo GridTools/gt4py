@@ -311,7 +311,9 @@ def test_tuple_field_input(program_processor):
     )
     inp2 = gtx.as_field(
         [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
+        rng.normal(
+            size=(shape[0], shape[1], shape[2] + 1)
+        ),  # TODO(havogt) currently we allow different sizes, needed for icon4py compatibility
     )
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
@@ -323,7 +325,7 @@ def test_tuple_field_input(program_processor):
     }
     run_processor(tuple_input[dom], program_processor, (inp1, inp2), out=out, offset_provider={})
     if validate:
-        assert np.allclose(inp1.asnumpy() + inp2.asnumpy(), out.asnumpy())
+        assert np.allclose(inp1.asnumpy() + inp2.asnumpy()[:, :, :-1], out.asnumpy())
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")

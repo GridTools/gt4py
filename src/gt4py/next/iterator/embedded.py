@@ -168,7 +168,7 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_domain__(self) -> common.Domain: ...
+    def dims(self) -> tuple[common.Dimension, ...]: ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
@@ -176,7 +176,7 @@ class LocatedField(Protocol):
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_domain__.dims))
+        return tuple([0] * len(self.dims))
 
 
 @runtime_checkable
@@ -678,18 +678,12 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    return _get_domain(field_or_tuple).dims
-
-
-def _get_domain(
-    field_or_tuple: LocatedField | tuple,
-) -> common.Domain:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
-        first = _get_domain(field_or_tuple[0])
-        assert all(first == _get_domain(f) for f in field_or_tuple)
+        first = _get_axes(field_or_tuple[0])
+        assert all(first == _get_axes(f) for f in field_or_tuple)
         return first
     else:
-        return field_or_tuple.__gt_domain__
+        return field_or_tuple.dims
 
 
 def _single_vertical_idx(
@@ -900,8 +894,8 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     _ndarrayfield: common.Field
 
     @property
-    def __gt_domain__(self) -> common.Domain:
-        return self._ndarrayfield.__gt_domain__
+    def dims(self) -> tuple[common.Dimension, ...]:
+        return self._ndarrayfield.__gt_domain__.dims
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
@@ -1452,7 +1446,7 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 class TupleOfFields(TupleField):
     def __init__(self, data):
         self.data = data
-        self.__gt_domain__ = _get_domain(data)
+        self.dims = _get_axes(data)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return _build_tuple_result(self.data, named_indices)
