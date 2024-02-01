@@ -190,7 +190,7 @@ def _tuple_at(
         res = field[pos] if common.is_field(field) else field
         res = (
             res.ndarray.item() if hasattr(res, "ndarray") else res  # type: ignore[union-attr]
-        )  # extract scalar value from array, isinstance for mypy
+        )  # extract scalar value from array
         assert core_defs.is_scalar_type(res)
         return res
 
