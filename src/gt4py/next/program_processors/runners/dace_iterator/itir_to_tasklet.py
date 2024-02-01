@@ -18,7 +18,6 @@ from typing import Any, Callable, Optional, TypeAlias, cast
 
 import dace
 import numpy as np
-from dace.transformation.dataflow import MapFusion
 
 import gt4py.eve.codegen
 from gt4py import eve
@@ -185,40 +184,39 @@ class Context:
 def builtin_neighbors(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
+    sdfg: dace.SDFG = transformer.context.body
+    state: dace.SDFGState = transformer.context.state
+
+    di = dace_debuginfo(node, sdfg.debuginfo)
     offset_literal, data = node_args
     assert isinstance(offset_literal, itir.OffsetLiteral)
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
+    offset_provider = transformer.offset_provider[offset_dim]
+    assert isinstance(offset_provider, NeighborTableOffsetProvider)
+
     iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
     field_desc = iterator.field.desc(transformer.context.body)
-
-    field_index = "__field_idx"
-    offset_provider = transformer.offset_provider[offset_dim]
-    if isinstance(offset_provider, NeighborTableOffsetProvider):
-        neighbor_check = f"{field_index} != {neighbor_skip_value}"
-    elif isinstance(offset_provider, StridedNeighborOffsetProvider):
-        neighbor_check = f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
-    else:
-        assert isinstance(offset_provider, Dimension)
-        raise NotImplementedError(
-            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
-        )
+    origin_index_node = iterator.indices[offset_provider.origin_axis.value]
 
     assert transformer.context.reduce_identity is not None
     assert transformer.context.reduce_identity.dtype == iterator.dtype
 
-    sdfg: dace.SDFG = transformer.context.body
-    state: dace.SDFGState = transformer.context.state
-
-    shifted_dim = offset_provider.origin_axis.value
-
-    result_name = unique_var_name()
+    # gather the neighbors in a result array dimensioned for `max_neighbors`
+    data_neighbor_var = unique_var_name()
     sdfg.add_array(
-        result_name, dtype=iterator.dtype, shape=(offset_provider.max_neighbors,), transient=True
+        data_neighbor_var,
+        dtype=iterator.dtype,
+        shape=(offset_provider.max_neighbors,),
+        transient=True,
     )
-    result_node = state.add_access(result_name, debuginfo=di)
+    data_neighbor_node = state.add_access(data_neighbor_var, debuginfo=di)
+
+    # allocate scalar to store index for direct addressing of neighbor field
+    neighbor_index_name = unique_var_name()
+    sdfg.add_scalar(neighbor_index_name, _INDEX_DTYPE, transient=True)
+    neighbor_index_node = state.add_access(neighbor_index_name, debuginfo=di)
 
     # generate unique map index name to avoid conflict with other maps inside same state
     neighbor_map_index = unique_name(f"{offset_dim}_neighbor_map_idx")
@@ -237,20 +235,6 @@ def builtin_neighbors(
         outputs={"__result"},
         debuginfo=di,
     )
-    data_access_tasklet = state.add_tasklet(
-        "data_access",
-        code=f"__result = __field[{field_index}]"
-        + (
-            f" if {neighbor_check} else {transformer.context.reduce_identity.value}"
-            if offset_provider.has_skip_values
-            else ""
-        ),
-        inputs={"__field", field_index},
-        outputs={"__result"},
-        debuginfo=di,
-    )
-    idx_name = unique_var_name()
-    sdfg.add_scalar(idx_name, _INDEX_DTYPE, transient=True)
     state.add_memlet_path(
         state.add_access(table_name, debuginfo=di),
         me,
@@ -259,13 +243,39 @@ def builtin_neighbors(
         dst_conn="__table",
     )
     state.add_memlet_path(
-        iterator.indices[shifted_dim],
+        origin_index_node,
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0", debuginfo=di),
+        memlet=dace.Memlet(data=origin_index_node.data, subset="0", debuginfo=di),
         dst_conn="__idx",
     )
-    state.add_edge(shift_tasklet, "__result", data_access_tasklet, field_index, dace.Memlet())
+    state.add_edge(
+        shift_tasklet,
+        "__result",
+        neighbor_index_node,
+        None,
+        dace.Memlet(data=neighbor_index_name, subset="0"),
+    )
+
+    data_access_tasklet = state.add_tasklet(
+        "data_access",
+        code="__result = __field[__idx]"
+        + (
+            f" if __idx != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
+            if offset_provider.has_skip_values
+            else ""
+        ),
+        inputs={"__field", "__idx"},
+        outputs={"__result"},
+        debuginfo=di,
+    )
+    state.add_edge(
+        neighbor_index_node,
+        None,
+        data_access_tasklet,
+        "__idx",
+        dace.Memlet(data=neighbor_index_name, subset="0"),
+    )
     # select full shape only in the neighbor-axis dimension
     field_subset = tuple(
         f"0:{shape}" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
@@ -281,12 +291,47 @@ def builtin_neighbors(
     state.add_memlet_path(
         data_access_tasklet,
         mx,
-        result_node,
-        memlet=dace.Memlet(data=result_name, subset=neighbor_map_index, debuginfo=di),
+        data_neighbor_node,
+        memlet=dace.Memlet(data=data_neighbor_var, subset=neighbor_map_index, debuginfo=di),
         src_conn="__result",
     )
 
-    return [ValueExpr(result_node, iterator.dtype)]
+    if not offset_provider.has_skip_values:
+        return [ValueExpr(data_neighbor_node, iterator.dtype)]
+    else:
+        skip_neighbor_var = unique_var_name()
+        sdfg.add_array(
+            skip_neighbor_var,
+            dtype=dace.dtypes.bool,
+            shape=(offset_provider.max_neighbors,),
+            transient=True,
+        )
+        skip_neighbor_node = state.add_access(skip_neighbor_var, debuginfo=di)
+
+        neighbor_valid_tasklet = state.add_tasklet(
+            "skip_neighbor",
+            {"__idx"},
+            {"__skip"},
+            f"__skip = True if __idx == {neighbor_skip_value} else False",
+        )
+        state.add_edge(
+            neighbor_index_node,
+            None,
+            neighbor_valid_tasklet,
+            "__idx",
+            dace.Memlet(data=neighbor_index_name, subset="0"),
+        )
+        state.add_memlet_path(
+            neighbor_valid_tasklet,
+            mx,
+            skip_neighbor_node,
+            memlet=dace.Memlet(data=skip_neighbor_var, subset=neighbor_map_index),
+            src_conn="__skip",
+        )
+        return [
+            ValueExpr(data_neighbor_node, iterator.dtype),
+            ValueExpr(skip_neighbor_node, dace.dtypes.bool),
+        ]
 
 
 def builtin_can_deref(
@@ -990,7 +1035,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             args = self.visit(node.args[0])
 
-            assert len(args) == 1
+            assert 1 <= len(args) <= 2
             reduce_input_node = args[0].value
 
         else:
@@ -1006,19 +1051,22 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # set reduction state in visit context
             self.context.reduce_identity = SymbolExpr(reduce_identity, reduce_dtype)
 
-            args = flatten_list(self.visit(node.args))
+            args = self.visit(node.args)
 
             # clear context
             self.context.reduce_identity = None
 
             # check that all neighbor expressions have the same shape
             args_shape = [
-                arg.value.desc(self.context.body).shape
+                arg[0].value.desc(self.context.body).shape
                 for arg in args
-                if arg.value.desc(self.context.body).shape != (1,)
+                if arg[0].value.desc(self.context.body).shape != (1,)
             ]
             assert len(set(args_shape)) == 1
             nreduce_shape = args_shape[0]
+
+            input_args = [arg[0] for arg in args]
+            input_skip = [arg[1] for arg in args if len(arg) == 2]
 
             nreduce_index = tuple(f"_i{i}" for i in range(len(nreduce_shape)))
             nreduce_domain = {idx: f"0:{size}" for idx, size in zip(nreduce_index, nreduce_shape)}
@@ -1032,8 +1080,33 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 expr=fun_node.expr.args[1], params=fun_node.params[1:], location=node.location
             )
             lambda_context, inner_inputs, inner_outputs = self.visit(
-                lambda_node, args=args, use_neighbor_tables=False
+                lambda_node, args=input_args, use_neighbor_tables=False
             )
+
+            if input_skip:
+                # check neighbor validity on if/else inter-state edge
+                start_state = lambda_context.body.add_state(is_start_block=True)
+                skip_neighbor_state = lambda_context.body.add_state()
+                skip_neighbor_state.add_edge(
+                    skip_neighbor_state.add_tasklet(
+                        "identity", {}, {"val"}, f"val = {reduce_identity}"
+                    ),
+                    "val",
+                    skip_neighbor_state.add_access(inner_outputs[0].value.data),
+                    None,
+                    dace.Memlet(data=inner_outputs[0].value.data, subset="0"),
+                )
+                lambda_context.body.add_scalar("skip_neighbor", dace.dtypes.bool)
+                lambda_context.body.add_edge(
+                    start_state,
+                    skip_neighbor_state,
+                    dace.InterstateEdge(condition="skip_neighbor == True"),
+                )
+                lambda_context.body.add_edge(
+                    start_state,
+                    lambda_context.state,
+                    dace.InterstateEdge(condition="skip_neighbor == False"),
+                )
 
             input_mapping = {
                 param: (
@@ -1041,8 +1114,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     if arg.value.desc(self.context.body).shape == (1,)
                     else create_memlet_at(arg.value.data, nreduce_index)
                 )
-                for (param, _), arg in zip(inner_inputs, args)
-            }
+                for (param, _), arg in zip(inner_inputs, input_args)
+            } | (
+                {"skip_neighbor": create_memlet_at(input_skip[0].value.data, nreduce_index)}
+                if input_skip
+                else {}
+            )
             output_mapping = {
                 inner_outputs[0].value.data: create_memlet_at(reduce_input_name, nreduce_index)
             }
@@ -1059,7 +1136,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 inputs=input_mapping,
                 outputs=output_mapping,
                 symbol_mapping=symbol_mapping,
-                input_nodes={arg.value.data: arg.value for arg in args},
+                input_nodes={arg.value.data: arg.value for arg in input_args}
+                | ({input_skip[0].value.data: input_skip[0].value} if input_skip else {}),
                 output_nodes={reduce_input_name: reduce_input_node},
                 debuginfo=di,
             )
@@ -1081,10 +1159,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.context.state.add_nedge(
             reduce_node, result_access, dace.Memlet(data=result_name, subset="0")
         )
-
-        # we apply map fusion only to the nested-SDFG which is generated for the reduction operator
-        # the purpose is to keep the ITIR-visitor program simple and to clean up the generated SDFG
-        self.context.body.apply_transformations_repeated([MapFusion], validate=False)
 
         return [ValueExpr(result_access, reduce_dtype)]
 
