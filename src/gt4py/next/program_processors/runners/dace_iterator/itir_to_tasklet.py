@@ -23,6 +23,7 @@ from dace.transformation.dataflow import MapFusion
 import gt4py.eve.codegen
 from gt4py import eve
 from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
+from gt4py.next.common import SKIP_VALUE as neighbor_skip_value
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda
@@ -181,167 +182,43 @@ class Context:
         self.reduce_identity = reduce_identity
 
 
-def _visit_lift_in_neighbors_reduction(
-    transformer: "PythonTaskletCodegen",
-    node: itir.FunCall,
-    node_args: Sequence[IteratorExpr | list[ValueExpr]],
-    offset_provider: NeighborTableOffsetProvider,
-    map_entry: dace.nodes.MapEntry,
-    map_exit: dace.nodes.MapExit,
-    neighbor_index_node: dace.nodes.AccessNode,
-    result_node: dace.nodes.AccessNode,
-) -> list[ValueExpr]:
-    neighbor_dim = offset_provider.neighbor_axis.value
-    origin_dim = offset_provider.origin_axis.value
-
-    lifted_args: list[IteratorExpr | ValueExpr] = []
-    for arg in node_args:
-        if isinstance(arg, IteratorExpr):
-            if origin_dim in arg.indices:
-                lifted_indices = arg.indices.copy()
-                lifted_indices.pop(origin_dim)
-                lifted_indices[neighbor_dim] = neighbor_index_node
-                lifted_args.append(
-                    IteratorExpr(
-                        arg.field,
-                        lifted_indices,
-                        arg.dtype,
-                        arg.dimensions,
-                    )
-                )
-            else:
-                lifted_args.append(arg)
-        else:
-            lifted_args.append(arg[0])
-
-    lift_context, inner_inputs, inner_outputs = transformer.visit(node.args[0], args=lifted_args)
-    assert len(inner_outputs) == 1
-    inner_out_connector = inner_outputs[0].value.data
-
-    input_nodes = {}
-    iterator_index_nodes = {}
-    lifted_index_connectors = set()
-
-    for x, y in inner_inputs:
-        if isinstance(y, IteratorExpr):
-            field_connector, inner_index_table = x
-            input_nodes[field_connector] = y.field
-            for dim, connector in inner_index_table.items():
-                if dim == neighbor_dim:
-                    lifted_index_connectors.add(connector)
-                iterator_index_nodes[connector] = y.indices[dim]
-        else:
-            assert isinstance(y, ValueExpr)
-            input_nodes[x] = y.value
-
-    neighbor_tables = filter_neighbor_tables(transformer.offset_provider)
-    connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
-
-    parent_sdfg = transformer.context.body
-    parent_state = transformer.context.state
-
-    input_mapping = {
-        connector: create_memlet_full(node.data, node.desc(parent_sdfg))
-        for connector, node in input_nodes.items()
-    }
-    connectivity_mapping = {
-        name: create_memlet_full(name, parent_sdfg.arrays[name]) for name in connectivity_names
-    }
-    array_mapping = {**input_mapping, **connectivity_mapping}
-    symbol_mapping = map_nested_sdfg_symbols(parent_sdfg, lift_context.body, array_mapping)
-
-    nested_sdfg_node = parent_state.add_nested_sdfg(
-        lift_context.body,
-        parent_sdfg,
-        inputs={*array_mapping.keys(), *iterator_index_nodes.keys()},
-        outputs={inner_out_connector},
-        symbol_mapping=symbol_mapping,
-        debuginfo=lift_context.body.debuginfo,
-    )
-
-    for connectivity_connector, memlet in connectivity_mapping.items():
-        parent_state.add_memlet_path(
-            parent_state.add_access(memlet.data, debuginfo=lift_context.body.debuginfo),
-            map_entry,
-            nested_sdfg_node,
-            dst_conn=connectivity_connector,
-            memlet=memlet,
-        )
-
-    for inner_connector, access_node in input_nodes.items():
-        parent_state.add_memlet_path(
-            access_node,
-            map_entry,
-            nested_sdfg_node,
-            dst_conn=inner_connector,
-            memlet=input_mapping[inner_connector],
-        )
-
-    for inner_connector, access_node in iterator_index_nodes.items():
-        memlet = dace.Memlet(data=access_node.data, subset="0")
-        if inner_connector in lifted_index_connectors:
-            parent_state.add_edge(access_node, None, nested_sdfg_node, inner_connector, memlet)
-        else:
-            parent_state.add_memlet_path(
-                access_node,
-                map_entry,
-                nested_sdfg_node,
-                dst_conn=inner_connector,
-                memlet=memlet,
-            )
-
-    parent_state.add_memlet_path(
-        nested_sdfg_node,
-        map_exit,
-        result_node,
-        src_conn=inner_out_connector,
-        memlet=dace.Memlet(data=result_node.data, subset=",".join(map_entry.params)),
-    )
-
-    return [ValueExpr(result_node, inner_outputs[0].dtype)]
-
-
 def builtin_neighbors(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    assert transformer.context.reduce_identity is not None
-
-    sdfg: dace.SDFG = transformer.context.body
-    state: dace.SDFGState = transformer.context.state
-
-    di = dace_debuginfo(node, sdfg.debuginfo)
+    di = dace_debuginfo(node, transformer.context.body.debuginfo)
     offset_literal, data = node_args
     assert isinstance(offset_literal, itir.OffsetLiteral)
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
-    offset_provider = transformer.offset_provider[offset_dim]
-
-    lift_node = None
-    if isinstance(data, FunCall):
-        assert isinstance(data.fun, itir.FunCall)
-        fun_node = data.fun
-        if isinstance(fun_node.fun, itir.SymRef) and fun_node.fun.id == "lift":
-            lift_node = fun_node
-            lift_args = transformer.visit(data.args)
-            iterator = next(filter(lambda x: isinstance(x, IteratorExpr), lift_args), None)
-    if lift_node is None:
-        iterator = transformer.visit(data)
+    iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
     field_desc = iterator.field.desc(transformer.context.body)
-    origin_index_node = iterator.indices[offset_provider.origin_axis.value]
 
-    # gather the neighbors in a result array dimensioned for `max_neighbors`
+    field_index = "__field_idx"
+    offset_provider = transformer.offset_provider[offset_dim]
+    if isinstance(offset_provider, NeighborTableOffsetProvider):
+        neighbor_check = f"{field_index} != {neighbor_skip_value}"
+    elif isinstance(offset_provider, StridedNeighborOffsetProvider):
+        neighbor_check = f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
+    else:
+        assert isinstance(offset_provider, Dimension)
+        raise NotImplementedError(
+            "Neighbor reductions for cartesian grids not implemented in DaCe backend."
+        )
+
+    assert transformer.context.reduce_identity is not None
+    assert transformer.context.reduce_identity.dtype == iterator.dtype
+
+    sdfg: dace.SDFG = transformer.context.body
+    state: dace.SDFGState = transformer.context.state
+
+    shifted_dim = offset_provider.origin_axis.value
+
     result_name = unique_var_name()
     sdfg.add_array(
         result_name, dtype=iterator.dtype, shape=(offset_provider.max_neighbors,), transient=True
     )
     result_node = state.add_access(result_name, debuginfo=di)
-
-    # allocate scalar to store index for direct addressing of neighbor field
-    neighbor_dim = offset_provider.neighbor_axis.value
-    neighbor_index_name = unique_var_name()
-    sdfg.add_scalar(neighbor_index_name, _INDEX_DTYPE, transient=True)
-    neighbor_index_node = state.add_access(neighbor_index_name, debuginfo=di)
 
     # generate unique map index name to avoid conflict with other maps inside same state
     neighbor_map_index = unique_name(f"{offset_dim}_neighbor_map_idx")
@@ -360,6 +237,20 @@ def builtin_neighbors(
         outputs={"__result"},
         debuginfo=di,
     )
+    data_access_tasklet = state.add_tasklet(
+        "data_access",
+        code=f"__result = __field[{field_index}]"
+        + (
+            f" if {neighbor_check} else {transformer.context.reduce_identity.value}"
+            if offset_provider.has_skip_values
+            else ""
+        ),
+        inputs={"__field", field_index},
+        outputs={"__result"},
+        debuginfo=di,
+    )
+    idx_name = unique_var_name()
+    sdfg.add_scalar(idx_name, _INDEX_DTYPE, transient=True)
     state.add_memlet_path(
         state.add_access(table_name, debuginfo=di),
         me,
@@ -368,83 +259,32 @@ def builtin_neighbors(
         dst_conn="__table",
     )
     state.add_memlet_path(
-        origin_index_node,
+        iterator.indices[shifted_dim],
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=origin_index_node.data, subset="0", debuginfo=di),
+        memlet=dace.Memlet(data=iterator.indices[shifted_dim].data, subset="0", debuginfo=di),
         dst_conn="__idx",
     )
-    state.add_edge(
-        shift_tasklet,
-        "__result",
-        neighbor_index_node,
-        None,
-        dace.Memlet(data=neighbor_index_name, subset="0"),
+    state.add_edge(shift_tasklet, "__result", data_access_tasklet, field_index, dace.Memlet())
+    # select full shape only in the neighbor-axis dimension
+    field_subset = tuple(
+        f"0:{shape}" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
+        for dim, shape in zip(sorted(iterator.dimensions), field_desc.shape)
     )
-
-    if lift_node is not None:
-        _visit_lift_in_neighbors_reduction(
-            transformer,
-            lift_node,
-            lift_args,
-            offset_provider,
-            me,
-            mx,
-            neighbor_index_node,
-            result_node,
-        )
-    else:
-        field_index = "__field_idx"
-        if isinstance(offset_provider, NeighborTableOffsetProvider):
-            neighbor_check = f"{field_index} >= 0"
-        elif isinstance(offset_provider, StridedNeighborOffsetProvider):
-            neighbor_check = (
-                f"{field_index} < {field_desc.shape[offset_provider.neighbor_axis.value]}"
-            )
-        else:
-            assert isinstance(offset_provider, Dimension)
-            raise NotImplementedError(
-                "Neighbor reductions for cartesian grids not implemented in DaCe backend."
-            )
-        data_access_tasklet = state.add_tasklet(
-            "data_access",
-            code=f"__result = __field[{field_index}]"
-            + (
-                f" if {neighbor_check} else {transformer.context.reduce_identity.value}"
-                if offset_provider.has_skip_values
-                else ""
-            ),
-            inputs={"__field", field_index},
-            outputs={"__result"},
-            debuginfo=di,
-        )
-        state.add_edge(
-            neighbor_index_node,
-            None,
-            data_access_tasklet,
-            field_index,
-            dace.Memlet(data=neighbor_index_name, subset="0"),
-        )
-        # select full shape only in the neighbor-axis dimension
-        field_subset = tuple(
-            f"0:{shape}" if dim == neighbor_dim else f"i_{dim}"
-            # dace array shaped at construction time based on field dimensions sorted in alphabetical order
-            for dim, shape in zip(sorted(iterator.dimensions), field_desc.shape)
-        )
-        state.add_memlet_path(
-            iterator.field,
-            me,
-            data_access_tasklet,
-            memlet=create_memlet_at(iterator.field.data, field_subset),
-            dst_conn="__field",
-        )
-        state.add_memlet_path(
-            data_access_tasklet,
-            mx,
-            result_node,
-            memlet=dace.Memlet(data=result_name, subset=neighbor_map_index, debuginfo=di),
-            src_conn="__result",
-        )
+    state.add_memlet_path(
+        iterator.field,
+        me,
+        data_access_tasklet,
+        memlet=create_memlet_at(iterator.field.data, field_subset),
+        dst_conn="__field",
+    )
+    state.add_memlet_path(
+        data_access_tasklet,
+        mx,
+        result_node,
+        memlet=dace.Memlet(data=result_name, subset=neighbor_map_index, debuginfo=di),
+        src_conn="__result",
+    )
 
     return [ValueExpr(result_node, iterator.dtype)]
 
@@ -453,39 +293,40 @@ def builtin_can_deref(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
-
-    # extract shift node from arguments
+    # first visit shift, to get set of indices for deref
     can_deref_callable = node_args[0]
     assert isinstance(can_deref_callable, itir.FunCall)
     shift_callable = can_deref_callable.fun
     assert isinstance(shift_callable, itir.FunCall)
     assert isinstance(shift_callable.fun, itir.SymRef)
     assert shift_callable.fun.id == "shift"
-
-    # limit support to shift in single dimension
-    assert len(shift_callable.args) == 2
-    assert isinstance(shift_callable.args[0], itir.OffsetLiteral)
-    offset_dim = shift_callable.args[0].value
-    assert isinstance(offset_dim, str)
-    offset_provider = transformer.offset_provider[offset_dim]
-
-    # limit support to offset providers based on neighbor tables
-    assert isinstance(offset_provider, NeighborTableOffsetProvider)
-    if not offset_provider.has_skip_values:
-        # optimize trivial case of full connectivity
-        return transformer.add_expr_tasklet(
-            [], "True", dace.dtypes.bool, "can_deref", dace_debuginfo=di
-        )
-
-    # for non-trivial case, visit shift to get set of indices for deref
     iterator = transformer._visit_shift(can_deref_callable)
-    assert isinstance(iterator, IteratorExpr)
+
+    # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
+    if not isinstance(iterator, IteratorExpr):
+        assert len(iterator) == 1 and isinstance(iterator[0], ValueExpr)
+        # We can always deref a value expression, therefore hard-code `can_deref` to True.
+        # Returning a SymbolExpr would be preferable, but it requires update to type-checking.
+        result_name = unique_var_name()
+        transformer.context.body.add_scalar(result_name, dace.dtypes.bool, transient=True)
+        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
+        transformer.context.state.add_edge(
+            transformer.context.state.add_tasklet(
+                "can_always_deref", {}, {"_out"}, "_out = True", debuginfo=di
+            ),
+            "_out",
+            result_node,
+            None,
+            dace.Memlet(data=result_name, subset="0", debuginfo=di),
+        )
+        return [ValueExpr(result_node, dace.dtypes.bool)]
 
     # create tasklet to check that field indices are non-negative (-1 is invalid)
     args = [ValueExpr(access_node, _INDEX_DTYPE) for access_node in iterator.indices.values()]
     internals = [f"{arg.value.data}_v" for arg in args]
     expr_code = " and ".join([f"{v} >= 0" for v in internals])
 
+    # TODO(edopao): select-memlet could maybe allow to efficiently translate can_deref to predicative execution
     return transformer.add_expr_tasklet(
         list(zip(args, internals)),
         expr_code,
@@ -542,7 +383,7 @@ def builtin_list_get(
         index_value = args[0].value
         result_name = unique_var_name()
         transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
-        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
+        result_node = transformer.context.state.add_access(result_name)
         transformer.context.state.add_nedge(
             args[1].value,
             result_node,
@@ -1052,7 +893,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             iterator = self.visit(node.args[0])
         if not isinstance(iterator, IteratorExpr):
             # shift cannot be applied because the argument is not iterable
-            # TODO: remove this special case when ITIR pass is able to catch it
+            # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
             assert isinstance(iterator, list) and len(iterator) == 1
             assert isinstance(iterator[0], ValueExpr)
             return iterator
