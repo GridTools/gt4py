@@ -30,7 +30,6 @@ import gt4py.next.program_processors.otf_compile_executor as otf_exec
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next import common
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -82,7 +81,7 @@ def preprocess_program(
         unroll_reduce=unroll_reduce,
     )
 
-    if isinstance(node, global_tmps.FencilWithTemporaries):
+    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
         fencil_definition = node.fencil
         tmps = node.tmps
 

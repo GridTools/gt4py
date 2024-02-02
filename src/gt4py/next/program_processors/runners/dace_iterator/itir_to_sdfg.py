@@ -19,9 +19,12 @@ from dace.sdfg.state import LoopRegion
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
 from gt4py.next.common import NeighborTable
-from gt4py.next.iterator import ir as itir, type_inference as itir_typing
+from gt4py.next.iterator import (
+    ir as itir,
+    transforms as itir_transforms,
+    type_inference as itir_typing,
+)
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import (
@@ -156,7 +159,7 @@ class ItirToSDFG(eve.NodeVisitor):
         self,
         param_types: list[ts.TypeSpec],
         offset_provider: dict[str, NeighborTable],
-        tmps: list[global_tmps.Temporary],
+        tmps: list[itir_transforms.global_tmps.Temporary],
         column_axis: Optional[Dimension] = None,
     ):
         self.param_types = param_types
