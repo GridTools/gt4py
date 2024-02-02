@@ -30,8 +30,7 @@ class SignednessTrait(Trait, abc.ABC):
     """Specifies the signedness of a type."""
 
     @abc.abstractmethod
-    def is_signed(self) -> bool:
-        ...
+    def is_signed(self) -> bool: ...
 
 
 class FromTrait(Trait, abc.ABC):
@@ -43,8 +42,7 @@ class FromTrait(Trait, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_constructible_from(self, ty: Type) -> bool:
-        ...
+    def is_constructible_from(self, ty: Type) -> bool: ...
 
 
 class ToTrait(Trait, abc.ABC):
@@ -56,8 +54,7 @@ class ToTrait(Trait, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_convertible_to(self, ty: Type) -> bool:
-        ...
+    def is_convertible_to(self, ty: Type) -> bool: ...
 
 
 class FromImplicitTrait(Trait, abc.ABC):
@@ -70,8 +67,7 @@ class FromImplicitTrait(Trait, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_implicitly_constructible_from(self, ty: Type) -> bool:
-        ...
+    def is_implicitly_constructible_from(self, ty: Type) -> bool: ...
 
 
 class ToImplicitTrait(Trait, abc.ABC):
@@ -84,8 +80,7 @@ class ToImplicitTrait(Trait, abc.ABC):
     """
 
     @abc.abstractmethod
-    def is_implicitly_convertible_to(self, ty: Type) -> bool:
-        ...
+    def is_implicitly_convertible_to(self, ty: Type) -> bool: ...
 
 
 class ArithmeticTrait(Trait):

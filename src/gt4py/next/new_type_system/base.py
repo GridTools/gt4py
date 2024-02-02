@@ -15,12 +15,10 @@
 import dataclasses
 
 
-class Type:
-    ...
+class Type: ...
 
 
-class Trait:
-    ...
+class Trait: ...
 
 
 @dataclasses.dataclass(frozen=True)
