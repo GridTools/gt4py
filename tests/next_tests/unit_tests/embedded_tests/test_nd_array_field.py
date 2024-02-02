@@ -471,7 +471,7 @@ def test_absolute_indexing_value_return():
     value = field[named_index].ndarray
 
     assert isinstance(value, np.ndarray)
-    assert value == np.asarray([21])
+    assert value == np.asarray(21)
 
 
 @pytest.mark.parametrize(
