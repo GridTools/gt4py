@@ -69,13 +69,15 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    unroll_reduce: bool = False,
 ):
     return itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
+        force_inline_lambda_args=True,
         lift_mode=lift_mode,
         offset_provider=offset_provider,
-        unroll_reduce=False,
+        unroll_reduce=unroll_reduce,
     )
 
 

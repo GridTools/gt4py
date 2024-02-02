@@ -189,7 +189,7 @@ def _visit_lift_in_neighbors_reduction(
     map_entry: dace.nodes.MapEntry,
     map_exit: dace.nodes.MapExit,
     neighbor_index_node: dace.nodes.AccessNode,
-    result_node: dace.nodes.AccessNode,
+    neighbor_value_node: dace.nodes.AccessNode,
 ) -> list[ValueExpr]:
     neighbor_dim = offset_provider.neighbor_axis.value
     origin_dim = offset_provider.origin_axis.value
@@ -293,12 +293,12 @@ def _visit_lift_in_neighbors_reduction(
     parent_state.add_memlet_path(
         nested_sdfg_node,
         map_exit,
-        result_node,
+        neighbor_value_node,
         src_conn=inner_out_connector,
-        memlet=dace.Memlet(data=result_node.data, subset=",".join(map_entry.params)),
+        memlet=dace.Memlet(data=neighbor_value_node.data, subset=",".join(map_entry.params)),
     )
 
-    return [ValueExpr(result_node, inner_outputs[0].dtype)]
+    return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
 
 
 def builtin_neighbors(
@@ -487,8 +487,7 @@ def builtin_can_deref(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
-
-    # extract shift node from arguments
+    # first visit shift, to get set of indices for deref
     can_deref_callable = node_args[0]
     assert isinstance(can_deref_callable, itir.FunCall)
     shift_callable = can_deref_callable.fun
@@ -576,7 +575,7 @@ def builtin_list_get(
         index_value = args[0].value
         result_name = unique_var_name()
         transformer.context.body.add_scalar(result_name, args[1].dtype, transient=True)
-        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
+        result_node = transformer.context.state.add_access(result_name)
         transformer.context.state.add_nedge(
             args[1].value,
             result_node,
