@@ -164,7 +164,7 @@ def make_node(o):
         return NoneLiteral()
     if hasattr(o, "fun"):
         return SymRef(id=o.fun.__name__)
-    raise NotImplementedError(f"Cannot handle {o}")
+    raise NotImplementedError(f"Cannot handle '{o}'.")
 
 
 def trace_function_call(fun, *, args=None):
@@ -254,7 +254,7 @@ def _contains_tuple_dtype_field(arg):
     #  other `np.int32`). We just ignore the error here and postpone fixing this to when
     #  the new storages land (The implementation here works for LocatedFieldImpl).
 
-    return common.is_field(arg) and any(dim is None for dim in arg.__gt_dims__)
+    return common.is_field(arg) and any(dim is None for dim in arg.domain.dims)
 
 
 def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
@@ -269,7 +269,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
                 # the last parameter info might also be a keyword or variadic keyword argument, but
                 # they are not supported.
                 raise NotImplementedError(
-                    "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                    "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
                 )
             param_info = param_infos[-1]
 
@@ -279,7 +279,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
             param_name = param_info.name
         else:
             raise NotImplementedError(
-                "Only `POSITIONAL_OR_KEYWORD` or `VAR_POSITIONAL` parameters are supported."
+                "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
             )
 
         kind, dtype = None, None

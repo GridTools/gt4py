@@ -15,7 +15,7 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -39,7 +39,7 @@ def promote_to_list(
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(NodeTranslator):
+class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
@@ -61,7 +61,7 @@ class FieldOperatorLowering(NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params
+    >>> lowered.params # doctest: +ELLIPSIS
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
@@ -142,7 +142,7 @@ class FieldOperatorLowering(NodeTranslator):
         self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
-        #  from a scalar value (and not a field)
+        # from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
@@ -230,7 +230,7 @@ class FieldOperatorLowering(NodeTranslator):
         dtype = type_info.extract_dtype(node.type)
         if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
             if dtype.kind != ts.ScalarKind.BOOL:
-                raise NotImplementedError(f"{node.op} is only supported on `bool`s.")
+                raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._map("not_", node.operand)
 
         return self._map(
@@ -313,7 +313,7 @@ class FieldOperatorLowering(NodeTranslator):
             return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
 
         raise AssertionError(
-            f"Call to object of type {type(node.func.type).__name__} not understood."
+            f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
@@ -371,7 +371,9 @@ class FieldOperatorLowering(NodeTranslator):
                     im.literal(str(bool(source_type(node.args[0].value))), "bool")
                 )
             return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
-        raise FieldOperatorLoweringError(f"Encountered a type cast, which is not supported: {node}")
+        raise FieldOperatorLoweringError(
+            f"Encountered a type cast, which is not supported: {node}."
+        )
 
     def _make_literal(self, val: Any, type_: ts.TypeSpec) -> itir.Expr:
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
@@ -388,7 +390,7 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
             return im.promote_to_const_iterator(im.literal(str(val), typename))
-        raise ValueError(f"Unsupported literal type {type_}.")
+        raise ValueError(f"Unsupported literal type '{type_}'.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
         return self._make_literal(node.value, node.type)
@@ -428,5 +430,4 @@ class FieldOperatorLowering(NodeTranslator):
             return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
-class FieldOperatorLoweringError(Exception):
-    ...
+class FieldOperatorLoweringError(Exception): ...

@@ -19,9 +19,10 @@ from typing import Any, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.eve as eve
 import gt4py.next as gtx
-from gt4py.eve import Coerced, NodeTranslator
+from gt4py.eve import Coerced, NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import common
 from gt4py.next.iterator import ir, type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
@@ -266,6 +267,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
                             inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            location=current_closure.location,
                         )
                     )
 
@@ -293,6 +295,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                         output=current_closure.output,
                         inputs=current_closure.inputs
                         + [ir.SymRef(id=sym.id) for sym in extracted_lifts.keys()],
+                        location=current_closure.location,
                     )
                 )
             else:
@@ -306,6 +309,7 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
             + [ir.Sym(id=tmp.id) for tmp in tmps]
             + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
+            location=node.location,
         ),
         params=node.params,
         tmps=[Temporary(id=tmp.id) for tmp in tmps],
@@ -332,6 +336,7 @@ def prune_unused_temporaries(node: FencilWithTemporaries) -> FencilWithTemporari
             function_definitions=node.fencil.function_definitions,
             params=[p for p in node.fencil.params if p.id not in unused_tmps],
             closures=closures,
+            location=node.fencil.location,
         ),
         params=node.params,
         tmps=[tmp for tmp in node.tmps if tmp.id not in unused_tmps],
@@ -437,9 +442,12 @@ def _group_offsets(
     return zip(tags, offsets, strict=True)  # type: ignore[return-value] # mypy doesn't infer literal correctly
 
 
-def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, Any]):
+def update_domains(
+    node: FencilWithTemporaries,
+    offset_provider: Mapping[str, Any],
+    symbolic_sizes: Optional[dict[str, str]],
+):
     horizontal_sizes = _max_domain_sizes_by_location_type(offset_provider)
-
     closures: list[ir.StencilClosure] = []
     domains = dict[str, ir.FunCall]()
     for closure in reversed(node.fencil.closures):
@@ -452,6 +460,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                 stencil=closure.stencil,
                 output=closure.output,
                 inputs=closure.inputs,
+                location=closure.location,
             )
         else:
             domain = closure.domain
@@ -479,16 +488,29 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
                         # cartesian shift
                         dim = offset_provider[offset_name].value
                         consumed_domain.ranges[dim] = consumed_domain.ranges[dim].translate(offset)
-                    elif isinstance(offset_provider[offset_name], gtx.NeighborTableOffsetProvider):
+                    elif isinstance(offset_provider[offset_name], common.Connectivity):
                         # unstructured shift
                         nbt_provider = offset_provider[offset_name]
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
-                        consumed_domain.ranges.pop(old_axis)
-                        assert new_axis not in consumed_domain.ranges
-                        consumed_domain.ranges[new_axis] = SymbolicRange(
-                            im.literal("0", ir.INTEGER_INDEX_BUILTIN),
-                            im.literal(str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN),
+
+                        assert new_axis not in consumed_domain.ranges or old_axis == new_axis
+
+                        if symbolic_sizes is None:
+                            new_range = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                im.literal(
+                                    str(horizontal_sizes[new_axis]), ir.INTEGER_INDEX_BUILTIN
+                                ),
+                            )
+                        else:
+                            new_range = SymbolicRange(
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
+                                im.ref(symbolic_sizes[new_axis]),
+                            )
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
                         )
                     else:
                         raise NotImplementedError
@@ -504,6 +526,7 @@ def update_domains(node: FencilWithTemporaries, offset_provider: Mapping[str, An
             function_definitions=node.fencil.function_definitions,
             params=node.fencil.params[:-1],  # remove `_gtmp_auto_domain` param again
             closures=list(reversed(closures)),
+            location=node.fencil.location,
         ),
         params=node.params,
         tmps=node.tmps,
@@ -563,14 +586,18 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
 # TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol). This can be
 #  tricky: For every lift statement that is dynamically shifted we can not compute bounds anymore
 #  and hence also not extract as a temporary.
-class CreateGlobalTmps(NodeTranslator):
+class CreateGlobalTmps(PreserveLocationVisitor, NodeTranslator):
     """Main entry point for introducing global temporaries.
 
     Transforms an existing iterator IR fencil into a fencil with global temporaries.
     """
 
     def visit_FencilDefinition(
-        self, node: ir.FencilDefinition, *, offset_provider: Mapping[str, Any]
+        self,
+        node: ir.FencilDefinition,
+        *,
+        offset_provider: Mapping[str, Any],
+        symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(node, offset_provider=offset_provider)
@@ -581,6 +608,6 @@ class CreateGlobalTmps(NodeTranslator):
         # Perform an eta-reduction which should put all calls at the highest level of a closure
         res = EtaReduction().visit(res)
         # Perform a naive extent analysis to compute domain sizes of closures and temporaries
-        res = update_domains(res, offset_provider)
+        res = update_domains(res, offset_provider, symbolic_sizes)
         # Use type inference to determine the data type of the temporaries
         return collect_tmps_info(res, offset_provider=offset_provider)

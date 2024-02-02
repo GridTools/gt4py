@@ -15,7 +15,7 @@
 import dataclasses
 import functools
 import inspect
-from builtins import bool, float, int, tuple
+from builtins import bool, float, int, tuple  # noqa: A004
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
@@ -139,13 +139,16 @@ class WhereBuiltinFunction(
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
-                    f"Either both or none can be tuple in {true_field=} and {false_field=}."  # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                    # TODO(havogt) find a strategy to unify parsing and embedded error messages
+                    f"Either both or none can be tuple in '{true_field=}' and '{false_field=}'."
                 )
             if len(true_field) != len(false_field):
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(
+                where(mask, t, f) for t, f in zip(true_field, false_field)
+            )  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 
@@ -185,12 +188,8 @@ def broadcast(
     assert core_defs.is_scalar_type(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
-    return common.field(
-        np.asarray(field)[
-            tuple([np.newaxis] * len(dims))
-        ],  # TODO(havogt) use FunctionField once available
-        domain=common.Domain(dims=dims, ranges=tuple([common.UnitRange.infinity()] * len(dims))),
-    )
+    # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
+    return field  # type: ignore[return-value] # see comment above
 
 
 @WhereBuiltinFunction

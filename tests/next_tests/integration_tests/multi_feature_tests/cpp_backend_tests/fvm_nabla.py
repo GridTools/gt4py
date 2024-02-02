@@ -19,7 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef, offset
 from gt4py.next.iterator.tracing import trace_fencil_definition
-from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
+from gt4py.next.program_processors.runners.gtfn import run_gtfn, run_gtfn_imperative
 
 
 E2V = offset("E2V")
@@ -92,13 +92,20 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
     imperative = sys.argv[2].lower() == "true"
 
+    if imperative:
+        backend = run_gtfn_imperative
+    else:
+        backend = run_gtfn
+
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
     prog = trace_fencil_definition(nabla_fencil, [None] * 7, use_arg_types=False)
     offset_provider = {
         "V2E": DummyConnectivity(max_neighbors=6, has_skip_values=True),
         "E2V": DummyConnectivity(max_neighbors=2, has_skip_values=False),
     }
-    generated_code = generate(prog, offset_provider=offset_provider, imperative=imperative)
+    generated_code = backend.executor.otf_workflow.translation.generate_stencil_source(
+        prog, offset_provider=offset_provider, column_axis=None
+    )
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

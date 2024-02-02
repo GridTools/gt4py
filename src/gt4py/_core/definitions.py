@@ -73,17 +73,23 @@ float64 = np.float64
 
 BoolScalar: TypeAlias = Union[bool_, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
-BOOL_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], BoolScalar.__args__)  # type: ignore[attr-defined]
+BOOL_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], BoolScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
 IntT = TypeVar("IntT", bound=IntScalar)
-INT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], IntScalar.__args__)  # type: ignore[attr-defined]
+INT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], IntScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
-UINT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], UnsignedIntScalar.__args__)  # type: ignore[attr-defined]
+UINT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], UnsignedIntScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 IntegralScalar: TypeAlias = Union[IntScalar, UnsignedIntScalar]
@@ -93,7 +99,9 @@ INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 
 FloatingScalar: TypeAlias = Union[float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
-FLOAT_TYPES: Final[Tuple[type, ...]] = cast(Tuple[type, ...], FloatingScalar.__args__)  # type: ignore[attr-defined]
+FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
+    Tuple[type, ...], FloatingScalar.__args__  # type: ignore[attr-defined]
+)
 
 
 #: Type alias for all scalar types supported by GT4Py
@@ -157,28 +165,23 @@ class DTypeKind(eve.StrEnum):
 
 
 @overload
-def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]:
-    ...
+def dtype_kind(sc_type: Type[BoolT]) -> Literal[DTypeKind.BOOL]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]:
-    ...
+def dtype_kind(sc_type: Type[IntT]) -> Literal[DTypeKind.INT]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]:
-    ...
+def dtype_kind(sc_type: Type[UnsignedIntT]) -> Literal[DTypeKind.UINT]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]:
-    ...
+def dtype_kind(sc_type: Type[FloatingT]) -> Literal[DTypeKind.FLOAT]: ...
 
 
 @overload
-def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
-    ...
+def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind: ...
 
 
 def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
@@ -195,7 +198,7 @@ def dtype_kind(sc_type: Type[ScalarT]) -> DTypeKind:
     if issubclass(sc_type, numbers.Complex):
         return DTypeKind.COMPLEX
 
-    raise TypeError("Unknown scalar type kind")
+    raise TypeError("Unknown scalar type kind.")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -352,8 +355,7 @@ class GTDimsInterface(Protocol):
     """
 
     @property
-    def __gt_dims__(self) -> Tuple[str, ...]:
-        ...
+    def __gt_dims__(self) -> Tuple[str, ...]: ...
 
 
 class GTOriginInterface(Protocol):
@@ -364,8 +366,7 @@ class GTOriginInterface(Protocol):
     """
 
     @property
-    def __gt_origin__(self) -> Tuple[int, ...]:
-        ...
+    def __gt_origin__(self) -> Tuple[int, ...]: ...
 
 
 # -- Device representation --
@@ -435,66 +436,48 @@ SliceLike = Union[int, Tuple[int, ...], None, slice, "NDArrayObject"]
 
 class NDArrayObject(Protocol):
     @property
-    def ndim(self) -> int:
-        ...
+    def ndim(self) -> int: ...
 
     @property
-    def shape(self) -> tuple[int, ...]:
-        ...
+    def shape(self) -> tuple[int, ...]: ...
 
     @property
-    def dtype(self) -> Any:
+    def dtype(self) -> Any: ...
+
+    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject: ...
+
+    def __getitem__(self, item: Any) -> NDArrayObject: ...
+
+    def __abs__(self) -> NDArrayObject: ...
+
+    def __neg__(self) -> NDArrayObject: ...
+
+    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __radd__(self, other: Any) -> NDArrayObject: ...
+
+    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rsub__(self, other: Any) -> NDArrayObject: ...
+
+    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rmul__(self, other: Any) -> NDArrayObject: ...
+
+    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rfloordiv__(self, other: Any) -> NDArrayObject: ...
+
+    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __rtruediv__(self, other: Any) -> NDArrayObject: ...
+
+    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
+
+    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
 
-    def astype(self, dtype: npt.DTypeLike) -> NDArrayObject:
-        ...
-
-    def __getitem__(self, item: Any) -> NDArrayObject:
-        ...
-
-    def __abs__(self) -> NDArrayObject:
-        ...
-
-    def __neg__(self) -> NDArrayObject:
-        ...
-
-    def __add__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __radd__(self, other: Any) -> NDArrayObject:
-        ...
-
-    def __sub__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __rsub__(self, other: Any) -> NDArrayObject:
-        ...
-
-    def __mul__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __rmul__(self, other: Any) -> NDArrayObject:
-        ...
-
-    def __floordiv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __rfloordiv__(self, other: Any) -> NDArrayObject:
-        ...
-
-    def __truediv__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __rtruediv__(self, other: Any) -> NDArrayObject:
-        ...
-
-    def __pow__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
-
-    def __eq__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
-        ...
-
-    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy want to return `bool`
+    def __ne__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[override] # mypy wants to return `bool`
         ...
 
     def __gt__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
@@ -509,11 +492,8 @@ class NDArrayObject(Protocol):
     def __le__(self, other: NDArrayObject | Scalar) -> NDArrayObject:  # type: ignore[misc] # Forward operator is not callable
         ...
 
-    def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __and__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __or__(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...
 
-    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject:
-        ...
+    def __xor(self, other: NDArrayObject | Scalar) -> NDArrayObject: ...

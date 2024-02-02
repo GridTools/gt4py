@@ -41,7 +41,7 @@ from gt4py.next import (
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -147,9 +147,9 @@ def test_unary_invert(cartesian_case):
 
 def test_unary_not(cartesian_case):
     pytest.xfail(
-        "We accidentally supported `not` on fields. This is wrong, we should raise an error."
+        "We accidentally supported 'not' on fields. This is wrong, we should raise an error."
     )
-    with pytest.raises:  # TODO `not` on a field should be illegal
+    with pytest.raises:  # TODO 'not' on a field should be illegal
 
         @gtx.field_operator
         def not_fieldop(inp1: cases.IBoolField) -> cases.IBoolField:

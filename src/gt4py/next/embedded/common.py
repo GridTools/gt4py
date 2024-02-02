@@ -32,7 +32,7 @@ def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Doma
     if common.is_relative_index_sequence(index_sequence):
         return _relative_sub_domain(domain, index_sequence)
 
-    raise IndexError(f"Unsupported index type: {index}")
+    raise IndexError(f"Unsupported index type: '{index}'.")
 
 
 def _relative_sub_domain(
@@ -42,7 +42,9 @@ def _relative_sub_domain(
 
     expanded = _expand_ellipsis(index, len(domain))
     if len(domain) < len(expanded):
-        raise IndexError(f"Trying to index a `Field` with {len(domain)} dimensions with {index}.")
+        raise IndexError(
+            f"Can not access dimension with index {index} of 'Field' with {len(domain)} dimensions."
+        )
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for (dim, rng), idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
@@ -56,6 +58,7 @@ def _relative_sub_domain(
         else:
             # not in new domain
             assert common.is_int_index(idx)
+            assert common.UnitRange.is_finite(rng)
             new_index = (rng.start if idx >= 0 else rng.stop) + idx
             if new_index < rng.start or new_index >= rng.stop:
                 raise embedded_exceptions.IndexOutOfBounds(

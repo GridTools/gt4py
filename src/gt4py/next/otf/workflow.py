@@ -61,8 +61,7 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
     - take a single input argument
     """
 
-    def __call__(self, inp: StartT_contra) -> EndT_co:
-        ...
+    def __call__(self, inp: StartT_contra) -> EndT_co: ...
 
 
 class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
@@ -80,9 +79,9 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
             TypeError: If `self` is not a dataclass.
         """
         if not dataclasses.is_dataclass(self):
-            raise TypeError(f"{self.__class__} is not a dataclass")
+            raise TypeError(f"'{self.__class__}' is not a dataclass.")
         assert not isinstance(self, type)
-        return dataclasses.replace(self, **kwargs)  # type: ignore[misc] # `self` is guaranteed to be a dataclass (is_dataclass) should be a `TypeGuard`?
+        return dataclasses.replace(self, **kwargs)
 
 
 class ChainableWorkflowMixin(Workflow[StartT, EndT]):
@@ -242,7 +241,9 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
+    hash_function: Callable[[StartT], HashT] = dataclasses.field(
+        default=hash
+    )  # type: ignore[assignment]
 
     _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
 

@@ -59,7 +59,7 @@ class ProgramSource(Generic[SrcL, SettingT]):
     def __post_init__(self):
         if not isinstance(self.language_settings, self.language.settings_class):
             raise TypeError(
-                f"Wrong language settings type for {self.language}, must be subclass of {self.language.settings_class}"
+                f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
             )
 
 
@@ -107,15 +107,13 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     and is not responsible for importing the results into Python.
     """
 
-    def build(self) -> None:
-        ...
+    def build(self) -> None: ...
 
 
 class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
-    def __call__(self, *args, **kwargs) -> None:
-        ...
+    def __call__(self, *args, **kwargs) -> None: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

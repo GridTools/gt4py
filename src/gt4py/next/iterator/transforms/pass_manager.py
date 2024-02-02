@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Optional
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
@@ -68,7 +69,7 @@ def _inline_into_scan(ir, *, max_iter=10):
             break
         ir = inlined
     else:
-        raise RuntimeError(f"Inlining into scan did not converge with {max_iter} iterations.")
+        raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
     return ir
 
 
@@ -81,6 +82,7 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -117,7 +119,7 @@ def apply_common_transforms(
             break
         ir = inlined
     else:
-        raise RuntimeError("Inlining lift and lambdas did not converge.")
+        raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
@@ -147,7 +149,9 @@ def apply_common_transforms(
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(ir, offset_provider=offset_provider)
+        ir = CreateGlobalTmps().visit(
+            ir, offset_provider=offset_provider, symbolic_sizes=symbolic_domain_sizes
+        )
         ir = InlineLifts().visit(ir)
         # If after creating temporaries, the scan is not at the top, we inline.
         # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.

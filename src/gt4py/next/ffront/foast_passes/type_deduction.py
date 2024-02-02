@@ -53,7 +53,7 @@ def with_altered_scalar_kind(
     elif isinstance(type_spec, ts.ScalarType):
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
     else:
-        raise ValueError(f"Expected field or scalar type, but got {type_spec}.")
+        raise ValueError(f"Expected field or scalar type, got '{type_spec}'.")
 
 
 def construct_tuple_type(
@@ -113,7 +113,9 @@ def promote_to_mask_type(
         item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
-        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
+        return type_info.promote(
+            input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype)
+        )  # type: ignore
     else:
         return input_type
 
@@ -148,7 +150,7 @@ def deduce_stmt_return_type(
                 else:
                     raise errors.DSLError(
                         stmt.location,
-                        f"If statement contains return statements with inconsistent types:"
+                        "If statement contains return statements with inconsistent types:"
                         f"{return_types[0]} != {return_types[1]}",
                     )
             return_type = return_types[0] or return_types[1]
@@ -160,12 +162,12 @@ def deduce_stmt_return_type(
         elif isinstance(stmt, (foast.Assign, foast.TupleTargetAssign)):
             return_type = None
         else:
-            raise AssertionError(f"Nodes of type `{type(stmt).__name__}` not supported.")
+            raise AssertionError(f"Nodes of type '{type(stmt).__name__}' not supported.")
 
         if conditional_return_type and return_type and return_type != conditional_return_type:
             raise errors.DSLError(
                 stmt.location,
-                f"If statement contains return statements with inconsistent types:"
+                "If statement contains return statements with inconsistent types:"
                 f"{conditional_return_type} != {conditional_return_type}",
             )
 
@@ -179,7 +181,7 @@ def deduce_stmt_return_type(
         # If the node was constructed by the foast parsing we should never get here, but instead
         # we should have gotten an error there.
         raise AssertionError(
-            "Malformed block statement. Expected a return statement in this context, "
+            "Malformed block statement: expected a return statement in this context, "
             "but none was found. Please submit a bug report."
         )
 
@@ -195,7 +197,7 @@ class FieldOperatorTypeDeductionCompletnessValidator(NodeVisitor):
         cls().visit(node, incomplete_nodes=incomplete_nodes)
 
         if incomplete_nodes:
-            raise AssertionError("FOAST expression is not fully typed.")
+            raise AssertionError("'FOAST' expression is not fully typed.")
 
     def visit_LocatedNode(
         self, node: foast.LocatedNode, *, incomplete_nodes: list[foast.LocatedNode]
@@ -251,7 +253,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(return_type, (ts.DataType, ts.DeferredType, ts.VoidType)):
             raise errors.DSLError(
                 node.location,
-                f"Function must return `DataType`, `DeferredType`, or `VoidType`, got `{return_type}`.",
+                f"Function must return 'DataType', 'DeferredType', or 'VoidType', got '{return_type}'.",
             )
         new_type = ts.FunctionType(
             pos_only_args=[],
@@ -283,17 +285,17 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_axis.type, ts.DimensionType):
             raise errors.DSLError(
                 node.location,
-                f"Argument `axis` to scan operator `{node.id}` must be a dimension.",
+                f"Argument 'axis' to scan operator '{node.id}' must be a dimension.",
             )
         if not new_axis.type.dim.kind == DimensionKind.VERTICAL:
             raise errors.DSLError(
                 node.location,
-                f"Argument `axis` to scan operator `{node.id}` must be a vertical dimension.",
+                f"Argument 'axis' to scan operator '{node.id}' must be a vertical dimension.",
             )
         new_forward = self.visit(node.forward, **kwargs)
         if not new_forward.type.kind == ts.ScalarKind.BOOL:
             raise errors.DSLError(
-                node.location, f"Argument `forward` to scan operator `{node.id}` must be a boolean."
+                node.location, f"Argument 'forward' to scan operator '{node.id}' must be a boolean."
             )
         new_init = self.visit(node.init, **kwargs)
         if not all(
@@ -302,8 +304,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             raise errors.DSLError(
                 node.location,
-                f"Argument `init` to scan operator `{node.id}` must "
-                f"be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
+                f"Argument 'init' to scan operator '{node.id}' must "
+                "be an arithmetic type or a logical type or a composite of arithmetic and logical types.",
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
@@ -311,15 +313,15 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if new_init.type != new_def_type.returns:
             raise errors.DSLError(
                 node.location,
-                f"Argument `init` to scan operator `{node.id}` must have same type as its return. "
-                f"Expected `{new_def_type.returns}`, but got `{new_init.type}`",
+                f"Argument 'init' to scan operator '{node.id}' must have same type as its return: "
+                f"expected '{new_def_type.returns}', got '{new_init.type}'.",
             )
         elif new_init.type != carry_type:
             carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
             raise errors.DSLError(
                 node.location,
-                f"Argument `init` to scan operator `{node.id}` must have same type as `{carry_arg_name}` argument. "
-                f"Expected `{carry_type}`, but got `{new_init.type}`",
+                f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "
+                f"expected '{carry_type}', got '{new_init.type}'.",
             )
 
         new_type = ts_ffront.ScanOperatorType(
@@ -339,7 +341,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     def visit_Name(self, node: foast.Name, **kwargs) -> foast.Name:
         symtable = kwargs["symtable"]
         if node.id not in symtable or symtable[node.id].type is None:
-            raise errors.DSLError(node.location, f"Undeclared symbol `{node.id}`.")
+            raise errors.DSLError(node.location, f"Undeclared symbol '{node.id}'.")
 
         symbol = symtable[node.id]
         return foast.Name(id=node.id, type=symbol.type, location=node.location)
@@ -362,9 +364,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             targets: TargetType = node.targets
             indices: list[tuple[int, int] | int] = compute_assign_indices(targets, num_elts)
 
-            if not any(isinstance(i, tuple) for i in indices) and len(indices) != num_elts:
+            if not any(isinstance(i, tuple) for i in indices) and len(targets) != num_elts:
                 raise errors.DSLError(
-                    node.location, f"Too many values to unpack (expected {len(indices)})."
+                    node.location, f"Too many values to unpack (expected {len(targets)})."
                 )
 
             new_targets: TargetType = []
@@ -396,7 +398,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 new_targets.append(new_target)
         else:
             raise errors.DSLError(
-                node.location, f"Assignment value must be of type tuple! Got: {values.type}"
+                node.location, f"Assignment value must be of type tuple, got '{values.type}'."
             )
 
         return foast.TupleTargetAssign(targets=new_targets, value=values, location=node.location)
@@ -416,15 +418,14 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not isinstance(new_node.condition.type, ts.ScalarType):
             raise errors.DSLError(
                 node.location,
-                "Condition for `if` must be scalar. "
-                f"But got `{new_node.condition.type}` instead.",
+                "Condition for 'if' must be scalar, " f"got '{new_node.condition.type}' instead.",
             )
 
         if new_node.condition.type.kind != ts.ScalarKind.BOOL:
             raise errors.DSLError(
                 node.location,
-                "Condition for `if` must be of boolean type. "
-                f"But got `{new_node.condition.type}` instead.",
+                "Condition for 'if' must be of boolean type, "
+                f"got '{new_node.condition.type}' instead.",
             )
 
         for sym in node.annex.propagated_symbols.keys():
@@ -433,13 +434,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     node.location,
-                    f"Inconsistent types between two branches for variable `{sym}`. "
-                    f"Got types `{true_type}` and `{false_type}.",
+                    f"Inconsistent types between two branches for variable '{sym}': "
+                    f"got types '{true_type}' and '{false_type}.",
                 )
             # TODO: properly patch symtable (new node?)
-            symtable[sym].type = new_node.annex.propagated_symbols[
-                sym
-            ].type = new_true_branch.annex.symtable[sym].type
+            symtable[sym].type = new_node.annex.propagated_symbols[sym].type = (
+                new_true_branch.annex.symtable[sym].type
+            )
 
         return new_node
 
@@ -455,8 +456,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 raise errors.DSLError(
                     node.location,
                     (
-                        "type inconsistency: expression was deduced to be "
-                        f"of type {refine_type}, instead of the expected type {node.type}"
+                        "Type inconsistency: expression was deduced to be "
+                        f"of type '{refine_type}', instead of the expected type '{node.type}'."
                     ),
                 )
             new_node: foast.Symbol = foast.Symbol(
@@ -490,7 +491,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 new_type = new_value.type
             case _:
                 raise errors.DSLError(
-                    new_value.location, "Could not deduce type of subscript expression!"
+                    new_value.location, "Could not deduce type of subscript expression."
                 )
 
         return foast.Subscript(
@@ -531,13 +532,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if condition.type != ts.ScalarType(kind=ts.ScalarKind.BOOL):
             raise errors.DSLError(
                 condition.location,
-                f"Condition is of type `{condition.type}` " f"but should be of type `bool`.",
+                f"Condition is of type '{condition.type}', should be of type 'bool'.",
             )
 
         if true_expr.type != false_expr.type:
             raise errors.DSLError(
                 node.location,
-                f"Left and right types are not the same: `{true_expr.type}` and `{false_expr.type}`",
+                f"Left and right types are not the same: '{true_expr.type}' and '{false_expr.type}'",
             )
         return true_expr.type
 
@@ -556,7 +557,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for arg in (left, right):
             if not type_info.is_arithmetic(arg.type):
                 raise errors.DSLError(
-                    arg.location, f"Type {arg.type} can not be used in operator '{node.op}'!"
+                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
                 )
 
         self._check_operand_dtypes_match(node, left=left, right=right)
@@ -571,8 +572,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Could not promote `{left.type}` and `{right.type}` to common type"
-                f" in call to `{node.op}`.",
+                f"Could not promote '{left.type}' and '{right.type}' to common type"
+                f" in call to '{node.op}'.",
             ) from ex
 
     def _deduce_binop_type(
@@ -594,7 +595,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         for arg in (left, right):
             if not is_compatible(arg.type):
                 raise errors.DSLError(
-                    arg.location, f"Type {arg.type} can not be used in operator `{node.op}`!"
+                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
                 )
 
         left_type = cast(ts.FieldType | ts.ScalarType, left.type)
@@ -608,7 +609,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ):
             raise errors.DSLError(
                 arg.location,
-                f"Type {right_type} can not be used in operator `{node.op}`, it can only accept ints",
+                f"Type '{right_type}' can not be used in operator '{node.op}', it only accepts 'int'.",
             )
 
         try:
@@ -616,8 +617,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Could not promote `{left_type}` and `{right_type}` to common type"
-                f" in call to `{node.op}`.",
+                f"Could not promote '{left_type}' and '{right_type}' to common type"
+                f" in call to '{node.op}'.",
             ) from ex
 
     def _check_operand_dtypes_match(
@@ -627,7 +628,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.extract_dtype(left.type) == type_info.extract_dtype(right.type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible datatypes in operator `{node.op}`: {left.type} and {right.type}!",
+                f"Incompatible datatypes in operator '{node.op}': '{left.type}' and '{right.type}'.",
             )
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> foast.UnaryOp:
@@ -644,7 +645,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not is_compatible(new_operand.type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible type for unary operator `{node.op}`: `{new_operand.type}`!",
+                f"Incompatible type for unary operator '{node.op}': '{new_operand.type}'.",
             )
         return foast.UnaryOp(
             op=node.op, operand=new_operand, location=node.location, type=new_operand.type
@@ -674,13 +675,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 new_func,
                 (foast.FunctionDefinition, foast.FieldOperator, foast.ScanOperator, foast.Name),
             ):
-                raise errors.DSLError(node.location, "Functions can only be called directly!")
+                raise errors.DSLError(node.location, "Functions can only be called directly.")
         elif isinstance(new_func.type, ts.FieldType):
             pass
         else:
             raise errors.DSLError(
                 node.location,
-                f"Expression of type `{new_func.type}` is not callable, must be a `Function`, `FieldOperator`, `ScanOperator` or `Field`.",
+                f"Expression of type '{new_func.type}' is not callable, must be a 'Function', 'FieldOperator', 'ScanOperator' or 'Field'.",
             )
 
         # ensure signature is valid
@@ -693,7 +694,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         except ValueError as err:
             raise errors.DSLError(
-                node.location, f"Invalid argument types in call to `{new_func}`!"
+                node.location, f"Invalid argument types in call to '{new_func}'.\n{err}"
             ) from err
 
         return_type = type_info.return_type(func_type, with_args=arg_types, with_kwargs=kwarg_types)
@@ -727,7 +728,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         func_name = cast(foast.Name, node.func).id
 
         # validate arguments
-        error_msg_preamble = f"Incompatible argument in call to `{func_name}`."
+        error_msg_preamble = f"Incompatible argument in call to '{func_name}'."
         error_msg_for_validator = {
             type_info.is_arithmetic: "an arithmetic",
             type_info.is_floating_point: "a floating point",
@@ -741,13 +742,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         elif func_name in fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES:
             arg_validator = type_info.is_arithmetic
         else:
-            raise AssertionError(f"Unknown math builtin `{func_name}`.")
+            raise AssertionError(f"Unknown math builtin '{func_name}'.")
 
         error_msgs = []
         for i, arg in enumerate(node.args):
             if not arg_validator(arg.type):
                 error_msgs.append(
-                    f"Expected {i}-th argument to be {error_msg_for_validator[arg_validator]} type, but got `{arg.type}`."
+                    f"Expected {i}-th argument to be {error_msg_for_validator[arg_validator]} type, got '{arg.type}'."
                 )
         if error_msgs:
             raise errors.DSLError(
@@ -756,7 +757,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
 
         if func_name == "power" and all(type_info.is_integral(arg.type) for arg in node.args):
-            print(f"Warning: return type of {func_name} might be inconsistent (not implemented).")
+            print(f"Warning: return type of '{func_name}' might be inconsistent (not implemented).")
 
         # deduce return type
         return_type: Optional[ts.FieldType | ts.ScalarType] = None
@@ -777,7 +778,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             except ValueError as ex:
                 raise errors.DSLError(node.location, error_msg_preamble) from ex
         else:
-            raise AssertionError(f"Unknown math builtin `{func_name}`.")
+            raise AssertionError(f"Unknown math builtin '{func_name}'.")
 
         return foast.Call(
             func=node.func,
@@ -796,9 +797,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise errors.DSLError(
                 node.location,
-                f"Incompatible field argument in call to `{str(node.func)}`. "
-                f"Expected a field with dimension {reduction_dim}, but got "
-                f"{field_dims_str}.",
+                f"Incompatible field argument in call to '{str(node.func)}'. "
+                f"Expected a field with dimension '{reduction_dim}', got "
+                f"'{field_dims_str}'.",
             )
         return_type = ts.FieldType(
             dims=[dim for dim in field_type.dims if dim != reduction_dim],
@@ -834,7 +835,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         ]:
             raise errors.DSLError(
                 node.location,
-                f"Invalid call to `astype`. Second argument must be a scalar type, but got {new_type}.",
+                f"Invalid call to 'astype': second argument must be a scalar type, got '{new_type}'.",
             )
 
         return_type = type_info.apply_to_primitive_constituents(
@@ -860,16 +861,16 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. "
-                f"Excepted integer for offset field dtype, but got {arg_1.dtype}"
+                f"Incompatible argument in call to '{str(node.func)}': "
+                f"expected integer for offset field dtype, got '{arg_1.dtype}'. "
                 f"{node.location}",
             )
 
         if arg_0.source not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. "
-                f"{arg_0.source} not in list of offset field dimensions {arg_1.dims}. "
+                f"Incompatible argument in call to '{str(node.func)}': "
+                f"'{arg_0.source}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
 
@@ -889,8 +890,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. Expected "
-                f"a field with dtype `bool`, but got `{mask_type}`.",
+                f"Incompatible argument in call to '{str(node.func)}': expected "
+                f"a field with dtype 'bool', got '{mask_type}'.",
             )
 
         try:
@@ -907,8 +908,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     node.location,
-                    f"Return arguments need to be of same type in {str(node.func)}, but got: "
-                    f"{node.args[1].type} and {node.args[2].type}",
+                    f"Return arguments need to be of same type in '{str(node.func)}', got "
+                    f"'{node.args[1].type}' and '{node.args[2].type}'.",
                 )
             else:
                 true_branch_fieldtype = cast(ts.FieldType, true_branch_type)
@@ -919,7 +920,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`.",
+                f"Incompatible argument in call to '{str(node.func)}'.",
             ) from ex
 
         return foast.Call(
@@ -937,8 +938,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if any([not (isinstance(elt.type, ts.DimensionType)) for elt in broadcast_dims_expr]):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimension type in {str(node.func)}. Expected "
-                f"all broadcast dimensions to be of type Dimension.",
+                f"Incompatible broadcast dimension type in '{str(node.func)}': expected "
+                f"all broadcast dimensions to be of type 'Dimension'.",
             )
 
         broadcast_dims = [cast(ts.DimensionType, elt.type).dim for elt in broadcast_dims_expr]
@@ -946,8 +947,8 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimensions in {str(node.func)}. Expected "
-                f"broadcast dimension is missing {set(arg_dims).difference(set(broadcast_dims))}",
+                f"Incompatible broadcast dimensions in '{str(node.func)}': expected "
+                f"broadcast dimension(s) '{set(arg_dims).difference(set(broadcast_dims))}' missing",
             )
 
         return_type = ts.FieldType(

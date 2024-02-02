@@ -43,12 +43,10 @@ def offset(value):
     return Offset(value)
 
 
-class CartesianDomain(dict):
-    ...
+class CartesianDomain(dict): ...
 
 
-class UnstructuredDomain(dict):
-    ...
+class UnstructuredDomain(dict): ...
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
@@ -96,7 +94,7 @@ class FendefDispatcher:
             backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
-                raise RuntimeError("Embedded execution is not registered")
+                raise RuntimeError("Embedded execution is not registered.")
             fendef_embedded(self.function, *args, **kwargs)
 
     def format_itir(self, *args, formatter: ProgramFormatter, **kwargs) -> str:

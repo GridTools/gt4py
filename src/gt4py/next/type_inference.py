@@ -94,13 +94,11 @@ class _TypeVarReindexer(eve.NodeTranslator):
 
 
 @typing.overload
-def freshen(dtypes: list[T]) -> list[T]:
-    ...
+def freshen(dtypes: list[T]) -> list[T]: ...
 
 
 @typing.overload
-def freshen(dtypes: T) -> T:
-    ...
+def freshen(dtypes: T) -> T: ...
 
 
 def freshen(dtypes: list[T] | T) -> list[T] | T:
@@ -325,15 +323,13 @@ class _Unifier:
 @typing.overload
 def unify(
     dtypes: list[Type], constraints: set[tuple[Type, Type]]
-) -> tuple[list[Type], list[tuple[Type, Type]]]:
-    ...
+) -> tuple[list[Type], list[tuple[Type, Type]]]: ...
 
 
 @typing.overload
 def unify(
     dtypes: Type, constraints: set[tuple[Type, Type]]
-) -> tuple[Type, list[tuple[Type, Type]]]:
-    ...
+) -> tuple[Type, list[tuple[Type, Type]]]: ...
 
 
 def unify(

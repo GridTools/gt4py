@@ -80,8 +80,7 @@ Scalar: TypeAlias = (
 )
 
 
-class SparseTag(Tag):
-    ...
+class SparseTag(Tag): ...
 
 
 class NeighborTableOffsetProvider:
@@ -156,14 +155,11 @@ class ItIterator(Protocol):
     `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
     """
 
-    def shift(self, *offsets: OffsetPart) -> ItIterator:
-        ...
+    def shift(self, *offsets: OffsetPart) -> ItIterator: ...
 
-    def can_deref(self) -> bool:
-        ...
+    def can_deref(self) -> bool: ...
 
-    def deref(self) -> Any:
-        ...
+    def deref(self) -> Any: ...
 
 
 @runtime_checkable
@@ -172,17 +168,15 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        ...
+    def dims(self) -> tuple[common.Dimension, ...]: ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: NamedFieldIndices) -> Any:
-        ...
+    def field_getitem(self, indices: NamedFieldIndices) -> Any: ...
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_dims__))
+        return tuple([0] * len(self.dims))
 
 
 @runtime_checkable
@@ -191,8 +185,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
-        ...
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None: ...
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
@@ -238,7 +231,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
             set(arg.kstart for arg in args if isinstance(arg, Column)) - {self.kstart}
         ):
             raise ValueError(
-                "Incompatible Column.kstart: it should be '{self.kstart}' but found other values: {wrong_kstarts}"
+                "Incompatible 'Column.kstart': it should be '{self.kstart}' but found other values: {wrong_kstarts}."
             )
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs) -> Column:
@@ -486,7 +479,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
         return constant_field(val)
     else:
         raise ValueError(
-            f"Expected a `Field` or a number (`float`, `np.int64`, ...), but got {val_type}."
+            f"Expected a 'Field' or a number ('float', 'np.int64', ...), got '{val_type}'."
         )
 
 
@@ -533,6 +526,16 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
+                offset_implementation = offset_provider[tag]
+                assert isinstance(offset_implementation, common.Connectivity)
+                cur_index = pos[offset_implementation.origin_axis.value]
+                assert common.is_int_index(cur_index)
+                if offset_implementation.mapped_index(cur_index, index) in [
+                    None,
+                    common.SKIP_VALUE,
+                ]:
+                    return None
+
                 new_entry[i] = index
                 break
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
@@ -556,7 +559,7 @@ def execute_shift(
         assert common.is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
-            -1,
+            common.SKIP_VALUE,
         ]:
             return None
         else:
@@ -566,7 +569,7 @@ def execute_shift(
 
         return new_pos
 
-    raise AssertionError("Unknown object in `offset_provider`")
+    raise AssertionError("Unknown object in 'offset_provider'.")
 
 
 def _is_list_of_complete_offsets(
@@ -680,7 +683,7 @@ def _get_axes(
         assert all(first == _get_axes(f) for f in field_or_tuple)
         return first
     else:
-        return field_or_tuple.__gt_dims__
+        return field_or_tuple.dims
 
 
 def _single_vertical_idx(
@@ -699,8 +702,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
-) -> tuple[tuple | Column, ...]:
-    ...
+) -> tuple[tuple | Column, ...]: ...
 
 
 @overload
@@ -716,8 +718,7 @@ def _make_tuple(
 @overload
 def _make_tuple(
     field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
-) -> Column:
-    ...
+) -> Column: ...
 
 
 @overload
@@ -726,8 +727,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> npt.DTypeLike | Undefined:
-    ...
+) -> npt.DTypeLike | Undefined: ...
 
 
 def _make_tuple(
@@ -878,7 +878,7 @@ def make_in_iterator(
             return SparseListIterator(it, sparse_dimensions[0])
         else:
             raise NotImplementedError(
-                f"More than one local dimension is currently not supported, got {sparse_dimensions}"
+                f"More than one local dimension is currently not supported, got {sparse_dimensions}."
             )
     else:
         return it
@@ -894,14 +894,14 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     _ndarrayfield: common.Field
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return self._ndarrayfield.__gt_dims__
+    def dims(self) -> tuple[common.Dimension, ...]:
+        return self._ndarrayfield.__gt_domain__.dims
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
     ) -> common.AbsoluteIndexSequence:
         named_indices: Mapping[common.Dimension, FieldIndex | SparsePositionEntry] = {
-            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_dims__
+            d: _named_indices[d.value] for d in self._ndarrayfield.__gt_domain__.dims
         }
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
@@ -925,7 +925,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         if common.is_mutable_field(self._ndarrayfield):
             self._ndarrayfield[self._translate_named_indices(named_indices)] = value
         else:
-            raise RuntimeError("Assigment into a non-mutable Field.")
+            raise RuntimeError("Assigment into a non-mutable Field is not allowed.")
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -968,13 +968,11 @@ def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[F
 
 
 @overload
-def _shift_range(range_or_index: range, offset: int) -> slice:
-    ...
+def _shift_range(range_or_index: range, offset: int) -> slice: ...
 
 
 @overload
-def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex:
-    ...
+def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex: ...
 
 
 def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayIndex:
@@ -988,13 +986,11 @@ def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayI
 
 
 @overload
-def _range2slice(r: range) -> slice:
-    ...
+def _range2slice(r: range) -> slice: ...
 
 
 @overload
-def _range2slice(r: common.IntIndex) -> common.IntIndex:
-    ...
+def _range2slice(r: common.IntIndex) -> common.IntIndex: ...
 
 
 def _range2slice(r: range | common.IntIndex) -> slice | common.IntIndex:
@@ -1023,13 +1019,13 @@ def np_as_located_field(
 
     def _maker(a) -> common.Field:
         if a.ndim != len(axes):
-            raise TypeError("ndarray.ndim incompatible with number of given dimensions")
+            raise TypeError("'ndarray.ndim' is incompatible with number of given dimensions.")
         ranges = []
         for d, s in zip(axes, a.shape):
             offset = origin.get(d, 0)
             ranges.append(common.UnitRange(-offset, s - offset))
 
-        res = common.field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
+        res = common._field(a, domain=common.Domain(dims=tuple(axes), ranges=tuple(ranges)))
         return res
 
     return _maker
@@ -1046,8 +1042,8 @@ class IndexField(common.Field):
     _dimension: common.Dimension
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return (self._dimension,)
+    def __gt_domain__(self) -> common.Domain:
+        return self.domain
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -1059,7 +1055,7 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension, common.UnitRange.infinity()))
+        return common.Domain((self._dimension, common.UnitRange.infinite()))
 
     @property
     def codomain(self) -> type[core_defs.int32]:
@@ -1071,7 +1067,7 @@ class IndexField(common.Field):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get 'ndarray' of an infinite 'Field'.")
 
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
@@ -1165,8 +1161,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     _value: core_defs.ScalarT
 
     @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return tuple()
+    def __gt_domain__(self) -> common.Domain:
+        return self.domain
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -1190,7 +1186,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
-        raise AttributeError("Cannot get `ndarray` of an infinite Field.")
+        raise AttributeError("Cannot get 'ndarray' of an infinite 'Field'.")
 
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
@@ -1282,8 +1278,7 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-class _List(tuple, Generic[DT]):
-    ...
+class _List(tuple, Generic[DT]): ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1418,8 +1413,7 @@ def is_tuple_of_field(field) -> bool:
     )
 
 
-class TupleFieldMeta(type):
-    ...
+class TupleFieldMeta(type): ...
 
 
 class TupleField(metaclass=TupleFieldMeta):
@@ -1440,7 +1434,7 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
     if isinstance(field, tuple):
         if len(field) != len(value):
             raise RuntimeError(
-                f"Tuple of incompatible size, expected tuple of len={len(field)}, got len={len(value)}"
+                f"Tuple of incompatible size, expected tuple of 'len={len(field)}', got 'len={len(value)}'."
             )
         for f, v in zip(field, value):
             _tuple_assign(f, v, named_indices)
@@ -1452,14 +1446,14 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 class TupleOfFields(TupleField):
     def __init__(self, data):
         self.data = data
-        self.__gt_dims__ = _get_axes(data)
+        self.dims = _get_axes(data)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return _build_tuple_result(self.data, named_indices)
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if not isinstance(value, tuple):
-            raise RuntimeError(f"Value needs to be tuple, got `{value}`.")
+            raise RuntimeError(f"Value needs to be tuple, got '{value}'.")
         _tuple_assign(self.data, value, named_indices)
 
 
@@ -1503,13 +1497,13 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
     if isinstance(domain, runtime.CartesianDomain):
         if any(isinstance(o, common.Connectivity) for o in offset_provider.values()):
             raise RuntimeError(
-                "Got a `CartesianDomain`, but found a `Connectivity` in `offset_provider`, expected `UnstructuredDomain`."
+                "Got a 'CartesianDomain', but found a 'Connectivity' in 'offset_provider', expected 'UnstructuredDomain'."
             )
 
 
 def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     if "offset_provider" not in kwargs:
-        raise RuntimeError("offset_provider not provided")
+        raise RuntimeError("'offset_provider' not provided.")
 
     offset_provider = kwargs["offset_provider"]
 
@@ -1523,7 +1517,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
         if not (common.is_field(out) or is_tuple_of_field(out)):
-            raise TypeError("Out needs to be a located field.")
+            raise TypeError("'Out' needs to be a located field.")
 
         column_range = None
         column: Optional[ColumnDescriptor] = None

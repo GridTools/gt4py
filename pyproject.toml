@@ -34,7 +34,7 @@ dependencies = [
   'deepdiff>=5.6.0',
   'devtools>=0.6',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.1,==2.*',
+  'gridtools-cpp>=2.3.2,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
@@ -69,15 +69,15 @@ requires-python = '>=3.8'
 cuda = ['cupy>=12.0']
 cuda11x = ['cupy-cuda11x>=12.0']
 cuda12x = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
+dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
 # Always add all extra packages to 'full' for a simple full gt4py installation
 full = [
   'clang-format>=9.0',
-  'dace>=0.14.2,<0.15',
+  'dace>=0.15.1,<0.16',
   'hypothesis>=6.0.0',
   'pytest>=7.0',
-  'sympy>=1.7',
+  'sympy>=1.9',
   'scipy>=1.7.2',
   'jax[cpu]>=0.4.13'
 ]
@@ -162,7 +162,9 @@ ignore = [
   'DAR',  # Disable dargling errors by default
   'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
+  'W503',  # Line break occurred before a binary operator
+  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above
@@ -340,15 +342,21 @@ markers = [
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
+  'uses_scan: tests that uses scan',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
+  'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
+  'uses_scan_nested: tests that use nested scans',
+  'uses_scan_requiring_projector: tests need a projector implementation in gtfn',
   'uses_sparse_fields: tests that require backend support for sparse fields',
+  'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
   'uses_tuple_args: tests that require backend support for tuple arguments',
   'uses_tuple_returns: tests that require backend support for tuple results',
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
-  'uses_scan: tests that uses scan',
+  'uses_max_over: tests that use the max_over builtin',
+  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']

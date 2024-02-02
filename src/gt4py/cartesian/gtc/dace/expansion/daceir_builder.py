@@ -30,6 +30,7 @@ from gt4py.cartesian.gtc.dace.utils import (
     compute_dcir_access_infos,
     flatten_list,
     get_tasklet_symbol,
+    make_dace_subset,
     union_inout_memlets,
     union_node_grid_subsets,
     untile_memlets,
@@ -117,18 +118,26 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
             len(
                 set(
                     (
-                        None
-                        if mask.intervals[axis.to_idx()].start is None
-                        else mask.intervals[axis.to_idx()].start.level,
-                        None
-                        if mask.intervals[axis.to_idx()].start is None
-                        else mask.intervals[axis.to_idx()].start.offset,
-                        None
-                        if mask.intervals[axis.to_idx()].end is None
-                        else mask.intervals[axis.to_idx()].end.level,
-                        None
-                        if mask.intervals[axis.to_idx()].end is None
-                        else mask.intervals[axis.to_idx()].end.offset,
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].start is None
+                            else mask.intervals[axis.to_idx()].start.level
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].start is None
+                            else mask.intervals[axis.to_idx()].start.offset
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].end is None
+                            else mask.intervals[axis.to_idx()].end.level
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].end is None
+                            else mask.intervals[axis.to_idx()].end.offset
+                        ),
                     )
                     for mask in eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask)
                 )
@@ -457,6 +466,40 @@ class DaCeIRBuilder(eve.NodeTranslator):
             read_memlets=read_memlets,
             write_memlets=write_memlets,
         )
+
+        for memlet in [*read_memlets, *write_memlets]:
+            """
+            This loop handles the special case of a tasklet performing array access.
+            The memlet should pass the full array shape (no tiling) and
+            the tasklet expression for array access should use all explicit indexes.
+            """
+            array_ndims = len(global_ctx.arrays[memlet.field].shape)
+            field_decl = global_ctx.library_node.field_decls[memlet.field]
+            # calculate array subset on original memlet
+            memlet_subset = make_dace_subset(
+                global_ctx.library_node.access_infos[memlet.field],
+                memlet.access_info,
+                field_decl.data_dims,
+            )
+            # select index values for single-point grid access
+            memlet_data_index = [
+                dcir.Literal(value=str(dim_range[0]), dtype=common.DataType.INT32)
+                for dim_range, dim_size in zip(memlet_subset, memlet_subset.size())
+                if dim_size == 1
+            ]
+            if len(memlet_data_index) < array_ndims:
+                reshape_memlet = False
+                for access_node in dcir_node.walk_values().if_isinstance(dcir.IndexAccess):
+                    if access_node.data_index and access_node.name == memlet.connector:
+                        access_node.data_index = memlet_data_index + access_node.data_index
+                        assert len(access_node.data_index) == array_ndims
+                        reshape_memlet = True
+                if reshape_memlet:
+                    # ensure that memlet symbols used for array indexing are defined in context
+                    for sym in memlet.access_info.grid_subset.free_symbols:
+                        symbol_collector.add_symbol(sym)
+                    # set full shape on memlet
+                    memlet.access_info = global_ctx.library_node.access_infos[memlet.field]
 
         for item in reversed(expansion_items):
             iteration_ctx = iteration_ctx.pop()

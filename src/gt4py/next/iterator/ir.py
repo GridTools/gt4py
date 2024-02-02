@@ -17,12 +17,15 @@ from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
+from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 
 
 @noninstantiable
 class Node(eve.Node):
+    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
+
     def __str__(self) -> str:
         from gt4py.next.iterator.pretty_printer import pformat
 
@@ -42,26 +45,25 @@ class Sym(Node):  # helper
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
     kind: typing.Literal["Iterator", "Value", None] = None
-    dtype: Optional[
-        tuple[str, bool]
-    ] = None  # format: name of primitive type, boolean indicating if it is a list
+    dtype: Optional[tuple[str, bool]] = (
+        None  # format: name of primitive type, boolean indicating if it is a list
+    )
 
     @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
         if value and value not in ["Iterator", "Value"]:
-            raise ValueError(f"Invalid kind `{value}`, must be one of `Iterator`, `Value`.")
+            raise ValueError(f"Invalid kind '{value}', must be one of 'Iterator', 'Value'.")
 
     @datamodels.validator("dtype")
     def _dtype_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
         if value and value[0] not in TYPEBUILTINS:
             raise ValueError(
-                f"Invalid dtype `{value}`, must be one of `{'`, `'.join(TYPEBUILTINS)}`."
+                f"Invalid dtype '{value}', must be one of '{', '.join(TYPEBUILTINS)}'."
             )
 
 
 @noninstantiable
-class Expr(Node):
-    ...
+class Expr(Node): ...
 
 
 class Literal(Expr):
@@ -71,7 +73,7 @@ class Literal(Expr):
     @datamodels.validator("type")
     def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if value not in TYPEBUILTINS:
-            raise ValueError(f"{value} is not a valid builtin type.")
+            raise ValueError(f"'{value}' is not a valid builtin type.")
 
 
 class NoneLiteral(Expr):
@@ -115,7 +117,7 @@ class StencilClosure(Node):
     @datamodels.validator("output")
     def _output_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
         if isinstance(value, FunCall) and value.fun != SymRef(id="make_tuple"):
-            raise ValueError("Only FunCall to `make_tuple` allowed.")
+            raise ValueError("Only FunCall to 'make_tuple' allowed.")
 
 
 UNARY_MATH_NUMBER_BUILTINS = {"abs"}

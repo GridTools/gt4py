@@ -58,8 +58,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
-        ...
+    def __gt_device_type__(self) -> core_defs.DeviceTypeT: ...
 
     @abc.abstractmethod
     def __gt_allocate__(
@@ -68,8 +67,7 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
-        ...
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -87,8 +85,7 @@ class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
-        ...
+    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]: ...
 
 
 def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactoryProtocol]:
@@ -142,7 +139,9 @@ def get_allocator(
     elif not strict or is_field_allocator(default):
         return default
     else:
-        raise TypeError(f"Object {obj} is neither a field allocator nor a field allocator factory")
+        raise TypeError(
+            f"Object '{obj}' is neither a field allocator nor a field allocator factory."
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -176,9 +175,9 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
 
 if TYPE_CHECKING:
-    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[
-        FieldBufferAllocatorProtocol
-    ] = BaseFieldBufferAllocator
+    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[FieldBufferAllocatorProtocol] = (
+        BaseFieldBufferAllocator
+    )
 
 
 def horizontal_first_layout_mapper(
@@ -228,6 +227,7 @@ class StandardCPUFieldBufferAllocator(BaseFieldBufferAllocator[core_defs.CPUDevi
 
 
 device_allocators[core_defs.DeviceType.CPU] = StandardCPUFieldBufferAllocator()
+
 
 assert is_field_allocator(device_allocators[core_defs.DeviceType.CPU])
 
@@ -331,7 +331,7 @@ def allocate(
 
     """
     if device is None and allocator is None:
-        raise ValueError("No 'device' or 'allocator' specified")
+        raise ValueError("No 'device' or 'allocator' specified.")
     actual_allocator = get_allocator(allocator)
     if actual_allocator is None:
         assert device is not None  # for mypy
@@ -339,7 +339,7 @@ def allocate(
     elif device is None:
         device = core_defs.Device(actual_allocator.__gt_device_type__, 0)
     elif device.device_type != actual_allocator.__gt_device_type__:
-        raise ValueError(f"Device {device} and allocator {actual_allocator} are incompatible")
+        raise ValueError(f"Device '{device}' and allocator '{actual_allocator}' are incompatible.")
 
     return actual_allocator.__gt_allocate__(
         domain=common.domain(domain),

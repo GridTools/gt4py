@@ -20,9 +20,8 @@ import dataclasses
 import enum
 import functools
 import numbers
-import sys
 import types
-from collections.abc import Mapping, Sequence, Set
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -33,10 +32,13 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
+    Final,
+    Generic,
     Never,
     Optional,
     ParamSpec,
     Protocol,
+    Self,
     TypeAlias,
     TypeGuard,
     TypeVar,
@@ -50,16 +52,6 @@ from gt4py.eve.type_definitions import StrEnum
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
-
-
-class Infinity(int):
-    @classmethod
-    def positive(cls) -> Infinity:
-        return cls(sys.maxsize)
-
-    @classmethod
-    def negative(cls) -> Infinity:
-        return cls(-sys.maxsize)
 
 
 Tag: TypeAlias = str
@@ -84,48 +76,103 @@ class Dimension:
         return f"{self.value}[{self.kind}]"
 
 
+class Infinity(enum.Enum):
+    """Describes an unbounded `UnitRange`."""
+
+    NEGATIVE = enum.auto()
+    POSITIVE = enum.auto()
+
+    def __add__(self, _: int) -> Self:
+        return self
+
+    __radd__ = __add__
+
+    def __sub__(self, _: int) -> Self:
+        return self
+
+    __rsub__ = __sub__
+
+    def __le__(self, other: int | Infinity) -> bool:
+        return self is self.NEGATIVE or other is self.POSITIVE
+
+    def __lt__(self, other: int | Infinity) -> bool:
+        return self is self.NEGATIVE and other is not self
+
+    def __ge__(self, other: int | Infinity) -> bool:
+        return self is self.POSITIVE or other is self.NEGATIVE
+
+    def __gt__(self, other: int | Infinity) -> bool:
+        return self is self.POSITIVE and other is not self
+
+
+def _as_int(v: core_defs.IntegralScalar | Infinity) -> int | Infinity:
+    return v if isinstance(v, Infinity) else int(v)
+
+
+_Left = TypeVar("_Left", int, Infinity)
+_Right = TypeVar("_Right", int, Infinity)
+
+
 @dataclasses.dataclass(frozen=True, init=False)
-class UnitRange(Sequence[int], Set[int]):
+class UnitRange(Sequence[int], Generic[_Left, _Right]):
     """Range from `start` to `stop` with step size one."""
 
-    start: int
-    stop: int
+    start: _Left
+    stop: _Right
 
-    def __init__(self, start: core_defs.IntegralScalar, stop: core_defs.IntegralScalar) -> None:
+    def __init__(
+        self, start: core_defs.IntegralScalar | Infinity, stop: core_defs.IntegralScalar | Infinity
+    ) -> None:
         if start < stop:
-            object.__setattr__(self, "start", int(start))
-            object.__setattr__(self, "stop", int(stop))
+            object.__setattr__(self, "start", _as_int(start))
+            object.__setattr__(self, "stop", _as_int(stop))
         else:
             # make UnitRange(0,0) the single empty UnitRange
             object.__setattr__(self, "start", 0)
             object.__setattr__(self, "stop", 0)
 
-    # TODO: the whole infinity idea and implementation is broken and should be replaced
     @classmethod
-    def infinity(cls) -> UnitRange:
-        return cls(Infinity.negative(), Infinity.positive())
+    def infinite(
+        cls,
+    ) -> UnitRange:
+        return cls(Infinity.NEGATIVE, Infinity.POSITIVE)
 
     def __len__(self) -> int:
-        if Infinity.positive() in (abs(self.start), abs(self.stop)):
-            return Infinity.positive()
-        return max(0, self.stop - self.start)
+        if UnitRange.is_finite(self):
+            return max(0, self.stop - self.start)
+        raise ValueError("Cannot compute length of open 'UnitRange'.")
+
+    @classmethod
+    def is_finite(cls, obj: UnitRange) -> TypeGuard[FiniteUnitRange]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return obj.start is not Infinity.NEGATIVE and obj.stop is not Infinity.POSITIVE
+
+    @classmethod
+    def is_right_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[_Left, int]]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return obj.stop is not Infinity.POSITIVE
+
+    @classmethod
+    def is_left_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[int, _Right]]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return obj.start is not Infinity.NEGATIVE
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
 
     @overload
-    def __getitem__(self, index: int) -> int:
-        ...
+    def __getitem__(self, index: int) -> int: ...
 
     @overload
     def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
         ...
 
     def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+        assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             if step != 1:
-                raise ValueError("UnitRange: step required to be `1`.")
+                raise ValueError("'UnitRange': step required to be '1'.")
             new_start = self.start + (start or 0)
             new_stop = (self.start if stop > 0 else self.stop) + stop
             return UnitRange(new_start, new_stop)
@@ -136,54 +183,55 @@ class UnitRange(Sequence[int], Set[int]):
             if 0 <= index < len(self):
                 return self.start + index
             else:
-                raise IndexError("UnitRange index out of range")
+                raise IndexError("'UnitRange' index out of range")
 
-    def __and__(self, other: Set[int]) -> UnitRange:
-        if isinstance(other, UnitRange):
-            start = max(self.start, other.start)
-            stop = min(self.stop, other.stop)
-            return UnitRange(start, stop)
+    def __and__(self, other: UnitRange) -> UnitRange:
+        return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
+
+    def __contains__(self, value: Any) -> bool:
+        # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+        #   and remove int cast, once the related mypy bug (#16358) gets fixed
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return self.start <= cast(int, value) < self.stop
         else:
-            raise NotImplementedError("Can only find the intersection between UnitRange instances.")
-
-    def __le__(self, other: Set[int]):
-        if isinstance(other, UnitRange):
-            return self.start >= other.start and self.stop <= other.stop
-        elif len(self) == Infinity.positive():
             return False
-        else:
-            return Set.__le__(self, other)
 
-    def __add__(self, other: int | Set[int]) -> UnitRange:
-        if isinstance(other, int):
-            if other == Infinity.positive():
-                return UnitRange.infinity()
-            elif other == Infinity.negative():
-                return UnitRange(0, 0)
-            return UnitRange(
-                *(
-                    s if s in [Infinity.negative(), Infinity.positive()] else s + other
-                    for s in (self.start, self.stop)
-                )
-            )
-        else:
-            raise NotImplementedError("Can only compute union with int instances.")
+    def __le__(self, other: UnitRange) -> bool:
+        return self.start >= other.start and self.stop <= other.stop
 
-    def __sub__(self, other: int | Set[int]) -> UnitRange:
-        if isinstance(other, int):
-            if other == Infinity.negative():
-                return self + Infinity.positive()
-            elif other == Infinity.positive():
-                return self + Infinity.negative()
-            else:
-                return self + (-other)
-        else:
-            raise NotImplementedError("Can only compute substraction with int instances.")
+    def __lt__(self, other: UnitRange) -> bool:
+        return (self.start > other.start and self.stop <= other.stop) or (
+            self.start >= other.start and self.stop < other.stop
+        )
 
-    __ge__ = __lt__ = __gt__ = lambda self, other: NotImplemented
+    def __ge__(self, other: UnitRange) -> bool:
+        return self.start <= other.start and self.stop >= other.stop
+
+    def __gt__(self, other: UnitRange) -> bool:
+        return (self.start < other.start and self.stop >= other.stop) or (
+            self.start <= other.start and self.stop > other.stop
+        )
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, UnitRange):
+            return self.start == other.start and self.stop == other.stop
+        else:
+            return False
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
+    def __add__(self, other: int) -> UnitRange:
+        return UnitRange(self.start + other, self.stop + other)
+
+    def __sub__(self, other: int) -> UnitRange:
+        return UnitRange(self.start - other, self.stop - other)
 
     def __str__(self) -> str:
         return f"({self.start}:{self.stop})"
+
+
+FiniteUnitRange: TypeAlias = UnitRange[int, int]
 
 
 RangeLike: TypeAlias = (
@@ -191,6 +239,7 @@ RangeLike: TypeAlias = (
     | range
     | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
     | core_defs.IntegralScalar
+    | None
 )
 
 
@@ -199,24 +248,29 @@ def unit_range(r: RangeLike) -> UnitRange:
         return r
     if isinstance(r, range):
         if r.step != 1:
-            raise ValueError(f"`UnitRange` requires step size 1, got `{r.step}`.")
+            raise ValueError(f"'UnitRange' requires step size 1, got '{r.step}'.")
         return UnitRange(r.start, r.stop)
     # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
     #   once the related mypy bug (#16358) gets fixed
     if (
         isinstance(r, tuple)
-        and isinstance(r[0], core_defs.INTEGRAL_TYPES)
-        and isinstance(r[1], core_defs.INTEGRAL_TYPES)
+        and (isinstance(r[0], core_defs.INTEGRAL_TYPES) or r[0] in (None, Infinity.NEGATIVE))
+        and (isinstance(r[1], core_defs.INTEGRAL_TYPES) or r[1] in (None, Infinity.POSITIVE))
     ):
-        return UnitRange(r[0], r[1])
+        start = r[0] if r[0] is not None else Infinity.NEGATIVE
+        stop = r[1] if r[1] is not None else Infinity.POSITIVE
+        return UnitRange(start, stop)
     if isinstance(r, core_defs.INTEGRAL_TYPES):
         return UnitRange(0, cast(core_defs.IntegralScalar, r))
-    raise ValueError(f"`{r!r}` cannot be interpreted as `UnitRange`.")
+    if r is None:
+        return UnitRange.infinite()
+    raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
+FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
@@ -241,6 +295,10 @@ def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
         and isinstance(v[0], Dimension)
         and isinstance(v[1], UnitRange)
     )
+
+
+def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
+    return UnitRange.is_finite(v[1])
 
 
 def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
@@ -281,35 +339,44 @@ def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
     return (v[0], unit_range(v[1]))
 
 
+_Rng = TypeVar(
+    "_Rng",
+    UnitRange[int, int],
+    UnitRange[Infinity, int],
+    UnitRange[int, Infinity],
+    UnitRange[Infinity, Infinity],
+)
+
+
 @dataclasses.dataclass(frozen=True, init=False)
-class Domain(Sequence[NamedRange]):
+class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
 
     dims: tuple[Dimension, ...]
-    ranges: tuple[UnitRange, ...]
+    ranges: tuple[_Rng, ...]
 
     def __init__(
         self,
-        *args: NamedRange,
+        *args: tuple[Dimension, _Rng],
         dims: Optional[Sequence[Dimension]] = None,
-        ranges: Optional[Sequence[UnitRange]] = None,
+        ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
-                raise ValueError("Either both none of `dims` and `ranges` must be specified.")
+                raise ValueError("Either both none of 'dims' and 'ranges' must be specified.")
             if len(args) > 0:
                 raise ValueError(
-                    "No extra `args` allowed when constructing fomr `dims` and `ranges`."
+                    "No extra 'args' allowed when constructing fomr 'dims' and 'ranges'."
                 )
 
             assert dims is not None and ranges is not None  # for mypy
             if not all(isinstance(dim, Dimension) for dim in dims):
                 raise ValueError(
-                    f"`dims` argument needs to be a `tuple[Dimension, ...], got `{dims}`."
+                    f"'dims' argument needs to be a 'tuple[Dimension, ...]', got '{dims}'."
                 )
             if not all(isinstance(rng, UnitRange) for rng in ranges):
                 raise ValueError(
-                    f"`ranges` argument needs to be a `tuple[UnitRange, ...], got `{ranges}`."
+                    f"'ranges' argument needs to be a 'tuple[UnitRange, ...]', got '{ranges}'."
                 )
             if len(dims) != len(ranges):
                 raise ValueError(
@@ -320,13 +387,15 @@ class Domain(Sequence[NamedRange]):
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
             if not all(is_named_range(arg) for arg in args):
-                raise ValueError(f"Elements of `Domain` need to be `NamedRange`s, got `{args}`.")
+                raise ValueError(
+                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                )
             dims, ranges = zip(*args) if args else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
 
         if len(set(self.dims)) != len(self.dims):
-            raise NotImplementedError(f"Domain dimensions must be unique, not {self.dims}.")
+            raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")
 
     def __len__(self) -> int:
         return len(self.ranges)
@@ -339,17 +408,22 @@ class Domain(Sequence[NamedRange]):
     def shape(self) -> tuple[int, ...]:
         return tuple(len(r) for r in self.ranges)
 
+    @classmethod
+    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+
     @overload
-    def __getitem__(self, index: int) -> NamedRange:
+    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> Domain:  # noqa: F811 # redefine unused
-        ...
-
-    @overload
-    def __getitem__(self, index: Dimension) -> NamedRange:  # noqa: F811 # redefine unused
-        ...
+    def __getitem__(  # noqa: F811 # redefine unused
+        self, index: Dimension
+    ) -> tuple[Dimension, _Rng]: ...
 
     def __getitem__(  # noqa: F811 # redefine unused
         self, index: int | slice | Dimension
@@ -365,7 +439,7 @@ class Domain(Sequence[NamedRange]):
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
             except ValueError:
-                raise KeyError(f"No Dimension of type {index} is present in the Domain.")
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
@@ -415,10 +489,12 @@ class Domain(Sequence[NamedRange]):
         if isinstance(index, Dimension):
             dim_index = self.dim_index(index)
             if dim_index is None:
-                raise ValueError(f"Dimension {index} not found in Domain.")
+                raise ValueError(f"Dimension '{index}' not found in Domain.")
             index = dim_index
         if not (-len(self.dims) <= index < len(self.dims)):
-            raise IndexError(f"Index {index} out of bounds for Domain of length {len(self.dims)}.")
+            raise IndexError(
+                f"Index '{index}' out of bounds for Domain of length {len(self.dims)}."
+            )
         if index < 0:
             index += len(self.dims)
         new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
@@ -426,6 +502,9 @@ class Domain(Sequence[NamedRange]):
         ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
 
         return Domain(dims=dims, ranges=ranges)
+
+
+FiniteDomain: TypeAlias = Domain[FiniteUnitRange]
 
 
 DomainLike: TypeAlias = (
@@ -462,20 +541,23 @@ def domain(domain_like: DomainLike) -> Domain:
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
                 dims=tuple(domain_like.keys()),
-                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),  # type: ignore[arg-type] # type of `s` is checked in condition
+                ranges=tuple(
+                    UnitRange(0, s)  # type: ignore[arg-type] # type of `s` is checked in condition
+                    for s in domain_like.values()
+                ),
             )
         return Domain(
             dims=tuple(domain_like.keys()),
             ranges=tuple(unit_range(r) for r in domain_like.values()),
         )
-    raise ValueError(f"`{domain_like}` is not `DomainLike`.")
+    raise ValueError(f"'{domain_like}' is not 'DomainLike'.")
 
 
 def _broadcast_ranges(
     broadcast_dims: Sequence[Dimension], dims: Sequence[Dimension], ranges: Sequence[UnitRange]
 ) -> tuple[UnitRange, ...]:
     return tuple(
-        ranges[dims.index(d)] if d in dims else UnitRange.infinity() for d in broadcast_dims
+        ranges[dims.index(d)] if d in dims else UnitRange.infinite() for d in broadcast_dims
     )
 
 
@@ -487,85 +569,74 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-            ...
+        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
 
 
-# TODO(havogt): replace this protocol with the new `GTFieldInterface` protocol
-class NextGTDimsInterface(Protocol):
+# TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
+class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, Protocol):
     """
-    Protocol for objects providing the `__gt_dims__` property, naming :class:`Field` dimensions.
+    Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`.
 
-    The dimension names are objects of type :class:`Dimension`, in contrast to
-    :mod:`gt4py.cartesian`, where the labels are `str` s with implied semantics,
-    see :class:`~gt4py._core.definitions.GTDimsInterface` .
+    Note:
+    - A default implementation of the `__gt_dims__` interface from `gt4py.cartesian` is provided.
+    - No implementation of `__gt_origin__` is provided because of infinite fields.
     """
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        ...
-
-
-# TODO(egparedes): add support for this new protocol in the cartesian module
-class GTFieldInterface(Protocol):
-    """Protocol for object providing the `__gt_domain__` property, specifying the :class:`Domain` of a :class:`Field`."""
 
     @property
     def __gt_domain__(self) -> Domain:
+        # TODO probably should be changed to `DomainLike` (with a new concept `DimensionLike`)
+        # to allow implementations without having to import gtx.Domain.
         ...
+
+    @property
+    def __gt_dims__(self) -> tuple[str, ...]:
+        return tuple(d.value for d in self.__gt_domain__.dims)
 
 
 @extended_runtime_checkable
-class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, core_defs.ScalarT]):
+class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
-    def domain(self) -> Domain:
-        ...
+    def domain(self) -> Domain: ...
 
     @property
-    def codomain(self) -> type[core_defs.ScalarT] | Dimension:
-        ...
+    def __gt_domain__(self) -> Domain:
+        return self.domain
 
     @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        ...
+    def codomain(self) -> type[core_defs.ScalarT] | Dimension: ...
 
     @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        ...
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]: ...
+
+    @property
+    def ndarray(self) -> core_defs.NDArrayObject: ...
 
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
-    def asnumpy(self) -> np.ndarray:
-        ...
+    def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
 
     @abc.abstractmethod
-    def __abs__(self) -> Field:
-        ...
+    def __abs__(self) -> Field: ...
 
     @abc.abstractmethod
-    def __neg__(self) -> Field:
-        ...
+    def __neg__(self) -> Field: ...
 
     @abc.abstractmethod
     def __invert__(self) -> Field:
@@ -580,48 +651,37 @@ class Field(NextGTDimsInterface, core_defs.GTOriginInterface, Protocol[DimsT, co
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
@@ -649,8 +709,7 @@ def is_field(
 @extended_runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None:
-        ...
+    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
 def is_mutable_field(
@@ -670,11 +729,11 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):  # type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but break in another place
+class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT:
-        ...
+    def codomain(self) -> DimT: ...
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -685,66 +744,65 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        ...
+    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
 
     # Operators
     def __abs__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __neg__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __invert__(self) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __eq__(self, other: Any) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __ne__(self, other: Any) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __mul__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rmul__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __truediv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rtruediv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __floordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rfloordiv__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __pow__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __and__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __or__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("ConnectivityField does not support this operation")
+        raise TypeError("'ConnectivityField' does not support this operation.")
 
 
 def is_connectivity_field(
@@ -757,8 +815,10 @@ def is_connectivity_field(
     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -768,8 +828,9 @@ def field(
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
@@ -837,15 +898,11 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinity(),))
-
-    @property
-    def __gt_dims__(self) -> tuple[Dimension, ...]:
-        return self.domain.dims
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
 
     @property
     def __gt_origin__(self) -> Never:
-        raise TypeError("CartesianConnectivity does not support this operation")
+        raise TypeError("'CartesianConnectivity' does not support this operation.")
 
     @property
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
@@ -877,7 +934,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         if not isinstance(image_range, UnitRange):
             if image_range[0] != self.codomain:
                 raise ValueError(
-                    f"Dimension {image_range[0]} does not match the codomain dimension {self.codomain}"
+                    f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
                 )
 
             image_range = image_range[1]
@@ -898,7 +955,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     __getitem__ = restrict
 
 
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique
@@ -991,9 +1048,9 @@ class FieldBuiltinFuncRegistry:
     dispatching (via ChainMap) to its parent's registries.
     """
 
-    _builtin_func_map: collections.ChainMap[
-        fbuiltins.BuiltInFunction, Callable
-    ] = collections.ChainMap()
+    _builtin_func_map: collections.ChainMap[fbuiltins.BuiltInFunction, Callable] = (
+        collections.ChainMap()
+    )
 
     def __init_subclass__(cls, **kwargs):
         cls._builtin_func_map = collections.ChainMap(
@@ -1017,3 +1074,9 @@ class FieldBuiltinFuncRegistry:
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
+
+
+#: Numeric value used to represent missing values in connectivities.
+#: Equivalent to the `_FillValue` attribute in the UGRID Conventions
+#: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
+SKIP_VALUE: Final[int] = -1

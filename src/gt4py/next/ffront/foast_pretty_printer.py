@@ -110,7 +110,7 @@ class _PrettyPrinter(TemplatedGenerator):
         node_type_name = type(node).__name__
         if not hasattr(cls, node_type_name) and not hasattr(cls, f"visit_{node_type_name}"):
             raise NotImplementedError(
-                f"Pretty printer does not support nodes of type " f"`{node_type_name}`."
+                f"Pretty printer does not support nodes of type '{node_type_name}'."
             )
         return cls().visit(node, **kwargs)
 

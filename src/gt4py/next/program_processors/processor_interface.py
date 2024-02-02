@@ -40,20 +40,74 @@ ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=T
 
 
 class ProgramProcessorCallable(Protocol[OutputT]):
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
-        ...
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT: ...
 
 
 class ProgramProcessor(ProgramProcessorCallable[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
-    def kind(self) -> type[ProcessorKindT]:
-        ...
+    def kind(self) -> type[ProcessorKindT]: ...
 
 
 class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
     @property
     def kind(self) -> type[ProgramFormatter]:
         return ProgramFormatter
+
+
+def _make_arg_filter(
+    accept_args: None | int | Literal["all"] = "all",
+) -> Callable[[tuple[Any, ...]], tuple[Any, ...]]:
+    match accept_args:
+        case None:
+
+            def arg_filter(args: tuple[Any, ...]) -> tuple[Any, ...]:
+                return ()
+
+        case "all":
+
+            def arg_filter(args: tuple[Any, ...]) -> tuple[Any, ...]:
+                return args
+
+        case int():
+            if accept_args < 0:
+                raise ValueError(
+                    f"Number of accepted arguments cannot be a negative number, got {accept_args}."
+                )
+
+            def arg_filter(args: tuple[Any, ...]) -> tuple[Any, ...]:
+                return args[:accept_args]
+
+        case _:
+            raise ValueError(f"Invalid 'accept_args' value: {accept_args}.")
+    return arg_filter
+
+
+def _make_kwarg_filter(
+    accept_kwargs: None | Sequence[str] | Literal["all"] = "all",
+) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    match accept_kwargs:
+        case None:
+
+            def kwarg_filter(kwargs: dict[str, Any]) -> dict[str, Any]:
+                return {}
+
+        case "all":
+
+            def kwarg_filter(kwargs: dict[str, Any]) -> dict[str, Any]:
+                return kwargs
+
+        case Sequence():
+            if not all(isinstance(a, str) for a in accept_kwargs):
+                raise ValueError(
+                    f"Provided invalid list of keyword argument names: '{accept_kwargs}'."
+                )
+
+            def kwarg_filter(kwargs: dict[str, Any]) -> dict[str, Any]:
+                return {key: value for key, value in kwargs.items() if key in accept_kwargs}
+
+        case _:
+            raise ValueError(f"Invalid 'accept_kwargs' value: {accept_kwargs}")
+    return kwarg_filter
 
 
 def make_program_processor(
@@ -80,33 +134,9 @@ def make_program_processor(
     Raises:
         ValueError: If the value of `accept_args` or `accept_kwargs` is invalid.
     """
-    args_filter: Callable[[Sequence], Sequence]
-    if accept_args is None:
-        args_filter = lambda args: ()  # noqa: E731  # use def instead of named lambdas
-    elif accept_args == "all":
-        args_filter = lambda args: args  # noqa: E731
-    elif isinstance(accept_args, int):
-        if accept_args < 0:
-            raise ValueError(
-                f"Number of accepted arguments cannot be a negative number ({accept_args})"
-            )
-        args_filter = lambda args: args[:accept_args]  # type: ignore[misc] # noqa: E731
-    else:
-        raise ValueError(f"Invalid ({accept_args}) accept_args value")
+    args_filter = _make_arg_filter(accept_args)
 
-    filtered_kwargs: Callable[[dict[str, Any]], dict[str, Any]]
-    if accept_kwargs is None:
-        filtered_kwargs = lambda kwargs: {}  # noqa: E731  # use def instead of named lambdas
-    elif accept_kwargs == "all":  # don't swap with 'isinstance(..., Sequence)'
-        filtered_kwargs = lambda kwargs: kwargs  # noqa: E731
-    elif isinstance(accept_kwargs, Sequence):
-        if not all(isinstance(a, str) for a in accept_kwargs):
-            raise ValueError(f"Provided invalid list of keyword argument names ({accept_args})")
-        filtered_kwargs = lambda kwargs: {  # noqa: E731
-            key: value for key, value in kwargs.items() if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
-        }
-    else:
-        raise ValueError(f"Invalid ({accept_kwargs}) 'accept_kwargs' value")
+    filtered_kwargs = _make_kwarg_filter(accept_kwargs)
 
     @functools.wraps(func)
     def _wrapper(program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
@@ -195,15 +225,14 @@ def ensure_processor_kind(
     obj: ProgramProcessor[OutputT, ProcessorKindT], kind: type[ProcessorKindT]
 ) -> None:
     if not is_processor_kind(obj, kind):
-        raise TypeError(f"{obj} is not a {kind.__name__}!")
+        raise TypeError(f"'{obj}' is not a '{kind.__name__}'.")
 
 
 class ProgramBackend(
     ProgramProcessor[None, "ProgramExecutor"],
     next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT],
     Protocol[core_defs.DeviceTypeT],
-):
-    ...
+): ...
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
