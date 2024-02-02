@@ -495,6 +495,10 @@ def _make_reduction(
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
+        if len([d for d in field.domain.dims if d.kind is common.DimensionKind.LOCAL]) > 1:
+            raise NotImplementedError(
+                "Reducing a field with more than one local dimension is not supported."
+            )
         reduce_dim_index = field.domain.dims.index(axis)
         current_offset_provider = embedded_context.offset_provider.get(None)
         assert current_offset_provider is not None
@@ -502,12 +506,14 @@ def _make_reduction(
             axis.value
         ]  # assumes offset and local dimension have same name
         assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
-        # TODO unclear in case of multiple local dimensions (probably just chain)
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
 
-        # TODO add test that requires broadcasting
+        broadcast_slice = tuple(
+            slice(None) if d in [axis, offset_definition.origin_axis] else None
+            for d in field.domain.dims
+        )
         masked_array = field.array_ns.where(
-            field.array_ns.asarray(offset_definition.table) != common.SKIP_VALUE,
+            field.array_ns.asarray(offset_definition.table[broadcast_slice]) != common.SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )
