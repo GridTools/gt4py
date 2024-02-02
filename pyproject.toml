@@ -363,6 +363,9 @@ show-fixes = true
 # show-source = true
 target-version = 'py310'
 
+[tool.ruff.format]
+docstring-code-format = true
+
 [tool.ruff.lint]
 # # Rules sets:
 # E: pycodestyle
@@ -381,7 +384,8 @@ ignore = [
   # 'D1',  # Public code object needs docstring
   # 'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'E701'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'RUF100'
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
