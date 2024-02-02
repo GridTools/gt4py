@@ -1,6 +1,10 @@
 ##[[[cog
-## import re, tomli
-## project = tomli.loads(open("pyproject.toml").read())
+## import re, sys
+## if sys.version_info >= (3, 11):
+##    import tomllib
+## else:
+##    import tomli as tomllib
+## project = tomllib.loads(open("pyproject.toml").read())
 ## versions = "\n".join(project["project"]["optional-dependencies"]["full"])
 ## for pkg in ['hypothesis', 'pytest']:
 ##    print(re.search(f"\n({pkg} *[=>~!].*)\n", versions)[1])
@@ -40,6 +44,6 @@ pytest-xdist[psutil]>=2.4
 ruff>=0.0.265
 sphinx>=4.4
 sphinx_rtd_theme>=1.0
-tomli>=2.0.1
+tomli>=2.0.1;python_version<'3.11'
 tox>=3.2.0
 types-all>=1.0.0

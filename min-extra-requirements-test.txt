@@ -1,6 +1,10 @@
 ##[[[cog
-## import re, tomli
-## project = tomli.loads(open("pyproject.toml").read())
+## import re, sys
+## if sys.version_info >= (3, 11):
+##    import tomllib
+## else:
+##    import tomli as tomllib
+## project = tomllib.loads(open("pyproject.toml").read())
 ## requirements = set(
 ##     rr
 ##     for r in (
@@ -74,7 +78,7 @@ sphinx==4.4
 sphinx_rtd_theme==1.0
 sympy==1.9
 tabulate==0.8.10
-tomli==2.0.1
+tomli==2.0.1;python_version<'3.11'
 tox==3.2.0
 types-all==1.0.0
 typing-extensions==4.2

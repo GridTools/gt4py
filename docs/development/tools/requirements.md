@@ -14,7 +14,7 @@ The following files in this repository contain information about required third-
 
 The expected workflow to update GT4Py requirements is as follows:
 
-1. For changes in the GT4Py package dependencies, update the relevant table in `pyproject.toml`. When modifying the _project.optional-dependencies_ tables, make sure the `full` extra table **always** contains the combined dependencies from all the other extra tables.
+1. For changes in the GT4Py package dependencies, update the relevant table in `pyproject.toml`. When adding new tables to the _project.optional-dependencies_ section, make sure to add the new table as a dependency of the `all` extra table when possible.
 
 2. For changes in the development tools, update the `requirements-dev.in` file.
 
