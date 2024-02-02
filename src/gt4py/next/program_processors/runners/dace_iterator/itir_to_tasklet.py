@@ -494,30 +494,31 @@ def builtin_can_deref(
     assert isinstance(shift_callable, itir.FunCall)
     assert isinstance(shift_callable.fun, itir.SymRef)
     assert shift_callable.fun.id == "shift"
-
-    # limit support to shift in single dimension
-    assert len(shift_callable.args) == 2
-    assert isinstance(shift_callable.args[0], itir.OffsetLiteral)
-    offset_dim = shift_callable.args[0].value
-    assert isinstance(offset_dim, str)
-    offset_provider = transformer.offset_provider[offset_dim]
-
-    # limit support to offset providers based on neighbor tables
-    assert isinstance(offset_provider, NeighborTableOffsetProvider)
-    if not offset_provider.has_skip_values:
-        # optimize trivial case of full connectivity
-        return transformer.add_expr_tasklet(
-            [], "True", dace.dtypes.bool, "can_deref", dace_debuginfo=di
-        )
-
-    # for non-trivial case, visit shift to get set of indices for deref
     iterator = transformer._visit_shift(can_deref_callable)
-    assert isinstance(iterator, IteratorExpr)
+
+    # TODO: remove this special case when ITIR reduce-unroll pass is able to catch it
+    if not isinstance(iterator, IteratorExpr):
+        assert len(iterator) == 1 and isinstance(iterator[0], ValueExpr)
+        # We can always deref a value expression, therefore hard-code `can_deref` to True.
+        # Returning a SymbolExpr would be preferable, but it requires update to type-checking.
+        result_name = unique_var_name()
+        transformer.context.body.add_scalar(result_name, dace.dtypes.bool, transient=True)
+        result_node = transformer.context.state.add_access(result_name, debuginfo=di)
+        transformer.context.state.add_edge(
+            transformer.context.state.add_tasklet(
+                "can_always_deref", {}, {"_out"}, "_out = True", debuginfo=di
+            ),
+            "_out",
+            result_node,
+            None,
+            dace.Memlet(data=result_name, subset="0", debuginfo=di),
+        )
+        return [ValueExpr(result_node, dace.dtypes.bool)]
 
     # create tasklet to check that field indices are non-negative (-1 is invalid)
     args = [ValueExpr(access_node, _INDEX_DTYPE) for access_node in iterator.indices.values()]
     internals = [f"{arg.value.data}_v" for arg in args]
-    expr_code = " and ".join([f"{v} >= 0" for v in internals])
+    expr_code = " and ".join(f"{v} != {neighbor_skip_value}" for v in internals)
 
     return transformer.add_expr_tasklet(
         list(zip(args, internals)),
