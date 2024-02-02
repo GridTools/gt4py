@@ -69,28 +69,16 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    unroll_reduce: bool = False,
 ):
-    node = itir_transforms.apply_common_transforms(
+    return itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
+        force_inline_lambda_args=True,
         lift_mode=lift_mode,
         offset_provider=offset_provider,
-        unroll_reduce=False,
+        unroll_reduce=unroll_reduce,
     )
-    # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
-    # In this case, just retry with unrolled reductions.
-    if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
-        fencil_definition = node
-    else:
-        fencil_definition = itir_transforms.apply_common_transforms(
-            program,
-            common_subexpression_elimination=False,
-            force_inline_lambda_args=True,
-            lift_mode=lift_mode,
-            offset_provider=offset_provider,
-            unroll_reduce=True,
-        )
-    return fencil_definition
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
