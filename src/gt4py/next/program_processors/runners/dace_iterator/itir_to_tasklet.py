@@ -193,7 +193,10 @@ def builtin_neighbors(
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
     offset_provider = transformer.offset_provider[offset_dim]
-    assert isinstance(offset_provider, NeighborTableOffsetProvider)
+    if not isinstance(offset_provider, NeighborTableOffsetProvider):
+        raise NotImplementedError(
+            "Neighbor reduction only implemented for connectivity based on neighbor tables."
+        )
 
     iterator = transformer.visit(data)
     assert isinstance(iterator, IteratorExpr)
@@ -225,12 +228,11 @@ def builtin_neighbors(
         ndrange={neighbor_map_index: f"0:{offset_provider.max_neighbors}"},
         debuginfo=di,
     )
-    table_name = connectivity_identifier(offset_dim)
-    table_subset = (f"0:{sdfg.arrays[table_name].shape[0]}", neighbor_map_index)
 
+    table_name = connectivity_identifier(offset_dim)
     shift_tasklet = state.add_tasklet(
         "shift",
-        code="__result = __table[__idx]",
+        code=f"__result = __table[__idx, {neighbor_map_index}]",
         inputs={"__table", "__idx"},
         outputs={"__result"},
         debuginfo=di,
@@ -239,7 +241,7 @@ def builtin_neighbors(
         state.add_access(table_name, debuginfo=di),
         me,
         shift_tasklet,
-        memlet=create_memlet_at(table_name, table_subset),
+        memlet=create_memlet_full(table_name, sdfg.arrays[table_name]),
         dst_conn="__table",
     )
     state.add_memlet_path(
@@ -299,6 +301,12 @@ def builtin_neighbors(
     if not offset_provider.has_skip_values:
         return [ValueExpr(neighbor_value_node, iterator.dtype)]
     else:
+        """
+        In case of neighbor tables with skip values, in addition to the array of neighbor values this function also
+        returns an array of booleans to indicate if the neighbor value is present or not. This node is only used
+        for neighbor reductions with lambda functions, a very specific case. For single input neighbor reductions,
+        the regular case, this node will be removed by the simplify pass.
+        """
         neighbor_valid_var = unique_var_name()
         sdfg.add_array(
             neighbor_valid_var,
@@ -471,7 +479,7 @@ def builtin_make_const_list(
 ) -> list[ValueExpr]:
     di = dace_debuginfo(node, transformer.context.body.debuginfo)
     args = [transformer.visit(arg)[0] for arg in node_args]
-    assert all([isinstance(x, (SymbolExpr, ValueExpr)) for x in args])
+    assert all(isinstance(x, (SymbolExpr, ValueExpr)) for x in args)
     args_dtype = [x.dtype for x in args]
     assert len(set(args_dtype)) == 1
     dtype = args_dtype[0]
@@ -1083,10 +1091,36 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 lambda_node, args=input_args, use_neighbor_tables=False
             )
 
+            input_mapping = {
+                param: (
+                    dace.Memlet(data=arg.value.data, subset="0")
+                    if arg.value.desc(self.context.body).shape == (1,)
+                    else create_memlet_at(arg.value.data, nreduce_index)
+                )
+                for (param, _), arg in zip(inner_inputs, input_args)
+            }
+            output_mapping = {
+                inner_outputs[0].value.data: create_memlet_at(reduce_input_name, nreduce_index)
+            }
+            symbol_mapping = map_nested_sdfg_symbols(
+                self.context.body, lambda_context.body, input_mapping
+            )
+
             if input_valid:
+                """
+                The neighbors builtin returns an array of booleans in case the connectivity table
+                contains skip values. These boolean values indicate whether the neighbor value is present or not,
+                and are used below to construct an if/else branch to bypass the lambda call for neighbor skip values.
+                If the neighbor table has full connectivity (no skip values by type definition), the input_valid node
+                is not built, and the construction of the if/else branch below is also skipped.
+                """
+                input_args.append(input_valid[0])
+                input_valid_node = input_valid[0].value
+                # add input connector to nested sdfg
+                input_mapping["is_valid"] = create_memlet_at(input_valid_node.data, nreduce_index)
                 # check neighbor validity on if/else inter-state edge
-                start_state = lambda_context.body.add_state(is_start_block=True)
-                skip_neighbor_state = lambda_context.body.add_state()
+                start_state = lambda_context.body.add_state("start", is_start_block=True)
+                skip_neighbor_state = lambda_context.body.add_state("skip_neighbor")
                 skip_neighbor_state.add_edge(
                     skip_neighbor_state.add_tasklet(
                         "identity", {}, {"val"}, f"val = {reduce_identity}"
@@ -1108,25 +1142,6 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     dace.InterstateEdge(condition="is_valid == True"),
                 )
 
-            input_mapping = {
-                param: (
-                    dace.Memlet(data=arg.value.data, subset="0")
-                    if arg.value.desc(self.context.body).shape == (1,)
-                    else create_memlet_at(arg.value.data, nreduce_index)
-                )
-                for (param, _), arg in zip(inner_inputs, input_args)
-            } | (
-                {"is_valid": create_memlet_at(input_valid[0].value.data, nreduce_index)}
-                if input_valid
-                else {}
-            )
-            output_mapping = {
-                inner_outputs[0].value.data: create_memlet_at(reduce_input_name, nreduce_index)
-            }
-            symbol_mapping = map_nested_sdfg_symbols(
-                self.context.body, lambda_context.body, input_mapping
-            )
-
             reduce_input_node = self.context.state.add_access(reduce_input_name, debuginfo=di)
 
             nsdfg_node, map_entry, _ = add_mapped_nested_sdfg(
@@ -1136,8 +1151,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 inputs=input_mapping,
                 outputs=output_mapping,
                 symbol_mapping=symbol_mapping,
-                input_nodes={arg.value.data: arg.value for arg in input_args}
-                | ({input_valid[0].value.data: input_valid[0].value} if input_valid else {}),
+                input_nodes={arg.value.data: arg.value for arg in input_args},
                 output_nodes={reduce_input_name: reduce_input_node},
                 debuginfo=di,
             )
