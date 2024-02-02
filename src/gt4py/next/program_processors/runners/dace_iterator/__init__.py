@@ -299,7 +299,7 @@ def build_sdfg_from_itir(
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
             _, frameinfo = warnings.warn(
-                f"{nested_sdfg} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
+                f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
             ), getframeinfo(
                 currentframe()  # type: ignore
             )
