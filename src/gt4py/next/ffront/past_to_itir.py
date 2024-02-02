@@ -389,4 +389,4 @@ class ProgramLowering(
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
             )
         else:
-            raise AssertionError("Only 'minimum', and 'maximum' builtins supported currently.")
+            raise NotImplementedError("Only 'minimum', and 'maximum' builtins supported currently.")
