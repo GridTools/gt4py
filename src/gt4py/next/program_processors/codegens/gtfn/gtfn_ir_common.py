@@ -25,8 +25,7 @@ class Sym(Node):  # helper
     id: Coerced[SymbolName]  # noqa: A003
 
 
-class Expr(Node):
-    ...
+class Expr(Node): ...
 
 
 class SymRef(Expr):

@@ -40,7 +40,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     Cell,
-    fieldview_backend,
+    exec_alloc_descriptor,
     size,
 )
 
@@ -241,10 +241,10 @@ def test_nested_if_stmt_conditional(cartesian_case, condition1, condition2):
     out = cases.allocate(cartesian_case, nested_if_conditional_return, cases.RETURN)()
 
     ref = {
-        (True, True): np.asarray(inp) + 1,
-        (True, False): np.asarray(inp) + 2,
-        (False, True): np.asarray(inp) + 3,
-        (False, False): np.asarray(inp) + 3,
+        (True, True): inp.asnumpy() + 1,
+        (True, False): inp.asnumpy() + 2,
+        (False, True): inp.asnumpy() + 3,
+        (False, False): inp.asnumpy() + 3,
     }
 
     cases.verify(
@@ -289,7 +289,7 @@ def test_nested_if(cartesian_case, condition):
         b,
         condition,
         out=out,
-        ref=np.asarray(a) + 1 if condition else np.asarray(b) + 5,
+        ref=a.asnumpy() + 1 if condition else b.asnumpy() + 5,
     )
 
 

@@ -18,11 +18,11 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import errors
 
-import next_tests.exclusion_matrices as definitions
+from next_tests import definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
     cartesian_case,
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -70,7 +70,7 @@ def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
     assert b == 42.0
 
 
-@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
+@pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a")()
     b = cases.allocate(cartesian_case, addition, "b")()
@@ -81,7 +81,7 @@ def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixt
         cases.verify(cartesian_case, addition, a, b, out=out, ref=wrong_ref)
 
 
-@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
+@pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
     a = cases.allocate(cartesian_case, addition, "a").dtype(np.float32)()
     b = cases.allocate(cartesian_case, addition, "b")()
@@ -91,7 +91,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
         cases.verify(cartesian_case, addition, a, b, out=out, ref=a + b)
 
 
-@pytest.mark.parametrize("fieldview_backend", [~definitions.ProgramBackendId.ROUNDTRIP])
+@pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_with_default_data_fails_with_wrong_reference(
     cartesian_case,  # noqa: F811 # fixtures
 ):

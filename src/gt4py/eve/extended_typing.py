@@ -177,19 +177,16 @@ class NonDataDescriptor(Protocol[_C, _V]):
     @overload
     def __get__(
         self, _instance: Literal[None], _owner_type: Optional[Type[_C]] = None
-    ) -> NonDataDescriptor[_C, _V]:
-        ...
+    ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
     def __get__(  # noqa: F811  # redefinion of unused member
         self, _instance: _C, _owner_type: Optional[Type[_C]] = None
-    ) -> _V:
-        ...
+    ) -> _V: ...
 
     def __get__(  # noqa: F811  # redefinion of unused member
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
-    ) -> _V | NonDataDescriptor[_C, _V]:
-        ...
+    ) -> _V | NonDataDescriptor[_C, _V]: ...
 
 
 class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
@@ -198,11 +195,9 @@ class DataDescriptor(NonDataDescriptor[_C, _V], Protocol):
     See https://docs.python.org/3/howto/descriptor.html for further information.
     """
 
-    def __set__(self, _instance: _C, _value: _V) -> None:
-        ...
+    def __set__(self, _instance: _C, _value: _V) -> None: ...
 
-    def __delete__(self, _instance: _C) -> None:
-        ...
+    def __delete__(self, _instance: _C) -> None: ...
 
 
 # -- Based on typeshed definitions --
@@ -220,26 +215,20 @@ class HashlibAlgorithm(Protocol):
     block_size: int
     name: str
 
-    def __init__(self, data: ReadableBuffer = ...) -> None:
-        ...
+    def __init__(self, data: ReadableBuffer = ...) -> None: ...
 
-    def copy(self) -> HashlibAlgorithm:
-        ...
+    def copy(self) -> HashlibAlgorithm: ...
 
-    def update(self, data: ReadableBuffer) -> None:
-        ...
+    def update(self, data: ReadableBuffer) -> None: ...
 
-    def digest(self) -> bytes:
-        ...
+    def digest(self) -> bytes: ...
 
-    def hexdigest(self) -> str:
-        ...
+    def hexdigest(self) -> str: ...
 
 
 # -- Third party protocols --
 class SupportsArray(Protocol):
-    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]:
-        ...
+    def __array__(self, dtype: Optional[npt.DTypeLike] = None, /) -> npt.NDArray[Any]: ...
 
 
 def supports_array(value: Any) -> TypeGuard[SupportsArray]:
@@ -248,8 +237,7 @@ def supports_array(value: Any) -> TypeGuard[SupportsArray]:
 
 class ArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> Dict[str, Any]:
-        ...
+    def __array_interface__(self) -> Dict[str, Any]: ...
 
 
 class ArrayInterfaceTypedDict(TypedDict):
@@ -265,8 +253,7 @@ class ArrayInterfaceTypedDict(TypedDict):
 
 class StrictArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> ArrayInterfaceTypedDict:
-        ...
+    def __array_interface__(self) -> ArrayInterfaceTypedDict: ...
 
 
 def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
@@ -275,8 +262,7 @@ def supports_array_interface(value: Any) -> TypeGuard[ArrayInterface]:
 
 class CUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> Dict[str, Any]:
-        ...
+    def __cuda_array_interface__(self) -> Dict[str, Any]: ...
 
 
 class CUDAArrayInterfaceTypedDict(TypedDict):
@@ -292,8 +278,7 @@ class CUDAArrayInterfaceTypedDict(TypedDict):
 
 class StrictCUDAArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict:
-        ...
+    def __cuda_array_interface__(self) -> CUDAArrayInterfaceTypedDict: ...
 
 
 def supports_cuda_array_interface(value: Any) -> TypeGuard[CUDAArrayInterface]:
@@ -305,19 +290,15 @@ DLPackDevice = Tuple[int, int]
 
 
 class MultiStreamDLPackBuffer(Protocol):
-    def __dlpack__(self, *, stream: Optional[int] = None) -> Any:
-        ...
+    def __dlpack__(self, *, stream: Optional[int] = None) -> Any: ...
 
-    def __dlpack_device__(self) -> DLPackDevice:
-        ...
+    def __dlpack_device__(self) -> DLPackDevice: ...
 
 
 class SingleStreamDLPackBuffer(Protocol):
-    def __dlpack__(self, *, stream: None = None) -> Any:
-        ...
+    def __dlpack__(self, *, stream: None = None) -> Any: ...
 
-    def __dlpack_device__(self) -> DLPackDevice:
-        ...
+    def __dlpack_device__(self) -> DLPackDevice: ...
 
 
 DLPackBuffer: TypeAlias = Union[MultiStreamDLPackBuffer, SingleStreamDLPackBuffer]
@@ -333,8 +314,9 @@ def supports_dlpack(value: Any) -> TypeGuard[DLPackBuffer]:
 class DevToolsPrettyPrintable(Protocol):
     """Used by python-devtools (https://python-devtools.helpmanual.io/)."""
 
-    def __pretty__(self, fmt: Callable[[Any], Any], **kwargs: Any) -> Generator[Any, None, None]:
-        ...
+    def __pretty__(
+        self, fmt: Callable[[Any], Any], **kwargs: Any
+    ) -> Generator[Any, None, None]: ...
 
 
 # -- Added functionality --
@@ -357,8 +339,7 @@ def extended_runtime_checkable(
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> Callable[[_ProtoT], _ProtoT]:
-    ...
+) -> Callable[[_ProtoT], _ProtoT]: ...
 
 
 @overload
@@ -367,8 +348,7 @@ def extended_runtime_checkable(
     *,
     instance_check_shortcut: bool = True,
     subclass_check_with_data_members: bool = False,
-) -> _ProtoT:
-    ...
+) -> _ProtoT: ...
 
 
 def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
@@ -414,9 +394,11 @@ def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
 
             _allow_reckless_class_checks = getattr(
                 _typing,
-                "_allow_reckless_class_checks"
-                if hasattr(_typing, "_allow_reckless_class_checks")
-                else "_allow_reckless_class_cheks",  # There is a typo in 3.8 and 3.9
+                (
+                    "_allow_reckless_class_checks"
+                    if hasattr(_typing, "_allow_reckless_class_checks")
+                    else "_allow_reckless_class_cheks"
+                ),  # There is a typo in 3.8 and 3.9
             )
 
             _get_protocol_attrs = (

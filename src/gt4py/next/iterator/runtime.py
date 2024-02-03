@@ -43,12 +43,10 @@ def offset(value):
     return Offset(value)
 
 
-class CartesianDomain(dict):
-    ...
+class CartesianDomain(dict): ...
 
 
-class UnstructuredDomain(dict):
-    ...
+class UnstructuredDomain(dict): ...
 
 
 # dependency inversion, register fendef for embedded execution or for tracing/parsing here
