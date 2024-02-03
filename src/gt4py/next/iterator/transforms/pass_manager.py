@@ -91,7 +91,7 @@ unique_id = 0
 
 from gt4py.next.iterator.ir_utils import ir_makers as im
 
-
+# TODO: document in all passes which annexes they use.
 class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("recorded_shifts", "used_in_scan")
 

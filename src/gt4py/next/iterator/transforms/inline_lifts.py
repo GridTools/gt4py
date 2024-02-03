@@ -248,6 +248,7 @@ class InlineLifts(
                 for arg in lift_call.args  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
             ]
             result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
+            # TODO: describe everywhere
             result.annex.recorded_shifts = node.annex.recorded_shifts
             return self.visit(result, recurse=False, **kwargs)
         if self.flags & (self.Flag.INLINE_DEREF_LIFT | self.Flag.INLINE_TRIVIAL_DEREF_LIFT) and node.fun == ir.SymRef(id="deref"):
