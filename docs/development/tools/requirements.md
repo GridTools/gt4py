@@ -18,10 +18,10 @@ The expected workflow to update GT4Py requirements is as follows:
 
 2. For changes in the development tools, update the `requirements-dev.in` file.
 
-3. Run the **tox** _requirements-common_ environment to update all files automatically with **pip-compile** and **cog**. Note that **pip-compile** will most likely update the versions of some unrelated tools if new versions are available in PyPI.
+3. Run the **tox** _requirements-base_ environment to update all files automatically with **pip-compile** and **cog**. Note that **pip-compile** will most likely update the versions of some unrelated tools if new versions are available in PyPI.
 
    ```bash
-   tox r -e requirements-common
+   tox r -e requirements-base
    ```
 
 4. Check that the **mypy** mirror used by **pre-commit** (https://github.com/pre-commit/mirrors-mypy) in `.pre-commit-config.yaml` supports the same version as in `constraints.txt`, and manually update the `rev` version number.
