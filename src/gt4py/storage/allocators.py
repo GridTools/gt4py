@@ -156,8 +156,7 @@ class BufferAllocator(Protocol[core_defs.DeviceTypeT]):
     """Protocol for buffer allocators."""
 
     @property
-    def device_type(self) -> core_defs.DeviceTypeT:
-        ...
+    def device_type(self) -> core_defs.DeviceTypeT: ...
 
     def allocate(
         self,
@@ -321,20 +320,17 @@ class ValidNumPyLikeAllocationNS(Protocol):
             @staticmethod
             def as_strided(
                 ndarray: core_defs.NDArrayObject, **kwargs: Any
-            ) -> core_defs.NDArrayObject:
-                ...
+            ) -> core_defs.NDArrayObject: ...
 
         stride_tricks: _NumPyLibStridesModule
 
     lib: _NumPyLibModule
 
     @staticmethod
-    def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer:
-        ...
+    def empty(shape: Tuple[int, ...], dtype: Any) -> _NDBuffer: ...
 
     @staticmethod
-    def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]:
-        ...
+    def byte_bounds(ndarray: _NDBuffer) -> Tuple[int, int]: ...
 
 
 def is_valid_nplike_allocation_ns(obj: Any) -> TypeGuard[ValidNumPyLikeAllocationNS]:

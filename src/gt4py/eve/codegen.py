@@ -641,15 +641,13 @@ class TemplatedGenerator(NodeVisitor):
 
     @overload
     @classmethod
-    def apply(cls, root: LeafNode, **kwargs: Any) -> str:
-        ...
+    def apply(cls, root: LeafNode, **kwargs: Any) -> str: ...
 
     @overload
     @classmethod
     def apply(  # noqa: F811  # redefinition of symbol
         cls, root: CollectionNode, **kwargs: Any
-    ) -> Collection[str]:
-        ...
+    ) -> Collection[str]: ...
 
     @classmethod
     def apply(  # noqa: F811  # redefinition of symbol

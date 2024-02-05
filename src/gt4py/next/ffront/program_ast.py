@@ -93,8 +93,7 @@ class Slice(Expr):
     step: Literal[None]
 
 
-class Stmt(LocatedNode):
-    ...
+class Stmt(LocatedNode): ...
 
 
 class Program(LocatedNode, SymbolTableTrait):

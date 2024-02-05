@@ -229,7 +229,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
         except ValueError as ex:
-            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.") from ex
+            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.\n{ex}") from ex
 
         return past.Call(
             func=new_func,

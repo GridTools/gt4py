@@ -28,6 +28,7 @@ from gt4py.eve import (
 )
 from gt4py.eve.extended_typing import (
     Any,
+    Callable,
     Dict,
     Final,
     ForwardRef,
@@ -41,8 +42,8 @@ from gt4py.eve.extended_typing import (
 )
 
 
-VALIDATORS: Final = [type_val.simple_type_validator]
-FACTORIES: Final = [type_val.simple_type_validator_factory]
+VALIDATORS: Final[list[Callable]] = [type_val.simple_type_validator]
+FACTORIES: Final[list[Callable]] = [type_val.simple_type_validator_factory]
 
 
 class SampleEnum(enum.Enum):

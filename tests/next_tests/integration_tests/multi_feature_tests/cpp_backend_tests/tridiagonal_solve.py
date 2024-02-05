@@ -19,7 +19,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef
 from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 
 IDim = gtx.Dimension("IDim")
@@ -67,10 +67,10 @@ if __name__ == "__main__":
 
     prog = trace_fencil_definition(tridiagonal_solve_fencil, [None] * 8, use_arg_types=False)
     offset_provider = {"I": gtx.Dimension("IDim"), "J": gtx.Dimension("JDim")}
-    generated_code = generate(
+    generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
         prog,
         offset_provider=offset_provider,
-        lift_mode=LiftMode.SIMPLE_HEURISTIC,
+        runtime_lift_mode=LiftMode.SIMPLE_HEURISTIC,
         column_axis=KDim,
     )
 
