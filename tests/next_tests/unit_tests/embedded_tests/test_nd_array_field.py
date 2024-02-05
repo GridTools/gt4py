@@ -578,7 +578,7 @@ def test_relative_indexing_value_return(index, expected_value):
     field = common._field(np.reshape(np.arange(100, dtype=int), (10, 10)), domain=domain)
     indexed_field = field[index].ndarray
 
-    assert indexed_field == np.asarray(expected_value)
+    assert indexed_field.asscalar() == expected_value
 
 
 @pytest.mark.parametrize("lazy_slice", [lambda f: f[13], lambda f: f[:5, :3, :2]])
