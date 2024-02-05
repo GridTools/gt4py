@@ -51,11 +51,11 @@ def as_dace_type(type_: ts.ScalarType):
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
-def as_scalar_type(dtype: str) -> ts.ScalarType:
+def as_scalar_type(typestr: str) -> ts.ScalarType:
     try:
-        kind = getattr(ts.ScalarKind, dtype.upper())
+        kind = getattr(ts.ScalarKind, typestr.upper())
     except AttributeError:
-        raise ValueError(f"Data type {dtype} not supported.")
+        raise ValueError(f"Data type {typestr} not supported.")
     return ts.ScalarType(kind)
 
 
