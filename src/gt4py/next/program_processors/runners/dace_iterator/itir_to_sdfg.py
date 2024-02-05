@@ -199,7 +199,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def add_storage_for_temporaries(
         self, node_params: list[Sym], defs_state: dace.SDFGState, program_sdfg: dace.SDFG
-    ) -> dict[str, TaskletExpr]:
+    ) -> dict[str, str]:
         symbol_map: dict[str, TaskletExpr] = {}
         # The shape of temporary arrays might be defined based on scalar values passed as program arguments.
         # Here we collect these values in a symbol map.
@@ -211,8 +211,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 assert isinstance(type_, ts.ScalarType)
                 symbol_map[name_] = SymbolExpr(name_, as_dace_type(type_))
 
-        symbol_dtype = dace.int64
-        tmp_symbols: dict[str, TaskletExpr] = {}
+        tmp_symbols: dict[str, str] = {}
         for tmp in self.tmps:
             tmp_name = str(tmp.id)
 
@@ -250,50 +249,15 @@ class ItirToSDFG(eve.NodeVisitor):
                 tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
             )
 
-            # Loop through all dimensions to visit the symbolic expressions for array shape and offset
-            # This loop will produce a map of symbol assignments, where the origin value is the result of a tasklet.
+            # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
+            # These expressions are later mapped to interstate symbols.
             for (_, (begin, end)), offset_sym, shape_sym in zip(
                 tmp_domain,
                 tmp_array.offset,
                 tmp_array.shape,
             ):
-                offset_tasklet = defs_state.add_tasklet(
-                    "offset",
-                    code=f"__result = - {begin.value}",
-                    inputs={},
-                    outputs={"__result"},
-                )
-                offset_var = unique_var_name()
-                program_sdfg.add_scalar(offset_var, symbol_dtype, transient=True)
-                offset_node = defs_state.add_access(offset_var)
-                defs_state.add_edge(
-                    offset_tasklet,
-                    "__result",
-                    offset_node,
-                    None,
-                    dace.Memlet.simple(offset_var, "0"),
-                )
-
-                shape_tasklet = defs_state.add_tasklet(
-                    "shape",
-                    code=f"__result = {end.value} - {begin.value}",
-                    inputs={},
-                    outputs={"__result"},
-                )
-                shape_var = unique_var_name()
-                program_sdfg.add_scalar(shape_var, symbol_dtype, transient=True)
-                shape_node = defs_state.add_access(shape_var)
-                defs_state.add_edge(
-                    shape_tasklet,
-                    "__result",
-                    shape_node,
-                    None,
-                    dace.Memlet.simple(shape_var, "0"),
-                )
-
-                # The transient scalars containing the array parameters are later mapped to interstate symbols
-                tmp_symbols[str(offset_sym)] = offset_var
-                tmp_symbols[str(shape_sym)] = shape_var
+                tmp_symbols[str(offset_sym)] = f"0 - {begin.value}"
+                tmp_symbols[str(shape_sym)] = f"{end.value} - {begin.value}"
 
         return tmp_symbols
 
