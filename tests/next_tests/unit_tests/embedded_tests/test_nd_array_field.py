@@ -468,6 +468,7 @@ def test_absolute_indexing_value_return():
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
     named_index = ((IDim, 12), (JDim, 6))
+    assert common.is_field(field[named_index])
     value = field[named_index].ndarray
 
     assert isinstance(value, np.ndarray)
