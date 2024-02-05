@@ -20,7 +20,7 @@ definitions for the keywords of the DSL.
 
 import sys
 
-from gt4py.cartesian.gtscript import *  # noqa: F403 # star import is intended here
+from gt4py.cartesian.gtscript import *
 
 
 sys.modules["__gtscript__"] = sys.modules["gt4py.cartesian.__gtscript__"]
