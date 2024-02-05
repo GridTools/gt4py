@@ -187,10 +187,7 @@ def _tuple_at(
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
-        res = field[pos] if common.is_field(field) else field
-        res = (
-            res.ndarray.item() if hasattr(res, "ndarray") else res  # type: ignore[union-attr]
-        )  # extract scalar value from array
+        res = field[pos].ndarray.item() if common.is_field(field) else field  # type: ignore[union-attr]
         assert core_defs.is_scalar_type(res)
         return res
 
