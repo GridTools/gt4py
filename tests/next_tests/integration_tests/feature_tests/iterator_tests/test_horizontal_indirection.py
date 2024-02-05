@@ -101,7 +101,7 @@ def test_direct_offset_for_indirection(program_processor):
 
     ref = np.zeros(shape)
     for i in range(shape[0]):
-        ref[i] = inp.ndarray[i + cond.ndarray[i]]
+        ref[i] = inp.asnumpy()[i + cond.asnumpy()[i]]
 
     run_processor(
         direct_indirection[cartesian_domain(named_range(IDim, 0, shape[0]))],
