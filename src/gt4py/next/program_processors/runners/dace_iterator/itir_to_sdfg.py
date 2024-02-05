@@ -244,12 +244,11 @@ class ItirToSDFG(eve.NodeVisitor):
             tmp_offset = [
                 dace.symbol(unique_name(f"{tmp_name}_offset{i}")) for i in range(len(dims))
             ]
-            assert isinstance(tmp.dtype, str)
             _, tmp_array = program_sdfg.add_array(
                 tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
             )
 
-            # Loop through all dimensions to initialize the array parameters
+            # Loop through all dimensions to initialize the array parameters for shape and offsets
             for (_, (begin, end)), offset_sym, shape_sym in zip(
                 tmp_domain,
                 tmp_array.offset,
@@ -342,8 +341,6 @@ class ItirToSDFG(eve.NodeVisitor):
         # Create a nested SDFG for all stencil closures.
         last_state = entry_state
         for closure in node.closures:
-            ItirToSDFG._replace_ssa_identifiers(closure)
-
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg, input_names, output_names = self.visit(
                 closure, array_table=program_sdfg.arrays
@@ -382,7 +379,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
 
         if self.tmps:
-            # on the first interstate edge define symbols for shape/stride/offsets of temporary arrays
+            # on the first interstate edge define symbols for shape and offsets of temporary arrays
             inter_state_edge = program_sdfg.out_edges(entry_state)[0]
             inter_state_edge.data.assignments.update(tmp_symbols)
 
@@ -824,33 +821,3 @@ class ItirToSDFG(eve.NodeVisitor):
             if not all(isinstance(arg, (itir.Literal, itir.OffsetLiteral)) for arg in shift.args):
                 return False
         return True
-
-    @staticmethod
-    def _replace_ssa_identifiers(closure: itir.StencilClosure):
-        """
-        Replace unicode symbols in function arguments with suffix identifiers based on the number of characters.
-
-        For example, 'z_gammaᐞ0ᐞ3' is renamed to 'z_gamma7_0'
-        Unicode symbols are not accepted in DaCe connectors, because C/C++ code does not have support.
-        """
-        _UNIQUE_NAME_SEPARATOR = "ᐞ"
-
-        def __replace_in_expression(fun: itir.FunCall, p_old: str, p_new: str):
-            for arg in fun.args:
-                if isinstance(arg, itir.FunCall):
-                    __replace_in_expression(arg, p_old, p_new)
-                elif isinstance(arg, itir.SymRef) and arg.id == p_old:
-                    arg.id = eve.SymbolRef(p_new)
-
-        if isinstance(closure.stencil, itir.Lambda):
-            for p in closure.stencil.params:
-                p_new = ""
-                p_old = str(p.id)
-                match = p_old.split(_UNIQUE_NAME_SEPARATOR)
-                p_new += match[0]
-                for suffix in match[1:]:
-                    p_new += f"{len(p_new)}_{suffix}"
-                if p_new != p_old:
-                    assert isinstance(closure.stencil.expr, itir.FunCall)
-                    __replace_in_expression(closure.stencil.expr, p_old, p_new)
-                    p.id = eve.SymbolName(p_new)
