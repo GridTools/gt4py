@@ -5,7 +5,7 @@ requires = ['setuptools>=60.6', 'wheel', 'cython']
 # ---- Project description ----
 # -- Standard options (PEP 621) --
 [project]
-authors = [{name = 'ETH Zurich', email = 'gridtools@cscs.ch'}]
+authors = [{ name = 'ETH Zurich', email = 'gridtools@cscs.ch' }]
 classifiers = [
   'Development Status :: 4 - Beta',
   'Environment :: Console',
@@ -21,7 +21,7 @@ classifiers = [
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
-  'Topic :: Scientific/Engineering :: Physics'
+  'Topic :: Scientific/Engineering :: Physics',
 ]
 dependencies = [
   "astunparse>=1.6.3;python_version<'3.9'",
@@ -48,7 +48,7 @@ dependencies = [
   'setuptools>=65.5.0',
   'tabulate>=0.8.10',
   'typing-extensions>=4.2,<4.6.0',
-  'xxhash>=1.4.4,<3.1.0'
+  'xxhash>=1.4.4,<3.1.0',
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
 dynamic = ['version']
@@ -59,21 +59,29 @@ keywords = [
   'climate',
   'performance',
   'portable',
-  'hpc'
+  'hpc',
 ]
-license = {text = 'GPL-3.0-or-later'}
+license = { text = 'GPL-3.0-or-later' }
 name = 'gt4py'
 readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-all = ['gt4py[dace,formatting,jax,performance,testing]']
-cuda = ['cupy>=12.0']
-cuda11x = ['cupy-cuda11x>=12.0']
-cuda12x = ['cupy-cuda12x>=12.0']
+# Bundles
+all-cpu = ['gt4py[dace,formatting,jax-cpu,performance,testing]']
+all-cuda11 = ['gt4py[cuda11,dace,formatting,jax-cuda11,performance,testing]']
+all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
+# Device support
+gpu = ['cupy>=12.0']
+cuda11 = ['cupy-cuda11x>=12.0']
+cuda12 = ['cupy-cuda12x>=12.0']
+rocm-43 = ['cupy-rocm-4-3']
+# Other packages
 dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
-jax = ['jax[cpu]>=0.4.13']
+jax-cpu = ['jax[cpu]>=0.4.13']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.13']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.13']
 performance = ['scipy>=1.7.2']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
@@ -118,10 +126,10 @@ source = ['src/', '.tox/py*/lib/python3.*/site-packages/']
 [tool.coverage.report]
 # Regexes for lines to exclude from consideration
 exclude_lines = [
-  'raise AssertionError',  # Don't complain if tests don't hit defensive assertion code
+  'raise AssertionError',       # Don't complain if tests don't hit defensive assertion code
   'raise NotImplementedError',  # Don't complain if tests don't hit defensive assertion code
-  'if 0:',  # Don't complain if non-runnable code isn't run
-  'if __name__ == .__main__.:'  # Don't complain if non-runnable code isn't run
+  'if 0:',                      # Don't complain if non-runnable code isn't run
+  'if __name__ == .__main__.:', # Don't complain if non-runnable code isn't run
 ]
 ignore_errors = true
 
@@ -145,24 +153,24 @@ exclude = [
   'dist',
   'docs',
   'tests/_disabled',
-  'setup.py'
+  'setup.py',
 ]
 ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
-  'D1',  # Public code object needs docstring
+  'B008', # Do not perform function calls in argument defaults
+  'B028', # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
+  'D1',   # Public code object needs docstring
   'DAR',  # Disable dargling errors by default
-  'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503',  # Line break occurred before a binary operator
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E203', # Whitespace before ':' (black formatter breaks this sometimes)
+  'E501', # Line too long (using Bugbear's B950 warning)
+  'W503', # Line break occurred before a binary operator
+  'E701', # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E704', # Multiple statements on one line, see https://github.com/psf/black/issues/3887
 ]
 max-complexity = 15
-max-line-length = 100  # It should be the same as in `tool.black.line-length` above
+max-line-length = 100 # It should be the same as in `tool.black.line-length` above
 per-file-ignores = [
   'src/gt4py/eve/extended_typing.py:F401,F405',
-  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
+  'src/gt4py/next/__init__.py:F401',            # We import stuff there in order to reexport.
 ]
 rst-roles = [
   'py:mod, mod',
@@ -173,7 +181,7 @@ rst-roles = [
   'py:meth, meth',
   'py:attr, attr',
   'py:exc, exc',
-  'py:obj, obj'
+  'py:obj, obj',
 ]
 
 # -- isort --
@@ -205,13 +213,20 @@ known_third_party = [
   'setuptools',
   'tabulate',
   'typing_extensions',
-  'xxhash'
+  'xxhash',
 ]
 lexicographical = true
-line_length = 100  # It should be the same as in `tool.black.line-length` above
+line_length = 100 # It should be the same as in `tool.black.line-length` above
 lines_after_imports = 2
 profile = 'black'
-sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
+sections = [
+  'FUTURE',
+  'STDLIB',
+  'THIRDPARTY',
+  'FIRSTPARTY',
+  'TESTS',
+  'LOCALFOLDER',
+]
 skip_gitignore = true
 skip_glob = ['*.venv/**', '_local/**']
 
@@ -232,7 +247,7 @@ exclude = [
   '^tests/next_tests/integration_tests/feature_tests/otf_tests/*.py$',
   '^tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py$',
   '^tests/next_tests/past_common_fixtures.py$',
-  '^tests/next_tests/toy_connectivity.py$'
+  '^tests/next_tests/toy_connectivity.py$',
 ]
 ignore_missing_imports = true
 install_types = true
@@ -350,14 +365,14 @@ markers = [
   'uses_unstructured_shift: tests that use a unstructured connectivity',
   'uses_max_over: tests that use the max_over builtin',
   'uses_mesh_with_skip_values: tests that use a mesh with skip values',
-  'checks_specific_error: tests that rely on the backend to produce a specific error message'
+  'checks_specific_error: tests that rely on the backend to produce a specific error message',
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
 testpaths = 'tests'
 
 # -- ruff --
 [tool.ruff]
-line-length = 100  # It should be the same as in `tool.black.line-length` above
+line-length = 100        # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
 show-fixes = true
 # show-source = true
@@ -378,14 +393,14 @@ docstring-code-format = true
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
 ignore = [
-  'B008',  # Do not perform function calls in argument defaults
+  'B008', # Do not perform function calls in argument defaults
   # 'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905',  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
+  'B905', # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
   # 'D1',  # Public code object needs docstring
   # 'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'RUF100'
+  'E501',   # Line too long (using Bugbear's B950 warning)
+  'E701',   # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'RUF100',
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
@@ -419,11 +434,18 @@ known-third-party = [
   'setuptools',
   'tabulate',
   'typing_extensions',
-  'xxhash'
+  'xxhash',
 ]
 lines-after-imports = 2
 order-by-type = true
-section-order = ['future', 'standard-library', 'third-party', 'first-party', 'tests', 'local-folder']
+section-order = [
+  'future',
+  'standard-library',
+  'third-party',
+  'first-party',
+  'tests',
+  'local-folder',
+]
 split-on-trailing-comma = false
 
 [tool.ruff.lint.isort.sections]
@@ -441,11 +463,11 @@ max-complexity = 15
 platforms = ['Linux', 'Mac']
 
 [tool.setuptools.dynamic]
-version = {attr = 'gt4py.__about__.__version__'}
+version = { attr = 'gt4py.__about__.__version__' }
 
 [tool.setuptools.package-data]
 '*' = ['*.in', '*.txt']
 'gt4py' = ['py.typed', '*.md', '*.rst']
 
 [tool.setuptools.packages]
-find = {namespaces = false, where = ['src']}
+find = { namespaces = false, where = ['src'] }

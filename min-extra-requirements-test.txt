@@ -1,24 +1,55 @@
+#
+# Generated automatically by cog from pyproject.toml and requirements-dev.in
+# Run: 
+#       tox r -e requirements-common
+#
+
 ##[[[cog
-## import re, sys
+## import copy, sys
+## from packaging import requirements as reqs, specifiers as specs
 ## if sys.version_info >= (3, 11):
-##    import tomllib
+##     import tomllib
 ## else:
-##    import tomli as tomllib
+##     import tomli as tomllib
+##
+## def make_min_req(r: reqs.Requirement) -> reqs.Requirement:
+##     for s in r.specifier:
+##        if (ss := str(s)).startswith(">"):
+##            min_spec = f"=={ss[1:]}" if ss[1] != "=" else f"=={ss[2:]}"
+##            spec = specs.SpecifierSet(min_spec)
+##            break
+##     min_r = copy.deepcopy(r)
+##     min_r.specifier = spec
+##     return min_r
+##
 ## project = tomllib.loads(open("pyproject.toml").read())
-## requirements = set(
-##     rr
-##     for r in (
-##         project["project"]["dependencies"]
-##         + project["project"]["optional-dependencies"]["full"]
-##         + open("requirements-dev.in").readlines()
-##     )
-##     if (rr := r.strip()) and not rr.startswith('#')
-## )
-## for r in sorted(requirements):
-##     m = re.match("^([\w-][\w\d\[\]-]*)[=>~][=]([^,]+)", r)
-##     print(f"{m[1]}=={m[2].strip()}")
+## all_cpu_extra = project["project"]["optional-dependencies"]["all-cpu"]
+## assert len(all_cpu_extra) == 1 and all_cpu_extra[0].startswith("gt4py[")
+## opt_req_versions = {
+##     reqs.Requirement(r).name: reqs.Requirement(r)
+##     for e in reqs.Requirement(all_cpu_extra[0]).extras
+##     for r in project["project"]["optional-dependencies"][e]
+## }
+## requirements = [
+##     reqs.Requirement(rr)
+##     for r in (project["project"]["dependencies"] + open("requirements-dev.in").readlines())
+##     if (rr := (r[: r.find("#")] if "#" in r else r))
+## ]
+## processed = set()
+## result = []
+## for r in requirements:
+##     assert r.name not in processed
+##     processed.add(r.name)
+##     if not r.specifier:
+##         assert r.name in opt_req_versions, f"Missing contraints for '{r.name}'"
+##         r = opt_req_versions[r.name]
+##     result.append(str(make_min_req(r)))
+## for r_name, r in opt_req_versions.items():
+##     if r_name not in processed:
+##         result.append(str(make_min_req(r)))
+## print("\n".join(sorted(result)))
 ##]]]
-astunparse==1.6.3;python_version<'3.9'
+astunparse==1.6.3; python_version < "3.9"
 attrs==21.3
 black==22.3
 boltons==20.1
@@ -46,7 +77,7 @@ flake8==5.0.4
 frozendict==2.3
 gridtools-cpp==2.3.2
 hypothesis==6.0.0
-importlib-resources==5.0;python_version<'3.9'
+importlib-resources==5.0; python_version < "3.9"
 isort==5.10
 jax[cpu]==0.4.13
 jinja2==3.0.0
@@ -78,7 +109,7 @@ sphinx==4.4
 sphinx_rtd_theme==1.0
 sympy==1.9
 tabulate==0.8.10
-tomli==2.0.1;python_version<'3.11'
+tomli==2.0.1; python_version < "3.11"
 tox==3.2.0
 types-all==1.0.0
 typing-extensions==4.2
