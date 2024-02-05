@@ -288,6 +288,7 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
 
     Program = as_mako(
         """
+        #include <cstdint>
         #include <gridtools/stencil/${gt_backend_t}.hpp>
         #include <gridtools/stencil/cartesian.hpp>
         #include <gridtools/common/array.hpp>

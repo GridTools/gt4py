@@ -560,5 +560,4 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
-class FieldOperatorLoweringError(Exception):
-    ...
+class FieldOperatorLoweringError(Exception): ...

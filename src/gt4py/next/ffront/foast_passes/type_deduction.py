@@ -448,9 +448,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                     f"got types '{true_type}' and '{false_type}.",
                 )
             # TODO: properly patch symtable (new node?)
-            symtable[sym].type = new_node.annex.propagated_symbols[
-                sym
-            ].type = new_true_branch.annex.symtable[sym].type
+            symtable[sym].type = new_node.annex.propagated_symbols[sym].type = (
+                new_true_branch.annex.symtable[sym].type
+            )
 
         return new_node
 

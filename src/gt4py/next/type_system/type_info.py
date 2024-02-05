@@ -122,8 +122,9 @@ def primitive_constituents(
 
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
-    fun: Callable[[ts.TypeSpec], ts.TypeSpec]
-    | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec],
+    fun: (
+        Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec]
+    ),
     _path=(),
     *,
     with_path_arg=False,

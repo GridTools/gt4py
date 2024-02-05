@@ -40,14 +40,12 @@ ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=T
 
 
 class ProgramProcessorCallable(Protocol[OutputT]):
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
-        ...
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT: ...
 
 
 class ProgramProcessor(ProgramProcessorCallable[OutputT], Protocol[OutputT, ProcessorKindT]):
     @property
-    def kind(self) -> type[ProcessorKindT]:
-        ...
+    def kind(self) -> type[ProcessorKindT]: ...
 
 
 class ProgramFormatter(ProgramProcessor[str, "ProgramFormatter"], Protocol):
@@ -234,8 +232,7 @@ class ProgramBackend(
     ProgramProcessor[None, "ProgramExecutor"],
     next_allocators.FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT],
     Protocol[core_defs.DeviceTypeT],
-):
-    ...
+): ...
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
