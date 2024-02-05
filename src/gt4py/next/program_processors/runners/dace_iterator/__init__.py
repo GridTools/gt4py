@@ -91,7 +91,7 @@ def preprocess_program(
 
     else:
         raise TypeError(
-            f"Expected a 'FencilDefinition' or 'FencilWithTemporaries, got '{type(program).__name__}'."
+            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
         )
 
     return fencil_definition, tmps
@@ -176,6 +176,7 @@ _build_cache: dict[str, CompiledSDFG] = {}
 def get_cache_id(
     build_type: str,
     build_for_gpu: bool,
+    lift_mode: itir_transforms.LiftMode,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -201,6 +202,7 @@ def get_cache_id(
         for arg in (
             build_type,
             build_for_gpu,
+            lift_mode,
             program,
             *arg_types,
             column_axis,
@@ -354,7 +356,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
-    cache_id = get_cache_id(build_type, on_gpu, program, arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(
+        build_type, on_gpu, lift_mode, program, arg_types, column_axis, offset_provider
+    )
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]

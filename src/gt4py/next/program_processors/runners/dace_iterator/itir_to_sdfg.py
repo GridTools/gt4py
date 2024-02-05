@@ -49,6 +49,7 @@ from .utility import (
     flatten_list,
     get_sorted_dims,
     map_nested_sdfg_symbols,
+    new_array_symbols,
     unique_name,
     unique_var_name,
 )
@@ -219,7 +220,7 @@ class ItirToSDFG(eve.NodeVisitor):
             domain_ctx = Context(program_sdfg, defs_state, symbol_map)
             tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
 
-            # First build the FieldType for the temporary array
+            # First build the FieldType for this temporary array
             dims: list[Dimension] = []
             for dim, _ in tmp_domain:
                 dims.append(
@@ -234,37 +235,25 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
             assert isinstance(tmp.dtype, str)
             type_ = ts.FieldType(dims=dims, dtype=as_scalar_type(tmp.dtype))
-            self.add_storage(program_sdfg, tmp_name, type_, {})
+            self.storage_types[tmp_name] = type_
 
-            # Then we retrieve the data container...
-            tmp_array = program_sdfg.arrays[tmp_name]
-            tmp_array.transient = True
-
-            stride_var = unique_var_name()
-            program_sdfg.add_scalar(stride_var, symbol_dtype, transient=True)
-            stride_node = defs_state.add_access(stride_var)
-            defs_state.add_edge(
-                defs_state.add_tasklet(
-                    "stride",
-                    code="__result = 1",
-                    inputs={},
-                    outputs={"__result"},
-                ),
-                "__result",
-                stride_node,
-                None,
-                dace.Memlet.simple(stride_var, "0"),
+            # N.B.: skip generation of symbolic strides and just let dace assign default strides, for now.
+            # Another option, in the future, is to use symbolic strides and apply auto-tuning or some heuristics
+            # to assign optimal stride values.
+            tmp_shape, _ = new_array_symbols(tmp_name, len(dims))
+            tmp_offset = [
+                dace.symbol(unique_name(f"{tmp_name}_offset{i}")) for i in range(len(dims))
+            ]
+            assert isinstance(tmp.dtype, str)
+            _, tmp_array = program_sdfg.add_array(
+                tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
             )
-            # ...and loop through all dimensions to initialize the parameters for array offset/shape/stride
-            for (_, (begin, end)), offset_sym, shape_sym, stride_sym in reversed(
-                list(
-                    zip(
-                        tmp_domain,
-                        tmp_array.offset,
-                        tmp_array.shape,
-                        tmp_array.strides,
-                    )
-                )
+
+            # Loop through all dimensions to initialize the array parameters
+            for (_, (begin, end)), offset_sym, shape_sym in zip(
+                tmp_domain,
+                tmp_array.offset,
+                tmp_array.shape,
             ):
                 offset_tasklet = defs_state.add_tasklet(
                     "offset",
@@ -302,8 +291,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
                 # The transient scalars containing the array parameters are later mapped to interstate symbols
                 tmp_symbols[str(offset_sym)] = offset_var
-                tmp_symbols[str(stride_sym)] = stride_var
-                tmp_symbols[str(shape_sym)] = stride_var = shape_var
+                tmp_symbols[str(shape_sym)] = shape_var
 
         return tmp_symbols
 
