@@ -197,15 +197,15 @@ class ItirToSDFG(eve.NodeVisitor):
             raise NotImplementedError()
         self.storage_types[name] = type_
 
-    def generate_temporaries(
+    def add_storage_for_temporaries(
         self, node_params: list[Sym], defs_state: dace.SDFGState, program_sdfg: dace.SDFG
     ) -> dict[str, TaskletExpr]:
-        """Create a table of symbols which are used to define array shape, stride and offset for temporaries."""
         symbol_map: dict[str, TaskletExpr] = {}
-        # The shape of temporary arrays might be defined based on the shape of other input/output fields.
-        # Therefore, here we collect the symbols used to define data-field parameters that are not temporaries.
+        # The shape of temporary arrays might be defined based on scalar values passed as program arguments.
+        # Here we collect these values in a symbol map.
+        tmp_ids = set(tmp.id for tmp in self.tmps)
         for sym in node_params:
-            if all([sym.id != tmp.id for tmp in self.tmps]) and sym.kind != "Iterator":
+            if sym.id not in tmp_ids and sym.kind != "Iterator":
                 name_ = str(sym.id)
                 type_ = self.storage_types[name_]
                 assert isinstance(type_, ts.ScalarType)
@@ -215,12 +215,14 @@ class ItirToSDFG(eve.NodeVisitor):
         tmp_symbols: dict[str, TaskletExpr] = {}
         for tmp in self.tmps:
             tmp_name = str(tmp.id)
+
+            # We visit the domain of the temporary field, passing the set of available symbols.
             assert isinstance(tmp.domain, itir.FunCall)
             self.node_types.update(itir_typing.infer_all(tmp.domain))
             domain_ctx = Context(program_sdfg, defs_state, symbol_map)
             tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
 
-            # First build the FieldType for this temporary array
+            # We build the FieldType for this temporary array.
             dims: list[Dimension] = []
             for dim, _ in tmp_domain:
                 dims.append(
@@ -248,7 +250,8 @@ class ItirToSDFG(eve.NodeVisitor):
                 tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
             )
 
-            # Loop through all dimensions to initialize the array parameters for shape and offsets
+            # Loop through all dimensions to visit the symbolic expressions for array shape and offset
+            # This loop will produce a map of symbol assignments, where the origin value is the result of a tasklet.
             for (_, (begin, end)), offset_sym, shape_sym in zip(
                 tmp_domain,
                 tmp_array.offset,
@@ -309,7 +312,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
         program_sdfg.debuginfo = dace_debuginfo(node)
-        entry_state = program_sdfg.add_state("program_entry", True)
+        entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
@@ -320,7 +323,18 @@ class ItirToSDFG(eve.NodeVisitor):
             self.add_storage(program_sdfg, str(param.id), type_, neighbor_tables)
 
         if self.tmps:
-            tmp_symbols = self.generate_temporaries(node.params, entry_state, program_sdfg)
+            tmp_symbols = self.add_storage_for_temporaries(node.params, entry_state, program_sdfg)
+            # on the first interstate edge define symbols for shape and offsets of temporary arrays
+            last_state = program_sdfg.add_state("init_symbols_for_temporaries")
+            program_sdfg.add_edge(
+                entry_state,
+                last_state,
+                dace.InterstateEdge(
+                    assignments=tmp_symbols,
+                ),
+            )
+        else:
+            last_state = entry_state
 
         # Add connectivities as SDFG storages.
         for offset, offset_provider in neighbor_tables.items():
@@ -339,7 +353,6 @@ class ItirToSDFG(eve.NodeVisitor):
             )
 
         # Create a nested SDFG for all stencil closures.
-        last_state = entry_state
         for closure in node.closures:
             # Translate the closure and its stencil's body to an SDFG.
             closure_sdfg, input_names, output_names = self.visit(
@@ -377,11 +390,6 @@ class ItirToSDFG(eve.NodeVisitor):
             for inner_name, memlet in output_mapping.items():
                 access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
-
-        if self.tmps:
-            # on the first interstate edge define symbols for shape and offsets of temporary arrays
-            inter_state_edge = program_sdfg.out_edges(entry_state)[0]
-            inter_state_edge.data.assignments.update(tmp_symbols)
 
         # Create the call signature for the SDFG.
         #  Only the arguments requiered by the Fencil, i.e. `node.params` are added as poitional arguments.
