@@ -562,7 +562,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     backend: Optional[ppi.ProgramExecutor]
     grid_type: Optional[GridType]
     operator_attributes: Optional[dict[str, Any]] = None
-    _program_cache: dict = dataclasses.field(default_factory=dict)
+    _program_cache: dict = dataclasses.field(
+        init=False, default_factory=dict
+    )  # init=False ensure the cache is not copied in calls to replace
 
     @classmethod
     def from_function(
