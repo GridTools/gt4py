@@ -1,5 +1,5 @@
 # 
-# Constraints should specify the minimum required version.
+# Constraints should specify the minimum required version (>=).
 # 
 # Packages also required in the extra `gt4py['all-cpu']` configuration
 # should be added here without constraints, so they will use the

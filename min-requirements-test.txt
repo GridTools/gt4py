@@ -84,7 +84,7 @@ mypy==1.0
 nanobind==1.4.0
 nbmake==1.4.6
 ninja==1.10
-numpy==1.22.0
+numpy==1.23.3
 packaging==20.0
 pip-tools==6.10
 pipdeptree==2.3
