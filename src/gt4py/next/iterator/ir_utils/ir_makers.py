@@ -250,12 +250,10 @@ class let:
     """
 
     @typing.overload
-    def __init__(self, var: str | itir.Sym, init_form: itir.Expr):
-        ...
+    def __init__(self, var: str | itir.Sym, init_form: itir.Expr): ...
 
     @typing.overload
-    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr]]):
-        ...
+    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr]]): ...
 
     def __init__(self, *args):
         if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
@@ -268,7 +266,7 @@ class let:
             self.init_forms = [args[1]]
         else:
             raise TypeError(
-                "Invalid arguments. Expected a variable name and an init form or a list thereof."
+                "Invalid arguments: expected a variable name and an init form or a list thereof."
             )
 
     def __call__(self, form):

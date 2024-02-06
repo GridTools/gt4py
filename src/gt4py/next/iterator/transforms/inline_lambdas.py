@@ -135,8 +135,6 @@ class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
 
     force_inline_trivial_lift_args: bool
 
-    force_inline_lambda_args: bool
-
     @classmethod
     def apply(
         cls,

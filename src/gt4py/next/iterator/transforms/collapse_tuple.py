@@ -60,6 +60,7 @@ def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
 
 
 def _is_trivial_make_tuple_call(node: ir.Expr):
+    """Given an `Expr` return if it is a `make_tuple` call with all elements `SymRef`s or `Literal`s."""
     if not (isinstance(node, ir.FunCall) and node.fun == im.ref("make_tuple")):
         return False
     if not all(
@@ -88,15 +89,17 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         PROPAGATE_TUPLE_GET = 4
         #: `{1, 2}` -> `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)`
         LETIFY_MAKE_TUPLE_ELEMENTS = 8
-        #: TODO
+        #: Inverse of LETIFY_MAKE_TUPLE_ELEMENTS run after all other transformations
+        #: `(λ(_tuple_el_1, _tuple_el_2) → {_tuple_el_1, _tuple_el_2})(1, 2)` -> {1, 2}`
         REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS = 16
-        #: TODO
+        #: `let(tup, {trivial_expr1, trivial_expr2})(foo(tup))`
+        #:  -> `foo({trivial_expr1, trivial_expr2})`
         INLINE_TRIVIAL_MAKE_TUPLE = 32
-        #: TODO
+        #: `(if cond then {1, 2} else {3, 4})[0]` -> `if cond then {1, 2}[0] else {3, 4}[0]`
         PROPAGATE_TO_IF_ON_TUPLES = 64
-        #: TODO
+        #: `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
         PROPAGATE_NESTED_LET = 128
-        #: TODO
+        #: `let(a, 1)(a)` -> `1`
         INLINE_TRIVIAL_LET = 256
 
     ignore_tuple_size: bool
@@ -143,15 +146,11 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if use_global_type_inference:
             it_type_inference.infer_all(node, save_to_annex=True)
 
-        # TODO(tehrengruber): We don't want neither opcount preserving nor unconditionally inlining,
-        #  but only force inline of lambda args.
-        new_node = InlineLambdas.apply(node, opcount_preserving=True, force_inline_lambda_args=True)
-
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,
             use_global_type_inference=use_global_type_inference,
             flags=flags,
-        ).visit(new_node)
+        ).visit(node)
 
         # inline to remove left-overs from LETIFY_MAKE_TUPLE_ELEMENTS. this is important
         # as otherwise two equal expressions containing a tuple will not be equal anymore
@@ -220,15 +219,17 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if is_let(node.args[1]):
                 idx, let_expr = node.args
                 return self.visit(
-                    im.call(im.lambda_(*let_expr.fun.params)(im.tuple_get(idx, let_expr.fun.expr)))(
-                        *let_expr.args
+                    im.call(
+                        im.lambda_(*let_expr.fun.params)(im.tuple_get(idx.value, let_expr.fun.expr))  # type: ignore[attr-defined]  # ensured by is_let
+                    )(
+                        *let_expr.args  # type: ignore[attr-defined]  # ensured by is_let
                     )
                 )
             elif isinstance(node.args[1], ir.FunCall) and node.args[1].fun == im.ref("if_"):
                 idx = node.args[0]
                 cond, true_branch, false_branch = node.args[1].args
                 return self.visit(
-                    im.if_(cond, im.tuple_get(idx, true_branch), im.tuple_get(idx, false_branch))
+                    im.if_(cond, im.tuple_get(idx.value, true_branch), im.tuple_get(idx.value, false_branch))
                 )  # todo: check if visit needed
 
         if self.flags & self.Flag.LETIFY_MAKE_TUPLE_ELEMENTS and node.fun == ir.SymRef(
@@ -251,7 +252,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                     new_args.append(arg)
 
             if bound_vars:
-                return self.visit(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))
+                return self.visit(im.let(*bound_vars.items())(im.call(node.fun)(*new_args)))  # type: ignore[arg-type]  # mypy not smart enough
 
         if self.flags & self.Flag.INLINE_TRIVIAL_MAKE_TUPLE and is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
@@ -277,29 +278,29 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
-            original_inner_expr = node.fun.expr
-            for arg_sym, arg in zip(node.fun.params, node.args):
+            original_inner_expr = node.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
+            for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
                 assert arg_sym not in inner_vars  # TODO: fix collisions
                 if is_let(arg):
-                    for sym, val in zip(arg.fun.params, arg.args):
+                    for sym, val in zip(arg.fun.params, arg.args):  # type: ignore[attr-defined]  # ensured by is_let
                         assert sym not in outer_vars  # TODO: fix collisions
                         outer_vars[sym] = val
-                    inner_vars[arg_sym] = arg.fun.expr
+                    inner_vars[arg_sym] = arg.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
                 node = self.visit(
-                    im.let(*outer_vars.items())(im.let(*inner_vars.items())(original_inner_expr))
+                    im.let(*outer_vars.items())(im.let(*inner_vars.items())(original_inner_expr))  # type: ignore[arg-type]  # mypy not smart enough
                 )
 
         if (
             self.flags & self.Flag.INLINE_TRIVIAL_LET
             and is_let(node)
-            and isinstance(node.fun.expr, ir.SymRef)
+            and isinstance(node.fun.expr, ir.SymRef)  # type: ignore[attr-defined]  # ensured by is_let
         ):
             # `let(a, 1)(a)` -> `1`
-            for arg_sym, arg in zip(node.fun.params, node.args):
-                if node.fun.expr == im.ref(arg_sym.id):
+            for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
+                if node.fun.expr == im.ref(arg_sym.id):  # type: ignore[attr-defined]  # ensured by is_let
                     return arg
 
         return node
