@@ -15,12 +15,11 @@
 ## def make_min_req(r: reqs.Requirement) -> reqs.Requirement:
 ##     for s in r.specifier:
 ##        if (ss := str(s)).startswith(">"):
-##            assert ss.startswith(">=") 
-##            min_spec = f"=={ss[2:]}"
-##            spec = specs.SpecifierSet(min_spec)
+##            assert ss.startswith(">="), f"'{r!s}' requires a '>=' constraint"
+##            min_spec = specs.SpecifierSet(f"=={ss[2:]}")
 ##            break
 ##     min_r = copy.deepcopy(r)
-##     min_r.specifier = spec
+##     min_r.specifier = min_spec
 ##     return min_r
 ##
 ## project = tomllib.loads(open("pyproject.toml").read())
