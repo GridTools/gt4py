@@ -64,7 +64,7 @@ fonttools==4.47.2         # via matplotlib
 fparser==0.1.4            # via dace
 frozendict==2.4.0         # via gt4py (pyproject.toml)
 gridtools-cpp==2.3.2      # via gt4py (pyproject.toml)
-hypothesis==6.98.1        # via -r requirements-dev.in, gt4py (pyproject.toml)
+hypothesis==6.98.2        # via -r requirements-dev.in, gt4py (pyproject.toml)
 identify==2.5.33          # via pre-commit
 idna==3.6                 # via requests
 imagesize==1.4.1          # via sphinx
@@ -72,7 +72,7 @@ importlib-metadata==7.0.1  # via build, flask, jax, jupyter-client, sphinx
 importlib-resources==6.1.1 ; python_version < "3.9"  # via gt4py (pyproject.toml), jsonschema, jsonschema-specifications, matplotlib
 inflection==0.5.1         # via pytest-factoryboy
 iniconfig==2.0.0          # via pytest
-ipykernel==6.29.0         # via nbmake
+ipykernel==6.29.1         # via nbmake
 ipython==8.12.3           # via ipykernel
 isort==5.13.2             # via -r requirements-dev.in
 itsdangerous==2.1.2       # via flask
@@ -149,7 +149,7 @@ referencing==0.33.0       # via jsonschema, jsonschema-specifications
 requests==2.31.0          # via dace, sphinx
 restructuredtext-lint==1.4.0  # via flake8-rst-docstrings
 rpds-py==0.17.1           # via jsonschema, referencing
-ruff==0.2.0               # via -r requirements-dev.in
+ruff==0.2.1               # via -r requirements-dev.in
 scipy==1.10.1             # via gt4py (pyproject.toml), jax, jaxlib
 setuptools-scm==8.0.4     # via fparser
 six==1.16.0               # via asttokens, astunparse, python-dateutil
@@ -224,7 +224,7 @@ types-openssl-python==0.1.3  # via types-all
 types-orjson==3.6.2       # via types-all
 types-paramiko==3.4.0.20240205  # via types-all, types-pysftp
 types-pathlib2==2.3.0     # via types-all
-types-pillow==10.2.0.20240125  # via types-all
+types-pillow==10.2.0.20240206  # via types-all
 types-pkg-resources==0.1.3  # via types-all
 types-polib==1.2.0.20240115  # via types-all
 types-protobuf==4.24.0.20240129  # via types-all

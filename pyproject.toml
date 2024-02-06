@@ -1,6 +1,6 @@
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=60.6', 'wheel', 'cython']
+requires = ['setuptools>=65.5.0', 'wheel>=0.33.6', 'cython>=0.29.13']
 
 # ---- Project description ----
 # -- Standard options (PEP 621) --
