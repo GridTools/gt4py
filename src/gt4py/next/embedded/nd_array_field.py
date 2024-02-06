@@ -160,7 +160,9 @@ class NdArrayField(
     def remap(
         self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
     ) -> NdArrayField:
-        # TODO skip values: if the skip_value is -1 we don't need special treatment, we'll just select a random value (the wrapped around one)
+        # Current implementation relies on SKIP_VALUE == -1:
+        # if we assume the indexed array has at least one element, we wrap around without out of bounds
+        assert common.SKIP_VALUE == -1
 
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
