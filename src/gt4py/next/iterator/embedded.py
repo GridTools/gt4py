@@ -1089,12 +1089,12 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> np.ndarray:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
-            return np.asarray(r)
+            return np.asarray(r)  # type: ignore[return-value] # Field is a superset
         # TODO set a domain...
         raise NotImplementedError()
 
