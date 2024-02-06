@@ -22,6 +22,7 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
+from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
@@ -69,28 +70,31 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    unroll_reduce: bool = False,
 ):
     node = itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
+        force_inline_lambda_args=True,
         lift_mode=lift_mode,
         offset_provider=offset_provider,
-        unroll_reduce=False,
+        unroll_reduce=unroll_reduce,
     )
-    # If we don't unroll, there may be lifts left in the itir which can't be lowered to SDFG.
-    # In this case, just retry with unrolled reductions.
-    if all([ItirToSDFG._check_no_lifts(closure) for closure in node.closures]):
+
+    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
+        fencil_definition = node.fencil
+        tmps = node.tmps
+
+    elif isinstance(node, itir.FencilDefinition):
         fencil_definition = node
+        tmps = []
+
     else:
-        fencil_definition = itir_transforms.apply_common_transforms(
-            program,
-            common_subexpression_elimination=False,
-            force_inline_lambda_args=True,
-            lift_mode=lift_mode,
-            offset_provider=offset_provider,
-            unroll_reduce=True,
+        raise TypeError(
+            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
         )
-    return fencil_definition
+
+    return fencil_definition, tmps
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
@@ -172,6 +176,7 @@ _build_cache: dict[str, CompiledSDFG] = {}
 def get_cache_id(
     build_type: str,
     build_for_gpu: bool,
+    lift_mode: itir_transforms.LiftMode,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -197,6 +202,7 @@ def get_cache_id(
         for arg in (
             build_type,
             build_for_gpu,
+            lift_mode,
             program,
             *arg_types,
             column_axis,
@@ -254,37 +260,52 @@ def build_sdfg_from_itir(
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
+    load_sdfg_from_file: bool = False,
+    cache_id: Optional[str] = None,
+    save_sdfg: bool = True,
 ) -> dace.SDFG:
     """Translate a Fencil into an SDFG.
 
     Args:
-        program:	        The Fencil that should be translated.
-        *args:		        Arguments for which the fencil should be called.
-        offset_provider:	The set of offset providers that should be used.
-        auto_optimize:	    Apply DaCe's `auto_optimize` heuristic.
-        on_gpu:		        Performs the translation for GPU, defaults to `False`.
-        column_axis:		The column axis to be used, defaults to `None`.
-        lift_mode:		    Which lift mode should be used, defaults `FORCE_INLINE`.
+        program:             The Fencil that should be translated.
+        *args:               Arguments for which the fencil should be called.
+        offset_provider:     The set of offset providers that should be used.
+        auto_optimize:       Apply DaCe's `auto_optimize` heuristic.
+        on_gpu:              Performs the translation for GPU, defaults to `False`.
+        column_axis:         The column axis to be used, defaults to `None`.
+        lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
+        load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
+        cache_id:            The id of the cache entry, used to disambiguate stored sdfgs.
+        save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
     """
-    # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
-    #                `lift_more` to `FORCE_INLINE` mode.
-    lift_mode = itir_transforms.LiftMode.FORCE_INLINE
+    # Test if we can go through the cache?
+    sdfg_filename = (
+        f"_dacegraphs/gt4py/{cache_id if cache_id is not None else '.'}/{program.id}.sdfg"
+    )
+    if load_sdfg_from_file and Path(sdfg_filename).exists():
+        sdfg: dace.SDFG = dace.SDFG.from_file(sdfg_filename)
+        sdfg.validate()
+        return sdfg
+
     arg_types = [type_translation.from_value(arg) for arg in args]
 
     # visit ITIR and generate SDFG
-    program = preprocess_program(program, offset_provider, lift_mode)
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
-    sdfg: dace.SDFG = sdfg_genenerator.visit(program)
+    program, tmps = preprocess_program(program, offset_provider, lift_mode)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
+    sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
+    elif tmps:
+        # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
+        sdfg.apply_transformations_repeated(RefineNestedAccess)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
             _, frameinfo = warnings.warn(
-                f"{nested_sdfg} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
+                f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
             ), getframeinfo(
                 currentframe()  # type: ignore
             )
@@ -311,6 +332,10 @@ def build_sdfg_from_itir(
     if on_gpu:
         sdfg.apply_gpu_transformations()
 
+    # Store the sdfg such that we can later reuse it.
+    if save_sdfg:
+        sdfg.save(sdfg_filename)
+
     return sdfg
 
 
@@ -326,30 +351,31 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
     # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
-    skip_itir_lowering_to_sdfg = kwargs.get("skip_itir_lowering_to_sdfg", False)
+    load_sdfg_from_file = kwargs.get("load_sdfg_from_file", False)
+    save_sdfg = kwargs.get("save_sdfg", True)
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
-    cache_id = get_cache_id(build_type, on_gpu, program, arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(
+        build_type, on_gpu, lift_mode, program, arg_types, column_axis, offset_provider
+    )
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]
         sdfg = sdfg_program.sdfg
     else:
-        sdfg_filename = f"_dacegraphs/gt4py/{cache_id}/{program.id}.sdfg"
-        if not (skip_itir_lowering_to_sdfg and Path(sdfg_filename).exists()):
-            sdfg = build_sdfg_from_itir(
-                program,
-                *args,
-                offset_provider=offset_provider,
-                auto_optimize=auto_optimize,
-                on_gpu=on_gpu,
-                column_axis=column_axis,
-                lift_mode=lift_mode,
-            )
-            sdfg.save(sdfg_filename)
-        else:
-            sdfg = dace.SDFG.from_file(sdfg_filename)
+        sdfg = build_sdfg_from_itir(
+            program,
+            *args,
+            offset_provider=offset_provider,
+            auto_optimize=auto_optimize,
+            on_gpu=on_gpu,
+            column_axis=column_axis,
+            lift_mode=lift_mode,
+            load_sdfg_from_file=load_sdfg_from_file,
+            cache_id=cache_id,
+            save_sdfg=save_sdfg,
+        )
 
         sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():
