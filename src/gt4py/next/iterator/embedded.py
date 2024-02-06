@@ -1089,12 +1089,12 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
+    def restrict(self, item: common.AnyIndexSpec) -> np.ndarray:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, int)
-            return self.dtype.scalar_type(r)
+            return np.asarray(r)
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1208,9 +1208,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         # TODO set a domain...
-        return self._value
+        if core_defs.is_scalar_type(self._value):
+            return np.asarray(self._value)  # type: ignore[return-value] # Field is a superset
+        return self._value  # type: ignore[return-value] # scalar type in if statement above
 
     __call__ = remap
     __getitem__ = restrict
