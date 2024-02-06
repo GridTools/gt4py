@@ -15,7 +15,8 @@
 ## def make_min_req(r: reqs.Requirement) -> reqs.Requirement:
 ##     for s in r.specifier:
 ##        if (ss := str(s)).startswith(">"):
-##            min_spec = f"=={ss[1:]}" if ss[1] != "=" else f"=={ss[2:]}"
+##            assert ss.startswith(">=") 
+##            min_spec = f"=={ss[2:]}"
 ##            spec = specs.SpecifierSet(min_spec)
 ##            break
 ##     min_r = copy.deepcopy(r)
