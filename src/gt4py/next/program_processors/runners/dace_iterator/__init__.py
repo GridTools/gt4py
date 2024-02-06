@@ -22,6 +22,7 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
+from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
@@ -71,7 +72,7 @@ def preprocess_program(
     lift_mode: itir_transforms.LiftMode,
     unroll_reduce: bool = False,
 ):
-    return itir_transforms.apply_common_transforms(
+    node = itir_transforms.apply_common_transforms(
         program,
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
@@ -79,6 +80,21 @@ def preprocess_program(
         offset_provider=offset_provider,
         unroll_reduce=unroll_reduce,
     )
+
+    if isinstance(node, itir_transforms.global_tmps.FencilWithTemporaries):
+        fencil_definition = node.fencil
+        tmps = node.tmps
+
+    elif isinstance(node, itir.FencilDefinition):
+        fencil_definition = node
+        tmps = []
+
+    else:
+        raise TypeError(
+            f"Expected 'FencilDefinition' or 'FencilWithTemporaries', got '{type(program).__name__}'."
+        )
+
+    return fencil_definition, tmps
 
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
@@ -160,6 +176,7 @@ _build_cache: dict[str, CompiledSDFG] = {}
 def get_cache_id(
     build_type: str,
     build_for_gpu: bool,
+    lift_mode: itir_transforms.LiftMode,
     program: itir.FencilDefinition,
     arg_types: Sequence[ts.TypeSpec],
     column_axis: Optional[common.Dimension],
@@ -185,6 +202,7 @@ def get_cache_id(
         for arg in (
             build_type,
             build_for_gpu,
+            lift_mode,
             program,
             *arg_types,
             column_axis,
@@ -272,17 +290,17 @@ def build_sdfg_from_itir(
         sdfg.validate()
         return sdfg
 
-    # TODO(edopao): As temporary fix until temporaries are supported in the DaCe Backend force
-    #                `lift_more` to `FORCE_INLINE` mode.
-    lift_mode = itir_transforms.LiftMode.FORCE_INLINE
     arg_types = [type_translation.from_value(arg) for arg in args]
 
     # visit ITIR and generate SDFG
-    program = preprocess_program(program, offset_provider, lift_mode)
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, column_axis)
+    program, tmps = preprocess_program(program, offset_provider, lift_mode)
+    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
+    elif tmps:
+        # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
+        sdfg.apply_transformations_repeated(RefineNestedAccess)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
@@ -338,7 +356,9 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
-    cache_id = get_cache_id(build_type, on_gpu, program, arg_types, column_axis, offset_provider)
+    cache_id = get_cache_id(
+        build_type, on_gpu, lift_mode, program, arg_types, column_axis, offset_provider
+    )
     if build_cache is not None and cache_id in build_cache:
         # retrieve SDFG program from build cache
         sdfg_program = build_cache[cache_id]

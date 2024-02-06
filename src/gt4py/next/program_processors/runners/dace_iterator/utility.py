@@ -51,6 +51,14 @@ def as_dace_type(type_: ts.ScalarType):
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
+def as_scalar_type(typestr: str) -> ts.ScalarType:
+    try:
+        kind = getattr(ts.ScalarKind, typestr.upper())
+    except AttributeError:
+        raise ValueError(f"Data type {typestr} not supported.")
+    return ts.ScalarType(kind)
+
+
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
     return {
         offset: table
