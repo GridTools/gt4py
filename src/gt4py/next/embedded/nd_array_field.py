@@ -433,9 +433,20 @@ def _hypercube(
     ignore_mask: Optional[core_defs.NDArrayObject] = None,
 ) -> Optional[list[common.UnitRange]]:
     """
-    Return the hypercube that contains all True values and no False values or `None` if no such hypercube exists.
+    Return the hypercube that contains all True values and no False values, or `None` if no such hypercube exists.
 
-    If `ignore_mask` is given, the selected values are ignored.
+    If `ignore_mask` is given, the selected values are ignored. It returns the smallest hypercube.
+    A bigger hypercube could be constructed by adding lines from the ignore_mask.
+    Example:
+    select = True  True False
+             True  True False
+             False False True
+
+    ignore_mask = False False True
+                  False False True
+                  True  True  True
+
+    would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select)
 
