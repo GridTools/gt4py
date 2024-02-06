@@ -330,7 +330,7 @@ def test_single_value_field(cartesian_case):
         testee_fo(a, out=a[1:2, 3:4])
 
     a = cases.allocate(cartesian_case, testee_prog, "a")()
-    ref = a[1, 3].asnumpy()
+    ref = a[1, 3]
 
     cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
 
