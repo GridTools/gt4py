@@ -257,7 +257,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         im.tuple_get(idx.value, true_branch)
                     ),  # todo: call transformation directly
                     self.fp_transform(im.tuple_get(idx.value, false_branch)),
-                )  # todo: check if visit needed
+                )
         return None
 
     def transform_letify_make_tuple_elements(self, node: ir.FunCall) -> Optional[ir.Node]:
