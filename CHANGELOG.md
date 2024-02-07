@@ -4,7 +4,13 @@ Notable changes to this project will be documented in this file. The format is b
 
 ## [1.0.3] - 2024-02-07
 
-- Support for Python 3.11
+### General
+
+- Support for Python 3.11 and updated dependencies
+
+### Testing
+
+- Testing of Jupyter notebooks in CI
 
 ### Next
 
