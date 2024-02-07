@@ -118,18 +118,26 @@ def _all_stmts_same_region(scope_nodes, axis: dcir.Axis, interval):
             len(
                 set(
                     (
-                        None
-                        if mask.intervals[axis.to_idx()].start is None
-                        else mask.intervals[axis.to_idx()].start.level,
-                        None
-                        if mask.intervals[axis.to_idx()].start is None
-                        else mask.intervals[axis.to_idx()].start.offset,
-                        None
-                        if mask.intervals[axis.to_idx()].end is None
-                        else mask.intervals[axis.to_idx()].end.level,
-                        None
-                        if mask.intervals[axis.to_idx()].end is None
-                        else mask.intervals[axis.to_idx()].end.offset,
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].start is None
+                            else mask.intervals[axis.to_idx()].start.level
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].start is None
+                            else mask.intervals[axis.to_idx()].start.offset
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].end is None
+                            else mask.intervals[axis.to_idx()].end.level
+                        ),
+                        (
+                            None
+                            if mask.intervals[axis.to_idx()].end is None
+                            else mask.intervals[axis.to_idx()].end.offset
+                        ),
                     )
                     for mask in eve.walk_values(scope_nodes).if_isinstance(common.HorizontalMask)
                 )

@@ -19,12 +19,12 @@ import pytest
 
 import gt4py.next as gtx
 from gt4py.next import common
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
+from next_tests import definitions as test_definitions
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import Cell, KDim, Koff
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -193,12 +193,13 @@ def reference(
 
 
 @pytest.fixture
-def test_setup(fieldview_backend):
+def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        fieldview_backend,
+        exec_alloc_descriptor.executor,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
+        allocator=exec_alloc_descriptor.allocator,
     )
 
     @dataclasses.dataclass(frozen=True)
@@ -226,15 +227,8 @@ def test_setup(fieldview_backend):
 
 
 @pytest.mark.uses_tuple_returns
+@pytest.mark.uses_scan_requiring_projector
 def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
-    if test_setup.case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Needs implementation of scan projector.")
-
     cases.verify(
         test_setup.case,
         solve_nonhydro_stencil_52_like_z_q,
@@ -253,12 +247,15 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail(
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
         )
-    if test_setup.case.backend == roundtrip.backend:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.verify(
@@ -277,7 +274,10 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     cases.run(
@@ -296,9 +296,12 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 
 @pytest.mark.uses_tuple_returns
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
-    if test_setup.case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if (
+        test_setup.case.executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+    ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-    if test_setup.case.backend == roundtrip.backend:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.run(

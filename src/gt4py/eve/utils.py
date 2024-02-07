@@ -241,15 +241,13 @@ class fluid_partial(functools.partial):
 @overload
 def with_fluid_partial(
     func: Literal[None] = None, *args: Any, **kwargs: Any
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
 def with_fluid_partial(  # noqa: F811  # redefinition of unused function
     func: Callable[_P, _T], *args: Any, **kwargs: Any
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
 def with_fluid_partial(  # noqa: F811  # redefinition of unused function
@@ -286,15 +284,13 @@ def with_fluid_partial(  # noqa: F811  # redefinition of unused function
 @overload
 def optional_lru_cache(
     func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]:
-    ...
+) -> Callable[[Callable[_P, _T]], Callable[_P, _T]]: ...
 
 
 @overload
 def optional_lru_cache(  # noqa: F811  # redefinition of unused function
     func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[_P, _T]:
-    ...
+) -> Callable[_P, _T]: ...
 
 
 def optional_lru_cache(  # noqa: F811  # redefinition of unused function
@@ -1228,12 +1224,10 @@ class XIterable(Iterable[T]):
         return XIterable(zip(*self.iterator))
 
     @typing.overload
-    def islice(self, __stop: int) -> XIterable[T]:
-        ...
+    def islice(self, __stop: int) -> XIterable[T]: ...
 
     @typing.overload
-    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]:
-        ...
+    def islice(self, __start: int, __stop: int, __step: int = 1) -> XIterable[T]: ...
 
     def islice(
         self,
@@ -1315,18 +1309,17 @@ class XIterable(Iterable[T]):
     @typing.overload
     def groupby(
         self, key: str, *other_keys: str, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
-    def groupby(self, key: List[Any], *, as_dict: bool = False) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    def groupby(
+        self, key: List[Any], *, as_dict: bool = False
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     @typing.overload
     def groupby(
         self, key: Callable[[T], Any], *, as_dict: bool = False
-    ) -> XIterable[Tuple[Any, List[T]]]:
-        ...
+    ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     def groupby(
         self,
@@ -1454,8 +1447,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[str, S]]:
-        ...
+    ) -> XIterable[Tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1466,8 +1458,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], S]]:
-        ...
+    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1477,8 +1468,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[str, S]:
-        ...
+    ) -> Dict[str, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1489,8 +1479,7 @@ class XIterable(Iterable[T]):
         *attr_keys: str,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[Tuple[str, ...], S]:
-        ...
+    ) -> Dict[Tuple[str, ...], S]: ...
 
     @typing.overload
     def reduceby(
@@ -1500,8 +1489,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1511,8 +1499,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
     @typing.overload
     def reduceby(
@@ -1522,8 +1509,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[False],
         init: Union[S, NothingType],
-    ) -> XIterable[Tuple[K, S]]:
-        ...
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
@@ -1533,8 +1519,7 @@ class XIterable(Iterable[T]):
         *,
         as_dict: Literal[True],
         init: Union[S, NothingType],
-    ) -> Dict[K, S]:
-        ...
+    ) -> Dict[K, S]: ...
 
     def reduceby(
         self,

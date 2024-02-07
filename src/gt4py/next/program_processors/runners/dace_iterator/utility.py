@@ -17,7 +17,7 @@ from typing import Any, Optional, Sequence
 import dace
 
 from gt4py.next import Dimension
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import NeighborTable
 from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
 
@@ -51,12 +51,20 @@ def as_dace_type(type_: ts.ScalarType):
     raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
+def as_scalar_type(typestr: str) -> ts.ScalarType:
+    try:
+        kind = getattr(ts.ScalarKind, typestr.upper())
+    except AttributeError:
+        raise ValueError(f"Data type {typestr} not supported.")
+    return ts.ScalarType(kind)
+
+
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
-    return [
-        (offset, table)
+    return {
+        offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
-    ]
+        if isinstance(table, NeighborTable)
+    }
 
 
 def connectivity_identifier(name: str):
@@ -69,7 +77,7 @@ def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
-    return dace.Memlet.simple(source_identifier, subset)
+    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:

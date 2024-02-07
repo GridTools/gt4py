@@ -16,13 +16,13 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import int32, neighbor_sum
+from gt4py.next import common, int32, neighbor_sum
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import V2E, Edge, V2EDim, Vertex, unstructured_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-    reduction_setup,
+    exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 
@@ -43,13 +43,19 @@ def test_external_local_field(unstructured_case):
     )
     ones = cases.allocate(unstructured_case, testee, "ones").strategy(cases.ConstInitializer(1))()
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify(
         unstructured_case,
         testee,
         inp,
         ones,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(unstructured_case.offset_provider["V2E"].table, axis=1),
+        ref=np.sum(
+            v2e_table,
+            axis=1,
+            initial=0,
+            where=v2e_table != common.SKIP_VALUE,
+        ),
     )
 
 
