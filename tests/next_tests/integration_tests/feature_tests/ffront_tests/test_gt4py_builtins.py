@@ -114,7 +114,7 @@ def test_neighbor_sum(unstructured_case, fop):
 
     edge_f = cases.allocate(unstructured_case, fop, "edge_f")()
 
-    local_dim_idx = edge_f.domain.dims.index(Edge)
+    local_dim_idx = edge_f.domain.dims.index(Edge) + 1
     adv_indexing = tuple(
         slice(None) if dim is not Edge else v2e_table for dim in edge_f.domain.dims
     )
@@ -130,7 +130,7 @@ def test_neighbor_sum(unstructured_case, fop):
     broadcasted_table = v2e_table[tuple(broadcast_slice)]
     ref = np.sum(
         edge_f.asnumpy()[adv_indexing],
-        axis=local_dim_idx + 1,
+        axis=local_dim_idx,
         initial=0,
         where=broadcasted_table != common.SKIP_VALUE,
     )

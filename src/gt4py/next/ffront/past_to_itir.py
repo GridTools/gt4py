@@ -207,7 +207,6 @@ class ProgramLowering(
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
-        domain_args = []
 
         assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
@@ -222,6 +221,8 @@ class ProgramLowering(
                 " caught in type deduction already."
             )
 
+        domain_args = []
+        domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
@@ -247,11 +248,19 @@ class ProgramLowering(
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
                 )
             )
+            domain_args_kind.append(dim.kind)
 
         if self.grid_type == GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
         elif self.grid_type == GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
+            assert len(domain_args) == 2
+            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
+            if domain_args_kind[0] == DimensionKind.VERTICAL:
+                assert domain_args_kind[1] == DimensionKind.HORIZONTAL
+                domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
+            else:
+                assert domain_args_kind[1] == DimensionKind.VERTICAL
         else:
             raise AssertionError()
 
