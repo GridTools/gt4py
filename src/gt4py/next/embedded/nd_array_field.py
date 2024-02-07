@@ -120,6 +120,11 @@ class NdArrayField(
         else:
             return np.asarray(self._ndarray)
 
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self._ndarray.ndim != 0:
+            raise ValueError("'as_scalar' only accepts 0-dimensional arrays.")
+        return self.asnumpy().item()
+
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
         return self.dtype.scalar_type
@@ -206,9 +211,7 @@ class NdArrayField(
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
-        if new_domain.ndim == 0:
-            assert self.array_ns.dtype(new_buffer) in core_defs.SCALAR_TYPES
-            return self._scalar_to_field(new_buffer)  # type: ignore[return-value, arg-type]
+        new_buffer = self.__class__.array_ns.asarray(new_buffer)
         return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
@@ -301,12 +304,6 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
-
-    def _scalar_to_field(self, value: core_defs.Scalar) -> np.ndarray:
-        if self.array_ns == cp:
-            return cp.asarray(value)
-        else:
-            return np.asarray(value)
 
 
 @dataclasses.dataclass(frozen=True)

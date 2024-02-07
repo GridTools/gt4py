@@ -471,8 +471,8 @@ def test_absolute_indexing_value_return():
     assert common.is_field(field)
     value = field[named_index]
 
-    assert isinstance(value, np.ndarray)
-    assert value == np.asarray(21)
+    assert common.is_field(value)
+    assert value.as_scalar() == 21
 
 
 @pytest.mark.parametrize(
