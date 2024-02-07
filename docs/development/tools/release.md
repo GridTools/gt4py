@@ -17,10 +17,10 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 4. Commit the changes with the following message:
 
    ```bash
-   $ git commit -m 'Releasing 0.{M}.{m}.{p} version.'
+   $ git commit -m 'Releasing {M}.{m}.{p} version.'
    ```
 
-5. On the GitHub website go to _Releases_ and _Draft a new release_. Choose `v0.{M}.{m}.{p}` as tag and select a branch (usually `main`). Follow the style of the previous releases for the title (`GT4Py v0.{M}.{m}.{p}`) and description. Then _Publish release_.
+5. On the GitHub website go to _Releases_ and _Draft a new release_. Choose `v{M}.{m}.{p}` as tag and select a branch (usually `main`). Follow the style of the previous releases for the title (`GT4Py v{M}.{m}.{p}`) and description. Then _Publish release_.
 
 6. Publishing the release will trigger a Github action to deploy to TestPyPI. Install the package from TestPyPi and do basic tests.
 
