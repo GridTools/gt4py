@@ -71,6 +71,11 @@ def _is_trivial_make_tuple_call(node: ir.Expr):
     return True
 
 
+# TODO(tehrengruber): Conceptually the structure of this pass makes sense: Visit depth first,
+#  transform each node until no transformations apply anymore, whenever a node is to be transformed
+#  go through all available transformation and apply them. However the final result here still
+#  reads a little convoluted and is also different to how we write other transformations. We
+#  should revisit the pattern here and try to find a more general mechanism.
 @dataclasses.dataclass(frozen=True)
 class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
@@ -80,6 +85,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
       - `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
     """
 
+    # TODO(tehrengruber): This Flag machanism is a little low level. What we actually want
+    #   is something like a pass manager, where for each pattern we have a corresponding
+    #   transformation, etc.
     class Flag(enum.IntEnum):
         #: `make_tuple(tuple_get(0, t), tuple_get(1, t), ..., tuple_get(N-1,t))` -> `t`
         COLLAPSE_MAKE_TUPLE_TUPLE_GET = 1
@@ -167,9 +175,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         node = self.generic_visit(node)
         return self.fp_transform(node)
 
-    def fp_transform(
-        self, node: ir.Node
-    ) -> ir.Node:  # todo: pass what transformations to do (one or all)
+    def fp_transform(self, node: ir.Node) -> ir.Node:
         while True:
             new_node = self.transform(node)
             if new_node is None:
@@ -186,7 +192,6 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             if transformation == self.Flag.REMOVE_LETIFIED_MAKE_TUPLE_ELEMENTS:
                 continue
             if self.flags & transformation:
-                # todo: remove flags and make it a list
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node)
                 if result is not None:
@@ -253,9 +258,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 cond, true_branch, false_branch = node.args[1].args
                 return im.if_(
                     cond,
-                    self.fp_transform(
-                        im.tuple_get(idx.value, true_branch)
-                    ),  # todo: call transformation directly
+                    self.fp_transform(im.tuple_get(idx.value, true_branch)),
                     self.fp_transform(im.tuple_get(idx.value, false_branch)),
                 )
         return None
