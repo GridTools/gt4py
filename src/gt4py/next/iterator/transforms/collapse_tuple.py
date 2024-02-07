@@ -246,8 +246,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         self.fp_transform(im.tuple_get(idx.value, let_expr.fun.expr))  # type: ignore[attr-defined]  # ensured by is_let
                     )
                 )(
-                    *let_expr.args
-                )  # type: ignore[attr-defined]  # ensured by is_let
+                    *let_expr.args  # type: ignore[attr-defined]  # ensured by is_let
+                )
             elif isinstance(node.args[1], ir.FunCall) and node.args[1].fun == im.ref("if_"):
                 idx = node.args[0]
                 cond, true_branch, false_branch = node.args[1].args
