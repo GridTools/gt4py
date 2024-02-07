@@ -114,7 +114,10 @@ def apply_common_transforms(
             # to limit number of times global type inference is executed, only in the last iterations.
             use_global_type_inference=inlined == ir,
         )
-        inlined = PropagateDeref.apply(inlined)  # todo: document
+        # This pass is required such that a deref outside of a
+        # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
+        # `tuple_get` is removed by the `CollapseTuple` pass.
+        inlined = PropagateDeref.apply(inlined)
 
         if inlined == ir:
             break
