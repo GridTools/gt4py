@@ -121,9 +121,11 @@ class NdArrayField(
             return np.asarray(self._ndarray)
 
     def as_scalar(self) -> core_defs.ScalarT:
-        if self._ndarray.ndim != 0:
-            raise ValueError("'as_scalar' only accepts 0-dimensional arrays.")
-        return self.asnumpy().item()
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        return self.ndarray.item()
 
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
@@ -136,8 +138,9 @@ class NdArrayField(
     @classmethod
     def from_array(
         cls,
-        data: npt.ArrayLike
-        | core_defs.NDArrayObject,  # TODO: NDArrayObject should be part of ArrayLike
+        data: (
+            npt.ArrayLike | core_defs.NDArrayObject
+        ),  # TODO: NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.DomainLike,
@@ -403,10 +406,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 last_data_index = dim_nnz_indices[-1]
                 assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
                 indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
+                dim_range = self._domain[i]
+
                 if len(xp.unique(counts)) == 1 and (
                     len(indices) == last_data_index - first_data_index + 1
                 ):
-                    dim_range = self._domain[i]
                     idx_offset = dim_range[1].start
                     start = idx_offset + first_data_index
                     assert common.is_int_index(start)
@@ -427,6 +431,8 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 raise ValueError(
                     f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
                 )
+
+            self._cache[cache_key] = new_dims
 
         return new_dims
 
@@ -477,9 +483,10 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _make_reduction(
-    builtin_name: str, array_builtin_name: str
-) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
+def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
+    ...,
+    NdArrayField[common.DimsT, core_defs.ScalarT],
+]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:

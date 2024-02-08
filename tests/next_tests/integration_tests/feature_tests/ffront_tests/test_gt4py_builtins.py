@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import broadcast, float64, int32, max_over, min_over, neighbor_sum, where
+from gt4py.next import broadcast, common, float64, int32, max_over, min_over, neighbor_sum, where
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
@@ -35,7 +35,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
-    reduction_setup,
+    mesh_descriptor,
 )
 
 
@@ -56,7 +56,12 @@ def test_maxover_execution_(unstructured_case, strategy):
     out = cases.allocate(unstructured_case, testee, cases.RETURN)()
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    ref = np.max(inp.ndarray[v2e_table], axis=1)
+    ref = np.max(
+        inp.asnumpy()[v2e_table],
+        axis=1,
+        initial=np.min(inp.asnumpy()),
+        where=v2e_table != common.SKIP_VALUE,
+    )
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
 
@@ -69,7 +74,14 @@ def test_minover_execution(unstructured_case):
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
-        unstructured_case, minover, ref=lambda edge_f: np.min(edge_f[v2e_table], axis=1)
+        unstructured_case,
+        minover,
+        ref=lambda edge_f: np.min(
+            edge_f[v2e_table],
+            axis=1,
+            initial=np.max(edge_f),
+            where=v2e_table != common.SKIP_VALUE,
+        ),
     )
 
 
@@ -83,10 +95,16 @@ def test_reduction_execution(unstructured_case):
     def fencil(edge_f: cases.EField, out: cases.VField):
         reduction(edge_f, out=out)
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         fencil,
-        ref=lambda edge_f: np.sum(edge_f[unstructured_case.offset_provider["V2E"].table], axis=1),
+        ref=lambda edge_f: np.sum(
+            edge_f[v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common.SKIP_VALUE,
+        ),
     )
 
 
@@ -103,11 +121,17 @@ def test_reduction_expression_in_call(unstructured_case):
     def fencil(edge_f: cases.EField, out: cases.VField):
         reduce_expr(edge_f, out=out)
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         fencil,
         ref=lambda edge_f: 3
-        * np.sum(-edge_f[unstructured_case.offset_provider["V2E"].table] ** 2 * 2, axis=1),
+        * np.sum(
+            -edge_f[v2e_table] ** 2 * 2,
+            axis=1,
+            initial=0,
+            where=v2e_table != common.SKIP_VALUE,
+        ),
     )
 
 
@@ -117,10 +141,16 @@ def test_reduction_with_common_expression(unstructured_case):
     def testee(flux: cases.EField) -> cases.VField:
         return neighbor_sum(flux(V2E) + flux(V2E), axis=V2EDim)
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda flux: np.sum(flux[unstructured_case.offset_provider["V2E"].table] * 2, axis=1),
+        ref=lambda flux: np.sum(
+            flux[v2e_table] * 2,
+            axis=1,
+            initial=0,
+            where=v2e_table != common.SKIP_VALUE,
+        ),
     )
 
 

@@ -80,8 +80,7 @@ Scalar: TypeAlias = (
 )
 
 
-class SparseTag(Tag):
-    ...
+class SparseTag(Tag): ...
 
 
 class NeighborTableOffsetProvider:
@@ -156,14 +155,11 @@ class ItIterator(Protocol):
     `ItIterator` to avoid name clashes with `Iterator` from `typing` and `collections.abc`.
     """
 
-    def shift(self, *offsets: OffsetPart) -> ItIterator:
-        ...
+    def shift(self, *offsets: OffsetPart) -> ItIterator: ...
 
-    def can_deref(self) -> bool:
-        ...
+    def can_deref(self) -> bool: ...
 
-    def deref(self) -> Any:
-        ...
+    def deref(self) -> Any: ...
 
 
 @runtime_checkable
@@ -172,17 +168,15 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_domain__(self) -> common.Domain:
-        ...
+    def dims(self) -> tuple[common.Dimension, ...]: ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_getitem(self, indices: NamedFieldIndices) -> Any:
-        ...
+    def field_getitem(self, indices: NamedFieldIndices) -> Any: ...
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_domain__.dims))
+        return tuple([0] * len(self.dims))
 
 
 @runtime_checkable
@@ -191,8 +185,7 @@ class MutableLocatedField(LocatedField, Protocol):
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
-    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None:
-        ...
+    def field_setitem(self, indices: NamedFieldIndices, value: Any) -> None: ...
 
 
 #: Column range used in column mode (`column_axis != None`) in the current closure execution context.
@@ -533,6 +526,16 @@ def execute_shift(
         for i, p in reversed(list(enumerate(new_entry))):
             # first shift applies to the last sparse dimensions of that axis type
             if p is None:
+                offset_implementation = offset_provider[tag]
+                assert isinstance(offset_implementation, common.Connectivity)
+                cur_index = pos[offset_implementation.origin_axis.value]
+                assert common.is_int_index(cur_index)
+                if offset_implementation.mapped_index(cur_index, index) in [
+                    None,
+                    common.SKIP_VALUE,
+                ]:
+                    return None
+
                 new_entry[i] = index
                 break
         # the assertions above confirm pos is incomplete casting here to avoid duplicating work in a type guard
@@ -556,7 +559,7 @@ def execute_shift(
         assert common.is_int_index(cur_index)
         if offset_implementation.mapped_index(cur_index, index) in [
             None,
-            -1,
+            common.SKIP_VALUE,
         ]:
             return None
         else:
@@ -675,18 +678,12 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    return _get_domain(field_or_tuple).dims
-
-
-def _get_domain(
-    field_or_tuple: LocatedField | tuple,
-) -> common.Domain:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
-        first = _get_domain(field_or_tuple[0])
-        assert all(first == _get_domain(f) for f in field_or_tuple)
+        first = _get_axes(field_or_tuple[0])
+        assert all(first == _get_axes(f) for f in field_or_tuple)
         return first
     else:
-        return field_or_tuple.__gt_domain__
+        return field_or_tuple.dims
 
 
 def _single_vertical_idx(
@@ -705,8 +702,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Tag,
-) -> tuple[tuple | Column, ...]:
-    ...
+) -> tuple[tuple | Column, ...]: ...
 
 
 @overload
@@ -722,8 +718,7 @@ def _make_tuple(
 @overload
 def _make_tuple(
     field_or_tuple: LocatedField, named_indices: NamedFieldIndices, *, column_axis: Tag
-) -> Column:
-    ...
+) -> Column: ...
 
 
 @overload
@@ -732,8 +727,7 @@ def _make_tuple(
     named_indices: NamedFieldIndices,
     *,
     column_axis: Literal[None] = None,
-) -> npt.DTypeLike | Undefined:
-    ...
+) -> npt.DTypeLike | Undefined: ...
 
 
 def _make_tuple(
@@ -748,10 +742,7 @@ def _make_tuple(
         else:
             try:
                 data = field_or_tuple.field_getitem(named_indices)
-                if core_defs.is_scalar_type(data):
-                    return data  # type: ignore[return-value] # type assessed in if
-                assert data.ndarray.ndim == 0
-                return data.as_scalar()
+                return data
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
@@ -903,8 +894,8 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     _ndarrayfield: common.Field
 
     @property
-    def __gt_domain__(self) -> common.Domain:
-        return self._ndarrayfield.__gt_domain__
+    def dims(self) -> tuple[common.Dimension, ...]:
+        return self._ndarrayfield.__gt_domain__.dims
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
@@ -928,7 +919,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-        return self._ndarrayfield[self._translate_named_indices(named_indices)]
+        return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if common.is_mutable_field(self._ndarrayfield):
@@ -977,13 +968,11 @@ def get_ordered_indices(axes: Iterable[Axis], pos: NamedFieldIndices) -> tuple[F
 
 
 @overload
-def _shift_range(range_or_index: range, offset: int) -> slice:
-    ...
+def _shift_range(range_or_index: range, offset: int) -> slice: ...
 
 
 @overload
-def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex:
-    ...
+def _shift_range(range_or_index: common.IntIndex, offset: int) -> common.IntIndex: ...
 
 
 def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayIndex:
@@ -997,13 +986,11 @@ def _shift_range(range_or_index: range | common.IntIndex, offset: int) -> ArrayI
 
 
 @overload
-def _range2slice(r: range) -> slice:
-    ...
+def _range2slice(r: range) -> slice: ...
 
 
 @overload
-def _range2slice(r: common.IntIndex) -> common.IntIndex:
-    ...
+def _range2slice(r: common.IntIndex) -> common.IntIndex: ...
 
 
 def _range2slice(r: range | common.IntIndex) -> slice | common.IntIndex:
@@ -1053,6 +1040,7 @@ class IndexField(common.Field):
     """
 
     _dimension: common.Dimension
+    _cur_index: Optional[core_defs.IntegralScalar] = None
 
     @property
     def __gt_domain__(self) -> common.Domain:
@@ -1068,7 +1056,10 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension, common.UnitRange.infinite()))
+        if self._cur_index is None:
+            return common.Domain((self._dimension, common.UnitRange.infinite()))
+        else:
+            return common.Domain()
 
     @property
     def codomain(self) -> type[core_defs.int32]:
@@ -1085,8 +1076,13 @@ class IndexField(common.Field):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def as_scalar(self) -> core_defs.ScalarT:
-        raise NotImplementedError()
+    def as_scalar(self) -> core_defs.IntegralScalar:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        assert self._cur_index is not None
+        return self._cur_index
 
     def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
@@ -1096,8 +1092,8 @@ class IndexField(common.Field):
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
-            assert isinstance(r, int)
-            return np.asarray(r)  # type: ignore[return-value] # Field is a superset
+            assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            return self.__class__(self._dimension, r)  # type: ignore[arg-type] # not sure why the assert above does not work
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1207,17 +1203,16 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def as_scalar(self) -> core_defs.ScalarT:
-        raise NotImplementedError()
-
     def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         # TODO set a domain...
-        if core_defs.is_scalar_type(self._value):
-            return as_field([], np.asarray(self._value))  # type: ignore[return-value] # Field is a superset
+        return self
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        assert self.domain.ndim == 0
         return self._value
 
     __call__ = remap
@@ -1299,8 +1294,7 @@ def shift(*offsets: Union[runtime.Offset, int]) -> Callable[[ItIterator], ItIter
 DT = TypeVar("DT")
 
 
-class _List(tuple, Generic[DT]):
-    ...
+class _List(tuple, Generic[DT]): ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -1435,8 +1429,7 @@ def is_tuple_of_field(field) -> bool:
     )
 
 
-class TupleFieldMeta(type):
-    ...
+class TupleFieldMeta(type): ...
 
 
 class TupleField(metaclass=TupleFieldMeta):
@@ -1469,7 +1462,7 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 class TupleOfFields(TupleField):
     def __init__(self, data):
         self.data = data
-        self.__gt_domain__ = _get_domain(data)
+        self.dims = _get_axes(data)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return _build_tuple_result(self.data, named_indices)

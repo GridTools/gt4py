@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    common,
     errors,
     float32,
     float64,
@@ -52,7 +53,7 @@ from next_tests.integration_tests.cases import (
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
-    reduction_setup,
+    mesh_descriptor,
 )
 
 
@@ -488,7 +489,7 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field, True, dtype=bool),
+        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
         comparison=lambda out, ref: np.all(out == ref),
     )
 
@@ -523,9 +524,12 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
-                unstructured_case.offset_provider["E2V"].table
-            ],
+            np.sum(
+                a[unstructured_case.offset_provider["V2E"].table],
+                axis=1,
+                initial=0,
+                where=unstructured_case.offset_provider["V2E"].table != common.SKIP_VALUE,
+            )[unstructured_case.offset_provider["E2V"].table],
             axis=1,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
@@ -583,11 +587,15 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         tmp = red(E2V[0])
         return tmp
 
+    v2e = unstructured_case.offset_provider["V2E"]
     cases.verify_with_default_data(
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table] + np.tile(v, (4, 1)).T, axis=1
+            e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
+            axis=1,
+            initial=0,
+            where=v2e.table != common.SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -680,7 +688,7 @@ def test_ternary_operator(cartesian_case, left, right):
     def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
-    e = np.asarray(a) if left < right else np.asarray(b)
+    e = a if left < right else b
     cases.verify(
         cartesian_case,
         testee,
@@ -718,13 +726,17 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1)
-            if 2 < 3
-            else np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)
+            np.sum(
+                b[v2e_table],
+                axis=1,
+                initial=0,
+                where=v2e_table != common.SKIP_VALUE,
+            )
         ),
     )
 
@@ -779,9 +791,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(np.asarray(out[0]) == ref[0])
-        and np.all(np.asarray(out[1][0]) == ref[1][0])
-        and np.all(np.asarray(out[1][1]) == ref[1][1]),
+        comparison=lambda ref, out: np.all(out[0] == ref[0])
+        and np.all(out[1][0] == ref[1][0])
+        and np.all(out[1][1] == ref[1][1]),
     )
 
 
@@ -1114,7 +1126,12 @@ def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
-    ) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField,]:
+    ) -> tuple[
+        cases.IField,
+        cases.IField,
+        cases.IField,
+        cases.IField,
+    ]:
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
@@ -1205,5 +1222,7 @@ def test_constant_closure_vars(cartesian_case):
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(
-        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+        cartesian_case,
+        consume_constants,
+        ref=lambda input: constants.PI * constants.E * input,
     )
