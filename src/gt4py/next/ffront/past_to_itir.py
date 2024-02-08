@@ -18,10 +18,10 @@ from typing import Optional, cast, Callable
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
+from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront, lowering_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_info, type_specifications as ts
-
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
@@ -38,51 +38,6 @@ def _flatten_tuple_expr(
             result.extend(_flatten_tuple_expr(e))
         return result
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
-
-
-from gt4py.next.iterator.ir_utils import ir_makers as im
-def to_tuples_of_iterator(param: str, arg_type: ts.TypeSpec):
-    """
-    Convert iterator of tuples into tuples of iterator
-
-    >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
-    """
-    def fun(primitive_type, path):
-        inner_expr = im.deref("it")
-        for path_part in path:
-            inner_expr = im.tuple_get(path_part, inner_expr)
-
-        return im.lift(im.lambda_("it")(inner_expr))(param)
-
-    return type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple)
-
-def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
-    """
-    Convert tuples of iterator into iterator of tuples
-
-    >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
-    """
-    param = f"__param_{abs(hash(expr))}"
-
-    def fun(primitive_type, path):
-        param_name = "__tuple_el"
-        for path_part in path:
-            param_name = f"{param_name}_{path_part}"
-        return im.deref(param_name)
-
-    lift_params, lift_args = [], []
-    for _, path in type_info.primitive_constituents(arg_type, with_path_arg=True):
-        param_name, arg_expr = "__tuple_el", param
-        for path_part in path:
-            param_name = f"{param_name}_{path_part}"
-            arg_expr = im.tuple_get(path_part, arg_expr)
-
-        lift_params.append(param_name)
-        lift_args.append(arg_expr)
-
-    stencil_expr = type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
-                                                     tuple_constructor=im.make_tuple)
-    return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
 class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -199,7 +154,7 @@ class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTa
             stencil_params.append(f"__sarg{i}")
             if isinstance(arg.type, ts.TupleType):
                 # convert into tuple of iterators
-                stencil_args.append(to_tuples_of_iterator(f"__sarg{i}", arg.type))
+                stencil_args.append(lowering_utils.to_tuples_of_iterator(f"__sarg{i}", arg.type))
             else:
                 stencil_args.append(f"__sarg{i}")
         #stencil_body = _process_elements(lambda x: im.deref(x), im.call(node.func.id)(*stencil_args), node.func.type.definition.returns)
@@ -208,7 +163,7 @@ class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTa
             stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
         else:
             # field operators return a tuple of iterators
-            stencil_body = im.deref(to_iterator_of_tuples(im.call(node.func.id)(*stencil_args), node.func.type.definition.returns))
+            stencil_body = im.deref(lowering_utils.to_iterator_of_tuples(im.call(node.func.id)(*stencil_args), node.func.type.definition.returns))
 
         return itir.StencilClosure(
             domain=lowered_domain,

@@ -25,6 +25,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
+from gt4py.next.ffront import lowering_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -72,53 +73,6 @@ def _process_elements(
         return im.let(*[(f"_tuple_wtf{i}", obj) for i, obj in enumerate(objs)])(result)
 
     return result
-
-def to_tuples_of_iterator(expr: itir.Expr, arg_type: ts.TypeSpec):
-    """
-    Convert iterator of tuples into tuples of iterator
-
-    >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
-    """
-    param = f"__param_{abs(hash(expr))}"
-    def fun(primitive_type, path):
-        inner_expr = im.deref("it")
-        for path_part in path:
-            inner_expr = im.tuple_get(path_part, inner_expr)
-
-        return im.lift(im.lambda_("it")(inner_expr))(param)
-
-    return im.let(param, expr)(
-        type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
-                                                  tuple_constructor=im.make_tuple)
-    )
-
-def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
-    """
-    Convert tuples of iterator into iterator of tuples
-
-    >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
-    """
-    param = f"__param_{abs(hash(expr))}"
-
-    def fun(primitive_type, path):
-        param_name = "__tuple_el"
-        for path_part in path:
-            param_name = f"{param_name}_{path_part}"
-        return im.deref(param_name)
-
-    lift_params, lift_args = [], []
-    for _, path in type_info.primitive_constituents(arg_type, with_path_arg=True):
-        param_name, arg_expr = "__tuple_el", param
-        for path_part in path:
-            param_name = f"{param_name}_{path_part}"
-            arg_expr = im.tuple_get(path_part, arg_expr)
-
-        lift_params.append(param_name)
-        lift_args.append(arg_expr)
-
-    stencil_expr = type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
-                                                     tuple_constructor=im.make_tuple)
-    return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
 @dataclasses.dataclass
@@ -197,8 +151,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         # (this is the only place in the lowering were a variable is captured in a lifted lambda)
         new_body = im.let(
             func_definition.params[0].id,
-            to_tuples_of_iterator(im.promote_to_const_iterator(func_definition.params[0].id), [*node.type.definition.pos_or_kw_args.values()][0]),
-        )(im.let("new_body", new_body)(im.deref(to_iterator_of_tuples("new_body", node.type.definition.returns))))
+            lowering_utils.to_tuples_of_iterator(im.promote_to_const_iterator(func_definition.params[0].id), [*node.type.definition.pos_or_kw_args.values()][0]),
+        )(im.let("new_body", new_body)(im.deref(lowering_utils.to_iterator_of_tuples("new_body", node.type.definition.returns))))
         #body = im.call(im.call("scan")(definition, forward, init))(
         #    *(param.id for param in definition.params[1:])
         #)
@@ -208,11 +162,11 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         for i, (param, arg_type) in enumerate(zip(func_definition.params[1:], [*node.type.definition.pos_or_kw_args.values()][1:], strict=True)):
             if isinstance(arg_type, ts.TupleType):
                 # convert into iterator of tuples
-                stencil_args.append(to_iterator_of_tuples(param.id, arg_type))
+                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
 
                 new_body = im.let(
                     param.id,
-                    to_tuples_of_iterator(param.id, arg_type),
+                    lowering_utils.to_tuples_of_iterator(param.id, arg_type),
                 )(new_body)
             else:
                 stencil_args.append(param.id)
@@ -349,12 +303,12 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
         op = "if_"
         args = (node.condition, node.true_expr, node.false_expr)
-        lowered_args = [to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type) for arg in args]
+        lowered_args = [lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type) for arg in args]
         if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
             op = im.call("map_")(op)
 
-        return to_tuples_of_iterator(im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type)
+        return lowering_utils.to_tuples_of_iterator(im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type)
 
         # TODO: iterator of tuples?
         #return im.if_(im.deref(self.visit(node.condition, **kwargs)), self.visit(node.true_expr, **kwargs), self.visit(node.false_expr, **kwargs))
@@ -409,7 +363,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             result = im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
 
             if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-                result = to_tuples_of_iterator(result, node.func.type.definition.returns)
+                result = lowering_utils.to_tuples_of_iterator(result, node.func.type.definition.returns)
 
             return result
 
