@@ -623,14 +623,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
     # TODO: there still appears to be a duplication of the scan
-    if cartesian_case.executor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Nested `scan`s requires creating temporaries.")
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))

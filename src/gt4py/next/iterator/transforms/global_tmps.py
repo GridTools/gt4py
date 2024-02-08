@@ -205,6 +205,28 @@ class SimpleTemporaryExtractionHeuristics:
         return False
 
 
+@dataclasses.dataclass(frozen=True)
+class SimpleTemporaryExtractionHeuristics:
+    """
+    Heuristic that extracts only if a lift expr is derefed in more than one position.
+
+    Note that such expression result in redundant computations if inlined instead of being
+    placed into a temporary.
+    """
+
+    closure: ir.StencilClosure
+
+    @functools.cached_property
+    def closure_shifts(self):
+        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
+
+    def __call__(self, expr: ir.Expr) -> bool:
+        shifts = self.closure_shifts[id(expr)]
+        if len(shifts) > 1:
+            return True
+        return False
+
+
 def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
     """
     Create a mapping from the closures parameters to the closure arguments.
@@ -565,6 +587,11 @@ def update_domains(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.ref(symbolic_sizes[new_axis]),
                             )
+                        # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
+                        )
                         # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
