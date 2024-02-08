@@ -56,35 +56,33 @@ def to_tuples_of_iterator(param: str, arg_type: ts.TypeSpec):
 
     return type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple)
 
+def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
+    """
+    Convert tuples of iterator into iterator of tuples
 
-def _process_elements(
-    process_func: Callable[[itir.Expr], itir.Expr],
-    obj: Optional[itir.Expr],
-    current_el_type: ts.TypeSpec,
-    current_el_expr: itir.Expr = im.ref("_tuple_wtf"),
-):
-    """Recursively applies a processing function to all primitive constituents of a tuple."""
-    if isinstance(current_el_type, ts.TupleType):
-        # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
-        result = im.make_tuple(
-            *[
-                _process_elements(
-                    process_func,
-                    None,
-                    current_el_type.types[i],
-                    im.tuple_get(i, current_el_expr),
-                )
-                for i in range(len(current_el_type.types))
-            ]
-        )
-    elif type_info.contains_local_field(current_el_type):
-        raise NotImplementedError("Processing fields with local dimension is not implemented.")
-    else:
-        result = process_func(current_el_expr)
+    >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    """
+    param = f"__param_{abs(hash(expr))}"
 
-    if obj is not None:
-        return im.let("_tuple_wtf", obj)(result)
-    return result
+    def fun(primitive_type, path):
+        param_name = "__tuple_el"
+        for path_part in path:
+            param_name = f"{param_name}_{path_part}"
+        return im.deref(param_name)
+
+    lift_params, lift_args = [], []
+    for _, path in type_info.primitive_constituents(arg_type, with_path_arg=True):
+        param_name, arg_expr = "__tuple_el", param
+        for path_part in path:
+            param_name = f"{param_name}_{path_part}"
+            arg_expr = im.tuple_get(path_part, arg_expr)
+
+        lift_params.append(param_name)
+        lift_args.append(arg_expr)
+
+    stencil_expr = type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
+                                                     tuple_constructor=im.make_tuple)
+    return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
 class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
@@ -210,9 +208,7 @@ class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTa
             stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
         else:
             # field operators return a tuple of iterators
-            stencil_body = _process_elements(lambda x: im.deref(x),
-                                             im.call(node.func.id)(*stencil_args),
-                                             node.func.type.definition.returns)
+            stencil_body = im.deref(to_iterator_of_tuples(im.call(node.func.id)(*stencil_args), node.func.type.definition.returns))
 
         return itir.StencilClosure(
             domain=lowered_domain,
