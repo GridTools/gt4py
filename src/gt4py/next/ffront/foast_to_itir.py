@@ -121,10 +121,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
-        #new_body = _process_elements(
-        #    lambda x: im.deref(x), func_definition.expr, node.definition.type.returns
-        #)
-        #new_body = im.deref(func_definition.expr)
         new_body = func_definition.expr
 
         return itir.FunctionDefinition(
@@ -462,32 +458,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             op = im.call("map_")(op)
 
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
-
-    def _process_elements(
-        self,
-        process_func: Callable[[itir.Expr], itir.Expr],
-        obj: foast.Expr,
-        current_el_type: ts.TypeSpec,
-        current_el_expr: itir.Expr = im.ref("expr"),
-    ):
-        """Recursively applies a processing function to all primitive constituents of a tuple."""
-        if isinstance(current_el_type, ts.TupleType):
-            # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
-            return im.make_tuple(
-                *[
-                    self._process_elements(
-                        process_func,
-                        obj,
-                        current_el_type.types[i],
-                        im.tuple_get(i, current_el_expr),
-                    )
-                    for i in range(len(current_el_type.types))
-                ]
-            )
-        elif type_info.contains_local_field(current_el_type):
-            raise NotImplementedError("Processing fields with local dimension is not implemented.")
-        else:
-            return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
 class FieldOperatorLoweringError(Exception): ...
