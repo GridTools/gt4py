@@ -165,15 +165,17 @@ def main_transforms(
         inlined = ConstantFolding.apply(inlined)
         # This pass is required to be in the loop such that when an `if_` call with tuple arguments
         # is constant-folded the surrounding tuple_get calls can be removed.
-        if stage == 1:
-            inlined = CollapseTuple.apply(
-                inlined,
-                # to limit number of times global type inference is executed, only in the last iterations.
-                # use_global_type_inference=inlined == ir,
-                ignore_tuple_size=True,  # possibly dangerous
-                use_global_type_inference=False,
-            )
-        inlined = PropagateDeref.apply(inlined)  # todo: document
+        inlined = CollapseTuple.apply(
+            inlined,
+            # to limit number of times global type inference is executed, only in the last iterations.
+            # use_global_type_inference=inlined == ir,
+            ignore_tuple_size=True,  # possibly dangerous
+            use_global_type_inference=False,
+        )
+        # This pass is required such that a deref outside of a
+        # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
+        # `tuple_get` is removed by the `CollapseTuple` pass.
+        inlined = PropagateDeref.apply(inlined)
 
         if inlined == ir:
             stage += 1
