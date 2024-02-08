@@ -887,7 +887,6 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     dimension: DimT
     offset: int = 0
-    _cur_index: Optional[core_defs.IntegralScalar] = None
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -900,20 +899,12 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
-    def as_scalar(self) -> core_defs.IntegralScalar:
-        if self.domain.ndim != 0:
-            raise ValueError(
-                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-            )
-        assert self._cur_index is not None
-        return self._cur_index
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
 
     @functools.cached_property
     def domain(self) -> Domain:
-        if self._cur_index is None:
-            return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
-        else:
-            return Domain()
+        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
 
     @property
     def __gt_origin__(self) -> Never:
@@ -962,9 +953,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     __call__ = remap
 
-    def restrict(self, index: AnyIndexSpec) -> ConnectivityField[DimsT, DimT]:
-        if is_int_index(index):
-            return dataclasses.replace(self, _cur_index=index + self.offset)
+    def restrict(self, index: AnyIndexSpec) -> Never:
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
