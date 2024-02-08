@@ -51,7 +51,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import common, embedded as next_embedded
+from gt4py.next import as_field, common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
@@ -1217,8 +1217,8 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         # TODO set a domain...
         if core_defs.is_scalar_type(self._value):
-            return np.asarray(self._value)  # type: ignore[return-value] # Field is a superset
-        return self._value  # type: ignore[return-value] # scalar type in if statement above
+            return as_field([], np.asarray(self._value))  # type: ignore[return-value] # Field is a superset
+        return self._value
 
     __call__ = remap
     __getitem__ = restrict
