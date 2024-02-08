@@ -67,6 +67,18 @@ repos:
   hooks:
   - id: black
 
+# - repo: https://github.com/charliermarsh/ruff-pre-commit
+#   ##[[[cog
+#   ## import re
+#   ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1] 
+#   ## print(f"#   rev: 'v{version}'  # version from constraints.txt")
+#   ##]]]
+#   rev: 'v0.2.0'  # version from constraints.txt
+#   ##[[[end]]]
+#   hooks:
+#   - id: ruff
+#     #  args: [ --fix, --exit-non-zero-on-fix ]
+
 - repo: https://github.com/PyCQA/isort
   ##[[[cog
   ## import re
@@ -153,9 +165,13 @@ repos:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
     ##[[[cog
-    ## import re, tomli
+    ## import re, sys
+    ## if sys.version_info >= (3, 11):
+    ##    import tomllib
+    ## else:
+    ##    import tomli as tomllib
     ## constraints = open("constraints.txt").read()
-    ## project = tomli.loads(open("pyproject.toml").read())
+    ## project = tomllib.loads(open("pyproject.toml").read())
     ## packages = [re.match('^([\w-][\w\d-]*)', r)[1] for r in project["project"]["dependencies"] if r.strip()]
     ## for pkg in packages:
     ##     print(f"- {pkg}==" + str(re.search(f'\n{pkg}==([0-9\.]*)', constraints)[1]))
