@@ -490,13 +490,13 @@ class ProgramWithBoundArgs(Program):
 
 
 @typing.overload
-def program(definition: types.FunctionType) -> Program:
-    ...
+def program(definition: types.FunctionType) -> Program: ...
 
 
 @typing.overload
-def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.FunctionType], Program]:
-    ...
+def program(
+    *, backend: Optional[ppi.ProgramExecutor]
+) -> Callable[[types.FunctionType], Program]: ...
 
 
 def program(
@@ -562,7 +562,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     backend: Optional[ppi.ProgramExecutor]
     grid_type: Optional[GridType]
     operator_attributes: Optional[dict[str, Any]] = None
-    _program_cache: dict = dataclasses.field(default_factory=dict)
+    _program_cache: dict = dataclasses.field(
+        init=False, default_factory=dict
+    )  # init=False ensure the cache is not copied in calls to replace
 
     @classmethod
     def from_function(
@@ -748,15 +750,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 @typing.overload
 def field_operator(
     definition: types.FunctionType, *, backend: Optional[ppi.ProgramExecutor]
-) -> FieldOperator[foast.FieldOperator]:
-    ...
+) -> FieldOperator[foast.FieldOperator]: ...
 
 
 @typing.overload
 def field_operator(
     *, backend: Optional[ppi.ProgramExecutor]
-) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
-    ...
+) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]: ...
 
 
 def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
@@ -793,8 +793,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: Optional[str],
     grid_type: GridType,
-) -> FieldOperator[foast.ScanOperator]:
-    ...
+) -> FieldOperator[foast.ScanOperator]: ...
 
 
 @typing.overload
@@ -805,8 +804,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: Optional[str],
     grid_type: GridType,
-) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
-    ...
+) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]: ...
 
 
 def scan_operator(

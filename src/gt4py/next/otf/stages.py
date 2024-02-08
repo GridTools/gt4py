@@ -107,15 +107,13 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
     and is not responsible for importing the results into Python.
     """
 
-    def build(self) -> None:
-        ...
+    def build(self) -> None: ...
 
 
 class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
-    def __call__(self, *args, **kwargs) -> None:
-        ...
+    def __call__(self, *args, **kwargs) -> None: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

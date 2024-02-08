@@ -143,7 +143,7 @@ def test_call_field_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.asarray(a) + 2 * np.asarray(b) + 3 * np.asarray(c)
+    ref = a + 2 * b + 3 * c
 
     cases.verify(
         cartesian_case,

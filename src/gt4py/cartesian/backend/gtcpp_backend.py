@@ -88,9 +88,9 @@ class GTCppBindingsCodegen(codegen.TemplatedGenerator):
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
                 return "py::{pybind_type} {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
+                    pybind_type=(
+                        "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                    ),
                     name=node.name,
                     sid_ndim=sid_ndim,
                 )

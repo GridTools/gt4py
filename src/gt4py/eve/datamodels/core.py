@@ -84,8 +84,7 @@ Attribute: TypeAlias = attr.Attribute
 
 
 class DataModelTP(_AttrsClassTP, xtyping.DevToolsPrettyPrintable, Protocol):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        ...
+    def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
     __datamodel_fields__: ClassVar[utils.FrozenNamespace[Attribute]] = cast(
         utils.FrozenNamespace[Attribute], None
@@ -116,8 +115,7 @@ class GenericDataModelTP(DataModelTP, Protocol):
     @classmethod
     def __class_getitem__(
         cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
-    ) -> Union[DataModelTP, GenericDataModelTP]:
-        ...
+    ) -> Union[DataModelTP, GenericDataModelTP]: ...
 
 
 _DM = TypeVar("_DM", bound="DataModel")
@@ -280,8 +278,7 @@ def datamodel(
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Callable[[Type[_T]], Type[_T]]:
-    ...
+) -> Callable[[Type[_T]], Type[_T]]: ...
 
 
 @overload
@@ -300,8 +297,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     coerce: bool = _COERCE_DEFAULT,
     generic: bool = _GENERIC_DEFAULT,
     type_validation_factory: Optional[FieldTypeValidatorFactory] = DefaultFieldTypeValidatorFactory,
-) -> Type[_T]:
-    ...
+) -> Type[_T]: ...
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
@@ -410,8 +406,7 @@ class _DataModelDecoratorTP(Protocol[_T]):
         type_validation_factory: Optional[
             FieldTypeValidatorFactory
         ] = DefaultFieldTypeValidatorFactory,
-    ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]:
-        ...
+    ) -> Union[Type[_T], Callable[[Type[_T]], Type[_T]]]: ...
 
 
 frozenmodel: _DataModelDecoratorTP = functools.partial(datamodel, frozen=True)
@@ -424,13 +419,11 @@ frozen_model = frozenmodel
 if xtyping.TYPE_CHECKING:
 
     class DataModel(DataModelTP):
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            ...
+        def __init__(self, *args: Any, **kwargs: Any) -> None: ...
 
         def __pretty__(
             self, fmt: Callable[[Any], Any], **kwargs: Any
-        ) -> Generator[Any, None, None]:
-            ...
+        ) -> Generator[Any, None, None]: ...
 
 else:
     # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
@@ -453,9 +446,9 @@ else:
             cls,
             /,
             *,
-            repr: bool  # noqa: A002  # shadowing 'repr' python builtin
-            | None
-            | Literal["inherited"] = "inherited",
+            repr: (  # noqa: A002  # shadowing 'repr' python builtin
+                bool | None | Literal["inherited"]
+            ) = "inherited",
             eq: bool | None | Literal["inherited"] = "inherited",
             order: bool | None | Literal["inherited"] = "inherited",
             unsafe_hash: bool | None | Literal["inherited"] = "inherited",
@@ -463,8 +456,9 @@ else:
             match_args: bool | Literal["inherited"] = "inherited",
             kw_only: bool | Literal["inherited"] = "inherited",
             coerce: bool | Literal["inherited"] = "inherited",
-            type_validation_factory: Optional[FieldTypeValidatorFactory]
-            | Literal["inherited"] = "inherited",
+            type_validation_factory: (
+                Optional[FieldTypeValidatorFactory] | Literal["inherited"]
+            ) = "inherited",
             **kwargs: Any,
         ) -> None:
             dm_opts = kwargs.pop(_DM_OPTS, [])
@@ -519,10 +513,9 @@ def field(
     metadata: Optional[Mapping[Any, Any]] = None,
     kw_only: bool = _KW_ONLY_DEFAULT,
     converter: Callable[[Any], Any] | Literal["coerce"] | None = None,
-    validator: AttrsValidator
-    | FieldValidator
-    | Sequence[AttrsValidator | FieldValidator]
-    | None = None,
+    validator: (
+        AttrsValidator | FieldValidator | Sequence[AttrsValidator | FieldValidator] | None
+    ) = None,
 ) -> Any:  # attr.s lies in some typings
     """Define a new attribute on a class with advanced options.
 
@@ -1373,8 +1366,7 @@ if xtyping.TYPE_CHECKING:
         @classmethod
         def __class_getitem__(
             cls: Type[GenericDataModelTP], args: Union[Type, Tuple[Type, ...]]
-        ) -> Union[DataModelTP, GenericDataModelTP]:
-            ...
+        ) -> Union[DataModelTP, GenericDataModelTP]: ...
 
 else:
 
