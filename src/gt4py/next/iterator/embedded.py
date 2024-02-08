@@ -51,7 +51,7 @@ import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
-from gt4py.next import as_field, common, embedded as next_embedded
+from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
