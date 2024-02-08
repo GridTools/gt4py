@@ -623,14 +623,17 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
+    def restrict(self, item: AnyIndexSpec) -> Field: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     # Operators
     @abc.abstractmethod
     def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
+    def __getitem__(self, item: AnyIndexSpec) -> Field: ...
 
     @abc.abstractmethod
     def __abs__(self) -> Field: ...
@@ -884,6 +887,7 @@ OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     dimension: DimT
     offset: int = 0
+    _cur_index: Optional[core_defs.IntegralScalar] = None
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -896,9 +900,20 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
+    def as_scalar(self) -> core_defs.IntegralScalar:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        assert self._cur_index is not None
+        return self._cur_index
+
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
+        if self._cur_index is None:
+            return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
+        else:
+            return Domain()
 
     @property
     def __gt_origin__(self) -> Never:
@@ -947,9 +962,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     __call__ = remap
 
-    def restrict(self, index: AnyIndexSpec) -> core_defs.IntegralScalar:
+    def restrict(self, index: AnyIndexSpec) -> ConnectivityField[DimsT, DimT]:
         if is_int_index(index):
-            return index + self.offset
+            return dataclasses.replace(self, _cur_index=index + self.offset)
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
