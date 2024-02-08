@@ -191,8 +191,9 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if not isinstance(node, ir.FunCall):
             return None
 
-        for transformation in self.Flag.all():
+        for transformation in self.Flag:
             if self.flags & transformation:
+                assert isinstance(transformation.name, str)
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 result = method(node)
                 if result is not None:
