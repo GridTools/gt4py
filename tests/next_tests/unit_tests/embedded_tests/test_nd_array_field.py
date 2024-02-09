@@ -762,6 +762,7 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
             ]
         ),
         codomain=V,
+        skip_value=-1,
     )
 
     # c2v_conn:
@@ -801,24 +802,25 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
 
 
 @pytest.mark.parametrize(
-    "select, ignore_mask, expected",
+    "index_array, expected",
     [
-        ([True, True, False], None, [(0, 2)]),
-        ([True, False, True], None, None),
-        ([True, False, True], [False, True, False], [(0, 3)]),
-        ([[False, False, False], [False, True, True]], None, [(1, 2), (1, 3)]),
+        ([0, 0, 1], [(0, 2)]),
+        ([0, 1, 0], None),
+        ([0, -1, 0], [(0, 3)]),
+        ([[1, 1, 1], [1, 0, 0]], [(1, 2), (1, 3)]),
         (
-            [[False, True, False], [False, True, True]],
-            [[False, False, True], [False, False, False]],
+            [[1, 0, -1], [1, 0, 0]],
             [(0, 2), (1, 3)],
         ),
     ],
 )
-def test_hypercube(select, ignore_mask, expected):
-    select = np.asarray(select)
-    ignore_mask = np.asarray(ignore_mask) if ignore_mask is not None else None
+def test_hypercube(index_array, expected):
+    index_array = np.asarray(index_array)
+    image_range = common.UnitRange(0, 1)
+    skip_value = -1
+
     expected = [common.unit_range(e) for e in expected] if expected is not None else None
 
-    result = nd_array_field._hypercube_from_mask(select, np, ignore_mask=ignore_mask)
+    result = nd_array_field._hypercube(index_array, image_range, np, skip_value)
 
     assert result == expected

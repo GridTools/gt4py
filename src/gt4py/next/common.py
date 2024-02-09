@@ -841,6 +841,7 @@ def _connectivity(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 
