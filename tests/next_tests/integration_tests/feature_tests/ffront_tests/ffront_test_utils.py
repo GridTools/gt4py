@@ -239,12 +239,12 @@ def skip_value_mesh() -> MeshDescriptor:
 
     v2e_arr = np.array(
         [
-            [1, 8, 7, 0, -1],
-            [2, 8, 1, -1, -1],
-            [3, 9, 8, 2, -1],
-            [4, 10, 3, -1, -1],
-            [5, 11, 4, -1, -1],
-            [0, 6, 4, -1, -1],
+            [1, 8, 7, 0, common.SKIP_VALUE],
+            [2, 8, 1, common.SKIP_VALUE, common.SKIP_VALUE],
+            [3, 9, 8, 2, common.SKIP_VALUE],
+            [4, 10, 3, common.SKIP_VALUE, common.SKIP_VALUE],
+            [5, 11, 4, common.SKIP_VALUE, common.SKIP_VALUE],
+            [0, 6, 4, common.SKIP_VALUE, common.SKIP_VALUE],
             [6, 7, 9, 10, 11],
         ],
         dtype=gtx.IndexType,

@@ -160,16 +160,15 @@ class NdArrayField(
     def remap(
         self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
     ) -> NdArrayField:
-        # Current implementation relies on SKIP_VALUE == -1:
-        # if we assume the indexed array has at least one element, we wrap around without out of bounds
-        assert common.SKIP_VALUE == -1
-
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
         if not common.is_connectivity_field(connectivity):
             assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
-
         assert common.is_connectivity_field(connectivity)
+
+        # Current implementation relies on skip_value == -1:
+        # if we assume the indexed array has at least one element, we wrap around without out of bounds
+        assert connectivity.skip_value == -1
 
         # Compute the new domain
         dim = connectivity.codomain
