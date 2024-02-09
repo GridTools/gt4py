@@ -665,60 +665,60 @@ def test_connectivity_field_inverse_image():
 
 def test_connectivity_field_inverse_image_2d_domain():
     V = Dimension("V")
-    E = Dimension("E")
-    E2V = Dimension("E2V")
+    C = Dimension("C")
+    C2V = Dimension("C2V")
 
     V_START, V_STOP = 0, 3
-    E_START, E_STOP = 0, 3
-    E2V_START, E2V_STOP = 0, 3
+    C_START, C_STOP = 0, 3
+    C2V_START, C2V_STOP = 0, 3
 
-    e2v_conn = common._connectivity(
+    c2v_conn = common._connectivity(
         np.asarray([[0, 0, 2], [1, 1, 2], [2, 2, 2]]),
         domain=common.domain(
             [
-                common.named_range((E, (E_START, E_STOP))),
-                common.named_range((E2V, (E2V_START, E2V_STOP))),
+                common.named_range((C, (C_START, C_STOP))),
+                common.named_range((C2V, (C2V_START, C2V_STOP))),
             ]
         ),
         codomain=V,
     )
 
-    # e2v_conn:
-    #  ---E2V----
+    # c2v_conn:
+    #  ---C2V----
     #  |[[0 0 2]
-    #  E [1 1 2]
+    #  C [1 1 2]
     #  | [2 2 2]]
 
     # Test contiguous and non-contiguous ranges.
-    # For the 'e2v_conn' defined above, the only valid range including 2
+    # For the 'c2v_conn' defined above, the only valid range including 2
     # is [0, 3). Otherwise, the inverse image would be non-contiguous.
     image_range = UnitRange(V_START, V_STOP)
-    result = e2v_conn.inverse_image(image_range)
+    result = c2v_conn.inverse_image(image_range)
 
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(E_START, E_STOP))
-    assert result[1] == (E2V, UnitRange(E2V_START, E2V_STOP))
+    assert result[0] == (C, UnitRange(C_START, C_STOP))
+    assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn.inverse_image(UnitRange(0, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(0, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn.inverse_image(UnitRange(0, 1))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 1))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(0, 1))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn.inverse_image(UnitRange(1, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(1, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(1, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn.inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
@@ -746,58 +746,58 @@ def test_connectivity_field_inverse_image_non_contiguous():
 
 def test_connectivity_field_inverse_image_2d_domain_skip_values():
     V = Dimension("V")
-    E = Dimension("E")
-    E2V = Dimension("E2V")
+    C = Dimension("C")
+    C2V = Dimension("C2V")
 
     V_START, V_STOP = 0, 3
-    E_START, E_STOP = 0, 4
-    E2V_START, E2V_STOP = 0, 4
+    C_START, C_STOP = 0, 4
+    C2V_START, C2V_STOP = 0, 4
 
-    e2v_conn = common._connectivity(
+    c2v_conn = common._connectivity(
         np.asarray([[-1, 0, 2, -1], [1, 1, 2, 2], [2, 2, -1, -1], [-1, 2, -1, -1]]),
         domain=common.domain(
             [
-                common.named_range((E, (E_START, E_STOP))),
-                common.named_range((E2V, (E2V_START, E2V_STOP))),
+                common.named_range((C, (C_START, C_STOP))),
+                common.named_range((C2V, (C2V_START, C2V_STOP))),
             ]
         ),
         codomain=V,
     )
 
-    # e2v_conn:
-    #  ---E2V---------
+    # c2v_conn:
+    #  ---C2V---------
     #  |[[-1  0  2 -1]
-    #  E [ 1  1  2  2]
+    #  C [ 1  1  2  2]
     #  | [ 2  2 -1 -1]
     #  | [-1  2 -1 -1]]
 
     image_range = UnitRange(V_START, V_STOP)
-    result = e2v_conn.inverse_image(image_range)
+    result = c2v_conn.inverse_image(image_range)
 
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(E_START, E_STOP))
-    assert result[1] == (E2V, UnitRange(E2V_START, E2V_STOP))
+    assert result[0] == (C, UnitRange(C_START, C_STOP))
+    assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn.inverse_image(UnitRange(0, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(0, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn.inverse_image(UnitRange(0, 1))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 1))
-    assert result[1] == (E2V, UnitRange(1, 2))
+    assert result[0] == (C, UnitRange(0, 1))
+    assert result[1] == (C2V, UnitRange(1, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn.inverse_image(UnitRange(1, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(1, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(1, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn.inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
 @pytest.mark.parametrize(
