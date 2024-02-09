@@ -819,6 +819,6 @@ def test_hypercube(select, ignore_mask, expected):
     ignore_mask = np.asarray(ignore_mask) if ignore_mask is not None else None
     expected = [common.unit_range(e) for e in expected] if expected is not None else None
 
-    result = nd_array_field._hypercube(select, np, ignore_mask=ignore_mask)
+    result = nd_array_field._hypercube_from_mask(select, np, ignore_mask=ignore_mask)
 
     assert result == expected
