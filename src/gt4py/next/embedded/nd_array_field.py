@@ -504,6 +504,8 @@ def _make_reduction(
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
+        xp = field.array_ns
+
         if not axis.kind == common.DimensionKind.LOCAL:
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
@@ -522,17 +524,17 @@ def _make_reduction(
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
 
         broadcast_slice = tuple(
-            slice(None) if d in [axis, offset_definition.origin_axis] else None
+            slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
             for d in field.domain.dims
         )
-        masked_array = field.array_ns.where(
-            field.array_ns.asarray(offset_definition.table[broadcast_slice]) != common.SKIP_VALUE,
+        masked_array = xp.where(
+            xp.asarray(offset_definition.table[broadcast_slice]) != common.SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )
 
         return field.__class__.from_array(
-            getattr(field.array_ns, array_builtin_name)(
+            getattr(xp, array_builtin_name)(
                 masked_array,
                 axis=reduce_dim_index,
             ),
