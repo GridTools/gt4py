@@ -317,6 +317,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
+    _skip_value: Optional[core_defs.IntegralScalar]
 
     @functools.cached_property
     def _cache(self) -> dict:
@@ -330,6 +331,10 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
     def codomain(self) -> common.DimT:
         return self._codomain
+
+    @property
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
+        return self._skip_value
 
     @functools.cached_property
     def kind(self) -> common.ConnectivityKind:
@@ -369,7 +374,12 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain)
+        return cls(
+            domain,
+            array,
+            codomain,
+            _skip_value=common.SKIP_VALUE,  # TODO(havogt): make skip_value configurable
+        )
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -415,7 +425,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain, self.skip_value)
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity

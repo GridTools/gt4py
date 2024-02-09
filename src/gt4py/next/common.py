@@ -729,7 +729,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but breaks in another place
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -747,10 +747,8 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
 
     @property
-    def skip_value(self) -> core_defs.IntegralScalar:
-        # TODO(havogt): This is a preparation for the future, currently we assume the skip_value is
-        # globally defined to be `-1`. In the future we want to make this customizable in the connectivity.
-        return SKIP_VALUE
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -917,6 +915,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def codomain(self) -> DimT:
         return self.dimension
+
+    @property
+    def skip_value(self) -> None:
+        return None
 
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
