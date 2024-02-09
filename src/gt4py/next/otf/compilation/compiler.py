@@ -20,6 +20,7 @@ from typing import Protocol, TypeVar
 
 import factory
 
+from gt4py.next import config
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.step_types import LS, SrcL, TgtL
@@ -42,7 +43,7 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
     def __call__(
         self,
         source: stages.CompilableSource[SrcL, LS, TgtL],
-        cache_strategy: cache.Strategy,
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
 
 
@@ -60,7 +61,7 @@ class Compiler(
 ):
     """Use any build system (via configured factory) to compile a GT4Py program to a ``gt4py.next.otf.stages.CompiledProgram``."""
 
-    cache_strategy: cache.Strategy
+    cache_lifetime: config.BuildCacheLifetime
     builder_factory: BuildSystemProjectGenerator[
         SourceLanguageType, LanguageSettingsType, languages.Python
     ]
@@ -70,12 +71,12 @@ class Compiler(
         self,
         inp: stages.CompilableSource[SourceLanguageType, LanguageSettingsType, languages.Python],
     ) -> stages.CompiledProgram:
-        src_dir = cache.get_cache_folder(inp, self.cache_strategy)
+        src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
 
         data = build_data.read_data(src_dir)
 
         if not data or not is_compiled(data) or self.force_recompile:
-            self.builder_factory(inp, self.cache_strategy).build()
+            self.builder_factory(inp, self.cache_lifetime).build()
 
         new_data = build_data.read_data(src_dir)
 

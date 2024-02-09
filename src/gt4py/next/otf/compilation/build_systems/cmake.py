@@ -15,24 +15,14 @@
 from __future__ import annotations
 
 import dataclasses
-import enum
 import pathlib
 import subprocess
 from typing import Optional
 
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.compilation import build_data, cache, common, compiler
 from gt4py.next.otf.compilation.build_systems import cmake_lists
-
-
-class BuildType(enum.Enum):
-    def _generate_next_value_(name, start, count, last_values):
-        return "".join(part.capitalize() for part in name.split("_"))
-
-    DEBUG = enum.auto()
-    RELEASE = enum.auto()
-    REL_WITH_DEB_INFO = enum.auto()
-    MIN_SIZE_REL = enum.auto()
 
 
 @dataclasses.dataclass
@@ -44,7 +34,7 @@ class CMakeFactory(
     """Create a CMakeProject from a ``CompilableSource`` stage object with given CMake settings."""
 
     cmake_generator_name: str = "Ninja"
-    cmake_build_type: BuildType = BuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: Optional[list[str]] = None
 
     def __call__(
@@ -54,7 +44,7 @@ class CMakeFactory(
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
-        cache_strategy: cache.Strategy,
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> CMakeProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -73,7 +63,7 @@ class CMakeFactory(
             languages=cmake_languages,
         )
         return CMakeProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(source, cache_lifetime),
             source_files={
                 header_name: source.program_source.source_code,
                 bindings_name: source.binding_source.source_code,
@@ -105,7 +95,7 @@ class CMakeProject(
     source_files: dict[str, str]
     program_name: str
     generator_name: str = "Ninja"
-    build_type: BuildType = BuildType.DEBUG
+    build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
     def build(self):

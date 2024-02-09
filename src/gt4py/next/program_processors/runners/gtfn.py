@@ -22,11 +22,11 @@ import numpy.typing as npt
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import common
+from gt4py.next import common, config
 from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import config, recipes, stages, workflow
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import cache, compiler
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
@@ -120,6 +120,10 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = config.CMAKE_BUILD_TYPE
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
+        )
 
     translation = factory.SubFactory(
         gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
@@ -129,8 +133,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
-        cache_strategy=cache.Strategy.SESSION,
-        builder_factory=compiledb.CompiledbFactory(),
+        cache_lifetime=config.BUILD_CACHE_LIFETIME,
+        builder_factory=factory.SelfAttribute("..builder_factory"),
     )
     decoration = functools.partial(
         convert_args, device=factory.LazyAttribute(lambda o: o.device_type)
@@ -174,29 +178,20 @@ class GTFNBackendFactory(factory.Factory):
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
 
 
-__config = config.get_config()
-
-__user_defaults = {
-    "gpu": __config.get("use_gpu", False),
-    "cached": __config.get("cache_backends", False),
-}
-
-run_gtfn = GTFNBackendFactory(**__user_defaults)
+run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
     name_postfix="_imperative",
     otf_workflow__translation__use_imperative_backend=True,
-    **__user_defaults,
 )
 
-run_gtfn_cached = GTFNBackendFactory(**__user_defaults | {"cached": True})
+run_gtfn_cached = GTFNBackendFactory(cached=True)
 
 run_gtfn_with_temporaries = GTFNBackendFactory(
     name_postfix="_with_temporaries",
     otf_workflow__translation__lift_mode=LiftMode.FORCE_TEMPORARIES,
-    **__user_defaults,
 )
 
-run_gtfn_gpu = GTFNBackendFactory(**__user_defaults | {"gpu": True})
+run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
-run_gtfn_gpu_cached = GTFNBackendFactory(**__user_defaults | {"gpu": True, "cached": True})
+run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
