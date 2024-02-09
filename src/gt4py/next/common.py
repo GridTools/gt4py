@@ -623,14 +623,17 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
+    def restrict(self, item: AnyIndexSpec) -> Field: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     # Operators
     @abc.abstractmethod
     def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT: ...
+    def __getitem__(self, item: AnyIndexSpec) -> Field: ...
 
     @abc.abstractmethod
     def __abs__(self) -> Field: ...
@@ -896,6 +899,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
+
     @functools.cached_property
     def domain(self) -> Domain:
         return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
@@ -947,9 +953,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     __call__ = remap
 
-    def restrict(self, index: AnyIndexSpec) -> core_defs.IntegralScalar:
-        if is_int_index(index):
-            return index + self.offset
+    def restrict(self, index: AnyIndexSpec) -> Never:
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
