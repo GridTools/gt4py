@@ -746,6 +746,12 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
 
+    @property
+    def skip_value(self) -> core_defs.IntegralScalar:
+        # TODO(havogt): This is a preparation for the future, currently we assume the skip_value is
+        # globally defined to be `-1`. In the future we want to make this customizable in the connectivity.
+        return SKIP_VALUE
+
     # Operators
     def __abs__(self) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")

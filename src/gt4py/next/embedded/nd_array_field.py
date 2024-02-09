@@ -393,13 +393,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
             assert common.UnitRange.is_finite(image_range)
 
-            restricted_mask = (self._ndarray >= image_range.start) & (
-                self._ndarray < image_range.stop
-            )
-
-            relative_ranges = _hypercube(
-                restricted_mask, xp, ignore_mask=self._ndarray == common.SKIP_VALUE
-            )
+            relative_ranges = _hypercube(self._ndarray, image_range, xp, self.skip_value)
 
             if relative_ranges is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
@@ -430,7 +424,30 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
 
 def _hypercube(
-    select: core_defs.NDArrayObject,
+    index_array: core_defs.NDArrayObject,
+    image_range: common.UnitRange,
+    xp: ModuleType,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Optional[list[common.UnitRange]]:
+    """
+    Return the hypercube that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+
+    If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
+    A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+    Example:
+    index_array =  0  1 -1
+                   3  4 -1
+                  -1 -1 -1
+    skip_value = -1
+    would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+    """
+    restricted_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
+    ignore_mask = None if skip_value is None else index_array == skip_value
+    return _hypercube_from_mask(restricted_mask, xp, ignore_mask)
+
+
+def _hypercube_from_mask(
+    select_mask: core_defs.NDArrayObject,
     xp: ModuleType,
     ignore_mask: Optional[core_defs.NDArrayObject] = None,
 ) -> Optional[list[common.UnitRange]]:
@@ -440,9 +457,9 @@ def _hypercube(
     If `ignore_mask` is given, the selected values are ignored. It returns the smallest hypercube.
     A bigger hypercube could be constructed by adding lines from the ignore_mask.
     Example:
-    select = True  True False
-             True  True False
-             False False True
+    select = True  True  False
+             True  True  False
+             False False False
 
     ignore_mask = False False True
                   False False True
@@ -450,12 +467,12 @@ def _hypercube(
 
     would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
-    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select)
+    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
 
     slices = tuple(
         slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
     )
-    hcube = select[tuple(slices)]
+    hcube = select_mask[tuple(slices)]
     if ignore_mask is not None:
         hcube |= ignore_mask[tuple(slices)]
     if not xp.all(hcube):
