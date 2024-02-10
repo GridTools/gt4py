@@ -168,7 +168,7 @@ class NdArrayField(
 
         # Current implementation relies on skip_value == -1:
         # if we assume the indexed array has at least one element, we wrap around without out of bounds
-        assert connectivity.skip_value == -1
+        assert connectivity.skip_value is None or connectivity.skip_value == -1
 
         # Compute the new domain
         dim = connectivity.codomain
