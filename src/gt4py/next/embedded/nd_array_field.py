@@ -121,6 +121,13 @@ class NdArrayField(
         else:
             return np.asarray(self._ndarray)
 
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        return self.ndarray.item()
+
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
         return self.dtype.scalar_type
@@ -208,15 +215,11 @@ class NdArrayField(
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)
-
         new_buffer = self.ndarray[buffer_slice]
-        if len(new_domain) == 0:
-            # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
-            return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__.from_array(new_buffer, domain=new_domain)
+        new_buffer = self.__class__.array_ns.asarray(new_buffer)
+        return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
 
@@ -417,7 +420,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.IntegralScalar:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:

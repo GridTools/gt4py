@@ -321,6 +321,21 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
+def test_single_value_field(cartesian_case):
+    @gtx.field_operator
+    def testee_fo(a: cases.IKField) -> cases.IKField:
+        return a
+
+    @gtx.program
+    def testee_prog(a: cases.IKField):
+        testee_fo(a, out=a[1:2, 3:4])
+
+    a = cases.allocate(cartesian_case, testee_prog, "a")()
+    ref = a[1, 3]
+
+    cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
+
+
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
@@ -622,7 +637,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))

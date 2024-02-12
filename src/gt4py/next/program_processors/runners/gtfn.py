@@ -22,7 +22,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import common
-from gt4py.next.iterator.transforms import LiftMode
+from gt4py.next.iterator.transforms import LiftMode, global_tmps
 from gt4py.next.otf import languages, recipes, stages, step_types, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
@@ -187,7 +187,8 @@ run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
         name="run_gtfn_with_temporaries",
         otf_workflow=gtfn_executor.otf_workflow.replace(
             translation=gtfn_executor.otf_workflow.translation.replace(
-                lift_mode=LiftMode.FORCE_TEMPORARIES
+                lift_mode=LiftMode.FORCE_TEMPORARIES,
+                temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
             ),
         ),
     ),

@@ -919,7 +919,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-        return self._ndarrayfield[self._translate_named_indices(named_indices)]
+        return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if common.is_mutable_field(self._ndarrayfield):
@@ -1040,6 +1040,7 @@ class IndexField(common.Field):
     """
 
     _dimension: common.Dimension
+    _cur_index: Optional[core_defs.IntegralScalar] = None
 
     @property
     def __gt_domain__(self) -> common.Domain:
@@ -1055,7 +1056,10 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension, common.UnitRange.infinite()))
+        if self._cur_index is None:
+            return common.Domain((self._dimension, common.UnitRange.infinite()))
+        else:
+            return common.Domain()
 
     @property
     def codomain(self) -> type[core_defs.int32]:
@@ -1072,16 +1076,24 @@ class IndexField(common.Field):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
+    def as_scalar(self) -> core_defs.IntegralScalar:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        assert self._cur_index is not None
+        return self._cur_index
+
     def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
-            assert isinstance(r, int)
-            return self.dtype.scalar_type(r)
+            assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            return self.__class__(self._dimension, r)  # type: ignore[arg-type] # not sure why the assert above does not work
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1195,8 +1207,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         # TODO set a domain...
+        return self
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        assert self.domain.ndim == 0
         return self._value
 
     __call__ = remap
