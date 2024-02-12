@@ -1163,9 +1163,13 @@ class IRMaker(ast.NodeVisitor):
                 field_axes = self.fields[result.name].axes
                 if index is not None:
                     if len(field_axes) != len(index):
+                        ro_field_message = ""
+                        if len(field_axes) == 0:
+                            ro_field_message = f"Did you mean .at{index}?"
                         raise GTScriptSyntaxError(
                             f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)})"
+                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript) or _is_absolute_indexing_node(node):
