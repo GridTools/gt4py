@@ -289,7 +289,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             index = self._match_index(node.slice)
         except ValueError:
             raise errors.DSLError(
-                self.get_location(node.slice), "eXpected an integral index."
+                self.get_location(node.slice), "Expected an integral index."
             ) from None
 
         return foast.Subscript(

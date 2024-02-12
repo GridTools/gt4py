@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
-from typing import Optional
+from typing import Callable, Optional
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
@@ -51,8 +51,6 @@ def _inline_lifts(ir, lift_mode):
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
-            | InlineLifts.Flag.INLINE_LIFTED_ARGS
-            # needed for UnrollReduce and lift args like `(↑(λ() → constant)`
         ).visit(ir)
     else:
         raise ValueError()
@@ -73,6 +71,8 @@ def _inline_into_scan(ir, *, max_iter=10):
     return ir
 
 
+# TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
+#  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
     ir: ir.Node,
     *,
@@ -82,6 +82,9 @@ def apply_common_transforms(
     common_subexpression_elimination=True,
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
+    temporary_extraction_heuristics: Optional[
+        Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+    ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     if lift_mode is None:
@@ -121,6 +124,37 @@ def apply_common_transforms(
     else:
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
 
+    if lift_mode != LiftMode.FORCE_INLINE:
+        assert offset_provider is not None
+        ir = CreateGlobalTmps().visit(
+            ir,
+            offset_provider=offset_provider,
+            extraction_heuristics=temporary_extraction_heuristics,
+            symbolic_sizes=symbolic_domain_sizes,
+        )
+
+        for _ in range(10):
+            inlined = InlineLifts().visit(ir)
+            inlined = InlineLambdas.apply(
+                inlined,
+                opcount_preserving=True,
+                force_inline_lift_args=True,
+            )
+            if inlined == ir:
+                break
+            ir = inlined
+        else:
+            raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
+
+        # If after creating temporaries, the scan is not at the top, we inline.
+        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
+        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
+        ir = _inline_into_scan(ir)
+
+    # Since `CollapseTuple` relies on the type inference which does not support returning tuples
+    # larger than the number of closure outputs as given by the unconditional collapse, we can
+    # only run the unconditional version here instead of in the loop above.
+
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = _inline_into_scan(ir)
 
@@ -128,6 +162,7 @@ def apply_common_transforms(
 
     ir = FuseMaps().visit(ir)
     ir = CollapseListGet().visit(ir)
+
     if unroll_reduce:
         for _ in range(10):
             unrolled = UnrollReduce.apply(ir, offset_provider=offset_provider)
@@ -136,21 +171,10 @@ def apply_common_transforms(
             ir = unrolled
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
-            ir = _inline_lifts(ir, lift_mode)
+            ir = _inline_lifts(ir, LiftMode.FORCE_INLINE)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")
-
-    if lift_mode != LiftMode.FORCE_INLINE:
-        assert offset_provider is not None
-        ir = CreateGlobalTmps().visit(
-            ir, offset_provider=offset_provider, symbolic_sizes=symbolic_domain_sizes
-        )
-        ir = InlineLifts().visit(ir)
-        # If after creating temporaries, the scan is not at the top, we inline.
-        # The following example doesn't have a lift around the shift, i.e. temporary pass will not extract it.
-        # λ(inp) → scan(λ(state, k, kp) → state + ·k + ·kp, True, 0.0)(inp, ⟪Koffₒ, 1ₒ⟫(inp))`
-        ir = _inline_into_scan(ir)
 
     ir = EtaReduction().visit(ir)
     ir = ScanEtaReduction().visit(ir)

@@ -305,7 +305,7 @@ class ProgramLowering(
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
-            #  inspection of the PAST to emulate the behaviour
+            # inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
@@ -382,12 +382,11 @@ class ProgramLowering(
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
-        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
+        if node.func.id in ["maximum", "minimum"]:
+            assert len(node.args) == 2
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
             )
         else:
-            raise AssertionError(
-                "Only 'minimum' and 'maximum' builtins supported supported currently."
-            )
+            raise NotImplementedError("Only 'minimum', and 'maximum' builtins supported currently.")
