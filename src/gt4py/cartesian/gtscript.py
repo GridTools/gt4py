@@ -694,9 +694,22 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
+class _ReadOnlyFieldDescriptorMaker(_FieldDescriptorMaker):
+    def __getitem__(self, field_spec):
+        if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
+            raise ValueError("ROField is defined by a tuple (type, [axes_size..])")
+
+        dtype, data_dims = field_spec
+
+        return _FieldDescriptor(dtype, [], data_dims)
+
+
 # GTScript builtins: variable annotations
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
+
+ROField = _ReadOnlyFieldDescriptorMaker()
+"""Read-Only Field descriptor: provide a field outside of the IJK"""
 
 
 class _SequenceDescriptor:

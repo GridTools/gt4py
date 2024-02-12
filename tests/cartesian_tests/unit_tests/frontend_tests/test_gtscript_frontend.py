@@ -1455,6 +1455,38 @@ class TestAssignmentSyntax:
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
+    def test_global_access(self):
+        def data_dims(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.Field[(np.int32, (3, 3, 3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field[0, 0, 0][1, 0, 2]
+
+        def at_read(
+            out_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.ROField[(np.int32, (3, 3, 3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                out_field = global_field.at[1, 0, 2]
+
+        def at_write(
+            in_field: gtscript.Field[gtscript.IJK, np.int32],
+            global_field: gtscript.ROField[(np.int32, (3, 3, 3))],
+        ):
+            with computation(PARALLEL), interval(...):
+                global_field.at[1, 0, 2] = in_field
+
+        parse_definition(data_dims, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+        parse_definition(at_read, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r".*writing to a ROField \('at' global indexation\) is forbidden.*",
+        ):
+            parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
 
 class TestNestedWithSyntax:
     def test_nested_with(self):

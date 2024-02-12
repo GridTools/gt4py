@@ -367,6 +367,10 @@ class FieldRef(Ref):
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
         )
 
+    @classmethod
+    def absolute_index(cls, name: str, loc=None):
+        return cls(name=name, offset={}, data_index=[], loc=loc)
+
 
 @attribclass
 class Cast(Expr):
