@@ -25,10 +25,10 @@ from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
 from gt4py.cartesian.gtscript import (
     __INLINED,
+    FORWARD,
     IJ,
     IJK,
     PARALLEL,
-    FORWARD,
     Field,
     I,
     J,
