@@ -23,7 +23,8 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     Convert iterator of tuples into tuples of iterator.
 
-    >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    >>> _ = to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[],
+    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
     param = f"__toi_{abs(hash(expr))}"
 
@@ -45,12 +46,14 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     Convert tuples of iterator into iterator of tuples.
 
-    >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    >>> _ = to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
+    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
     param = f"__iot_{abs(hash(expr))}"
 
     assert all(isinstance(type_, ts.FieldType) for type_ in type_info.primitive_constituents(arg_type))
-    assert reduce(operator.eq, [type_.dims for type_ in type_info.primitive_constituents(arg_type)])  # type: ignore[attr-defined]  # ensure by assert above
+    type_constituents = list(type_info.primitive_constituents(arg_type))
+    assert all(type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
 
     def fun(primitive_type, path):
         param_name = "__iot_el"
