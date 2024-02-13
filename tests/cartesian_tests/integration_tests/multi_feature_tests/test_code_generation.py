@@ -25,7 +25,7 @@ from gt4py.cartesian.gtscript import (
     Field,
     I,
     J,
-    ROField,
+    OffgridField,
     computation,
     horizontal,
     interval,
@@ -594,7 +594,7 @@ def test_global_index(backend):
     F64_VEC4 = (np.float64, (2, 2, 2, 2))
 
     @gtscript.stencil(backend=backend)
-    def test(out: Field[np.float64], inp: ROField[F64_VEC4]):
+    def test(out: Field[np.float64], inp: OffgridField[F64_VEC4]):
         with computation(PARALLEL), interval(...):
             out = inp.at[1, 0, 1, 0]
 

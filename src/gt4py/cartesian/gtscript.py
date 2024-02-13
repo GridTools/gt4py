@@ -697,7 +697,7 @@ class _FieldDescriptorMaker:
 class _ReadOnlyFieldDescriptorMaker(_FieldDescriptorMaker):
     def __getitem__(self, field_spec):
         if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
-            raise ValueError("ROField is defined by a tuple (type, [axes_size..])")
+            raise ValueError("OffgridField is defined by a tuple (type, [axes_size..])")
 
         dtype, data_dims = field_spec
 
@@ -708,8 +708,8 @@ class _ReadOnlyFieldDescriptorMaker(_FieldDescriptorMaker):
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
 
-ROField = _ReadOnlyFieldDescriptorMaker()
-"""Read-Only Field descriptor: provide a field outside of the IJK"""
+OffgridField = _ReadOnlyFieldDescriptorMaker()
+"""Field with no spatial dimension descriptor."""
 
 
 class _SequenceDescriptor:

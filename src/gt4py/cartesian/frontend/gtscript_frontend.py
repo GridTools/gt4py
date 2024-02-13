@@ -1627,7 +1627,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                         name_node = t.value
                     elif _is_absolute_indexing_node(t):
                         raise GTScriptSyntaxError(
-                            message="writing to a ROField ('at' global indexation) is forbidden",
+                            message="writing to an OffgridField ('at' global indexation) is forbidden",
                             loc=nodes.Location.from_ast_node(node),
                         )
                     elif isinstance(t.value, ast.Subscript) and isinstance(t.value.value, ast.Name):
