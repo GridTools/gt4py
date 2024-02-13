@@ -22,6 +22,7 @@ from gt4py.next.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     lowering_utils,
+    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
@@ -169,7 +170,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 # the function itself returns a tuple of iterators, transform into iterator of
                 #  tuples again so that we can deref.
                 lowering_utils.to_iterator_of_tuples(
-                    func_definition.expr, node.type.definition.returns
+                    func_definition.expr,
+                    ti_ffront.promote_scalars_to_zero_dim_field(node.type.definition.returns),
                 )
             )
         )

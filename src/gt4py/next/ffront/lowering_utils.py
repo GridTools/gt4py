@@ -11,8 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import operator
-from functools import reduce
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
@@ -51,7 +49,9 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     param = f"__iot_{abs(hash(expr))}"
 
-    assert all(isinstance(type_, ts.FieldType) for type_ in type_info.primitive_constituents(arg_type))
+    assert all(
+        isinstance(type_, ts.FieldType) for type_ in type_info.primitive_constituents(arg_type)
+    )
     type_constituents = list(type_info.primitive_constituents(arg_type))
     assert all(type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
 
