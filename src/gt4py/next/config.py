@@ -34,8 +34,8 @@ class CMakeBuildType(enum.Enum):
     MIN_SIZE_REL = enum.auto()
 
 
-PREFIX = "GT4PY_GTX"
-
+_PREFIX = "GT4PY"
+DEBUG = ...
 BUILD_CACHE_DIR = (
     pathlib.Path(os.environ.get(f"{PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir())) / "gt4py_cache"
 )
@@ -44,4 +44,4 @@ BUILD_CACHE_LIFETIME = getattr(
     BuildCacheLifetime, os.environ.get(f"{PREFIX}_BUILD_CACHE_LIFETIME", "session").upper()
 )
 
-CMAKE_BUILD_TYPE = getattr(CMakeBuildType, os.environ.get(f"{PREFIX}_BUILD_TYPE", "debug").upper())
+CMAKE_BUILD_TYPE = getattr(CMakeBuildType, os.environ.get(f"{PREFIX}_BUILD_TYPE", "debug" if DEBUG else "release").upper())
