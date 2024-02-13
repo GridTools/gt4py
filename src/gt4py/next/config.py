@@ -34,14 +34,25 @@ class CMakeBuildType(enum.Enum):
     MIN_SIZE_REL = enum.auto()
 
 
+def env_flag_to_bool(flag_value: str) -> bool:
+    """Like in gt4py.cartesian, env vars for flags should be set to '0' or '1'."""
+    return bool(int(flag_value))
+
+
 _PREFIX = "GT4PY"
-DEBUG = ...
+
+DEBUG = env_flag_to_bool(os.environ.get(f"{_PREFIX}_DEBUG", "0"))
+
 BUILD_CACHE_DIR = (
-    pathlib.Path(os.environ.get(f"{PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir())) / "gt4py_cache"
+    pathlib.Path(os.environ.get(f"{_PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir()))
+    / "gt4py_cache"
 )
 
 BUILD_CACHE_LIFETIME = getattr(
-    BuildCacheLifetime, os.environ.get(f"{PREFIX}_BUILD_CACHE_LIFETIME", "session").upper()
+    BuildCacheLifetime,
+    os.environ.get(f"{_PREFIX}_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper(),
 )
 
-CMAKE_BUILD_TYPE = getattr(CMakeBuildType, os.environ.get(f"{PREFIX}_BUILD_TYPE", "debug" if DEBUG else "release").upper())
+CMAKE_BUILD_TYPE = getattr(
+    CMakeBuildType, os.environ.get(f"{_PREFIX}_BUILD_TYPE", "debug" if DEBUG else "release").upper()
+)
