@@ -50,7 +50,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     # TODO(tehrengruber): check they are all defined on the same dimensions
     param = f"__iot_{abs(hash(expr))}"
 
-    assert reduce(operator.eq, type_info.primitive_constituents(arg_type))
+    assert reduce(operator.eq, [type_.dims for type_ in type_info.primitive_constituents(arg_type)])
 
     def fun(primitive_type, path):
         param_name = "__iot_el"

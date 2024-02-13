@@ -168,6 +168,7 @@ class ProgramLowering(
             stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
         else:
             # field operators return a tuple of iterators
+            # TODO(tehrengruber): change into deref per element
             stencil_body = im.deref(
                 lowering_utils.to_iterator_of_tuples(
                     im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
