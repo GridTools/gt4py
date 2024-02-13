@@ -47,7 +47,6 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
 
     >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
-    # TODO(tehrengruber): check they are all defined on the same dimensions
     param = f"__iot_{abs(hash(expr))}"
 
     assert all(isinstance(type_, ts.FieldType) for type_ in type_info.primitive_constituents(arg_type))
