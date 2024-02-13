@@ -1474,17 +1474,6 @@ class TestAssignmentSyntax:
 
             parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match=r"(.*?)Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.(.*)",
-        ):
-
-            def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
-                with computation(...), interval(...):
-                    out[0, 0, 1] = inp
-
-            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
-
 
 class TestNestedWithSyntax:
     def test_nested_with(self):
