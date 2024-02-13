@@ -11,6 +11,18 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+"""
+Test that the high level gtfn interface respects user config.
+
+Note: certain features of the config system can not be tested.
+
+These features include:
+- build cache location
+- debug mode
+
+Because monkey patching the config variables is not enough, as
+other variables are computed at import time based on them.
+"""
 
 import gt4py._core.definitions as core_defs
 from gt4py.next import allocators, config
