@@ -59,7 +59,7 @@ class CannonicalizeBoundSymbolNames(eve.NodeTranslator):
 
 def is_equal(a: itir.Expr, b: itir.Expr):
     """
-    Return true if, but not only if, two expression (with equal scope) have the same value.
+    Return true if two expressions have provably equal values.
 
     Be aware that this function might return false even though the two expression have the same
     value.
@@ -67,7 +67,13 @@ def is_equal(a: itir.Expr, b: itir.Expr):
     >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
     >>> testee2 = im.lambda_("c")(im.plus("c", "b"))
     >>> assert is_equal(testee1, testee2)
+
+    >>> testee1 = im.lambda_("a")(im.plus("a", "b"))
+    >>> testee2 = im.lambda_("c")(im.plus("c", "d"))
+    >>> assert not is_equal(testee1, testee2)
     """
+    # TODO(tehrengruber): Extend this function cover more cases than just those with equal
+    #  structure, e.g., by also canonicalization of the structure.
     return a == b or (
         CannonicalizeBoundSymbolNames.apply(a) == CannonicalizeBoundSymbolNames.apply(b)
     )
