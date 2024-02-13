@@ -87,7 +87,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
       - `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
     """
 
-    # TODO(tehrengruber): This Flag machanism is a little low level. What we actually want
+    # TODO(tehrengruber): This Flag mechanism is a little low level. What we actually want
     #   is something like a pass manager, where for each pattern we have a corresponding
     #   transformation, etc.
     class Flag(enum.Flag):
