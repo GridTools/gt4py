@@ -301,7 +301,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.Expr:
-        # TODO: this breaks when the fields are on different domains
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.Expr:
