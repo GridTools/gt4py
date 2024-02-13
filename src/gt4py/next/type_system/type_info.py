@@ -14,6 +14,7 @@
 
 import functools
 import types
+import typing
 from typing import Any, Callable, Iterator, Type, TypeGuard, cast
 
 import numpy as np
@@ -86,10 +87,24 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
+@typing.overload
+def primitive_constituents(
+    symbol_type: ts.TypeSpec,
+    with_path_arg: typing.Literal[False] = False,
+) -> XIterable[ts.TypeSpec]: ...
+
+
+@typing.overload
+def primitive_constituents(
+    symbol_type: ts.TypeSpec,
+    with_path_arg: typing.Literal[True],
+) -> XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]: ...
+
+
 def primitive_constituents(
     symbol_type: ts.TypeSpec,
     with_path_arg: bool = False,
-) -> XIterable[ts.TypeSpec]:
+) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -139,9 +154,14 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(*[
+        return tuple_constructor(
+            *[
                 apply_to_primitive_constituents(
-                    el, fun, _path=(*_path, i), with_path_arg=with_path_arg, tuple_constructor=tuple_constructor
+                    el,
+                    fun,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
                 )
                 for i, el in enumerate(symbol_type.types)
             ]
@@ -648,7 +668,6 @@ def function_signature_incompatibilities_func(  # noqa: C901
                 arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
             else:
                 arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
-            breakpoint()
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
 
     for kwarg in set(func_type.kw_only_args.keys()) & set(kwargs.keys()):
