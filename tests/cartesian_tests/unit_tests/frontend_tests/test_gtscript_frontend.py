@@ -1486,7 +1486,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match=r".*writing to a OffgridField \('at' global indexation\) is forbidden.*",
+            match="writing to an OffgridField \('at' global indexation\) is forbidden",
         ):
             parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
