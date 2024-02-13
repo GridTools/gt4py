@@ -405,7 +405,7 @@ def builtin_neighbors(
             code="__data = __field[__idx]"
             + (
                 f" if __idx != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
-                if offset_provider.has_skip_values
+                if offset_provider.has_skip_values and offset_dim != "C2CE"
                 else ""
             ),
             inputs={"__field", "__idx"},
@@ -1254,34 +1254,10 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 If the neighbor table has full connectivity (no skip values by type definition), the input_valid node
                 is not built, and the construction of the if/else branch below is also skipped.
                 """
-                input_valid_var = unique_var_name()
-                self.context.body.add_array(
-                    input_valid_var, nreduce_shape, dace.dtypes.bool, transient=True
-                )
-                input_valid_node = self.context.state.add_access(input_valid_var)
-
-                internals = [f"{arg.value.data}_v" for arg in input_valid_args]
-                self.context.state.add_mapped_tasklet(
-                    "all_inputs_valid",
-                    nreduce_domain,
-                    {
-                        internal: create_memlet_at(arg.value.data, nreduce_index)
-                        for internal, arg in zip(internals, input_valid_args)
-                    },
-                    "__result = " + " and ".join(internals),
-                    {
-                        "__result": create_memlet_at(input_valid_var, nreduce_index),
-                    },
-                    external_edges=True,
-                    input_nodes={arg.value.data: arg.value for arg in input_valid_args},
-                    output_nodes={
-                        input_valid_var: input_valid_node,
-                    },
-                )
-
+                input_args.append(input_valid_args[0])
+                input_valid_node = input_valid_args[0].value
                 # add input connector to nested sdfg
-                input_args.append(ValueExpr(input_valid_node, dace.dtypes.bool))
-                input_mapping["is_valid"] = create_memlet_at(input_valid_var, nreduce_index)
+                input_mapping["is_valid"] = create_memlet_at(input_valid_node.data, nreduce_index)
                 # check neighbor validity on if/else inter-state edge
                 start_state = lambda_context.body.add_state("start", is_start_block=True)
                 skip_neighbor_state = lambda_context.body.add_state("skip_neighbor")
