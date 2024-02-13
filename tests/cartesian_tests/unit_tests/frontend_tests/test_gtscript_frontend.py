@@ -28,6 +28,7 @@ from gt4py.cartesian.gtscript import (
     IJ,
     IJK,
     PARALLEL,
+    FORWARD,
     Field,
     I,
     J,
@@ -1382,7 +1383,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Assignment to non-zero offsets is not supported.",
+            match="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
         ):
             parse_definition(
                 func,
@@ -1421,7 +1422,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Assignment to non-zero offsets is not supported.",
+            match="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
         ):
             parse_definition(
                 definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
@@ -1454,6 +1455,35 @@ class TestAssignmentSyntax:
                 in_field *= 4.0
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_K_offset_write(self):
+        def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
+            with computation(FORWARD), interval(...):
+                out[0, 0, 1] = inp
+
+        parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r"(.*?)Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.(.*)",
+        ):
+
+            def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
+                with computation(PARALLEL), interval(...):
+                    out[0, 0, 1] = inp
+
+            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r"(.*?)Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.(.*)",
+        ):
+
+            def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
+                with computation(...), interval(...):
+                    out[0, 0, 1] = inp
+
+            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
 
 class TestNestedWithSyntax:

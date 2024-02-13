@@ -586,3 +586,56 @@ def test_pruned_args_match(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
     )
     test(out, inp)
+
+
+@pytest.mark.parametrize("backend", ["numpy"])
+def test_K_offset_write(backend):
+    @gtscript.stencil(backend=backend)
+    def simple(A: Field[np.float64], B: Field[np.float64]):
+        with computation(FORWARD), interval(...):
+            B[0, 0, 1] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    A[:, :, :] = 42.0
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    simple(A, B)
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:3] == 42.0).all()
+
+    @gtscript.stencil(backend=backend)
+    def forward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(FORWARD), interval(1, 3):
+            A[0, 0, -1] = scalar
+            B[0, 0, 1] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    A[:, :, :] = 42.0
+    B = gt_storage.empty(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    forward(A, B, 2.0)
+    # B will have non-updated values of A
+    assert (B[:, :, 1:3] == 42.0).all()
+
+    @gtscript.stencil(backend=backend)
+    def backward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, 3):
+            A[0, 0, -1] = scalar
+            B[0, 0, 1] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    A[:, :, :] = 42.0
+    B = gt_storage.empty(
+        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    )
+    backward(A, B, 2.0)
+    # B will have updated values of A
+    assert (B[:, :, 1:3] == 2.0).all()
