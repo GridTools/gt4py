@@ -168,7 +168,7 @@ class LocatedField(Protocol):
 
     @property
     @abc.abstractmethod
-    def __gt_domain__(self) -> common.Domain: ...
+    def dims(self) -> tuple[common.Dimension, ...]: ...
 
     # TODO(havogt): define generic Protocol to provide a concrete return type
     @abc.abstractmethod
@@ -176,7 +176,7 @@ class LocatedField(Protocol):
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
-        return tuple([0] * len(self.__gt_domain__.dims))
+        return tuple([0] * len(self.dims))
 
 
 @runtime_checkable
@@ -678,18 +678,12 @@ def _is_concrete_position(pos: Position) -> TypeGuard[ConcretePosition]:
 def _get_axes(
     field_or_tuple: LocatedField | tuple,
 ) -> Sequence[common.Dimension]:  # arbitrary nesting of tuples of LocatedField
-    return _get_domain(field_or_tuple).dims
-
-
-def _get_domain(
-    field_or_tuple: LocatedField | tuple,
-) -> common.Domain:  # arbitrary nesting of tuples of LocatedField
     if isinstance(field_or_tuple, tuple):
-        first = _get_domain(field_or_tuple[0])
-        assert all(first == _get_domain(f) for f in field_or_tuple)
+        first = _get_axes(field_or_tuple[0])
+        assert all(first == _get_axes(f) for f in field_or_tuple)
         return first
     else:
-        return field_or_tuple.__gt_domain__
+        return field_or_tuple.dims
 
 
 def _single_vertical_idx(
@@ -900,8 +894,8 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
     _ndarrayfield: common.Field
 
     @property
-    def __gt_domain__(self) -> common.Domain:
-        return self._ndarrayfield.__gt_domain__
+    def dims(self) -> tuple[common.Dimension, ...]:
+        return self._ndarrayfield.__gt_domain__.dims
 
     def _translate_named_indices(
         self, _named_indices: NamedFieldIndices
@@ -925,7 +919,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-        return self._ndarrayfield[self._translate_named_indices(named_indices)]
+        return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if common.is_mutable_field(self._ndarrayfield):
@@ -1046,6 +1040,7 @@ class IndexField(common.Field):
     """
 
     _dimension: common.Dimension
+    _cur_index: Optional[core_defs.IntegralScalar] = None
 
     @property
     def __gt_domain__(self) -> common.Domain:
@@ -1061,7 +1056,10 @@ class IndexField(common.Field):
 
     @property
     def domain(self) -> common.Domain:
-        return common.Domain((self._dimension, common.UnitRange.infinite()))
+        if self._cur_index is None:
+            return common.Domain((self._dimension, common.UnitRange.infinite()))
+        else:
+            return common.Domain()
 
     @property
     def codomain(self) -> type[core_defs.int32]:
@@ -1078,16 +1076,24 @@ class IndexField(common.Field):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
+    def as_scalar(self) -> core_defs.IntegralScalar:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        assert self._cur_index is not None
+        return self._cur_index
+
     def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.int32:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
-            assert isinstance(r, int)
-            return self.dtype.scalar_type(r)
+            assert isinstance(r, core_defs.INTEGRAL_TYPES)
+            return self.__class__(self._dimension, r)  # type: ignore[arg-type] # not sure why the assert above does not work
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1201,8 +1207,12 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         # TODO set a domain...
+        return self
+
+    def as_scalar(self) -> core_defs.ScalarT:
+        assert self.domain.ndim == 0
         return self._value
 
     __call__ = remap
@@ -1452,7 +1462,7 @@ def _tuple_assign(field: tuple | MutableLocatedField, value: Any, named_indices:
 class TupleOfFields(TupleField):
     def __init__(self, data):
         self.data = data
-        self.__gt_domain__ = _get_domain(data)
+        self.dims = _get_axes(data)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
         return _build_tuple_result(self.data, named_indices)

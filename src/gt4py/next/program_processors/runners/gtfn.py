@@ -23,7 +23,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import common, config
-from gt4py.next.iterator.transforms import LiftMode
+from gt4py.next.iterator.transforms import LiftMode, global_tmps
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -190,6 +190,7 @@ run_gtfn_cached = GTFNBackendFactory(cached=True)
 run_gtfn_with_temporaries = GTFNBackendFactory(
     name_postfix="_with_temporaries",
     otf_workflow__translation__lift_mode=LiftMode.FORCE_TEMPORARIES,
+    otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
 )
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)

@@ -15,7 +15,7 @@ import copy
 import dataclasses
 import functools
 from collections.abc import Mapping
-from typing import Any, Final, Iterable, Literal, Optional, Sequence
+from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
 import gt4py.eve as eve
 import gt4py.next as gtx
@@ -150,20 +150,54 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
     return node
 
 
-def temporary_extraction_predicate(expr: ir.Node, num_occurences: int) -> bool:
-    """Determine if `expr` is an applied lift that should be extracted as a temporary."""
-    if not is_applied_lift(expr):
+@dataclasses.dataclass(frozen=True)
+class TemporaryExtractionPredicate:
+    """
+    Construct a callable that determines if a lift expr can and should be extracted to a temporary.
+
+    The class optionally takes a heuristic that can restrict the extraction.
+    """
+
+    heuristics: Optional[Callable[[ir.Expr], bool]] = None
+
+    def __call__(self, expr: ir.Expr, num_occurences: int) -> bool:
+        """Determine if `expr` is an applied lift that should be extracted as a temporary."""
+        if not is_applied_lift(expr):
+            return False
+        # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
+        # as we can not create temporaries for these stencils
+        if isinstance(expr.annex.type.dtype, type_inference.List):
+            return False
+        if self.heuristics and not self.heuristics(expr):
+            return False
+        stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
+        # do not extract when the stencil is capturing
+        used_symbols = collect_symbol_refs(stencil)
+        if used_symbols:
+            return False
+        return True
+
+
+@dataclasses.dataclass(frozen=True)
+class SimpleTemporaryExtractionHeuristics:
+    """
+    Heuristic that extracts only if a lift expr is derefed in more than one position.
+
+    Note that such expression result in redundant computations if inlined instead of being
+    placed into a temporary.
+    """
+
+    closure: ir.StencilClosure
+
+    @functools.cached_property
+    def closure_shifts(self):
+        return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
+
+    def __call__(self, expr: ir.Expr) -> bool:
+        shifts = self.closure_shifts[id(expr)]
+        if len(shifts) > 1:
+            return True
         return False
-    # do not extract when the result is a list as we can not create temporaries for
-    # these stencils
-    if isinstance(expr.annex.type.dtype, type_inference.List):
-        return False
-    stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
-    used_symbols = collect_symbol_refs(stencil)
-    # do not extract when the stencil is capturing
-    if used_symbols:
-        return False
-    return True
 
 
 def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
@@ -193,7 +227,14 @@ def _ensure_expr_does_not_capture(expr: ir.Expr, whitelist: list[ir.Sym]) -> Non
     assert not (set(used_symbol_refs) - {param.id for param in whitelist})
 
 
-def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemporaries:
+def split_closures(
+    node: ir.FencilDefinition,
+    offset_provider,
+    *,
+    extraction_heuristics: Optional[
+        Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+    ] = None,
+) -> FencilWithTemporaries:
     """Split closures on lifted function calls and introduce new temporary buffers for return values.
 
     Newly introduced temporaries will have the symbolic size of `AUTO_DOMAIN`. A symbol with the
@@ -205,6 +246,13 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
     3. Extract lifted function class as new closures with the previously created temporary as output.
     The closures are processed in reverse order to properly respect the dependencies.
     """
+    if not extraction_heuristics:
+        # extract all (eligible) lifts
+        def always_extract_heuristics(_):
+            return lambda _: True
+
+        extraction_heuristics = always_extract_heuristics
+
     uid_gen_tmps = UIDGenerator(prefix="_tmp")
 
     type_inference.infer_all(node, offset_provider=offset_provider, save_to_annex=True)
@@ -228,9 +276,13 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                 current_closure.stencil if not is_scan else current_closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
             )
 
+            extraction_predicate = TemporaryExtractionPredicate(
+                extraction_heuristics(current_closure)
+            )
+
             stencil_body, extracted_lifts, _ = extract_subexpression(
                 current_closure_stencil.expr,
-                temporary_extraction_predicate,
+                extraction_predicate,
                 uid_gen_tmps,
                 once_only=True,
                 deepest_expr_first=True,
@@ -454,7 +506,12 @@ def update_domains(
         if closure.domain == AUTO_DOMAIN:
             # every closure with auto domain should have a single out field
             assert isinstance(closure.output, ir.SymRef)
+
+            if closure.output.id not in domains:
+                raise NotImplementedError(f"Closure output '{closure.output.id}' is never used.")
+
             domain = domains[closure.output.id]
+
             closure = ir.StencilClosure(
                 domain=copy.deepcopy(domain),
                 stencil=closure.stencil,
@@ -466,14 +523,6 @@ def update_domains(
             domain = closure.domain
 
         closures.append(closure)
-
-        if closure.stencil == ir.SymRef(id="deref"):
-            # all closure inputs inherit the domain
-            for input_arg in _tuple_constituents(closure.inputs[0]):
-                assert isinstance(input_arg, ir.SymRef)
-                assert domains.get(input_arg.id, domain) == domain
-                domains[input_arg.id] = domain
-            continue
 
         local_shifts = trace_shifts.TraceShifts.apply(closure)
         for param, shift_chains in local_shifts.items():
@@ -512,13 +561,22 @@ def update_domains(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
                             for axis, range_ in consumed_domain.ranges.items()
                         )
+                        # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
+                        consumed_domain.ranges = dict(
+                            (axis, range_) if axis != old_axis else (new_axis, new_range)
+                            for axis, range_ in consumed_domain.ranges.items()
+                        )
                     else:
-                        raise NotImplementedError
+                        raise NotImplementedError()
                 consumed_domains.append(consumed_domain)
 
             # compute the bounds of all consumed domains
             if consumed_domains:
-                domains[param] = domain_union(consumed_domains).as_expr()
+                if all(
+                    consumed_domain.ranges.keys() == consumed_domains[0].ranges.keys()
+                    for consumed_domain in consumed_domains
+                ):  # scalar otherwise
+                    domains[param] = domain_union(consumed_domains).as_expr()
 
     return FencilWithTemporaries(
         fencil=ir.FencilDefinition(
@@ -597,10 +655,15 @@ class CreateGlobalTmps(PreserveLocationVisitor, NodeTranslator):
         node: ir.FencilDefinition,
         *,
         offset_provider: Mapping[str, Any],
+        extraction_heuristics: Optional[
+            Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+        ] = None,
         symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
         # Split closures on lifted function calls and introduce temporaries
-        res = split_closures(node, offset_provider=offset_provider)
+        res = split_closures(
+            node, offset_provider=offset_provider, extraction_heuristics=extraction_heuristics
+        )
         # Prune unreferences closure inputs introduced in the previous step
         res = PruneClosureInputs().visit(res)
         # Prune unused temporaries possibly introduced in the previous step

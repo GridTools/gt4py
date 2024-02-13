@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 import functools
 import warnings
-from typing import Any, Final, Optional
+from typing import Any, Callable, Final, Optional
 
 import factory
 import numpy as np
@@ -59,6 +59,9 @@ class GTFNTranslationStep(
     lift_mode: Optional[LiftMode] = None
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     symbolic_domain_sizes: Optional[dict[str, str]] = None
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None
 
     def _default_language_settings(self) -> languages.LanguageWithHeaderFilesSettings:
         match self.device_type:
@@ -180,14 +183,14 @@ class GTFNTranslationStep(
         self,
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
-        runtime_lift_mode: Optional[LiftMode] = None,
+        runtime_lift_mode: Optional[LiftMode],
     ) -> itir.FencilDefinition:
         # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
         #  to the interface of all (or at least all of concern) backends, but instead should be
         #  configured in the backend itself (like it is here), until then we respect the argument
         #  here and warn the user if it differs from the one configured.
         lift_mode = runtime_lift_mode or self.lift_mode
-        if lift_mode != self.lift_mode:
+        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
             warnings.warn(
                 f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
                 f"overriden to be {str(runtime_lift_mode)} at runtime."
@@ -203,6 +206,7 @@ class GTFNTranslationStep(
             # sid::composite (via hymap) supports assigning from tuple with more elements to tuple with fewer elements
             unconditionally_collapse_tuples=True,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
         )
 
         new_program = apply_common_transforms(
