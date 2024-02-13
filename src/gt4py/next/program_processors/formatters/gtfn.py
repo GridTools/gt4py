@@ -17,13 +17,13 @@ from typing import Any
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.codegens.gtfn.gtfn_module import GTFNTranslationStep
 from gt4py.next.program_processors.processor_interface import program_formatter
-from gt4py.next.program_processors.runners.gtfn import gtfn_executor
+from gt4py.next.program_processors.runners import gtfn
 
 
 @program_formatter
 def format_cpp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     # TODO(tehrengruber): This is a little ugly. Revisit.
-    gtfn_translation = gtfn_executor.otf_workflow.translation
+    gtfn_translation = gtfn.GTFNBackendFactory().executor.otf_workflow.translation
     assert isinstance(gtfn_translation, GTFNTranslationStep)
     return gtfn_translation.generate_stencil_source(
         program,
