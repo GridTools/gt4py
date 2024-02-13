@@ -19,7 +19,7 @@ stages:
 - test
 
 build py38 baseimage:
-  extends: .container-builder
+  extends: .container-builder-cscs-zen2
   stage: baseimage
   # we create a tag that depends on the SHA value of ci/base.Dockerfile, this way
   # a new base image is only built when the SHA of this file changes
@@ -52,7 +52,7 @@ build py310 baseimage:
     <<: *py310
 
 build py38 image:
-  extends: .container-builder
+  extends: .container-builder-cscs-zen2
   needs: ["build py38 baseimage"]
   stage: image
   variables:
