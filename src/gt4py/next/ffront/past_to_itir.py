@@ -14,14 +14,15 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast, Callable
+from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront, lowering_utils
+from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
-from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_info, type_specifications as ts
+
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
@@ -40,7 +41,9 @@ def _flatten_tuple_expr(
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -151,19 +154,25 @@ class ProgramLowering(traits.PreserveLocationVisitor, traits.VisitorWithSymbolTa
         stencil_params = []
         stencil_args = []
         for i, arg in enumerate([*args, *node_kwargs]):
-            stencil_params.append(f"__sarg{i}")
+            stencil_params.append(f"__stencil_arg{i}")
             if isinstance(arg.type, ts.TupleType):
                 # convert into tuple of iterators
-                stencil_args.append(lowering_utils.to_tuples_of_iterator(f"__sarg{i}", arg.type))
+                stencil_args.append(
+                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                )
             else:
-                stencil_args.append(f"__sarg{i}")
-        #stencil_body = _process_elements(lambda x: im.deref(x), im.call(node.func.id)(*stencil_args), node.func.type.definition.returns)
+                stencil_args.append(f"__stencil_arg{i}")
+
         if isinstance(node.func.type, ts_ffront.ScanOperatorType):
             # scan operators return an iterator of tuples
             stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
         else:
             # field operators return a tuple of iterators
-            stencil_body = im.deref(lowering_utils.to_iterator_of_tuples(im.call(node.func.id)(*stencil_args), node.func.type.definition.returns))
+            stencil_body = im.deref(
+                lowering_utils.to_iterator_of_tuples(
+                    im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+                )
+            )
 
         return itir.StencilClosure(
             domain=lowered_domain,

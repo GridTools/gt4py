@@ -11,16 +11,22 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import operator
+from functools import reduce
+
 from gt4py.next.iterator import ir as itir
-from gt4py.next.type_system import type_info, type_specifications as ts
 from gt4py.next.iterator.ir_utils import ir_makers as im
-def to_tuples_of_iterator(expr: itir.Expr, arg_type: ts.TypeSpec):
+from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
-    Convert iterator of tuples into tuples of iterator
+    Convert iterator of tuples into tuples of iterator.
 
     >>> to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
-    param = f"__param_{abs(hash(expr))}"
+    param = f"__toi_{abs(hash(expr))}"
+
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
         for path_part in path:
@@ -29,27 +35,32 @@ def to_tuples_of_iterator(expr: itir.Expr, arg_type: ts.TypeSpec):
         return im.lift(im.lambda_("it")(inner_expr))(param)
 
     return im.let(param, expr)(
-        type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
-                                                  tuple_constructor=im.make_tuple)
+        type_info.apply_to_primitive_constituents(
+            arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+        )
     )
 
-def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
+
+def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
-    Convert tuples of iterator into iterator of tuples
+    Convert tuples of iterator into iterator of tuples.
 
     >>> to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
     """
-    param = f"__param_{abs(hash(expr))}"
+    # TODO(tehrengruber): check they are all defined on the same dimensions
+    param = f"__iot_{abs(hash(expr))}"
+
+    assert reduce(operator.eq, type_info.primitive_constituents(arg_type))
 
     def fun(primitive_type, path):
-        param_name = "__tuple_el"
+        param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"
         return im.deref(param_name)
 
     lift_params, lift_args = [], []
     for _, path in type_info.primitive_constituents(arg_type, with_path_arg=True):
-        param_name, arg_expr = "__tuple_el", param
+        param_name, arg_expr = "__iot_el", param
         for path_part in path:
             param_name = f"{param_name}_{path_part}"
             arg_expr = im.tuple_get(path_part, arg_expr)
@@ -57,6 +68,7 @@ def to_iterator_of_tuples(expr: itir.Expr, arg_type: ts.TypeSpec):
         lift_params.append(param_name)
         lift_args.append(arg_expr)
 
-    stencil_expr = type_info.apply_to_primitive_constituents(arg_type, fun, with_path_arg=True,
-                                                     tuple_constructor=im.make_tuple)
+    stencil_expr = type_info.apply_to_primitive_constituents(
+        arg_type, fun, with_path_arg=True, tuple_constructor=im.make_tuple
+    )
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
