@@ -117,7 +117,7 @@ def apply_common_transforms(
             # to limit number of times global type inference is executed, only in the last iterations.
             use_global_type_inference=inlined == ir,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
-            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
         # This pass is required such that a deref outside of a
         # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
@@ -165,7 +165,7 @@ def apply_common_transforms(
             ir,
             ignore_tuple_size=unconditionally_collapse_tuples,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
-            flags = ~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
 
     if lift_mode == LiftMode.FORCE_INLINE:
