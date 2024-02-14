@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
@@ -49,11 +50,11 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     param = f"__iot_{abs(hash(expr))}"
 
-    assert all(
-        isinstance(type_, ts.FieldType) for type_ in type_info.primitive_constituents(arg_type)
-    )
-    type_constituents = list(type_info.primitive_constituents(arg_type))
-    assert all(type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
+    type_constituents = [
+        ti_ffront.promote_scalars_to_zero_dim_field(type_)
+        for type_ in type_info.primitive_constituents(arg_type)
+    ]
+    assert all(isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
 
     def fun(primitive_type, path):
         param_name = "__iot_el"
