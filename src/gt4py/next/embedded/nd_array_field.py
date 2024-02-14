@@ -42,7 +42,9 @@ except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
-def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., NdArrayField]:
+def _make_builtin(
+    builtin_name: str, array_builtin_name: str, reversed=False
+) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         first = None
         for f in fields:
@@ -63,7 +65,11 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
-                    f_broadcasted = _broadcast(f, domain_intersection.dims)
+                    f_broadcasted = (
+                        _broadcast(f, domain_intersection.dims)
+                        if f.domain.dims != domain_intersection.dims
+                        else f
+                    )
                     f_slices = _get_slices_from_domain_slice(
                         f_broadcasted.domain, domain_intersection
                     )
@@ -71,7 +77,8 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
             else:
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
-
+        if reversed:
+            transformed = transformed[::-1]
         new_data = op(*transformed)
         return first.__class__.from_array(new_data, domain=domain_intersection)
 
@@ -252,13 +259,16 @@ class NdArrayField(
 
     __pos__ = _make_builtin("pos", "positive")
 
-    __sub__ = __rsub__ = _make_builtin("sub", "subtract")
+    __sub__ = _make_builtin("sub", "subtract")
+    __rsub__ = _make_builtin("sub", "subtract", reversed=True)
 
     __mul__ = __rmul__ = _make_builtin("mul", "multiply")
 
-    __truediv__ = __rtruediv__ = _make_builtin("div", "divide")
+    __truediv__ = _make_builtin("div", "divide")
+    __rtruediv__ = _make_builtin("div", "divide", reversed=True)
 
-    __floordiv__ = __rfloordiv__ = _make_builtin("floordiv", "floor_divide")
+    __floordiv__ = _make_builtin("floordiv", "floor_divide")
+    __rfloordiv__ = _make_builtin("floordiv", "floor_divide", reversed=True)
 
     __pow__ = _make_builtin("pow", "power")
 
@@ -694,7 +704,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             domain_slice.append(slice(None))
             named_ranges.append((dim, field.domain[pos][1]))
         else:
-            domain_slice.append(np.newaxis)
+            domain_slice.append(field.__class__.array_ns.newaxis)
             named_ranges.append((dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
