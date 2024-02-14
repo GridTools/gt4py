@@ -117,6 +117,10 @@ def apply_common_transforms(
             ignore_tuple_size=True, # possibly dangerous
             use_global_type_inference=False,
         )
+        # This pass is required such that a deref outside of a
+        # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
+        # `tuple_get` is removed by the `CollapseTuple` pass.
+        inlined = PropagateDeref.apply(inlined)
 
         if inlined == ir:
             break
