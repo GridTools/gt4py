@@ -24,7 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
+from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, Tuple, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -212,7 +212,12 @@ class NdArrayField(
     __call__ = remap  # type: ignore[assignment]
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
-        new_domain, buffer_slice = self._slice(index)
+        new_index: Tuple | common.AnyIndexSpec = index
+        if isinstance(index, slice):
+            new_index = self._refactor_slice(index)
+        if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
+            new_index = tuple([self._refactor_slice(i) for i in index])
+        new_domain, buffer_slice = self._slice(new_index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
         return self.__class__.from_array(new_buffer, domain=new_domain)
@@ -307,6 +312,18 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    def _refactor_slice(
+        self, idx: common.AnyIndexSpec
+    ) -> tuple[common.Dimension, common.UnitRange] | common.AnyIndexSpec:
+        if isinstance(idx.start, tuple) or isinstance(idx.stop, tuple):  # type: ignore[union-attr]
+            dim_idx = list(self.domain.dims).index(
+                idx.stop[0] if idx.start is None else idx.start[0]  # type: ignore[union-attr]
+            )
+            start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]  # type: ignore[union-attr]
+            stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]  # type: ignore[union-attr]
+            return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
+        return idx
 
 
 @dataclasses.dataclass(frozen=True)

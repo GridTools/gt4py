@@ -463,6 +463,30 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     assert indexed_field.domain.dims == expected_dimensions
 
 
+def test_absolute_indexing_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[JDim(8) : JDim(10), : IDim(9)]
+    indexed_field_2 = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == indexed_field_2
+
+
+def test_absolute_indexing_dim_sliced_single_slice():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[KDim(11)]
+    indexed_field_2 = field[(KDim, 11)]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == indexed_field_2
+
+
 def test_absolute_indexing_value_return():
     domain = common.Domain(dims=(IDim, JDim), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
