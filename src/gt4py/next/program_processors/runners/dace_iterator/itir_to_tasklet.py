@@ -412,7 +412,7 @@ def builtin_neighbors(
             code=f"__data = __field[{data_access_index}]"
             + (
                 f" if __idx != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
-                if offset_provider.has_skip_values and offset_dim != "C2CE"
+                if offset_provider.has_skip_values
                 else ""
             ),
             inputs={"__field", "__idx"},
