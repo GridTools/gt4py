@@ -78,6 +78,10 @@ class Dimension:
     def __call__(self, val: int):
         return self, val
 
+    @property
+    def __name__(self) -> str:
+        return repr(self)
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
