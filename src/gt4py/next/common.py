@@ -78,7 +78,6 @@ class Dimension:
     def __call__(self, val: int):
         return self, val
 
-    @property
     def __name__(self) -> str:
         return getattr(self.value, "__name__", None) or repr(self)
 
