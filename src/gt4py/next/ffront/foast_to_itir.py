@@ -22,7 +22,6 @@ from gt4py.next.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     lowering_utils,
-    type_info as ti_ffront,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
@@ -171,7 +170,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 #  tuples again so that we can deref.
                 lowering_utils.to_iterator_of_tuples(
                     func_definition.expr,
-                    ti_ffront.promote_scalars_to_zero_dim_field(node.type.definition.returns),
+                    node.type.definition.returns,
                 )
             )
         )
@@ -185,7 +184,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         ):
             if isinstance(arg_type, ts.TupleType):
                 # convert into iterator of tuples
-                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, ti_ffront.promote_scalars_to_zero_dim_field(arg_type)))
+                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
 
                 new_body = im.let(
                     param.id,
