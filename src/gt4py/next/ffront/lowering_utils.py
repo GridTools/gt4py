@@ -22,8 +22,11 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     Convert iterator of tuples into tuples of iterator.
 
-    >>> _ = to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    Supports arbitrary nesting.
+
+    >>> print(to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[],
+    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
+    (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
     param = f"__toi_{abs(hash(expr))}"
 
@@ -45,8 +48,13 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     Convert tuples of iterator into iterator of tuples.
 
-    >>> _ = to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]))
+    Supports arbitrary nesting.
+
+    >>> print(to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
+    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
+    (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(
+      arg
+    )
     """
     param = f"__iot_{abs(hash(expr))}"
 
@@ -56,7 +64,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ]
     assert all(isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
 
-    def fun(primitive_type, path):
+    def fun(_, path):
         param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"

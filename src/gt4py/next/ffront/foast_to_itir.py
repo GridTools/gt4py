@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypeVar
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
@@ -39,12 +39,11 @@ def promote_to_list(
     return lambda x: x
 
 
-# TODO(tehrengruber): The interface and code quality of this function is poor. We should rewrite it.
+# TODO(tehrengruber): The code quality of this function is poor. We should rewrite it.
 def _process_elements(
     process_func: Callable[..., itir.Expr],
-    objs: Optional[itir.Expr | list[itir.Expr]],
+    objs: itir.Expr | list[itir.Expr],
     current_el_type: ts.TypeSpec,
-    current_el_exprs: Optional[list[itir.Expr]] = None,
 ):
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
@@ -55,24 +54,33 @@ def _process_elements(
         objs: The object whose elements are to be transformed.
         current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
             are not used and thus not relevant.
-        current_el_exprs: For internal purposes only.
     """
     if isinstance(objs, itir.Expr):
         objs = [objs]
 
-    if objs is not None:
-        assert current_el_exprs is None
-        current_el_exprs = [im.ref(f"__val_{abs(hash(obj))}") for i, obj in enumerate(objs)]
-    assert isinstance(current_el_exprs, list)  # make mypy happy
+    _current_el_exprs = [im.ref(f"__val_{abs(hash(obj))}") for i, obj in enumerate(objs)]
+    body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
 
+    return im.let(*((f"__val_{abs(hash(obj))}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
+        body
+    )
+
+
+T = TypeVar("T", bound=itir.Expr, covariant=True)
+
+
+def _process_elements_impl(
+    process_func: Callable[..., itir.Expr],
+    _current_el_exprs: list[T],
+    current_el_type: ts.TypeSpec,
+):
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(
             *[
-                _process_elements(
+                _process_elements_impl(
                     process_func,
-                    None,
+                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
                     current_el_type.types[i],
-                    [im.tuple_get(i, current_el_expr) for current_el_expr in current_el_exprs],
                 )
                 for i in range(len(current_el_type.types))
             ]
@@ -80,10 +88,7 @@ def _process_elements(
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")
     else:
-        result = process_func(*current_el_exprs)
-
-    if objs is not None:
-        return im.let(*((f"__val_{abs(hash(obj))}", obj) for i, obj in enumerate(objs)))(result)  # type: ignore[arg-type]  # mypy not smart enough
+        result = process_func(*_current_el_exprs)
 
     return result
 
