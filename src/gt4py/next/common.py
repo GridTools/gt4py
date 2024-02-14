@@ -79,7 +79,7 @@ class Dimension:
         return self, val
 
     def __name__(self) -> str:
-        return getattr(self.value, "__name__", None) or repr(self)
+        return repr(self)
 
 
 class Infinity(enum.Enum):
