@@ -590,7 +590,7 @@ def test_pruned_args_match(backend):
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
-def test_global_index(backend):
+def test_direct_datadims_index(backend):
     F64_VEC4 = (np.float64, (2, 2, 2, 2))
 
     @gtscript.stencil(backend=backend)

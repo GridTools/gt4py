@@ -694,7 +694,7 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
-class _ReadOnlyFieldDescriptorMaker(_FieldDescriptorMaker):
+class _OffgridFieldDescriptorMaker(_FieldDescriptorMaker):
     def __getitem__(self, field_spec):
         if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
             raise ValueError("OffgridField is defined by a tuple (type, [axes_size..])")
@@ -708,7 +708,7 @@ class _ReadOnlyFieldDescriptorMaker(_FieldDescriptorMaker):
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
 
-OffgridField = _ReadOnlyFieldDescriptorMaker()
+OffgridField = _OffgridFieldDescriptorMaker()
 """Field with no spatial dimension descriptor."""
 
 

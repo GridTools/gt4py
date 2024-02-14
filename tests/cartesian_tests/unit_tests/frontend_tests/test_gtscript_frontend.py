@@ -1455,7 +1455,7 @@ class TestAssignmentSyntax:
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-    def test_global_access(self):
+    def test_datadims_direct_access(self):
         # Check classic data dimensions are working
         def data_dims(
             out_field: gtscript.Field[gtscript.IJK, np.int32],

@@ -368,7 +368,7 @@ class FieldRef(Ref):
         )
 
     @classmethod
-    def absolute_index(cls, name: str, loc=None):
+    def datadims_index(cls, name: str, loc=None):
         return cls(name=name, offset={}, data_index=[], loc=loc)
 
 
