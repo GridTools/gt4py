@@ -320,7 +320,7 @@ class NdArrayField(
             is_start_none: bool = idx.start is None
             is_stop_none: bool = idx.stop is None
             dim_idx = list(self.domain.dims).index(idx.stop[0] if is_start_none else idx.start[0])
-            if not (is_start_none and is_stop_none):
+            if not is_start_none and not is_stop_none:
                 # assert dimension in upper and lower bounds are the same
                 assert idx.start[0] == idx.stop[0]
             start = self.domain.ranges[dim_idx].start if is_start_none else idx.start[1]
