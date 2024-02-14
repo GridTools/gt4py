@@ -80,7 +80,7 @@ class Dimension:
 
     @property
     def __name__(self) -> str:
-        return repr(self)
+        return getattr(self.value, "__name__", None) or repr(self)
 
 
 class Infinity(enum.Enum):
