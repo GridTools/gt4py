@@ -114,8 +114,8 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iterations.
-            use_global_type_inference=inlined == ir,
+            ignore_tuple_size=True, # possibly dangerous
+            use_global_type_inference=False,
         )
         # This pass is required such that a deref outside of a
         # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
@@ -158,8 +158,6 @@ def apply_common_transforms(
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
-    if unconditionally_collapse_tuples:
-        ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = _inline_into_scan(ir)
