@@ -44,8 +44,12 @@ except ImportError:
 
 def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
-        first = fields[0]
-        assert isinstance(first, NdArrayField)
+        first = None
+        for f in fields:
+            if isinstance(f, NdArrayField):
+                first = f
+                break
+        assert first is not None
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
@@ -411,10 +415,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if relative_ranges is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_dims = [
-                common.named_range((d, rr + ar.start))
-                for d, ar, rr in zip(self.domain.dims, self.domain.ranges, relative_ranges)
-            ]
+            new_dims = _relative_ranges_to_domain(relative_ranges, self.domain)
 
             self._cache[cache_key] = new_dims
 
@@ -436,6 +437,14 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
+def _relative_ranges_to_domain(
+    relative_ranges: tuple[common.UnitRange, ...], domain: common.Domain
+) -> common.Domain:
+    return common.Domain(
+        dims=domain.dims, ranges=[rr + ar.start for ar, rr in zip(domain.ranges, relative_ranges)]
+    )
+
+
 def _hypercube(
     index_array: core_defs.NDArrayObject,
     image_range: common.UnitRange,
@@ -455,15 +464,24 @@ def _hypercube(
     would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
+    ignore_mask = None if skip_value is None else index_array == skip_value
+    return _hypercube_from_mask(select_mask, xp, ignore_mask)
 
+
+def _hypercube_from_mask(
+    select_mask: core_defs.NDArrayObject,
+    xp: ModuleType,
+    ignore_mask: Optional[core_defs.NDArrayObject] = None,
+) -> list[common.UnitRange]:
     nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
-
     slices = tuple(
-        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
+        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1)
+        if dim_nnz_indices.size > 0
+        else slice(0, 0)  # TODO test this code path
+        for dim_nnz_indices in nnz
     )
     hcube = select_mask[tuple(slices)]
-    if skip_value is not None:
-        ignore_mask = index_array == skip_value
+    if ignore_mask is not None:
         hcube |= ignore_mask[tuple(slices)]
     if not xp.all(hcube):
         return None
@@ -502,12 +520,62 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
+def _concat_where(m, t, f):
+    xp = t.__class__.array_ns
+    if m.domain.ndim != 1:
+        raise ValueError("Can only concatenate fields with a 1-dimensional mask.")
+    mask_dim = m.domain.dims[0]
+    mask_true_domain = _relative_ranges_to_domain(_hypercube_from_mask(m.ndarray, xp), m.domain)
+    t_domain = t.domain if common.is_field(t) else common.Domain()
+    true_domain = embedded_common.intersect_domains(t_domain, mask_true_domain)
+    mask_false_domain = _relative_ranges_to_domain(_hypercube_from_mask(~m.ndarray, xp), m.domain)
+    f_domain = f.domain if common.is_field(f) else common.Domain()
+    false_domain = embedded_common.intersect_domains(f_domain, mask_false_domain)
+
+    if common.is_field(t):
+        true_slices = _get_slices_from_domain_slice(t.domain, true_domain)
+        true_transformed = xp.asarray(t.ndarray[true_slices])
+    else:
+        true_transformed = t
+    if common.is_field(f):
+        false_slices = _get_slices_from_domain_slice(f.domain, false_domain)
+        false_transformed = xp.asarray(f.ndarray[false_slices])
+    else:
+        false_transformed = f
+
+    assert true_domain.dims == false_domain.dims  # TODO implement broadcasting
+    mask_index = true_domain.dim_index(mask_dim)
+    if true_domain[mask_dim][1].stop == false_domain[mask_dim][1].start:
+        result = xp.concatenate((true_transformed, false_transformed), axis=mask_index)
+        result_domain = true_domain.replace(
+            mask_dim,
+            (
+                mask_dim,
+                common.UnitRange(true_domain[mask_dim][1].start, false_domain[mask_dim][1].stop),
+            ),
+        )
+    elif false_domain[mask_dim][1].stop == true_domain[mask_dim][1].start:
+        result = xp.concatenate((false_transformed, true_transformed), axis=mask_index)
+        result_domain = true_domain.replace(
+            mask_dim,
+            (
+                mask_dim,
+                common.UnitRange(false_domain[mask_dim][1].start, true_domain[mask_dim][1].stop),
+            ),
+        )
+        # concatenate false then true
+    else:
+        raise ValueError("Mask does not split the domain into two non-overlapping parts.")
+
+    return t.__class__.from_array(result, domain=result_domain)
+
+
+NdArrayField.register_builtin_func(fbuiltins.concat_where, _concat_where)
+
+
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
-) -> Callable[
-    ...,
-    NdArrayField[common.DimsT, core_defs.ScalarT],
-]:
+) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:

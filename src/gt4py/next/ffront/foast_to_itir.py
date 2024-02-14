@@ -326,6 +326,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self._map("if_", *node.args)
 
+    def _visit_concat_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
+        return self._map("if_", *node.args)
+
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
 
@@ -430,4 +433,5 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
-class FieldOperatorLoweringError(Exception): ...
+class FieldOperatorLoweringError(Exception):
+    ...

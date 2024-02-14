@@ -79,6 +79,14 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         return res
 
 
+def _get_out_domain(
+    out: common.MutableField | tuple[common.MutableField | tuple, ...]
+) -> common.Domain:
+    return embedded_common.intersect_domains(
+        *[f.domain for f in utils.flatten_nested_tuple((out,))]
+    )
+
+
 def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
     if "out" in kwargs:
         # called from program or direct field_operator as program
@@ -98,10 +106,7 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
 
         domain = kwargs.pop("domain", None)
 
-        flattened_out: tuple[common.Field, ...] = utils.flatten_nested_tuple((out,))
-        assert all(f.domain == flattened_out[0].domain for f in flattened_out)
-
-        out_domain = common.domain(domain) if domain is not None else flattened_out[0].domain
+        out_domain = common.domain(domain) if domain is not None else _get_out_domain(out)
 
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 

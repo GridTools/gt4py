@@ -202,6 +202,16 @@ def where(
     raise NotImplementedError()
 
 
+@WhereBuiltinFunction
+def concat_where(
+    mask: common.Field,
+    true_field: common.Field | core_defs.ScalarT | Tuple,
+    false_field: common.Field | core_defs.ScalarT | Tuple,
+    /,
+) -> common.Field | Tuple:
+    raise NotImplementedError()
+
+
 @BuiltInFunction
 def astype(
     value: common.Field | core_defs.ScalarT | Tuple,
@@ -295,6 +305,7 @@ FUN_BUILTIN_NAMES = [
     "min_over",
     "broadcast",
     "where",
+    "concat_where",
     "astype",
     "as_offset",
 ] + MATH_BUILTIN_NAMES
