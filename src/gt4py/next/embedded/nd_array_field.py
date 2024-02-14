@@ -216,7 +216,7 @@ class NdArrayField(
         if isinstance(index, slice):
             new_index = self._refactor_slice(index)
         if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
-            new_index = tuple([self._refactor_slice(i) for i in index])
+            new_index = tuple([self._refactor_slice(i) for i in index])  # type: ignore[arg-type] # all i's are slices as per if statement
         new_domain, buffer_slice = self._slice(new_index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
@@ -314,14 +314,17 @@ class NdArrayField(
         return new_domain, slice_
 
     def _refactor_slice(
-        self, idx: common.AnyIndexSpec
+        self, idx: slice
     ) -> tuple[common.Dimension, common.UnitRange] | common.AnyIndexSpec:
-        if isinstance(idx.start, tuple) or isinstance(idx.stop, tuple):  # type: ignore[union-attr]
-            dim_idx = list(self.domain.dims).index(
-                idx.stop[0] if idx.start is None else idx.start[0]  # type: ignore[union-attr]
-            )
-            start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]  # type: ignore[union-attr]
-            stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]  # type: ignore[union-attr]
+        if isinstance(idx.start, tuple) or isinstance(idx.stop, tuple):
+            is_start_none: bool = idx.start is None
+            is_stop_none: bool = idx.stop is None
+            dim_idx = list(self.domain.dims).index(idx.stop[0] if is_start_none else idx.start[0])
+            if not (is_start_none and is_stop_none):
+                # assert dimension in upper and lower bounds are the same
+                assert idx.start[0] == idx.stop[0]
+            start = self.domain.ranges[dim_idx].start if is_start_none else idx.start[1]
+            stop = self.domain.ranges[dim_idx].stop if is_stop_none else idx.stop[1]
             return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
         return idx
 
