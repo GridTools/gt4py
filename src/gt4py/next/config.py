@@ -17,6 +17,7 @@ import enum
 import os
 import pathlib
 import tempfile
+from typing import Final
 
 
 class BuildCacheLifetime(enum.Enum):
@@ -36,33 +37,39 @@ class CMakeBuildType(enum.Enum):
 
 def env_flag_to_bool(flag_value: str) -> bool:
     """Like in gt4py.cartesian, env vars for flags should be set to '0' or '1'."""
-    return bool(int(flag_value))
+    match flag_value:
+        case "0" | "1":
+            return bool(int(flag_value))
+        case _:
+            raise ValueError("GT4Py flag environment variables must have value '0' or '1'.")
 
 
-_PREFIX = "GT4PY"
+_PREFIX: Final[str] = "GT4PY"
 
 #: Master debug flag
 #: Changes defaults for all the other options to be as helpful for debugging as possible.
 #: Does not override values set in environment variables.
-DEBUG = env_flag_to_bool(os.environ.get(f"{_PREFIX}_DEBUG", "0"))
+DEBUG: Final[bool] = env_flag_to_bool(os.environ.get(f"{_PREFIX}_DEBUG", "0"))
 
 #: Where generated code projects should be persisted.
 #: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
-BUILD_CACHE_DIR = (
+BUILD_CACHE_DIR: Final[pathlib.Path] = (
     pathlib.Path(os.environ.get(f"{_PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir()))
     / "gt4py_cache"
 )
 
+
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
-BUILD_CACHE_LIFETIME = getattr(
+BUILD_CACHE_LIFETIME: Final[BuildCacheLifetime] = getattr(
     BuildCacheLifetime,
     os.environ.get(f"{_PREFIX}_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper(),
 )
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
-CMAKE_BUILD_TYPE = getattr(
-    CMakeBuildType, os.environ.get(f"{_PREFIX}_BUILD_TYPE", "debug" if DEBUG else "release").upper()
+CMAKE_BUILD_TYPE: Final[CMakeBuildType] = getattr(
+    CMakeBuildType,
+    os.environ.get(f"{_PREFIX}_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper(),
 )

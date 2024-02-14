@@ -9,12 +9,14 @@ tags: [backend, otf, workflows, toolchain]
 - **Created**: 2024-02-13
 - **Updated**: 2024-02-13
 
-In order to provide a streamlined user experience, we attempt to standardize how users of GT4Py stencils can configure how those stencils are optimized without editing GT4Py code.
+In order to provide a streamlined user experience, we attempt to standardize how users of GT4Py stencils can configure how those stencils are optimized without editing GT4Py code. This describes the design of the first minimal implementation.
 
 ## Context
 
 In this document the word toolchain is used to mean all the code components that work together to go from DSL code to an optimized, runnable python callable.
 It includes JIT / OTF pipelines or workflows but also transformation passes, lowerings, parsers etc.
+
+In this document the term "end user" refers to someone who runs an application which uses GT4Py internally. The end user may or may not be aware of GT4Py, only of the documentation that the application provides.
 
 The most pressing issue is the developer experience. One debugging technique is to have the generated C++ code written to a permanent file location for inspection. This requires changing the code to reconfigure the build cache location. However this is forseeably only one of multiple values that stencil developers and their end users will wish to configure without touching GT4Py code.
 
@@ -30,9 +32,13 @@ At the time of creation of this document, at least one additional toolchain is a
 
 ## Decision
 
+**All decisions below are in the spirit of keeping the scope of the initial implementation small and can be changed whenever changing them is suitably justified.**
+
 ### Opt-in pattern for building toolchains from user configuration and client code
 
 Any toolchain that has user configurable options should provide a high level interface for building a toolchain that is consistent with the options set by the end user. If a default toolchain instance is provided in GT4Py code, it should use that interface. This ensures that the simplest way of obtaining an instance of a toolchain respects user configuration.
+
+The pattern established for the 'GTFN' toolchain uses `factory-boy`.
 
 ### Limit configuration options exposed to the end user
 
@@ -42,11 +48,12 @@ Any option that the end user can change in order to influence the toolchain beha
 - an external name used to load from environment variables (possibly with a common prefix)
 - a fallback default value in case no environment variable is defined
 
-Any other toolchain option is considered an implementation detail.
+Any other toolchain option is considered an implementation detail from the point of view of the end user.
 
-### Limit the times when configuration can change
+### Read end user configuration only once at import time
 
-By making the `gt4py.next.config` module contain module level variables with user configuration, we ensure user configuration can only be changed between python interpreter runs (after `from gt4py import next` the configuration is fixed). Of course there are ways around it but they should be considered unsupported as they are difficult to make reliable (consider monkey patching as an example).
+We design `gt4py.next.config` as a module with module level variables, which are initialized at import time from environment variables (if they exist).
+We are aware that this decision has significant drawbacks. The main justification for it is to keep scope minimal by reusing the pattern from `gt4py.cartesian`.
 
 ### Environment variables are the primary end user interface
 
@@ -54,17 +61,30 @@ Each user configurable option must be loaded from an environment variable if it 
 
 ## Consequences
 
-### Testability is limited
+### Changing configuration variables at runtime can lead to inconsistencies
 
-Since the process of loading user configuration is in module scope, it is not repeatable for testing purposes. Module unloading and reloading is too much work and fragile.
+Config variables are module-level and initialized at import time. Therefore any
 
-Monkey patching can be used to test whether the values in the config module are reflected in newly built toolchains, but this very process sidesteps the actual reading of user configuration, which remains inaccessible to testing.
+- logic that switches one of them based on another or any other module-level
+- initialization of dependent module-level defaults
+- side effects
 
-### Implementation is kept simple
+Will also have to happen at import time. At least in the first case it can **only** happen at import time.
+This means changing the variables after import time will lead to inconsistencies if any of those patterns are present.
 
-All the logic for how to interpret the user configuration is manually encoded in the high level toolchain building interface. This does not currently require much code. No infrastructure is needed to automatically gather configuration options from toolchain definitions and present them to the user, as the exposed options are hand-picked.
+Implementations of the two latter patterns can be designed to mitigate this but at the cost of increased complexity elsewhere in the code. The first pattern can not.
 
-Config variables can be assumed to be fixed for the entirety of a run of any program that uses GT4Py.
+#### Testability is limited as a result
+
+- the patterns outlined above are not repeatable for testing purposes
+- the potential resulting inconsistencies in configuration limit usefulness of changing the config variables for testing
+
+#### Implementation is kept minimal
+
+Since we accept that changing the configuration at runtime may cause inconsistencies,
+
+- we do not have to implement any way of delaying the point when we read the configuration to the last possible moment
+- no new pattern needs to be established for how to expose end user config vars
 
 ### It is not possible to track where configuration values come from.
 
@@ -94,7 +114,7 @@ Implementing tracking was briefly considered but looked like it would be too hea
 
 ### Dynamical loading of user configuration
 
-The first PoC used a function call to load user configuration just before using it. This would have increased testability. The only stated reason to switch to module level code is that `gt4py.cartesian` does it this way.
+The first PoC used a function call to load user configuration just before using it. This would have increased testability at the cost of a less minimal implementation.
 
 ### Dynamical exposing of configuration options
 
