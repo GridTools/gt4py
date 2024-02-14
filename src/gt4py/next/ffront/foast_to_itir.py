@@ -185,7 +185,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         ):
             if isinstance(arg_type, ts.TupleType):
                 # convert into iterator of tuples
-                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
+                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, ti_ffront.promote_scalars_to_zero_dim_field(arg_type)))
 
                 new_body = im.let(
                     param.id,
