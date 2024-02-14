@@ -400,9 +400,16 @@ def builtin_neighbors(
             neighbor_value_node,
         )
     else:
+        # use explicit indexes for all dimensions inside tasklet
+        data_access_index = ",".join(
+            [
+                "__idx" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
+                for dim in sorted(iterator.dimensions)
+            ]
+        )
         data_access_tasklet = state.add_tasklet(
             "data_access",
-            code="__data = __field[__idx]"
+            code=f"__data = __field[{data_access_index}]"
             + (
                 f" if __idx != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
                 if offset_provider.has_skip_values and offset_dim != "C2CE"
@@ -412,16 +419,11 @@ def builtin_neighbors(
             outputs={"__data"},
             debuginfo=di,
         )
-        # select full shape only in the neighbor-axis dimension
-        field_subset = tuple(
-            f"0:{shape}" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
-            for dim, shape in zip(sorted(iterator.dimensions), field_desc.shape)
-        )
         state.add_memlet_path(
             iterator.field,
             me,
             data_access_tasklet,
-            memlet=create_memlet_at(iterator.field.data, field_subset),
+            memlet=create_memlet_full(iterator.field.data, field_desc),
             dst_conn="__field",
         )
         state.add_edge(
