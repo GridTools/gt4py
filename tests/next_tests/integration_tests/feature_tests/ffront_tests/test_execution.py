@@ -273,6 +273,7 @@ def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
+@pytest.mark.uses_scalar_tuple_args
 def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
