@@ -16,8 +16,32 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
+from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+
+
+class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
+    def visit_FunCall(self, node: ir.FunCall):
+        if is_applied_lift(node):
+            if not hasattr(node.annex, "recorded_shifts"):
+                breakpoint()
+                assert False
+
+            if len(node.annex.recorded_shifts) == 0:
+                return
+
+            if isinstance(node.fun.args[0], ir.Lambda):
+                stencil = node.fun.args[0]
+                for param in stencil.params:
+                    assert hasattr(param.annex, "recorded_shifts")
+
+        self.generic_visit(node)
+
+
+def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+    to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
 class Sentinel(enum.Enum):
@@ -134,9 +158,9 @@ def _can_deref(x):
 def _shift(*offsets):
     def apply(arg):
         assert isinstance(arg, IteratorTracer)
-        #if arg is Sentinel.VALUE:
+        # if arg is Sentinel.VALUE:
         #    arg = object()
-        #assert all(isinstance(offset, ir.OffsetLiteral) or offset is Sentinel.ALL_NEIGHBORS for offset in offsets)
+        # assert all(isinstance(offset, ir.OffsetLiteral) or offset is Sentinel.ALL_NEIGHBORS for offset in offsets)
         return arg.shift(offsets)
 
     return apply
@@ -149,7 +173,9 @@ class AppliedLift(IteratorTracer):
     break_on_deref: bool = False
 
     def shift(self, offsets):
-        return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its), self.break_on_deref)
+        return AppliedLift(
+            self.stencil, tuple(_shift(*offsets)(it) for it in self.its), self.break_on_deref
+        )
 
     def deref(self):
         if self.break_on_deref:
@@ -260,7 +286,10 @@ _START_CTX: Final = {
 }
 
 import sys
+
+
 sys.setrecursionlimit(100000000)
+
 
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(PreserveLocationVisitor, NodeTranslator):
@@ -276,14 +305,16 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
-        return _combine
+        elif node.id in ir.ARITHMETIC_BUILTINS:
+            return _combine
+        raise NotImplementedError()
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):
             assert isinstance(node.args[0], ir.Literal)
             index = int(node.args[0].value)
             try:
-               return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
+                return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
             except Exception as e:
                 breakpoint()
                 raise e
@@ -352,6 +383,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
         if save_to_annex:
             _save_to_annex(node, recorded_shifts)
 
+            if __debug__:
+                ValidateRecordedShiftsAnnex().visit(node)
+
         if inputs_only:
             inputs_shifts = {}
             for inp in node.inputs:
@@ -362,8 +396,10 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
 
 def _save_to_annex(
-        node: ir.Node,
-        recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
+    node: ir.Node,
+    recorded_shifts: (
+        dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
+    ),
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:

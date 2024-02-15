@@ -23,29 +23,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
-
-
-
-class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
-    def visit_FunCall(self, node: ir.FunCall):
-        if _is_lift(node):
-            if not hasattr(node.annex, "recorded_shifts"):
-                breakpoint()
-                assert False
-
-            if len(node.annex.recorded_shifts) == 0:
-                return
-
-            if isinstance(node.fun.args[0], ir.Lambda):
-                stencil = node.fun.args[0]
-                for param in stencil.params:
-                    if not hasattr(param.annex, "recorded_shifts"):
-                        breakpoint()
-                        assert False
-                    # assert hasattr(param.annex, "recorded_shifts")
-
-        self.generic_visit(node)
+from gt4py.next.iterator.transforms.trace_shifts import TraceShifts, ValidateRecordedShiftsAnnex
 
 
 def _generate_unique_symbol(
@@ -69,7 +47,7 @@ def _generate_unique_symbol(
     count = 0
     while new_symbol.id in occupied_names or new_symbol in occupied_symbols:
         new_symbol = ir.Sym(id=f"{desired_name}ᐞ{count}")
-        count+=1
+        count += 1
     return new_symbol
 
 
@@ -100,7 +78,7 @@ def _transform_and_extract_lift_args(
     node: ir.FunCall,
     symtable: dict[eve.SymbolName, ir.Sym],
     extracted_args: dict[ir.Sym, ir.Expr],
-    recorded_shifts_base
+    recorded_shifts_base,
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
@@ -145,6 +123,7 @@ def _transform_and_extract_lift_args(
 
 global_counter = 0
 
+
 def validate_recorded_shifts_annex(node):
     for child in node.pre_walk_values().filter(_is_lift):
         if not hasattr(child.annex, "recorded_shifts"):
@@ -156,7 +135,8 @@ def validate_recorded_shifts_annex(node):
                 if child.annex.recorded_shifts and not hasattr(param.annex, "recorded_shifts"):
                     breakpoint()
                     assert False
-                #assert hasattr(param.annex, "recorded_shifts")
+                # assert hasattr(param.annex, "recorded_shifts")
+
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
@@ -212,15 +192,14 @@ class InlineLifts(
             ValidateRecordedShiftsAnnex().visit(node)
         return self.generic_visit(node, **kwargs)
 
-
     def visit_FunCall(
         self, node: ir.FunCall, *, is_scan_pass_context=False, recurse=True, **kwargs
     ):
         symtable = kwargs["symtable"]
 
-        ignore_recorded_shifts_missing = (kwargs.get("ignore_recorded_shifts_missing", False) or (
-                    hasattr(node.annex, "recorded_shifts") and len(
-                node.annex.recorded_shifts) == 0))
+        ignore_recorded_shifts_missing = kwargs.get("ignore_recorded_shifts_missing", False) or (
+            hasattr(node.annex, "recorded_shifts") and len(node.annex.recorded_shifts) == 0
+        )
         kwargs = {**kwargs, "ignore_recorded_shifts_missing": ignore_recorded_shifts_missing}
 
         recorded_shifts_annex = getattr(node.annex, "recorded_shifts", None)
@@ -236,8 +215,7 @@ class InlineLifts(
         if recorded_shifts_annex is not None:
             node.annex.recorded_shifts = recorded_shifts_annex
 
-        #ValidateRecordedShiftsAnnex().visit(node)
-
+        # ValidateRecordedShiftsAnnex().visit(node)
 
         if self.flags & self.Flag.PROPAGATE_SHIFT and _is_shift_lift(node):
             shift = node.fun
@@ -251,7 +229,9 @@ class InlineLifts(
             # TODO: describe everywhere
             result.annex.recorded_shifts = node.annex.recorded_shifts
             return self.visit(result, recurse=False, **kwargs)
-        if self.flags & (self.Flag.INLINE_DEREF_LIFT | self.Flag.INLINE_TRIVIAL_DEREF_LIFT) and node.fun == ir.SymRef(id="deref"):
+        if self.flags & (
+            self.Flag.INLINE_DEREF_LIFT | self.Flag.INLINE_TRIVIAL_DEREF_LIFT
+        ) and node.fun == ir.SymRef(id="deref"):
             # TODO: this does not work for neighbors(..., lift(...)), which is essentially also a deref
             assert len(node.args) == 1
             is_lift = _is_lift(node.args[0])
@@ -330,7 +310,11 @@ class InlineLifts(
             if self.flags & self.Flag.INLINE_LIFTED_ARGS:
                 for i, arg in enumerate(node.args):
                     # TODO: if not isinstance(arg.fun.args[0], ir.Lambda) we have a scan. document this
-                    eligible_lifted_args[i] |= _is_lift(arg) and isinstance(arg.fun.args[0], ir.Lambda) and self.predicate(arg, is_scan_pass_context)
+                    eligible_lifted_args[i] |= (
+                        _is_lift(arg)
+                        and isinstance(arg.fun.args[0], ir.Lambda)
+                        and self.predicate(arg, is_scan_pass_context)
+                    )
             if self.flags & self.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS:
                 # TODO: write comment why we need params, i.e. local shift, instead of arg to get recorded shifts
                 for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
@@ -339,8 +323,11 @@ class InlineLifts(
                         breakpoint()
                     # TODO: for lift it should be fine as long as shift only occurs once (not only centre)
                     # TODO: if not isinstance(arg.fun.args[0], ir.Lambda) we have a scan. document this
-                    eligible_lifted_args[i] |= _is_lift(arg) and isinstance(arg.fun.args[0], ir.Lambda) and (param.annex.recorded_shifts in [set(), {()}])
-
+                    eligible_lifted_args[i] |= (
+                        _is_lift(arg)
+                        and isinstance(arg.fun.args[0], ir.Lambda)
+                        and (param.annex.recorded_shifts in [set(), {()}])
+                    )
 
             if isinstance(stencil, ir.Lambda) and any(eligible_lifted_args):
                 # TODO(tehrengruber): we currently only inlining opcount preserving, but what we
@@ -349,7 +336,9 @@ class InlineLifts(
                 new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
                 bound_scalars: dict = {}
                 inlined_args = []
-                for i, (param, arg, eligible) in enumerate(zip(stencil.params, node.args, eligible_lifted_args)):
+                for i, (param, arg, eligible) in enumerate(
+                    zip(stencil.params, node.args, eligible_lifted_args)
+                ):
                     if eligible:
                         assert isinstance(arg, ir.FunCall)
                         transformed_arg, _ = _transform_and_extract_lift_args(
@@ -359,10 +348,14 @@ class InlineLifts(
                         if param.annex.recorded_shifts in [set(), {()}]:
                             global global_counter
                             new_name = f"bound_scalar_{global_counter}"
-                            global_counter+=1
-                            bound_scalars[new_name] = InlineLifts(flags=self.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(im.deref(transformed_arg), recurse=False)
+                            global_counter += 1
+                            bound_scalars[new_name] = InlineLifts(
+                                flags=self.Flag.INLINE_TRIVIAL_DEREF_LIFT
+                            ).visit(im.deref(transformed_arg), recurse=False)
                             new_lift = im.lift(im.lambda_()(new_name))()
-                            new_lift.annex.recorded_shifts = arg.annex.recorded_shifts  # todo: isn't this empty all the time
+                            new_lift.annex.recorded_shifts = (
+                                arg.annex.recorded_shifts
+                            )  # todo: isn't this empty all the time
                             inlined_args.append(new_lift)
                         else:
                             inlined_args.append(transformed_arg)
@@ -381,7 +374,9 @@ class InlineLifts(
                         if new_arg_sym in new_arg_exprs:
                             for key in new_arg_exprs.keys():
                                 if key == new_arg_sym:
-                                    new_arg_sym.annex.recorded_shifts.update(key.annex.recorded_shifts)
+                                    new_arg_sym.annex.recorded_shifts.update(
+                                        key.annex.recorded_shifts
+                                    )
 
                         assert new_arg_sym not in new_arg_exprs or new_arg_exprs[new_arg_sym] == arg
                         new_arg_exprs[new_arg_sym] = arg

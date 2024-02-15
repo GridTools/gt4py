@@ -24,6 +24,7 @@ from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
+from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
@@ -32,7 +33,6 @@ from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -53,7 +53,7 @@ def _inline_lifts(ir, lift_mode):
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
             | InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS
-                  | InlineLifts.Flag.REMOVE_UNUSED_LIFT_ARGS
+            | InlineLifts.Flag.REMOVE_UNUSED_LIFT_ARGS
         ).visit(ir)
     else:
         raise ValueError()
@@ -65,7 +65,9 @@ def _inline_into_scan(ir, *, max_iter=10):
     for _ in range(10):
         # in case there are multiple levels of lambdas around the scan we have to do multiple iterations
         inlined = InlineIntoScan().visit(ir)
-        inlined = InlineLambdas.apply(inlined, opcount_preserving=True, force_inline_lift_args=False)
+        inlined = InlineLambdas.apply(
+            inlined, opcount_preserving=True, force_inline_lift_args=False
+        )
         if inlined == ir:
             break
         ir = inlined
@@ -73,9 +75,11 @@ def _inline_into_scan(ir, *, max_iter=10):
         raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
     return ir
 
+
 import gt4py.next.iterator.ir_utils.common_pattern_matcher as common_pattern_matcher
-from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 from gt4py import eve
+from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
+
 
 class EnsureNoLiftCapture(eve.VisitorWithSymbolTableTrait):
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -87,71 +91,13 @@ class EnsureNoLiftCapture(eve.VisitorWithSymbolTableTrait):
                 raise "123"
 
 
-unique_id = 0
-
-from gt4py.next.iterator.ir_utils import ir_makers as im
-
-# TODO: document in all passes which annexes they use.
-class InlineSinglePosDerefLiftArgs(eve.NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("recorded_shifts", "used_in_scan")
-
-    def visit_StencilClosure(self, node: ir.StencilClosure):
-        TraceShifts.apply(node, save_to_annex=True)
-        ValidateRecordedShiftsAnnex().visit(node)
-        return self.generic_visit(node)
-
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        old_node = node
-        node = self.generic_visit(node,
-                                  ignore_recorded_shifts_missing=(kwargs.get("ignore_recorded_shifts_missing", False) or (hasattr(node.annex, "recorded_shifts") and len(node.annex.recorded_shifts) == 0)))
-        #ValidateRecordedShiftsAnnex().visit(node)
-        if isinstance(node.fun, ir.Lambda):
-            eligible_params = [False] * len(node.fun.params)
-
-            # force inline lift args derefed at at most a single position
-            new_args = []
-            bound_scalars = {}
-            # TODO: what if node.fun is not a lambda? e.g. directly deref?
-            for i, (param, arg) in enumerate(zip(node.fun.params, node.args)):
-                if not kwargs.get("ignore_recorded_shifts_missing", False) and common_pattern_matcher.is_applied_lift(arg) and not hasattr(param.annex, "recorded_shifts"):
-                    breakpoint()
-                if not kwargs.get("ignore_recorded_shifts_missing", False) and common_pattern_matcher.is_applied_lift(arg) and param.annex.recorded_shifts in [set(), {()}]:
-                    eligible_params[i] = True
-                    global unique_id
-                    bound_arg_name = f"__wtf{unique_id}"
-                    unique_id+=1
-                    capture_lift = im.lift(im.lambda_()(bound_arg_name))()
-                    capture_lift.annex.recorded_shifts = param.annex.recorded_shifts
-                    new_args.append(capture_lift)
-                    bound_scalars[bound_arg_name] = InlineLifts(flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(im.deref(arg), recurse=False)
-                    ValidateRecordedShiftsAnnex().visit(bound_scalars[bound_arg_name])
-                else:
-                    new_args.append(arg)
-
-            if any(eligible_params):
-                # TODO(tehrengruber): propagate let outwards
-                new_node = inline_lambda(
-                    ir.FunCall(
-                        fun=node.fun,
-                        args=new_args
-                    ),
-                    eligible_params=eligible_params,
-                )
-                return im.let(*bound_scalars.items())(new_node)
-
-        return node
-
-
-def main_transforms(
-    ir: ir.Node,
-    lift_mode=None
-):
+def main_transforms(ir: ir.Node, lift_mode=None):
     stage = 0
     for _ in range(10):
         inlined = ir
 
         # TODO: save trace shifts info here once and don't recompute twice below
-        inlined = InlineSinglePosDerefLiftArgs().visit(inlined)
+        inlined = InlineCenterDerefLiftVars.apply(inlined)
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
@@ -186,6 +132,7 @@ def main_transforms(
         raise RuntimeError("Inlining 'lift' and 'lambdas' did not converge.")
     return ir
 
+
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
@@ -202,21 +149,21 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
-    #lift_mode = LiftMode.FORCE_TEMPORARIES
+    # lift_mode = LiftMode.FORCE_TEMPORARIES
 
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
-    #ir = main_transforms(ir, lift_mode=lift_mode)
+    # ir = main_transforms(ir, lift_mode=lift_mode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
 
-    #EnsureNoLiftCapture().visit(ir)  # disabled since it breaks no offset
-    #InlineLifts(flags=InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS | InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(ir)
-    #traced_shifts = TraceShifts.apply(ir.closures[0], inputs_only=False)
+    # EnsureNoLiftCapture().visit(ir)  # disabled since it breaks no offset
+    # InlineLifts(flags=InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS | InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(ir)
+    # traced_shifts = TraceShifts.apply(ir.closures[0], inputs_only=False)
 
     ir = main_transforms(ir, lift_mode=lift_mode)
 
@@ -251,7 +198,7 @@ def apply_common_transforms(
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
-    #if unconditionally_collapse_tuples:
+    # if unconditionally_collapse_tuples:
     #    ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
 
     if lift_mode == LiftMode.FORCE_INLINE:
