@@ -41,6 +41,11 @@ class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
 
 
 def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+    """
+    Copy `recorded_shifts` annex attribute from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
     to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
