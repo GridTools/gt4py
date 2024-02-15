@@ -316,7 +316,7 @@ class NdArrayField(
     def _refactor_slice(
         self, idx: slice
     ) -> tuple[common.Dimension, common.UnitRange] | common.AnyIndexSpec:
-        if isinstance(idx.start, tuple) or isinstance(idx.stop, tuple):
+        if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
             is_start_none: bool = idx.start is None
             is_stop_none: bool = idx.stop is None
             dim_idx = list(self.domain.dims).index(idx.stop[0] if is_start_none else idx.start[0])
