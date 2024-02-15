@@ -469,7 +469,7 @@ def test_absolute_indexing_dim_sliced():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[JDim(8) : JDim(10), : IDim(9)]
-    indexed_field_2 = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
+    expected = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == indexed_field_2
