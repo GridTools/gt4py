@@ -277,7 +277,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return Sentinel.TYPE
         elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
             return _combine
-        raise NotImplementedError()
+        raise ValueError(f"Undefined symbol {node.id}")
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):

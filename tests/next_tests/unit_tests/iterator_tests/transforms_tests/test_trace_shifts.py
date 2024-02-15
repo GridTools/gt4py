@@ -117,12 +117,13 @@ def test_neighbors():
 
 def test_reduce():
     testee = ir.StencilClosure(
-        # λ(inp) → reduce(plus, init)(·inp)
+        # λ(inp) → reduce(plus, 0.)(·inp)
         stencil=ir.Lambda(
             params=[ir.Sym(id="inp")],
             expr=ir.FunCall(
                 fun=ir.FunCall(
-                    fun=ir.SymRef(id="reduce"), args=[ir.SymRef(id="plus"), ir.SymRef(id="init")]
+                    fun=ir.SymRef(id="reduce"),
+                    args=[ir.SymRef(id="plus"), im.literal_from_value(0.0)],
                 ),
                 args=[ir.FunCall(fun=ir.SymRef(id="deref"), args=[ir.SymRef(id="inp")])],
             ),
