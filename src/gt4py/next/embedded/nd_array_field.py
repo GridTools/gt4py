@@ -212,12 +212,7 @@ class NdArrayField(
     __call__ = remap  # type: ignore[assignment]
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
-        new_index: Tuple | common.AnyIndexSpec = index
-        if isinstance(index, slice):
-            new_index = self._refactor_slice(index)
-        if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
-            new_index = tuple([self._refactor_slice(i) for i in index])  # type: ignore[arg-type] # all i's are slices as per if statement
-        new_domain, buffer_slice = self._slice(new_index)
+        new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
         return self.__class__.from_array(new_buffer, domain=new_domain)
@@ -302,6 +297,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
+        index = embedded_common.canonicalize_any_index_sequence(self.domain.dims, index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -313,20 +309,20 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
-    def _refactor_slice(self, idx: slice) -> common.NamedRange | slice:
-        if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
-            dim_idx = list(self.domain.dims).index(
-                idx.stop[0] if idx.start is None else idx.start[0]
-            )
-            if idx.start is not None and idx.stop is not None:
-                if idx.start[0] != idx.stop[0]:
-                    raise ValueError(
-                        f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
-                    )
-            start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]
-            stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]
-            return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
-        return idx
+    # def _refactor_slice(self, idx: slice) -> common.NamedRange | slice:
+    #     if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
+    #         dim_idx = list(self.domain.dims).index(
+    #             idx.stop[0] if idx.start is None else idx.start[0]
+    #         )
+    #         if idx.start is not None and idx.stop is not None:
+    #             if idx.start[0] != idx.stop[0]:
+    #                 raise ValueError(
+    #                     f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
+    #                 )
+    #         start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]
+    #         stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]
+    #         return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
+    #     return idx
 
 
 @dataclasses.dataclass(frozen=True)

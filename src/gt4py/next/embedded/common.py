@@ -146,3 +146,27 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
+
+def canonicalize_any_index_sequence(dims, index: common.AnyIndexSpec) -> common.AnyIndexSpec:
+    new_index = index
+    if isinstance(index, slice):
+        new_index = _refactor_slice(dims, index)
+    if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
+        new_index = tuple(
+            [_refactor_slice(dims, i) for i in index])  # type: ignore[arg-type] # all i's are slices as per if statement
+    return new_index
+
+def _refactor_slice(dims, idx: slice) -> common.NamedRange | slice:
+    if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
+        dim_idx = list(dims).index(
+            idx.stop[0] if idx.start is None else idx.start[0]
+        )
+        if idx.start is not None and idx.stop is not None:
+            if idx.start[0] != idx.stop[0]:
+                raise ValueError(
+                    f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
+                )
+        start = common.Infinity.NEGATIVE if idx.start is None else idx.start[1]
+        stop = common.Infinity.POSITIVE if idx.stop is None else idx.stop[1]
+        return (dims[dim_idx], common.UnitRange(start, stop))
+    return idx
