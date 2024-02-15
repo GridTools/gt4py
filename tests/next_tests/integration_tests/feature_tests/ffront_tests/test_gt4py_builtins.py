@@ -131,7 +131,7 @@ def test_reduction_execution_with_offset(unstructured_case):
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
     field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
-    out = cases.allocate(unstructured_case, reduction, cases.RETURN, sizes={KDim: 1})()
+    out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
 
     cases.verify(
         unstructured_case,
