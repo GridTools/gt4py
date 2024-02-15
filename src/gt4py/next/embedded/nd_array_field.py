@@ -313,18 +313,18 @@ class NdArrayField(
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
 
-    def _refactor_slice(
-        self, idx: slice
-    ) -> common.NamedRange | slice:
+    def _refactor_slice(self, idx: slice) -> common.NamedRange | slice:
         if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
-            is_start_none: bool = idx.start is None
-            is_stop_none: bool = idx.stop is None
-            dim_idx = list(self.domain.dims).index(idx.stop[0] if is_start_none else idx.start[0])
-            if not is_start_none and not is_stop_none:
-                # assert dimension in upper and lower bounds are the same
-                assert idx.start[0] == idx.stop[0]
-            start = self.domain.ranges[dim_idx].start if is_start_none else idx.start[1]
-            stop = self.domain.ranges[dim_idx].stop if is_stop_none else idx.stop[1]
+            dim_idx = list(self.domain.dims).index(
+                idx.stop[0] if idx.start is None else idx.start[0]
+            )
+            if idx.start is not None and idx.stop is not None:
+                if idx.start[0] != idx.stop[0]:
+                    raise ValueError(
+                        f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
+                    )
+            start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]
+            stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]
             return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
         return idx
 

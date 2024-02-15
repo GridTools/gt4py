@@ -75,7 +75,7 @@ class Dimension:
     def __str__(self):
         return f"{self.value}[{self.kind}]"
 
-    def __call__(self, val: int) -> common.NamedIndex:
+    def __call__(self, val: int) -> NamedIndex:
         return self, val
 
     def __name__(self) -> str:
