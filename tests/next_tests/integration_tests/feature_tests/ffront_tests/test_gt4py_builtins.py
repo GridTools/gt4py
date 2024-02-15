@@ -12,6 +12,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -29,7 +30,9 @@ from next_tests.integration_tests.cases import (
     JDim,
     Joff,
     KDim,
+    Koff,
     V2EDim,
+    Vertex,
     cartesian_case,
     unstructured_case,
 )
@@ -105,6 +108,44 @@ def test_reduction_execution(unstructured_case):
             initial=0,
             where=v2e_table != common.SKIP_VALUE,
         ),
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_execution_with_offset(unstructured_case):
+    EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
+    VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
+
+    @gtx.field_operator
+    def reduction(edge_f: EKField) -> VKField:
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+    @gtx.field_operator
+    def fencil_op(edge_f: EKField) -> VKField:
+        red = reduction(edge_f)
+        return red(Koff[1])
+
+    @gtx.program
+    def fencil(edge_f: EKField, out: VKField):
+        fencil_op(edge_f, out=out)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+    field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
+    out = cases.allocate(unstructured_case, reduction, cases.RETURN, sizes={KDim: 1})()
+
+    cases.verify(
+        unstructured_case,
+        fencil,
+        field,
+        out,
+        inout=out,
+        ref=np.sum(
+            field.asnumpy()[:, 1][v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common.SKIP_VALUE,
+        ).reshape(out.shape),
+        offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
     )
 
 
