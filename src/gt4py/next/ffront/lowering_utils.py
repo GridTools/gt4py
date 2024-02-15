@@ -19,6 +19,11 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
+def _expr_hash(expr: itir.Expr | str) -> str:
+    """Small utility function that returns a string hash of an expression."""
+    return str(abs(hash(expr)) % (10**12)).zfill(12)
+
+
 def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     """
     Convert iterator of tuples into tuples of iterator.
@@ -29,7 +34,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
     (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
-    param = f"__toi_{abs(hash(expr))}"
+    param = f"__toi_{_expr_hash(expr)}"
 
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
@@ -53,11 +58,9 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
 
     >>> print(to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
-    (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(
-      arg
-    )
+    (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(arg)
     """
-    param = f"__iot_{abs(hash(expr))}"
+    param = f"__iot_{_expr_hash(expr)}"
 
     type_constituents = [
         ti_ffront.promote_scalars_to_zero_dim_field(type_)
@@ -106,10 +109,10 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = [objs]
 
-    _current_el_exprs = [im.ref(f"__val_{abs(hash(obj))}") for i, obj in enumerate(objs)]
+    _current_el_exprs = [im.ref(f"__val_{_expr_hash(obj)}") for i, obj in enumerate(objs)]
     body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
 
-    return im.let(*((f"__val_{abs(hash(obj))}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
+    return im.let(*((f"__val_{_expr_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
         body
     )
 
