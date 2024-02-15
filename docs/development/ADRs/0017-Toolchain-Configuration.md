@@ -232,6 +232,18 @@ The first PoC used a function call to load user configuration just before using 
 
 ```python
 
+class Configuration:
+    ...
+    @property
+    def option_1(self):
+        ...
+
+    @option_1.setter
+    def option_1(self, value):
+        self._option_1 = value
+        self._dependent_option = ...
+        ... # more dependent behavior
+
 OPTION_1_DEFAULT
 
 def get_configuration():
@@ -239,7 +251,13 @@ def get_configuration():
     conf.option_1 = read_from_env() or read_from_other_source() or default
 
 current_configuration: Configuration = get_configuration()
+
+# later on
+
+config.current_configuration.option_1 = "foo"  # now all the dependent logic is handled correctly
 ```
+
+A side effect of this would be that tests could work with independent configuration objects when necessary.
 
 ### Dynamical exposing of configuration options
 

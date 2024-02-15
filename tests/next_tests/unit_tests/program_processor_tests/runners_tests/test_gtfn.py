@@ -26,8 +26,8 @@ other variables are computed at import time based on them.
 
 import gt4py._core.definitions as core_defs
 from gt4py.next import allocators, config
+from gt4py.next.otf import workflow
 from gt4py.next.program_processors.runners import gtfn
-from gt4py.otf import workflow
 
 
 def test_backend_factory_set_device():
