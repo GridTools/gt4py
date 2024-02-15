@@ -195,9 +195,9 @@ def test_unpacking():
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
-    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
-    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
+    tuple_expr = im.make_tuple("inp1", "inp2")
+    tuple_access_0 = im.tuple_get(0, "__tuple_tmp_0")
+    tuple_access_1 = im.tuple_get(1, "__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(
@@ -248,7 +248,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
+    reference = im.call("identity")("inp")
 
     assert lowered.expr == reference
 
