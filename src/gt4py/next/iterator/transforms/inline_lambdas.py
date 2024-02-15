@@ -175,7 +175,6 @@ class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
             force_inline_trivial_lift_args=force_inline_trivial_lift_args,
         ).visit(node)
 
-
     def visit_FunCall(self, node: ir.FunCall):
         node = self.generic_visit(node)
         if isinstance(node.fun, ir.Lambda):

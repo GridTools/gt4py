@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Optional, cast, Iterable
+from typing import Iterable, Optional, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
 from gt4py import eve
@@ -65,6 +65,7 @@ def all_equal(iterable: Iterable):
             continue
         return False
     return True
+
 
 def construct_tuple_type(
     true_branch_types: list,

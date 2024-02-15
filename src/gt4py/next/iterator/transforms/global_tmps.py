@@ -307,7 +307,9 @@ def split_closures(
                     # this doesn't seem to be necessary right now as we extract the lifts
                     # in post-order of the tree)
                     if not all(isinstance(arg, ir.SymRef) for arg in lift_expr.args):
-                        lift_expr = canonicalize_applied_lift([str(param.id) for param in current_closure_stencil.params], lift_expr)
+                        lift_expr = canonicalize_applied_lift(
+                            [str(param.id) for param in current_closure_stencil.params], lift_expr
+                        )
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
                     # create a mapping from the closures parameters to the closure arguments
@@ -641,7 +643,9 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             raise NotImplementedError("Temporaries with dtype list not supported.")
         raise AssertionError()
 
-    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider, save_to_annex=True)
+    all_types = type_inference.infer_all(
+        node.fencil, offset_provider=offset_provider, save_to_annex=True
+    )
     fencil_type = all_types[id(node.fencil)]
     assert isinstance(fencil_type, type_inference.FencilDefinitionType)
     assert isinstance(fencil_type.params, type_inference.Tuple)

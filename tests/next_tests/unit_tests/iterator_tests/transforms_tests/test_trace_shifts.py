@@ -59,9 +59,7 @@ def test_shift():
 
 def test_lift():
     testee = ir.StencilClosure(
-        stencil=im.lambda_("x")(
-            im.deref(im.lift("deref")(im.shift("I", 1)("x")))
-        ),
+        stencil=im.lambda_("x")(im.deref(im.lift("deref")(im.shift("I", 1)("x")))),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -75,7 +73,9 @@ def test_lift():
 def test_lift2():
     testee = ir.StencilClosure(
         stencil=im.lambda_("x")(
-            im.deref(im.shift("I", 1)(im.lift(im.lambda_("x")(im.deref(im.shift("J", 1)("x"))))("x")))
+            im.deref(
+                im.shift("I", 1)(im.lift(im.lambda_("x")(im.deref(im.shift("J", 1)("x"))))("x"))
+            )
         ),
         inputs=[ir.SymRef(id="inp")],
         output=ir.SymRef(id="out"),
@@ -85,6 +85,7 @@ def test_lift2():
 
     actual = TraceShifts.apply(testee, save_to_annex=True)
     assert actual == expected
+
 
 def test_neighbors():
     testee = ir.StencilClosure(

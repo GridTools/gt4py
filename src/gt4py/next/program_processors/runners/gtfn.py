@@ -188,7 +188,7 @@ run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
         otf_workflow=gtfn_executor.otf_workflow.replace(
             translation=gtfn_executor.otf_workflow.translation.replace(
                 lift_mode=LiftMode.FORCE_TEMPORARIES,
-                #temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+                # temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
             ),
         ),
     ),
