@@ -40,11 +40,15 @@ def test_backend_factory_set_device():
     assert cpu_version.executor.otf_workflow.translation.device_type is core_defs.DeviceType.CPU
     assert gpu_version.executor.otf_workflow.translation.device_type is core_defs.DeviceType.CUDA
 
-    assert cpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CPU
-    assert gpu_version.executor.decoration.keywords["device"] is core_defs.DeviceType.CUDA
+    assert (
+        cpu_version.executor.otf_workflow.decoration.keywords["device"] is core_defs.DeviceType.CPU
+    )
+    assert (
+        gpu_version.executor.otf_workflow.decoration.keywords["device"] is core_defs.DeviceType.CUDA
+    )
 
-    assert allocators.is_allocator_for(cpu_version.allocator, core_defs.DeviceType.CPU)
-    assert allocators.is_allocator_for(gpu_version.allocator, core_defs.DeviceType.CUDA)
+    assert allocators.is_field_allocator_for(cpu_version.allocator, core_defs.DeviceType.CPU)
+    assert allocators.is_field_allocator_for(gpu_version.allocator, core_defs.DeviceType.CUDA)
 
 
 def test_backend_factory_set_cached():

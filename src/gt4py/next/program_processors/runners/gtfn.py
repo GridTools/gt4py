@@ -120,7 +120,9 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
     class Params:
         device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
-        cmake_build_type: config.CMakeBuildType = config.CMAKE_BUILD_TYPE
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
+        )
         builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
             lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
         )
@@ -133,7 +135,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
     )
     compilation = factory.SubFactory(
         compiler.CompilerFactory,
-        cache_lifetime=config.BUILD_CACHE_LIFETIME,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
         builder_factory=factory.SelfAttribute("..builder_factory"),
     )
     decoration = factory.LazyAttribute(
