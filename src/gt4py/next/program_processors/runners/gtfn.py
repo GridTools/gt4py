@@ -136,8 +136,8 @@ class GTFNCompileWorkflowFactory(factory.Factory):
         cache_lifetime=config.BUILD_CACHE_LIFETIME,
         builder_factory=factory.SelfAttribute("..builder_factory"),
     )
-    decoration = functools.partial(
-        convert_args, device=factory.LazyAttribute(lambda o: o.device_type)
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(convert_args, device=o.device_type)
     )
 
 
