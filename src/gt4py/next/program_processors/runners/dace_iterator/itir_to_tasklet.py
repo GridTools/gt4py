@@ -191,6 +191,7 @@ def _visit_lift_in_neighbors_reduction(
     neighbor_index_node: dace.nodes.AccessNode,
     neighbor_value_node: dace.nodes.AccessNode,
 ) -> list[ValueExpr]:
+    assert transformer.context.reduce_identity is not None
     neighbor_dim = offset_provider.neighbor_axis.value
     origin_dim = offset_provider.origin_axis.value
 
@@ -220,7 +221,7 @@ def _visit_lift_in_neighbors_reduction(
 
     input_nodes = {}
     iterator_index_nodes = {}
-    lifted_index_connectors = set()
+    lifted_index_connectors = []
 
     for x, y in inner_inputs:
         if isinstance(y, IteratorExpr):
@@ -228,7 +229,7 @@ def _visit_lift_in_neighbors_reduction(
             input_nodes[field_connector] = y.field
             for dim, connector in inner_index_table.items():
                 if dim == neighbor_dim:
-                    lifted_index_connectors.add(connector)
+                    lifted_index_connectors.append(connector)
                 iterator_index_nodes[connector] = y.indices[dim]
         else:
             assert isinstance(y, ValueExpr)
@@ -297,6 +298,30 @@ def _visit_lift_in_neighbors_reduction(
         src_conn=inner_out_connector,
         memlet=dace.Memlet(data=neighbor_value_node.data, subset=",".join(map_entry.params)),
     )
+
+    if offset_provider.has_skip_values:
+        # check neighbor validity on if/else inter-state edge
+        start_state = lift_context.body.add_state("start", is_start_block=True)
+        skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
+        skip_neighbor_state.add_edge(
+            skip_neighbor_state.add_tasklet(
+                "identity", {}, {"val"}, f"val = {transformer.context.reduce_identity.value}"
+            ),
+            "val",
+            skip_neighbor_state.add_access(inner_outputs[0].value.data),
+            None,
+            dace.Memlet(data=inner_outputs[0].value.data, subset="0"),
+        )
+        lift_context.body.add_edge(
+            start_state,
+            skip_neighbor_state,
+            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} == {neighbor_skip_value}"),
+        )
+        lift_context.body.add_edge(
+            start_state,
+            lift_context.state,
+            dace.InterstateEdge(condition=f"{lifted_index_connectors[0]} != {neighbor_skip_value}"),
+        )
 
     return [ValueExpr(neighbor_value_node, inner_outputs[0].dtype)]
 
