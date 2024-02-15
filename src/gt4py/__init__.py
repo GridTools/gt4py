@@ -33,6 +33,6 @@ __all__ = [
 
 
 if _sys.version_info >= (3, 10):
-    from . import next
+    from . import next  # noqa: A004
 
     __all__ += ["next"]

@@ -62,12 +62,10 @@ TreeLikeT = TypeVar("TreeLikeT", bound=TreeLike)
 
 class Tree(Protocol):
     @abc.abstractmethod
-    def iter_children_values(self) -> Iterable:
-        ...
+    def iter_children_values(self) -> Iterable: ...
 
     @abc.abstractmethod
-    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]:
-        ...
+    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]: ...
 
 
 TreeLike.register(Tree)
@@ -133,7 +131,7 @@ def _pre_walk_items(
         yield from _pre_walk_items(child, __key__=key)
 
 
-def _pre_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _pre_walk_values(node: TreeLike) -> Iterable:
     """Create a pre-order tree traversal iterator of values."""
     yield node
     for child in iter_children_values(node):
@@ -153,7 +151,7 @@ def _post_walk_items(
     yield __key__, node
 
 
-def _post_walk_values(node: TreeLike) -> Iterable[Tuple[Any]]:
+def _post_walk_values(node: TreeLike) -> Iterable:
     """Create a post-order tree traversal iterator of values."""
     if (iter_children_values := getattr(node, "iter_children_values", None)) is not None:
         for child in iter_children_values():

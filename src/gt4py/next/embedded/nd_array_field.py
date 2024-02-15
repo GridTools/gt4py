@@ -95,9 +95,7 @@ class NdArrayField(
     _domain: common.Domain
     _ndarray: core_defs.NDArrayObject
 
-    array_ns: ClassVar[
-        ModuleType
-    ]  # TODO(havogt) after storage PR is merged, update to the NDArrayNamespace protocol
+    array_ns: ClassVar[ModuleType]  # TODO(havogt) introduce a NDArrayNamespace protocol
 
     @property
     def domain(self) -> common.Domain:
@@ -106,10 +104,6 @@ class NdArrayField(
     @property
     def shape(self) -> tuple[int, ...]:
         return self._ndarray.shape
-
-    @property
-    def __gt_dims__(self) -> tuple[common.Dimension, ...]:
-        return self._domain.dims
 
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
@@ -126,6 +120,13 @@ class NdArrayField(
         else:
             return np.asarray(self._ndarray)
 
+    def as_scalar(self) -> core_defs.ScalarT:
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
+        return self.ndarray.item()
+
     @property
     def codomain(self) -> type[core_defs.ScalarT]:
         return self.dtype.scalar_type
@@ -137,8 +138,9 @@ class NdArrayField(
     @classmethod
     def from_array(
         cls,
-        data: npt.ArrayLike
-        | core_defs.NDArrayObject,  # TODO: NDArrayObject should be part of ArrayLike
+        data: (
+            npt.ArrayLike | core_defs.NDArrayObject
+        ),  # TODO: NDArrayObject should be part of ArrayLike
         /,
         *,
         domain: common.DomainLike,
@@ -201,19 +203,19 @@ class NdArrayField(
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
+        return self.__class__.from_array(
+            new_buffer,
+            domain=new_domain,
+            dtype=self.dtype,
+        )
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.ScalarT:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)
-
         new_buffer = self.ndarray[buffer_slice]
-        if len(new_domain) == 0:
-            # TODO: assert core_defs.is_scalar_type(new_buffer), new_buffer
-            return new_buffer  # type: ignore[return-value] # I don't think we can express that we return `ScalarT` here
-        else:
-            return self.__class__.from_array(new_buffer, domain=new_domain)
+        new_buffer = self.__class__.array_ns.asarray(new_buffer)
+        return self.__class__.from_array(new_buffer, domain=new_domain)
 
     __getitem__ = restrict
 
@@ -404,10 +406,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 last_data_index = dim_nnz_indices[-1]
                 assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
                 indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
+                dim_range = self._domain[i]
+
                 if len(xp.unique(counts)) == 1 and (
                     len(indices) == last_data_index - first_data_index + 1
                 ):
-                    dim_range = self._domain[i]
                     idx_offset = dim_range[1].start
                     start = idx_offset + first_data_index
                     assert common.is_int_index(start)
@@ -429,9 +432,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                     f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
                 )
 
+            self._cache[cache_key] = new_dims
+
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field | core_defs.IntegralScalar:
+    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:
@@ -478,9 +483,10 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _make_reduction(
-    builtin_name: str, array_builtin_name: str
-) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
+def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
+    ...,
+    NdArrayField[common.DimsT, core_defs.ScalarT],
+]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
@@ -514,7 +520,7 @@ class NumPyArrayField(NdArrayField):
     array_ns: ClassVar[ModuleType] = np
 
 
-common.field.register(np.ndarray, NumPyArrayField.from_array)
+common._field.register(np.ndarray, NumPyArrayField.from_array)
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -522,7 +528,7 @@ class NumPyArrayConnectivityField(NdArrayConnectivityField):
     array_ns: ClassVar[ModuleType] = np
 
 
-common.connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
+common._connectivity.register(np.ndarray, NumPyArrayConnectivityField.from_array)
 
 # CuPy
 if cp:
@@ -532,13 +538,13 @@ if cp:
     class CuPyArrayField(NdArrayField):
         array_ns: ClassVar[ModuleType] = cp
 
-    common.field.register(cp.ndarray, CuPyArrayField.from_array)
+    common._field.register(cp.ndarray, CuPyArrayField.from_array)
 
     @dataclasses.dataclass(frozen=True, eq=False)
     class CuPyArrayConnectivityField(NdArrayConnectivityField):
         array_ns: ClassVar[ModuleType] = cp
 
-    common.connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
+    common._connectivity.register(cp.ndarray, CuPyArrayConnectivityField.from_array)
 
 # JAX
 if jnp:
@@ -556,7 +562,7 @@ if jnp:
             # TODO(havogt): use something like `self.ndarray = self.ndarray.at(index).set(value)`
             raise NotImplementedError("'__setitem__' for JaxArrayField not yet implemented.")
 
-    common.field.register(jnp.ndarray, JaxArrayField.from_array)
+    common._field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
@@ -569,7 +575,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
         else:
             domain_slice.append(np.newaxis)
             named_ranges.append((dim, common.UnitRange.infinite()))
-    return common.field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
+    return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
 def _builtins_broadcast(

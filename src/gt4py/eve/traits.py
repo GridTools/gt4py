@@ -172,3 +172,11 @@ class VisitorWithSymbolTableTrait(visitors.NodeVisitor):
             kwargs["symtable"] = kwargs["symtable"].parents
 
         return result
+
+
+class PreserveLocationVisitor(visitors.NodeVisitor):
+    def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
+        result = super().visit(node, **kwargs)
+        if hasattr(node, "location") and hasattr(result, "location"):
+            result.location = node.location
+        return result

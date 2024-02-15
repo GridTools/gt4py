@@ -13,11 +13,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+from types import ModuleType
 from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
+
+import numpy as np
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, constructors, utils
+from gt4py.next import common, errors, utils
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
 
 
@@ -43,7 +46,8 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
-        domain_intersection = _intersect_scan_args(*args, *kwargs.values())
+        all_args = [*args, *kwargs.values()]
+        domain_intersection = _intersect_scan_args(*all_args)
         non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
         out_domain = common.Domain(
@@ -53,7 +57,8 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
 
-        res = _construct_scan_array(out_domain)(self.init)
+        xp = _get_array_ns(*all_args)
+        res = _construct_scan_array(out_domain, xp)(self.init)
 
         def scan_loop(hpos):
             acc = self.init
@@ -77,17 +82,20 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
 def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
     if "out" in kwargs:
         # called from program or direct field_operator as program
-        offset_provider = kwargs.pop("offset_provider", None)
-
         new_context_kwargs = {}
         if embedded_context.within_context():
             # called from program
-            assert offset_provider is None
+            assert "offset_provider" not in kwargs
         else:
             # field_operator as program
+            if "offset_provider" not in kwargs:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
+            offset_provider = kwargs.pop("offset_provider", None)
+
             new_context_kwargs["offset_provider"] = offset_provider
 
         out = kwargs.pop("out")
+
         domain = kwargs.pop("domain", None)
 
         flattened_out: tuple[common.Field, ...] = utils.flatten_nested_tuple((out,))
@@ -105,7 +113,10 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
                 domain=out_domain,
             )
     else:
-        # called from other field_operator
+        # called from other field_operator or missing `out` argument
+        if "offset_provider" in kwargs:
+            # assuming we wanted to call the field_operator as program, otherwise `offset_provider` would not be there
+            raise errors.MissingArgumentError(None, "out", True)
         return op(*args, **kwargs)
 
 
@@ -122,7 +133,11 @@ def _tuple_assign_field(
 ):
     @utils.tree_map
     def impl(target: common.MutableField, source: common.Field):
-        target[domain] = source[domain]
+        if common.is_field(source):
+            target[domain] = source[domain]
+        else:
+            assert core_defs.is_scalar_type(source)
+            target[domain] = source
 
     impl(target, source)
 
@@ -135,10 +150,21 @@ def _intersect_scan_args(
     )
 
 
-def _construct_scan_array(domain: common.Domain):
+def _get_array_ns(
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+) -> ModuleType:
+    for arg in utils.flatten_nested_tuple(args):
+        if hasattr(arg, "array_ns"):
+            return arg.array_ns
+    return np
+
+
+def _construct_scan_array(
+    domain: common.Domain, xp: ModuleType
+):  # TODO(havogt) introduce a NDArrayNamespace protocol
     @utils.tree_map
     def impl(init: core_defs.Scalar) -> common.Field:
-        return constructors.empty(domain, dtype=type(init))
+        return common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
 
     return impl
 
@@ -161,7 +187,7 @@ def _tuple_at(
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
-        res = field[pos] if common.is_field(field) else field
+        res = field[pos].as_scalar() if common.is_field(field) else field
         assert core_defs.is_scalar_type(res)
         return res
 

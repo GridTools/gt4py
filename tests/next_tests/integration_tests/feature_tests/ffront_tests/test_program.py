@@ -20,9 +20,16 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import errors
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
+from next_tests.integration_tests.cases import (
+    IDim,
+    Ioff,
+    JDim,
+    cartesian_case,
+    exec_alloc_descriptor,
+)
 from next_tests.past_common_fixtures import (
     copy_program_def,
     copy_restrict_program_def,
@@ -33,7 +40,7 @@ from next_tests.past_common_fixtures import (
 
 
 def test_identity_fo_execution(cartesian_case, identity_def):
-    identity = gtx.field_operator(identity_def, backend=cartesian_case.backend)
+    identity = gtx.field_operator(identity_def, backend=cartesian_case.executor)
 
     in_field = cases.allocate(cartesian_case, identity, "in_field").strategy(
         cases.ConstInitializer(1)
@@ -81,13 +88,13 @@ def test_shift_by_one_execution(cartesian_case):
 
 
 def test_copy_execution(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):
-    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.backend)
+    double_copy_program = gtx.program(double_copy_program_def, backend=cartesian_case.executor)
 
     cases.verify_with_default_data(
         cartesian_case, double_copy_program, ref=lambda in_field, intermediate_field: in_field
@@ -95,7 +102,7 @@ def test_double_copy_execution(cartesian_case, double_copy_program_def):
 
 
 def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
-    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.backend)
+    copy_restrict_program = gtx.program(copy_restrict_program_def, backend=cartesian_case.executor)
 
     cases.verify_with_default_data(
         cartesian_case,
@@ -217,12 +224,12 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
 
 
 def test_wrong_argument_type(cartesian_case, copy_program_def):
-    copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
+    copy_program = gtx.program(copy_program_def, backend=cartesian_case.executor)
 
     inp = cartesian_case.as_field([JDim], np.ones((cartesian_case.default_sizes[JDim],)))
     out = cases.allocate(cartesian_case, copy_program, "out").strategy(cases.ConstInitializer(1))()
 
-    with pytest.raises(TypeError) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
         #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})

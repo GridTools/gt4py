@@ -21,6 +21,7 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -76,6 +77,12 @@ class Tuple(Type):
         if not isinstance(self.others, (Tuple, EmptyTuple)):
             raise ValueError(f"Can not iterate over partially defined tuple '{self}'.")
         yield from self.others
+
+    @property
+    def has_known_length(self):
+        return isinstance(self.others, EmptyTuple) or (
+            isinstance(self.others, Tuple) and self.others.has_known_length
+        )
 
     def __len__(self) -> int:
         return sum(1 for _ in self)
@@ -561,9 +568,7 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
                 axis = offset_provider[offset]
                 if isinstance(axis, gtx.Dimension):
                     continue  # Cartesian shifts don’t change the location type
-                elif isinstance(
-                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
-                ):
+                elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
                         == axis.neighbor_axis.kind
@@ -932,6 +937,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         )
         return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
+    def visit_FencilWithTemporaries(self, node: FencilWithTemporaries, **kwargs):
+        return self.visit(node.fencil, **kwargs)
+
     def visit_FencilDefinition(
         self,
         node: ir.FencilDefinition,
@@ -958,7 +966,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
-            child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
+            child_node.annex.type = types[id(child_node)]
         except KeyError:
             if not (
                 isinstance(child_node, ir.SymRef)

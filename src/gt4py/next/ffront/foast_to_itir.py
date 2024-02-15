@@ -15,7 +15,7 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -39,7 +39,7 @@ def promote_to_list(
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(NodeTranslator):
+class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
@@ -61,7 +61,7 @@ class FieldOperatorLowering(NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params
+    >>> lowered.params # doctest: +ELLIPSIS
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
@@ -142,7 +142,7 @@ class FieldOperatorLowering(NodeTranslator):
         self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
-        #  from a scalar value (and not a field)
+        # from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
@@ -430,5 +430,4 @@ class FieldOperatorLowering(NodeTranslator):
             return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
 
-class FieldOperatorLoweringError(Exception):
-    ...
+class FieldOperatorLoweringError(Exception): ...
