@@ -15,7 +15,7 @@
 import enum
 from typing import Callable, Optional
 
-from gt4py.next.iterator import ir
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -75,7 +75,7 @@ def _inline_into_scan(ir, *, max_iter=10):
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: ir.Node,
+    ir: itir.Node,
     *,
     lift_mode=None,
     offset_provider=None,
@@ -84,7 +84,7 @@ def apply_common_transforms(
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
     temporary_extraction_heuristics: Optional[
-        Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
@@ -100,7 +100,7 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
-        inlined = InlineCenterDerefLiftVars.apply(inlined)
+        inlined = InlineCenterDerefLiftVars.apply(inlined)  # type: ignore[arg-type]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(

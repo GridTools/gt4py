@@ -40,8 +40,8 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     `let(var, (↑stencil)(it))(·var + ·var)`
 
     Directly inlining `var` would increase the size of the tree and duplicate the calculation.
-    Instead, this pass computes the value at the current location once that replaces all previous
-    occurrences of `var` by an applied lift which captures this value.
+    Instead, this pass computes the value at the current location once and replaces all previous
+    references to `var` by an applied lift which captures this value.
 
     `let(_icdlv_1, stencil(it))(·(↑(λ() → _icdlv_1) + ·(↑(λ() → _icdlv_1))`
 
@@ -52,7 +52,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     Note: This pass uses and preserves the `recorded_shifts` annex.
     """
 
-    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("recorded_shifts", "used_in_scan")
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("recorded_shifts",)
 
     uids: eve_utils.UIDGenerator
 

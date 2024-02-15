@@ -126,7 +126,7 @@ class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
     # TODO: document that these annex attrs are preserved, but not used by the pass itself.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "used_in_scan")
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
 
     opcount_preserving: bool
 

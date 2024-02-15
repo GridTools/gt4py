@@ -23,6 +23,8 @@ from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
 class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
+    """Ensure every applied lift and its arguments have the `recorded_shifts` annex populated."""
+
     def visit_FunCall(self, node: ir.FunCall):
         if is_applied_lift(node):
             assert hasattr(node.annex, "recorded_shifts")
@@ -351,9 +353,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
 def _save_to_annex(
     node: ir.Node,
-    recorded_shifts: (
-        dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
-    ),
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]],
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:
