@@ -21,7 +21,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
-from gt4py.next.iterator.transforms.inline_lifts import InlineLifts, ValidateRecordedShiftsAnnex
+from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts, copy_recorded_shifts
 
 
@@ -71,6 +71,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node)
         if common_pattern_matcher.is_let(node):
+            assert isinstance(node.fun, itir.Lambda)  # to make mypy happy
             eligible_params = [False] * len(node.fun.params)
             new_args = []
             bound_scalars: dict[str, itir.Expr] = {}
@@ -88,7 +89,6 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     bound_scalars[bound_arg_name] = InlineLifts(
                         flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
                     ).visit(im.deref(arg), recurse=False)
-                    ValidateRecordedShiftsAnnex().visit(bound_scalars[bound_arg_name])
                 else:
                     new_args.append(arg)
 
