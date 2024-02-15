@@ -400,22 +400,17 @@ def builtin_neighbors(
             neighbor_value_node,
         )
     else:
-        # use explicit indexes for all dimensions inside tasklet
-        data_access_index = ",".join(
-            [
-                "__idx" if dim == offset_provider.neighbor_axis.value else f"i_{dim}"
-                for dim in sorted(iterator.dimensions)
-            ]
-        )
+        data_access_index = ",".join(f"{dim}_v" for dim in sorted(iterator.dimensions))
+        connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
         data_access_tasklet = state.add_tasklet(
             "data_access",
-            code=f"__data = __field[{data_access_index}]"
+            code=f"__data = __field[{data_access_index}] "
             + (
-                f" if __idx != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
+                f"if {connector_neighbor_dim} != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
                 if offset_provider.has_skip_values
                 else ""
             ),
-            inputs={"__field", "__idx"},
+            inputs={"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
             outputs={"__data"},
             debuginfo=di,
         )
@@ -426,13 +421,25 @@ def builtin_neighbors(
             memlet=create_memlet_full(iterator.field.data, field_desc),
             dst_conn="__field",
         )
-        state.add_edge(
-            neighbor_index_node,
-            None,
-            data_access_tasklet,
-            "__idx",
-            dace.Memlet(data=neighbor_index_var, subset="0"),
-        )
+        for dim in iterator.dimensions:
+            connector = f"{dim}_v"
+            if dim == offset_provider.neighbor_axis.value:
+                state.add_edge(
+                    neighbor_index_node,
+                    None,
+                    data_access_tasklet,
+                    connector,
+                    dace.Memlet(data=neighbor_index_var, subset="0"),
+                )
+            else:
+                state.add_memlet_path(
+                    iterator.indices[dim],
+                    me,
+                    data_access_tasklet,
+                    dst_conn=connector,
+                    memlet=dace.Memlet(data=iterator.indices[dim].data, subset="0"),
+                )
+
         state.add_memlet_path(
             data_access_tasklet,
             mx,
