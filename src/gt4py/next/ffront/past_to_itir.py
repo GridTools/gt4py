@@ -164,15 +164,12 @@ class ProgramLowering(
                 stencil_args.append(f"__stencil_arg{i}")
 
         if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-            # scan operators return an iterator of tuples
+            # scan operators return an iterator of tuples, just deref directly
             stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
         else:
-            # field operators return a tuple of iterators
-            # TODO(tehrengruber): change into deref per element
-            stencil_body = im.deref(
-                lowering_utils.to_iterator_of_tuples(
-                    im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
-                )
+            # field operators return a tuple of iterators, deref element-wise
+            stencil_body = lowering_utils.process_elements(
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
             )
 
         return itir.StencilClosure(
