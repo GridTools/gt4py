@@ -1248,39 +1248,50 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             if input_valid_args:
                 """
-                The neighbors builtin returns an array of booleans in case the connectivity table
-                contains skip values. These boolean values indicate whether the neighbor value is present or not,
-                and are used below to construct an if/else branch to bypass the lambda call for neighbor skip values.
+                The neighbors builtin returns an array of booleans in case the connectivity table contains skip values.
+                These booleans indicate whether the neighbor is present or not, and are used in a tasklet to select
+                the result of field access or the identity value, respectively.
                 If the neighbor table has full connectivity (no skip values by type definition), the input_valid node
-                is not built, and the construction of the if/else branch below is also skipped.
+                is not built, and the construction of the select tasklet below is also skipped.
                 """
                 input_args.append(input_valid_args[0])
                 input_valid_node = input_valid_args[0].value
+                lambda_output_node = inner_outputs[0].value
                 # add input connector to nested sdfg
-                input_mapping["is_valid"] = create_memlet_at(input_valid_node.data, nreduce_index)
-                # check neighbor validity on if/else inter-state edge
-                start_state = lambda_context.body.add_state("start", is_start_block=True)
-                skip_neighbor_state = lambda_context.body.add_state("skip_neighbor")
-                skip_neighbor_state.add_edge(
-                    skip_neighbor_state.add_tasklet(
-                        "identity", {}, {"val"}, f"val = {reduce_identity}"
-                    ),
-                    "val",
-                    skip_neighbor_state.add_access(inner_outputs[0].value.data),
+                lambda_context.body.add_scalar("_valid_neighbor", dace.dtypes.bool)
+                input_mapping["_valid_neighbor"] = create_memlet_at(
+                    input_valid_node.data, nreduce_index
+                )
+                # add select tasklet before writing to output node
+                output_edge = lambda_context.state.in_edges(lambda_output_node)[0]
+                select_tasklet = lambda_context.state.add_tasklet(
+                    "neighbor_select",
+                    {"_inp", "_valid"},
+                    {"_out"},
+                    f"_out = _inp if _valid else {reduce_identity}",
+                )
+                lambda_context.state.add_edge(
+                    output_edge.src,
                     None,
-                    dace.Memlet(data=inner_outputs[0].value.data, subset="0"),
+                    select_tasklet,
+                    "_inp",
+                    dace.Memlet(data=output_edge.src.data, subset="0"),
                 )
-                lambda_context.body.add_scalar("is_valid", dace.dtypes.bool)
-                lambda_context.body.add_edge(
-                    start_state,
-                    skip_neighbor_state,
-                    dace.InterstateEdge(condition="is_valid == False"),
+                lambda_context.state.add_edge(
+                    lambda_context.state.add_access("_valid_neighbor"),
+                    None,
+                    select_tasklet,
+                    "_valid",
+                    dace.Memlet(data="_valid_neighbor", subset="0"),
                 )
-                lambda_context.body.add_edge(
-                    start_state,
-                    lambda_context.state,
-                    dace.InterstateEdge(condition="is_valid == True"),
+                lambda_context.state.add_edge(
+                    select_tasklet,
+                    "_out",
+                    lambda_output_node,
+                    None,
+                    dace.Memlet(data=lambda_output_node.data, subset="0"),
                 )
+                lambda_context.state.remove_edge(output_edge)
 
             reduce_input_node = self.context.state.add_access(reduce_input_name, debuginfo=di)
 
