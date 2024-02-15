@@ -305,7 +305,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
-        elif node.id in ir.ARITHMETIC_BUILTINS:
+        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list"}):
             return _combine
         raise NotImplementedError()
 
