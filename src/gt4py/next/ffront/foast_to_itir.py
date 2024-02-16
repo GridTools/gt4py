@@ -39,55 +39,6 @@ def promote_to_list(
     return lambda x: x
 
 
-# TODO(tehrengruber): The interface and code quality of this function is poor. We should rewrite it.
-def _process_elements(
-    process_func: Callable[..., itir.Expr],
-    objs: Optional[itir.Expr | list[itir.Expr]],
-    current_el_type: ts.TypeSpec,
-    current_el_exprs: Optional[list[itir.Expr]] = None,
-):
-    """
-    Recursively applies a processing function to all primitive constituents of a tuple.
-
-    Arguments:
-        process_func: A callable that takes an itir.Expr representing a leaf-element of `objs`.
-            If multiple `objs` are given the callable takes equally many arguments.
-        objs: The object whose elements are to be transformed.
-        current_el_type: A type with the same structure as the elements of `objs`. The leaf-types
-            are not used and thus not relevant.
-        current_el_exprs: For internal purposes only.
-    """
-    if isinstance(objs, itir.Expr):
-        objs = [objs]
-
-    if objs is not None:
-        assert current_el_exprs is None
-        current_el_exprs = [im.ref(f"__val_{abs(hash(obj))}") for i, obj in enumerate(objs)]
-    assert isinstance(current_el_exprs, list)  # make mypy happy
-
-    if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(
-            *[
-                _process_elements(
-                    process_func,
-                    None,
-                    current_el_type.types[i],
-                    [im.tuple_get(i, current_el_expr) for current_el_expr in current_el_exprs],
-                )
-                for i in range(len(current_el_type.types))
-            ]
-        )
-    elif type_info.contains_local_field(current_el_type):
-        raise NotImplementedError("Processing fields with local dimension is not implemented.")
-    else:
-        result = process_func(*current_el_exprs)
-
-    if objs is not None:
-        return im.let(*((f"__val_{abs(hash(obj))}", obj) for i, obj in enumerate(objs)))(result)  # type: ignore[arg-type]  # mypy not smart enough
-
-    return result
-
-
 @dataclasses.dataclass
 class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
@@ -151,7 +102,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         # In iterator IR we didn't properly specify if this is legal,
         # however after lift-inlining the expressions are transformed back to literals.
         forward = im.deref(self.visit(node.forward, **kwargs))
-        init = _process_elements(im.deref, self.visit(node.init, **kwargs), node.init.type)
+        init = lowering_utils.process_elements(
+            im.deref, self.visit(node.init, **kwargs), node.init.type
+        )
 
         # lower definition function
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
@@ -164,14 +117,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 [*node.type.definition.pos_or_kw_args.values()][0],
             ),
         )(
-            im.deref(
-                # TODO(tehrengruber): deref of all elements makes more sense.
-                # the function itself returns a tuple of iterators, transform into iterator of
-                #  tuples again so that we can deref.
-                lowering_utils.to_iterator_of_tuples(
-                    func_definition.expr,
-                    node.type.definition.returns,
-                )
+            # the function itself returns a tuple of iterators, deref element-wise
+            lowering_utils.process_elements(
+                im.deref, func_definition.expr, node.type.definition.returns
             )
         )
 
@@ -401,7 +349,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
-        return _process_elements(
+        return lowering_utils.process_elements(
             lambda x: im.promote_to_lifted_stencil(
                 im.lambda_("it")(im.call("cast_")("it", str(new_type)))
             )(x),
@@ -413,7 +361,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         condition, true_value, false_value = node.args
 
         lowered_condition = self.visit(condition, **kwargs)
-        return _process_elements(
+        return lowering_utils.process_elements(
             lambda tv, fv: im.promote_to_lifted_stencil("if_")(lowered_condition, tv, fv),
             [self.visit(true_value, **kwargs), self.visit(false_value, **kwargs)],
             node.type,
