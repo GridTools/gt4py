@@ -15,6 +15,7 @@
 import enum
 from typing import Callable, Optional
 
+from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
@@ -88,6 +89,8 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
+    icdlv_uids = eve_utils.UIDGenerator()
+
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
     assert isinstance(lift_mode, LiftMode)
@@ -100,7 +103,7 @@ def apply_common_transforms(
     for _ in range(10):
         inlined = ir
 
-        inlined = InlineCenterDerefLiftVars.apply(inlined)  # type: ignore[arg-type]  # always a fencil
+        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
