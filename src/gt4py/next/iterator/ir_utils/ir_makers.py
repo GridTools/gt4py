@@ -250,10 +250,10 @@ class let:
     """
 
     @typing.overload
-    def __init__(self, var: str | itir.Sym, init_form: itir.Expr): ...
+    def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str): ...
 
     @typing.overload
-    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr]]): ...
+    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]): ...
 
     def __init__(self, *args):
         if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
@@ -369,7 +369,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     >>> str(promote_to_lifted_stencil("op")("a", "b"))
     '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
-    if isinstance(op, (str, itir.SymRef)):
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
     def _impl(*its: itir.Expr) -> itir.Expr:

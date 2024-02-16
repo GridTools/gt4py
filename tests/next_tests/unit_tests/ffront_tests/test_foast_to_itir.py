@@ -85,7 +85,7 @@ def test_multicopy():
     parsed = FieldOperatorParser.apply_to_function(multicopy)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
+    reference = im.make_tuple("inp1", "inp2")
 
     assert lowered.expr == reference
 
@@ -195,9 +195,9 @@ def test_unpacking():
     parsed = FieldOperatorParser.apply_to_function(unpacking)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.promote_to_lifted_stencil("make_tuple")("inp1", "inp2")
-    tuple_access_0 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(0, x))("__tuple_tmp_0")
-    tuple_access_1 = im.promote_to_lifted_stencil(lambda x: im.tuple_get(1, x))("__tuple_tmp_0")
+    tuple_expr = im.make_tuple("inp1", "inp2")
+    tuple_access_0 = im.tuple_get(0, "__tuple_tmp_0")
+    tuple_access_1 = im.tuple_get(1, "__tuple_tmp_0")
 
     reference = im.let("__tuple_tmp_0", tuple_expr)(
         im.let(
@@ -248,7 +248,7 @@ def test_call():
     parsed = FieldOperatorParser.apply_to_function(call)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.lift(im.lambda_("__arg0")(im.call("identity")("__arg0")))("inp")
+    reference = im.call("identity")("inp")
 
     assert lowered.expr == reference
 
@@ -263,7 +263,7 @@ def test_temp_tuple():
     parsed = FieldOperatorParser.apply_to_function(temp_tuple)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    tuple_expr = im.promote_to_lifted_stencil("make_tuple")("a", "b")
+    tuple_expr = im.make_tuple("a", "b")
     reference = im.let(ssa.unique_name("tmp", 0), tuple_expr)(ssa.unique_name("tmp", 0))
 
     assert lowered.expr == reference
@@ -538,7 +538,7 @@ def test_builtin_int_constructors():
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int32")),
         im.promote_to_const_iterator(im.literal("1", "int64")),
@@ -572,7 +572,7 @@ def test_builtin_float_constructors():
     parsed = FieldOperatorParser.apply_to_function(float_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
         im.promote_to_const_iterator(im.literal("0.1", "float64")),
         im.promote_to_const_iterator(im.literal("0.1", "float32")),
@@ -592,7 +592,7 @@ def test_builtin_bool_constructors():
     parsed = FieldOperatorParser.apply_to_function(bool_constrs)
     lowered = FieldOperatorLowering.apply(parsed)
 
-    reference = im.promote_to_lifted_stencil("make_tuple")(
+    reference = im.make_tuple(
         im.promote_to_const_iterator(im.literal(str(True), "bool")),
         im.promote_to_const_iterator(im.literal(str(False), "bool")),
         im.promote_to_const_iterator(im.literal(str(True), "bool")),
