@@ -157,7 +157,7 @@ def make_node(o):
     if isinstance(o, iterator.runtime.Offset):
         return OffsetLiteral(value=o.value)
     if isinstance(o, core_defs.Scalar):
-        return im.literal_from_value(o
+        return im.literal_from_value(o)
     if isinstance(o, tuple):
         return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
