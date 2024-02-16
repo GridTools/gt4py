@@ -1288,7 +1288,11 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                     input_valid_node.data, nreduce_index
                 )
                 # add select tasklet before writing to output node
+                # TODO: consider replacing it with a select-memlet once it is supported by DaCe SDFG API
                 output_edge = lambda_context.state.in_edges(lambda_output_node)[0]
+                assert isinstance(
+                    lambda_context.body.arrays[output_edge.src.data], dace.data.Scalar
+                )
                 select_tasklet = lambda_context.state.add_tasklet(
                     "neighbor_select",
                     {"_inp", "_valid"},
