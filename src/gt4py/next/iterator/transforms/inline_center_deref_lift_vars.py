@@ -29,11 +29,10 @@ def is_center_derefed_only(node: itir.Node) -> bool:
     return hasattr(node.annex, "recorded_shifts") and node.annex.recorded_shifts in [set(), {()}]
 
 
-# TODO: document in all passes which annexes they use.
 @dataclasses.dataclass
 class InlineCenterDerefLiftVars(eve.NodeTranslator):
     """
-    Inline all variables which derefed in the center only (i.e. unshifted).
+    Inline all variables which are derefed in the center only (i.e. unshifted).
 
     Consider the following example where `var` is never shifted:
 
