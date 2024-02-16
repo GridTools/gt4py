@@ -468,7 +468,7 @@ def test_absolute_indexing_dim_sliced():
         dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[JDim(8) : JDim(10), : IDim(9)]
+    indexed_field_1 = field[JDim(8) : JDim(10), IDim(5) : IDim(9)]
     expected = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
 
     assert common.is_field(indexed_field_1)
@@ -493,8 +493,17 @@ def test_absolute_indexing_wrong_dim_sliced():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
 
-    with pytest.raises(ValueError, match="Dimensions slicing mismatch between 'JDim' and 'IDim'."):
+    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'JDim' and 'IDim'."):
         field[JDim(8) : IDim(10)]
+
+
+def test_absolute_indexing_empty_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    with pytest.raises(IndexError, match="Lower bound needs to be specified"):
+        field[: IDim(10)]
 
 
 def test_absolute_indexing_value_return():

@@ -24,7 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, Tuple, TypeAlias, TypeVar
+from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common
 from gt4py.next.ffront import fbuiltins
@@ -297,7 +297,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
-        index = embedded_common.canonicalize_any_index_sequence(self.domain.dims, index)
+        index = embedded_common.canonicalize_any_index_sequence(index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -308,21 +308,6 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
-
-    # def _refactor_slice(self, idx: slice) -> common.NamedRange | slice:
-    #     if common.is_named_index(idx.start) or common.is_named_index(idx.stop):
-    #         dim_idx = list(self.domain.dims).index(
-    #             idx.stop[0] if idx.start is None else idx.start[0]
-    #         )
-    #         if idx.start is not None and idx.stop is not None:
-    #             if idx.start[0] != idx.stop[0]:
-    #                 raise ValueError(
-    #                     f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
-    #                 )
-    #         start = self.domain.ranges[dim_idx].start if idx.start is None else idx.start[1]
-    #         stop = self.domain.ranges[dim_idx].stop if idx.stop is None else idx.stop[1]
-    #         return (self.domain.dims[dim_idx], common.UnitRange(start, stop))
-    #     return idx
 
 
 @dataclasses.dataclass(frozen=True)
