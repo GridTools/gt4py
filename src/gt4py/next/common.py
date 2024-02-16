@@ -78,9 +78,6 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return self, val
 
-    def __name__(self) -> str:
-        return repr(self)
-
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
