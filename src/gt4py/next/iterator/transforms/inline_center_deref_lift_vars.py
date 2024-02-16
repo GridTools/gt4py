@@ -21,7 +21,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
-from gt4py.next.iterator.transforms.inline_lifts import InlineLifts, ValidateRecordedShiftsAnnex
+from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.trace_shifts import TraceShifts, copy_recorded_shifts
 
 
@@ -29,19 +29,18 @@ def is_center_derefed_only(node: itir.Node) -> bool:
     return hasattr(node.annex, "recorded_shifts") and node.annex.recorded_shifts in [set(), {()}]
 
 
-# TODO: document in all passes which annexes they use.
 @dataclasses.dataclass
 class InlineCenterDerefLiftVars(eve.NodeTranslator):
     """
-    Inline all variables which derefed in the center only (i.e. unshifted).
+    Inline all variables which are derefed in the center only (i.e. unshifted).
 
     Consider the following example where `var` is never shifted:
 
     `let(var, (↑stencil)(it))(·var + ·var)`
 
     Directly inlining `var` would increase the size of the tree and duplicate the calculation.
-    Instead, this pass computes the value at the current location once that replaces all previous
-    occurrences of `var` by an applied lift which captures this value.
+    Instead, this pass computes the value at the current location once and replaces all previous
+    references to `var` by an applied lift which captures this value.
 
     `let(_icdlv_1, stencil(it))(·(↑(λ() → _icdlv_1) + ·(↑(λ() → _icdlv_1))`
 
@@ -52,7 +51,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     Note: This pass uses and preserves the `recorded_shifts` annex.
     """
 
-    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("recorded_shifts", "used_in_scan")
+    PRESERVED_ANNEX_ATTRS: ClassVar[tuple[str, ...]] = ("recorded_shifts",)
 
     uids: eve_utils.UIDGenerator
 
@@ -71,6 +70,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
     def visit_FunCall(self, node: itir.FunCall, **kwargs):
         node = self.generic_visit(node)
         if common_pattern_matcher.is_let(node):
+            assert isinstance(node.fun, itir.Lambda)  # to make mypy happy
             eligible_params = [False] * len(node.fun.params)
             new_args = []
             bound_scalars: dict[str, itir.Expr] = {}
@@ -88,7 +88,6 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     bound_scalars[bound_arg_name] = InlineLifts(
                         flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
                     ).visit(im.deref(arg), recurse=False)
-                    ValidateRecordedShiftsAnnex().visit(bound_scalars[bound_arg_name])
                 else:
                     new_args.append(arg)
 
@@ -98,6 +97,6 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     eligible_params=eligible_params,
                 )
                 # TODO(tehrengruber): propagate let outwards
-                return im.let(*bound_scalars.items())(new_node)
+                return im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
 
         return node

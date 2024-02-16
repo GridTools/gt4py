@@ -23,17 +23,17 @@ from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 
 
 class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
+    """Ensure every applied lift and its arguments have the `recorded_shifts` annex populated."""
+
     def visit_FunCall(self, node: ir.FunCall):
         if is_applied_lift(node):
-            if not hasattr(node.annex, "recorded_shifts"):
-                breakpoint()
-                assert False
+            assert hasattr(node.annex, "recorded_shifts")
 
             if len(node.annex.recorded_shifts) == 0:
                 return
 
-            if isinstance(node.fun.args[0], ir.Lambda):
-                stencil = node.fun.args[0]
+            if isinstance(node.fun.args[0], ir.Lambda):  # type: ignore[attr-defined]  # ensured by is_applied_lift
+                stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_lift
                 for param in stencil.params:
                     assert hasattr(param.annex, "recorded_shifts")
 
@@ -41,6 +41,11 @@ class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
 
 
 def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+    """
+    Copy `recorded_shifts` annex attribute from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
     to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
@@ -61,9 +66,6 @@ class ShiftRecorder:
         self.recorded_shifts.setdefault(id(inp), set())
 
     def __call__(self, inp: ir.Expr | ir.Sym, offsets: tuple[ir.OffsetLiteral, ...]) -> None:
-        recorded_shifts = getattr(inp.annex, "recorded_shifts1", set())
-        recorded_shifts.add(offsets)
-        inp.annex.recorded_shifts1 = recorded_shifts
         self.recorded_shifts[id(inp)].add(offsets)
 
 
@@ -93,11 +95,6 @@ class IteratorArgTracer(IteratorTracer):
     shift_recorder: ShiftRecorder | ForwardingShiftRecorder
     offsets: tuple[ir.OffsetLiteral, ...] = ()
 
-    already_derefed: bool = False
-
-    def mark_used_in_scan(self):
-        self.arg.annex.mark_used_in_scan = True
-
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return IteratorArgTracer(
             arg=self.arg,
@@ -106,10 +103,6 @@ class IteratorArgTracer(IteratorTracer):
         )
 
     def deref(self):
-        if self.already_derefed:
-            breakpoint()
-        super().__setattr__("already_derefed", True)
-
         self.shift_recorder(self.arg, self.offsets)
         return Sentinel.VALUE
 
@@ -119,10 +112,6 @@ class IteratorArgTracer(IteratorTracer):
 @dataclasses.dataclass(frozen=True)
 class CombinedTracer(IteratorTracer):
     its: tuple[IteratorTracer, ...]
-
-    def mark_used_in_scan(self):
-        for it in self.its:
-            it.mark_used_in_scan()
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return CombinedTracer(tuple(_shift(*offsets)(it) for it in self.its))
@@ -146,8 +135,6 @@ def _combine(*values):
 
 # implementations of builtins
 def _deref(x):
-    if isinstance(x, tuple) or x is Sentinel.VALUE:
-        breakpoint()
     return x.deref()
 
 
@@ -158,9 +145,6 @@ def _can_deref(x):
 def _shift(*offsets):
     def apply(arg):
         assert isinstance(arg, IteratorTracer)
-        # if arg is Sentinel.VALUE:
-        #    arg = object()
-        # assert all(isinstance(offset, ir.OffsetLiteral) or offset is Sentinel.ALL_NEIGHBORS for offset in offsets)
         return arg.shift(offsets)
 
     return apply
@@ -170,16 +154,11 @@ def _shift(*offsets):
 class AppliedLift(IteratorTracer):
     stencil: Callable
     its: tuple[IteratorTracer, ...]
-    break_on_deref: bool = False
 
     def shift(self, offsets):
-        return AppliedLift(
-            self.stencil, tuple(_shift(*offsets)(it) for it in self.its), self.break_on_deref
-        )
+        return AppliedLift(self.stencil, tuple(_shift(*offsets)(it) for it in self.its))
 
     def deref(self):
-        if self.break_on_deref:
-            breakpoint()
         return self.stencil(*self.its)
 
 
@@ -206,8 +185,6 @@ def _neighbors(o, x):
 
 def _scan(f, forward, init):
     def apply(*args):
-        for arg in args:
-            arg.mark_used_in_scan()
         return f(init, *args)
 
     return apply
@@ -285,16 +262,9 @@ _START_CTX: Final = {
     "make_tuple": _make_tuple,
 }
 
-import sys
-
-
-sys.setrecursionlimit(100000000)
-
 
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(PreserveLocationVisitor, NodeTranslator):
-    PRESERVED_ANNEX_ATTRS = ("recorded_shifts1",)
-
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
 
     def visit_Literal(self, node: ir.SymRef, *, ctx: dict[str, Any]) -> Any:
@@ -305,24 +275,19 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
-        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list"}):
+        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
             return _combine
-        raise NotImplementedError()
+        raise ValueError(f"Undefined symbol {node.id}")
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):
             assert isinstance(node.args[0], ir.Literal)
             index = int(node.args[0].value)
-            try:
-                return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
-            except Exception as e:
-                breakpoint()
-                raise e
+            return _tuple_get(index, self.visit(node.args[1], ctx=ctx))
 
         fun = self.visit(node.fun, ctx=ctx)
         args = self.visit(node.args, ctx=ctx)
-        result = fun(*args)
-        return result
+        return fun(*args)
 
     def visit(self, node, **kwargs):
         result = super().visit(node, **kwargs)
@@ -362,10 +327,6 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             self.shift_recorder.register_node(inp)
             tracers.append(IteratorArgTracer(arg=inp, shift_recorder=self.shift_recorder))
 
-        # TODO: why was this needed and is it correct?
-        if isinstance(node.stencil, ir.SymRef):
-            return
-
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
 
@@ -397,9 +358,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
 def _save_to_annex(
     node: ir.Node,
-    recorded_shifts: (
-        dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
-    ),
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]],
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:

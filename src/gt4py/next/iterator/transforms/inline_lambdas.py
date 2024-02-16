@@ -20,7 +20,6 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
@@ -127,7 +126,7 @@ class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
     # TODO: document that these annex attrs are preserved, but not used by the pass itself.
-    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "used_in_scan")
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
 
     opcount_preserving: bool
 

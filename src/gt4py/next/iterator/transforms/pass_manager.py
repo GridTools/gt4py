@@ -15,7 +15,10 @@
 import enum
 from typing import Callable, Optional
 
-from gt4py.next.iterator import ir
+from gt4py import eve
+from gt4py.eve import utils as eve_utils
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher
 from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
@@ -33,6 +36,7 @@ from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
+from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -75,14 +79,8 @@ def _inline_into_scan(ir, *, max_iter=10):
         raise RuntimeError(f"Inlining into 'scan' did not converge within {max_iter} iterations.")
     return ir
 
-
-import gt4py.next.iterator.ir_utils.common_pattern_matcher as common_pattern_matcher
-from gt4py import eve
-from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
-
-
 class EnsureNoLiftCapture(eve.VisitorWithSymbolTableTrait):
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: itir.FunCall, **kwargs):
         self.generic_visit(node, **kwargs)
         if common_pattern_matcher.is_applied_lift(node):
             stencil = node.fun.args[0]
@@ -91,13 +89,13 @@ class EnsureNoLiftCapture(eve.VisitorWithSymbolTableTrait):
                 raise "123"
 
 
-def main_transforms(ir: ir.Node, lift_mode=None):
+def main_transforms(ir: itir.Node, lift_mode=None, icdlv_uids=None):
     stage = 0
     for _ in range(10):
         inlined = ir
 
         # TODO: save trace shifts info here once and don't recompute twice below
-        inlined = InlineCenterDerefLiftVars.apply(inlined)
+        inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
         inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
@@ -136,7 +134,7 @@ def main_transforms(ir: ir.Node, lift_mode=None):
 # TODO(tehrengruber): Revisit interface to configure temporary extraction. We currently forward
 #  `lift_mode` and `temporary_extraction_heuristics` which is inconvenient.
 def apply_common_transforms(
-    ir: ir.Node,
+    ir: itir.Node,
     *,
     lift_mode=None,
     offset_provider=None,
@@ -145,10 +143,11 @@ def apply_common_transforms(
     force_inline_lambda_args=False,
     unconditionally_collapse_tuples=False,
     temporary_extraction_heuristics: Optional[
-        Callable[[ir.StencilClosure], Callable[[ir.Expr], bool]]
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
+    icdlv_uids = eve_utils.UIDGenerator()
     # lift_mode = LiftMode.FORCE_TEMPORARIES
 
     if lift_mode is None:
@@ -165,7 +164,7 @@ def apply_common_transforms(
     # InlineLifts(flags=InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS | InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT).visit(ir)
     # traced_shifts = TraceShifts.apply(ir.closures[0], inputs_only=False)
 
-    ir = main_transforms(ir, lift_mode=lift_mode)
+    ir = main_transforms(ir, lift_mode=lift_mode, icdlv_uids=icdlv_uids)
 
     if lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
