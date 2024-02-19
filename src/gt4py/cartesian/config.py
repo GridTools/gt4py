@@ -14,7 +14,7 @@
 
 import multiprocessing
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import gridtools_cpp
 
@@ -50,7 +50,7 @@ GT_CPP_TEMPLATE_DEPTH: int = 1024
 
 # Settings dict
 GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
-extra_compile_args: list[str] = (
+extra_compile_args: List[str] = (
     list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
 )
 build_settings: Dict[str, Any] = {
