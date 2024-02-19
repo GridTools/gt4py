@@ -104,7 +104,7 @@ def _make_array_shape_and_strides(
     dims: Sequence[Dimension],
     neighbor_tables: Mapping[str, NeighborTable],
     sort_dims: bool,
-) -> tuple[list[dace.symbol], list[dace.symbol]]:
+) -> tuple[list[dace.symbol], list[dace.symbol], list[dace.symbol]]:
     """
     Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -116,18 +116,20 @@ def _make_array_shape_and_strides(
     tuple(shape, strides)
         The output tuple fields are arrays of dace symbolic expressions.
     """
-    dtype = dace.int64
-    sorted_dims = [dim for _, dim in get_sorted_dims(dims)] if sort_dims else dims
+    dtype = dace.int32
+    sorted_dims = get_sorted_dims(dims) if sort_dims else enumerate(dims)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
-            else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+            # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+            else dace.symbol(f"__{name}_size_{i}", dtype)
         )
-        for i, dim in enumerate(sorted_dims)
+        for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
-    return shape, strides
+    offset = [dace.symbol(unique_name(f"{name}_offset{i}"), dtype) for i, _ in sorted_dims]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
+    return shape, offset, strides
 
 
 def _check_no_lifts(node: itir.StencilClosure):
@@ -179,19 +181,24 @@ class ItirToSDFG(eve.NodeVisitor):
         sort_dimensions: bool = True,
     ):
         if isinstance(type_, ts.FieldType):
-            shape, strides = _make_array_shape_and_strides(
+            shape, offset, strides = _make_array_shape_and_strides(
                 name, type_.dims, neighbor_tables, sort_dimensions
             )
-            offset = (
-                [dace.symbol(unique_name(f"{name}_offset{i}_")) for i in range(len(type_.dims))]
-                if has_offset
-                else None
-            )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
+            sdfg.add_array(
+                name,
+                shape=shape,
+                strides=strides,
+                offset=(offset if has_offset else None),
+                dtype=dtype,
+            )
 
         elif isinstance(type_, ts.ScalarType):
-            sdfg.add_symbol(name, as_dace_type(type_))
+            dtype = as_dace_type(type_)
+            if name in sdfg.symbols:
+                assert sdfg.symbols[name].dtype == dtype
+            else:
+                sdfg.add_symbol(name, dtype)
 
         else:
             raise NotImplementedError()
@@ -429,7 +436,6 @@ class ItirToSDFG(eve.NodeVisitor):
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
-                closure_sdfg.add_symbol(name, dtype)
                 if name in input_names:
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
