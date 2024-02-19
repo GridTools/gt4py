@@ -221,7 +221,7 @@ def _visit_lift_in_neighbors_reduction(
 
     input_nodes = {}
     iterator_index_nodes = {}
-    lifted_index_connectors = []
+    lifted_index_connectors = set()
 
     for x, y in inner_inputs:
         if isinstance(y, IteratorExpr):
@@ -229,7 +229,7 @@ def _visit_lift_in_neighbors_reduction(
             input_nodes[field_connector] = y.field
             for dim, connector in inner_index_table.items():
                 if dim == neighbor_dim:
-                    lifted_index_connectors.append(connector)
+                    lifted_index_connectors.add(connector)
                 iterator_index_nodes[connector] = y.indices[dim]
         else:
             assert isinstance(y, ValueExpr)
