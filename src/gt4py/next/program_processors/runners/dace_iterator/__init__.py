@@ -215,7 +215,7 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
+def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
     This function can handle the same arguments that are passed to `run_dace_iterator()`.
@@ -229,7 +229,6 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
     neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    sdfg_sig = sdfg.signature_arglist(with_types=False)
     dace_args = get_args(sdfg, args)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
@@ -247,9 +246,13 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
         **dace_conn_strides,
         **dace_offsets,
     }
-    expected_args = {key: all_args[key] for key in sdfg_sig}
 
-    return expected_args
+    if check_args:
+        # return only arguments expected in SDFG signature (note hat `signature_arglist` takes time)
+        sdfg_sig = sdfg.signature_arglist(with_types=False)
+        return {key: all_args[key] for key in sdfg_sig}
+
+    return all_args
 
 
 def build_sdfg_from_itir(
@@ -390,12 +393,12 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         if build_cache is not None:
             build_cache[cache_id] = sdfg_program
 
-    expected_args = get_sdfg_args(sdfg, *args, **kwargs)
+    sdfg_args = get_sdfg_args(sdfg, *args, **kwargs)
 
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg_program(**expected_args)
+        sdfg_program(**sdfg_args)
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
