@@ -69,7 +69,7 @@ VERBOSE_EXCEPTIONS: bool = env_flag_to_bool(
 
 #: Where generated code projects should be persisted.
 #: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
-BUILD_CACHE_DIR: Final[pathlib.Path] = (
+BUILD_CACHE_DIR: pathlib.Path = (
     pathlib.Path(os.environ.get(f"{_PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir()))
     / "gt4py_cache"
 )

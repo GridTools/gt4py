@@ -27,7 +27,6 @@ from gt4py.next.otf.binding import interface
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
-_persistent_cache_dir_path = config.BUILD_CACHE_DIR
 
 
 def _serialize_param(parameter: interface.Parameter) -> str:
@@ -72,7 +71,7 @@ def get_cache_folder(
         case config.BuildCacheLifetime.SESSION:
             base_path = _session_cache_dir_path
         case config.BuildCacheLifetime.PERSISTENT:
-            base_path = _persistent_cache_dir_path
+            base_path = config.BUILD_CACHE_DIR
         case _:
             raise ValueError("Unsupported caching lifetime.")
 
