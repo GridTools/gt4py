@@ -120,17 +120,14 @@ def get_gt_pyext_build_opts(
     extra_link_args.extend(mode_flags)
 
     if dace_path := get_dace_module_path():
+        extra_compile_args["cxx"].append(
+            "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
+        )
         if gt_config.GT4PY_USE_HIP:
-            extra_compile_args["cxx"].append(
-                "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
-            )
             extra_compile_args["cuda"].append(
                 "-isystem{}".format(os.path.join(dace_path, "runtime/include"))
             )
         else:
-            extra_compile_args["cxx"].append(
-                "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
-            )
             extra_compile_args["cuda"].append(
                 "-isystem={}".format(os.path.join(dace_path, "runtime/include"))
             )
