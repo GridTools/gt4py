@@ -189,7 +189,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 name,
                 shape=shape,
                 strides=strides,
-                offset=(offset if has_offset else None),
+                offset=(offset if has_offset and name not in neighbor_tables else None),
                 dtype=dtype,
             )
 
