@@ -55,6 +55,8 @@ _build_type = "Release"
 
 def convert_arg(arg: Any):
     if common.is_field(arg):
+        # field domain offsets are not supported
+        assert all(drange.start == 0 for drange in arg.domain.ranges)
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -140,20 +142,6 @@ def get_shape_args(
     return shape_args
 
 
-def get_offset_args(
-    sdfg: dace.SDFG,
-    args: Sequence[Any],
-) -> Mapping[str, int]:
-    sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
-    sdfg_params: Sequence[str] = sdfg.arg_names
-    return {
-        str(sym): -drange.start
-        for sdfg_param, arg in zip(sdfg_params, args)
-        if common.is_field(arg)
-        for sym, drange in zip(sdfg_arrays[sdfg_param].offset, get_sorted_dim_ranges(arg.domain))
-    }
-
-
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
@@ -236,7 +224,6 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    dace_offsets = get_offset_args(sdfg, args)
     all_args = {
         **dace_args,
         **dace_conn_args,
@@ -244,7 +231,6 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
         **dace_conn_shapes,
         **dace_strides,
         **dace_conn_strides,
-        **dace_offsets,
     }
 
     if check_args:
