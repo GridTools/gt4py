@@ -162,8 +162,7 @@ def canonicalize_any_index_sequence(
 def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
-        idx_start_0, idx_start_1 = idx.start[0], idx.stop[1]  # type: ignore[attr-defined]
-        idx_stop_0, idx_stop_1 = idx.stop[0], idx.stop[1]  # type: ignore[attr-defined]
+        idx_start_0, idx_start_1, idx_stop_0, idx_stop_1 = idx.start[0], idx.start[1], idx.stop[0], idx.stop[1]  # type: ignore[attr-defined]
         if idx_start_0 != idx_stop_0:
             raise IndexError(
                 f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
