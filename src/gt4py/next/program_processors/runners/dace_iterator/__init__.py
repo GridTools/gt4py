@@ -317,6 +317,8 @@ def build_sdfg_from_itir(
         symbols: dict[str, int] = {}
         device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
+    elif on_gpu:
+        autoopt.apply_gpu_storage(sdfg)
 
     if on_gpu:
         sdfg.apply_gpu_transformations()
