@@ -348,7 +348,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", False)
-    auto_optimize = kwargs.get("auto_optimize", True)
+    auto_optimize = kwargs.get("auto_optimize", False)
     lift_mode = kwargs.get("lift_mode", itir_transforms.LiftMode.FORCE_INLINE)
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
@@ -356,6 +356,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
     load_sdfg_from_file = kwargs.get("load_sdfg_from_file", False)
     save_sdfg = kwargs.get("save_sdfg", True)
+    return_sdfg = kwargs.get('return_sdfg', False)
 
     arg_types = [type_translation.from_value(arg) for arg in args]
 
@@ -379,6 +380,10 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             cache_id=cache_id,
             save_sdfg=save_sdfg,
         )
+
+        if return_sdfg:
+            kwargs['sdfg_'].append(sdfg)
+            return
 
         sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
         with dace.config.temporary_config():

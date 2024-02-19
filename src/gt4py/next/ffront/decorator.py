@@ -25,7 +25,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable
-from typing import Generator, Generic, TypeVar
+from typing import Generator, Generic, TypeVar, Any, Dict, Optional, Sequence, Tuple
 
 from devtools import debug
 
@@ -63,6 +63,9 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 )
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
+import dace
+from dace.frontend.python.common import SDFGConvertible
 
 
 DEFAULT_BACKEND: Callable = None
@@ -157,7 +160,7 @@ def _field_constituents_shape_and_dims(
 # prior knowledge of the fencil signature rewriting done by `Program`.
 # After that, drop the `.format_itir()` method, since it won't be needed.
 @dataclasses.dataclass(frozen=True)
-class Program:
+class Program(SDFGConvertible):
     """
     Construct a program object from a PAST node.
 
@@ -287,31 +290,66 @@ class Program:
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> Optional[dace.SDFG]:
+        return_sdfg = kwargs.pop('return_sdfg', False)
+        arg_types   = kwargs.pop('arg_types', None)
+        if not return_sdfg:
+            rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if self.backend is None:
-            warnings.warn(
-                UserWarning(
-                    f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+            if self.backend is None:
+                warnings.warn(
+                    UserWarning(
+                        f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
+                    )
                 )
+                with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                    ctx.run(self.definition, *rewritten_args, **kwargs)
+                return
+
+            ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
+            if "debug" in kwargs:
+                debug(self.itir)
+
+            self.backend(
+                self.itir,
+                *rewritten_args,
+                *size_args,
+                **kwargs,
+                offset_provider=offset_provider,
+                column_axis=self._column_axis,
             )
-            with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                ctx.run(self.definition, *rewritten_args, **kwargs)
-            return
+        else:
+            _, size_args, _ = self._process_args(args, kwargs, return_sdfg=return_sdfg)
+            
+            # Container to store the SDFG (from run_dace_iterator)
+            kwargs['sdfg_'] = []
 
-        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
-        if "debug" in kwargs:
-            debug(self.itir)
+            self.backend(
+                self.itir,
+                *arg_types,
+                *size_args,
+                return_sdfg=return_sdfg,
+                **kwargs,
+                offset_provider=offset_provider,
+                column_axis=self._column_axis,
+            )
+            
+            return kwargs.get('sdfg_', None)
 
-        self.backend(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            column_axis=self._column_axis,
-        )
+    def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
+        return_sdfg: bool = True
+        arg_types = [self.past_node.type.definition.pos_or_kw_args[arg.id] for arg in self.past_node.params]
+        sdfg = self.__call__(*args, return_sdfg=return_sdfg, arg_types=arg_types, **kwargs)[0]
+        return sdfg
+
+    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        return {}
+
+    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+        args = []
+        for arg in self.past_node.params:
+            args.append(arg.id)
+        return (args, [])
 
     def format_itir(
         self,
@@ -348,10 +386,11 @@ class Program:
                 None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
             ) from err
 
-    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        self._validate_args(*args, **kwargs)
+    def _process_args(self, args: tuple, kwargs: dict, return_sdfg: bool = False) -> tuple[tuple, tuple, dict[str, Any]]:
+        if not return_sdfg:
+            self._validate_args(*args, **kwargs)
 
-        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
+            args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs

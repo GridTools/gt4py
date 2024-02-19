@@ -14,8 +14,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Generic, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union, Optional
 
+import gt4py.eve as eve
 from gt4py.eve import Coerced, Node, SourceLocation, SymbolName, SymbolRef, datamodels
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.type_definitions import StrEnum
@@ -25,7 +26,7 @@ from gt4py.next.utils import RecursionGuard
 
 
 class LocatedNode(Node):
-    location: SourceLocation
+    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
     def __str__(self):
         from gt4py.next.ffront.foast_pretty_printer import pretty_format
