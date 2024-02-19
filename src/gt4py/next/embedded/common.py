@@ -159,7 +159,7 @@ def canonicalize_any_index_sequence(
     return new_index
 
 
-def _refactor_slice(idx: slice) -> common.NamedRange | slice:
+def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange:
     if common.is_named_index(idx.start) and common.is_named_index(idx.stop):
         if idx.start[0] != idx.stop[0]:
             raise IndexError(
