@@ -49,11 +49,10 @@ GT_INCLUDE_PATH: str = os.path.abspath(gridtools_cpp.get_include_dir())
 GT_CPP_TEMPLATE_DEPTH: int = 1024
 
 # Settings dict
-extra_compile_args = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
-if extra_compile_args:
-    extra_compile_args = list(extra_compile_args.split(" "))
-else:
-    extra_compile_args = []
+GT4PY_EXTRA_COMPILE_ARGS: str = os.environ.get("GT4PY_EXTRA_COMPILE_ARGS", "")
+extra_compile_args: list[str] = (
+    list(GT4PY_EXTRA_COMPILE_ARGS.split(" ")) if GT4PY_EXTRA_COMPILE_ARGS else []
+)
 build_settings: Dict[str, Any] = {
     "boost_include_path": os.path.join(BOOST_ROOT, "include"),
     "cuda_bin_path": os.path.join(CUDA_ROOT, "bin"),
@@ -86,4 +85,4 @@ code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
 
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
 
-default_block_size = os.environ.get("DEFAULT_BLOCK_SIZE", "32,1,1")
+DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "32,1,1")

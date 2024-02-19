@@ -311,8 +311,9 @@ class JITCachingStrategy(CachingStrategy):
             "docstring": inspect.getdoc(self.builder.definition),
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
             **self._externals,
-            "default_block_size": gt_config.default_block_size
         }
+        if self.builder.backend.name == "dace:gpu":
+            fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
         # typeignore because attrclass StencilID has generated constructor
         return StencilID(  # type: ignore
