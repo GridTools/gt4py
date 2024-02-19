@@ -12,10 +12,20 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import warnings
+
+from gt4py.next import config
+
 from . import definitions
 
 
 __all__ = ["definitions", "get_processor_id"]
+
+
+if config.BUILD_CACHE_LIFETIME is config.BuildCacheLifetime.PERSISTENT:
+    warnings.warn(
+        "You are running GT4Py tests with BUILD_CACHE_LIFETIME set to PERSISTENT!", UserWarning
+    )
 
 
 def get_processor_id(processor):

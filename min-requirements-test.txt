@@ -61,6 +61,7 @@ darglint==1.6
 deepdiff==5.6.0
 devtools==0.6
 factory-boy==3.1
+factory-boy==3.3.0
 flake8-bugbear==20.11.1
 flake8-builtins==1.5.3
 flake8-debugger==4.0.0
