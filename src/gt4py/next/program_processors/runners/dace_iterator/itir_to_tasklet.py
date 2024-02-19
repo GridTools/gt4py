@@ -302,14 +302,12 @@ def _visit_lift_in_neighbors_reduction(
     check_full_iterator_index = True
     if offset_provider.has_skip_values or check_full_iterator_index:
         # check neighbor validity on if/else inter-state edge
-        valid_index_expr = " and ".join([
-            f"{connector} != {neighbor_skip_value}"
-            for connector in iterator_index_nodes.keys()
-        ])
-        invalid_index_expr = " or ".join([
-            f"{connector} == {neighbor_skip_value}"
-            for connector in iterator_index_nodes.keys()
-        ])
+        valid_index_expr = " and ".join(
+            [f"{connector} != {neighbor_skip_value}" for connector in iterator_index_nodes.keys()]
+        )
+        invalid_index_expr = " or ".join(
+            [f"{connector} == {neighbor_skip_value}" for connector in iterator_index_nodes.keys()]
+        )
         start_state = lift_context.body.add_state("start", is_start_block=True)
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
