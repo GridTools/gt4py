@@ -242,6 +242,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
+    dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
     dace_offsets = get_offset_args(sdfg, args)
     all_args = {
         **dace_args,
@@ -249,6 +250,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
         **dace_shapes,
         **dace_conn_shapes,
         **dace_strides,
+        **dace_conn_strides,
         **dace_offsets,
     }
 
