@@ -22,7 +22,6 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
-from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
@@ -287,9 +286,6 @@ def build_sdfg_from_itir(
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
-    elif tmps:
-        # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
-        sdfg.apply_transformations_repeated(RefineNestedAccess)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
