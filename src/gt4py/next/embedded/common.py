@@ -151,22 +151,25 @@ def _find_index_of_dim(
 def canonicalize_any_index_sequence(
     index: common.AnyIndexSpec,
 ) -> common.AnyIndexSpec:
-    new_index = index
+    new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(index, slice):
-        new_index = _refactor_slice(index)
+        new_index = _named_slice_to_named_range(index)
     if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
-        new_index = tuple([_refactor_slice(i) for i in index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
+        new_index = tuple([_named_slice_to_named_range(i) for i in index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
     return new_index
 
 
-def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange:
-    if common.is_named_index(idx.start) and common.is_named_index(idx.stop):
-        if idx.start[0] != idx.stop[0]:
+def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
+    assert hasattr(idx, "start") and hasattr(idx, "stop")
+    if common.is_named_slice(idx):
+        idx_start_0, idx_start_1 = idx.start[0], idx.stop[1]  # type: ignore[attr-defined]
+        idx_stop_0, idx_stop_1 = idx.stop[0], idx.stop[1]  # type: ignore[attr-defined]
+        if idx_start_0 != idx_stop_0:
             raise IndexError(
-                f"Dimensions slicing mismatch between '{idx.start[0].value}' and '{idx.stop[0].value}'."
+                f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
             )
-        assert isinstance(idx.start[1], int) and isinstance(idx.stop[1], int)
-        return (idx.start[0], common.UnitRange(idx.start[1], idx.stop[1]))
+        assert isinstance(idx_start_1, int) and isinstance(idx_stop_1, int)
+        return (idx_start_0, common.UnitRange(idx_start_1, idx_stop_1))
     if common.is_named_index(idx.start) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
     if common.is_named_index(idx.stop) and idx.start is None:
