@@ -639,3 +639,26 @@ def test_K_offset_write(backend):
     backward(A, B, 2.0)
     # B will have updated values of A
     assert (B[:, :, 1:3] == 2.0).all()
+
+    # Conditional with secoundary K index on a while loop,
+    # simplified from in-situ code of NOAA's SHiELD microphysics
+    @gtscript.stencil(backend=backend)
+    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, 3):
+            if A > 0 and B > 0:
+                A[0, 0, -1] = scalar
+                B[0, 0, 1] = A
+            lev = 1
+            while A >= 0 and B >= 0:
+                A[0, 0, lev] = -1
+                B = -1
+                lev = lev + 1
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64
+    )
+    A[:, :, :] = 42.0
+    B = gt_storage.ones(backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64)
+    column_physics_conditional(A, B, 2.0)
+    assert (A[0, 0, :] == [2, 2, -1, -1]).all()
+    assert (B[0, 0, :] == [1, -1, 2, 42]).all()
