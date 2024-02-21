@@ -182,6 +182,7 @@ class Program(SDFGConvertible):
     definition: Optional[types.FunctionType]
     backend: Optional[ppi.ProgramExecutor]
     grid_type: Optional[GridType]
+    offset_provider: dict[str, Dimension] = None
 
     @classmethod
     def from_function(
@@ -233,8 +234,8 @@ class Program(SDFGConvertible):
         else:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
-    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
-        return dataclasses.replace(self, backend=backend)
+    def with_backend(self, backend: ppi.ProgramExecutor, offset_provider: dict[str, Dimension]=None) -> Program:
+        return dataclasses.replace(self, backend=backend, offset_provider=offset_provider)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(self, grid_type=grid_type)
@@ -292,7 +293,7 @@ class Program(SDFGConvertible):
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> Optional[dace.SDFG]:
         return_sdfg = kwargs.pop('return_sdfg', False)
-        arg_types   = kwargs.pop('arg_types', None)
+
         if not return_sdfg:
             rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
@@ -320,9 +321,10 @@ class Program(SDFGConvertible):
             )
         else:
             _, size_args, _ = self._process_args(args, kwargs, return_sdfg=return_sdfg)
-            
+            arg_types = [self.past_node.type.definition.pos_or_kw_args[arg.id] for arg in self.past_node.params]
+
             # Container to store the SDFG (from run_dace_iterator)
-            kwargs['sdfg_'] = []
+            kwargs["sdfg_"] = []
 
             self.backend(
                 self.itir,
@@ -330,16 +332,18 @@ class Program(SDFGConvertible):
                 *size_args,
                 return_sdfg=return_sdfg,
                 **kwargs,
-                offset_provider=offset_provider,
+                offset_provider=self.offset_provider,
                 column_axis=self._column_axis,
             )
             
-            return kwargs.get('sdfg_', None)
+            return kwargs.get("sdfg_", None)
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
         return_sdfg: bool = True
-        arg_types = [self.past_node.type.definition.pos_or_kw_args[arg.id] for arg in self.past_node.params]
-        sdfg = self.__call__(*args, return_sdfg=return_sdfg, arg_types=arg_types, **kwargs)[0]
+        sdfg = self.__call__(*args, return_sdfg=return_sdfg, offset_provider=None, **kwargs)[0]
+        if self.offset_provider:
+            for k in self.offset_provider:
+                sdfg.arg_names.append(f"__connectivity_{k}")
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
@@ -349,6 +353,9 @@ class Program(SDFGConvertible):
         args = []
         for arg in self.past_node.params:
             args.append(arg.id)
+        if self.offset_provider:
+            for k in self.offset_provider:
+                args.append(f"__connectivity_{k}")
         return (args, [])
 
     def format_itir(
