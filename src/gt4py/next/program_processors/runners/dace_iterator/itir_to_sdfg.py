@@ -259,10 +259,8 @@ class ItirToSDFG(eve.NodeVisitor):
             ):
                 # instead of using the actual size `end.value - begin.value` we allocate space for indexing from 0
                 # in order to avoid using dace array offsets
-                if begin.value != 0:
-                    warnings.warn(
-                        f"Array for temporary {tmp_name} allocated with size larger than the domain shape."
-                    )
+                if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
+                    warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
                 tmp_symbols[str(shape_sym)] = end.value
 
         return tmp_symbols
@@ -767,7 +765,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def _visit_domain(
         self, node: itir.FunCall, context: Context
-    ) -> tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]:
+    ) -> tuple[tuple[str, tuple[SymbolExpr | ValueExpr, SymbolExpr | ValueExpr]], ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 
