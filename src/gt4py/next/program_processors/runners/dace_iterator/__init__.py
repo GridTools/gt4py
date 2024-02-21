@@ -55,7 +55,8 @@ _build_type = "Release"
 def convert_arg(arg: Any):
     if common.is_field(arg):
         # field domain offsets are not supported
-        assert all(drange.start == 0 for drange in arg.domain.ranges)
+        if any(dim_range.start != 0 for dim_range in arg.domain.ranges):
+            raise RuntimeError("Sliced fields not supported as program arguments.")
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
