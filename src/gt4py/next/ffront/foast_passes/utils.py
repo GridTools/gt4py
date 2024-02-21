@@ -53,8 +53,6 @@ def compute_assign_indices(
             break
     if starred_lower is not None and starred_upper is not None:
         return (
-            list(range(0, starred_lower))
-            + [(starred_lower, starred_upper)]
-            + list(range(starred_upper, num_elts))
+            [*list(range(0, starred_lower)), (starred_lower, starred_upper), *list(range(starred_upper, num_elts))]
         )
     return list(range(0, num_elts))  # no starred target

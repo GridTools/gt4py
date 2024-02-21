@@ -40,10 +40,7 @@ from gt4py.next import (
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-)
+from next_tests.integration_tests.cases import IDim
 
 
 # Math builtins

@@ -417,7 +417,7 @@ class CallInliner(ast.NodeTransformer):
         else:
             return self.generic_visit(node)
 
-    def visit_Call(  # noqa: C901 # Cyclomatic complexity too high
+    def visit_Call(  # Cyclomatic complexity too high
         self, node: ast.Call, *, target_node=None
     ):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
@@ -461,10 +461,10 @@ class CallInliner(ast.NodeTransformer):
                 if name not in call_args:
                     assert arg_infos[name] != nodes.Empty
                     call_args[name] = ast.Constant(value=arg_infos[name])
-        except Exception:
+        except Exception as err:
             raise GTScriptSyntaxError(
                 message="Invalid call signature", loc=nodes.Location.from_ast_node(node)
-            )
+            ) from err
 
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
@@ -1059,10 +1059,10 @@ class IRMaker(ast.NodeVisitor):
         for index_node in index_nodes:
             try:
                 value = gt_meta.ast_eval(index_node, axis_context)
-            except Exception:
+            except Exception as err:
                 raise GTScriptSyntaxError(
                     message="Could not evaluate axis shift expression.", loc=index_node
-                )
+                ) from err
             if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
                 raise GTScriptSyntaxError(
                     message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",

@@ -25,10 +25,7 @@ from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduc
 from gt4py.next.type_system import type_translation
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, cartesian_case, unstructured_case
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-)
+from next_tests.integration_tests.cases import IDim
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
 
 

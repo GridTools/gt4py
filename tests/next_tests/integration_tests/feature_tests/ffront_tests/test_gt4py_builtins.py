@@ -21,22 +21,7 @@ from gt4py.next import broadcast, float64, int32, max_over, min_over, neighbor_s
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (
-    V2E,
-    Edge,
-    IDim,
-    Ioff,
-    JDim,
-    Joff,
-    KDim,
-    V2EDim,
-    cartesian_case,
-    unstructured_case,
-)
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-    reduction_setup,
-)
+from next_tests.integration_tests.cases import V2E, Edge, IDim, Ioff, JDim, Joff, KDim, V2EDim
 
 
 @pytest.mark.parametrize(

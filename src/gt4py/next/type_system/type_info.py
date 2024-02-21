@@ -608,7 +608,7 @@ def function_signature_incompatibilities(
 
 
 @function_signature_incompatibilities.register
-def function_signature_incompatibilities_func(  # noqa: C901
+def function_signature_incompatibilities_func(
     func_type: ts.FunctionType,
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],

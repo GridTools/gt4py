@@ -307,7 +307,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = list(new_def_type.pos_or_kw_args.values())[0]
+        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
         if new_init.type != new_def_type.returns:
             raise errors.DSLError(
                 node.location,
@@ -315,7 +315,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"Expected `{new_def_type.returns}`, but got `{new_init.type}`",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
+            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument `init` to scan operator `{node.id}` must have same type as `{carry_arg_name}` argument. "
@@ -796,7 +796,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise errors.DSLError(
                 node.location,
-                f"Incompatible field argument in call to `{str(node.func)}`. "
+                f"Incompatible field argument in call to `{node.func!s}`. "
                 f"Expected a field with dimension {reduction_dim}, but got "
                 f"{field_dims_str}.",
             )
@@ -855,7 +855,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. "
+                f"Incompatible argument in call to `{node.func!s}`. "
                 f"Excepted integer for offset field dtype, but got {arg_1.dtype}"
                 f"{node.location}",
             )
@@ -863,7 +863,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if arg_0.source not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. "
+                f"Incompatible argument in call to `{node.func!s}`. "
                 f"{arg_0.source} not in list of offset field dimensions {arg_1.dims}. "
                 f"{node.location}",
             )
@@ -884,7 +884,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`. Expected "
+                f"Incompatible argument in call to `{node.func!s}`. Expected "
                 f"a field with dtype `bool`, but got `{mask_type}`.",
             )
 
@@ -902,7 +902,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     node.location,
-                    f"Return arguments need to be of same type in {str(node.func)}, but got: "
+                    f"Return arguments need to be of same type in {node.func!s}, but got: "
                     f"{node.args[1].type} and {node.args[2].type}",
                 )
             else:
@@ -914,7 +914,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to `{str(node.func)}`.",
+                f"Incompatible argument in call to `{node.func!s}`.",
             ) from ex
 
         return foast.Call(
@@ -932,7 +932,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if any([not (isinstance(elt.type, ts.DimensionType)) for elt in broadcast_dims_expr]):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimension type in {str(node.func)}. Expected "
+                f"Incompatible broadcast dimension type in {node.func!s}. Expected "
                 f"all broadcast dimensions to be of type Dimension.",
             )
 
@@ -941,7 +941,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimensions in {str(node.func)}. Expected "
+                f"Incompatible broadcast dimensions in {node.func!s}. Expected "
                 f"broadcast dimension is missing {set(arg_dims).difference(set(broadcast_dims))}",
             )
 

@@ -85,8 +85,6 @@ class Backend(abc.ABC):
     languages: ClassVar[Optional[Dict[str, Any]]] = None
 
     # __impl_opts:
-    #   "disable-code-generation": bool
-    #   "disable-cache-validation": bool
 
     builder: "StencilBuilder"
 

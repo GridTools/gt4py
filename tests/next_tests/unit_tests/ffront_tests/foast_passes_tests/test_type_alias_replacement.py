@@ -12,8 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import ast
-import typing
 from typing import TypeAlias
 
 import pytest

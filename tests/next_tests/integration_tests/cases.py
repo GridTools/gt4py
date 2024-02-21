@@ -166,7 +166,7 @@ class IndexInitializer(DataInitializer):
             raise ValueError(
                 f"`IndexInitializer` only supports fields with a single `Dimension`, got {sizes}."
             )
-        n_data = list(sizes.values())[0]
+        n_data = next(iter(sizes.values()))
         return constructors.as_field(
             domain=common.domain(sizes), data=np.arange(0, n_data, dtype=dtype), allocator=backend
         )

@@ -19,7 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import deref, named_range, shift, unstructured_domain
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
-from next_tests.unit_tests.conftest import program_processor, run_processor
+from next_tests.unit_tests.conftest import run_processor
 
 
 LocA = gtx.Dimension("LocA")

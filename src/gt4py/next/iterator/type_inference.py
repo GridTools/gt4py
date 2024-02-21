@@ -958,14 +958,14 @@ def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
             child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
-        except KeyError:
+        except KeyError as err:
             if not (
                 isinstance(child_node, ir.SymRef)
                 and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
                     f"Expected a type to be inferred for node `{child_node}`, but none was found."
-                )
+                ) from err
 
 
 def infer_all(

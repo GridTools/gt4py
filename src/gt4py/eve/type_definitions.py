@@ -20,10 +20,10 @@ from __future__ import annotations
 import abc
 import re
 import sys
-from enum import Enum as Enum, IntEnum as IntEnum  # noqa: F401  # imported but unused
+from enum import Enum as Enum, IntEnum as IntEnum  # imported but unused
 
-from boltons.typeutils import classproperty as classproperty  # noqa: F401
-from frozendict import frozendict as _frozendict  # noqa: F401
+from boltons.typeutils import classproperty as classproperty
+from frozendict import frozendict as _frozendict
 
 from .extended_typing import (
     Any,
@@ -43,7 +43,7 @@ _T = TypeVar("_T")
 _Tc = TypeVar("_Tc", covariant=True)
 
 
-class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # noqa: B024   # no abstract methods
+class FrozenList(Tuple[_Tc, ...], metaclass=abc.ABCMeta):  # no abstract methods
     """Tuple subtype which works as an alias of ``Tuple[_Tc, ...]``."""
 
     __slots__ = ()

@@ -210,7 +210,7 @@ def get_qualified_name_from_node(name_or_attribute, *, as_list=False):
     else:
         assert isinstance(node, ast.Attribute)
         components = get_qualified_name_from_node(node.value, as_list=True)
-        components = components + [node.attr]
+        components = [*components, node.attr]
 
     return components if as_list else ".".join(components)
 
@@ -431,7 +431,7 @@ class QualifiedNameCollector(ASTPass):
             valid = self.prefixes is None or node.id in self.prefixes
         elif isinstance(node, ast.Attribute):
             components, valid = self._get_name_components(node.value)
-            components = components + [node.attr]
+            components = [*components, node.attr]
             valid = valid or ".".join(components) in self.prefixes
         else:
             components = [None]

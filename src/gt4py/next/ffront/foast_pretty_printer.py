@@ -47,7 +47,7 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     # Positive, negative, bitwise NOT
     (foast.UnaryOp, "plus"): 14,
     (foast.UnaryOp, "minus"): 14,
-    (foast.UnaryOp, "not_"): 14,
+    (foast.UnaryOp, "invert"): 14,
     # Multiplication, matrix multiplication, division, floor division, remainder
     (foast.BinOp, "multiplies"): 13,
     (foast.BinOp, "divides"): 13,

@@ -22,14 +22,7 @@ import pytest
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, Ioff, JDim, cartesian_case, fieldview_backend
-from next_tests.past_common_fixtures import (
-    copy_program_def,
-    copy_restrict_program_def,
-    double_copy_program_def,
-    float64,
-    identity_def,
-)
+from next_tests.integration_tests.cases import IDim, Ioff, JDim
 
 
 def test_identity_fo_execution(cartesian_case, identity_def):
@@ -58,7 +51,6 @@ def test_shift_by_one_execution(cartesian_case):
 
     # direct call to field operator
     # TODO(tehrengruber): slicing located fields not supported currently
-    # shift_by_one(in_field, out=out_field[:-1], offset_provider={"Ioff": IDim})
 
     @gtx.program
     def shift_by_one_program(in_field: cases.IFloatField, out_field: cases.IFloatField):
@@ -219,7 +211,6 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
 
     with pytest.raises(TypeError) as exc_info:
         # program is defined on Field[[IDim], ...], but we call with
-        #  Field[[JDim], ...]
         copy_program(inp, out, offset_provider={})
 
     msgs = [

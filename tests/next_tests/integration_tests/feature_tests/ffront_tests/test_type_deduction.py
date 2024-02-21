@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import re
-from typing import Optional, Pattern
+from typing import Optional
 
 import pytest
 
@@ -24,7 +24,6 @@ from gt4py.next import (
     FieldOffset,
     astype,
     broadcast,
-    common,
     errors,
     float32,
     float64,
@@ -829,7 +828,7 @@ def test_as_offset_dim():
 
     with pytest.raises(
         errors.DSLError,
-        match=f"not in list of offset field dimensions",
+        match="not in list of offset field dimensions",
     ):
         _ = FieldOperatorParser.apply_to_function(as_offset_dim)
 
@@ -844,6 +843,6 @@ def test_as_offset_dtype():
 
     with pytest.raises(
         errors.DSLError,
-        match=f"Excepted integer for offset field dtype",
+        match="Excepted integer for offset field dtype",
     ):
         _ = FieldOperatorParser.apply_to_function(as_offset_dtype)

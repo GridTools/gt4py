@@ -79,7 +79,7 @@ def layout_maker_factory(
         mask = [dim in dimensions for dim in "IJK"]
         mask += [True] * (len(dimensions) - sum(mask))
         ranks = []
-        for m, l in zip(mask, base_layout):
+        for m, l in zip(mask, base_layout): # noqa: E741  # ambiguous variable name
             if m:
                 ranks.append(l)
         if len(mask) > 3:

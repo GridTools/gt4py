@@ -14,7 +14,6 @@
 
 import dataclasses
 import enum
-from collections.abc import Callable
 from typing import Optional
 
 import gt4py.eve as eve
@@ -136,7 +135,8 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #: when we see that it is not required.
         INLINE_LIFTED_ARGS = 16
 
-    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
+    def predicate(_1: ir.Expr, _2: bool) -> bool:
+        return True
 
     flags: int = (
         Flag.PROPAGATE_SHIFT

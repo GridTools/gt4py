@@ -159,7 +159,7 @@ def test_if():
 def test_if_variable_condition():
     result = ast.unparse(
         ssaify_string(
-            f"""
+            """
             if b:
                 a = 1
             """
@@ -179,7 +179,7 @@ def test_if_variable_condition():
 def test_nested_if():
     result = ast.unparse(
         ssaify_string(
-            f"""
+            """
             if True:
                 a = 1
             else:
@@ -214,7 +214,7 @@ def test_nested_if():
 def test_nested_if_chain():
     result = ast.unparse(
         ssaify_string(
-            f"""
+            """
             if True:
                 a = 1
             else:
@@ -249,7 +249,7 @@ def test_nested_if_chain():
 def test_if_branch_local():
     result = ast.unparse(
         ssaify_string(
-            f"""
+            """
             if True:
                 a = 0
                 a = a + 1
@@ -277,7 +277,7 @@ def test_if_branch_local():
 def test_if_only_one_branch():
     result = ast.unparse(
         ssaify_string(
-            f"""
+            """
             if True:
                 a = 0
             b = a

@@ -13,14 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import inspect
-import traceback
 
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next import errors
 from gt4py.next.ffront import func_to_foast as f2f, source_utils as src_utils
-from gt4py.next.ffront.foast_passes import type_deduction
 
 
 # NOTE: These tests are sensitive to filename and the line number of the marked statement
@@ -85,7 +83,6 @@ def test_fo_type_deduction_error():
     with pytest.raises(errors.DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)
 
-    exc = exc_info.value
 
     assert exc_info.value.location
     assert exc_info.value.location.filename.find("test_func_to_foast_error_line_number.py")

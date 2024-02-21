@@ -20,7 +20,7 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, s
 from gt4py.next.iterator.runtime import fundef, offset
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import run_processor
 
 
 @pytest.mark.uses_index_fields

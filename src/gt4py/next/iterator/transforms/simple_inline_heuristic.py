@@ -29,9 +29,9 @@ def is_eligible_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bo
     `↑(scan(λ(acc, args...) → acc + ·↑(f)(args...)))(...)`
 
     Follows the simple rules:
-    - Don’t inline scans (as there is no efficient way to inline them, also required by some
+    - Don't inline scans (as there is no efficient way to inline them, also required by some
       backends, e.g. gtfn)
-    - Don’t inline the first lifted function call within a scan (otherwise, all stencils would get
+    - Don't inline the first lifted function call within a scan (otherwise, all stencils would get
       inlined into the scans, leading to reduced parallelism/scan-only computation)
     """
     assert _is_lift(node)

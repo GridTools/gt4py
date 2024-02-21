@@ -181,12 +181,12 @@ class NonDataDescriptor(Protocol[_C, _V]):
         ...
 
     @overload
-    def __get__(  # noqa: F811  # redefinion of unused member
+    def __get__(  # redefinion of unused member
         self, _instance: _C, _owner_type: Optional[Type[_C]] = None
     ) -> _V:
         ...
 
-    def __get__(  # noqa: F811  # redefinion of unused member
+    def __get__(  # redefinion of unused member
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
     ) -> _V | NonDataDescriptor[_C, _V]:
         ...
@@ -371,7 +371,7 @@ def extended_runtime_checkable(
     ...
 
 
-def extended_runtime_checkable(  # noqa: C901  # too complex but unavoidable
+def extended_runtime_checkable(  # too complex but unavoidable
     maybe_cls: Optional[_ProtoT] = None,
     *,
     instance_check_shortcut: bool = True,
@@ -710,7 +710,7 @@ class CallableKwargsInfo:
     data: Dict[str, Any]
 
 
-def infer_type(  # noqa: C901  # function is complex but well organized in independent cases
+def infer_type(  # function is complex but well organized in independent cases
     value: Any,
     *,
     annotate_callable_kwargs: bool = False,

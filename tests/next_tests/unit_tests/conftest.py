@@ -53,19 +53,7 @@ if dace_iterator:
 
 
 @pytest.fixture(
-    params=[
-        (None, True),
-        (definitions.ProgramBackendId.ROUNDTRIP, True),
-        (definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
-        (definitions.ProgramBackendId.GTFN_CPU, True),
-        (definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
-        (definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
-        (definitions.ProgramFormatterId.LISP_FORMATTER, False),
-        (definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
-        (definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
-    ]
-    + OPTIONAL_PROCESSORS,
+    params=[(None, True), (definitions.ProgramBackendId.ROUNDTRIP, True), (definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True), (definitions.ProgramBackendId.GTFN_CPU, True), (definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True), (definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True), (definitions.ProgramFormatterId.LISP_FORMATTER, False), (definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False), (definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False), (definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False), *OPTIONAL_PROCESSORS],
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
 )
 def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:

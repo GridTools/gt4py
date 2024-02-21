@@ -34,7 +34,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -285,7 +285,7 @@ def datamodel(
 
 
 @overload
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
@@ -304,8 +304,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
     ...
 
 
-# TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
@@ -433,7 +432,6 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
-    # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
 
@@ -550,7 +548,7 @@ def field(
             have their own key, to use as a namespace in the metadata.
         kw_only: If ``True`` (default is ``False``), make this field keyword-only in the
             generated ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
-        converter: Callable that is automatically called to convert attribute’s value.
+        converter: Callable that is automatically called to convert attribute's value.
             It is given the passed-in value, and the returned value will be used as the
             new value of the attribute before being passed to the validator, if any.
             If ``"coerce"`` is passed, a naive coercer converter will be generated.
@@ -667,7 +665,7 @@ def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespac
         >>> fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
-    """  # noqa: RST201  # doctest conventions confuse RST validator
+    """  # doctest conventions confuse RST validator
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -702,7 +700,7 @@ def asdict(
         ...     y: int
         >>> c = C(x=1, y=2)
         >>> assert asdict(c) == {'x': 1, 'y': 2}
-    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
+    """  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attrs.asdict(instance, value_serializer=value_serializer)
@@ -791,7 +789,7 @@ def concretize(
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-    support_pickling: bool = True,  # noqa
+    support_pickling: bool = True,
     overwrite_definition: bool = True,
 ) -> Type[DataModelT]:
     """Generate a new concrete subclass of a generic Data Model.
@@ -812,7 +810,7 @@ def concretize(
         overwrite_definition: If ``True``, a previous definition of the class in
             the target module will be overwritten.
 
-    """  # noqa: RST301  # doctest conventions confuse RST validator
+    """  # doctest conventions confuse RST validator
     concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
         datamodel_cls, *type_args, class_name=class_name, module=module
     )
@@ -884,16 +882,16 @@ def _substitute_typevars(
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
         # TODO(egparedes): WIP fix for partial specialization
-        # # Type hint is a generic model: replace all the concretized type vars
-        # noqa: e800 replaced = False
-        # noqa: e800 new_args = []
-        # noqa: e800 for tp in type_hint.__parameters__:
-        # noqa: e800     if tp in type_params_map:
-        # noqa: e800         new_args.append(type_params_map[tp])
-        # noqa: e800         replaced = True
-        # noqa: e800     else:
-        # noqa: e800         new_args.append(type_params_map[tp])
-        # noqa: e800 return type_hint[tuple(new_args)], replaced
+        #   # Type hint is a generic model: replace all the concretized type vars
+        #   replaced = False                                # noqa: ERA001, RUF100
+        #   new_args = []                                   # noqa: ERA001, RUF100
+        #   for tp in type_hint.__parameters__:             # noqa: ERA001, RUF100
+        #       if tp in type_params_map:                   # noqa: ERA001, RUF100
+        #           new_args.append(type_params_map[tp])    # noqa: ERA001, RUF100
+        #           replaced = True                         # noqa: ERA001, RUF100
+        #       else:                                       # noqa: ERA001, RUF100
+        #           new_args.append(type_params_map[tp])    # noqa: ERA001, RUF100
+        #   return type_hint[tuple(new_args)], replaced     # noqa: ERA001, RUF100
     else:
         return type_hint, False
 
@@ -1043,7 +1041,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
 
-def _make_datamodel(  # noqa: C901  # too complex but still readable and documented
+def _make_datamodel(  # too complex but still readable and documented
     cls: Type[_T],
     *,
     repr: bool,  # noqa: A002   # shadowing 'repr' python builtin
@@ -1316,11 +1314,7 @@ def _make_concrete_with_cache(
     # Replace field definitions with the new actual types for generic fields
     type_params_map = dict(zip(datamodel_cls.__parameters__, type_args))
     model_fields = getattr(datamodel_cls, MODEL_FIELD_DEFINITIONS_ATTR)
-    new_annotations = {
-        # TODO(egparedes): ?
-        # noqa: e800 "__args__": "ClassVar[Tuple[Union[Type, TypeVar], ...]]",
-        # noqa: e800 "__parameters__": "ClassVar[Tuple[TypeVar, ...]]",
-    }
+    new_annotations = {}
 
     new_field_c_attrs = {}
     for field_name, field_type in xtyping.get_type_hints(datamodel_cls).items():

@@ -349,7 +349,7 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(  # noqa: C901  # Function is too complex
+    def _validate_args(  # Function is too complex
         self,
         arg_infos: Dict[str, Optional[ArgsInfo]],
         param_args: Dict[str, Any],
@@ -376,8 +376,8 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except Exception:
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
+        except Exception as err:
+            raise ValueError("Invalid 'domain' value ({})".format(domain)) from err
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")

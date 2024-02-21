@@ -62,7 +62,7 @@ class ObjectPattern:
         return next(get_differences(self, other), None) is None
 
     def __str__(self) -> str:
-        attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.fields.items()])
+        attrs_str = ", ".join([f"{k!s}={v!s}" for k, v in self.fields.items()])
         return f"{self.cls.__name__}({attrs_str})"
 
 

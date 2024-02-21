@@ -821,7 +821,7 @@ class TestVariableKAndReadOutside(gt_testing.StencilTestSuite):
     def definition(field_in, field_out, index):
         with computation(PARALLEL), interval(1, None):
             field_out[0, 0, 0] = (
-                field_in[0, 0, index]  # noqa: F841  # Local name is assigned to but never used
+                field_in[0, 0, index]  # Local name is assigned to but never used
                 + field_in[0, 0, -2]
             )
 
@@ -876,11 +876,11 @@ class TestHorizontalRegions(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out):
         with computation(PARALLEL), interval(...):
-            field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+            field_out = (  # local variable 'field_out' is assigned to but never used
                 field_in
             )
             with horizontal(region[I[0], :], region[I[-1], :]):
-                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                field_out = (  # local variable 'field_out' is assigned to but never used
                     field_in + 1.0
                 )
             with horizontal(region[:, J[0]], region[:, J[-1]]):
@@ -915,7 +915,7 @@ class TestHorizontalRegionsCorners(gt_testing.StencilTestSuite):
     def definition(field_in, field_out):
         with computation(PARALLEL), interval(...):
             with horizontal(region[I[0] : I[2], J[0] : J[2]], region[I[-3] : I[-1], J[-3] : J[-1]]):
-                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                field_out = (  # local variable 'field_out' is assigned to but never used
                     field_in + 1.0
                 )
             with horizontal(region[I[0] : I[2], J[-3] : J[-1]], region[I[-3] : I[-1], J[0] : J[2]]):
@@ -951,7 +951,7 @@ class TestTypedTemporary(gt_testing.StencilTestSuite):
                 tmp[0, 0, 0][1, 0] = field_in[0, 0, 1]
                 tmp[0, 0, 0][0, 1] = -1.0
                 tmp[0, 0, 0][1, 1] = -1.0
-                field_out = (  # noqa: F841  # local variable 'field_out' is assigned to but never used
+                field_out = (  # local variable 'field_out' is assigned to but never used
                     tmp[0, 0, 0][0, 0] + tmp[0, 0, 0][1, 0]
                 )
             with interval(-1, None):

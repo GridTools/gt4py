@@ -14,8 +14,8 @@
 
 """Contains the exception classes and other utilities for error handling."""
 
-from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
-    excepthook,
+from . import (  # noqa
+    excepthook,  # module needs to be loaded for pretty printing of uncaught exceptions.
 )
 from .excepthook import set_verbose_exceptions
 from .exceptions import (

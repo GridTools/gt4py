@@ -26,8 +26,8 @@ module in question is a submodule, defines `__all__` and exports many public API
 from . import common, ffront, iterator, program_processors, type_inference
 from .common import Dimension, DimensionKind, Field, GridType
 from .constructors import as_field, empty, full, ones, zeros
-from .embedded import (  # Just for registering field implementations
-    nd_array_field as _nd_array_field,
+from .embedded import (
+    nd_array_field as _,  # noqa: F401 # Unused import but needed for registering field implementation
 )
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator

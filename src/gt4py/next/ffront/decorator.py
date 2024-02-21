@@ -599,7 +599,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
-            return getattr(self, "__cached_itir")  # noqa: B009
+            return getattr(self, "__cached_itir")
 
         itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
 
@@ -655,7 +655,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=params_decl + [out_sym],
+            params=[*params_decl, out_sym],
             body=[
                 past.Call(
                     func=past.Name(id=self.foast_node.id, location=loc),

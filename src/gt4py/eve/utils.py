@@ -35,12 +35,12 @@ import warnings
 
 import deepdiff
 import xxhash
-from boltons.iterutils import (  # noqa: F401
+from boltons.iterutils import (
     flatten as flatten,
     flatten_iter as flatten_iter,
     is_collection as is_collection,
 )
-from boltons.strutils import (  # noqa: F401
+from boltons.strutils import (
     a10n as a10n,
     asciify as asciify,
     format_int_list as format_int_list,
@@ -79,7 +79,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 
 T = TypeVar("T")
@@ -246,13 +246,13 @@ def with_fluid_partial(
 
 
 @overload
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+def with_fluid_partial(  # redefinition of unused function
     func: Callable[_P, _T], *args: Any, **kwargs: Any
 ) -> Callable[_P, _T]:
     ...
 
 
-def with_fluid_partial(  # noqa: F811  # redefinition of unused function
+def with_fluid_partial(  # redefinition of unused function
     func: Optional[Callable[..., Any]] = None, *args: Any, **kwargs: Any
 ) -> Union[Callable[..., Any], Callable[[Callable[..., Any]], Callable[..., Any]]]:
     """Add a `partial` attribute to the decorated function.
@@ -291,13 +291,13 @@ def optional_lru_cache(
 
 
 @overload
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+def optional_lru_cache(  # redefinition of unused function
     func: Callable[_P, _T], *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Callable[_P, _T]:
     ...
 
 
-def optional_lru_cache(  # noqa: F811  # redefinition of unused function
+def optional_lru_cache(  # redefinition of unused function
     func: Optional[Callable[_P, _T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
 ) -> Union[Callable[_P, _T], Callable[[Callable[_P, _T]], Callable[_P, _T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
@@ -1599,7 +1599,7 @@ class XIterable(Iterable[T]):
             >>> list(it.reduceby(lambda nvowels, name: nvowels + sum(i in 'aeiou' for i in name), len, init=0))
             [(5, 4), (3, 2), (7, 3)]
 
-        """  # noqa: RST203, RST301  # sphinx.napoleon conventions confuse RST validator
+        """  # sphinx.napoleon conventions confuse RST validator
         if (not callable(key) and not isinstance(key, (int, str, list))) or not all(
             isinstance(i, str) for i in attr_keys
         ):

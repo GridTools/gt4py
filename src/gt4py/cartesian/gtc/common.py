@@ -589,7 +589,7 @@ def validate_dtype_is_set() -> datamodels.RootValidator:
 
 class _LvalueDimsValidator(eve.VisitorWithSymbolTableTrait):
     def __init__(self, vertical_loop_type: Type[eve.Node], decl_type: Type[eve.Node]) -> None:
-        if not vertical_loop_type.__annotations__.get("loop_order") is LoopOrder:
+        if vertical_loop_type.__annotations__.get("loop_order") is not LoopOrder:
             raise ValueError(
                 f"Vertical loop type {vertical_loop_type} has no `loop_order` attribute"
             )

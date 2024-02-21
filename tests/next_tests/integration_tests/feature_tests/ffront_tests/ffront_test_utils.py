@@ -22,7 +22,6 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
 try:
@@ -48,13 +47,7 @@ if dace_iterator:
 
 
 @pytest.fixture(
-    params=[
-        definitions.ProgramBackendId.ROUNDTRIP,
-        definitions.ProgramBackendId.GTFN_CPU,
-        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
-    ]
-    + OPTIONAL_PROCESSORS,
+    params=[definitions.ProgramBackendId.ROUNDTRIP, definitions.ProgramBackendId.GTFN_CPU, definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, *OPTIONAL_PROCESSORS],
     ids=lambda p: p.short_id() if p is not None else "None",
 )
 def fieldview_backend(request):
@@ -207,7 +200,6 @@ def reduction_setup():
         E2V=gtx.FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
         C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
         C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
-        # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
         inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
         out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={

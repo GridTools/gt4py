@@ -142,22 +142,18 @@ storing a reference to the piece of source code which originated the node.
 import enum
 import operator
 import sys
-from typing import Generator, List, Optional, Sequence, Type
+from typing import List, Optional, Sequence
 
 import numpy as np
 
-from gt4py.cartesian.definitions import AccessKind, CartesianSpace
-from gt4py.cartesian.gtc.definitions import Extent, Index
+from gt4py.cartesian.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
     Dict as DictOf,
     List as ListOf,
-    Optional as OptionalOf,
-    Tuple as TupleOf,
     Union as UnionOf,
     attribkwclass as attribclass,
     attribute,
-    attributes_of,
 )
 
 
@@ -328,11 +324,9 @@ class ScalarLiteral(Literal):
 
 # @attribclass
 # class TupleLiteral(Node):
-#     items = attribute(of=TupleOf[Expr])
 #
 #     @property
 #     def length(self):
-#         return len(self.items)
 
 
 @attribclass
@@ -599,8 +593,6 @@ class Statement(Node):
 
 # @attribclass
 # class ExprStmt(Statement):
-#     expr = attribute(of=Expr)
-#     loc = attribute(of=Location, optional=True)
 
 
 class Decl(Statement):
@@ -727,7 +719,6 @@ class AxisInterval(Node):
 
     def disjoint_from(self, other: "AxisInterval") -> bool:
         # This made-up constant must be larger than any LevelMarker.offset used
-        DOMAIN_SIZE: int = 1000
 
         def get_offset(bound: AxisBound) -> int:
             return (

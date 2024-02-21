@@ -24,14 +24,7 @@ from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
 
-from next_tests.past_common_fixtures import (
-    IDim,
-    copy_program_def,
-    copy_restrict_program_def,
-    float64,
-    identity_def,
-    invalid_call_sig_program_def,
-)
+from next_tests.past_common_fixtures import IDim, float64
 
 
 @pytest.fixture
@@ -182,10 +175,7 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     #  immediately after missing `out` argument
     # assert (
     #    re.search(
-    #        "Function takes 1 arguments, but 2 were given.", exc_info.value.__cause__.args[0]
-    #    )
     #    is not None
-    # )
     assert (
         re.search("Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
         is not None

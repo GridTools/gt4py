@@ -163,7 +163,7 @@ def a_stencil(
 ## The following type ignores are there because mypy get's confused by gtscript
 def avg_stencil(in_field: Field[np.float64], out_field: Field[np.float64]):  # type: ignore
     with computation(PARALLEL), interval(...):  # type: ignore
-        out_field = 0.25 * (
+        0.25 * (
             +in_field[0, 1, 0] + in_field[0, -1, 0] + in_field[1, 0, 0] + in_field[-1, 0, 0]
         )
 
@@ -356,7 +356,7 @@ class TestAxesMismatch:
             field_out: gtscript.Field[gtscript.IJ, np.float64],
         ):
             with computation(FORWARD), interval(...):
-                field_out = 1.0
+                pass
 
         return _stencil
 
@@ -420,7 +420,7 @@ def test_origin_unchanged(backend):
     @gtscript.stencil(backend=backend)
     def calc_damp(outp: Field[float], inp: Field[K, float]):
         with computation(FORWARD), interval(...):
-            outp = inp
+            pass
 
     outp = gt_storage.ones(
         backend=backend,
@@ -451,7 +451,7 @@ def test_permute_axes():
     @gtscript.stencil(backend="numpy")
     def calc_damp(outp: Field[float], inp: Field[K, float]):
         with computation(FORWARD), interval(...):
-            outp = inp
+            pass
 
     outp = gt_storage.ones(
         backend="numpy",

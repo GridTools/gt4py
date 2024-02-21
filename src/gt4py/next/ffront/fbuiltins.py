@@ -40,7 +40,7 @@ from gt4py.next.type_system import type_specifications as ts
 PYTHON_TYPE_BUILTINS = [bool, int, float, tuple]
 PYTHON_TYPE_BUILTIN_NAMES = [t.__name__ for t in PYTHON_TYPE_BUILTINS]
 
-TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64] + PYTHON_TYPE_BUILTINS
+TYPE_BUILTINS = [Field, Dimension, int32, int64, float32, float64, *PYTHON_TYPE_BUILTINS]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 # Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
@@ -247,15 +247,7 @@ MATH_BUILTIN_NAMES = (
     + BINARY_MATH_NUMBER_BUILTIN_NAMES
 )
 
-FUN_BUILTIN_NAMES = [
-    "neighbor_sum",
-    "max_over",
-    "min_over",
-    "broadcast",
-    "where",
-    "astype",
-    "as_offset",
-] + MATH_BUILTIN_NAMES
+FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "min_over", "broadcast", "where", "astype", "as_offset", *MATH_BUILTIN_NAMES]
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 

@@ -44,10 +44,10 @@ def _relative_sub_domain(
             try:
                 sliced = _slice_range(rng, idx)
                 named_ranges.append((dim, sliced))
-            except IndexError:
+            except IndexError as err:
                 raise embedded_exceptions.IndexOutOfBounds(
                     domain=domain, indices=index, index=idx, dim=dim
-                )
+                ) from err
         else:
             # not in new domain
             assert common.is_int_index(idx)

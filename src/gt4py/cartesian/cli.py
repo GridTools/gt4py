@@ -153,7 +153,7 @@ class BackendOption(click.ParamType):
             value = self._convert_value(backend.options[name]["type"], value, param, ctx)
         except click.BadParameter as conversion_error:
             self.fail(
-                f'Invalid value for backend option "{name}": {conversion_error.message}'  # noqa: B306
+                f'Invalid value for backend option "{name}": {conversion_error.message}'
             )
         return (name, value)
 

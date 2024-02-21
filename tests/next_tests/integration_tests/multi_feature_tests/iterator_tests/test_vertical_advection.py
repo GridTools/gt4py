@@ -23,7 +23,7 @@ from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import run_processor
 
 
 @fundef

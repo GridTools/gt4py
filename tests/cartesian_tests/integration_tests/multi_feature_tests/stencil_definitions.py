@@ -70,7 +70,7 @@ Field3DBool = gtscript.Field[np.bool_]
 @register
 def copy_stencil(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_b = field_a[0, 0, 0]
+        field_a[0, 0, 0]
 
 
 @gtscript.function
@@ -81,7 +81,7 @@ def afunc(b):
 @register
 def arithmetic_ops(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_a = (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
+        (((((field_b + 42.0) - 42.0) * +42.0) / -42.0) % 42.0) ** 2
 
 
 @register
@@ -98,16 +98,7 @@ def data_types(
     float64_field: gtscript.Field[np.float64],
 ):
     with computation(PARALLEL), interval(...):
-        bool_field = True
-        npbool_field = False
-        int_field = 2147483647
-        int8_field = 127
-        int16_field = 32767
-        int32_field = 2147483647
-        int64_field = 9223372036854775807
-        float_field = 37.5
-        float32_field = 37.5
-        float64_field = 37.5
+        pass
 
 
 @register
@@ -153,17 +144,15 @@ def native_functions(field_a: Field3D, field_b: Field3D):
 @register
 def copy_stencil_plus_one(field_a: Field3D, field_b: Field3D):
     with computation(PARALLEL), interval(...):
-        field_b = field_a[0, 0, 0] + 1
+        field_a[0, 0, 0] + 1
 
 
 @register
 def runtime_if(field_a: Field3D, field_b: Field3D):
     with computation(BACKWARD), interval(...):
         if field_a > 0.0:
-            field_b = -1
             field_a = -field_a
         else:
-            field_b = 1
             field_a = field_a
 
 
@@ -175,7 +164,7 @@ def simple_horizontal_diffusion(in_field: Field3D, coeff: Field3D, out_field: Fi
         )
         flx_field = lap_field[1, 0, 0] - lap_field[0, 0, 0]
         fly_field = lap_field[0, 1, 0] - lap_field[0, 0, 0]
-        out_field = in_field[0, 0, 0] - coeff[0, 0, 0] * (
+        in_field[0, 0, 0] - coeff[0, 0, 0] * (
             flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
         )
 
@@ -287,7 +276,7 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
         flx_field = 0 if (res * (in_field[1, 0, 0] - in_field[0, 0, 0])) > 0 else res
         res = lap_field[0, 1, 0] - lap_field[0, 0, 0]
         fly_field = 0 if (res * (in_field[0, 1, 0] - in_field[0, 0, 0])) > 0 else res
-        out_field = in_field[0, 0, 0] - coeff[0, 0, 0] * (
+        in_field[0, 0, 0] - coeff[0, 0, 0] * (
             flx_field[0, 0, 0] - flx_field[-1, 0, 0] + fly_field[0, 0, 0] - fly_field[0, -1, 0]
         )
 
@@ -296,35 +285,34 @@ def horizontal_diffusion(in_field: Field3D, out_field: Field3D, coeff: Field3D):
 def large_k_interval(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL):
         with interval(0, 6):
-            out_field = in_field
+            pass
         with interval(6, -10):  # this stage will only run if field has more than 16 elements
-            out_field = in_field + 1
+            in_field + 1
         with interval(-10, None):
-            out_field = in_field
+            pass
 
 
 @register
 def single_level_with_offset(in_field: Field3D, out_field: Field3D):
     with computation(PARALLEL), interval(1, 2):
-        out_field = in_field
+        pass
 
 
 @register
 def form_land_mask(in_field: Field3D, mask: gtscript.Field[np.bool_]):
     with computation(PARALLEL), interval(...):
-        mask = in_field >= 0
+        pass
 
 
 @register
 def set_inner_as_kord(a4_1: Field3D, a4_2: Field3D, a4_3: Field3D, extm: Field3DBool):
     with computation(PARALLEL), interval(...):
-        diff_23 = 0.0
         if extm and extm[0, 0, -1]:
             a4_2 = a4_1
         elif extm and extm[0, 0, 1]:
             a4_3 = a4_1
         else:
-            diff_23 = a4_2 - a4_3
+            a4_2 - a4_3
 
 
 @register
@@ -348,11 +336,11 @@ def local_var_inside_nested_conditional(in_storage: Field3D, out_storage: Field3
 def multibranch_param_conditional(in_field: Field3D, out_field: Field3D, c: float):
     with computation(PARALLEL), interval(...):
         if c > 0.0:
-            out_field = in_field + in_field[1, 0, 0]
+            in_field + in_field[1, 0, 0]
         elif c < -1.0:
-            out_field = in_field - in_field[1, 0, 0]
+            in_field - in_field[1, 0, 0]
         else:
-            out_field = in_field
+            pass
 
 
 @register(externals={"DO_SOMETHING": False})
@@ -360,10 +348,10 @@ def allow_empty_computation(in_field: Field3D, out_field: Field3D):
     from __externals__ import DO_SOMETHING
 
     with computation(FORWARD), interval(...):
-        out_field = in_field
+        pass
     with computation(PARALLEL), interval(...):
         if __INLINED(DO_SOMETHING):
-            out_field = abs(in_field)
+            abs(in_field)
 
 
 @register(externals={"PHYS_TEND": False}, name="unused_optional_field")

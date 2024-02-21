@@ -14,7 +14,7 @@
 # flake8: noqa: F841
 
 import typing
-from typing import Callable, List, Tuple, TypedDict
+from typing import Callable, List, Tuple
 
 import pytest
 

@@ -317,8 +317,8 @@ class Domain(Sequence[NamedRange]):
             try:
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
-            except ValueError:
-                raise KeyError(f"No Dimension of type {index} is present in the Domain.")
+            except ValueError as err:
+                raise KeyError(f"No Dimension of type {index} is present in the Domain.") from err
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 

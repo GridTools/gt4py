@@ -40,7 +40,7 @@ def test_unsatisfiable_constraints():
     ]
 
     try:
-        inferred = ti.infer(testee)
+        ti.infer(testee)
     except ti.UnsatisfiableConstraintsError as e:
         assert str(e) in expected_error
 
@@ -65,7 +65,7 @@ def test_unsatisfiable_constraints():
     ]
 
     try:
-        inferred = ti.infer(testee)
+        ti.infer(testee)
     except ti.UnsatisfiableConstraintsError as e:
         assert str(e) in expected_error
 

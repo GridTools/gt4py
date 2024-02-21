@@ -18,7 +18,7 @@ from typing_extensions import Protocol
 
 
 class StencilFunc(Protocol):
-    __name__: str
+    __name__: str # noqa: A003  # shadowing python builtin class attribute
     __module__: str
 
     def __call__(self, *args: Any, **kwargs: Dict[str, Any]) -> None:

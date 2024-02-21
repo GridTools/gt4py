@@ -41,7 +41,7 @@ class OTFCompileExecutor(ppi.ProgramExecutor):
         )
 
     @property
-    def __name__(self) -> str:
+    def __name__(self) -> str: # noqa: A003  # shadowing python builtin class attribute
         return self.name or repr(self)
 
 
@@ -56,7 +56,7 @@ class CachedOTFCompileExecutor(ppi.ProgramExecutor, Generic[HashT]):
         )
 
     @property
-    def __name__(self) -> str:
+    def __name__(self) -> str: # noqa: A003  # shadowing python builtin class attribute
         return self.name or repr(self)
 
 
@@ -69,7 +69,7 @@ class OTFBackend(Generic[core_defs.DeviceTypeT]):
         self.executor.__call__(program, *args, **kwargs)
 
     @property
-    def __name__(self) -> str:
+    def __name__(self) -> str: # noqa: A003  # shadowing python builtin class attribute
         return getattr(self.executor, "__name__", None) or repr(self)
 
     @property
