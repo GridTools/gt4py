@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import ast
 import textwrap
 
 import pytest
@@ -76,6 +77,7 @@ def test_scanop():
 
     @scan_operator(axis=KDim, forward=False, init=1)
     def scan(inp: int32) -> int32:
+        foo = inp
         return inp
 
     expected = textwrap.dedent(

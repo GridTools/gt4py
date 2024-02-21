@@ -19,7 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef
 
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 IDim = gtx.Dimension("IDim")
@@ -279,7 +279,7 @@ def test_field_of_extra_dim_output(program_processor, stencil):
         rng.normal(size=(shape[0], shape[1], shape[2])),
     )
 
-    out_np = np.zeros([*shape, 2])
+    out_np = np.zeros(shape + [2])
     out = gtx.as_field([IDim, JDim, KDim, None], out_np)
 
     dom = {

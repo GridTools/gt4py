@@ -17,8 +17,10 @@ import pytest
 import gt4py.next.allocators as next_allocators
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.processor_interface import (
+    ProgramBackend,
     ProgramExecutor,
     ProgramFormatter,
+    ProgramProcessor,
     ensure_processor_kind,
     is_processor_kind,
     is_program_backend,

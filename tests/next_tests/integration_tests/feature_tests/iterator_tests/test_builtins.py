@@ -20,6 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next.iterator import builtins as it_builtins
 from gt4py.next.iterator.builtins import (
     and_,
@@ -55,7 +56,7 @@ from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 from next_tests.integration_tests.feature_tests.math_builtin_test_data import math_builtin_test_data
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 def array_maker(*lists):
@@ -132,6 +133,7 @@ def fencil(builtin, out, *inps, processor, as_column=False):
 
 def arithmetic_and_logical_test_data():
     return [
+        # (builtin, inputs, expected)
         (plus, [2.0, 3.0], 5.0),
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
@@ -204,6 +206,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
 @pytest.mark.parametrize("builtin_name, inputs", math_builtin_test_data())
 def test_math_function_builtins(program_processor, builtin_name, inputs, as_column):
     program_processor, validate = program_processor
+    # validate = ppi.is_program_backend(program_processor)
 
     if builtin_name == "gamma":
         # numpy has no gamma function
@@ -282,19 +285,34 @@ def test_can_deref(program_processor, stencil):
 
 
 # def test_can_deref_lifted(program_processor):
+#     program_processor, validate = program_processor
 
+#     Neighbor = offset("Neighbor")
+#     Node = gtx.Dimension("Node")
 
 #     @fundef
 #     def _can_deref(inp):
+#         shifted = shift(Neighbor, 0)(inp)
+#         return if_(can_deref(shifted), 1, -1)
 
+#     inp = gtx.as_field([Node], np.zeros((1,)))
+#     out = gtx.as_field([Node], np.asarray([0]))
 
+#     no_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[None]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
+#         inp, out=out, offset_provider={"Neighbor": no_neighbor_tbl}, program_processor=program_processor
+#     )
 
 #     if validate:
+#         assert np.allclose(np.asarray(out), -1.0)
 
+#     a_neighbor_tbl = gtx.NeighborTableOffsetProvider(np.array([[0]]), Node, Node, 1)
 #     _can_deref[{Node: range(1)}](
+#         inp, out=out, offset_provider={"Neighbor": a_neighbor_tbl}, program_processor=program_processor
+#     )
 
 #     if validate:
+#         assert np.allclose(np.asarray(out), 1.0)
 
 
 @pytest.mark.parametrize(
@@ -332,4 +350,4 @@ def test_cast(program_processor, as_column, input_value, dtype, np_dtype):
     )
 
     if validate:
-        assert out[0] is True
+        assert out[0] == True

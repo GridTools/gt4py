@@ -129,7 +129,12 @@ class DataClass:
 def unique_data_items(request):
     input_data = request.param
 
-    yield [*input_data, DataClass(data=input_data), DataClass(data=input_data[0]), ModelClass(data=input_data), ModelClass(data=input_data[0])]
+    yield input_data + [
+        DataClass(data=input_data),
+        DataClass(data=input_data[0]),
+        ModelClass(data=input_data),
+        ModelClass(data=input_data[0]),
+    ]
 
 
 def test_fluid_partial():

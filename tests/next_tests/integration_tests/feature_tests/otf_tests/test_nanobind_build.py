@@ -21,6 +21,10 @@ from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import cache, compiler
 from gt4py.next.otf.compilation.build_systems import cmake, compiledb
 
+from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
+    program_source_with_name,
+)
+
 
 def test_gtfn_cpp_with_cmake(program_source_with_name):
     example_program_source = program_source_with_name("gtfn_cpp_with_cmake")

@@ -65,7 +65,7 @@ def test_reused_op_nodes():
         ):
             pass
         case _:
-            raise AssertionError()
+            assert False
 
     assert first is not second
     assert second is not third

@@ -15,6 +15,7 @@
 import shutil
 
 import jinja2
+import numpy as np
 import pytest
 
 import gt4py.next as gtx

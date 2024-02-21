@@ -75,10 +75,12 @@ def allocation_strategy(draw):
     aligned_index_strats = []
 
     for _i in range(dimension):
-        shape_strats = [*shape_strats, hyp_st.integers(min_value=1, max_value=64)]
+        shape_strats = shape_strats + [hyp_st.integers(min_value=1, max_value=64)]
     shape = draw(hyp_st.tuples(*shape_strats))
     for i in range(dimension):
-        aligned_index_strats = [*aligned_index_strats, hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))]
+        aligned_index_strats = aligned_index_strats + [
+            hyp_st.integers(min_value=0, max_value=min(32, shape[i] - 1))
+        ]
 
     aligned_index = draw(hyp_st.tuples(*aligned_index_strats))
     layout_order = draw(hyp_st.permutations(tuple(range(dimension))))
@@ -145,30 +147,30 @@ def test_allocate_cpu(param_dict):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
-                slices = [*slices, slice(aligned_index[hidx], None)]
+                slices = slices + [slice(aligned_index[hidx], None)]
             else:
-                slices = [*slices, slice(random.randint(0, shape[hidx]), None)]
+                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
         assert field[tuple(slices)].ctypes.data % alignment_bytes == 0
 
     # check that writing does not give errors, e.g. because of going out of bounds
     slices = []
     for _hidx in range(len(shape)):
-        slices = [*slices, 0]
+        slices = slices + [0]
     field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, aligned_index[hidx]]
+        slices = slices + [aligned_index[hidx]]
     field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, shape[hidx] - 1]
+        slices = slices + [shape[hidx] - 1]
     field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, shape[hidx]]
+        slices = slices + [shape[hidx]]
     try:
         field[tuple(slices)] = 1
     except IndexError:
@@ -210,30 +212,30 @@ def test_allocate_gpu(param_dict):
         slices = []
         for hidx in range(len(shape)):
             if hidx == np.argmax(layout_map):
-                slices = [*slices, slice(aligned_index[hidx], None)]
+                slices = slices + [slice(aligned_index[hidx], None)]
             else:
-                slices = [*slices, slice(random.randint(0, shape[hidx]), None)]
+                slices = slices + [slice(random.randint(0, shape[hidx]), None)]
         assert device_field[tuple(slices)].data.ptr % alignment_bytes == 0
 
     # check that writing does not give errors, e.g. because of going out of bounds
     slices = []
     for _hidx in range(len(shape)):
-        slices = [*slices, 0]
+        slices = slices + [0]
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, aligned_index[hidx]]
+        slices = slices + [aligned_index[hidx]]
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, shape[hidx] - 1]
+        slices = slices + [shape[hidx] - 1]
     device_field[tuple(slices)] = 1
 
     slices = []
     for hidx in range(len(shape)):
-        slices = [*slices, shape[hidx]]
+        slices = slices + [shape[hidx]]
 
     with pytest.raises(IndexError):
         device_field[tuple(slices)] = 1

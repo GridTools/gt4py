@@ -13,14 +13,36 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from functools import reduce
 
 import numpy as np
 import pytest
 
-from gt4py.next import Field, errors, field_operator, float64
+import gt4py.next as gtx
+from gt4py.next import Field, errors, field_operator, float64, index_field
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IDim, JDim
+from next_tests.integration_tests.cases import (
+    E2V,
+    V2E,
+    E2VDim,
+    Edge,
+    IDim,
+    Ioff,
+    JDim,
+    Joff,
+    KDim,
+    Koff,
+    V2EDim,
+    Vertex,
+    cartesian_case,
+    unstructured_case,
+)
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    Cell,
+    fieldview_backend,
+    size,
+)
 
 
 @pytest.mark.parametrize("condition", [True, False])

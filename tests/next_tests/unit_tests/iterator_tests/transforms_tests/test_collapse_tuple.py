@@ -12,8 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import pytest
 
-from gt4py.next.iterator import ir_makers as im
+from gt4py.next.iterator import ir, ir_makers as im
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 
 

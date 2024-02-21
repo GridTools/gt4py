@@ -129,7 +129,7 @@ def reduction_with_irrelevant_full_shift():
     ],
 )
 def test_get_partial_offsets(reduction, request):
-    {"Dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
+    offset_provider = {"Dim": SimpleNamespace(max_neighbors=3, has_skip_values=False)}
     partial_offsets = _get_partial_offset_tags(request.getfixturevalue(reduction).args)
 
     assert set(partial_offsets) == {"Dim"}
@@ -150,7 +150,7 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
         for arg in red.args
     ]
 
-    step_expr = ir.FunCall(fun=red_fun, args=[acc, *elements])
+    step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
     if has_skip_values:
         neighbors_offset = red.args[shifted_arg].args[0]
         neighbors_it = red.args[shifted_arg].args[1]

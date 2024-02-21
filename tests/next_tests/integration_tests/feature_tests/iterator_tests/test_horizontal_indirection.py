@@ -18,7 +18,12 @@
 #         ((if (less (deref p_vn) 0)
 #             (shift e2c 0)
 #             (shift e2c 1)
+#          )
 #          input_on_cell
+#         )
+#     )
+#   )
+# )
 import numpy as np
 import pytest
 
@@ -29,7 +34,7 @@ from gt4py.next.program_processors.formatters import type_check
 from gt4py.next.program_processors.formatters.gtfn import format_cpp as gtfn_format_sourcecode
 
 from next_tests.integration_tests.cases import IDim
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = offset("I")

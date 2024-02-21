@@ -47,22 +47,28 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
+    cartesian_case,
+    unstructured_case,
+)
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    fieldview_backend,
+    reduction_setup,
 )
 
 
-def test_copy(cartesian_case):  # fixtures
+def test_copy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
         field_tuple = (a, a)
         field_0 = field_tuple[0]
-        field_tuple[1]
+        field_1 = field_tuple[1]
         return field_0
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
 @pytest.mark.uses_tuple_returns
-def test_multicopy(cartesian_case):  # fixtures
+def test_multicopy(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: cases.IJKField) -> tuple[cases.IJKField, cases.IJKField]:
         return a, b
@@ -70,7 +76,7 @@ def test_multicopy(cartesian_case):  # fixtures
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
-def test_cartesian_shift(cartesian_case):  # fixtures
+def test_cartesian_shift(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField) -> cases.IJKField:
         return a(Ioff[1])
@@ -81,7 +87,7 @@ def test_cartesian_shift(cartesian_case):  # fixtures
     cases.verify(cartesian_case, testee, a, out=out, ref=a[1:])
 
 
-def test_unstructured_shift(unstructured_case):  # fixtures
+def test_unstructured_shift(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.VField) -> cases.EField:
         return a(E2V[0])
@@ -137,7 +143,7 @@ def test_composed_unstructured_shift(unstructured_case):
     )
 
 
-def test_fold_shifts(cartesian_case):  # fixtures
+def test_fold_shifts(cartesian_case):  # noqa: F811 # fixtures
     """Shifting the result of an addition should work."""
 
     @gtx.field_operator
@@ -152,7 +158,7 @@ def test_fold_shifts(cartesian_case):  # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=a.ndarray[1:] + b.ndarray[2:])
 
 
-def test_tuples(cartesian_case):  # fixtures
+def test_tuples(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKFloatField, b: cases.IJKFloatField) -> cases.IJKFloatField:
         inps = a, b
@@ -164,7 +170,7 @@ def test_tuples(cartesian_case):  # fixtures
     )
 
 
-def test_scalar_arg(unstructured_case):  # fixtures
+def test_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     """Test scalar argument being turned into 0-dim field."""
 
     @gtx.field_operator
@@ -183,7 +189,7 @@ def test_scalar_arg(unstructured_case):  # fixtures
     )
 
 
-def test_nested_scalar_arg(unstructured_case):  # fixtures
+def test_nested_scalar_arg(unstructured_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee_inner(a: int32) -> cases.VField:
         return broadcast(a + 1, (Vertex,))
@@ -200,7 +206,7 @@ def test_nested_scalar_arg(unstructured_case):  # fixtures
 
 
 @pytest.mark.uses_index_fields
-def test_scalar_arg_with_field(cartesian_case):  # fixtures
+def test_scalar_arg_with_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IJKField, b: int32) -> cases.IJKField:
         tmp = b * a
@@ -214,7 +220,7 @@ def test_scalar_arg_with_field(cartesian_case):  # fixtures
     cases.verify(cartesian_case, testee, a, b, out=out, ref=ref)
 
 
-def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # fixtures
+def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # noqa: F811 # fixtures
     pytest.xfail(
         "Scalar arguments not supported to be used in both domain specification "
         "and as an argument to a field operator."
@@ -240,7 +246,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):  # fixtures
     )
 
 
-def test_scalar_scan(cartesian_case):  # fixtures
+def test_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, qc_in: float, scalar: float) -> float:
         qc = qc_in + state + scalar
@@ -259,7 +265,7 @@ def test_scalar_scan(cartesian_case):  # fixtures
 
 
 @pytest.mark.uses_scan_in_field_operator
-def test_tuple_scalar_scan(cartesian_case):  # fixtures
+def test_tuple_scalar_scan(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(
         state: float, qc_in: float, tuple_scalar: tuple[float, tuple[float, float]]
@@ -280,7 +286,7 @@ def test_tuple_scalar_scan(cartesian_case):  # fixtures
 
 
 @pytest.mark.uses_index_fields
-def test_scalar_scan_vertical_offset(cartesian_case):  # fixtures
+def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0))
     def testee_scan(state: float, inp: float) -> float:
         return inp
@@ -305,7 +311,7 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
-def test_astype_int(cartesian_case):  # fixtures
+def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
         b = astype(a, int64)
@@ -319,7 +325,7 @@ def test_astype_int(cartesian_case):  # fixtures
     )
 
 
-def test_astype_bool_field(cartesian_case):  # fixtures
+def test_astype_bool_field(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], bool]:
         b = astype(a, bool)
@@ -334,7 +340,7 @@ def test_astype_bool_field(cartesian_case):  # fixtures
 
 
 @pytest.mark.parametrize("inp", [0.0, 2.0])
-def test_astype_bool_scalar(cartesian_case, inp):  # fixtures
+def test_astype_bool_scalar(cartesian_case, inp):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(inp: float) -> gtx.Field[[IDim], bool]:
         return broadcast(astype(inp, bool), (IDim,))
@@ -344,7 +350,7 @@ def test_astype_bool_scalar(cartesian_case, inp):  # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=bool(inp))
 
 
-def test_astype_float(cartesian_case):  # fixtures
+def test_astype_float(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], np.float32]:
         b = astype(a, float32)

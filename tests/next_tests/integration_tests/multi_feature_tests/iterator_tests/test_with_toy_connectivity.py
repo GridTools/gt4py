@@ -48,7 +48,7 @@ from next_tests.toy_connectivity import (
     v2e_arr,
     v2v_arr,
 )
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 def edge_index_field():  # TODO replace by gtx.index_field once supported in bindings

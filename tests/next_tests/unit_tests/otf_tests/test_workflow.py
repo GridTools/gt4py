@@ -77,7 +77,7 @@ def test_cached_with_hashing():
     def hashing(inp: list[int]) -> int:
         return hash(sum(inp))
 
-    wf = workflow.CachedStep(step=lambda inp: [*inp, 1], hash_function=hashing)
+    wf = workflow.CachedStep(step=lambda inp: inp + [1], hash_function=hashing)
 
     assert wf([1, 2, 3]) == [1, 2, 3, 1]
     assert wf([3, 2, 1]) == [1, 2, 3, 1]

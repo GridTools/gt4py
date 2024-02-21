@@ -14,6 +14,10 @@
 
 from gt4py.next.otf.binding import nanobind
 
+from next_tests.unit_tests.otf_tests.compilation_tests.build_systems_tests.conftest import (
+    program_source_example,
+)
+
 
 def test_bindings(program_source_example):
     module = nanobind.create_bindings(program_source_example)

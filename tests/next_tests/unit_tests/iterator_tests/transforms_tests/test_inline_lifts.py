@@ -20,6 +20,7 @@ from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
 def inline_lift_test_data():
     return [
+        # (testee, expected)
         (
             # deref(lift(f)(args...)) -> f(args...)
             im.deref(im.lift("f")("arg")),

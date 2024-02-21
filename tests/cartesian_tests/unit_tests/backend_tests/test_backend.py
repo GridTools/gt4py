@@ -32,9 +32,9 @@ def stencil_def(
     out: Field[float],  # type: ignore
     pa: float,
     fa: Field[float],  # type: ignore
-    pb: float | None = None,
+    pb: float = None,
     fb: Field[float] = None,  # type: ignore
-    pc: float | None = None,
+    pc: float = None,
     fc: Field[float] = None,  # type: ignore
 ):
     from __externals__ import MODE

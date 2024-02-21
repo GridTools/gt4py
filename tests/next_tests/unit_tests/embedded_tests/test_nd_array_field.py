@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import dataclasses
 import itertools
 import math
 import operator
@@ -19,7 +20,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
-from gt4py.next import common
+from gt4py.next import common, constructors
 from gt4py.next.common import Dimension, Domain, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice

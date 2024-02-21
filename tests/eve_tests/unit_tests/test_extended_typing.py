@@ -545,8 +545,8 @@ def test_eval_forward_ref():
 def test_infer_type():
     assert xtyping.infer_type(3) == int
 
-    assert xtyping.infer_type(None) is type(None)  # do not compare types
-    assert xtyping.infer_type(type(None)) is type(None)  # do not compare types
+    assert xtyping.infer_type(None) is type(None)  # noqa: E721  # do not compare types
+    assert xtyping.infer_type(type(None)) is type(None)  # noqa: E721  # do not compare types
     assert xtyping.infer_type(None, none_as_type=False) is None
     assert xtyping.infer_type(type(None), none_as_type=False) is None
 

@@ -19,7 +19,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef
 
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = gtx.Dimension("I")
@@ -78,8 +78,7 @@ def test_lambda_domain(program_processor):
     inp = a_field()
     out = out_field()
 
-    def dom():
-        return cartesian_domain(named_range(I, 0, 10))
+    dom = lambda: cartesian_domain(named_range(I, 0, 10))
     run_processor(copy_stencil[dom], program_processor, inp, out=out, offset_provider={})
 
     if validate:

@@ -20,6 +20,10 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.program_processors.runners import gtfn, roundtrip
 
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    fieldview_backend,
+)
+
 
 Cell = gtx.Dimension("Cell")
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)

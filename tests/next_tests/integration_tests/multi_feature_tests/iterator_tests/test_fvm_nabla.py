@@ -42,7 +42,7 @@ from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_s
     assert_close,
     nabla_setup,
 )
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
 Vertex = gtx.Dimension("Vertex")
