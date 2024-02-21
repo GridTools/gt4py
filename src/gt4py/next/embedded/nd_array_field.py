@@ -465,9 +465,9 @@ NdArrayField.register_builtin_func(
 # TODO gamma
 
 for name in (
-    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES  # type: ignore[has-type]
-    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES  # type: ignore[has-type]
-    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES  # type: ignore[has-type]
+    fbuiltins.UNARY_MATH_FP_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES
+    + fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES
 ):
     if name in ["abs", "power", "gamma"]:
         continue
@@ -485,7 +485,7 @@ NdArrayField.register_builtin_func(
     fbuiltins.fmod,  # type: ignore[attr-defined]
     _make_builtin("fmod", "fmod"),
 )
-NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))  # type: ignore[has-type]
+NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
 def _make_reduction(
@@ -512,9 +512,9 @@ def _make_reduction(
     return _builtin_op
 
 
-NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))  # type: ignore[has-type]
-NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))  # type: ignore[has-type]
-NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))  # type: ignore[has-type]
+NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))
+NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))
+NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))
 
 
 # -- Concrete array implementations --
@@ -593,7 +593,7 @@ def _builtins_broadcast(
     raise AssertionError("Scalar case not reachable from 'fbuiltins.broadcast'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)  # type: ignore[has-type]
+NdArrayField.register_builtin_func(fbuiltins.broadcast, _builtins_broadcast)
 
 
 def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdArrayField:
@@ -602,7 +602,7 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
     raise AssertionError("This is the NdArrayField implementation of 'fbuiltins.astype'.")
 
 
-NdArrayField.register_builtin_func(fbuiltins.astype, _astype)  # type: ignore[has-type]
+NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 
 def _get_slices_from_domain_slice(
