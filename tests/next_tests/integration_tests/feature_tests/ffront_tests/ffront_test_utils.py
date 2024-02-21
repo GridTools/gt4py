@@ -48,11 +48,14 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
-    OPTIONAL_PROCESSORS.append(
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
-        )
-    ),
+    (
+        OPTIONAL_PROCESSORS.append(
+            pytest.param(
+                next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+                marks=pytest.mark.requires_gpu,
+            )
+        ),
+    )
 
 
 @pytest.fixture(
@@ -134,22 +137,28 @@ size = 10
 
 class MeshDescriptor(Protocol):
     @property
-    def name(self) -> str: ...
+    def name(self) -> str:
+        ...
 
     @property
-    def num_vertices(self) -> int: ...
+    def num_vertices(self) -> int:
+        ...
 
     @property
-    def num_cells(self) -> int: ...
+    def num_cells(self) -> int:
+        ...
 
     @property
-    def num_edges(self) -> int: ...
+    def num_edges(self) -> int:
+        ...
 
     @property
-    def num_levels(self) -> int: ...
+    def num_levels(self) -> int:
+        ...
 
     @property
-    def offset_provider(self) -> dict[str, common.Connectivity]: ...
+    def offset_provider(self) -> dict[str, common.Connectivity]:
+        ...
 
 
 def simple_mesh() -> MeshDescriptor:

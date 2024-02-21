@@ -58,7 +58,8 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def __gt_device_type__(self) -> core_defs.DeviceTypeT: ...
+    def __gt_device_type__(self) -> core_defs.DeviceTypeT:
+        ...
 
     @abc.abstractmethod
     def __gt_allocate__(
@@ -67,7 +68,8 @@ class FieldBufferAllocatorProtocol(Protocol[core_defs.DeviceTypeT]):
         dtype: core_defs.DType[core_defs.ScalarT],
         device_id: int = 0,
         aligned_index: Optional[Sequence[common.NamedIndex]] = None,  # absolute position
-    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]: ...
+    ) -> core_allocators.TensorBuffer[core_defs.DeviceTypeT, core_defs.ScalarT]:
+        ...
 
 
 def is_field_allocator(obj: Any) -> TypeGuard[FieldBufferAllocatorProtocol]:
@@ -85,7 +87,8 @@ class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]: ...
+    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+        ...
 
 
 def is_field_allocator_factory(obj: Any) -> TypeGuard[FieldBufferAllocatorFactoryProtocol]:
@@ -175,9 +178,9 @@ class BaseFieldBufferAllocator(FieldBufferAllocatorProtocol[core_defs.DeviceType
 
 
 if TYPE_CHECKING:
-    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[FieldBufferAllocatorProtocol] = (
-        BaseFieldBufferAllocator
-    )
+    __TensorFieldAllocatorAsFieldAllocatorInterfaceT: type[
+        FieldBufferAllocatorProtocol
+    ] = BaseFieldBufferAllocator
 
 
 def horizontal_first_layout_mapper(

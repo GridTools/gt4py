@@ -779,7 +779,7 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 
     @gtx.scan_operator(axis=KDim, forward=forward, init=init)
     def simple_scan_operator(
-        carry: tuple[int32, tuple[int32, int32]]
+        carry: tuple[int32, tuple[int32, int32]],
     ) -> tuple[int32, tuple[int32, int32]]:
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 

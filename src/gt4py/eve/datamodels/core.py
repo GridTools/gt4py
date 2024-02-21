@@ -34,7 +34,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -285,7 +285,7 @@ def datamodel(
 
 
 @overload
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
@@ -305,7 +305,7 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
@@ -667,7 +667,7 @@ def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespac
         >>> fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
-    """  # noqa: RST201  # doctest conventions confuse RST validator
+    """  # doctest conventions confuse RST validator
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -702,7 +702,7 @@ def asdict(
         ...     y: int
         >>> c = C(x=1, y=2)
         >>> assert asdict(c) == {"x": 1, "y": 2}
-    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
+    """  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attrs.asdict(instance, value_serializer=value_serializer)
@@ -791,7 +791,7 @@ def concretize(
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-    support_pickling: bool = True,  # noqa
+    support_pickling: bool = True,
     overwrite_definition: bool = True,
 ) -> Type[DataModelT]:
     """Generate a new concrete subclass of a generic Data Model.
@@ -812,7 +812,7 @@ def concretize(
         overwrite_definition: If ``True``, a previous definition of the class in
             the target module will be overwritten.
 
-    """  # noqa: RST301  # doctest conventions confuse RST validator
+    """  # doctest conventions confuse RST validator
     concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
         datamodel_cls,  # type: ignore[arg-type]
         *type_args,
@@ -1028,7 +1028,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
 
-def _make_datamodel(  # noqa: C901  # too complex but still readable and documented
+def _make_datamodel(  # too complex but still readable and documented
     cls: Type[_T],
     *,
     repr: bool,  # noqa: A002   # shadowing 'repr' python builtin

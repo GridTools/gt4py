@@ -39,10 +39,10 @@ def make_step(function: Workflow[StartT, EndT]) -> ChainableWorkflowMixin[StartT
     ---------
     >>> @make_step
     ... def times_two(x: int) -> int:
-    ...    return x * 2
+    ...     return x * 2
 
     >>> def stringify(x: int) -> str:
-    ...    return str(x)
+    ...     return str(x)
 
     >>> # create a workflow int -> int -> str
     >>> times_two.chain(stringify)(3)
@@ -61,7 +61,8 @@ class Workflow(Protocol[StartT_contra, EndT_co]):
     - take a single input argument
     """
 
-    def __call__(self, inp: StartT_contra) -> EndT_co: ...
+    def __call__(self, inp: StartT_contra) -> EndT_co:
+        ...
 
 
 class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
@@ -102,25 +103,21 @@ class NamedStepSequence(
     >>> import dataclasses
 
     >>> def parse(x: str) -> int:
-    ...    return int(x)
+    ...     return int(x)
 
     >>> def plus_half(x: int) -> float:
-    ...    return x + 0.5
+    ...     return x + 0.5
 
     >>> def stringify(x: float) -> str:
-    ...    return str(x)
+    ...     return str(x)
 
     >>> @dataclasses.dataclass(frozen=True)
     ... class ParseOpPrint(NamedStepSequence[str, str]):
-    ...    parse: Workflow[str, int]
-    ...    op: Workflow[int, float]
-    ...    print: Workflow[float, str]
+    ...     parse: Workflow[str, int]
+    ...     op: Workflow[int, float]
+    ...     print: Workflow[float, str]
 
-    >>> pop = ParseOpPrint(
-    ...    parse=parse,
-    ...    op=plus_half,
-    ...    print=stringify
-    ... )
+    >>> pop = ParseOpPrint(parse=parse, op=plus_half, print=stringify)
 
     >>> pop.step_order
     ['parse', 'op', 'print']
@@ -129,7 +126,7 @@ class NamedStepSequence(
     '73.5'
 
     >>> def plus_tenth(x: int) -> float:
-    ...   return x + 0.1
+    ...     return x + 0.1
 
 
     >>> pop.replace(op=plus_tenth)(73)
@@ -169,13 +166,13 @@ class StepSequence(ChainableWorkflowMixin[StartT, EndT]):
     Examples:
     ---------
     >>> def plus_one(x: int) -> int:
-    ...    return x + 1
+    ...     return x + 1
 
     >>> def plus_half(x: int) -> float:
-    ...    return x + 0.5
+    ...     return x + 0.5
 
     >>> def stringify(x: float) -> str:
-    ...    return str(x)
+    ...     return str(x)
 
     >>> StepSequence.start(plus_one).chain(plus_half).chain(stringify)(73)
     '74.5'
@@ -222,8 +219,8 @@ class CachedStep(
     Examples:
     ---------
     >>> def heavy_computation(x: int) -> int:
-    ...    print("This might take a while...")
-    ...    return x
+    ...     print("This might take a while...")
+    ...     return x
 
     >>> cached_step = CachedStep(step=heavy_computation)
 
@@ -241,9 +238,7 @@ class CachedStep(
     """
 
     step: Workflow[StartT, EndT]
-    hash_function: Callable[[StartT], HashT] = dataclasses.field(
-        default=hash
-    )  # type: ignore[assignment]
+    hash_function: Callable[[StartT], HashT] = dataclasses.field(default=hash)  # type: ignore[assignment]
 
     _cache: dict[HashT, EndT] = dataclasses.field(repr=False, init=False, default_factory=dict)
 

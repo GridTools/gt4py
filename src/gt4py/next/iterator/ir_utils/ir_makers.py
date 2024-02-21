@@ -243,17 +243,17 @@ class let:
     --------
     >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
     '(λ(a) → a)(b)'
-    >>> str(let(("a", 1),
-    ...         ("b", 2)
-    ... )(plus("a", "b")))
+    >>> str(let(("a", 1), ("b", 2))(plus("a", "b")))
     '(λ(a, b) → a + b)(1, 2)'
     """
 
     @typing.overload
-    def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str): ...
+    def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str):
+        ...
 
     @typing.overload
-    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]): ...
+    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]):
+        ...
 
     def __init__(self, *args):
         if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
@@ -301,7 +301,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     """
     Make a literal node from a value.
 
-    >>> literal_from_value(1.)
+    >>> literal_from_value(1.0)
     Literal(value='1.0', type='float64')
     >>> literal_from_value(1)
     Literal(value='1', type='int32')

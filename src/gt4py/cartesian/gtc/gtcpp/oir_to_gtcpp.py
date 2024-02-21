@@ -94,7 +94,8 @@ def _make_axis_offset_expr(
 
 
 class SymbolNameCreator(Protocol):
-    def __call__(self, name: str) -> str: ...
+    def __call__(self, name: str) -> str:
+        ...
 
 
 class OIRToGTCpp(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):

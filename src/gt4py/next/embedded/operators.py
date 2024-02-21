@@ -42,7 +42,11 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
     axis: common.Dimension
 
-    def __call__(self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
+    def __call__(  # type: ignore[override]  # we cannot properly type annotate relative to self.fun
+        self,
+        *args: common.Field | core_defs.Scalar,
+        **kwargs: common.Field | core_defs.Scalar,
+    ) -> common.Field:
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
@@ -143,7 +147,7 @@ def _tuple_assign_field(
 
 
 def _intersect_scan_args(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> common.Domain:
     return embedded_common.intersect_domains(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
@@ -151,7 +155,7 @@ def _intersect_scan_args(
 
 
 def _get_array_ns(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> ModuleType:
     for arg in utils.flatten_nested_tuple(args):
         if hasattr(arg, "array_ns"):

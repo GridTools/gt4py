@@ -1891,7 +1891,7 @@ class GTScriptParser(ast.NodeVisitor):
                         "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
                         for item_name, item_value in value._gtscript_["nonlocals"].items()
                     }
-                    resolved_values_list.extend(  # noqa[B038] #editing a loop's mutable iterable (probably intended here)
+                    resolved_values_list.extend(  # editing a loop's mutable iterable (probably intended here)
                         nested_inlined_values.items()
                     )
 

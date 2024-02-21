@@ -54,8 +54,8 @@ def as_dace_type(type_: ts.ScalarType):
 def as_scalar_type(typestr: str) -> ts.ScalarType:
     try:
         kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError:
-        raise ValueError(f"Data type {typestr} not supported.")
+    except AttributeError as err:
+        raise ValueError(f"Data type {typestr} not supported.") from err
     return ts.ScalarType(kind)
 
 
@@ -180,7 +180,7 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
     setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
     return f"{prefix}_{unique_id}"
 

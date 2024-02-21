@@ -394,17 +394,15 @@ docstring-code-format = true
 # RUF: Ruff-specific rules
 ignore = [
   'B008',  # Do not perform function calls in argument defaults
-  # 'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905',  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-  # 'D1',  # Public code object needs docstring
-  # 'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
+  'B905',  # B905 `zip()` without an explicit `strict=` parameter
   'E501',  # Line too long (using Bugbear's B950 warning)
   'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'RUF100',
   'RUF012',  # Mutable class attributes should be annotated with `typing.ClassVar`
-  'RUF003',
+  'RUF003',  # Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
   'RUF015',  # Prefer `next(iter(new_def_type.pos_or_kw_args.values()))` over single element slice
-  'B028'  # No explicit `stacklevel` keyword argument found
+  'B028',  # No explicit `stacklevel` keyword argument found
+  'RUF001',  # String contains ambiguous `∨` (LOGICAL OR). Did you mean `v` (LATIN SMALL LETTER V)?
+  'RUF009'  # Do not perform function call in dataclass defaults
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']

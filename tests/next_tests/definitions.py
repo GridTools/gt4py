@@ -61,10 +61,12 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
 class ExecutionAndAllocatorDescriptor(Protocol):
     # Used for test infrastructure, consider implementing this in gt4py when refactoring otf
     @property
-    def executor(self) -> Optional[ppi.ProgramExecutor]: ...
+    def executor(self) -> Optional[ppi.ProgramExecutor]:
+        ...
 
     @property
-    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol: ...
+    def allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        ...
 
 
 @dataclasses.dataclass(frozen=True)

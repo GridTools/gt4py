@@ -54,7 +54,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     >>>
     >>> IDim = Dimension("IDim")
     >>> def fieldop(inp: Field[[IDim], "float64"]):
-    ...    return inp
+    ...     return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
     >>> lowered = FieldOperatorLowering.apply(parsed)
@@ -62,7 +62,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params # doctest: +ELLIPSIS
+    >>> lowered.params  # doctest: +ELLIPSIS
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
@@ -440,4 +440,5 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
 
 
-class FieldOperatorLoweringError(Exception): ...
+class FieldOperatorLoweringError(Exception):
+    ...

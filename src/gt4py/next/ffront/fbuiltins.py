@@ -15,7 +15,7 @@
 import dataclasses
 import functools
 import inspect
-from builtins import bool, float, int, tuple  # noqa: A004
+from builtins import bool, float, int, tuple
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np

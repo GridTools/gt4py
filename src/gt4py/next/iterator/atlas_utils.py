@@ -45,7 +45,7 @@ class AtlasTable:
     def shape(self):
         return (self.atlas_connectivity.rows, self.atlas_connectivity.maxcols)
 
-    def max(self):  # noqa: A003
+    def max(self):
         maximum = -1
         for i in range(self.shape[0]):
             for j in range(self.shape[1]):

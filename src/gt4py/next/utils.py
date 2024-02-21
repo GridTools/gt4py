@@ -21,10 +21,10 @@ class RecursionGuard:
     Context manager to guard against inifinite recursion.
 
     >>> def foo(i):
-    ...    with RecursionGuard(i):
-    ...        if i % 2 == 0:
-    ...            foo(i)
-    ...    return i
+    ...     with RecursionGuard(i):
+    ...         if i % 2 == 0:
+    ...             foo(i)
+    ...     return i
     >>> foo(3)
     3
     >>> foo(2)  # doctest:+ELLIPSIS

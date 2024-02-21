@@ -392,10 +392,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         .. code-block:: python
 
-                    {
-                        'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int_, np.int64)
-                    }
+                    {"float_symbols": (np.float32, np.float64), "int_symbols": (int, np.int_, np.int64)}
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
         Required class attribute.

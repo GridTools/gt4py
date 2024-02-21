@@ -44,7 +44,8 @@ class BuildSystemProjectGenerator(Protocol[SrcL, LS, TgtL]):
         self,
         source: stages.CompilableSource[SrcL, LS, TgtL],
         cache_lifetime: config.BuildCacheLifetime,
-    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]: ...
+    ) -> stages.BuildSystemProject[SrcL, LS, TgtL]:
+        ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -95,4 +96,5 @@ class CompilerFactory(factory.Factory):
         model = Compiler
 
 
-class CompilationError(RuntimeError): ...
+class CompilationError(RuntimeError):
+    ...

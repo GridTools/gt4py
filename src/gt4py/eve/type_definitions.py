@@ -98,7 +98,8 @@ class ConstrainedStr(str):
     class keyword argument or as class variable.
 
     Examples:
-        >>> class OnlyLetters(ConstrainedStr, regex=re.compile(r"^[a-zA-Z]*$")): pass
+        >>> class OnlyLetters(ConstrainedStr, regex=re.compile(r"^[a-zA-Z]*$")):
+        ...     pass
         >>> OnlyLetters("aabbCC")
         OnlyLetters('aabbCC')
 

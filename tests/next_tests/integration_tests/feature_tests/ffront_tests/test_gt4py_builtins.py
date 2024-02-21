@@ -168,7 +168,7 @@ def test_reduction_expression_in_call(unstructured_case):
         fencil,
         ref=lambda edge_f: 3
         * np.sum(
-            -edge_f[v2e_table] ** 2 * 2,
+            -(edge_f[v2e_table] ** 2) * 2,
             axis=1,
             initial=0,
             where=v2e_table != common.SKIP_VALUE,

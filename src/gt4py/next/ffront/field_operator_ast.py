@@ -51,8 +51,8 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]  # shadowing a python builtin
+    type: Union[SymbolT, ts.DeferredType]  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -75,11 +75,11 @@ DimensionSymbol = DataSymbol[DimensionTypeT]
 
 
 class Expr(LocatedNode):
-    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # noqa A003
+    type: ts.TypeSpec = ts.DeferredType(constraint=None)  # A003
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolRef]  # shadowing a python builtin
 
 
 class Constant(Expr):
@@ -153,11 +153,12 @@ class Call(Expr):
     kwargs: dict[str, Expr]
 
 
-class Stmt(LocatedNode): ...
+class Stmt(LocatedNode):
+    ...
 
 
 class Starred(Expr):
-    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # noqa: A003  # shadowing a python builtin
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # shadowing a python builtin
 
 
 class Assign(Stmt):
@@ -198,29 +199,27 @@ class IfStmt(Stmt):
 
 
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolName]  # shadowing a python builtin
     params: list[DataSymbol]
     body: BlockStmt
     closure_vars: list[Symbol]
-    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
-        constraint=ts.FunctionType
-    )
+    type: Union[ts.FunctionType, ts.DeferredType] = ts.DeferredType(constraint=ts.FunctionType)
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003  # shadowing a python builtin
+    id: Coerced[SymbolName]  # shadowing a python builtin
     definition: FunctionDefinition
-    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+    type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.FieldOperatorType
     )
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003 # shadowing a python builtin
+    id: Coerced[SymbolName]  # shadowing a python builtin
     axis: Constant
     forward: Constant
     init: Constant
     definition: FunctionDefinition  # scan pass
-    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(  # noqa: A003
+    type: Union[ts_ffront.ScanOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.ScanOperatorType
     )

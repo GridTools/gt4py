@@ -57,7 +57,7 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
-    id: Coerced[eve.SymbolName]  # noqa: A003
+    id: Coerced[eve.SymbolName]
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 

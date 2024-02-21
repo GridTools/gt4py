@@ -165,10 +165,10 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: slice) -> UnitRange:  # redefine unused
         ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:  # redefine unused
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -419,18 +419,18 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: slice) -> Self:  # redefine unused
         ...
 
     @overload
-    def __getitem__(  # noqa: F811 # redefine unused
+    def __getitem__(  # redefine unused
         self, index: Dimension
     ) -> tuple[Dimension, _Rng]:
         ...
 
-    def __getitem__(  # noqa: F811 # redefine unused
+    def __getitem__(  # redefine unused
         self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # noqa: F811 # redefine unused
+    ) -> NamedRange | Domain:  # redefine unused
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):

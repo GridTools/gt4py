@@ -41,13 +41,13 @@ class Node(eve.Node):
 
 
 class Sym(Node):  # helper
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     # TODO(tehrengruber): Revisit. Using strings is a workaround to avoid coupling with the
     #   type inference.
     kind: typing.Literal["Iterator", "Value", None] = None
-    dtype: Optional[tuple[str, bool]] = (
-        None  # format: name of primitive type, boolean indicating if it is a list
-    )
+    dtype: Optional[
+        tuple[str, bool]
+    ] = None  # format: name of primitive type, boolean indicating if it is a list
 
     @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
@@ -63,12 +63,13 @@ class Sym(Node):  # helper
 
 
 @noninstantiable
-class Expr(Node): ...
+class Expr(Node):
+    ...
 
 
 class Literal(Expr):
     value: str
-    type: str  # noqa: A003
+    type: str
 
     @datamodels.validator("type")
     def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
@@ -89,7 +90,7 @@ class AxisLiteral(Expr):
 
 
 class SymRef(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]
 
 
 class Lambda(Expr, SymbolTableTrait):
@@ -103,7 +104,7 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: List[Sym]
     expr: Expr
 
@@ -215,7 +216,7 @@ BUILTINS = {
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]

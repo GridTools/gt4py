@@ -31,9 +31,9 @@ class ObjectPattern:
 
     Examples:
         >>> class Foo:
-        ...    def __init__(self, bar, baz):
-        ...        self.bar = bar
-        ...        self.baz = baz
+        ...     def __init__(self, bar, baz):
+        ...         self.bar = bar
+        ...         self.baz = baz
         >>> assert ObjectPattern(Foo, bar=1).match(Foo(1, 2))
     """
 

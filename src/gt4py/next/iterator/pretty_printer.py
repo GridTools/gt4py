@@ -97,7 +97,7 @@ class PrettyPrinter(NodeTranslator):
 
     @staticmethod
     def _vmerge(*blocks: list[str]) -> list[str]:
-        return sum(blocks, [])
+        return sum(blocks, [])  # noqa: RUF017
 
     def _prec_parens(self, block: list[str], prec: int, op_prec: int) -> list[str]:
         if prec > op_prec:

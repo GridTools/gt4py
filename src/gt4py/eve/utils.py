@@ -748,7 +748,7 @@ class XIterable(Iterable[T]):
     def __iter__(self) -> Iterator[T]:
         return self.iterator
 
-    def map(self, func: Callable) -> XIterable[Any]:  # noqa  # A003: shadowing a python builtin
+    def map(self, func: Callable) -> XIterable[Any]:  # A003: shadowing a python builtin
         """Apply a callable to every iterator element.
 
         Equivalent to ``map(func, self)``.
@@ -788,7 +788,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Invalid function or callable: '{func}'.")
         return XIterable(map(func, self.iterator))
 
-    def filter(  # noqa  # A003: shadowing a python builtin
+    def filter(  # A003: shadowing a python builtin
         self, func: Callable[..., bool]
     ) -> XIterable[T]:
         """Filter elements with callables.
@@ -952,7 +952,7 @@ class XIterable(Iterable[T]):
         """
         return XIterable(filter(attrchecker(*names), self.iterator))
 
-    def getattr(  # noqa  # A003: shadowing a python builtin
+    def getattr(  # A003: shadowing a python builtin
         self, *names: str, default: Any = NOTHING
     ) -> XIterable[Any]:
         """Get provided attributes from each item in a sequence.
@@ -1176,7 +1176,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Only positive integer numbers are accepted (provided: {n}).")
         return XIterable(toolz.itertoolz.take_nth(n, self.iterator))
 
-    def zip(  # noqa  # A003: shadowing a python builtin
+    def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Zip iterators.

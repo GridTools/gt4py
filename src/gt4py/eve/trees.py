@@ -62,10 +62,12 @@ TreeLikeT = TypeVar("TreeLikeT", bound=TreeLike)
 
 class Tree(Protocol):
     @abc.abstractmethod
-    def iter_children_values(self) -> Iterable: ...
+    def iter_children_values(self) -> Iterable:
+        ...
 
     @abc.abstractmethod
-    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]: ...
+    def iter_children_items(self) -> Iterable[Tuple[TreeKey, Any]]:
+        ...
 
 
 TreeLike.register(Tree)
