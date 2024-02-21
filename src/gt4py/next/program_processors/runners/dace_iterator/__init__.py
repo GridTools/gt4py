@@ -52,11 +52,19 @@ def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.FiniteUnitRa
 _build_type = "Release"
 
 
-def convert_arg(arg: Any):
+def convert_arg(arg: Any, sdfg_param: str):
     if common.is_field(arg):
         # field domain offsets are not supported
-        if any(dim_range.start != 0 for dim_range in arg.domain.ranges):
-            raise RuntimeError("Sliced fields not supported as program arguments.")
+        non_zero_offsets = [
+            (dim, dim_range)
+            for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges)
+            if dim_range.start != 0
+        ]
+        if non_zero_offsets:
+            dim, dim_range = non_zero_offsets[0]
+            raise RuntimeError(
+                f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
+            )
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -101,7 +109,7 @@ def preprocess_program(
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
+    return {sdfg_param: convert_arg(arg, sdfg_param) for sdfg_param, arg in zip(sdfg_params, args)}
 
 
 def _ensure_is_on_device(
