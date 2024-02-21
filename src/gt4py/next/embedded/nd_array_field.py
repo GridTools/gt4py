@@ -259,13 +259,16 @@ for name in (
     )
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum, _make_binary_array_field_intrinsic_func("minimum", "minimum")  # type: ignore[attr-defined]
+    fbuiltins.minimum,
+    _make_binary_array_field_intrinsic_func("minimum", "minimum"),  # type: ignore[attr-defined]
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum, _make_binary_array_field_intrinsic_func("maximum", "maximum")  # type: ignore[attr-defined]
+    fbuiltins.maximum,
+    _make_binary_array_field_intrinsic_func("maximum", "maximum"),  # type: ignore[attr-defined]
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod, _make_binary_array_field_intrinsic_func("fmod", "fmod")  # type: ignore[attr-defined]
+    fbuiltins.fmod,
+    _make_binary_array_field_intrinsic_func("fmod", "fmod"),  # type: ignore[attr-defined]
 )
 
 

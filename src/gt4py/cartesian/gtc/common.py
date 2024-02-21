@@ -906,7 +906,7 @@ OP_TO_UFUNC_NAME: Final[
 def op_to_ufunc(
     op: Union[
         UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction
-    ]
+    ],
 ) -> np.ufunc:
     if not isinstance(
         op, (UnaryOperator, ArithmeticOperator, ComparisonOperator, LogicalOperator, NativeFunction)

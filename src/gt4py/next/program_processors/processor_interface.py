@@ -103,7 +103,9 @@ def make_program_processor(
         if not all(isinstance(a, str) for a in accept_kwargs):
             raise ValueError(f"Provided invalid list of keyword argument names ({accept_args})")
         filtered_kwargs = lambda kwargs: {  # noqa: E731
-            key: value for key, value in kwargs.items() if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
+            key: value
+            for key, value in kwargs.items()
+            if key in accept_kwargs  # type: ignore[operator]  # key in accept_kwargs
         }
     else:
         raise ValueError(f"Invalid ({accept_kwargs}) 'accept_kwargs' value")
@@ -208,7 +210,8 @@ class ProgramBackend(
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory(obj)
 
 
@@ -216,5 +219,6 @@ def is_program_backend_for(
     obj: Callable, device: core_defs.DeviceTypeT
 ) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory_for(obj, device)

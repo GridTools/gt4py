@@ -80,7 +80,7 @@ def get_args(params: Sequence[itir.Sym], args: Sequence[Any]) -> dict[str, Any]:
 
 
 def get_connectivity_args(
-    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]]
+    neighbor_tables: Sequence[tuple[str, NeighborTableOffsetProvider]],
 ) -> dict[str, Any]:
     return {connectivity_identifier(offset): table.table for offset, table in neighbor_tables}
 

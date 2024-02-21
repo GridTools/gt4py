@@ -581,7 +581,7 @@ class Axis:
         return ShiftedAxis(self.name, -shift)
 
 
-I = Axis("I") # noqa: E741  # ambiguous variable name
+I = Axis("I")  # noqa: E741  # ambiguous variable name
 """I axes (parallel)."""
 
 J = Axis("J")
@@ -762,17 +762,17 @@ def compile_assert(expr):
 
 
 # GTScript builtins: math functions
-def abs(x): # noqa: A001  # shadowing python builtin
+def abs(x):  # noqa: A001  # shadowing python builtin
     """Return the absolute value of the argument"""
     pass
 
 
-def min(x, y): # noqa: A001  # shadowing python builtin
+def min(x, y):  # noqa: A001  # shadowing python builtin
     """Return the smallest of two or more arguments."""
     pass
 
 
-def max(x, y): # noqa: A001  # shadowing python builtin
+def max(x, y):  # noqa: A001  # shadowing python builtin
     """Return the largest of two or more arguments."""
     pass
 

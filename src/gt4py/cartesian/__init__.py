@@ -43,5 +43,5 @@ __all__ = (
     "stencil_builder",
     "stencil_object",
     "type_hints",
-    "StencilObject"
+    "StencilObject",
 )

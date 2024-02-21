@@ -58,7 +58,9 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
         context_info = copy.deepcopy(access_info)
         context_info.variable_offset_axes = []
         ranges = make_dace_subset(
-            access_info, context_info, data_dims=()  # data_index added in visit_IndexAccess
+            access_info,
+            context_info,
+            data_dims=(),  # data_index added in visit_IndexAccess
         )
         ranges.offset(sym_offsets, negative=False)
         res = dace.subsets.Range([r for i, r in enumerate(ranges.ranges) if int_sizes[i] != 1])

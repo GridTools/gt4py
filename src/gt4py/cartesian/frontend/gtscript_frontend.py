@@ -417,9 +417,7 @@ class CallInliner(ast.NodeTransformer):
         else:
             return self.generic_visit(node)
 
-    def visit_Call(  # Cyclomatic complexity too high
-        self, node: ast.Call, *, target_node=None
-    ):
+    def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in self.call_stack:
@@ -618,7 +616,7 @@ class CompiledIfInliner(ast.NodeTransformer):
 
 
 def _make_temp_decls(
-    descriptors: Dict[str, gtscript._FieldDescriptor]
+    descriptors: Dict[str, gtscript._FieldDescriptor],
 ) -> Dict[str, nodes.FieldDecl]:
     return {
         name: nodes.FieldDecl(

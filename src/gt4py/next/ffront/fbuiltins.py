@@ -247,7 +247,16 @@ MATH_BUILTIN_NAMES = (
     + BINARY_MATH_NUMBER_BUILTIN_NAMES
 )
 
-FUN_BUILTIN_NAMES = ["neighbor_sum", "max_over", "min_over", "broadcast", "where", "astype", "as_offset", *MATH_BUILTIN_NAMES]
+FUN_BUILTIN_NAMES = [
+    "neighbor_sum",
+    "max_over",
+    "min_over",
+    "broadcast",
+    "where",
+    "astype",
+    "as_offset",
+    *MATH_BUILTIN_NAMES,
+]
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 

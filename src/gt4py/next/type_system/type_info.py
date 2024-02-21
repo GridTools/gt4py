@@ -672,7 +672,12 @@ def function_signature_incompatibilities_field(
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
-        yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
+        yield (
+            f"Incompatible offset can not shift field defined on "
+            f"{', '.join([dim.value for dim in field_type.dims])} from "
+            f"{source_dim.value} to target dim(s): "
+            f"{', '.join([dim.value for dim in target_dims])}"
+        )
 
 
 def accepts_args(

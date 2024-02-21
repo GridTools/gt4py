@@ -57,7 +57,7 @@ def convert_args(inp: stages.CompiledProgram) -> stages.CompiledProgram:
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension]
+    offset_provider: dict[str, common.Connectivity | common.Dimension],
 ) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
     # note: the order here needs to agree with the order of the generated bindings
     args: list[tuple[npt.NDArray, tuple[int, ...]]] = []

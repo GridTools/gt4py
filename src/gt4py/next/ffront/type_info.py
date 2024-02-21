@@ -165,7 +165,9 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
         assert isinstance(dtype, ts.ScalarType)
         try:
             el_type = reduce(
-                lambda type_, idx: type_.types[idx], path, arg  # type: ignore[attr-defined]
+                lambda type_, idx: type_.types[idx],
+                path,
+                arg,  # type: ignore[attr-defined]
             )
             return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
         except (IndexError, AttributeError):

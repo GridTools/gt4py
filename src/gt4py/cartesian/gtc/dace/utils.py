@@ -419,7 +419,7 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 
 
 def collect_toplevel_computation_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.ComputationNode"]:
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
@@ -431,7 +431,7 @@ def collect_toplevel_computation_nodes(
 
 
 def collect_toplevel_iteration_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.IterationNode"]:
     class IterationNodeCollector(eve.NodeVisitor):
         def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):

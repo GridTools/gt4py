@@ -65,7 +65,7 @@ pytest-cov==2.8
 pytest-factoryboy==2.0.3
 pytest-xdist[psutil]==2.4
 pytest==7.0
-ruff==0.0.265
+ruff==0.2.2
 scipy==1.7.2
 setuptools==65.5.0
 sphinx==4.4

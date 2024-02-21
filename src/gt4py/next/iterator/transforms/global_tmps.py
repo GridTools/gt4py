@@ -55,7 +55,7 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
-    id: Coerced[eve.SymbolName]  # noqa: A003
+    id: Coerced[eve.SymbolName]
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
@@ -264,7 +264,9 @@ def split_closures(node: ir.FencilDefinition, offset_provider) -> FencilWithTemp
                             domain=AUTO_DOMAIN,
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
-                            inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            inputs=[
+                                closure_param_arg_mapping[param.id] for param in lift_expr.args
+                            ],  # type: ignore[attr-defined]
                         )
                     )
 

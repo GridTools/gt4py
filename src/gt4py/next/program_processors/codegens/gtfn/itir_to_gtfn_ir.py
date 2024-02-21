@@ -489,7 +489,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     @staticmethod
     def _merge_scans(
-        executions: list[Union[StencilExecution, ScanExecution]]
+        executions: list[Union[StencilExecution, ScanExecution]],
     ) -> list[Union[StencilExecution, ScanExecution]]:
         def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
             assert a.backend == b.backend

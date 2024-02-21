@@ -137,89 +137,6 @@ ignore_errors = true
 branch = true
 source_pkgs = ['gt4py']
 
-# -- flake8  --
-# flake8-pyproject plugin is used to load configuration settings
-# from this file, since flake8 doesn't support it natively.
-[tool.flake8]
-count = true
-doctests = true
-exclude = [
-  '.eggs',
-  '.gt_cache',
-  '.ipynb_checkpoints',
-  '.tox',
-  '_local/',
-  'build',
-  'dist',
-  'docs',
-  'tests/_disabled',
-  'setup.py'
-]
-ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
-  'D1',  # Public code object needs docstring
-  'DAR',  # Disable dargling errors by default
-  'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
-]
-max-complexity = 15
-max-line-length = 100  # It should be the same as in `tool.black.line-length` above
-per-file-ignores = [
-  'src/gt4py/eve/extended_typing.py:F401,F405',
-  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
-]
-rst-roles = [
-  'py:mod, mod',
-  'py:func, func',
-  'py:data, data',
-  'py:const, const',
-  'py:class, class',
-  'py:meth, meth',
-  'py:attr, attr',
-  'py:exc, exc',
-  'py:obj, obj'
-]
-
-# -- isort --
-[tool.isort]
-combine_as_imports = true
-group_by_package = true
-known_first_party = ['gt4py', '__externals__', '__gtscript__']
-known_tests = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
-known_third_party = [
-  'attr',
-  'black',
-  'boltons',
-  'cached_property',
-  'click',
-  'dace',
-  'devtools',
-  'factory',
-  'hypothesis',
-  'importlib_resources',
-  'jinja2',
-  'mako',
-  'networkx',
-  'numpy',
-  'packaging',
-  'pybind11',
-  'pytest',
-  'pytest_factoryboy',
-  'setuptools',
-  'tabulate',
-  'typing_extensions',
-  'xxhash'
-]
-lexicographical = true
-line_length = 100  # It should be the same as in `tool.black.line-length` above
-lines_after_imports = 2
-profile = 'black'
-sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
-skip_gitignore = true
-skip_glob = ['*.venv/**', '_local/**']
-
 # -- mypy  --
 [tool.mypy]
 disallow_incomplete_defs = true
@@ -351,18 +268,25 @@ testpaths = 'tests'
 
 # -- ruff --
 [tool.ruff]
+line-length = 100
+respect-gitignore = true
+show-fixes = true
+target-version = 'py310'
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
 ignore = [
   'E501',
   'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905',  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-  'RUF012', # RUF012 Mutable class attributes should be annotated with `typing.ClassVar` # TODO: review
-  'RUF001', # RUF001 String contains ambiguous `∨` (LOGICAL OR). Did you mean `v` (LATIN SMALL LETTER V)?
-  'RUF003', # RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
+  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"
+  'B905',  # B905 `zip()` without an explicit `strict=` parameter
+  'RUF012',  # RUF012 Mutable class attributes should be annotated with `typing.ClassVar`
+  'RUF001',  # RUF001 String contains ambiguous `∨` (LOGICAL OR). Did you mean `v` (LATIN SMALL LETTER V)?
+  'RUF003'  # RUF003 Comment contains ambiguous `×` (MULTIPLICATION SIGN). Did you mean `x` (LATIN SMALL LETTER X)?
 ]
 ignore-init-module-imports = true
-line-length = 100  # It should be the same as in `tool.black.line-length` above
-respect-gitignore = true
 # Rules:
 # E: pycodestyle
 # F: Pyflakes
@@ -374,13 +298,10 @@ respect-gitignore = true
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
 select = ['E', 'F', 'I', 'B', 'A', 'T100', 'ERA', 'NPY', 'RUF']
-show-fixes = true
-# show-source = true
-target-version = 'py310'
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 # force-wrap-aliases = true
 known-first-party = ['gt4py', '__externals__', '__gtscript__']
@@ -413,13 +334,13 @@ order-by-type = true
 section-order = ['future', 'standard-library', 'third-party', 'first-party', 'tests', 'local-folder']
 split-on-trailing-comma = false
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 'tests' = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
 
 # -- setuptools build backend --

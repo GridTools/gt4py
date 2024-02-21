@@ -92,7 +92,7 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[ArgsInfo]]
+    array_infos: Dict[str, Optional[ArgsInfo]],
 ) -> Dict[str, Optional[FieldType]]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
@@ -283,7 +283,7 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _make_origin_dict(
-        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None]
+        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None],
     ) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):

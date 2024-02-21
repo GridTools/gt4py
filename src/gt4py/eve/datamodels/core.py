@@ -432,6 +432,7 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
+
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
 
@@ -1203,7 +1204,8 @@ def _make_datamodel(  # too complex but still readable and documented
         cls.__attrs_pre_init__ = cls.__pre_init__  # type: ignore[attr-defined]  # adding new attribute
 
     if "__attrs_post_init__" in cls.__dict__ and not hasattr(
-        cls.__attrs_post_init__, _DATAMODEL_TAG  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
+        cls.__attrs_post_init__,
+        _DATAMODEL_TAG,  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
     ):
         raise TypeError(f"'{cls.__name__}' class contains forbidden custom '__attrs_post_init__'.")
     cls.__attrs_post_init__ = _make_post_init(has_post_init="__post_init__" in cls.__dict__)  # type: ignore[attr-defined]  # adding new attribute
