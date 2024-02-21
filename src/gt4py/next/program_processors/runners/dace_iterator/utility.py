@@ -12,13 +12,29 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Sequence
+from typing import Any, Optional, Sequence
 
 import dace
 
 from gt4py.next import Dimension
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
+from gt4py.next.common import NeighborTable
+from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
+
+
+def dace_debuginfo(
+    node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+) -> Optional[dace.dtypes.DebugInfo]:
+    location = node.location
+    if location:
+        return dace.dtypes.DebugInfo(
+            start_line=location.line,
+            start_column=location.column if location.column else 0,
+            end_line=location.end_line if location.end_line else -1,
+            end_column=location.end_column if location.end_column else 0,
+            filename=location.filename,
+        )
+    return debuginfo
 
 
 def as_dace_type(type_: ts.ScalarType):
@@ -32,15 +48,23 @@ def as_dace_type(type_: ts.ScalarType):
         return dace.float32
     elif type_.kind == ts.ScalarKind.FLOAT64:
         return dace.float64
-    raise ValueError(f"scalar type {type_} not supported")
+    raise ValueError(f"Scalar type '{type_}' not supported.")
+
+
+def as_scalar_type(typestr: str) -> ts.ScalarType:
+    try:
+        kind = getattr(ts.ScalarKind, typestr.upper())
+    except AttributeError:
+        raise ValueError(f"Data type {typestr} not supported.")
+    return ts.ScalarType(kind)
 
 
 def filter_neighbor_tables(offset_provider: dict[str, Any]):
-    return [
-        (offset, table)
+    return {
+        offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTableOffsetProvider)
-    ]
+        if isinstance(table, NeighborTable)
+    }
 
 
 def connectivity_identifier(name: str):
@@ -53,7 +77,7 @@ def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
 
 def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
     subset = ", ".join(index)
-    return dace.Memlet.simple(source_identifier, subset)
+    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -119,11 +143,13 @@ def add_mapped_nested_sdfg(
 
     if input_nodes is None:
         input_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in inputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in inputs.items()
         }
     if output_nodes is None:
         output_nodes = {
-            memlet.data: state.add_access(memlet.data) for name, memlet in outputs.items()
+            memlet.data: state.add_access(memlet.data, debuginfo=debuginfo)
+            for name, memlet in outputs.items()
         }
     if not inputs:
         state.add_edge(map_entry, None, nsdfg_node, None, dace.Memlet())
@@ -153,17 +179,21 @@ def add_mapped_nested_sdfg(
     return nsdfg_node, map_entry, map_exit
 
 
-_unique_id = 0
-
-
 def unique_name(prefix):
-    global _unique_id
-    _unique_id += 1
-    return f"{prefix}_{_unique_id}"
+    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    return f"{prefix}_{unique_id}"
 
 
 def unique_var_name():
-    return unique_name("__var")
+    return unique_name("_var")
+
+
+def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dace.symbol]]:
+    dtype = dace.int64
+    shape = [dace.symbol(unique_name(f"{name}_shape{i}"), dtype) for i in range(ndim)]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i in range(ndim)]
+    return shape, strides
 
 
 def flatten_list(node_list: list[Any]) -> list[Any]:

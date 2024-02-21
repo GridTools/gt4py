@@ -1152,9 +1152,11 @@ class IRMaker(ast.NodeVisitor):
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
             elif isinstance(node.value, ast.Subscript):
                 result.data_index = [
-                    nodes.ScalarLiteral(value=value, data_type=nodes.DataType.INT32)
-                    if isinstance(value, numbers.Integral)
-                    else value
+                    (
+                        nodes.ScalarLiteral(value=value, data_type=nodes.DataType.INT32)
+                        if isinstance(value, numbers.Integral)
+                        else value
+                    )
                     for value in index
                 ]
                 if len(result.data_index) != len(self.fields[result.name].data_dims):
@@ -1319,9 +1321,11 @@ class IRMaker(ast.NodeVisitor):
                 condition=self.visit(node.test),
                 loc=nodes.Location.from_ast_node(node),
                 main_body=nodes.BlockStmt(stmts=main_stmts, loc=nodes.Location.from_ast_node(node)),
-                else_body=nodes.BlockStmt(stmts=else_stmts, loc=nodes.Location.from_ast_node(node))
-                if else_stmts
-                else None,
+                else_body=(
+                    nodes.BlockStmt(stmts=else_stmts, loc=nodes.Location.from_ast_node(node))
+                    if else_stmts
+                    else None
+                ),
             )
         )
 
@@ -1887,7 +1891,9 @@ class GTScriptParser(ast.NodeVisitor):
                         "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
                         for item_name, item_value in value._gtscript_["nonlocals"].items()
                     }
-                    resolved_values_list.extend(nested_inlined_values.items())
+                    resolved_values_list.extend(  # noqa[B038] #editing a loop's mutable iterable (probably intended here)
+                        nested_inlined_values.items()
+                    )
 
                     for imported_name, imported_name_accesses in value._gtscript_[
                         "imported"

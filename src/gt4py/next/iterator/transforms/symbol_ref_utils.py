@@ -21,7 +21,7 @@ from gt4py.next.iterator import ir as itir
 
 
 @dataclasses.dataclass
-class CountSymbolRefs(eve.NodeVisitor):
+class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
     ref_counts: dict[str, int] = dataclasses.field(default_factory=lambda: defaultdict(int))
 
     @classmethod
@@ -36,7 +36,7 @@ class CountSymbolRefs(eve.NodeVisitor):
         Count references to given or all symbols in scope.
 
         Examples:
-            >>> import gt4py.next.iterator.ir_makers as im
+            >>> import gt4py.next.iterator.ir_utils.ir_makers as im
             >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
             >>> CountSymbolRefs.apply(expr)
             {'x': 2, 'y': 2, 'z': 1}

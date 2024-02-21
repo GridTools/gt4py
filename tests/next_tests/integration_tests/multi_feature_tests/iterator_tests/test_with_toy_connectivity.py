@@ -99,7 +99,7 @@ def test_sum_edges_to_vertices(program_processor, lift_mode, stencil):
         lift_mode=lift_mode,
     )
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -122,7 +122,7 @@ def test_map_neighbors(program_processor, lift_mode):
         lift_mode=lift_mode,
     )
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -146,7 +146,7 @@ def test_map_make_const_list(program_processor, lift_mode):
         lift_mode=lift_mode,
     )
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -172,7 +172,7 @@ def test_first_vertex_neigh_of_first_edge_neigh_of_cells_fencil(program_processo
         lift_mode=lift_mode,
     )
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -200,7 +200,7 @@ def test_sparse_input_field(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 def test_sparse_input_field_v2v(program_processor, lift_mode):
@@ -226,7 +226,7 @@ def test_sparse_input_field_v2v(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -254,7 +254,7 @@ def test_slice_sparse(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -309,7 +309,7 @@ def test_shift_sliced_sparse(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -337,7 +337,7 @@ def test_slice_shifted_sparse(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -365,7 +365,7 @@ def test_lift(program_processor, lift_mode):
         lift_mode=lift_mode,
     )
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -390,7 +390,7 @@ def test_shift_sparse_input_field(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)
 
 
 @fundef
@@ -413,7 +413,7 @@ def test_shift_sparse_input_field2(program_processor, lift_mode):
     ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
-        )  # observed in `cache.Strategy.PERSISTENT` mode
+        )  # observed in `config.BuildCacheLifetime.PERSISTENT` mode
     inp = vertex_index_field()
     inp_sparse = gtx.as_field([Edge, E2VDim], e2v_arr)
     out1 = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))
@@ -443,7 +443,7 @@ def test_shift_sparse_input_field2(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out1, out2)
+        assert np.allclose(out1.asnumpy(), out2.asnumpy())
 
 
 @fundef
@@ -484,4 +484,4 @@ def test_sparse_shifted_stencil_reduce(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(np.asarray(out), ref)
+        assert np.allclose(out.asnumpy(), ref)

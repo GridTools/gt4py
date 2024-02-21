@@ -31,7 +31,6 @@ def stencil_conditional(inp):
     return tuple_get(0, tmp) + tuple_get(1, tmp)
 
 
-@pytest.mark.uses_tuple_returns
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
 
@@ -51,5 +50,5 @@ def test_conditional_w_tuple(program_processor):
         offset_provider={},
     )
     if validate:
-        assert np.all(out.ndarray[np.asarray(inp) == 0] == 3.0)
-        assert np.all(out.ndarray[np.asarray(inp) == 1] == 7.0)
+        assert np.all(out.asnumpy()[inp.asnumpy() == 0] == 3.0)
+        assert np.all(out.asnumpy()[inp.asnumpy() == 1] == 7.0)

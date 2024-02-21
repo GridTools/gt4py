@@ -34,7 +34,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz
+    import toolz  # noqa: F401
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -285,7 +285,7 @@ def datamodel(
 
 
 @overload
-def datamodel(  # redefinion of unused symbol
+def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
@@ -304,7 +304,8 @@ def datamodel(  # redefinion of unused symbol
     ...
 
 
-def datamodel(  # redefinion of unused symbol
+# TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
+def datamodel(  # noqa: F811  # redefinion of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
@@ -432,7 +433,7 @@ if xtyping.TYPE_CHECKING:
             ...
 
 else:
-
+    # TODO(egparedes): use @dataclass_transform(eq_default=True, field_specifiers=("field",))
     class DataModel:
         """Base class to automatically convert any subclass into a Data Model.
 
@@ -452,9 +453,9 @@ else:
             cls,
             /,
             *,
-            repr: bool  # noqa: A002  # shadowing 'repr' python builtin
-            | None
-            | Literal["inherited"] = "inherited",
+            repr: (  # noqa: A002  # shadowing 'repr' python builtin
+                bool | None | Literal["inherited"]
+            ) = "inherited",
             eq: bool | None | Literal["inherited"] = "inherited",
             order: bool | None | Literal["inherited"] = "inherited",
             unsafe_hash: bool | None | Literal["inherited"] = "inherited",
@@ -462,8 +463,9 @@ else:
             match_args: bool | Literal["inherited"] = "inherited",
             kw_only: bool | Literal["inherited"] = "inherited",
             coerce: bool | Literal["inherited"] = "inherited",
-            type_validation_factory: Optional[FieldTypeValidatorFactory]
-            | Literal["inherited"] = "inherited",
+            type_validation_factory: (
+                Optional[FieldTypeValidatorFactory] | Literal["inherited"]
+            ) = "inherited",
             **kwargs: Any,
         ) -> None:
             dm_opts = kwargs.pop(_DM_OPTS, [])
@@ -518,10 +520,9 @@ def field(
     metadata: Optional[Mapping[Any, Any]] = None,
     kw_only: bool = _KW_ONLY_DEFAULT,
     converter: Callable[[Any], Any] | Literal["coerce"] | None = None,
-    validator: AttrsValidator
-    | FieldValidator
-    | Sequence[AttrsValidator | FieldValidator]
-    | None = None,
+    validator: (
+        AttrsValidator | FieldValidator | Sequence[AttrsValidator | FieldValidator] | None
+    ) = None,
 ) -> Any:  # attr.s lies in some typings
     """Define a new attribute on a class with advanced options.
 
@@ -565,7 +566,7 @@ def field(
         >>> from typing import List
         >>> @datamodel
         ... class C:
-        ...     mylist: List[int] = field(default_factory=lambda : [1, 2, 3])
+        ...     mylist: List[int] = field(default_factory=lambda: [1, 2, 3])
         >>> c = C()
         >>> c.mylist
         [1, 2, 3]
@@ -666,7 +667,7 @@ def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespac
         >>> fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
-    """  # doctest conventions confuse RST validator
+    """  # noqa: RST201  # doctest conventions confuse RST validator
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -700,8 +701,8 @@ def asdict(
         ...     x: int
         ...     y: int
         >>> c = C(x=1, y=2)
-        >>> assert asdict(c) == {'x': 1, 'y': 2}
-    """  # sphinx.napoleon conventions confuse RST validator
+        >>> assert asdict(c) == {"x": 1, "y": 2}
+    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attrs.asdict(instance, value_serializer=value_serializer)
@@ -790,7 +791,7 @@ def concretize(
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-    support_pickling: bool = True,
+    support_pickling: bool = True,  # noqa
     overwrite_definition: bool = True,
 ) -> Type[DataModelT]:
     """Generate a new concrete subclass of a generic Data Model.
@@ -811,9 +812,12 @@ def concretize(
         overwrite_definition: If ``True``, a previous definition of the class in
             the target module will be overwritten.
 
-    """  # doctest conventions confuse RST validator
+    """  # noqa: RST301  # doctest conventions confuse RST validator
     concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
-        datamodel_cls, *type_args, class_name=class_name, module=module
+        datamodel_cls,  # type: ignore[arg-type]
+        *type_args,
+        class_name=class_name,
+        module=module,
     )
     assert isinstance(concrete_cls, type) and is_datamodel(concrete_cls)
 
@@ -882,17 +886,6 @@ def _substitute_typevars(
         return type_params_map[type_hint], True
     elif getattr(type_hint, "__parameters__", []):
         return type_hint[tuple(type_params_map[tp] for tp in type_hint.__parameters__)], True
-        # TODO(egparedes): WIP fix for partial specialization
-        #   # Type hint is a generic model: replace all the concretized type vars
-        #   replaced = False                                # noqa: ERA001, RUF100
-        #   new_args = []                                   # noqa: ERA001, RUF100
-        #   for tp in type_hint.__parameters__:             # noqa: ERA001, RUF100
-        #       if tp in type_params_map:                   # noqa: ERA001, RUF100
-        #           new_args.append(type_params_map[tp])    # noqa: ERA001, RUF100
-        #           replaced = True                         # noqa: ERA001, RUF100
-        #       else:                                       # noqa: ERA001, RUF100
-        #           new_args.append(type_params_map[tp])    # noqa: ERA001, RUF100
-        #   return type_hint[tuple(new_args)], replaced     # noqa: ERA001, RUF100
     else:
         return type_hint, False
 
@@ -980,21 +973,14 @@ def _make_data_model_class_getitem() -> classmethod:
         """
         type_args: Tuple[Type] = args if isinstance(args, tuple) else (args,)
         concrete_cls: Type[DataModelT] = concretize(cls, *type_args)
-        res = xtyping.StdGenericAliasType(concrete_cls, type_args)
-        if sys.version_info < (3, 9):
-            # in Python 3.8, xtyping.StdGenericAliasType (aka typing._GenericAlias)
-            # does not copy all required `__dict__` entries, so do it manually
-            for k, v in concrete_cls.__dict__.items():
-                if k not in res.__dict__:
-                    res.__dict__[k] = v
-        return res
+        return concrete_cls
 
     return classmethod(__class_getitem__)
 
 
 def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConverter[_T]:
-    # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code as a tree traversal.
-    #
+    # TODO(egparedes): if a "typing tree" structure is implemented, refactor this code
+    # as a tree traversal.
     if xtyping.is_actual_type(type_annotation) and not isinstance(None, type_annotation):
         assert not xtyping.get_args(type_annotation)
         assert isinstance(type_annotation, type)
@@ -1042,7 +1028,7 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
 
-def _make_datamodel(  # too complex but still readable and documented
+def _make_datamodel(  # noqa: C901  # too complex but still readable and documented
     cls: Type[_T],
     *,
     repr: bool,  # noqa: A002   # shadowing 'repr' python builtin
@@ -1204,8 +1190,8 @@ def _make_datamodel(  # too complex but still readable and documented
         cls.__attrs_pre_init__ = cls.__pre_init__  # type: ignore[attr-defined]  # adding new attribute
 
     if "__attrs_post_init__" in cls.__dict__ and not hasattr(
-        cls.__attrs_post_init__,
-        _DATAMODEL_TAG,  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
+        cls.__attrs_post_init__,  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
+        _DATAMODEL_TAG,
     ):
         raise TypeError(f"'{cls.__name__}' class contains forbidden custom '__attrs_post_init__'.")
     cls.__attrs_post_init__ = _make_post_init(has_post_init="__post_init__" in cls.__dict__)  # type: ignore[attr-defined]  # adding new attribute
@@ -1349,8 +1335,16 @@ def _make_concrete_with_cache(
         "__module__": module if module else datamodel_cls.__module__,
         **new_field_c_attrs,
     }
-
     concrete_cls = type(class_name, (datamodel_cls,), namespace)
+
+    # Update the tuple of generic parameters in the new class, in case
+    # this is a partial concretization
+    assert hasattr(concrete_cls, "__parameters__")
+    concrete_cls.__parameters__ = tuple(
+        type_params_map[tp_var]
+        for tp_var in datamodel_cls.__parameters__
+        if isinstance(type_params_map[tp_var], typing.TypeVar)
+    )
     assert concrete_cls.__module__ == module or not module
 
     if MODEL_FIELD_DEFINITIONS_ATTR not in concrete_cls.__dict__:

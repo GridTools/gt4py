@@ -112,7 +112,7 @@ def format_python_source(
 ) -> str:
     """Format Python source code using black formatter."""
     python_versions = python_versions or {f"{sys.version_info.major}{sys.version_info.minor}"}
-    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)  # type: ignore[attr-defined]  # .TargetVersion implicitly exported
+    target_versions = set(black.TargetVersion[f"PY{v.replace('.', '')}"] for v in python_versions)
 
     formatted_source = black.format_str(
         source,
@@ -305,13 +305,13 @@ class TextBlock:
         common `indent - append - dedent` workflows.
 
         Examples:
-            >>> block = TextBlock();
-            >>> block.append('first line')  # doctest: +ELLIPSIS
+            >>> block = TextBlock()
+            >>> block.append("first line")  # doctest: +ELLIPSIS
             <...>
             >>> with block.indented():
-            ...     block.append('second line');  # doctest: +ELLIPSIS
+            ...     block.append("second line")  # doctest: +ELLIPSIS
             <...>
-            >>> block.append('third line')  # doctest: +ELLIPSIS
+            >>> block.append("third line")  # doctest: +ELLIPSIS
             <...>
             >>> print(block.text)
             first line
@@ -476,7 +476,9 @@ class StringTemplate(BaseTemplate):
                 message += f" (created at {self.definition_loc[0]}:{self.definition_loc[1]})"
             try:
                 loc_info = re.search(r"line (\d+), col (\d+)", str(e))
-                message += f" rendering error at template line: {loc_info[1]}, column {loc_info[2]}."  # type: ignore
+                message += (
+                    f" rendering error at template line: {loc_info[1]}, column {loc_info[2]}."  # type: ignore
+                )
             except Exception:
                 message += " rendering error."
 
@@ -541,7 +543,9 @@ class MakoTemplate(BaseTemplate):
             if self.definition_loc:
                 message += f" created at {self.definition_loc[0]}:{self.definition_loc[1]}"
                 try:
-                    message += f" (error likely around line {e.lineno}, column: {getattr(e, 'pos', '?')})"  # type: ignore  # assume Mako exception
+                    message += (
+                        f" (error likely around line {e.lineno}, column: {getattr(e, 'pos', '?')})"  # type: ignore  # assume Mako exception
+                    )
                 except Exception:
                     message = f"{message}:\n---\n{definition}\n---\n"
 

@@ -13,15 +13,18 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import types
 from collections import namedtuple
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.program_processors.runners import gtfn, roundtrip
 
 
@@ -34,9 +37,9 @@ except ModuleNotFoundError as e:
         raise e
 
 import next_tests
-import next_tests.exclusion_matrices as definitions
 
 
+@ppi.program_executor
 def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
@@ -44,20 +47,33 @@ def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> Non
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    OPTIONAL_PROCESSORS.append(definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
+    OPTIONAL_PROCESSORS.append(
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
+        )
+    ),
 
 
 @pytest.fixture(
     params=[
-        definitions.ProgramBackendId.ROUNDTRIP,
-        definitions.ProgramBackendId.GTFN_CPU,
-        definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
-        definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        next_tests.definitions.ProgramBackendId.ROUNDTRIP,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
+        next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        pytest.param(
+            next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
+        ),
+        # will use the default (embedded) execution, but input/output allocated with the provided allocator
+        next_tests.definitions.EmbeddedIds.NUMPY_EXECUTION,
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.CUPY_EXECUTION, marks=pytest.mark.requires_gpu
+        ),
     ]
     + OPTIONAL_PROCESSORS,
-    ids=lambda p: p.short_id() if p is not None else "None",
+    ids=lambda p: p.short_id(),
 )
-def fieldview_backend(request):
+def exec_alloc_descriptor(request):
     """
     Fixture creating field-view operator backend on-demand for tests.
 
@@ -65,19 +81,15 @@ def fieldview_backend(request):
         Check ADR 15 for details on the test-exclusion matrices.
     """
     backend_id = request.param
-    if backend_id is None:
-        backend = None
-    else:
-        backend = backend_id.load()
+    backend = backend_id.load()
 
-        for marker, skip_mark, msg in next_tests.exclusion_matrices.BACKEND_SKIP_TEST_MATRIX.get(
-            backend_id, []
-        ):
-            if request.node.get_closest_marker(marker):
-                skip_mark(msg.format(marker=marker, backend=backend_id))
+    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
+        backend_id, []
+    ):
+        if request.node.get_closest_marker(marker):
+            skip_mark(msg.format(marker=marker, backend=backend_id))
 
-        backup_backend = decorator.DEFAULT_BACKEND
-
+    backup_backend = decorator.DEFAULT_BACKEND
     decorator.DEFAULT_BACKEND = no_backend
     yield backend
     decorator.DEFAULT_BACKEND = backup_backend
@@ -108,18 +120,41 @@ Edge = gtx.Dimension("Edge")
 Cell = gtx.Dimension("Cell")
 EdgeOffset = gtx.FieldOffset("EdgeOffset", source=Edge, target=(Edge,))
 
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
+E2VDim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
+C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
+C2VDim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
+V2E = gtx.FieldOffset("V2E", source=Edge, target=(Vertex, V2EDim))
+E2V = gtx.FieldOffset("E2V", source=Vertex, target=(Edge, E2VDim))
+C2E = gtx.FieldOffset("C2E", source=Edge, target=(Cell, C2EDim))
+C2V = gtx.FieldOffset("C2V", source=Vertex, target=(Cell, C2VDim))
+
 size = 10
 
 
-@pytest.fixture
-def reduction_setup():
+class MeshDescriptor(Protocol):
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def num_vertices(self) -> int: ...
+
+    @property
+    def num_cells(self) -> int: ...
+
+    @property
+    def num_edges(self) -> int: ...
+
+    @property
+    def num_levels(self) -> int: ...
+
+    @property
+    def offset_provider(self) -> dict[str, common.Connectivity]: ...
+
+
+def simple_mesh() -> MeshDescriptor:
     num_vertices = 9
     num_cells = 8
-    k_levels = 10
-    v2edim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
-    e2vdim = gtx.Dimension("E2V", kind=gtx.DimensionKind.LOCAL)
-    c2vdim = gtx.Dimension("C2V", kind=gtx.DimensionKind.LOCAL)
-    c2edim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 
     v2e_arr = np.array(
         [
@@ -173,57 +208,115 @@ def reduction_setup():
     assert all(len(row) == 2 for row in e2v_arr)
     e2v_arr = np.asarray(e2v_arr, dtype=gtx.IndexType)
 
-    yield namedtuple(
-        "ReductionSetup",
+    return types.SimpleNamespace(
+        name="simple_mesh",
+        num_vertices=num_vertices,
+        num_edges=np.int32(num_edges),
+        num_cells=num_cells,
+        offset_provider={
+            V2E.value: gtx.NeighborTableOffsetProvider(
+                v2e_arr, Vertex, Edge, 4, has_skip_values=False
+            ),
+            E2V.value: gtx.NeighborTableOffsetProvider(
+                e2v_arr, Edge, Vertex, 2, has_skip_values=False
+            ),
+            C2V.value: gtx.NeighborTableOffsetProvider(
+                c2v_arr, Cell, Vertex, 4, has_skip_values=False
+            ),
+            C2E.value: gtx.NeighborTableOffsetProvider(
+                c2e_arr, Cell, Edge, 4, has_skip_values=False
+            ),
+        },
+    )
+
+
+def skip_value_mesh() -> MeshDescriptor:
+    """Mesh with skip values from the GT4Py quickstart guide."""
+
+    num_vertices = 7
+    num_cells = 6
+    num_edges = 12
+
+    v2e_arr = np.array(
         [
-            "num_vertices",
-            "num_edges",
-            "num_cells",
-            "k_levels",
-            "V2EDim",
-            "E2VDim",
-            "C2VDim",
-            "C2EDim",
-            "V2E",
-            "E2V",
-            "C2V",
-            "C2E",
-            "inp",
-            "out",
-            "offset_provider",
-            "v2e_table",
-            "e2v_table",
+            [1, 8, 7, 0, -1],
+            [2, 8, 1, -1, -1],
+            [3, 9, 8, 2, -1],
+            [4, 10, 3, -1, -1],
+            [5, 11, 4, -1, -1],
+            [0, 6, 4, -1, -1],
+            [6, 7, 9, 10, 11],
         ],
-    )(
+        dtype=gtx.IndexType,
+    )
+
+    e2v_arr = np.array(
+        [
+            [0, 5],
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 4],
+            [4, 5],
+            [5, 6],
+            [6, 0],
+            [0, 2],
+            [2, 6],
+            [3, 6],
+            [4, 6],
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    c2v_arr = np.array(
+        [
+            [0, 6, 5],
+            [0, 2, 6],
+            [0, 1, 2],
+            [2, 3, 6],
+            [3, 4, 6],
+            [4, 5, 6],
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    c2e_arr = np.array(
+        [
+            [0, 6, 7],  # cell 0 (neighbors: edge 0, edge 6, edge 7)
+            [7, 8, 9],  # cell 1
+            [1, 2, 8],  # cell 2
+            [3, 9, 10],  # cell 3
+            [4, 10, 11],  # cell 4
+            [5, 6, 11],  # cell 5
+        ],
+        dtype=gtx.IndexType,
+    )
+
+    return types.SimpleNamespace(
+        name="skip_value_mesh",
         num_vertices=num_vertices,
         num_edges=num_edges,
         num_cells=num_cells,
-        k_levels=k_levels,
-        V2EDim=v2edim,
-        E2VDim=e2vdim,
-        C2VDim=c2vdim,
-        C2EDim=c2edim,
-        V2E=gtx.FieldOffset("V2E", source=Edge, target=(Vertex, v2edim)),
-        E2V=gtx.FieldOffset("E2V", source=Vertex, target=(Edge, e2vdim)),
-        C2V=gtx.FieldOffset("C2V", source=Vertex, target=(Cell, c2vdim)),
-        C2E=gtx.FieldOffset("C2E", source=Edge, target=(Cell, c2edim)),
-        # inp=gtx.index_field(edge, dtype=np.int64), # TODO enable once we support gtx.index_fields in bindings
-        inp=gtx.as_field([Edge], np.arange(num_edges, dtype=np.int32)),
-        out=gtx.as_field([Vertex], np.zeros([num_vertices], dtype=np.int32)),
         offset_provider={
-            "V2E": gtx.NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
-            "E2V": gtx.NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2, has_skip_values=False),
-            "C2V": gtx.NeighborTableOffsetProvider(c2v_arr, Cell, Vertex, 4, has_skip_values=False),
-            "C2E": gtx.NeighborTableOffsetProvider(c2e_arr, Cell, Edge, 4, has_skip_values=False),
+            V2E.value: gtx.NeighborTableOffsetProvider(
+                v2e_arr, Vertex, Edge, 5, has_skip_values=True
+            ),
+            E2V.value: gtx.NeighborTableOffsetProvider(
+                e2v_arr, Edge, Vertex, 2, has_skip_values=False
+            ),
+            C2V.value: gtx.NeighborTableOffsetProvider(
+                c2v_arr, Cell, Vertex, 3, has_skip_values=False
+            ),
+            C2E.value: gtx.NeighborTableOffsetProvider(
+                c2e_arr, Cell, Edge, 3, has_skip_values=False
+            ),
         },
-        v2e_table=v2e_arr,
-        e2v_table=e2v_arr,
-    )  # type: ignore
+    )
 
 
 __all__ = [
-    "fieldview_backend",
-    "reduction_setup",
+    "exec_alloc_descriptor",
+    "mesh_descriptor",
     "debug_itir",
     "DimsType",
     "DType",
@@ -239,3 +332,14 @@ __all__ = [
     "EdgeOffset",
     "size",
 ]
+
+
+@pytest.fixture(
+    params=[
+        simple_mesh(),
+        pytest.param(skip_value_mesh(), marks=pytest.mark.uses_mesh_with_skip_values),
+    ],
+    ids=lambda p: p.name,
+)
+def mesh_descriptor(request) -> MeshDescriptor:
+    yield request.param

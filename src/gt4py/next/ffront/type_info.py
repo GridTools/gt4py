@@ -25,6 +25,21 @@ def _is_zero_dim_field(field: ts.TypeSpec) -> bool:
     return isinstance(field, ts.FieldType) and len(field.dims) == 0
 
 
+def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
+    """
+    Promote scalar primitive constituents to zero dimensional fields.
+
+    E.g. all elements of a tuple which are scalars are promoted to a zero dimensional field.
+    """
+
+    def promote_el(type_el: ts.TypeSpec) -> ts.TypeSpec:
+        if isinstance(type_el, ts.ScalarType):
+            return ts.FieldType(dims=[], dtype=type_el)
+        return type_el
+
+    return type_info.apply_to_primitive_constituents(type_, promote_el)
+
+
 def promote_zero_dims(
     function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[list, dict]:
@@ -51,7 +66,7 @@ def promote_zero_dims(
                 if type_info.extract_dtype(param_el) == type_info.extract_dtype(arg_el):
                     return param_el
                 else:
-                    raise ValueError(f"{arg_el} is not compatible with {param_el}.")
+                    raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
         return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
@@ -156,7 +171,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     --------
     >>> _scan_param_promotion(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64)
+    ...     ts.FieldType(dims=[common.Dimension("I")], dtype=ts.ScalarKind.FLOAT64),
     ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     """
@@ -165,9 +180,9 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
         assert isinstance(dtype, ts.ScalarType)
         try:
             el_type = reduce(
-                lambda type_, idx: type_.types[idx],
+                lambda type_, idx: type_.types[idx],  # type: ignore[attr-defined]
                 path,
-                arg,  # type: ignore[attr-defined]
+                arg,
             )
             return ts.FieldType(dims=type_info.extract_dims(el_type), dtype=dtype)
         except (IndexError, AttributeError):

@@ -99,7 +99,7 @@ def _get_connectivity(
 ) -> common.Connectivity:
     """Return single connectivity that is compatible with the arguments of the reduce."""
     if not _is_reduce(applied_reduce_node):
-        raise ValueError("Expected a call to a `reduce` object, i.e. `reduce(...)(...)`.")
+        raise ValueError("Expected a call to a 'reduce' object, i.e. 'reduce(...)(...)'.")
 
     connectivities: list[common.Connectivity] = []
     for o in _get_partial_offset_tags(applied_reduce_node.args):
@@ -108,11 +108,11 @@ def _get_connectivity(
         connectivities.append(conn)
 
     if not connectivities:
-        raise RuntimeError("Couldn't detect partial shift in any arguments of reduce.")
+        raise RuntimeError("Couldn't detect partial shift in any arguments of 'reduce'.")
 
     if len({(c.max_neighbors, c.has_skip_values) for c in connectivities}) != 1:
         # The condition for this check is required but not sufficient: the actual neighbor tables could still be incompatible.
-        raise RuntimeError("Arguments to reduce have incompatible partial shifts.")
+        raise RuntimeError("Arguments to 'reduce' have incompatible partial shifts.")
     return connectivities[0]
 
 

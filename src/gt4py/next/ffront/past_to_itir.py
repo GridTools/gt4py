@@ -18,8 +18,9 @@ from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
+from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -37,10 +38,12 @@ def _flatten_tuple_expr(
         for e in node.elts:
             result.extend(_flatten_tuple_expr(e))
         return result
-    raise ValueError("Only `past.Name`, `past.Subscript` or `past.TupleExpr`s thereof are allowed.")
+    raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -54,18 +57,19 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     >>> IDim = Dimension("IDim")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
-    ...    ...
+    ...     ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
-    ...    fieldop(inp, out=out)
+    ...     fieldop(inp, out=out)
     >>>
     >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
     >>> fieldop_def = ir.FunctionDefinition(
     ...     id="fieldop",
     ...     params=[ir.Sym(id="inp")],
-    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")])
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")]),
     ... )  # doctest: +SKIP
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
-    ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
+    >>> lowered = ProgramLowering.apply(
+    ...     parsed, [fieldop_def], grid_type=GridType.CARTESIAN
+    ... )  # doctest: +SKIP
     >>> type(lowered)  # doctest: +SKIP
     <class 'gt4py.next.iterator.ir.FencilDefinition'>
     >>> lowered.id  # doctest: +SKIP
@@ -139,18 +143,42 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+        args, node_kwargs = type_info.canonicalize_arguments(
             node.func.type,
-            self.visit(node.args, **kwargs),
-            self.visit(node_kwargs, **kwargs),
+            node.args,
+            node_kwargs,
             use_signature_ordering=True,
         )
 
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        stencil_params = []
+        stencil_args = []
+        for i, arg in enumerate([*args, *node_kwargs]):
+            stencil_params.append(f"__stencil_arg{i}")
+            if isinstance(arg.type, ts.TupleType):
+                # convert into tuple of iterators
+                stencil_args.append(
+                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                )
+            else:
+                stencil_args.append(f"__stencil_arg{i}")
+
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # scan operators return an iterator of tuples, just deref directly
+            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+        else:
+            # field operators return a tuple of iterators, deref element-wise
+            stencil_body = lowering_utils.process_elements(
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+            )
+
         return itir.StencilClosure(
             domain=lowered_domain,
-            stencil=itir.SymRef(id=node.func.id),
+            stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
+            location=node.location,
         )
 
     def _visit_slice_bound(
@@ -174,23 +202,28 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             else:
                 lowered_bound = self.visit(slice_bound, **kwargs)
         else:
-            raise AssertionError("Expected `None` or `past.Constant`.")
+            raise AssertionError("Expected 'None' or 'past.Constant'.")
+        if slice_bound:
+            lowered_bound.location = slice_bound.location
         return lowered_bound
 
     def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
         if isinstance(node, past.Name):
-            return itir.SymRef(id=node.id)
+            return itir.SymRef(id=node.id, location=node.location)
         elif isinstance(node, past.Subscript):
-            return self._construct_itir_out_arg(node.value)
+            itir_node = self._construct_itir_out_arg(node.value)
+            itir_node.location = node.location
+            return itir_node
         elif isinstance(node, past.TupleExpr):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
+                location=node.location,
             )
         else:
             raise ValueError(
-                "Unexpected `out` argument. Must be a `past.Name`, `past.Subscript`"
-                " or a `past.TupleExpr` thereof."
+                "Unexpected 'out' argument. Must be a 'past.Name', 'past.Subscript'"
+                " or a 'past.TupleExpr' thereof."
             )
 
     def _construct_itir_domain_arg(
@@ -209,9 +242,9 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             for out_field_type in out_field_types
         ):
             raise AssertionError(
-                f"Expected constituents of `{out_field.id}` argument to be"
-                f" fields defined on the same dimensions. This error should be "
-                f" caught in type deduction already."
+                f"Expected constituents of '{out_field.id}' argument to be"
+                " fields defined on the same dimensions. This error should be "
+                " caught in type deduction already."
             )
 
         for dim_i, dim in enumerate(out_dims):
@@ -232,7 +265,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 )
 
             if dim.kind == DimensionKind.LOCAL:
-                raise ValueError(f"Dimension {dim.value} must not be local.")
+                raise ValueError(f"Dimension '{dim.value}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
@@ -247,7 +280,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+        return itir.FunCall(
+            fun=itir.SymRef(id=domain_builtin),
+            args=domain_args,
+            location=(node_domain or out_field).location,
+        )
 
     def _construct_itir_initialized_domain_arg(
         self,
@@ -259,8 +296,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
             raise ValueError(
-                f"Dimensions in out field and field domain are not equivalent"
-                f"Expected {dim}, but got {keys_dims_types} "
+                "Dimensions in out field and field domain are not equivalent:"
+                f"expected '{dim}', got '{keys_dims_types}'."
             )
 
         return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
@@ -277,13 +314,13 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             out_field_slice_ = [node.slice_]
         else:
             raise AssertionError(
-                "Unexpected `out` argument. Must be tuple of slices or slice expression."
+                "Unexpected 'out' argument, must be tuple of slices or slice expression."
             )
         node_dims_ls = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims_ls, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
             raise ValueError(
-                f"Too many indices for field {out_field_name}: field is {len(node_dims_ls)}"
+                f"Too many indices for field '{out_field_name}': field is {len(node_dims_ls)}"
                 f"-dimensional, but {len(out_field_slice_)} were indexed."
             )
         return out_field_slice_
@@ -293,7 +330,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
-            #  inspection of the PAST to emulate the behaviour
+            # inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
@@ -321,8 +358,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     isinstance(field, past.Subscript) for field in flattened
                 ), "Incompatible field in tuple: either all fields or no field must be sliced."
                 assert all(
-                    concepts.eq_nonlocated(first_field.slice_, field.slice_)
-                    for field in flattened  # type: ignore[union-attr] # mypy cannot deduce type
+                    concepts.eq_nonlocated(
+                        first_field.slice_,
+                        field.slice_,  # type: ignore[union-attr] # mypy cannot deduce type
+                    )
+                    for field in flattened
                 ), "Incompatible field in tuple: all fields must be sliced in the same way."
                 field_slice = self._compute_field_slice(first_field)
                 first_field = first_field.value
@@ -333,7 +373,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         else:
             raise AssertionError(
-                "Unexpected `out` argument. Must be a `past.Subscript`, `past.Name` or `past.TupleExpr` node."
+                "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
             )
 
     def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
@@ -341,7 +381,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             match node.type.kind:
                 case ts.ScalarKind.STRING:
                     raise NotImplementedError(
-                        f"Scalars of kind {node.type.kind} not supported currently."
+                        f"Scalars of kind '{node.type.kind}' not supported currently."
                     )
             typename = node.type.kind.name.lower()
             return itir.Literal(value=str(node.value), type=typename)
@@ -367,12 +407,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
-        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
+        if node.func.id in ["maximum", "minimum"]:
+            assert len(node.args) == 2
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
             )
         else:
-            raise AssertionError(
-                "Only `minimum` and `maximum` builtins supported supported currently."
-            )
+            raise NotImplementedError("Only 'minimum', and 'maximum' builtins supported currently.")

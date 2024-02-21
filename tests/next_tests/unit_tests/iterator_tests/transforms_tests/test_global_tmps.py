@@ -15,10 +15,12 @@ import copy
 
 import gt4py.next as gtx
 from gt4py.eve.utils import UIDs
-from gt4py.next.iterator import ir, ir_makers as im
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,
+    SimpleTemporaryExtractionHeuristics,
     Temporary,
     collect_tmps_info,
     split_closures,
@@ -31,53 +33,23 @@ def test_split_closures():
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[ir.Sym(id="d"), ir.Sym(id="inp"), ir.Sym(id="out")],
+        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
         closures=[
             ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="baz_inp")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[
-                            ir.FunCall(
-                                fun=ir.FunCall(
-                                    fun=ir.SymRef(id="lift"),
-                                    args=[
-                                        ir.Lambda(
-                                            params=[ir.Sym(id="bar_inp")],
-                                            expr=ir.FunCall(
-                                                fun=ir.SymRef(id="deref"),
-                                                args=[
-                                                    ir.FunCall(
-                                                        fun=ir.FunCall(
-                                                            fun=ir.SymRef(id="lift"),
-                                                            args=[
-                                                                ir.Lambda(
-                                                                    params=[ir.Sym(id="foo_inp")],
-                                                                    expr=ir.FunCall(
-                                                                        fun=ir.SymRef(id="deref"),
-                                                                        args=[
-                                                                            ir.SymRef(id="foo_inp")
-                                                                        ],
-                                                                    ),
-                                                                )
-                                                            ],
-                                                        ),
-                                                        args=[ir.SymRef(id="bar_inp")],
-                                                    )
-                                                ],
-                                            ),
-                                        )
-                                    ],
-                                ),
-                                args=[ir.SymRef(id="baz_inp")],
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("baz_inp")(
+                    im.deref(
+                        im.lift(
+                            im.lambda_("bar_inp")(
+                                im.deref(
+                                    im.lift(im.lambda_("foo_inp")(im.deref("foo_inp")))("bar_inp")
+                                )
                             )
-                        ],
-                    ),
+                        )("baz_inp")
+                    )
                 ),
-                output=ir.SymRef(id="out"),
-                inputs=[ir.SymRef(id="inp")],
+                output=im.ref("out"),
+                inputs=[im.ref("inp")],
             )
         ],
     )
@@ -86,59 +58,90 @@ def test_split_closures():
         id="f",
         function_definitions=[],
         params=[
-            ir.Sym(id="d"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
-            ir.Sym(id="_tmp_1"),
-            ir.Sym(id="_tmp_2"),
-            ir.Sym(id="_gtmp_auto_domain"),
+            im.sym("d"),
+            im.sym("inp"),
+            im.sym("out"),
+            im.sym("_tmp_1"),
+            im.sym("_tmp_2"),
+            im.sym("_gtmp_auto_domain"),
         ],
         closures=[
             ir.StencilClosure(
                 domain=AUTO_DOMAIN,
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="foo_inp")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="foo_inp")],
-                    ),
-                ),
-                output=ir.SymRef(id="_tmp_2"),
-                inputs=[ir.SymRef(id="inp")],
+                stencil=im.lambda_("foo_inp")(im.deref("foo_inp")),
+                output=im.ref("_tmp_2"),
+                inputs=[im.ref("inp")],
             ),
             ir.StencilClosure(
                 domain=AUTO_DOMAIN,
-                stencil=ir.Lambda(
-                    params=[
-                        ir.Sym(id="bar_inp"),
-                        ir.Sym(id="_tmp_2"),
-                    ],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[
-                            ir.SymRef(id="_tmp_2"),
-                        ],
-                    ),
-                ),
-                output=ir.SymRef(id="_tmp_1"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_2")],
+                stencil=im.lambda_("bar_inp", "_tmp_2")(im.deref("_tmp_2")),
+                output=im.ref("_tmp_1"),
+                inputs=[im.ref("inp"), im.ref("_tmp_2")],
             ),
             ir.StencilClosure(
-                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                stencil=ir.Lambda(
-                    params=[ir.Sym(id="baz_inp"), ir.Sym(id="_tmp_1")],
-                    expr=ir.FunCall(
-                        fun=ir.SymRef(id="deref"),
-                        args=[ir.SymRef(id="_tmp_1")],
-                    ),
-                ),
-                output=ir.SymRef(id="out"),
-                inputs=[ir.SymRef(id="inp"), ir.SymRef(id="_tmp_1")],
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("baz_inp", "_tmp_1")(im.deref("_tmp_1")),
+                output=im.ref("out"),
+                inputs=[im.ref("inp"), im.ref("_tmp_1")],
             ),
         ],
     )
     actual = split_closures(testee, offset_provider={})
     assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
+    assert actual.fencil == expected
+
+
+def test_split_closures_simple_heuristics():
+    UIDs.reset_sequence()
+    testee = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("foo")(
+                    im.let("lifted_it", im.lift(im.lambda_("bar")(im.deref("bar")))("foo"))(
+                        im.plus(im.deref("lifted_it"), im.deref(im.shift("I", 1)("lifted_it")))
+                    )
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp")],
+            )
+        ],
+    )
+
+    expected = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[
+            im.sym("d"),
+            im.sym("inp"),
+            im.sym("out"),
+            im.sym("_tmp_1"),
+            im.sym("_gtmp_auto_domain"),
+        ],
+        closures=[
+            ir.StencilClosure(
+                domain=AUTO_DOMAIN,
+                stencil=im.lambda_("bar")(im.deref("bar")),
+                output=im.ref("_tmp_1"),
+                inputs=[im.ref("inp")],
+            ),
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("foo", "_tmp_1")(
+                    im.plus(im.deref("_tmp_1"), im.deref(im.shift("I", 1)("_tmp_1")))
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp"), im.ref("_tmp_1")],
+            ),
+        ],
+    )
+    actual = split_closures(
+        testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
+    )
+    assert actual.tmps == [Temporary(id="_tmp_1")]
     assert actual.fencil == expected
 
 
@@ -322,7 +325,7 @@ def test_update_cartesian_domains():
             for a, s in (("JDim", "j"), ("KDim", "k"))
         ],
     )
-    actual = update_domains(testee, {"I": gtx.Dimension("IDim")})
+    actual = update_domains(testee, {"I": gtx.Dimension("IDim")}, symbolic_sizes=None)
     assert actual == expected
 
 

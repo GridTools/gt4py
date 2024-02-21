@@ -451,7 +451,7 @@ class DaCeComputationCodegen:
                 const int __I = domain[0];
                 const int __J = domain[1];
                 const int __K = domain[2];
-                ${name}_t dace_handle;
+                ${name}${state_suffix} dace_handle;
                 ${backend_specifics}
                 auto allocator = gt::sid::cached_allocator(&${allocator}<char[]>);
                 ${"\\n".join(tmp_allocs)}
@@ -561,6 +561,7 @@ class DaCeComputationCodegen:
         else:
             omp_threads = ""
             omp_header = ""
+
         interface = cls.template.definition.render(
             name=sdfg.name,
             backend_specifics=omp_threads,
@@ -568,6 +569,7 @@ class DaCeComputationCodegen:
             functor_args=self.generate_functor_args(sdfg),
             tmp_allocs=self.generate_tmp_allocs(sdfg),
             allocator="gt::cuda_util::cuda_malloc" if is_gpu else "std::make_unique",
+            state_suffix=dace.Config.get("compiler.codegen_state_struct_suffix"),
         )
         generated_code = textwrap.dedent(
             f"""#include <gridtools/sid/sid_shift_origin.hpp>
@@ -685,9 +687,9 @@ class DaCeBindingsCodegen:
                 res[
                     name
                 ] = "py::{pybind_type} {name}, std::array<gt::int_t,{ndim}> {name}_origin".format(
-                    pybind_type="object"
-                    if self.backend.storage_info["device"] == "gpu"
-                    else "buffer",
+                    pybind_type=(
+                        "object" if self.backend.storage_info["device"] == "gpu" else "buffer"
+                    ),
                     name=name,
                     ndim=len(data.shape),
                 )

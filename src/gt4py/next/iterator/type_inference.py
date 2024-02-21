@@ -21,6 +21,7 @@ import gt4py.eve as eve
 import gt4py.next as gtx
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
 
 
@@ -74,8 +75,14 @@ class Tuple(Type):
     def __iter__(self) -> abc.Iterator[Type]:
         yield self.front
         if not isinstance(self.others, (Tuple, EmptyTuple)):
-            raise ValueError(f"Can not iterate over partially defined tuple {self}")
+            raise ValueError(f"Can not iterate over partially defined tuple '{self}'.")
         yield from self.others
+
+    @property
+    def has_known_length(self):
+        return isinstance(self.others, EmptyTuple) or (
+            isinstance(self.others, Tuple) and self.others.has_known_length
+        )
 
     def __len__(self) -> int:
         return sum(1 for _ in self)
@@ -286,7 +293,7 @@ class Primitive(Type):
 
         if self.name != other.name:
             raise TypeError(
-                f"Can not satisfy constraint on primitive types: {self.name} ≡ {other.name}"
+                f"Can not satisfy constraint on primitive types: '{self.name}' ≡ '{other.name}'."
             )
         return True
 
@@ -300,7 +307,7 @@ class UnionPrimitive(Type):
         self, other: Type, add_constraint: abc.Callable[[Type, Type], None]
     ) -> bool:
         if isinstance(other, UnionPrimitive):
-            raise AssertionError("`UnionPrimitive` may only appear on one side of a constraint.")
+            raise AssertionError("'UnionPrimitive' may only appear on one side of a constraint.")
         if not isinstance(other, Primitive):
             return False
 
@@ -380,7 +387,7 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
 OFFSET_TAG_DTYPE = Primitive(name="offset_tag")
 
-# Some helpers to define the builtins’ types
+# Some helpers to define the builtins' types
 T0 = TypeVar.fresh()
 T1 = TypeVar.fresh()
 T2 = TypeVar.fresh()
@@ -551,18 +558,17 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
         current_loc_out = current_loc_in
         for arg in shift_args:
             if not isinstance(arg, ir.OffsetLiteral):
-                continue  # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+                # probably some dynamically computed offset, thus we assume it's a number not an axis and just ignore it (see comment below)
+                continue
             offset = arg.value
             if isinstance(offset, int):
-                continue  # ignore ‘application’ of (partial) shifts
+                continue  # ignore ‘application' of (partial) shifts
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
                 if isinstance(axis, gtx.Dimension):
-                    continue  # Cartesian shifts don’t change the location type
-                elif isinstance(
-                    axis, (gtx.NeighborTableOffsetProvider, gtx.StridedNeighborOffsetProvider)
-                ):
+                    continue  # Cartesian shifts don't change the location type
+                elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
                         == axis.neighbor_axis.kind
@@ -639,7 +645,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             elif node.id in ir.GRAMMAR_BUILTINS:
                 raise TypeError(
                     f"Builtin '{node.id}' is only allowed as applied/called function by the type "
-                    f"inference."
+                    "inference."
                 )
             elif node.id in ir.TYPEBUILTINS:
                 # TODO(tehrengruber): Implement propagating types of values referring to types, e.g.
@@ -649,10 +655,10 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 #  `typing.Type`.
                 raise NotImplementedError(
                     f"Type builtin '{node.id}' is only supported as literal argument by the "
-                    f"type inference."
+                    "type inference."
                 )
             else:
-                raise NotImplementedError(f"Missing type definition for builtin '{node.id}'")
+                raise NotImplementedError(f"Missing type definition for builtin '{node.id}'.")
         elif node.id in symtable:
             sym_decl = symtable[node.id]
             assert isinstance(sym_decl, TYPED_IR_NODES)
@@ -696,13 +702,13 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     def _visit_tuple_get(self, node: ir.FunCall, **kwargs) -> Type:
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
-            raise TypeError("`tuple_get` requires exactly two arguments.")
+            raise TypeError("'tuple_get' requires exactly two arguments.")
         if (
             not isinstance(node.args[0], ir.Literal)
             or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
         ):
             raise TypeError(
-                f"The first argument to `tuple_get` must be a literal of type `{ir.INTEGER_INDEX_BUILTIN}`."
+                f"The first argument to 'tuple_get' must be a literal of type '{ir.INTEGER_INDEX_BUILTIN}'."
             )
         self.visit(node.args[0], **kwargs)  # visit index so that its type is collected
         idx = int(node.args[0].value)
@@ -725,9 +731,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_neighbors(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
-            raise TypeError("`neighbors` requires exactly two arguments.")
+            raise TypeError("'neighbors' requires exactly two arguments.")
         if not (isinstance(node.args[0], ir.OffsetLiteral) and isinstance(node.args[0].value, str)):
-            raise TypeError("The first argument to `neighbors` must be an `OffsetLiteral` tag.")
+            raise TypeError("The first argument to 'neighbors' must be an 'OffsetLiteral' tag.")
 
         # Visit arguments such that their type is also inferred
         self.visit(node.args, **kwargs)
@@ -766,11 +772,11 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
         if len(node.args) != 2:
-            raise TypeError("`cast_` requires exactly two arguments.")
+            raise TypeError("'cast_' requires exactly two arguments.")
         val_arg_type = self.visit(node.args[0], **kwargs)
         type_arg = node.args[1]
         if not isinstance(type_arg, ir.SymRef) or type_arg.id not in ir.TYPEBUILTINS:
-            raise TypeError("The second argument to `cast_` must be a type literal.")
+            raise TypeError("The second argument to 'cast_' must be a type literal.")
 
         size = TypeVar.fresh()
 
@@ -931,6 +937,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         )
         return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
+    def visit_FencilWithTemporaries(self, node: FencilWithTemporaries, **kwargs):
+        return self.visit(node.fencil, **kwargs)
+
     def visit_FencilDefinition(
         self,
         node: ir.FencilDefinition,
@@ -957,14 +966,14 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
-            child_node.annex.type = types[id(child_node)]  # type: ignore[attr-defined]
+            child_node.annex.type = types[id(child_node)]
         except KeyError as err:
             if not (
                 isinstance(child_node, ir.SymRef)
                 and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
-                    f"Expected a type to be inferred for node `{child_node}`, but none was found."
+                    f"Expected a type to be inferred for node '{child_node}', but none was found."
                 ) from err
 
 

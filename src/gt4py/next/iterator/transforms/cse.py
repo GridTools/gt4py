@@ -17,14 +17,20 @@ import math
 import operator
 import typing
 
-from gt4py.eve import NodeTranslator, NodeVisitor, SymbolTableTrait, VisitorWithSymbolTableTrait
+from gt4py.eve import (
+    NodeTranslator,
+    NodeVisitor,
+    PreserveLocationVisitor,
+    SymbolTableTrait,
+    VisitorWithSymbolTableTrait,
+)
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
 @dataclasses.dataclass
-class _NodeReplacer(NodeTranslator):
+class _NodeReplacer(PreserveLocationVisitor, NodeTranslator):
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     expr_map: dict[int, ir.SymRef]
@@ -72,7 +78,7 @@ def _is_collectable_expr(node: ir.Node) -> bool:
 
 
 @dataclasses.dataclass
-class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
+class CollectSubexpressions(PreserveLocationVisitor, VisitorWithSymbolTableTrait, NodeVisitor):
     @dataclasses.dataclass
     class SubexpressionData:
         #: A list of node ids with equal hash and a set of collected child subexpression ids
@@ -123,7 +129,7 @@ class CollectSubexpressions(VisitorWithSymbolTableTrait, NodeVisitor):
         depth = kwargs.pop("depth")
         return super().generic_visit(*args, depth=depth + 1, **kwargs)
 
-    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override]  # supertype accepts any node, but we want to be more specific here.
+    def visit(self, node: ir.Node, **kwargs) -> None:  # type: ignore[override] # supertype accepts any node, but we want to be more specific here.
         if not isinstance(node, SymbolTableTrait) and not _is_collectable_expr(node):
             return super().visit(node, **kwargs)
 
@@ -233,7 +239,7 @@ def extract_subexpression(
     Examples:
         Default case for `(x+y) + ((x+y)+z)`:
 
-        >>> import gt4py.next.iterator.ir_makers as im
+        >>> import gt4py.next.iterator.ir_utils.ir_makers as im
         >>> from gt4py.eve.utils import UIDGenerator
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
@@ -289,7 +295,7 @@ def extract_subexpression(
         #  `_subexpr_2`: `x + y + (x + y)`
         raise NotImplementedError(
             "Results of the current implementation not meaningful for "
-            "`deepest_expr_first == True` and `once_only == True`."
+            "'deepest_expr_first == True' and 'once_only == True'."
         )
 
     ignored_children = False
@@ -341,7 +347,7 @@ def extract_subexpression(
 
 
 @dataclasses.dataclass(frozen=True)
-class CommonSubexpressionElimination(NodeTranslator):
+class CommonSubexpressionElimination(PreserveLocationVisitor, NodeTranslator):
     """
     Perform common subexpression elimination.
 

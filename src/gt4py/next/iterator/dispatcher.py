@@ -57,7 +57,7 @@ class Dispatcher:
 
     def push_key(self, key):
         if key not in self._funs:
-            raise RuntimeError(f"Key {key} not registered")
+            raise RuntimeError(f"Key '{key}' not registered.")
         self.key_stack.append(key)
 
     def pop_key(self):

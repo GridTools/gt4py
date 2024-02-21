@@ -51,6 +51,44 @@ We deviate from the [Google Python Style Guide][google-style-guide] only in the 
   - Client code (like tests, doctests and examples) should use the above style for public FieldView API
   - Library code should always import the defining module and use qualified names.
 
+### Error messages
+
+Error messages should be written as sentences, starting with a capital letter and ending with a period (avoid exclamation marks). Try to be informative without being verbose. Code objects such as 'ClassNames' and 'function_names' should be enclosed in single quotes, and so should string values used for message interpolation.
+
+Examples:
+
+```python
+raise ValueError(f"Invalid argument 'dimension': should be of type 'Dimension', got '{dimension.type}'.")
+```
+
+Interpolated integer values do not need double quotes, if they are indicating an amount. Example:
+
+```python
+raise ValueError(f"Invalid number of arguments: expected 3 arguments, got {len(args)}.")
+```
+
+The double quotes can also be dropped when presenting a sequence of values. In this case the message should be rephrased so the sequence is separated from the text by a colon ':'.
+
+```python
+raise ValueError(f"unexpected keyword arguments: {', '.join(set(kwarg_names} - set(expected_kwarg_names)))}.")
+```
+
+The message should be kept to one sentence if reasonably possible. Ideally the sentence should be kept short and avoid unneccessary words. Examples:
+
+```python
+# too many sentences
+raise ValueError(f"Received an unexpeted number of arguments. Should receive 5 arguments, but got {len(args)}. Please provide the correct number of arguments.")
+# better
+raise ValueError(f"Wrong number of arguments: expected 5, got {len(args)}.")
+
+# less extreme
+raise TypeError(f"Wrong argument type. Can only accept 'int's, got '{type(arg)}' instead.")
+# but can still be improved
+raise TypeError(f"Wrong argument type: 'int' expected, got '{type(arg)}'")
+```
+
+The terseness vs. helpfulness tradeoff should be more in favor of terseness for internal error messages and more in favor of helpfulness for `DSLError` and it's subclassses, where additional sentences are encouraged if they point out likely hidden sources of the problem or common fixes.
+
 ### Docstrings
 
 We generate the API documentation automatically from the docstrings using [Sphinx][sphinx] and some extensions such as [Sphinx-autodoc][sphinx-autodoc] and [Sphinx-napoleon][sphinx-napoleon]. These follow the Google Python Style Guide docstring conventions to automatically format the generated documentation. A complete overview can be found here: [Example Google Style Python Docstrings](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html#example-google).

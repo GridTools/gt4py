@@ -11,22 +11,28 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Optional, cast
+from typing import Any, Mapping, Optional, Sequence, cast
 
 import dace
+from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
-from gt4py.next.iterator import ir as itir, type_inference as itir_typing
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
-from gt4py.next.iterator.ir import Expr, FunCall, Literal, SymRef
+from gt4py.next.common import NeighborTable
+from gt4py.next.iterator import (
+    ir as itir,
+    transforms as itir_transforms,
+    type_inference as itir_typing,
+)
+from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_tasklet import (
     Context,
-    IteratorExpr,
+    GatherOutputSymbolsPass,
     PythonTaskletCodegen,
     SymbolExpr,
+    TaskletExpr,
     ValueExpr,
     closure_to_tasklet_sdfg,
     is_scan,
@@ -34,18 +40,22 @@ from .itir_to_tasklet import (
 from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
+    as_scalar_type,
     connectivity_identifier,
     create_memlet_at,
     create_memlet_full,
+    dace_debuginfo,
     filter_neighbor_tables,
     flatten_list,
     get_sorted_dims,
     map_nested_sdfg_symbols,
+    new_array_symbols,
+    unique_name,
     unique_var_name,
 )
 
 
-def get_scan_args(stencil: Expr) -> tuple[bool, Literal]:
+def _get_scan_args(stencil: Expr) -> tuple[bool, Literal]:
     """
     Parse stencil expression to extract the scan arguments.
 
@@ -64,7 +74,7 @@ def get_scan_args(stencil: Expr) -> tuple[bool, Literal]:
     return is_forward.value == "True", init_carry
 
 
-def get_scan_dim(
+def _get_scan_dim(
     column_axis: Dimension,
     storage_types: dict[str, ts.TypeSpec],
     output: SymRef,
@@ -89,6 +99,57 @@ def get_scan_dim(
     )
 
 
+def _make_array_shape_and_strides(
+    name: str,
+    dims: Sequence[Dimension],
+    neighbor_tables: Mapping[str, NeighborTable],
+    sort_dims: bool,
+) -> tuple[list[dace.symbol], list[dace.symbol], list[dace.symbol]]:
+    """
+    Parse field dimensions and allocate symbols for array shape and strides.
+
+    For local dimensions, the size is known at compile-time and therefore
+    the corresponding array shape dimension is set to an integer literal value.
+
+    Returns
+    -------
+    tuple(shape, strides)
+        The output tuple fields are arrays of dace symbolic expressions.
+    """
+    dtype = dace.int32
+    sorted_dims = get_sorted_dims(dims) if sort_dims else enumerate(dims)
+    shape = [
+        (
+            neighbor_tables[dim.value].max_neighbors
+            if dim.kind == DimensionKind.LOCAL
+            # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+            else dace.symbol(f"__{name}_size_{i}", dtype)
+        )
+        for i, dim in sorted_dims
+    ]
+    offset = [dace.symbol(unique_name(f"{name}_offset{i}"), dtype) for i, _ in sorted_dims]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
+    return shape, offset, strides
+
+
+def _check_no_lifts(node: itir.StencilClosure):
+    """
+    Parse stencil closure ITIR to check that lift expressions only appear as child nodes in neighbor reductions.
+
+    Returns
+    -------
+    True if lifts do not appear in the ITIR exception lift expressions in neighbor reductions. False otherwise.
+    """
+    neighbors_call_count = 0
+    for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun"):
+        if getattr(fun, "id", "") == "neighbors":
+            neighbors_call_count = 3
+        elif getattr(fun, "id", "") == "lift" and neighbors_call_count != 1:
+            return False
+        neighbors_call_count = max(0, neighbors_call_count - 1)
+    return True
+
+
 class ItirToSDFG(eve.NodeVisitor):
     param_types: list[ts.TypeSpec]
     storage_types: dict[str, ts.TypeSpec]
@@ -100,41 +161,129 @@ class ItirToSDFG(eve.NodeVisitor):
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
-        offset_provider: dict[str, NeighborTableOffsetProvider],
+        offset_provider: dict[str, NeighborTable],
+        tmps: list[itir_transforms.global_tmps.Temporary],
         column_axis: Optional[Dimension] = None,
     ):
         self.param_types = param_types
         self.column_axis = column_axis
         self.offset_provider = offset_provider
         self.storage_types = {}
+        self.tmps = tmps
 
-    def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, has_offset: bool = True):
+    def add_storage(
+        self,
+        sdfg: dace.SDFG,
+        name: str,
+        type_: ts.TypeSpec,
+        neighbor_tables: Mapping[str, NeighborTable],
+        has_offset: bool = True,
+        sort_dimensions: bool = True,
+    ):
         if isinstance(type_, ts.FieldType):
-            shape = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
-            strides = [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
-            offset = (
-                [dace.symbol(unique_var_name()) for _ in range(len(type_.dims))]
-                if has_offset
-                else None
+            shape, offset, strides = _make_array_shape_and_strides(
+                name, type_.dims, neighbor_tables, sort_dimensions
             )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
+            sdfg.add_array(
+                name,
+                shape=shape,
+                strides=strides,
+                offset=(offset if has_offset else None),
+                dtype=dtype,
+            )
+
         elif isinstance(type_, ts.ScalarType):
-            sdfg.add_symbol(name, as_dace_type(type_))
+            dtype = as_dace_type(type_)
+            if name in sdfg.symbols:
+                assert sdfg.symbols[name].dtype == dtype
+            else:
+                sdfg.add_symbol(name, dtype)
+
         else:
             raise NotImplementedError()
         self.storage_types[name] = type_
 
+    def add_storage_for_temporaries(
+        self, node_params: list[Sym], defs_state: dace.SDFGState, program_sdfg: dace.SDFG
+    ) -> dict[str, str]:
+        symbol_map: dict[str, TaskletExpr] = {}
+        # The shape of temporary arrays might be defined based on scalar values passed as program arguments.
+        # Here we collect these values in a symbol map.
+        tmp_ids = set(tmp.id for tmp in self.tmps)
+        for sym in node_params:
+            if sym.id not in tmp_ids and sym.kind != "Iterator":
+                name_ = str(sym.id)
+                type_ = self.storage_types[name_]
+                assert isinstance(type_, ts.ScalarType)
+                symbol_map[name_] = SymbolExpr(name_, as_dace_type(type_))
+
+        tmp_symbols: dict[str, str] = {}
+        for tmp in self.tmps:
+            tmp_name = str(tmp.id)
+
+            # We visit the domain of the temporary field, passing the set of available symbols.
+            assert isinstance(tmp.domain, itir.FunCall)
+            self.node_types.update(itir_typing.infer_all(tmp.domain))
+            domain_ctx = Context(program_sdfg, defs_state, symbol_map)
+            tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
+
+            # We build the FieldType for this temporary array.
+            dims: list[Dimension] = []
+            for dim, _ in tmp_domain:
+                dims.append(
+                    Dimension(
+                        value=dim,
+                        kind=(
+                            DimensionKind.VERTICAL
+                            if self.column_axis is not None and self.column_axis.value == dim
+                            else DimensionKind.HORIZONTAL
+                        ),
+                    )
+                )
+            assert isinstance(tmp.dtype, str)
+            type_ = ts.FieldType(dims=dims, dtype=as_scalar_type(tmp.dtype))
+            self.storage_types[tmp_name] = type_
+
+            # N.B.: skip generation of symbolic strides and just let dace assign default strides, for now.
+            # Another option, in the future, is to use symbolic strides and apply auto-tuning or some heuristics
+            # to assign optimal stride values.
+            tmp_shape, _ = new_array_symbols(tmp_name, len(dims))
+            tmp_offset = [
+                dace.symbol(unique_name(f"{tmp_name}_offset{i}")) for i in range(len(dims))
+            ]
+            _, tmp_array = program_sdfg.add_array(
+                tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
+            )
+
+            # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
+            # These expressions are later mapped to interstate symbols.
+            for (_, (begin, end)), offset_sym, shape_sym in zip(
+                tmp_domain,
+                tmp_array.offset,
+                tmp_array.shape,
+            ):
+                tmp_symbols[str(offset_sym)] = f"0 - {begin.value}"
+                tmp_symbols[str(shape_sym)] = f"{end.value} - {begin.value}"
+
+        return tmp_symbols
+
     def get_output_nodes(
-        self, closure: itir.StencilClosure, context: Context
+        self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
+        # Visit output node, which could be a `make_tuple` expression, to collect the required access nodes
+        output_symbols_pass = GatherOutputSymbolsPass(sdfg, state, self.node_types)
+        output_symbols_pass.visit(closure.output)
+        # Visit output node again to generate the corresponding tasklet
+        context = Context(sdfg, state, output_symbols_pass.symbol_refs)
         translator = PythonTaskletCodegen(self.offset_provider, context, self.node_types)
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition):
         program_sdfg = dace.SDFG(name=node.id)
-        last_state = program_sdfg.add_state("program_entry")
+        program_sdfg.debuginfo = dace_debuginfo(node)
+        entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
@@ -142,14 +291,37 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
-            self.add_storage(program_sdfg, str(param.id), type_)
+            self.add_storage(program_sdfg, str(param.id), type_, neighbor_tables)
+
+        if self.tmps:
+            tmp_symbols = self.add_storage_for_temporaries(node.params, entry_state, program_sdfg)
+            # on the first interstate edge define symbols for shape and offsets of temporary arrays
+            last_state = program_sdfg.add_state("init_symbols_for_temporaries")
+            program_sdfg.add_edge(
+                entry_state,
+                last_state,
+                dace.InterstateEdge(
+                    assignments=tmp_symbols,
+                ),
+            )
+        else:
+            last_state = entry_state
 
         # Add connectivities as SDFG storages.
-        for offset, table in neighbor_tables:
-            scalar_kind = type_translation.get_scalar_kind(table.table.dtype)
-            local_dim = Dimension("ElementDim", kind=DimensionKind.LOCAL)
-            type_ = ts.FieldType([table.origin_axis, local_dim], ts.ScalarType(scalar_kind))
-            self.add_storage(program_sdfg, connectivity_identifier(offset), type_, has_offset=False)
+        for offset, offset_provider in neighbor_tables.items():
+            scalar_kind = type_translation.get_scalar_kind(offset_provider.table.dtype)
+            local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
+            type_ = ts.FieldType(
+                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
+            )
+            self.add_storage(
+                program_sdfg,
+                connectivity_identifier(offset),
+                type_,
+                neighbor_tables,
+                has_offset=False,
+                sort_dimensions=False,
+            )
 
         # Create a nested SDFG for all stencil closures.
         for closure in node.closures:
@@ -178,16 +350,22 @@ class ItirToSDFG(eve.NodeVisitor):
                 inputs=set(input_names),
                 outputs=set(output_names),
                 symbol_mapping=symbol_mapping,
+                debuginfo=closure_sdfg.debuginfo,
             )
 
             # Add access nodes for the program parameters and connect them to the nested SDFG's inputs via edges.
             for inner_name, memlet in input_mapping.items():
-                access_node = last_state.add_access(inner_name)
+                access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(access_node, None, nsdfg_node, inner_name, memlet)
 
             for inner_name, memlet in output_mapping.items():
-                access_node = last_state.add_access(inner_name)
+                access_node = last_state.add_access(inner_name, debuginfo=nsdfg_node.debuginfo)
                 last_state.add_edge(nsdfg_node, inner_name, access_node, None, memlet)
+
+        # Create the call signature for the SDFG.
+        #  Only the arguments requiered by the Fencil, i.e. `node.params` are added as poitional arguments.
+        #  The implicit arguments, such as the offset providers or the arguments created by the translation process, must be passed as keywords only arguments.
+        program_sdfg.arg_names = [str(a) for a in node.params]
 
         program_sdfg.validate()
         return program_sdfg
@@ -195,26 +373,24 @@ class ItirToSDFG(eve.NodeVisitor):
     def visit_StencilClosure(
         self, node: itir.StencilClosure, array_table: dict[str, dace.data.Array]
     ) -> tuple[dace.SDFG, list[str], list[str]]:
-        assert ItirToSDFG._check_no_lifts(node)
+        assert _check_no_lifts(node)
 
         # Create the closure's nested SDFG and single state.
         closure_sdfg = dace.SDFG(name="closure")
+        closure_sdfg.debuginfo = dace_debuginfo(node)
         closure_state = closure_sdfg.add_state("closure_entry")
-        closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init")
-
-        program_arg_syms: dict[str, ValueExpr | IteratorExpr | SymbolExpr] = {}
-        closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
-        output_nodes = self.get_output_nodes(node, closure_ctx)
+        output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
         output_names = [k for k, _ in output_nodes.items()]
 
         # Add DaCe arrays for inputs, outputs and connectivities to closure SDFG.
         input_transients_mapping = {}
-        for name in [*input_names, *conn_names, *output_names]:
+        for name in [*input_names, *connectivity_names, *output_names]:
             if name in closure_sdfg.arrays:
                 assert name in input_names and name in output_names
                 # In case of closures with in/out fields, there is risk of race condition
@@ -228,8 +404,8 @@ class ItirToSDFG(eve.NodeVisitor):
                     transient=True,
                 )
                 closure_init_state.add_nedge(
-                    closure_init_state.add_access(name),
-                    closure_init_state.add_access(transient_name),
+                    closure_init_state.add_access(name, debuginfo=closure_sdfg.debuginfo),
+                    closure_init_state.add_access(transient_name, debuginfo=closure_sdfg.debuginfo),
                     create_memlet_full(name, closure_sdfg.arrays[name]),
                 )
                 input_transients_mapping[name] = transient_name
@@ -256,38 +432,49 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         # Update symbol table and get output domain of the closure
+        program_arg_syms: dict[str, TaskletExpr] = {}
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
-                closure_sdfg.add_symbol(name, dtype)
                 if name in input_names:
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
                     out_tasklet = closure_init_state.add_tasklet(
-                        f"get_{name}", {}, {"__result"}, f"__result = {name}"
+                        f"get_{name}",
+                        {},
+                        {"__result"},
+                        f"__result = {name}",
+                        debuginfo=closure_sdfg.debuginfo,
                     )
-                    access = closure_init_state.add_access(out_name)
+                    access = closure_init_state.add_access(
+                        out_name, debuginfo=closure_sdfg.debuginfo
+                    )
                     value = ValueExpr(access, dtype)
-                    memlet = dace.Memlet.simple(out_name, "0")
+                    memlet = dace.Memlet(data=out_name, subset="0")
                     closure_init_state.add_edge(out_tasklet, "__result", access, None, memlet)
                     program_arg_syms[name] = value
                 else:
                     program_arg_syms[name] = SymbolExpr(name, dtype)
+        closure_ctx = Context(closure_sdfg, closure_state, program_arg_syms)
         closure_domain = self._visit_domain(node.domain, closure_ctx)
 
         # Map SDFG tasklet arguments to parameters
-        input_access_names = [
-            input_transients_mapping[input_name]
-            if input_name in input_transients_mapping
-            else input_name
-            if input_name in input_field_names
-            else cast(ValueExpr, program_arg_syms[input_name]).value.data
+        input_local_names = [
+            (
+                input_transients_mapping[input_name]
+                if input_name in input_transients_mapping
+                else (
+                    input_name
+                    if input_name in input_field_names
+                    else cast(ValueExpr, program_arg_syms[input_name]).value.data
+                )
+            )
             for input_name in input_names
         ]
         input_memlets = [
-            create_memlet_full(name, closure_sdfg.arrays[name]) for name in input_access_names
+            create_memlet_full(name, closure_sdfg.arrays[name])
+            for name in [*input_local_names, *connectivity_names]
         ]
-        conn_memlets = [create_memlet_full(name, closure_sdfg.arrays[name]) for name in conn_names]
 
         # create and write to transient that is then copied back to actual output array to avoid aliasing of
         # same memory in nested SDFG with different names
@@ -309,9 +496,11 @@ class ItirToSDFG(eve.NodeVisitor):
                 create_memlet_at(
                     output_name,
                     tuple(
-                        f"i_{dim}"
-                        if f"i_{dim}" in map_ranges
-                        else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
+                        (
+                            f"i_{dim}"
+                            if f"i_{dim}" in map_ranges
+                            else f"0:{closure_sdfg.arrays[output_name].shape[scan_dim_index]}"
+                        )
                         for dim, _ in closure_domain
                     ),
                 )
@@ -328,43 +517,44 @@ class ItirToSDFG(eve.NodeVisitor):
                 for output_name in output_connectors_mapping.values()
             ]
 
-        input_mapping = {param: arg for param, arg in zip(input_names, input_memlets)}
-        output_mapping = {param: arg_memlet for param, arg_memlet in zip(results, output_memlets)}
-        conn_mapping = {param: arg for param, arg in zip(conn_names, conn_memlets)}
+        input_mapping = {
+            param: arg for param, arg in zip([*input_names, *connectivity_names], input_memlets)
+        }
+        output_mapping = {param: memlet for param, memlet in zip(results, output_memlets)}
 
-        array_mapping = {**input_mapping, **conn_mapping}
-        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, array_mapping)
+        symbol_mapping = map_nested_sdfg_symbols(closure_sdfg, nsdfg, input_mapping)
 
         nsdfg_node, map_entry, map_exit = add_mapped_nested_sdfg(
             closure_state,
             sdfg=nsdfg,
             map_ranges=map_ranges or {"__dummy": "0"},
-            inputs=array_mapping,
+            inputs=input_mapping,
             outputs=output_mapping,
             symbol_mapping=symbol_mapping,
             output_nodes=output_nodes,
+            debuginfo=nsdfg.debuginfo,
         )
         access_nodes = {edge.data.data: edge.dst for edge in closure_state.out_edges(map_exit)}
         for edge in closure_state.in_edges(map_exit):
             memlet = edge.data
             if memlet.data not in output_connectors_mapping:
                 continue
-            transient_access = closure_state.add_access(memlet.data)
+            transient_access = closure_state.add_access(memlet.data, debuginfo=nsdfg.debuginfo)
             closure_state.add_edge(
                 nsdfg_node,
                 edge.src_conn,
                 transient_access,
                 None,
-                dace.Memlet.simple(memlet.data, output_subset),
+                dace.Memlet(data=memlet.data, subset=output_subset, debuginfo=nsdfg.debuginfo),
             )
-            inner_memlet = dace.Memlet.simple(
-                memlet.data, output_subset, other_subset_str=memlet.subset
+            inner_memlet = dace.Memlet(
+                data=memlet.data, subset=output_subset, other_subset=memlet.subset
             )
             closure_state.add_edge(transient_access, None, map_exit, edge.dst_conn, inner_memlet)
             closure_state.remove_edge(edge)
             access_nodes[memlet.data].data = output_connectors_mapping[memlet.data]
 
-        return closure_sdfg, input_field_names + conn_names, output_names
+        return closure_sdfg, input_field_names + connectivity_names, output_names
 
     def _visit_scan_stencil_closure(
         self,
@@ -376,11 +566,11 @@ class ItirToSDFG(eve.NodeVisitor):
         output_name: str,
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], int]:
         # extract scan arguments
-        is_forward, init_carry_value = get_scan_args(node.stencil)
+        is_forward, init_carry_value = _get_scan_args(node.stencil)
         # select the scan dimension based on program argument for column axis
         assert self.column_axis
         assert isinstance(node.output, SymRef)
-        scan_dim, scan_dim_index, scan_dtype = get_scan_dim(
+        scan_dim, scan_dim_index, scan_dtype = _get_scan_dim(
             self.column_axis,
             self.storage_types,
             node.output,
@@ -389,7 +579,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert isinstance(node.output, SymRef)
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        connectivity_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}
@@ -404,25 +594,57 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # the scan operator is implemented as an SDFG to be nested in the closure SDFG
         scan_sdfg = dace.SDFG(name="scan")
+        scan_sdfg.debuginfo = dace_debuginfo(node)
 
-        # create a state machine for lambda call over the scan dimension
-        start_state = scan_sdfg.add_state("start")
-        lambda_state = scan_sdfg.add_state("lambda_compute")
-        end_state = scan_sdfg.add_state("end")
+        # the carry value of the scan operator exists only in the scope of the scan sdfg
+        scan_carry_name = unique_var_name()
+        scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
 
-        scan_sdfg.add_loop(
-            start_state,
-            lambda_state,
-            end_state,
-            loop_var=f"i_{scan_dim}",
-            initialize_expr=f"{scan_lb_str}" if is_forward else f"{scan_ub_str} - 1",
-            condition_expr=f"i_{scan_dim} < {scan_ub_str}"
-            if is_forward
-            else f"i_{scan_dim} >= {scan_lb_str}",
-            increment_expr=f"i_{scan_dim} + 1" if is_forward else f"i_{scan_dim} - 1",
+        # create a loop region for lambda call over the scan dimension
+        scan_loop_var = f"i_{scan_dim}"
+        if is_forward:
+            scan_loop = LoopRegion(
+                label="scan",
+                condition_expr=f"{scan_loop_var} < {scan_ub_str}",
+                loop_var=scan_loop_var,
+                initialize_expr=f"{scan_loop_var} = {scan_lb_str}",
+                update_expr=f"{scan_loop_var} = {scan_loop_var} + 1",
+                inverted=False,
+            )
+        else:
+            scan_loop = LoopRegion(
+                label="scan",
+                condition_expr=f"{scan_loop_var} >= {scan_lb_str}",
+                loop_var=scan_loop_var,
+                initialize_expr=f"{scan_loop_var} = {scan_ub_str} - 1",
+                update_expr=f"{scan_loop_var} = {scan_loop_var} - 1",
+                inverted=False,
+            )
+        scan_sdfg.add_node(scan_loop)
+        compute_state = scan_loop.add_state("lambda_compute", is_start_block=True)
+        update_state = scan_loop.add_state("lambda_update")
+        scan_loop.add_edge(compute_state, update_state, dace.InterstateEdge())
+
+        start_state = scan_sdfg.add_state("start", is_start_block=True)
+        scan_sdfg.add_edge(start_state, scan_loop, dace.InterstateEdge())
+
+        # tasklet for initialization of carry
+        carry_init_tasklet = start_state.add_tasklet(
+            "get_carry_init_value",
+            {},
+            {"__result"},
+            f"__result = {init_carry_value}",
+            debuginfo=scan_sdfg.debuginfo,
+        )
+        start_state.add_edge(
+            carry_init_tasklet,
+            "__result",
+            start_state.add_access(scan_carry_name, debuginfo=scan_sdfg.debuginfo),
+            None,
+            dace.Memlet(data=scan_carry_name, subset="0"),
         )
 
-        # add access nodes to SDFG for inputs
+        # add storage to scan SDFG for inputs
         for name in [*input_names, *connectivity_names]:
             assert name not in scan_sdfg.arrays
             if isinstance(self.storage_types[name], ts.FieldType):
@@ -436,117 +658,76 @@ class ItirToSDFG(eve.NodeVisitor):
                 scan_sdfg.add_scalar(
                     name, dtype=as_dace_type(cast(ts.ScalarType, self.storage_types[name]))
                 )
+        # add storage to scan SDFG for output
+        scan_sdfg.add_array(
+            output_name,
+            shape=(array_table[node.output.id].shape[scan_dim_index],),
+            strides=(array_table[node.output.id].strides[scan_dim_index],),
+            offset=(array_table[node.output.id].offset[scan_dim_index],),
+            dtype=array_table[node.output.id].dtype,
+        )
 
+        # implement the lambda function as a nested SDFG that computes a single item in the scan dimension
+        lambda_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
+        input_arrays = [(scan_carry_name, scan_dtype)] + [
+            (name, self.storage_types[name]) for name in input_names
+        ]
         connectivity_arrays = [(scan_sdfg.arrays[name], name) for name in connectivity_names]
-
-        # implement the lambda closure as a nested SDFG that computes a single item of the map domain
-        lambda_context, lambda_inputs, lambda_outputs = closure_to_tasklet_sdfg(
+        lambda_context, lambda_outputs = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
-            {},
-            [],
+            lambda_domain,
+            input_arrays,
             connectivity_arrays,
             self.node_types,
         )
 
+        lambda_input_names = [name for name, _ in input_arrays]
+        lambda_output_names = [connector.value.data for connector in lambda_outputs]
+
+        input_memlets = [
+            create_memlet_full(name, scan_sdfg.arrays[name]) for name in lambda_input_names
+        ]
         connectivity_memlets = [
             create_memlet_full(name, scan_sdfg.arrays[name]) for name in connectivity_names
         ]
+        input_mapping = {param: arg for param, arg in zip(lambda_input_names, input_memlets)}
         connectivity_mapping = {
             param: arg for param, arg in zip(connectivity_names, connectivity_memlets)
         }
+        array_mapping = {**input_mapping, **connectivity_mapping}
+        symbol_mapping = map_nested_sdfg_symbols(scan_sdfg, lambda_context.body, array_mapping)
 
-        lambda_input_names = [inner_name for inner_name, _ in lambda_inputs]
-        symbol_mapping = map_nested_sdfg_symbols(
-            scan_sdfg, lambda_context.body, connectivity_mapping
-        )
-
-        scan_inner_node = lambda_state.add_nested_sdfg(
+        scan_inner_node = compute_state.add_nested_sdfg(
             lambda_context.body,
             parent=scan_sdfg,
             inputs=set(lambda_input_names) | set(connectivity_names),
-            outputs={connector.value.label for connector in lambda_outputs},
+            outputs=set(lambda_output_names),
             symbol_mapping=symbol_mapping,
+            debuginfo=lambda_context.body.debuginfo,
         )
 
-        # the carry value of the scan operator exists in the scope of the scan sdfg
-        scan_carry_name = unique_var_name()
-        lambda_carry_name, _ = lambda_inputs[0]
-        scan_sdfg.add_scalar(scan_carry_name, dtype=as_dace_type(scan_dtype), transient=True)
-
-        carry_init_tasklet = start_state.add_tasklet(
-            "get_carry_init_value", {}, {"__result"}, f"__result = {init_carry_value}"
-        )
-        carry_node1 = start_state.add_access(scan_carry_name)
-        start_state.add_edge(
-            carry_init_tasklet,
-            "__result",
-            carry_node1,
-            None,
-            dace.Memlet.simple(scan_carry_name, "0"),
-        )
-
-        carry_node2 = lambda_state.add_access(scan_carry_name)
-        lambda_state.add_memlet_path(
-            carry_node2,
-            scan_inner_node,
-            memlet=dace.Memlet.simple(scan_carry_name, "0"),
-            src_conn=None,
-            dst_conn=lambda_carry_name,
-        )
-
-        # connect access nodes to lambda inputs
-        for (inner_name, _), data_name in zip(lambda_inputs[1:], input_names):
-            if isinstance(self.storage_types[data_name], ts.FieldType):
-                memlet = create_memlet_at(data_name, tuple(f"i_{dim}" for dim, _ in closure_domain))
-            else:
-                memlet = dace.Memlet.simple(data_name, "0")
-            lambda_state.add_memlet_path(
-                lambda_state.add_access(data_name),
-                scan_inner_node,
-                memlet=memlet,
-                src_conn=None,
-                dst_conn=inner_name,
-            )
-
-        for inner_name, memlet in connectivity_mapping.items():
-            access_node = lambda_state.add_access(inner_name)
-            lambda_state.add_memlet_path(
-                access_node,
-                scan_inner_node,
-                memlet=memlet,
-                src_conn=None,
-                dst_conn=inner_name,
-                propagate=True,
-            )
+        # connect scan SDFG to lambda inputs
+        for name, memlet in array_mapping.items():
+            access_node = compute_state.add_access(name, debuginfo=lambda_context.body.debuginfo)
+            compute_state.add_edge(access_node, None, scan_inner_node, name, memlet)
 
         output_names = [output_name]
-        assert len(lambda_outputs) == 1
-        # connect lambda output to access node
-        for lambda_connector, data_name in zip(lambda_outputs, output_names):
-            scan_sdfg.add_array(
-                data_name,
-                shape=(array_table[node.output.id].shape[scan_dim_index],),
-                strides=(array_table[node.output.id].strides[scan_dim_index],),
-                offset=(array_table[node.output.id].offset[scan_dim_index],),
-                dtype=array_table[node.output.id].dtype,
-            )
-            lambda_state.add_memlet_path(
+        assert len(lambda_output_names) == 1
+        # connect lambda output to scan SDFG
+        for name, connector in zip(output_names, lambda_output_names):
+            compute_state.add_edge(
                 scan_inner_node,
-                lambda_state.add_access(data_name),
-                memlet=dace.Memlet.simple(data_name, f"i_{scan_dim}"),
-                src_conn=lambda_connector.value.label,
-                dst_conn=None,
+                connector,
+                compute_state.add_access(name, debuginfo=lambda_context.body.debuginfo),
+                None,
+                dace.Memlet(data=name, subset=scan_loop_var),
             )
 
-        # add state to scan SDFG to update the carry value at each loop iteration
-        lambda_update_state = scan_sdfg.add_state_after(lambda_state, "lambda_update")
-        result_node = lambda_update_state.add_access(output_names[0])
-        carry_node3 = lambda_update_state.add_access(scan_carry_name)
-        lambda_update_state.add_memlet_path(
-            result_node,
-            carry_node3,
-            memlet=dace.Memlet.simple(output_names[0], f"i_{scan_dim}", other_subset_str="0"),
+        update_state.add_nedge(
+            update_state.add_access(output_name, debuginfo=lambda_context.body.debuginfo),
+            update_state.add_access(scan_carry_name, debuginfo=lambda_context.body.debuginfo),
+            dace.Memlet(data=output_name, subset=scan_loop_var, other_subset="0"),
         )
 
         return scan_sdfg, map_ranges, scan_dim_index
@@ -561,7 +742,7 @@ class ItirToSDFG(eve.NodeVisitor):
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
-        conn_names = [connectivity_identifier(offset) for offset, _ in neighbor_tables]
+        connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         # find the scan dimension, same as output dimension, and exclude it from the map domain
         map_ranges = {}
@@ -574,14 +755,14 @@ class ItirToSDFG(eve.NodeVisitor):
         index_domain = {dim: f"i_{dim}" for dim, _ in closure_domain}
 
         input_arrays = [(name, self.storage_types[name]) for name in input_names]
-        conn_arrays = [(array_table[name], name) for name in conn_names]
+        connectivity_arrays = [(array_table[name], name) for name in connectivity_names]
 
-        context, _, results = closure_to_tasklet_sdfg(
+        context, results = closure_to_tasklet_sdfg(
             node,
             self.offset_provider,
             index_domain,
             input_arrays,
-            conn_arrays,
+            connectivity_arrays,
             self.node_types,
         )
 
@@ -609,15 +790,6 @@ class ItirToSDFG(eve.NodeVisitor):
             bounds.append((dimension.value, (lb, ub)))
 
         return tuple(sorted(bounds, key=lambda item: item[0]))
-
-    @staticmethod
-    def _check_no_lifts(node: itir.StencilClosure):
-        if any(
-            getattr(fun, "id", "") == "lift"
-            for fun in eve.walk_values(node).if_isinstance(itir.FunCall).getattr("fun")
-        ):
-            return False
-        return True
 
     @staticmethod
     def _check_shift_offsets_are_literals(node: itir.StencilClosure):

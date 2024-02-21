@@ -24,8 +24,8 @@ module in question is a submodule, defines `__all__` and exports many public API
 """
 
 from . import common, ffront, iterator, program_processors, type_inference
-from .common import Dimension, DimensionKind, Field, GridType
-from .constructors import as_field, empty, full, ones, zeros
+from .common import Dimension, DimensionKind, Domain, Field, GridType, UnitRange, domain, unit_range
+from .constructors import as_connectivity, as_field, empty, full, ones, zeros
 from .embedded import (
     nd_array_field as _,  # noqa: F401 # Unused import but needed for registering field implementation
 )
@@ -39,6 +39,11 @@ from .iterator.embedded import (
     index_field,
     np_as_located_field,
 )
+from .program_processors.runners.gtfn import (
+    run_gtfn_cached as gtfn_cpu,
+    run_gtfn_gpu_cached as gtfn_gpu,
+)
+from .program_processors.runners.roundtrip import backend as itir_python
 
 
 __all__ = [
@@ -53,12 +58,17 @@ __all__ = [
     "DimensionKind",
     "Field",
     "GridType",
+    "domain",
+    "Domain",
+    "unit_range",
+    "UnitRange",
     # from constructors
     "empty",
     "zeros",
     "ones",
     "full",
     "as_field",
+    "as_connectivity",
     # from iterator
     "NeighborTableOffsetProvider",
     "StridedNeighborOffsetProvider",
@@ -69,5 +79,9 @@ __all__ = [
     "field_operator",
     "program",
     "scan_operator",
+    # from program_processor
+    "gtfn_cpu",
+    "gtfn_gpu",
+    "itir_python",
     *fbuiltins.__all__,
 ]

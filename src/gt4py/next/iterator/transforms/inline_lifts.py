@@ -18,7 +18,8 @@ from typing import Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
-from gt4py.next.iterator import ir, ir_makers as im
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
 
 
@@ -101,14 +102,18 @@ def _transform_and_extract_lift_args(
             extracted_args[new_symbol] = arg
             new_args.append(ir.SymRef(id=new_symbol.id))
 
-    return (im.lift(inner_stencil)(*new_args), extracted_args)
+    itir_node = im.lift(inner_stencil)(*new_args)
+    itir_node.location = node.location
+    return (itir_node, extracted_args)
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
 #  passes. Due to a lack of infrastructure (e.g. no pass manager) to combine passes without
 #  performance degradation we leave everything as one pass for now.
 @dataclasses.dataclass
-class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class InlineLifts(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """Inline lifted function calls.
 
     Optionally a predicate function can be passed which can enable or disable inlining of specific
@@ -135,7 +140,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         #: when we see that it is not required.
         INLINE_LIFTED_ARGS = 16
 
-    def predicate(_1: ir.Expr, _2: bool) -> bool:
+    def predicate(self, _1: ir.Expr, _2: bool) -> bool:
         return True
 
     flags: int = (
@@ -173,7 +178,7 @@ class InlineLifts(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             assert len(node.args) == 1
             is_lift = _is_lift(node.args[0])
             is_eligible = is_lift and self.predicate(node.args[0], is_scan_pass_context)
-            is_trivial = is_lift and len(node.args[0].args) == 0  # type: ignore[attr-defined] # mypy not smart enough
+            is_trivial = is_lift and len(node.args[0].args) == 0  # type: ignore[attr-defined]
             if (
                 self.flags & self.Flag.INLINE_DEREF_LIFT
                 or (self.flags & self.Flag.INLINE_TRIVIAL_DEREF_LIFT and is_trivial)

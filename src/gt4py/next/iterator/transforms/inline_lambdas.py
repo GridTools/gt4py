@@ -15,9 +15,9 @@
 import dataclasses
 from typing import Optional
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.transforms.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.transforms.remap_symbols import RemapSymbolRefs, RenameSymbols
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
@@ -29,6 +29,7 @@ def inline_lambda(  # see todo above
     opcount_preserving=False,
     force_inline_lift_args=False,
     force_inline_trivial_lift_args=False,
+    force_inline_lambda_args=False,
     eligible_params: Optional[list[bool]] = None,
 ):
     assert isinstance(node.fun, ir.Lambda)
@@ -56,6 +57,12 @@ def inline_lambda(  # see todo above
     if force_inline_trivial_lift_args:
         for i, arg in enumerate(node.args):
             if is_applied_lift(arg) and len(arg.args) == 0:
+                eligible_params[i] = True
+
+    # inline lambdas passed as arguments
+    if force_inline_lambda_args:
+        for i, arg in enumerate(node.args):
+            if isinstance(arg, ir.Lambda):
                 eligible_params[i] = True
 
     if node.fun.params and not any(eligible_params):
@@ -95,6 +102,7 @@ def inline_lambda(  # see todo above
     new_expr = RemapSymbolRefs().visit(expr, symbol_map=symbol_map)
 
     if all(eligible_params):
+        new_expr.location = node.location
         return new_expr
     else:
         return ir.FunCall(
@@ -107,16 +115,19 @@ def inline_lambda(  # see todo above
                 expr=new_expr,
             ),
             args=[arg for arg, eligible in zip(node.args, eligible_params) if not eligible],
+            location=node.location,
         )
 
 
 @dataclasses.dataclass
-class InlineLambdas(NodeTranslator):
+class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
     """Inline lambda calls by substituting every argument by its value."""
 
     PRESERVED_ANNEX_ATTRS = ("type",)
 
     opcount_preserving: bool
+
+    force_inline_lambda_args: bool
 
     force_inline_lift_args: bool
 
@@ -127,6 +138,7 @@ class InlineLambdas(NodeTranslator):
         cls,
         node: ir.Node,
         opcount_preserving=False,
+        force_inline_lambda_args=False,
         force_inline_lift_args=False,
         force_inline_trivial_lift_args=False,
     ):
@@ -144,6 +156,8 @@ class InlineLambdas(NodeTranslator):
             opcount_preserving: Preserve the number of operations, i.e. only
                 inline lambda call if the resulting call has the same number of
                 operations.
+            force_inline_lambda_args: Inline all arguments that are lambda calls, i.e.
+                `(λ(p) → p(a, a))(λ(x, y) → x+y)`
             force_inline_lift_args: Inline all arguments that are applied lifts, i.e.
                 `lift(λ(...) → ...)(...)`.
             force_inline_trivial_lift_args: Inline all arguments that are trivial
@@ -152,6 +166,7 @@ class InlineLambdas(NodeTranslator):
         """
         return cls(
             opcount_preserving=opcount_preserving,
+            force_inline_lambda_args=force_inline_lambda_args,
             force_inline_lift_args=force_inline_lift_args,
             force_inline_trivial_lift_args=force_inline_trivial_lift_args,
         ).visit(node)
@@ -162,6 +177,7 @@ class InlineLambdas(NodeTranslator):
             return inline_lambda(
                 node,
                 opcount_preserving=self.opcount_preserving,
+                force_inline_lambda_args=self.force_inline_lambda_args,
                 force_inline_lift_args=self.force_inline_lift_args,
                 force_inline_trivial_lift_args=self.force_inline_trivial_lift_args,
             )

@@ -57,8 +57,7 @@ class Python(LanguageTag):
     ...
 
 
-class NanobindSrcL(LanguageTag):
-    ...
+class NanobindSrcL(LanguageTag): ...
 
 
 class Cpp(NanobindSrcL):

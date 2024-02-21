@@ -76,8 +76,8 @@ def test_tuple_output(program_processor, stencil):
     }
     run_processor(stencil[dom], program_processor, inp1, inp2, out=out, offset_provider={})
     if validate:
-        assert np.allclose(inp1, out[0])
-        assert np.allclose(inp2, out[1])
+        assert np.allclose(inp1.asnumpy(), out[0].asnumpy())
+        assert np.allclose(inp2.asnumpy(), out[1].asnumpy())
 
 
 @fundef
@@ -144,10 +144,10 @@ def test_tuple_of_tuple_of_field_output(program_processor):
         offset_provider={},
     )
     if validate:
-        assert np.allclose(inp1, out[0][0])
-        assert np.allclose(inp2, out[0][1])
-        assert np.allclose(inp3, out[1][0])
-        assert np.allclose(inp4, out[1][1])
+        assert np.allclose(inp1.asnumpy(), out[0][0].asnumpy())
+        assert np.allclose(inp2.asnumpy(), out[0][1].asnumpy())
+        assert np.allclose(inp3.asnumpy(), out[1][0].asnumpy())
+        assert np.allclose(inp4.asnumpy(), out[1][1].asnumpy())
 
 
 @pytest.mark.parametrize(
@@ -197,8 +197,8 @@ def test_tuple_of_field_output_constructed_inside(program_processor, stencil):
         offset_provider={},
     )
     if validate:
-        assert np.allclose(inp1, out1)
-        assert np.allclose(inp2, out2)
+        assert np.allclose(inp1.asnumpy(), out1.asnumpy())
+        assert np.allclose(inp2.asnumpy(), out2.asnumpy())
 
 
 def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_processor):
@@ -255,9 +255,9 @@ def test_asymetric_nested_tuple_of_field_output_constructed_inside(program_proce
         offset_provider={},
     )
     if validate:
-        assert np.allclose(inp1, out1)
-        assert np.allclose(inp2, out2)
-        assert np.allclose(inp3, out3)
+        assert np.allclose(inp1.asnumpy(), out1.asnumpy())
+        assert np.allclose(inp2.asnumpy(), out2.asnumpy())
+        assert np.allclose(inp3.asnumpy(), out3.asnumpy())
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
@@ -311,7 +311,9 @@ def test_tuple_field_input(program_processor):
     )
     inp2 = gtx.as_field(
         [IDim, JDim, KDim],
-        rng.normal(size=(shape[0], shape[1], shape[2])),
+        rng.normal(
+            size=(shape[0], shape[1], shape[2] + 1)
+        ),  # TODO(havogt) currently we allow different sizes, needed for icon4py compatibility
     )
 
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
@@ -323,7 +325,7 @@ def test_tuple_field_input(program_processor):
     }
     run_processor(tuple_input[dom], program_processor, (inp1, inp2), out=out, offset_provider={})
     if validate:
-        assert np.allclose(np.asarray(inp1) + np.asarray(inp2), out)
+        assert np.allclose(inp1.asnumpy() + inp2.asnumpy()[:, :, :-1], out.asnumpy())
 
 
 @pytest.mark.xfail(reason="Implement wrapper for extradim as tuple")
@@ -389,7 +391,7 @@ def test_tuple_of_tuple_of_field_input(program_processor):
     )
     if validate:
         assert np.allclose(
-            (np.asarray(inp1) + np.asarray(inp2) + np.asarray(inp3) + np.asarray(inp4)), out
+            (inp1.asnumpy() + inp2.asnumpy() + inp3.asnumpy() + inp4.asnumpy()), out.asnumpy()
         )
 
 

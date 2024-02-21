@@ -65,7 +65,25 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                 )
             ],
         ),
-        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
+        stencil=P(
+            itir.Lambda,
+            params=[P(itir.Sym, id=eve.SymbolName("__stencil_arg0"))],
+            expr=P(
+                itir.FunCall,
+                fun=P(
+                    itir.Lambda,
+                    params=[P(itir.Sym)],
+                    expr=P(itir.FunCall, fun=P(itir.SymRef, id=eve.SymbolRef("deref"))),
+                ),
+                args=[
+                    P(
+                        itir.FunCall,
+                        fun=P(itir.SymRef, id=eve.SymbolRef("identity")),
+                        args=[P(itir.SymRef, id=eve.SymbolRef("__stencil_arg0"))],
+                    )
+                ],
+            ),
+        ),
         inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
         output=P(itir.SymRef, id=eve.SymbolRef("out")),
     )
@@ -177,7 +195,7 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
             grid_type=gtx.GridType.CARTESIAN,
         )
 
-    assert exc_info.match("Invalid call to `identity`")
+    assert exc_info.match("Invalid call to 'identity'")
     # TODO(tehrengruber): re-enable again when call signature check doesn't return
     #  immediately after missing `out` argument
     # assert (
@@ -187,6 +205,6 @@ def test_invalid_call_sig_program(invalid_call_sig_program_def):
     #    is not None
     # )
     assert (
-        re.search("Missing required keyword argument\(s\) `out`", exc_info.value.__cause__.args[0])
+        re.search(r"Missing required keyword argument 'out'", exc_info.value.__cause__.args[0])
         is not None
     )

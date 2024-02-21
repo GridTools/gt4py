@@ -26,7 +26,7 @@ from gt4py.next.ffront.fbuiltins import broadcast, int32
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, IField, IJKFloatField, KDim, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
 
 
@@ -59,13 +59,13 @@ def test_call_field_operator_from_python(cartesian_case, arg_spec: tuple[tuple[s
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
+    testee.with_backend(cartesian_case.executor)(
         *pos_args, **kw_args, out=out, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) * 2 * np.asarray(args["b"]) - np.asarray(args["c"])
+    expected = args["a"] * 2 * args["b"] - args["c"]
 
-    assert np.allclose(out, expected)
+    assert np.allclose(out.asnumpy(), expected.asnumpy())
 
 
 @pytest.mark.parametrize("arg_spec", _generate_arg_permutations(("a", "b", "out")))
@@ -85,13 +85,13 @@ def test_call_program_from_python(cartesian_case, arg_spec):
     pos_args = [args[name] for name in arg_names]
     kw_args = {name: args[name] for name in kwarg_names}
 
-    testee.with_backend(cartesian_case.backend)(
+    testee.with_backend(cartesian_case.executor)(
         *pos_args, **kw_args, offset_provider=cartesian_case.offset_provider
     )
 
-    expected = np.asarray(args["a"]) + 2 * np.asarray(args["b"])
+    expected = args["a"] + 2 * args["b"]
 
-    assert np.allclose(args["out"], expected)
+    assert np.allclose(args["out"].asnumpy(), expected.asnumpy())
 
 
 def test_call_field_operator_from_field_operator(cartesian_case):
@@ -143,7 +143,7 @@ def test_call_field_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.asarray(a) + 2 * np.asarray(b) + 3 * np.asarray(c)
+    ref = a + 2 * b + 3 * c
 
     cases.verify(
         cartesian_case,
@@ -158,6 +158,7 @@ def test_call_field_operator_from_program(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 @pytest.mark.uses_scan_in_field_operator
 def test_call_scan_operator_from_field_operator(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
@@ -176,13 +177,12 @@ def test_call_scan_operator_from_field_operator(cartesian_case):
     a, b, out = (
         cases.allocate(cartesian_case, testee, name)() for name in ("a", "b", cases.RETURN)
     )
-    expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(
-        np.asarray(a) + 2.0 * np.asarray(b), axis=2
-    )
+    expected = (1.0 + 3.0 + 5.0 + 7.0) * np.add.accumulate(a.asnumpy() + 2.0 * b.asnumpy(), axis=2)
 
     cases.verify(cartesian_case, testee, a, b, out=out, ref=expected)
 
 
+@pytest.mark.uses_scan
 def test_call_scan_operator_from_program(cartesian_case):
     @scan_operator(axis=KDim, forward=True, init=0.0)
     def testee_scan(state: float, x: float, y: float) -> float:
@@ -208,7 +208,7 @@ def test_call_scan_operator_from_program(cartesian_case):
         for name in ("out1", "out2", "out3", "out4")
     )
 
-    ref = np.add.accumulate(np.asarray(a) + 2 * np.asarray(b), axis=2)
+    ref = np.add.accumulate(a.asnumpy() + 2 * b.asnumpy(), axis=2)
 
     cases.verify(
         cartesian_case,
@@ -222,10 +222,11 @@ def test_call_scan_operator_from_program(cartesian_case):
     )
 
 
+@pytest.mark.uses_scan
 def test_scan_wrong_return_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
-        match=(r"Argument `init` to scan operator `testee_scan` must have same type as its return"),
+        match=(r"Argument 'init' to scan operator 'testee_scan' must have same type as its return"),
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
@@ -239,11 +240,12 @@ def test_scan_wrong_return_type(cartesian_case):
             testee_scan(qc, param_1, param_2, scalar, out=(qc, param_1, param_2))
 
 
+@pytest.mark.uses_scan
 def test_scan_wrong_state_type(cartesian_case):
     with pytest.raises(
         errors.DSLError,
         match=(
-            r"Argument `init` to scan operator `testee_scan` must have same type as `state` argument"
+            r"Argument 'init' to scan operator 'testee_scan' must have same type as 'state' argument"
         ),
     ):
 
@@ -274,7 +276,7 @@ def bound_args_testee():
 
 def test_bind_invalid_arg(cartesian_case, bound_args_testee):
     with pytest.raises(
-        TypeError, match="Keyword argument `inexistent_arg` is not a valid program parameter."
+        TypeError, match="Keyword argument 'inexistent_arg' is not a valid program parameter."
     ):
         bound_args_testee.with_bound_args(inexistent_arg=1)
 
@@ -304,7 +306,7 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
 
     assert (
         re.search(
-            "Parameter `arg2` already set as a bound argument.", exc_info.value.__cause__.args[0]
+            "Parameter 'arg2' already set as a bound argument.", exc_info.value.__cause__.args[0]
         )
         is not None
     )

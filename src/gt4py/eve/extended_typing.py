@@ -414,9 +414,11 @@ def extended_runtime_checkable(  # too complex but unavoidable
 
             _allow_reckless_class_checks = getattr(
                 _typing,
-                "_allow_reckless_class_checks"
-                if hasattr(_typing, "_allow_reckless_class_checks")
-                else "_allow_reckless_class_cheks",  # There is a typo in 3.8 and 3.9
+                (
+                    "_allow_reckless_class_checks"
+                    if hasattr(_typing, "_allow_reckless_class_checks")
+                    else "_allow_reckless_class_cheks"
+                ),  # There is a typo in 3.8 and 3.9
             )
 
             _get_protocol_attrs = (
@@ -493,7 +495,7 @@ if _sys.version_info >= (3, 9):
     if isinstance(_typing.Any, type):  # Python >= 3.11
         _ArtefactTypes = (*_ArtefactTypes, _typing.Any)
 
-# `Any` is a class since typing_extensions >= 4.4
+# `Any` is a class since typing_extensions >= 4.4 and Python 3.11
 if (typing_exts_any := getattr(_typing_extensions, "Any", None)) is not _typing.Any and isinstance(
     typing_exts_any, type
 ):
@@ -504,11 +506,13 @@ def is_actual_type(obj: Any) -> TypeGuard[Type]:
     """Check if an object has an actual type and instead of a typing artefact like ``GenericAlias`` or ``Any``.
 
     This is needed because since Python 3.9:
-        ``isinstance(types.GenericAlias(),  type) is True``
+        ``isinstance(types.GenericAlias(), type) is True``
     and since Python 3.11:
-        ``isinstance(typing.Any,  type) is True``
+        ``isinstance(typing.Any, type) is True``
     """
-    return isinstance(obj, type) and type(obj) not in _ArtefactTypes
+    return (
+        isinstance(obj, type) and (obj not in _ArtefactTypes) and (type(obj) not in _ArtefactTypes)
+    )
 
 
 if hasattr(_typing_extensions, "Any") and _typing.Any is not _typing_extensions.Any:  # type: ignore[attr-defined] # _typing_extensions.Any only from >= 4.4
@@ -641,9 +645,12 @@ def get_partial_type_hints(
             resolved_hints = get_type_hints(  # type: ignore[call-arg]  # Python 3.8 does not define `include-extras`
                 obj, globalns=globalns, localns=localns, include_extras=include_extras
             )
-            hints.update(resolved_hints)
+            hints[name] = resolved_hints[name]
         except NameError as error:
             if isinstance(hint, str):
+                # This conversion could be probably skipped in Python versions containing
+                # the fix applied in bpo-41370. Check:
+                # https://github.com/python/cpython/commit/b465b606049f6f7dd0711cb031fdaa251818741a#diff-ddb987fca5f5df0c9a2f5521ed687919d70bb3d64eaeb8021f98833a2a716887R344
                 hints[name] = ForwardRef(hint)
             elif isinstance(hint, (ForwardRef, _typing.ForwardRef)):
                 hints[name] = hint
@@ -673,7 +680,7 @@ def eval_forward_ref(
 
     Examples:
         >>> from typing import Dict, Tuple
-        >>> print("Result:", eval_forward_ref('Dict[str, Tuple[int, float]]'))
+        >>> print("Result:", eval_forward_ref("Dict[str, Tuple[int, float]]"))
         Result: ...ict[str, ...uple[int, float]]
 
     """
@@ -737,21 +744,23 @@ def infer_type(  # function is complex but well organized in independent cases
         >>> infer_type(frozenset([1, 2, 3]))
         frozenset[int]
 
-        >>> infer_type({'a': 0, 'b': 1})
+        >>> infer_type({"a": 0, "b": 1})
         dict[str, int]
 
-        >>> infer_type({'a': 0, 'b': 'B'})
+        >>> infer_type({"a": 0, "b": "B"})
         dict[str, ...Any]
 
         >>> print("Result:", infer_type(lambda a, b: a + b))
         Result: ...Callable[[...Any, ...Any], ...Any]
 
         # Note that some patch versions of cpython3.9 show weird behaviors
-        >>> def f(a: int, b) -> int: ...
+        >>> def f(a: int, b) -> int:
+        ...     ...
         >>> print("Result:", infer_type(f))
         Result: ...Callable[[...int..., ...Any], int]
 
-        >>> def f(a: int, b) -> int: ...
+        >>> def f(a: int, b) -> int:
+        ...     ...
         >>> print("Result:", infer_type(f))
         Result: ...Callable[..., int]
 
@@ -768,7 +777,7 @@ def infer_type(  # function is complex but well organized in independent cases
         ... @extended_infer_type.register(float)
         ... @extended_infer_type.register(complex)
         ... def _infer_type_number(value, *, annotate_callable_kwargs: bool = False):
-        ...    return numbers.Number
+        ...     return numbers.Number
         >>> extended_infer_type(3.4)
         <class 'numbers.Number'>
         >>> infer_type(3.4)

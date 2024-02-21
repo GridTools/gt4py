@@ -65,11 +65,15 @@ def fencil(x, y, z, out, inp):
 def naive_lap(inp):
     shape = [inp.shape[0] - 2, inp.shape[1] - 2, inp.shape[2]]
     out = np.zeros(shape)
+    inp_data = inp.asnumpy()
     for i in range(1, shape[0] + 1):
         for j in range(1, shape[1] + 1):
             for k in range(0, shape[2]):
-                out[i - 1, j - 1, k] = -4 * inp[i, j, k] + (
-                    inp[i + 1, j, k] + inp[i - 1, j, k] + inp[i, j + 1, k] + inp[i, j - 1, k]
+                out[i - 1, j - 1, k] = -4 * inp_data[i, j, k] + (
+                    inp_data[i + 1, j, k]
+                    + inp_data[i - 1, j, k]
+                    + inp_data[i, j + 1, k]
+                    + inp_data[i, j - 1, k]
                 )
     return out
 
@@ -103,4 +107,4 @@ def test_anton_toy(program_processor, lift_mode):
     )
 
     if validate:
-        assert np.allclose(out, ref)
+        assert np.allclose(out.asnumpy(), ref)

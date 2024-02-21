@@ -11,16 +11,12 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import TypeGuard
 
-from gt4py.next.iterator import ir as itir
+import numpy as np
+
+from gt4py.next import common, utils
 
 
-def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
-    """Match expressions of the form `lift(λ(...) → ...)(...)`."""
-    return (
-        isinstance(arg, itir.FunCall)
-        and isinstance(arg.fun, itir.FunCall)
-        and isinstance(arg.fun.fun, itir.SymRef)
-        and arg.fun.fun.id == "lift"
-    )
+@utils.tree_map
+def asnumpy(field: common.Field | np.ndarray) -> np.ndarray:
+    return field.asnumpy() if common.is_field(field) else field  # type: ignore[return-value] # mypy doesn't understand the condition

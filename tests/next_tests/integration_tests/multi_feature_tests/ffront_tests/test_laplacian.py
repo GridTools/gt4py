@@ -13,14 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+import pytest
 
 import gt4py.next as gtx
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
+    exec_alloc_descriptor,
 )
+
+
+pytestmark = pytest.mark.uses_cartesian_shift
 
 
 @gtx.field_operator
@@ -82,5 +86,5 @@ def test_ffront_lap(cartesian_case):
         in_field,
         out_field,
         inout=out_field[2:-2, 2:-2],
-        ref=lap_ref(lap_ref(np.asarray(in_field.ndarray))),
+        ref=lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
     )
