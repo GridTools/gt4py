@@ -402,7 +402,8 @@ ignore = [
   'RUF015',  # Prefer `next(iter(new_def_type.pos_or_kw_args.values()))` over single element slice
   'B028',  # No explicit `stacklevel` keyword argument found
   'RUF001',  # String contains ambiguous `∨` (LOGICAL OR). Did you mean `v` (LATIN SMALL LETTER V)?
-  'RUF009'  # Do not perform function call in dataclass defaults
+  'RUF009',  # Do not perform function call in dataclass defaults
+  'RUF100'  # Ignore unused ignore qa statements
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
