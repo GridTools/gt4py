@@ -28,11 +28,6 @@ from gt4py.next import config
 from . import exceptions, formatting
 
 
-def set_verbose_exceptions(enabled: bool = False) -> None:
-    """Programmatically set whether to use verbose printing for uncaught errors."""
-    config.VERBOSE_EXCEPTIONS = enabled
-
-
 def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
         return formatting.format_compilation_error(
