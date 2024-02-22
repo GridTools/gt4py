@@ -167,8 +167,8 @@ class GTFNBackendFactory(factory.Factory):
             ),
             name_cached="_cached",
         )
-        force_temporaries = factory.Trait(
-            otf_workflow__translation__lift_mode=transforms.LiftMode.FORCE_TEMPORARIES,
+        use_temporaries = factory.Trait(
+            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
             otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
             name_temps="_with_temporaries",
         )
@@ -196,7 +196,7 @@ run_gtfn_imperative = GTFNBackendFactory(
 
 run_gtfn_cached = GTFNBackendFactory(cached=True)
 
-run_gtfn_with_temporaries = GTFNBackendFactory(force_temporaries=True)
+run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 

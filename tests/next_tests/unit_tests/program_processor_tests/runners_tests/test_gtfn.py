@@ -66,7 +66,7 @@ def test_backend_factory_trait_temporaries():
     assert inline_version.executor.otf_workflow.translation.lift_mode is None
     assert (
         temps_version.executor.otf_workflow.translation.lift_mode
-        is transforms.LiftMode.FORCE_TEMPORARIES
+        is transforms.LiftMode.USE_TEMPORARIES
     )
 
     assert inline_version.executor.otf_workflow.translation.temporary_extraction_heuristics is None
