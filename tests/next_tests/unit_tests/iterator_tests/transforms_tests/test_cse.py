@@ -213,15 +213,14 @@ def test_extract_subexpression_conversion_to_assignment_stmt_form():
 
     testee = im.plus(
         im.let(
-            "c",
-            im.let(
-                "a",
-                1,
-                "b",
-                2,
-            )(im.plus("a", "b")),
-            "d",
-            3,
+            (
+                "c",
+                im.let(
+                    ("a", 1),
+                    ("b", 2),
+                )(im.plus("a", "b")),
+            ),
+            ("d", 3),
         )(im.plus("c", "d")),
         4,
     )
