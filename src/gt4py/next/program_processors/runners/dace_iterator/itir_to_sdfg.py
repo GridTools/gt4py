@@ -257,8 +257,14 @@ class ItirToSDFG(eve.NodeVisitor):
                 tmp_domain,
                 tmp_array.shape,
             ):
-                # instead of using the actual size `end.value - begin.value` we allocate space for indexing from 0
-                # in order to avoid using dace array offsets
+                """
+                The temporary field has a dimension range defined by `begin` and `end` values.
+                Therefore, the actual size is given by the difference `end.value - begin.value`.
+                Instead of allocating the actual size, we allocate space to enable indexing from 0
+                because we want to avoid using dace array offsets (which will be deprecated soon).
+                The result should still be valid, but the stencil will be using only a subset
+                of the array.
+                """
                 if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
                     warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
                 tmp_symbols[str(shape_sym)] = end.value
