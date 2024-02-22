@@ -588,63 +588,77 @@ def test_pruned_args_match(backend):
     test(out, inp)
 
 
-@pytest.mark.parametrize("backend", ["numpy"])
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_K_offset_write(backend):
+    array_shape = (1, 1, 4)
+    K_values = np.arange(start=40, stop=44)
+
+    # Simple case of writing ot an offset.
+    # A is untouched
+    # B is written in K+1 and should have K_values, except for the first element (FORWARD)
     @gtscript.stencil(backend=backend)
     def simple(A: Field[np.float64], B: Field[np.float64]):
         with computation(FORWARD), interval(...):
             B[0, 0, 1] = A
 
     A = gt_storage.zeros(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
-    A[:, :, :] = 42.0
+    A[:, :, :] = K_values
     B = gt_storage.zeros(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     simple(A, B)
     assert (B[:, :, 0] == 0).all()
-    assert (B[:, :, 1:3] == 42.0).all()
+    assert (B[:, :, 1:3] == K_values[0:2]).all()
 
+    # Order of operations: FORWARD with negative offset
+    # means while A is update B will have non-updated values of A
+    # Because of the interval, value of B[0] is 0
     @gtscript.stencil(backend=backend)
     def forward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
-        with computation(FORWARD), interval(1, 3):
+        with computation(FORWARD), interval(1, None):
             A[0, 0, -1] = scalar
-            B[0, 0, 1] = A
+            B[0, 0, 0] = A
 
     A = gt_storage.zeros(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
-    A[:, :, :] = 42.0
-    B = gt_storage.empty(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+    A[:, :, :] = K_values
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     forward(A, B, 2.0)
-    # B will have non-updated values of A
-    assert (B[:, :, 1:3] == 42.0).all()
+    assert (A[:, :, 1:3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:] == K_values[1:]).all()
 
+    # Order of operations: BACKWARD with negative offset
+    # means A is update B will get the updated values of A
     @gtscript.stencil(backend=backend)
     def backward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
-        with computation(BACKWARD), interval(1, 3):
+        with computation(BACKWARD), interval(1, None):
             A[0, 0, -1] = scalar
-            B[0, 0, 1] = A
+            B[0, 0, 0] = A
 
     A = gt_storage.zeros(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
-    A[:, :, :] = 42.0
+    A[:, :, :] = K_values
     B = gt_storage.empty(
-        backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     backward(A, B, 2.0)
-    # B will have updated values of A
-    assert (B[:, :, 1:3] == 2.0).all()
+    assert (A[:, :, 1:3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, :] == A[:, :, :]).all()
 
     # Conditional with secoundary K index on a while loop,
     # simplified from in-situ code of NOAA's SHiELD microphysics
     @gtscript.stencil(backend=backend)
     def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
-        with computation(BACKWARD), interval(1, 3):
+        with computation(BACKWARD), interval(1, None):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
                 B[0, 0, 1] = A
@@ -657,7 +671,7 @@ def test_K_offset_write(backend):
     A = gt_storage.zeros(
         backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64
     )
-    A[:, :, :] = 42.0
+    A[:, :, :] = K_values
     B = gt_storage.ones(backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64)
     column_physics_conditional(A, B, 2.0)
     assert (A[0, 0, :] == [2, 2, -1, -1]).all()
