@@ -354,7 +354,11 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 )
             else:
                 res = dcir.ScalarAccess(name=name, dtype=node.dtype)
-        if is_target:
+        # Because we allow writing in K, we allow targets who have been
+        # writing in K to be omitted so the original connector can be re-used.
+        # Previous guardrails in `gtscript` restrict the writes
+        # to non-parallel K-loop so we don't have issues.
+        if is_target and node.offset.to_dict()["k"] == 0:
             targets.add(node.name)
         return res
 
