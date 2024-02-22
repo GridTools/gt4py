@@ -63,7 +63,7 @@ def test_maxover_execution_(unstructured_case, strategy):
         inp.asnumpy()[v2e_table],
         axis=1,
         initial=np.min(inp.asnumpy()),
-        where=v2e_table != common.SKIP_VALUE,
+        where=v2e_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
@@ -83,7 +83,7 @@ def test_minover_execution(unstructured_case):
             edge_f[v2e_table],
             axis=1,
             initial=np.max(edge_f),
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -134,7 +134,7 @@ def test_neighbor_sum(unstructured_case, fop):
         edge_f.asnumpy()[adv_indexing],
         axis=local_dim_idx,
         initial=0,
-        where=broadcasted_table != common.SKIP_VALUE,
+        where=broadcasted_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(
         unstructured_case,
@@ -177,7 +177,7 @@ def test_reduction_execution_with_offset(unstructured_case):
             field.asnumpy()[:, 1][v2e_table],
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ).reshape(out.shape),
         offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
     )
@@ -205,7 +205,7 @@ def test_reduction_expression_in_call(unstructured_case):
             -edge_f[v2e_table] ** 2 * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -224,7 +224,7 @@ def test_reduction_with_common_expression(unstructured_case):
             flux[v2e_table] * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 

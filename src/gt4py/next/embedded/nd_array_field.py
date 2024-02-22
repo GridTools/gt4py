@@ -535,7 +535,7 @@ def _make_reduction(
             for d in field.domain.dims
         )
         masked_array = xp.where(
-            xp.asarray(offset_definition.table[broadcast_slice]) != common.SKIP_VALUE,
+            xp.asarray(offset_definition.table[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
             field.ndarray,
             initial_value_op(field),
         )

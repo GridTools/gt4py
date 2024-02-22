@@ -31,7 +31,7 @@ class AtlasTable:
             if neigh_index < self.atlas_connectivity.cols(primary_index):
                 return self.atlas_connectivity[primary_index, neigh_index]
             else:
-                return common.SKIP_VALUE
+                return common._DEFAULT_SKIP_VALUE
         else:
             if neigh_index < 2:
                 return self.atlas_connectivity[primary_index, neigh_index]

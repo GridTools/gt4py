@@ -332,7 +332,7 @@ def as_connectivity(
         ValueError: If the domain or codomain is invalid, or if the shape of the data does not match the domain shape.
     """
     assert (
-        skip_value is None or skip_value == common.SKIP_VALUE
+        skip_value is None or skip_value == common._DEFAULT_SKIP_VALUE
     )  # TODO(havogt): not yet configurable
     if isinstance(domain, Sequence) and all(isinstance(dim, common.Dimension) for dim in domain):
         domain = cast(Sequence[common.Dimension], domain)
