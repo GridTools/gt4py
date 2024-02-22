@@ -61,7 +61,7 @@ def test_backend_factory_trait_cached():
 
 def test_backend_factory_trait_temporaries():
     inline_version = gtfn.GTFNBackendFactory(cached=False)
-    temps_version = gtfn.GTFNBackendFactory(cached=False, force_temporaries=True)
+    temps_version = gtfn.GTFNBackendFactory(cached=False, use_temporaries=True)
 
     assert inline_version.executor.otf_workflow.translation.lift_mode is None
     assert (
