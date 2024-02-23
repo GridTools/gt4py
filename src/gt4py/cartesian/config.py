@@ -85,4 +85,4 @@ code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
 
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
 
-DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "32,1,1")
+DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")
