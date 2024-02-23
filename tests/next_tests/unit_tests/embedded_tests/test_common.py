@@ -157,7 +157,7 @@ def test_iterate_domain():
 @pytest.mark.parametrize(
     "slices, expected",
     [
-        [slice(I(3), I(4)), (I, common.UnitRange(3, 4))],
+        [slice(I(3), I(4)), ((I, common.UnitRange(3, 4)),)],
         [
             (slice(J(3), J(6)), slice(I(3), I(5))),
             ((J, common.UnitRange(3, 6)), (I, common.UnitRange(3, 5))),

@@ -153,8 +153,8 @@ def canonicalize_any_index_sequence(
 ) -> common.AnyIndexSpec:
     # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
-    if isinstance(index, tuple) and all(isinstance(i, slice) for i in index):
-        new_index = tuple([_named_slice_to_named_range(i) for i in index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
+    if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
+        new_index = tuple([_named_slice_to_named_range(i) for i in new_index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
     return new_index
 
 
