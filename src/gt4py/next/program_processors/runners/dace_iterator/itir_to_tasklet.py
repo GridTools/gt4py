@@ -612,38 +612,53 @@ def builtin_if(
     # and therefore do not require exclusive branch execution, and regular if-statements where at least one branch
     # is a value expression, which has to be evaluated at runtime with conditional state transition
     result_values = []
-    branch_values = []
     assert len(tbr_values) == len(fbr_values)
     for tbr_value, fbr_value in zip(tbr_values, fbr_values):
         assert isinstance(tbr_value, (SymbolExpr, ValueExpr))
         assert isinstance(fbr_value, (SymbolExpr, ValueExpr))
         assert tbr_value.dtype == fbr_value.dtype
 
-        if any(isinstance(x, ValueExpr) for x in (tbr_value, fbr_value)):
-            branch_values.append((tbr_value, fbr_value))
+        var = unique_var_name()
 
-        ctx_args: Sequence[SymbolExpr | ValueExpr] = [ctx_stmt_node] + [
-            (
-                arg_node
-                if isinstance(arg_node, SymbolExpr)
-                else ValueExpr(current_state.add_access(arg_node.value.data), arg_node.dtype)
-            )
-            for arg_node in (tbr_value, fbr_value)
-        ]
-        expr_args = [(arg, f"{arg.value.data}_v") for arg in ctx_args if isinstance(arg, ValueExpr)]
-        internals = [
-            arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in ctx_args
-        ]
-        expr = "({1} if {0} else {2})".format(*internals)
-        if_expr = transformer.add_expr_tasklet(expr_args, expr, tbr_value.dtype, "if_select")
-        result_values.extend(if_expr)
+        if all(isinstance(x, SymbolExpr) for x in (tbr_value, fbr_value)):
+            code = f"{tbr_value.value} if _cond else {fbr_value.value}"
+            if_expr = transformer.add_expr_tasklet(
+                [(ctx_stmt_node, "_cond")], code, tbr_value.dtype, "if_select"
+            )[0]
+            result_values.append(if_expr)
+        else:
+            desc = sdfg.arrays[
+                tbr_value.value.data if isinstance(tbr_value, ValueExpr) else fbr_value.value.data
+            ]
+            if isinstance(desc, dace.data.Scalar):
+                sdfg.add_scalar(var, desc.dtype, transient=True)
+            else:
+                sdfg.add_array(var, desc.shape, desc.dtype, transient=True)
+
+            for state, expr in [(tbr_state, tbr_value), (fbr_state, fbr_value)]:
+                val_node = state.add_access(var)
+                if isinstance(expr, ValueExpr):
+                    state.add_nedge(
+                        expr.value, val_node, dace.Memlet.from_array(expr.value.data, desc)
+                    )
+                else:
+                    assert desc.shape == (1,)
+                    state.add_edge(
+                        state.add_tasklet("write_symbol", {}, {"_out"}, f"_out = {expr.value}"),
+                        "_out",
+                        val_node,
+                        None,
+                        dace.Memlet(var, "0"),
+                    )
+            result_values.append(ValueExpr(current_state.add_access(var), desc.dtype))
 
     # if all branches are symbolic expressions, the true/false states can be removed
     # as well as the conditional state transition
-    if branch_values:
-        sdfg.remove_edge(sdfg.edges_between(stmt_state, join_state)[0])
-    else:
+    if tbr_state.is_empty() and fbr_state.is_empty():
         sdfg.remove_nodes_from([tbr_state, fbr_state])
+    else:
+        sdfg.remove_edge(sdfg.edges_between(stmt_state, join_state)[0])
+        current_state.remove_node(ctx_stmt_node.value)
 
     return result_values
 
