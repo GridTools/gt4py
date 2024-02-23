@@ -629,7 +629,7 @@ def test_K_offset_write(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     forward(A, B, 2.0)
-    assert (A[:, :, 1:3] == 2.0).all()
+    assert (A[:, :, :3] == 2.0).all()
     assert (A[:, :, 3] == K_values[3]).all()
     assert (B[:, :, 0] == 0).all()
     assert (B[:, :, 1:] == K_values[1:]).all()
@@ -650,12 +650,22 @@ def test_K_offset_write(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     backward(A, B, 2.0)
-    assert (A[:, :, 1:3] == 2.0).all()
+    assert (A[:, :, :3] == 2.0).all()
     assert (A[:, :, 3] == K_values[3]).all()
     assert (B[:, :, :] == A[:, :, :]).all()
 
-    # Conditional with secoundary K index on a while loop,
-    # simplified from in-situ code of NOAA's SHiELD microphysics
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write_conditional(backend):
+    # While loop have a bug in `dace:X` backends where
+    # the read-connector is used which means you can never
+    # update the field in a while.
+    if backend == "dace:cpu":
+        pytest.skip("Internal compiler error in GitHub action container")
+
+    array_shape = (1, 1, 4)
+    K_values = np.arange(start=40, stop=44)
+
     @gtscript.stencil(backend=backend)
     def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
         with computation(BACKWARD), interval(1, None):
@@ -669,10 +679,12 @@ def test_K_offset_write(backend):
                 lev = lev + 1
 
     A = gt_storage.zeros(
-        backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     A[:, :, :] = K_values
-    B = gt_storage.ones(backend=backend, aligned_index=(0, 0, 0), shape=(1, 1, 4), dtype=np.float64)
+    B = gt_storage.ones(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
     column_physics_conditional(A, B, 2.0)
     assert (A[0, 0, :] == [2, 2, -1, -1]).all()
     assert (B[0, 0, :] == [1, -1, 2, 42]).all()
