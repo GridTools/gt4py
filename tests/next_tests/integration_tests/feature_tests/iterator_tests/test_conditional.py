@@ -34,15 +34,6 @@ def stencil_conditional(inp):
 def test_conditional_w_tuple(program_processor):
     program_processor, validate = program_processor
 
-    # TODO(edopao): remove try/catch once dace bug is fixed in state fusion
-    try:
-        from gt4py.next.program_processors.runners.dace_iterator import run_dace_cpu, run_dace_gpu
-
-        if program_processor in [run_dace_cpu, run_dace_gpu]:
-            pytest.xfail("requires fix in dace module for state fusion")
-    except ImportError:
-        pass
-
     shape = [5]
 
     inp = gtx.as_field([IDim], np.random.randint(0, 2, shape, dtype=np.int32))

@@ -569,7 +569,8 @@ def builtin_if(
 ) -> list[ValueExpr]:
     assert len(node_args) == 3
     sdfg = transformer.context.body
-    is_start_block = sdfg.start_block == transformer.context.state
+    current_state = transformer.context.state
+    is_start_state = sdfg.start_block == current_state
 
     def build_if_state(arg, state):
         symbol_map = copy.deepcopy(transformer.context.symbol_map)
@@ -580,7 +581,7 @@ def builtin_if(
         return node_taskgen.visit(arg)
 
     # visit if-statement condition as a tasklet inside start block
-    stmt_state = sdfg.add_state("if_statement", is_start_block=is_start_block)
+    stmt_state = sdfg.add_state_before(current_state, "if_statement", is_start_state=is_start_state)
     stmt_node = build_if_state(node_args[0], stmt_state)[0]
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
@@ -591,20 +592,18 @@ def builtin_if(
     sdfg.add_edge(
         stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
     )
-    sdfg.add_edge(tbr_state, transformer.context.state, dace.InterstateEdge())
+    sdfg.add_edge(tbr_state, current_state, dace.InterstateEdge())
     #
     fbr_state = sdfg.add_state("false_branch")
     fbr_values = build_if_state(node_args[2], fbr_state)
     sdfg.add_edge(
         stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
     )
-    sdfg.add_edge(fbr_state, transformer.context.state, dace.InterstateEdge())
+    sdfg.add_edge(fbr_state, current_state, dace.InterstateEdge())
 
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
-    ctx_stmt_node = ValueExpr(
-        transformer.context.state.add_access(stmt_node.value.data), stmt_node.dtype
-    )
+    ctx_stmt_node = ValueExpr(current_state.add_access(stmt_node.value.data), stmt_node.dtype)
 
     # we distinguish between select if-statements, where both true and false branches are symbolic expressions,
     # and therefore do not require exclusive branch execution, and regular if-statements where at least one branch
@@ -624,9 +623,7 @@ def builtin_if(
             (
                 arg_node
                 if isinstance(arg_node, SymbolExpr)
-                else ValueExpr(
-                    transformer.context.state.add_access(arg_node.value.data), arg_node.dtype
-                )
+                else ValueExpr(current_state.add_access(arg_node.value.data), arg_node.dtype)
             )
             for arg_node in (tbr_value, fbr_value)
         ]
@@ -640,9 +637,10 @@ def builtin_if(
 
     # if all branches are symbolic expressions, the true/false states can be removed
     # as well as the conditional state transition
-    if not branch_values:
+    if branch_values:
+        sdfg.remove_edge(sdfg.edges_between(stmt_state, current_state)[0])
+    else:
         sdfg.remove_nodes_from([tbr_state, fbr_state])
-        sdfg.add_edge(stmt_state, transformer.context.state, dace.InterstateEdge())
 
     return result_values
 
