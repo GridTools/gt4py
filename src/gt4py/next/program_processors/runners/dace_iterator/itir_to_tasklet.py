@@ -572,6 +572,9 @@ def builtin_if(
     current_state = transformer.context.state
     is_start_state = sdfg.start_block == current_state
 
+    # build an empty state to join true and false branches
+    join_state = sdfg.add_state_before(current_state, "join")
+
     def build_if_state(arg, state):
         symbol_map = copy.deepcopy(transformer.context.symbol_map)
         node_context = Context(sdfg, state, symbol_map)
@@ -581,25 +584,25 @@ def builtin_if(
         return node_taskgen.visit(arg)
 
     # visit if-statement condition as a tasklet inside start block
-    stmt_state = sdfg.add_state_before(current_state, "if_statement", is_start_state=is_start_state)
+    stmt_state = sdfg.add_state_before(join_state, "if_statement", is_start_state)
     stmt_node = build_if_state(node_args[0], stmt_state)[0]
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
 
     # visit true and false branches (here called `tbr` and `fbr`) as separate states
-    tbr_state = sdfg.add_state("true_branch")
-    tbr_values = build_if_state(node_args[1], tbr_state)
+    tbr_state = sdfg.add_state(join_state, "true_branch")
     sdfg.add_edge(
         stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
     )
-    sdfg.add_edge(tbr_state, current_state, dace.InterstateEdge())
+    sdfg.add_edge(tbr_state, join_state, dace.InterstateEdge())
+    tbr_values = build_if_state(node_args[1], tbr_state)
     #
-    fbr_state = sdfg.add_state("false_branch")
-    fbr_values = build_if_state(node_args[2], fbr_state)
+    fbr_state = sdfg.add_state(join_state, "false_branch")
     sdfg.add_edge(
         stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
     )
-    sdfg.add_edge(fbr_state, current_state, dace.InterstateEdge())
+    sdfg.add_edge(fbr_state, join_state, dace.InterstateEdge())
+    fbr_values = build_if_state(node_args[2], fbr_state)
 
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
@@ -638,7 +641,7 @@ def builtin_if(
     # if all branches are symbolic expressions, the true/false states can be removed
     # as well as the conditional state transition
     if branch_values:
-        sdfg.remove_edge(sdfg.edges_between(stmt_state, current_state)[0])
+        sdfg.remove_edge(sdfg.edges_between(stmt_state, join_state)[0])
     else:
         sdfg.remove_nodes_from([tbr_state, fbr_state])
 
