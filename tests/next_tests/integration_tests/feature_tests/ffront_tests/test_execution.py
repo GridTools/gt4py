@@ -1079,9 +1079,9 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), 2)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
 
-    cases.verify(cartesian_case, prog, inp, k_index, out=out[:, 1:], ref=ref[:, 1:])
+    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
