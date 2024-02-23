@@ -522,6 +522,87 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
+def _mask_ranges(
+    mask: core_defs.NDArrayObject,
+) -> list[tuple[bool, common.UnitRange]]:
+    # TODO: does it make sense to upgrade this naive algorithm to numpy?
+    assert mask.ndim == 1
+    cur = bool(mask[0].item())
+    ind = 0
+    res = []
+    for i in range(1, mask.shape[0]):
+        if (mask_i := bool(mask[i].item)) != cur:
+            res.append((cur, common.UnitRange(ind, i)))
+            cur = mask_i
+            ind = i
+    res.append((cur, common.UnitRange(ind, mask.shape[0])))
+    return res
+
+
+def _trim(lst: list[tuple[bool, common.Domain]]) -> list[tuple[bool, common.Domain]]:
+    res = []
+    found = False
+    for v, d in lst:
+        if d != common.Domain():
+            res.append((v, d))
+            found = True
+        else:
+            if found:
+                raise ValueError("Out of bounds.")
+    return res
+
+
+def _concat_where(m, t, f):
+    xp = t.__class__.array_ns
+    if m.domain.ndim != 1:
+        raise ValueError("Can only concatenate fields with a 1-dimensional mask.")
+    mask_dim = m.domain.dims[0]
+
+    relative_mask_ranges = _mask_ranges(m.ndarray)
+    mask_domains = [
+        (v, _relative_ranges_to_domain((mr,), m.domain)) for v, mr in relative_mask_ranges
+    ]
+    t_domain = t.domain if common.is_field(t) else common.Domain()
+    f_domain = f.domain if common.is_field(f) else common.Domain()
+    intersected_domains = [
+        (v, embedded_common.intersect_domains(t_domain if v else f_domain, d))
+        for v, d in mask_domains
+    ]
+
+    assert t.domain.dims == f.domain.dims  # TODO implement broadcasting
+
+    transformed = []
+    for v, d in _trim(intersected_domains):
+        if v:
+            if common.is_field(t):
+                slices = _get_slices_from_domain_slice(t.domain, d)
+                transformed.append(xp.asarray(t.ndarray[slices]))
+            else:
+                transformed.append(t)
+        else:
+            if common.is_field(f):
+                slices = _get_slices_from_domain_slice(f.domain, d)
+                transformed.append(xp.asarray(f.ndarray[slices]))
+            else:
+                transformed.append(f)
+    mask_index = t_domain.dim_index(mask_dim)
+    result = xp.concatenate(transformed, axis=mask_index)
+    result_domain = t_domain.replace(
+        mask_dim,
+        (
+            mask_dim,
+            common.UnitRange(
+                intersected_domains[0][1][mask_index][1].start,
+                intersected_domains[-1][1][mask_index][1].stop,
+            ),
+        ),
+    )
+    return t.__class__.from_array(result, domain=result_domain)
+
+
+NdArrayField.register_builtin_func(fbuiltins.concat_where, _concat_where)
+
+
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
 ) -> Callable[
