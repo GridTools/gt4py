@@ -413,6 +413,10 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
+    @property
+    def is_empty(self) -> bool:
+        return any(rng == UnitRange(0, 0) for rng in self.ranges)
+
     @overload
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 

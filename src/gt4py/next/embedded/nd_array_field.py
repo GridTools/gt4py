@@ -26,7 +26,11 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
-from gt4py.next.embedded import common as embedded_common, context as embedded_context
+from gt4py.next.embedded import (
+    common as embedded_common,
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+)
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
 
@@ -42,17 +46,19 @@ except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
+def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
+    for f in fields:
+        if isinstance(f, NdArrayField):
+            return f.__class__
+    raise AssertionError("No 'NdArrayField' found in the arguments.")
+
+
 def _make_builtin(
     builtin_name: str, array_builtin_name: str, reverse=False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
-        first = None
-        for f in fields:
-            if isinstance(f, NdArrayField):
-                first = f
-                break
-        assert first is not None
-        xp = first.__class__.array_ns
+        cls_ = _get_nd_array_class(*fields)
+        xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
         domain_intersection = embedded_common.intersect_domains(
@@ -80,7 +86,7 @@ def _make_builtin(
         if reverse:
             transformed.reverse()
         new_data = op(*transformed)
-        return first.__class__.from_array(new_data, domain=domain_intersection)
+        return cls_.from_array(new_data, domain=domain_intersection)
 
     _builtin_op.__name__ = builtin_name
     return _builtin_op
@@ -525,13 +531,14 @@ NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "wher
 def _mask_ranges(
     mask: core_defs.NDArrayObject,
 ) -> list[tuple[bool, common.UnitRange]]:
+    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to ranges."""
     # TODO: does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
     cur = bool(mask[0].item())
     ind = 0
     res = []
     for i in range(1, mask.shape[0]):
-        if (mask_i := bool(mask[i].item)) != cur:
+        if (mask_i := bool(mask[i].item())) != cur:
             res.append((cur, common.UnitRange(ind, i)))
             cur = mask_i
             ind = i
@@ -539,68 +546,114 @@ def _mask_ranges(
     return res
 
 
-def _trim(lst: list[tuple[bool, common.Domain]]) -> list[tuple[bool, common.Domain]]:
-    res = []
-    found = False
-    for v, d in lst:
-        if d != common.Domain():
-            res.append((v, d))
-            found = True
-        else:
-            if found:
-                raise ValueError("Out of bounds.")
-    return res
+def _trim_empty_domains(lst: list[tuple[bool, common.Domain]]) -> list[tuple[bool, common.Domain]]:
+    """Remove empty domains from beginning and end of the list."""
+    if not lst:
+        return lst
+    if lst[0][1].is_empty:
+        return _trim_empty_domains(lst[1:])
+    if lst[-1][1].is_empty:
+        return _trim_empty_domains(lst[:-1])
+    return lst
 
 
-def _concat_where(m, t, f):
-    xp = t.__class__.array_ns
+def _intersect_domains_orthogonal_to(
+    dim: common.Dimension, *domains: common.Domain
+) -> tuple[common.Domain, ...]:
+    intersection_orthogonal_to_dim = embedded_common.intersect_domains(
+        *[d.replace(dim) for d in domains]
+    )
+    return tuple(
+        common.Domain(
+            *[(d, r if d == dim else intersection_orthogonal_to_dim[d][1]) for d, r in domain]
+        )
+        for domain in domains
+    )
+
+
+def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.Field:
+    cls_ = _get_nd_array_class(m, t, f)
+    xp = cls_.array_ns
     if m.domain.ndim != 1:
-        raise ValueError("Can only concatenate fields with a 1-dimensional mask.")
+        raise NotImplementedError(
+            "'concat_where': Can only concatenate fields with a 1-dimensional mask."
+        )
     mask_dim = m.domain.dims[0]
+    promoted_dims = common.promote_dims(m.domain.dims, t.domain.dims, f.domain.dims)
+    t_broadcasted = _broadcast(t, promoted_dims)
+    f_broadcasted = _broadcast(f, promoted_dims)
 
     relative_mask_ranges = _mask_ranges(m.ndarray)
     mask_domains = [
         (v, _relative_ranges_to_domain((mr,), m.domain)) for v, mr in relative_mask_ranges
     ]
-    t_domain = t.domain if common.is_field(t) else common.Domain()
-    f_domain = f.domain if common.is_field(f) else common.Domain()
+    t_domain = t_broadcasted.domain if common.is_field(t) else common.Domain()
+    f_domain = f_broadcasted.domain if common.is_field(f) else common.Domain()
+
     intersected_domains = [
         (v, embedded_common.intersect_domains(t_domain if v else f_domain, d))
         for v, d in mask_domains
     ]
 
-    assert t.domain.dims == f.domain.dims  # TODO implement broadcasting
+    intersected_domains = _trim_empty_domains(intersected_domains)
+    if any(d.is_empty for _, d in intersected_domains):
+        raise embedded_exceptions.NonContiguousDomain(
+            f"In 'concat_where', cannot concatenate the following 'Domain's: {[d for _, d in intersected_domains]}."
+        )
+
+    # TODO now intersect them in the dimensions orthogonal to the mask
+
+    foo = _intersect_domains_orthogonal_to(mask_dim, *[domain for _, domain in intersected_domains])
+
+    intersected_domains = [(v, f) for (v, _), f in zip(intersected_domains, foo)]
 
     transformed = []
-    for v, d in _trim(intersected_domains):
+    for v, d in intersected_domains:
         if v:
             if common.is_field(t):
-                slices = _get_slices_from_domain_slice(t.domain, d)
-                transformed.append(xp.asarray(t.ndarray[slices]))
+                slices = _get_slices_from_domain_slice(t_broadcasted.domain, d)
+                transformed.append(
+                    xp.asarray(xp.broadcast_to(t_broadcasted.ndarray[slices], d.shape))
+                )
             else:
                 transformed.append(t)
         else:
             if common.is_field(f):
-                slices = _get_slices_from_domain_slice(f.domain, d)
-                transformed.append(xp.asarray(f.ndarray[slices]))
+                slices = _get_slices_from_domain_slice(f_broadcasted.domain, d)
+                transformed.append(
+                    xp.asarray(xp.broadcast_to(f_broadcasted.ndarray[slices], d.shape))
+                )
             else:
                 transformed.append(f)
     mask_index = t_domain.dim_index(mask_dim)
-    result = xp.concatenate(transformed, axis=mask_index)
-    result_domain = t_domain.replace(
-        mask_dim,
-        (
+    assert mask_index is not None  # for mypy
+    result_domain = (
+        intersected_domains[0][1].replace(
             mask_dim,
-            common.UnitRange(
-                intersected_domains[0][1][mask_index][1].start,
-                intersected_domains[-1][1][mask_index][1].stop,
+            (
+                (
+                    mask_dim,
+                    (
+                        common.UnitRange(
+                            intersected_domains[0][1][mask_index][1].start,
+                            intersected_domains[-1][1][mask_index][1].stop,
+                        )
+                    ),
+                )
             ),
-        ),
+        )
+        if intersected_domains
+        else common.Domain((mask_dim, common.UnitRange(0, 0)))
     )
-    return t.__class__.from_array(result, domain=result_domain)
+    result = (
+        xp.concatenate(transformed, axis=mask_index)
+        if transformed
+        else xp.empty(result_domain.shape)
+    )
+    return cls_.from_array(result, domain=result_domain)
 
 
-NdArrayField.register_builtin_func(fbuiltins.concat_where, _concat_where)
+NdArrayField.register_builtin_func(fbuiltins.concat_where, _concat_where)  # type: ignore[arg-type] # tuples are handled in the base implementation
 
 
 def _make_reduction(
@@ -719,7 +772,7 @@ if jnp:
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
     domain_slice: list[slice | None] = []
     named_ranges = []
     for dim in new_dimensions:
