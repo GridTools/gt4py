@@ -151,6 +151,7 @@ def _find_index_of_dim(
 def canonicalize_any_index_sequence(
     index: common.AnyIndexSpec,
 ) -> common.AnyIndexSpec:
+    # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(index, slice):
         new_index = _named_slice_to_named_range(index)
