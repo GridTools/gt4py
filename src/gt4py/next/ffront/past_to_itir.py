@@ -18,8 +18,9 @@ from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
+from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -141,16 +142,39 @@ class ProgramLowering(
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+        args, node_kwargs = type_info.canonicalize_arguments(
             node.func.type,
-            self.visit(node.args, **kwargs),
-            self.visit(node_kwargs, **kwargs),
+            node.args,
+            node_kwargs,
             use_signature_ordering=True,
         )
 
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        stencil_params = []
+        stencil_args = []
+        for i, arg in enumerate([*args, *node_kwargs]):
+            stencil_params.append(f"__stencil_arg{i}")
+            if isinstance(arg.type, ts.TupleType):
+                # convert into tuple of iterators
+                stencil_args.append(
+                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                )
+            else:
+                stencil_args.append(f"__stencil_arg{i}")
+
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # scan operators return an iterator of tuples, just deref directly
+            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+        else:
+            # field operators return a tuple of iterators, deref element-wise
+            stencil_body = lowering_utils.process_elements(
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+            )
+
         return itir.StencilClosure(
             domain=lowered_domain,
-            stencil=itir.SymRef(id=node.func.id),
+            stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
             location=node.location,

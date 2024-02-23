@@ -19,6 +19,7 @@ import functools
 import warnings
 from typing import Any, Callable, Final, Optional
 
+import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -349,6 +350,11 @@ class GTFNTranslationStep(
             f"{self.__class__.__name__} is not implemented for "
             f"device type {self.device_type.name}"
         )
+
+
+class GTFNTranslationStepFactory(factory.Factory):
+    class Meta:
+        model = GTFNTranslationStep
 
 
 translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()

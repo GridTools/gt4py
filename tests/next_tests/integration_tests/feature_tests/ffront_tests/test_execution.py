@@ -515,9 +515,9 @@ def test_nested_tuple_return(cartesian_case):
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.EField) -> cases.EField:
-        tmp = neighbor_sum(a(V2E), axis=V2EDim)
-        tmp_2 = neighbor_sum(tmp(E2V), axis=E2VDim)
+    def testee(a: cases.VField) -> cases.VField:
+        tmp = neighbor_sum(a(E2V), axis=E2VDim)
+        tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
     cases.verify_with_default_data(
@@ -525,12 +525,12 @@ def test_nested_reduction(unstructured_case):
         testee,
         ref=lambda a: np.sum(
             np.sum(
-                a[unstructured_case.offset_provider["V2E"].table],
+                a[unstructured_case.offset_provider["E2V"].table],
                 axis=1,
                 initial=0,
-                where=unstructured_case.offset_provider["V2E"].table != common.SKIP_VALUE,
-            )[unstructured_case.offset_provider["E2V"].table],
+            )[unstructured_case.offset_provider["V2E"].table],
             axis=1,
+            where=unstructured_case.offset_provider["V2E"].table != common._DEFAULT_SKIP_VALUE,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
     )
@@ -595,7 +595,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
             e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
             axis=1,
             initial=0,
-            where=v2e.table != common.SKIP_VALUE,
+            where=v2e.table != common._DEFAULT_SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -735,7 +735,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
                 b[v2e_table],
                 axis=1,
                 initial=0,
-                where=v2e_table != common.SKIP_VALUE,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
             )
         ),
     )

@@ -65,7 +65,25 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                 )
             ],
         ),
-        stencil=P(itir.SymRef, id=eve.SymbolRef("identity")),
+        stencil=P(
+            itir.Lambda,
+            params=[P(itir.Sym, id=eve.SymbolName("__stencil_arg0"))],
+            expr=P(
+                itir.FunCall,
+                fun=P(
+                    itir.Lambda,
+                    params=[P(itir.Sym)],
+                    expr=P(itir.FunCall, fun=P(itir.SymRef, id=eve.SymbolRef("deref"))),
+                ),
+                args=[
+                    P(
+                        itir.FunCall,
+                        fun=P(itir.SymRef, id=eve.SymbolRef("identity")),
+                        args=[P(itir.SymRef, id=eve.SymbolRef("__stencil_arg0"))],
+                    )
+                ],
+            ),
+        ),
         inputs=[P(itir.SymRef, id=eve.SymbolRef("in_field"))],
         output=P(itir.SymRef, id=eve.SymbolRef("out")),
     )

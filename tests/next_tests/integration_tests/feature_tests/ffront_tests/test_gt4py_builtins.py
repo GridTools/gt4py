@@ -12,6 +12,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from typing import TypeAlias
 
 import numpy as np
 import pytest
@@ -29,6 +30,7 @@ from next_tests.integration_tests.cases import (
     JDim,
     Joff,
     KDim,
+    Koff,
     V2EDim,
     Vertex,
     cartesian_case,
@@ -61,7 +63,7 @@ def test_maxover_execution_(unstructured_case, strategy):
         inp.asnumpy()[v2e_table],
         axis=1,
         initial=np.min(inp.asnumpy()),
-        where=v2e_table != common.SKIP_VALUE,
+        where=v2e_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
@@ -81,7 +83,7 @@ def test_minover_execution(unstructured_case):
             edge_f[v2e_table],
             axis=1,
             initial=np.max(edge_f),
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -132,7 +134,7 @@ def test_neighbor_sum(unstructured_case, fop):
         edge_f.asnumpy()[adv_indexing],
         axis=local_dim_idx,
         initial=0,
-        where=broadcasted_table != common.SKIP_VALUE,
+        where=broadcasted_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(
         unstructured_case,
@@ -140,6 +142,44 @@ def test_neighbor_sum(unstructured_case, fop):
         edge_f,
         out=cases.allocate(unstructured_case, fop, cases.RETURN)(),
         ref=ref,
+    )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_reduction_execution_with_offset(unstructured_case):
+    EKField: TypeAlias = gtx.Field[[Edge, KDim], np.int32]
+    VKField: TypeAlias = gtx.Field[[Vertex, KDim], np.int32]
+
+    @gtx.field_operator
+    def reduction(edge_f: EKField) -> VKField:
+        return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+    @gtx.field_operator
+    def fencil_op(edge_f: EKField) -> VKField:
+        red = reduction(edge_f)
+        return red(Koff[1])
+
+    @gtx.program
+    def fencil(edge_f: EKField, out: VKField):
+        fencil_op(edge_f, out=out)
+
+    v2e_table = unstructured_case.offset_provider["V2E"].table
+    field = cases.allocate(unstructured_case, fencil, "edge_f", sizes={KDim: 2})()
+    out = cases.allocate(unstructured_case, fencil_op, cases.RETURN, sizes={KDim: 1})()
+
+    cases.verify(
+        unstructured_case,
+        fencil,
+        field,
+        out,
+        inout=out,
+        ref=np.sum(
+            field.asnumpy()[:, 1][v2e_table],
+            axis=1,
+            initial=0,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+        ).reshape(out.shape),
+        offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
     )
 
 
@@ -165,7 +205,7 @@ def test_reduction_expression_in_call(unstructured_case):
             -edge_f[v2e_table] ** 2 * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -184,7 +224,7 @@ def test_reduction_with_common_expression(unstructured_case):
             flux[v2e_table] * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 

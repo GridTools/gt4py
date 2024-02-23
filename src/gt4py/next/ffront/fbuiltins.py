@@ -376,7 +376,9 @@ class FieldOffset(runtime.Offset):
                     codomain=self.source,
                     data=offset_definition.table,
                     dtype=offset_definition.index_type,
-                    skip_value=common.SKIP_VALUE if offset_definition.has_skip_values else None,
+                    skip_value=(
+                        common._DEFAULT_SKIP_VALUE if offset_definition.has_skip_values else None
+                    ),
                 )
             else:
                 raise NotImplementedError()
