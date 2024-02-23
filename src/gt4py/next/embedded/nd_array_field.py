@@ -78,7 +78,7 @@ def _make_builtin(
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
         if reverse:
-            transformed = transformed[::-1]
+            transformed.reverse()
         new_data = op(*transformed)
         return first.__class__.from_array(new_data, domain=domain_intersection)
 
@@ -272,7 +272,8 @@ class NdArrayField(
 
     __pow__ = _make_builtin("pow", "power")
 
-    __mod__ = __rmod__ = _make_builtin("mod", "mod")
+    __mod__ = _make_builtin("mod", "mod")
+    __rmod__ = _make_builtin("mod", "mod", reverse=True)
 
     __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore # mypy wants return `bool`
 
