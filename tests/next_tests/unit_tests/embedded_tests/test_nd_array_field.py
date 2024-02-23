@@ -988,3 +988,9 @@ def test_concat_where_broadcasting(nd_array_implementation):
 
     assert expected_domain == result.domain
     np.testing.assert_allclose(result.asnumpy(), expected_array)
+
+
+# TODO test
+# - where one of the field doesn't have the mask dimension
+# - (where the mask dimension is not the first one)
+# - a scalar is involved
