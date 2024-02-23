@@ -621,12 +621,15 @@ def builtin_if(
         var = unique_var_name()
 
         if all(isinstance(x, SymbolExpr) for x in (tbr_value, fbr_value)):
+            # symbolic expressions returned by both branches, the if-node can be translated to a select tasklet
+            # TODO: use select-memlet when it becomes available in dace
             code = f"{tbr_value.value} if _cond else {fbr_value.value}"
             if_expr = transformer.add_expr_tasklet(
                 [(ctx_stmt_node, "_cond")], code, tbr_value.dtype, "if_select"
             )[0]
             result_values.append(if_expr)
         else:
+            # write result to transient container and access it in the original state
             desc = sdfg.arrays[
                 tbr_value.value.data if isinstance(tbr_value, ValueExpr) else fbr_value.value.data
             ]
