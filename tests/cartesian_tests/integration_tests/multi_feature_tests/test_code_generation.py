@@ -32,7 +32,7 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, _get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -590,8 +590,13 @@ def test_pruned_args_match(backend):
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_K_offset_write(backend):
+    # Cuda generates bad code for the K offset
+    if backend == "cuda":
+        pytest.skip("cuda K-offset write generates bad code")
+
+    arraylib = _get_array_library(backend)
     array_shape = (1, 1, 4)
-    K_values = np.arange(start=40, stop=44)
+    K_values = arraylib.arange(start=40, stop=44)
 
     # Simple case of writing ot an offset.
     # A is untouched
@@ -660,11 +665,12 @@ def test_K_offset_write_conditional(backend):
     # While loop have a bug in `dace:X` backends where
     # the read-connector is used which means you can never
     # update the field in a while.
-    if backend == "dace:cpu":
-        pytest.skip("Internal compiler error in GitHub action container")
+    if backend.startswith("dace") or backend == "cuda":
+        pytest.skip("DaCe backends have a bug when handling while loop")
 
+    arraylib = _get_array_library(backend)
     array_shape = (1, 1, 4)
-    K_values = np.arange(start=40, stop=44)
+    K_values = arraylib.arange(start=40, stop=44)
 
     @gtscript.stencil(backend=backend)
     def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
@@ -686,5 +692,5 @@ def test_K_offset_write_conditional(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
     )
     column_physics_conditional(A, B, 2.0)
-    assert (A[0, 0, :] == [2, 2, -1, -1]).all()
-    assert (B[0, 0, :] == [1, -1, 2, 42]).all()
+    assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
+    assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()

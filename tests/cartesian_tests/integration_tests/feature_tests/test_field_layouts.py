@@ -12,13 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import numpy as np
 import pytest
 
 from gt4py import cartesian as gt4pyc, storage as gt_storage
 from gt4py.cartesian import gtscript
 
-from cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS
+from cartesian_tests.definitions import ALL_BACKENDS, PERFORMANCE_BACKENDS, _get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import copy_stencil
 
 
@@ -26,16 +25,6 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-
-
-def _get_array_library(backend: str):
-    backend_cls = gt4pyc.backend.from_name(backend)
-    assert backend_cls is not None
-    if backend_cls.storage_info["device"] == "gpu":
-        assert cp is not None
-        return cp
-    else:
-        return np
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
