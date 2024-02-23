@@ -276,7 +276,7 @@ NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTup
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = (
-    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]]
+    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 )
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
