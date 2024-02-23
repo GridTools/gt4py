@@ -43,7 +43,7 @@ except ImportError:
 
 
 def _make_builtin(
-    builtin_name: str, array_builtin_name: str, reversed=False
+    builtin_name: str, array_builtin_name: str, reverse=False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         first = None
@@ -77,7 +77,7 @@ def _make_builtin(
             else:
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
-        if reversed:
+        if reverse:
             transformed = transformed[::-1]
         new_data = op(*transformed)
         return first.__class__.from_array(new_data, domain=domain_intersection)
@@ -260,15 +260,15 @@ class NdArrayField(
     __pos__ = _make_builtin("pos", "positive")
 
     __sub__ = _make_builtin("sub", "subtract")
-    __rsub__ = _make_builtin("sub", "subtract", reversed=True)
+    __rsub__ = _make_builtin("sub", "subtract", reverse=True)
 
     __mul__ = __rmul__ = _make_builtin("mul", "multiply")
 
     __truediv__ = _make_builtin("div", "divide")
-    __rtruediv__ = _make_builtin("div", "divide", reversed=True)
+    __rtruediv__ = _make_builtin("div", "divide", reverse=True)
 
     __floordiv__ = _make_builtin("floordiv", "floor_divide")
-    __rfloordiv__ = _make_builtin("floordiv", "floor_divide", reversed=True)
+    __rfloordiv__ = _make_builtin("floordiv", "floor_divide", reverse=True)
 
     __pow__ = _make_builtin("pow", "power")
 
@@ -448,7 +448,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
 
 def _relative_ranges_to_domain(
-    relative_ranges: tuple[common.UnitRange, ...], domain: common.Domain
+    relative_ranges: Sequence[common.UnitRange], domain: common.Domain
 ) -> common.Domain:
     return common.Domain(
         dims=domain.dims, ranges=[rr + ar.start for ar, rr in zip(domain.ranges, relative_ranges)]
@@ -523,7 +523,10 @@ NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "wher
 
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
-) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT],]:
+) -> Callable[
+    ...,
+    NdArrayField[common.DimsT, core_defs.ScalarT],
+]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
@@ -642,7 +645,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             domain_slice.append(slice(None))
             named_ranges.append((dim, field.domain[pos][1]))
         else:
-            domain_slice.append(field.__class__.array_ns.newaxis)
+            domain_slice.append(None)  # np.newaxis
             named_ranges.append((dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 

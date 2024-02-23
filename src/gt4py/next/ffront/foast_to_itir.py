@@ -443,5 +443,4 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
 
 
-class FieldOperatorLoweringError(Exception):
-    ...
+class FieldOperatorLoweringError(Exception): ...
