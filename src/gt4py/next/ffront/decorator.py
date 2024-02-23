@@ -221,6 +221,10 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
+    @property
+    def __name__(self) -> str:
+        return self.definition.__name__
+
     @functools.cached_property
     def __gt_allocator__(
         self,
@@ -602,6 +606,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             grid_type=grid_type,
             operator_attributes=operator_attributes,
         )
+
+    @property
+    def __name__(self) -> str:
+        return self.definition.__name__
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type

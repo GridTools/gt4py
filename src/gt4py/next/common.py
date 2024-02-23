@@ -732,7 +732,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but breaks in another place
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -748,6 +748,10 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -840,6 +844,7 @@ def _connectivity(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 
@@ -917,6 +922,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def codomain(self) -> DimT:
         return self.dimension
+
+    @property
+    def skip_value(self) -> None:
+        return None
 
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
@@ -1083,4 +1092,4 @@ class FieldBuiltinFuncRegistry:
 #: Numeric value used to represent missing values in connectivities.
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
-SKIP_VALUE: Final[int] = -1
+_DEFAULT_SKIP_VALUE: Final[int] = -1
