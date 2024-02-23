@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import copy
 import dataclasses
 import itertools
 from collections.abc import Sequence
@@ -566,37 +567,84 @@ def builtin_can_deref(
 def builtin_if(
     transformer: "PythonTaskletCodegen", node: itir.Expr, node_args: list[itir.Expr]
 ) -> list[ValueExpr]:
-    di = dace_debuginfo(node, transformer.context.body.debuginfo)
-    args = transformer.visit(node_args)
-    assert len(args) == 3
-    if_node = args[0][0] if isinstance(args[0], list) else args[0]
+    assert len(node_args) == 3
+    sdfg = transformer.context.body
+    is_start_block = sdfg.start_block == transformer.context.state
 
-    # the argument could be a list of elements on each branch representing the result of `make_tuple`
-    # however, the normal case is to find one value expression
-    assert len(args[1]) == len(args[2])
-    if_expr_args = [
-        (a[0] if isinstance(a, list) else a, b[0] if isinstance(b, list) else b)
-        for a, b in zip(args[1], args[2])
-    ]
+    def build_if_state(arg, state):
+        symbol_map = copy.deepcopy(transformer.context.symbol_map)
+        node_context = Context(sdfg, state, symbol_map)
+        node_taskgen = PythonTaskletCodegen(
+            transformer.offset_provider, node_context, transformer.node_types
+        )
+        return node_taskgen.visit(arg)
 
-    # in case of tuple arguments, generate one if-tasklet for each element of the output tuple
-    if_expr_values = []
-    for a, b in if_expr_args:
-        assert a.dtype == b.dtype
-        expr_args = [
-            (arg, f"{arg.value.data}_v")
-            for arg in (if_node, a, b)
-            if not isinstance(arg, SymbolExpr)
+    # visit if-statement condition as a tasklet inside start block
+    stmt_state = sdfg.add_state("if_statement", is_start_block=is_start_block)
+    stmt_node = build_if_state(node_args[0], stmt_state)[0]
+    assert isinstance(stmt_node, ValueExpr)
+    assert stmt_node.dtype == dace.dtypes.bool
+
+    # visit true and false branches (here called `tbr` and `fbr`) as separate states
+    tbr_state = sdfg.add_state("true_branch")
+    tbr_values = build_if_state(node_args[1], tbr_state)
+    sdfg.add_edge(
+        stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
+    )
+    sdfg.add_edge(tbr_state, transformer.context.state, dace.InterstateEdge())
+    #
+    fbr_state = sdfg.add_state("false_branch")
+    fbr_values = build_if_state(node_args[2], fbr_state)
+    sdfg.add_edge(
+        stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
+    )
+    sdfg.add_edge(fbr_state, transformer.context.state, dace.InterstateEdge())
+
+    assert isinstance(stmt_node, ValueExpr)
+    assert stmt_node.dtype == dace.dtypes.bool
+    ctx_stmt_node = ValueExpr(
+        transformer.context.state.add_access(stmt_node.value.data), stmt_node.dtype
+    )
+
+    # we distinguish between select if-statements, where both true and false branches are symbolic expressions,
+    # and therefore do not require exclusive branch execution, and regular if-statements where at least one branch
+    # is a value expression, which has to be evaluated at runtime with conditional state transition
+    result_values = []
+    branch_values = []
+    assert len(tbr_values) == len(fbr_values)
+    for tbr_value, fbr_value in zip(tbr_values, fbr_values):
+        assert isinstance(tbr_value, (SymbolExpr, ValueExpr))
+        assert isinstance(fbr_value, (SymbolExpr, ValueExpr))
+        assert tbr_value.dtype == fbr_value.dtype
+
+        if any(isinstance(x, ValueExpr) for x in (tbr_value, fbr_value)):
+            branch_values.append((tbr_value, fbr_value))
+
+        ctx_args: Sequence[SymbolExpr | ValueExpr] = [ctx_stmt_node] + [
+            (
+                arg_node
+                if isinstance(arg_node, SymbolExpr)
+                else ValueExpr(
+                    transformer.context.state.add_access(arg_node.value.data), arg_node.dtype
+                )
+            )
+            for arg_node in (tbr_value, fbr_value)
         ]
+        expr_args = [(arg, f"{arg.value.data}_v") for arg in ctx_args if isinstance(arg, ValueExpr)]
         internals = [
-            arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v"
-            for arg in (if_node, a, b)
+            arg.value if isinstance(arg, SymbolExpr) else f"{arg.value.data}_v" for arg in ctx_args
         ]
         expr = "({1} if {0} else {2})".format(*internals)
-        if_expr = transformer.add_expr_tasklet(expr_args, expr, a.dtype, "if", dace_debuginfo=di)
-        if_expr_values.append(if_expr[0])
+        if_expr = transformer.add_expr_tasklet(expr_args, expr, tbr_value.dtype, "if_select")
+        result_values.extend(if_expr)
 
-    return if_expr_values
+    # if all branches are symbolic expressions, the true/false states can be removed
+    # as well as the conditional state transition
+    if not branch_values:
+        sdfg.remove_nodes_from([tbr_state, fbr_state])
+        sdfg.add_edge(stmt_state, transformer.context.state, dace.InterstateEdge())
+
+    return result_values
 
 
 def builtin_list_get(
