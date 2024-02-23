@@ -583,11 +583,12 @@ def builtin_if(
         )
         return node_taskgen.visit(arg)
 
-    # visit if-statement condition as a tasklet inside start block
+    # represent the if-statement condition as a tasklet inside an `if_statement` state preceding `join` state
     stmt_state = sdfg.add_state_before(join_state, "if_statement", is_start_state)
     stmt_node = build_if_state(node_args[0], stmt_state)[0]
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
+    assert sdfg.arrays[stmt_node.value.data].shape == (1,)
 
     # visit true and false branches (here called `tbr` and `fbr`) as separate states
     tbr_state = sdfg.add_state(join_state, "true_branch")
@@ -606,6 +607,7 @@ def builtin_if(
 
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
+    # make the result of the if-statement evaluation available inside current state
     ctx_stmt_node = ValueExpr(current_state.add_access(stmt_node.value.data), stmt_node.dtype)
 
     # we distinguish between select if-statements, where both true and false branches are symbolic expressions,
@@ -621,7 +623,8 @@ def builtin_if(
         var = unique_var_name()
 
         if all(isinstance(x, SymbolExpr) for x in (tbr_value, fbr_value)):
-            # symbolic expressions returned by both branches, the if-node can be translated to a select tasklet
+            # both branches return symbolic expressions, therefore the if-node can be translated
+            # to a select-tasklet inside current state
             # TODO: use select-memlet when it becomes available in dace
             code = f"{tbr_value.value} if _cond else {fbr_value.value}"
             if_expr = transformer.add_expr_tasklet(
@@ -629,7 +632,8 @@ def builtin_if(
             )[0]
             result_values.append(if_expr)
         else:
-            # write result to transient container and access it in the original state
+            # at least one of the two branches contains a value expression, which should be evaluated
+            # only if the corresponding true/false condition is satisfied
             desc = sdfg.arrays[
                 tbr_value.value.data if isinstance(tbr_value, ValueExpr) else fbr_value.value.data
             ]
@@ -638,6 +642,7 @@ def builtin_if(
             else:
                 sdfg.add_array(var, desc.shape, desc.dtype, transient=True)
 
+            # write result to transient data container and access it in the original state
             for state, expr in [(tbr_state, tbr_value), (fbr_state, fbr_value)]:
                 val_node = state.add_access(var)
                 if isinstance(expr, ValueExpr):
