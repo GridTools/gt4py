@@ -156,14 +156,21 @@ def test_where_builtin_with_tuple(nd_array_implementation):
     assert np.allclose(result[1].ndarray, expected1)
 
 
-def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation):
-    inp_a = [-1.0, 4.2, 42]
-    inp_b = [2.0, 3.0, -3.0]
-    inputs = [inp_a, inp_b]
+@pytest.mark.parametrize("lhs, rhs", [([-1.0, 4.2, 42], [2.0, 3.0, -3.0]), (1.0, [2.0, 3.0, -3.0])])
+def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation, lhs, rhs):
+    inputs = [lhs, rhs]
 
-    expected = binary_arithmetic_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+    expected = binary_arithmetic_op(
+        *[
+            (np.asarray(inp, dtype=np.float32) if isinstance(inp, list) else np.float32(inp))
+            for inp in inputs
+        ]
+    )
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
+    field_inputs = [
+        (_make_field(inp, nd_array_implementation) if isinstance(inp, list) else np.float32(inp))
+        for inp in inputs
+    ]
 
     result = binary_arithmetic_op(*field_inputs)
 

@@ -42,10 +42,16 @@ except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
-def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., NdArrayField]:
+def _make_builtin(
+    builtin_name: str, array_builtin_name: str, reverse=False
+) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
-        first = fields[0]
-        assert isinstance(first, NdArrayField)
+        first = None
+        for f in fields:
+            if isinstance(f, NdArrayField):
+                first = f
+                break
+        assert first is not None
         xp = first.__class__.array_ns
         op = getattr(xp, array_builtin_name)
 
@@ -59,7 +65,11 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
-                    f_broadcasted = _broadcast(f, domain_intersection.dims)
+                    f_broadcasted = (
+                        _broadcast(f, domain_intersection.dims)
+                        if f.domain.dims != domain_intersection.dims
+                        else f
+                    )
                     f_slices = _get_slices_from_domain_slice(
                         f_broadcasted.domain, domain_intersection
                     )
@@ -67,7 +77,8 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
             else:
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
-
+        if reverse:
+            transformed = transformed[::-1]
         new_data = op(*transformed)
         return first.__class__.from_array(new_data, domain=domain_intersection)
 
@@ -248,17 +259,21 @@ class NdArrayField(
 
     __pos__ = _make_builtin("pos", "positive")
 
-    __sub__ = __rsub__ = _make_builtin("sub", "subtract")
+    __sub__ = _make_builtin("sub", "subtract")
+    __rsub__ = _make_builtin("sub", "subtract", reverse=True)
 
     __mul__ = __rmul__ = _make_builtin("mul", "multiply")
 
-    __truediv__ = __rtruediv__ = _make_builtin("div", "divide")
+    __truediv__ = _make_builtin("div", "divide")
+    __rtruediv__ = _make_builtin("div", "divide", reverse=True)
 
-    __floordiv__ = __rfloordiv__ = _make_builtin("floordiv", "floor_divide")
+    __floordiv__ = _make_builtin("floordiv", "floor_divide")
+    __rfloordiv__ = _make_builtin("floordiv", "floor_divide", reverse=True)
 
     __pow__ = _make_builtin("pow", "power")
 
-    __mod__ = __rmod__ = _make_builtin("mod", "mod")
+    __mod__ = _make_builtin("mod", "mod")
+    __rmod__ = _make_builtin("mod", "mod", reverse=True)
 
     __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore # mypy wants return `bool`
 
