@@ -78,7 +78,7 @@ def _make_builtin(
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
         if reverse:
-            transformed = transformed[::-1]
+            transformed.reverse()
         new_data = op(*transformed)
         return first.__class__.from_array(new_data, domain=domain_intersection)
 
