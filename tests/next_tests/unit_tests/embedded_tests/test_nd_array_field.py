@@ -919,7 +919,7 @@ def test_hypercube(index_array, expected):
         ),
     ],
 )
-def test_concat_where_1D(
+def test_concat_where(
     nd_array_implementation,
     mask_data: tuple[list[bool], Optional[common.DomainLike]],
     true_data: tuple[list[int], Optional[common.DomainLike]],
