@@ -61,7 +61,7 @@ def _make_builtin(
         xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.intersect_domains(
+        domain_intersection = embedded_common.domain_intersection(
             *[f.domain for f in fields if common.is_field(f)]
         )
 
@@ -557,20 +557,6 @@ def _trim_empty_domains(lst: list[tuple[bool, common.Domain]]) -> list[tuple[boo
     return lst
 
 
-def _intersect_domains_orthogonal_to(
-    dim: common.Dimension, *domains: common.Domain
-) -> tuple[common.Domain, ...]:
-    intersection_orthogonal_to_dim = embedded_common.intersect_domains(
-        *[d.replace(dim) for d in domains]
-    )
-    return tuple(
-        common.Domain(
-            *[(d, r if d == dim else intersection_orthogonal_to_dim[d][1]) for d, r in domain]
-        )
-        for domain in domains
-    )
-
-
 def _to_field(
     value: common.Field | core_defs.Scalar, nd_array_field_type: type[NdArrayField]
 ) -> common.Field:
@@ -584,26 +570,83 @@ def _to_field(
     )
 
 
-def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.Field:
-    cls_ = _get_nd_array_class(m, t, f)
+# TODO move to common and test
+def _intersect_fields(
+    *fields: common.Field | core_defs.Scalar,
+    ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
+) -> tuple[common.Field, ...]:
+    nd_array_class = _get_nd_array_class(*fields)
+    promoted_dims = common.promote_dims(*[f.domain.dims for f in fields if common.is_field(f)])
+    broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
+
+    intersected_domains = embedded_common.intersect_domains(
+        *[f.domain for f in broadcasted_fields], ignore_dims=ignore_dims
+    )
+
+    return tuple(
+        nd_array_class.from_array(
+            f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)],
+            domain=intersected_domain,
+        )
+        for f, intersected_domain in zip(broadcasted_fields, intersected_domains, strict=True)
+    )
+
+
+def _concat_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
+    if not domains:
+        return common.Domain()
+    dim_start = domains[0][dim][1].start
+    dim_stop = dim_start
+    for domain in domains:
+        if not domain[dim][1].start == dim_stop:
+            return None
+        else:
+            dim_stop = domain[dim][1].stop
+    return domains[0].replace(dim, (dim, common.UnitRange(dim_start, dim_stop)))
+
+
+def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
+    # TODO(havogt): this function could be extended to a general concat
+    # currently only concatenate along the given dimension and requires the fields to be ordered
+
+    if (
+        len(fields) > 1
+        and not embedded_common.domain_intersection(*[f.domain for f in fields]).is_empty
+    ):
+        raise ValueError("Fields to concatenate must not overlap.")
+    new_domain = _concat_domains(*[f.domain for f in fields], dim=dim)
+    if new_domain is None:
+        raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
+    nd_array_class = _get_nd_array_class(*fields)
+    return nd_array_class.from_array(
+        nd_array_class.array_ns.concatenate(
+            [nd_array_class.array_ns.broadcast_to(f.ndarray, f.domain.shape) for f in fields],
+            axis=new_domain.dim_index(dim),
+        ),
+        domain=new_domain,
+    )
+
+
+def _concat_where(
+    mask_field: common.Field, true_field: common.Field, false_field: common.Field
+) -> common.Field:
+    cls_ = _get_nd_array_class(mask_field, true_field, false_field)
     xp = cls_.array_ns
-    if m.domain.ndim != 1:
+    if mask_field.domain.ndim != 1:
         raise NotImplementedError(
             "'concat_where': Can only concatenate fields with a 1-dimensional mask."
         )
-    mask_dim = m.domain.dims[0]
+    mask_dim = mask_field.domain.dims[0]
 
-    promoted_dims = common.promote_dims(*[f.domain.dims for f in [m, t, f] if common.is_field(f)])
-    t_broadcasted = _broadcast(_to_field(t, cls_), promoted_dims)
-    f_broadcasted = _broadcast(_to_field(f, cls_), promoted_dims)
+    t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
 
-    mask_values, mask_relative_ranges = zip(*_compute_mask_ranges(m.ndarray))
+    mask_values, mask_relative_ranges = zip(*_compute_mask_ranges(mask_field.ndarray))
     mask_domains = (
-        _relative_ranges_to_domain((relative_range,), m.domain)
+        _relative_ranges_to_domain((relative_range,), mask_field.domain)
         for relative_range in mask_relative_ranges
     )
     intersected_domains = (
-        embedded_common.intersect_domains(
+        embedded_common.domain_intersection(
             t_broadcasted.domain if mask_value else f_broadcasted.domain, mask_domain
         )
         for mask_value, mask_domain in zip(mask_values, mask_domains)
@@ -617,29 +660,13 @@ def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.F
             f"In 'concat_where', cannot concatenate the following 'Domain's: {list(intersected_domains)}."
         )
 
-    intersected_domains = _intersect_domains_orthogonal_to(mask_dim, *intersected_domains)
+    transformed = [
+        t_broadcasted[d] if v else f_broadcasted[d]
+        for v, d in zip(mask_values, intersected_domains)
+    ]
 
-    transformed = []
-    for v, d in zip(mask_values, intersected_domains):
-        if v:
-            slices = _get_slices_from_domain_slice(t_broadcasted.domain, d)
-            transformed.append(xp.broadcast_to(t_broadcasted.ndarray[slices], d.shape))
-        else:
-            slices = _get_slices_from_domain_slice(f_broadcasted.domain, d)
-            transformed.append(xp.broadcast_to(f_broadcasted.ndarray[slices], d.shape))
-    mask_index = t_broadcasted.domain.dim_index(mask_dim)
-    assert mask_index is not None  # for mypy
-
-    if intersected_domains:
-        new_masked_dim_named_range = (
-            mask_dim,
-            common.UnitRange(
-                intersected_domains[0][mask_index][1].start,
-                intersected_domains[-1][mask_index][1].stop,
-            ),
-        )
-        result_domain = intersected_domains[0].replace(mask_dim, new_masked_dim_named_range)
-        result_array = xp.concatenate(transformed, axis=mask_index)
+    if transformed:
+        return _concat(*transformed, dim=mask_dim)
     else:
         result_domain = common.Domain((mask_dim, common.UnitRange(0, 0)))
         result_array = xp.empty(result_domain.shape)

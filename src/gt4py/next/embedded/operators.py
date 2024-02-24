@@ -82,7 +82,7 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
 def _get_out_domain(
     out: common.MutableField | tuple[common.MutableField | tuple, ...]
 ) -> common.Domain:
-    return embedded_common.intersect_domains(
+    return embedded_common.domain_intersection(
         *[f.domain for f in utils.flatten_nested_tuple((out,))]
     )
 
@@ -150,7 +150,7 @@ def _tuple_assign_field(
 def _intersect_scan_args(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
 ) -> common.Domain:
-    return embedded_common.intersect_domains(
+    return embedded_common.domain_intersection(
         *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
     )
 
