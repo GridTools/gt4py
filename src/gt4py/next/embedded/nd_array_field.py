@@ -571,6 +571,19 @@ def _intersect_domains_orthogonal_to(
     )
 
 
+def _to_field(
+    value: common.Field | core_defs.Scalar, nd_array_field_type: type[NdArrayField]
+) -> common.Field:
+    # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
+    return (
+        value
+        if common.is_field(value)
+        else nd_array_field_type.from_array(
+            nd_array_field_type.array_ns.asarray(value), domain=common.Domain()
+        )
+    )
+
+
 def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.Field:
     cls_ = _get_nd_array_class(m, t, f)
     xp = cls_.array_ns
@@ -579,19 +592,22 @@ def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.F
             "'concat_where': Can only concatenate fields with a 1-dimensional mask."
         )
     mask_dim = m.domain.dims[0]
-    promoted_dims = common.promote_dims(m.domain.dims, t.domain.dims, f.domain.dims)
-    t_broadcasted = _broadcast(t, promoted_dims)
-    f_broadcasted = _broadcast(f, promoted_dims)
+
+    promoted_dims = common.promote_dims(*[f.domain.dims for f in [m, t, f] if common.is_field(f)])
+    t_broadcasted = _broadcast(_to_field(t, cls_), promoted_dims)
+    f_broadcasted = _broadcast(_to_field(f, cls_), promoted_dims)
 
     relative_mask_ranges = _mask_ranges(m.ndarray)
     mask_domains = [
         (v, _relative_ranges_to_domain((mr,), m.domain)) for v, mr in relative_mask_ranges
     ]
-    t_domain = t_broadcasted.domain if common.is_field(t) else common.Domain()
-    f_domain = f_broadcasted.domain if common.is_field(f) else common.Domain()
-
     intersected_domains = [
-        (v, embedded_common.intersect_domains(t_domain if v else f_domain, d))
+        (
+            v,
+            embedded_common.intersect_domains(
+                t_broadcasted.domain if v else f_broadcasted.domain, d
+            ),
+        )
         for v, d in mask_domains
     ]
 
@@ -601,31 +617,19 @@ def _concat_where(m: common.Field, t: common.Field, f: common.Field) -> common.F
             f"In 'concat_where', cannot concatenate the following 'Domain's: {[d for _, d in intersected_domains]}."
         )
 
-    # TODO now intersect them in the dimensions orthogonal to the mask
-
+    # TODO cleanup
     foo = _intersect_domains_orthogonal_to(mask_dim, *[domain for _, domain in intersected_domains])
-
     intersected_domains = [(v, f) for (v, _), f in zip(intersected_domains, foo)]
 
     transformed = []
     for v, d in intersected_domains:
         if v:
-            if common.is_field(t):
-                slices = _get_slices_from_domain_slice(t_broadcasted.domain, d)
-                transformed.append(
-                    xp.asarray(xp.broadcast_to(t_broadcasted.ndarray[slices], d.shape))
-                )
-            else:
-                transformed.append(t)
+            slices = _get_slices_from_domain_slice(t_broadcasted.domain, d)
+            transformed.append(xp.asarray(xp.broadcast_to(t_broadcasted.ndarray[slices], d.shape)))
         else:
-            if common.is_field(f):
-                slices = _get_slices_from_domain_slice(f_broadcasted.domain, d)
-                transformed.append(
-                    xp.asarray(xp.broadcast_to(f_broadcasted.ndarray[slices], d.shape))
-                )
-            else:
-                transformed.append(f)
-    mask_index = t_domain.dim_index(mask_dim)
+            slices = _get_slices_from_domain_slice(f_broadcasted.domain, d)
+            transformed.append(xp.asarray(xp.broadcast_to(f_broadcasted.ndarray[slices], d.shape)))
+    mask_index = t_broadcasted.domain.dim_index(mask_dim)
     assert mask_index is not None  # for mypy
     result_domain = (
         intersected_domains[0][1].replace(
