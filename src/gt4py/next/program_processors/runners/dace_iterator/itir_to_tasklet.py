@@ -664,18 +664,21 @@ def builtin_if(
         # as well as the conditional state transition
         sdfg.remove_nodes_from([join_state, tbr_state, fbr_state])
         sdfg.add_edge(stmt_state, current_state, dace.InterstateEdge())
+    elif tbr_state.is_empty():
+        # use direct edge from if-statement to join state for true branch
+        tbr_condition = sdfg.edges_between(stmt_state, tbr_state)[0].condition
+        sdfg.edges_between(stmt_state, join_state)[0].contition = tbr_condition
+        sdfg.remove_node(tbr_state)
+    elif fbr_state.is_empty():
+        # use direct edge from if-statement to join state for false branch
+        fbr_condition = sdfg.edges_between(stmt_state, fbr_state)[0].condition
+        sdfg.edges_between(stmt_state, join_state)[0].contition = fbr_condition
+        sdfg.remove_node(fbr_state)
     else:
-        direct_edge = sdfg.edges_between(stmt_state, join_state)[0]
-        if tbr_state.is_empty():
-            direct_edge.contition = sdfg.edges_between(stmt_state, tbr_state)[0].condition
-            sdfg.remove_node(tbr_state)
-        elif fbr_state.is_empty():
-            direct_edge.contition = sdfg.edges_between(stmt_state, fbr_state)[0].condition
-            sdfg.remove_node(fbr_state)
-        else:
-            sdfg.remove_edge(direct_edge)
-            # the if-statement condition is not used in current state
-            current_state.remove_node(ctx_stmt_node.value)
+        # remove direct edge from if-statement to join state
+        sdfg.remove_edge(sdfg.edges_between(stmt_state, join_state)[0])
+        # the if-statement condition is not used in current state
+        current_state.remove_node(ctx_stmt_node.value)
 
     return result_values
 
