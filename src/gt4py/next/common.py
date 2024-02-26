@@ -75,6 +75,9 @@ class Dimension:
     def __str__(self):
         return f"{self.value}[{self.kind}]"
 
+    def __call__(self, val: int) -> NamedIndex:
+        return self, val
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -272,7 +275,10 @@ NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTupl
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+NamedSlice: TypeAlias = (
+    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
+)
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -305,6 +311,10 @@ def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
+
+
+def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return isinstance(obj, slice) and (is_named_index(obj.start) and is_named_index(obj.stop))
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:

@@ -301,6 +301,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
+        index = embedded_common.canonicalize_any_index_sequence(index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
