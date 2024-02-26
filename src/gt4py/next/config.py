@@ -26,22 +26,34 @@ class BuildCacheLifetime(enum.Enum):
 
 
 class CMakeBuildType(enum.Enum):
-    def _generate_next_value_(name, start, count, last_values):
-        return "".join(part.capitalize() for part in name.split("_"))
+    """
+    CMake build types enum.
 
-    DEBUG = enum.auto()
-    RELEASE = enum.auto()
-    REL_WITH_DEB_INFO = enum.auto()
-    MIN_SIZE_REL = enum.auto()
+    Member values have to be valid CMake syntax.
+    """
+
+    DEBUG = "Debug"
+    RELEASE = "Release"
+    REL_WITH_DEB_INFO = "RelWithDebInfo"
+    MIN_SIZE_REL = "MinSizeRel"
 
 
-def env_flag_to_bool(flag_value: str) -> bool:
-    """Like in gt4py.cartesian, env vars for flags should be set to '0' or '1'."""
+def env_flag_to_bool(name: str, default: bool) -> bool:
+    """Recognize true or false signaling string values."""
+    flag_value = None
+    if name in os.environ:
+        flag_value = os.environ[name].lower()
     match flag_value:
-        case "0" | "1":
-            return bool(int(flag_value))
+        case None:
+            return default
+        case "0" | "false" | "off":
+            return False
+        case "1" | "true" | "on":
+            return True
         case _:
-            raise ValueError("GT4Py flag environment variables must have value '0' or '1'.")
+            raise ValueError(
+                "Invalid GT4Py environment flag value: use '0 | false | off' or '1 | true | on'."
+            )
 
 
 _PREFIX: Final[str] = "GT4PY"
@@ -49,11 +61,18 @@ _PREFIX: Final[str] = "GT4PY"
 #: Master debug flag
 #: Changes defaults for all the other options to be as helpful for debugging as possible.
 #: Does not override values set in environment variables.
-DEBUG: Final[bool] = env_flag_to_bool(os.environ.get(f"{_PREFIX}_DEBUG", "0"))
+DEBUG: Final[bool] = env_flag_to_bool(f"{_PREFIX}_DEBUG", default=False)
+
+
+#: Verbose flag for DSL compilation errors
+VERBOSE_EXCEPTIONS: bool = env_flag_to_bool(
+    f"{_PREFIX}_VERBOSE_EXCEPTIONS", default=True if DEBUG else False
+)
+
 
 #: Where generated code projects should be persisted.
 #: Only active if BUILD_CACHE_LIFETIME is set to PERSISTENT
-BUILD_CACHE_DIR: Final[pathlib.Path] = (
+BUILD_CACHE_DIR: pathlib.Path = (
     pathlib.Path(os.environ.get(f"{_PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir()))
     / "gt4py_cache"
 )
@@ -62,14 +81,12 @@ BUILD_CACHE_DIR: Final[pathlib.Path] = (
 #: Whether generated code projects should be kept around between runs.
 #: - SESSION: generated code projects get destroyed when the interpreter shuts down
 #: - PERSISTENT: generated code projects are written to BUILD_CACHE_DIR and persist between runs
-BUILD_CACHE_LIFETIME: Final[BuildCacheLifetime] = getattr(
-    BuildCacheLifetime,
-    os.environ.get(f"{_PREFIX}_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper(),
-)
+BUILD_CACHE_LIFETIME: BuildCacheLifetime = BuildCacheLifetime[
+    os.environ.get(f"{_PREFIX}_BUILD_CACHE_LIFETIME", "persistent" if DEBUG else "session").upper()
+]
 
 #: Build type to be used when CMake is used to compile generated code.
 #: Might have no effect when CMake is not used as part of the toolchain.
-CMAKE_BUILD_TYPE: Final[CMakeBuildType] = getattr(
-    CMakeBuildType,
-    os.environ.get(f"{_PREFIX}_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper(),
-)
+CMAKE_BUILD_TYPE: CMakeBuildType = CMakeBuildType[
+    os.environ.get(f"{_PREFIX}_CMAKE_BUILD_TYPE", "debug" if DEBUG else "release").upper()
+]
