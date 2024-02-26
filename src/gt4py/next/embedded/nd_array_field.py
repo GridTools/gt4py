@@ -65,11 +65,7 @@ def _make_builtin(
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
-                    f_broadcasted = (
-                        _broadcast(f, domain_intersection.dims)
-                        if f.domain.dims != domain_intersection.dims
-                        else f
-                    )
+                    f_broadcasted = _broadcast(f, domain_intersection.dims)
                     f_slices = _get_slices_from_domain_slice(
                         f_broadcasted.domain, domain_intersection
                     )
@@ -634,6 +630,8 @@ if jnp:
 
 
 def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+    if field.domain.dims == new_dimensions:
+        return field
     domain_slice: list[slice | None] = []
     named_ranges = []
     for dim in new_dimensions:

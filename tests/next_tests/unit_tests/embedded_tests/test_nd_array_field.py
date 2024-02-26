@@ -180,7 +180,13 @@ def test_where_builtin_with_tuple(nd_array_implementation):
     assert np.allclose(result[1].ndarray, expected1)
 
 
-@pytest.mark.parametrize("lhs, rhs", [([-1.0, 4.2, 42], [2.0, 3.0, -3.0]), (1.0, [2.0, 3.0, -3.0])])
+@pytest.mark.parametrize(
+    "lhs, rhs",
+    [
+        ([-1.0, 4.2, 42], [2.0, 3.0, -3.0]),
+        (1.0, [2.0, 3.0, -3.0]),  # scalar with field, tests reverse operators
+    ],
+)
 def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation, lhs, rhs):
     inputs = [lhs, rhs]
 
