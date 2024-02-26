@@ -530,7 +530,7 @@ def test_nested_reduction(unstructured_case):
                 initial=0,
             )[unstructured_case.offset_provider["V2E"].table],
             axis=1,
-            where=unstructured_case.offset_provider["V2E"].table != common.SKIP_VALUE,
+            where=unstructured_case.offset_provider["V2E"].table != common._DEFAULT_SKIP_VALUE,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
     )
@@ -595,7 +595,7 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
             e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
             axis=1,
             initial=0,
-            where=v2e.table != common.SKIP_VALUE,
+            where=v2e.table != common._DEFAULT_SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -735,7 +735,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
                 b[v2e_table],
                 axis=1,
                 initial=0,
-                where=v2e_table != common.SKIP_VALUE,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
             )
         ),
     )
@@ -1079,9 +1079,9 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), 2)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
 
-    cases.verify(cartesian_case, prog, inp, k_index, out=out[:, 1:], ref=ref[:, 1:])
+    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):

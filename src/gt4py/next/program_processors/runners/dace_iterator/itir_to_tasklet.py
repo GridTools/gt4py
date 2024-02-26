@@ -22,7 +22,7 @@ import numpy as np
 import gt4py.eve.codegen
 from gt4py import eve
 from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
-from gt4py.next.common import SKIP_VALUE as neighbor_skip_value
+from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
 from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda

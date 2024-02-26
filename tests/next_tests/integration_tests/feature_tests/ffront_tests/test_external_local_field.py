@@ -54,7 +54,7 @@ def test_external_local_field(unstructured_case):
             v2e_table,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 

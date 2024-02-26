@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import warnings
 from typing import Any, Mapping, Optional, Sequence, cast
 
 import dace
@@ -104,7 +105,7 @@ def _make_array_shape_and_strides(
     dims: Sequence[Dimension],
     neighbor_tables: Mapping[str, NeighborTable],
     sort_dims: bool,
-) -> tuple[list[dace.symbol], list[dace.symbol], list[dace.symbol]]:
+) -> tuple[list[dace.symbol], list[dace.symbol]]:
     """
     Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -127,9 +128,8 @@ def _make_array_shape_and_strides(
         )
         for i, dim in sorted_dims
     ]
-    offset = [dace.symbol(unique_name(f"{name}_offset{i}"), dtype) for i, _ in sorted_dims]
     strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
-    return shape, offset, strides
+    return shape, strides
 
 
 def _check_no_lifts(node: itir.StencilClosure):
@@ -177,11 +177,10 @@ class ItirToSDFG(eve.NodeVisitor):
         name: str,
         type_: ts.TypeSpec,
         neighbor_tables: Mapping[str, NeighborTable],
-        has_offset: bool = True,
         sort_dimensions: bool = True,
     ):
         if isinstance(type_, ts.FieldType):
-            shape, offset, strides = _make_array_shape_and_strides(
+            shape, strides = _make_array_shape_and_strides(
                 name, type_.dims, neighbor_tables, sort_dimensions
             )
             dtype = as_dace_type(type_.dtype)
@@ -189,7 +188,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 name,
                 shape=shape,
                 strides=strides,
-                offset=(offset if has_offset else None),
                 dtype=dtype,
             )
 
@@ -249,22 +247,27 @@ class ItirToSDFG(eve.NodeVisitor):
             # Another option, in the future, is to use symbolic strides and apply auto-tuning or some heuristics
             # to assign optimal stride values.
             tmp_shape, _ = new_array_symbols(tmp_name, len(dims))
-            tmp_offset = [
-                dace.symbol(unique_name(f"{tmp_name}_offset{i}")) for i in range(len(dims))
-            ]
             _, tmp_array = program_sdfg.add_array(
-                tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
+                tmp_name, tmp_shape, as_dace_type(type_.dtype), transient=True
             )
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
             # These expressions are later mapped to interstate symbols.
-            for (_, (begin, end)), offset_sym, shape_sym in zip(
+            for (_, (begin, end)), shape_sym in zip(
                 tmp_domain,
-                tmp_array.offset,
                 tmp_array.shape,
             ):
-                tmp_symbols[str(offset_sym)] = f"0 - {begin.value}"
-                tmp_symbols[str(shape_sym)] = f"{end.value} - {begin.value}"
+                """
+                The temporary field has a dimension range defined by `begin` and `end` values.
+                Therefore, the actual size is given by the difference `end.value - begin.value`.
+                Instead of allocating the actual size, we allocate space to enable indexing from 0
+                because we want to avoid using dace array offsets (which will be deprecated soon).
+                The result should still be valid, but the stencil will be using only a subset
+                of the array.
+                """
+                if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
+                    warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
+                tmp_symbols[str(shape_sym)] = end.value
 
         return tmp_symbols
 
@@ -319,7 +322,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 connectivity_identifier(offset),
                 type_,
                 neighbor_tables,
-                has_offset=False,
                 sort_dimensions=False,
             )
 
@@ -663,7 +665,6 @@ class ItirToSDFG(eve.NodeVisitor):
             output_name,
             shape=(array_table[node.output.id].shape[scan_dim_index],),
             strides=(array_table[node.output.id].strides[scan_dim_index],),
-            offset=(array_table[node.output.id].offset[scan_dim_index],),
             dtype=array_table[node.output.id].dtype,
         )
 
@@ -770,7 +771,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def _visit_domain(
         self, node: itir.FunCall, context: Context
-    ) -> tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]:
+    ) -> tuple[tuple[str, tuple[SymbolExpr | ValueExpr, SymbolExpr | ValueExpr]], ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 

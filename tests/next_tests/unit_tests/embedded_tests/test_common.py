@@ -19,7 +19,12 @@ import pytest
 from gt4py.next import common
 from gt4py.next.common import UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
-from gt4py.next.embedded.common import _slice_range, iterate_domain, sub_domain
+from gt4py.next.embedded.common import (
+    _slice_range,
+    canonicalize_any_index_sequence,
+    iterate_domain,
+    sub_domain,
+)
 
 
 @pytest.mark.parametrize(
@@ -147,3 +152,31 @@ def test_iterate_domain():
     testee = list(iterate_domain(domain))
 
     assert testee == ref
+
+
+@pytest.mark.parametrize(
+    "slices, expected",
+    [
+        [slice(I(3), I(4)), ((I, common.UnitRange(3, 4)),)],
+        [
+            (slice(J(3), J(6)), slice(I(3), I(5))),
+            ((J, common.UnitRange(3, 6)), (I, common.UnitRange(3, 5))),
+        ],
+        [slice(I(1), J(7)), IndexError],
+        [
+            slice(I(1), None),
+            IndexError,
+        ],
+        [
+            slice(None, K(8)),
+            IndexError,
+        ],
+    ],
+)
+def test_slicing(slices, expected):
+    if expected is IndexError:
+        with pytest.raises(IndexError):
+            canonicalize_any_index_sequence(slices)
+    else:
+        testee = canonicalize_any_index_sequence(slices)
+        assert testee == expected
