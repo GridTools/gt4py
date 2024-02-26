@@ -23,7 +23,8 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import common, config
-from gt4py.next.iterator.transforms import LiftMode, global_tmps
+from gt4py.next.iterator import transforms
+from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -150,6 +151,7 @@ class GTFNBackendFactory(factory.Factory):
     class Params:
         name_device = "cpu"
         name_cached = ""
+        name_temps = ""
         name_postfix = ""
         gpu = factory.Trait(
             allocator=next_allocators.StandardGPUFieldBufferAllocator(),
@@ -165,13 +167,18 @@ class GTFNBackendFactory(factory.Factory):
             ),
             name_cached="_cached",
         )
+        use_temporaries = factory.Trait(
+            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
+            otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+            name_temps="_with_temporaries",
+        )
         device_type = core_defs.DeviceType.CPU
         hash_function = compilation_hash
         otf_workflow = factory.SubFactory(
             GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
         )
         name = factory.LazyAttribute(
-            lambda o: f"run_gtfn_{o.name_device}{o.name_cached}{o.name_postfix}"
+            lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
 
     executor = factory.LazyAttribute(
@@ -189,11 +196,7 @@ run_gtfn_imperative = GTFNBackendFactory(
 
 run_gtfn_cached = GTFNBackendFactory(cached=True)
 
-run_gtfn_with_temporaries = GTFNBackendFactory(
-    name_postfix="_with_temporaries",
-    otf_workflow__translation__lift_mode=LiftMode.FORCE_TEMPORARIES,
-    otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
-)
+run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 

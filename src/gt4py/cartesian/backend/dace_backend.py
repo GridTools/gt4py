@@ -544,9 +544,14 @@ class DaCeComputationCodegen:
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            # To prevent conflict with 3rd party usage of DaCe config always make sure that any
+            #  changes be under the temporary_config manager
             if gt_config.GT4PY_USE_HIP:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+            dace.config.Config.set(
+                "compiler", "cuda", "default_block_size", value=gt_config.DACE_DEFAULT_BLOCK_SIZE
+            )
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}

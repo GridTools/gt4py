@@ -12,11 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
-
 from gt4py import eve
 from gt4py.next import errors
-from gt4py.next.errors import excepthook
 
 
 def test_format_uncaught_error():
@@ -35,23 +32,3 @@ def test_format_uncaught_error():
         assert str_usermode.find("Traceback") < 0
         assert str_usermode.find("cause") < 0
         assert str_usermode.find("ValueError") < 0
-
-
-def test_get_verbose_exceptions():
-    env_var_name = "GT4PY_VERBOSE_EXCEPTIONS"
-
-    # Make sure to save and restore the environment variable, we don't want to
-    # affect other tests running in the same process.
-    saved = os.environ.get(env_var_name, None)
-    try:
-        os.environ[env_var_name] = "False"
-        assert excepthook._get_verbose_exceptions_envvar() is False
-        os.environ[env_var_name] = "True"
-        assert excepthook._get_verbose_exceptions_envvar() is True
-        os.environ[env_var_name] = "invalid value"  # Should emit a warning too
-        assert excepthook._get_verbose_exceptions_envvar() is False
-        del os.environ[env_var_name]
-        assert excepthook._get_verbose_exceptions_envvar() is False
-    finally:
-        if saved is not None:
-            os.environ[env_var_name] = saved
