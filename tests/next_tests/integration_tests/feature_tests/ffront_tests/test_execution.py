@@ -1067,11 +1067,11 @@ def test_where_k_offset(cartesian_case):
     def fieldop_where_k_offset(
         inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
     ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), -1)
+        return where(k_index > 0, inp(Koff[-1]), 2)
 
     @gtx.program
     def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):
-        fieldop_where_k_offset(inp, k_index, out=out)
+        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, 10), KDim: (1, 10)})
 
     inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
     k_index = cases.allocate(
@@ -1079,7 +1079,7 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), -1)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
 
     cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
