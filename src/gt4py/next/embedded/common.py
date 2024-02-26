@@ -189,3 +189,32 @@ def _find_index_of_dim(
         if dim == d:
             return i
     return None
+
+
+def canonicalize_any_index_sequence(
+    index: common.AnyIndexSpec,
+) -> common.AnyIndexSpec:
+    # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
+    new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
+    if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
+        new_index = tuple([_named_slice_to_named_range(i) for i in new_index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
+    return new_index
+
+
+def _named_slice_to_named_range(
+    idx: common.NamedSlice,
+) -> common.NamedRange | common.NamedSlice:
+    assert hasattr(idx, "start") and hasattr(idx, "stop")
+    if common.is_named_slice(idx):
+        idx_start_0, idx_start_1, idx_stop_0, idx_stop_1 = idx.start[0], idx.start[1], idx.stop[0], idx.stop[1]  # type: ignore[attr-defined]
+        if idx_start_0 != idx_stop_0:
+            raise IndexError(
+                f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
+            )
+        assert isinstance(idx_start_1, int) and isinstance(idx_stop_1, int)
+        return (idx_start_0, common.UnitRange(idx_start_1, idx_stop_1))
+    if common.is_named_index(idx.start) and idx.stop is None:
+        raise IndexError(f"Upper bound needs to be specified for {idx}.")
+    if common.is_named_index(idx.stop) and idx.start is None:
+        raise IndexError(f"Lower bound needs to be specified for {idx}.")
+    return idx

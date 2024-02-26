@@ -111,7 +111,7 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
 def test_temporary_symbols(testee, mesh_descriptor):
     itir_with_tmp = apply_common_transforms(
         testee.itir,
-        lift_mode=LiftMode.FORCE_TEMPORARIES,
+        lift_mode=LiftMode.USE_TEMPORARIES,
         offset_provider=mesh_descriptor.offset_provider,
     )
 

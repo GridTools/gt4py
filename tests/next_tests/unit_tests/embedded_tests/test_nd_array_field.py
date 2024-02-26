@@ -183,7 +183,13 @@ def test_where_builtin_with_tuple(nd_array_implementation):
     assert np.allclose(result[1].ndarray, expected1)
 
 
-@pytest.mark.parametrize("lhs, rhs", [([-1.0, 4.2, 42], [2.0, 3.0, -3.0]), (1.0, [2.0, 3.0, -3.0])])
+@pytest.mark.parametrize(
+    "lhs, rhs",
+    [
+        ([-1.0, 4.2, 42], [2.0, 3.0, -3.0]),
+        (2.0, [2.0, 3.0, -3.0]),  # scalar with field, tests reverse operators
+    ],
+)
 def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation, lhs, rhs):
     inputs = [lhs, rhs]
 
@@ -495,6 +501,49 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
+
+
+def test_absolute_indexing_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[JDim(8) : JDim(10), IDim(5) : IDim(9)]
+    expected = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == expected
+
+
+def test_absolute_indexing_dim_sliced_single_slice():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[KDim(11)]
+    indexed_field_2 = field[(KDim, 11)]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == indexed_field_2
+
+
+def test_absolute_indexing_wrong_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+
+    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'JDim' and 'IDim'."):
+        field[JDim(8) : IDim(10)]
+
+
+def test_absolute_indexing_empty_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    with pytest.raises(IndexError, match="Lower bound needs to be specified"):
+        field[: IDim(10)]
 
 
 def test_absolute_indexing_value_return():

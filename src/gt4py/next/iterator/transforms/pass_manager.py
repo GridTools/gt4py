@@ -38,7 +38,7 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 @enum.unique
 class LiftMode(enum.Enum):
     FORCE_INLINE = enum.auto()
-    FORCE_TEMPORARIES = enum.auto()
+    USE_TEMPORARIES = enum.auto()
     SIMPLE_HEURISTIC = enum.auto()
 
 
@@ -47,7 +47,7 @@ def _inline_lifts(ir, lift_mode):
         return InlineLifts().visit(ir)
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
         return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
-    elif lift_mode == LiftMode.FORCE_TEMPORARIES:
+    elif lift_mode == LiftMode.USE_TEMPORARIES:
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
