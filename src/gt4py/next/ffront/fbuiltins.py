@@ -360,12 +360,14 @@ class FieldOffset(runtime.Offset):
             if common.is_connectivity_field(offset_definition):
                 connectivity = offset_definition
             elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
-                assert not offset_definition.has_skip_values
                 connectivity = gtx.as_connectivity(
                     domain=self.target,
                     codomain=self.source,
                     data=offset_definition.table,
                     dtype=offset_definition.index_type,
+                    skip_value=(
+                        common._DEFAULT_SKIP_VALUE if offset_definition.has_skip_values else None
+                    ),
                 )
             else:
                 raise NotImplementedError()

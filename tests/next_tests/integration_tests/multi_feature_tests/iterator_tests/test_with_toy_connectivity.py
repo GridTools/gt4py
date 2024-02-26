@@ -413,7 +413,7 @@ def test_shift_sparse_input_field2(program_processor, lift_mode):
     ]:
         pytest.xfail(
             "Bug in bindings/compilation/caching: only the first program seems to be compiled."
-        )  # observed in `cache.Strategy.PERSISTENT` mode
+        )  # observed in `config.BuildCacheLifetime.PERSISTENT` mode
     inp = vertex_index_field()
     inp_sparse = gtx.as_field([Edge, E2VDim], e2v_arr)
     out1 = gtx.as_field([Vertex], np.zeros([9], dtype=inp.dtype))

@@ -46,6 +46,7 @@ _None_
 - [0007 - Fencil Processors](0007-Fencil-Processors.md)
 - [0008 - Mapping Domain to Cpp Backend](0008-Mapping_Domain_to_Cpp-Backend.md)
 - [0016 - Multiple Backends and Build Systems](0016-Multiple-Backends-and-Build-Systems.md)
+- [0017 - Toolchain Configuration](0017-Toolchain-Configuration.md)
 
 ### Python Integration
 

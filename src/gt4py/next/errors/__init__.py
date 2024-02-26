@@ -17,7 +17,6 @@
 from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
     excepthook,
 )
-from .excepthook import set_verbose_exceptions
 from .exceptions import (
     DSLError,
     InvalidParameterAnnotationError,
@@ -37,5 +36,4 @@ __all__ = [
     "MissingArgumentError",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
-    "set_verbose_exceptions",
 ]
