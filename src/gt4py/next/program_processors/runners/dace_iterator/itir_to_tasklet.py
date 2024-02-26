@@ -590,15 +590,15 @@ def builtin_if(
     assert stmt_node.dtype == dace.dtypes.bool
     assert sdfg.arrays[stmt_node.value.data].shape == (1,)
 
-    # visit true and false branches (here called `tbr` and `fbr`) as separate states
-    tbr_state = sdfg.add_state(join_state, "true_branch")
+    # visit true and false branches (here called `tbr` and `fbr`) as separate states, following `if_statement` state
+    tbr_state = sdfg.add_state("true_branch")
     sdfg.add_edge(
         stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
     )
     sdfg.add_edge(tbr_state, join_state, dace.InterstateEdge())
     tbr_values = build_if_state(node_args[1], tbr_state)
     #
-    fbr_state = sdfg.add_state(join_state, "false_branch")
+    fbr_state = sdfg.add_state("false_branch")
     sdfg.add_edge(
         stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
     )
@@ -620,8 +620,6 @@ def builtin_if(
         assert isinstance(fbr_value, (SymbolExpr, ValueExpr))
         assert tbr_value.dtype == fbr_value.dtype
 
-        var = unique_var_name()
-
         if all(isinstance(x, SymbolExpr) for x in (tbr_value, fbr_value)):
             # both branches return symbolic expressions, therefore the if-node can be translated
             # to a select-tasklet inside current state
@@ -637,6 +635,7 @@ def builtin_if(
             desc = sdfg.arrays[
                 tbr_value.value.data if isinstance(tbr_value, ValueExpr) else fbr_value.value.data
             ]
+            var = unique_var_name()
             if isinstance(desc, dace.data.Scalar):
                 sdfg.add_scalar(var, desc.dtype, transient=True)
             else:
@@ -661,24 +660,22 @@ def builtin_if(
             result_values.append(ValueExpr(current_state.add_access(var), desc.dtype))
 
     if tbr_state.is_empty() and fbr_state.is_empty():
-        # if all branches are symbolic expressions, the true/false states can be removed
+        # if all branches are symbolic expressions, the true/false and join states can be removed
         # as well as the conditional state transition
-        sdfg.remove_nodes_from([tbr_state, fbr_state])
+        sdfg.remove_nodes_from([join_state, tbr_state, fbr_state])
+        sdfg.add_edge(stmt_state, current_state, dace.InterstateEdge())
     else:
+        direct_edge = sdfg.edges_between(stmt_state, join_state)[0]
         if tbr_state.is_empty():
-            sdfg.edges_between(stmt_state, join_state)[0].condition = sdfg.edges_between(
-                stmt_state, tbr_state
-            )[0].condition
+            direct_edge.contition = sdfg.edges_between(stmt_state, tbr_state)[0].condition
             sdfg.remove_node(tbr_state)
         elif fbr_state.is_empty():
-            sdfg.edges_between(stmt_state, join_state)[0].condition = sdfg.edges_between(
-                stmt_state, fbr_state
-            )[0].condition
+            direct_edge.contition = sdfg.edges_between(stmt_state, fbr_state)[0].condition
             sdfg.remove_node(fbr_state)
         else:
-            sdfg.remove_edge(sdfg.edges_between(stmt_state, join_state)[0])
-        # the if-statement condition is not used in current state
-        current_state.remove_node(ctx_stmt_node.value)
+            sdfg.remove_edge(direct_edge)
+            # the if-statement condition is not used in current state
+            current_state.remove_node(ctx_stmt_node.value)
 
     return result_values
 
