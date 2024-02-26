@@ -694,10 +694,10 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
-class _OffgridFieldDescriptorMaker(_FieldDescriptorMaker):
+class _GlobalTableDescriptorMaker(_FieldDescriptorMaker):
     def __getitem__(self, field_spec):
         if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
-            raise ValueError("OffgridField is defined by a tuple (type, [axes_size..])")
+            raise ValueError("GlobalTable is defined by a tuple (type, [axes_size..])")
 
         dtype, data_dims = field_spec
 
@@ -708,8 +708,8 @@ class _OffgridFieldDescriptorMaker(_FieldDescriptorMaker):
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
 
-OffgridField = _OffgridFieldDescriptorMaker()
-"""Field with no spatial dimension descriptor."""
+GlobalTable = _GlobalTableDescriptorMaker()
+"""Data array with no spatial dimension descriptor."""
 
 
 class _SequenceDescriptor:

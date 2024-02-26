@@ -692,14 +692,21 @@ class ParsingContext(enum.Enum):
     COMPUTATION = 2
 
 
+_DATADIMS_INDEXER = "A"
+
+
 def _is_datadims_indexing_name(name: str):
-    return name.endswith(".at")
+    return name.endswith(f".{_DATADIMS_INDEXER}")
+
+
+def _trim_indexing_symbol(name: str):
+    return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
 
 
 def _is_datadims_indexing_node(node):
     return (
         isinstance(node.value, ast.Attribute)
-        and node.value.attr == "at"
+        and node.value.attr == _DATADIMS_INDEXER
         and isinstance(node.value.value, ast.Name)
     )
 
@@ -1053,7 +1060,7 @@ class IRMaker(ast.NodeVisitor):
             raise AssertionError("Logic error")
         elif _is_datadims_indexing_name(symbol):
             result = nodes.FieldRef.datadims_index(
-                name=symbol[:-3], loc=nodes.Location.from_ast_node(node)
+                name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
             )
         else:
             raise AssertionError(f"Missing '{symbol}' symbol definition")
@@ -1165,7 +1172,7 @@ class IRMaker(ast.NodeVisitor):
                     if len(field_axes) != len(index):
                         ro_field_message = ""
                         if len(field_axes) == 0:
-                            ro_field_message = f"Did you mean .at{index}?"
+                            ro_field_message = f"Did you mean .A{index}?"
                         raise GTScriptSyntaxError(
                             f"Incorrect offset specification detected. Found {index}, "
                             f"but the field has dimensions ({', '.join(field_axes)}). "
@@ -1627,7 +1634,7 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                         name_node = t.value
                     elif _is_datadims_indexing_node(t):
                         raise GTScriptSyntaxError(
-                            message="writing to an OffgridField ('at' global indexation) is forbidden",
+                            message="writing to an GlobalTable ('A' global indexation) is forbidden",
                             loc=nodes.Location.from_ast_node(node),
                         )
                     elif isinstance(t.value, ast.Subscript) and isinstance(t.value.value, ast.Name):

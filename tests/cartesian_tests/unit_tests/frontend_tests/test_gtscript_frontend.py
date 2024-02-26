@@ -1466,55 +1466,55 @@ class TestAssignmentSyntax:
 
         parse_definition(data_dims, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
-        # Check .at on read
+        # Check .A on read
         def at_read(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
-            global_field: gtscript.OffgridField[(np.int32, (3, 3, 3, 3))],
+            global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
-                out_field = global_field.at[1, 0, 2, 2]
+                out_field = global_field.A[1, 0, 2, 2]
 
         parse_definition(at_read, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
         # Can't write to the field
         def at_write(
             in_field: gtscript.Field[gtscript.IJK, np.int32],
-            global_field: gtscript.OffgridField[(np.int32, (3, 3, 3))],
+            global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
-                global_field.at[1, 0, 2] = in_field
+                global_field.A[1, 0, 2] = in_field
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="writing to an OffgridField \('at' global indexation\) is forbidden",
+            match="writing to an GlobalTable \('A' global indexation\) is forbidden",
         ):
             parse_definition(at_write, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
         # Can't index cartesian style
-        def OffgridField_access_as_IJK(
+        def GlobalTable_access_as_IJK(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
-            global_field: gtscript.OffgridField[(np.int32, (3, 3, 3))],
+            global_field: gtscript.GlobalTable[(np.int32, (3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
                 out_field = global_field[1, 0, 2]
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Incorrect offset specification detected. Found .* but the field has dimensions .* Did you mean .at",
+            match="Incorrect offset specification detected. Found .* but the field has dimensions .* Did you mean .A",
         ):
             parse_definition(
-                OffgridField_access_as_IJK,
+                GlobalTable_access_as_IJK,
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
 
-        # Check .at on read with a Field with data dimensions
+        # Check .A on read with a Field with data dimensions
         def data_dims_with_at(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
             global_field: gtscript.Field[(np.int32, (3, 3, 3))],
         ):
             with computation(PARALLEL), interval(...):
-                out_field = global_field.at[1, 0, 2]
+                out_field = global_field.A[1, 0, 2]
 
         parse_definition(
             data_dims_with_at, name=inspect.stack()[0][3], module=self.__class__.__name__

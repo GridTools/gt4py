@@ -25,7 +25,7 @@ from gt4py.cartesian.gtscript import (
     Field,
     I,
     J,
-    OffgridField,
+    GlobalTable,
     computation,
     horizontal,
     interval,
@@ -594,9 +594,9 @@ def test_direct_datadims_index(backend):
     F64_VEC4 = (np.float64, (2, 2, 2, 2))
 
     @gtscript.stencil(backend=backend)
-    def test(out: Field[np.float64], inp: OffgridField[F64_VEC4]):
+    def test(out: Field[np.float64], inp: GlobalTable[F64_VEC4]):
         with computation(PARALLEL), interval(...):
-            out = inp.at[1, 0, 1, 0]
+            out = inp.A[1, 0, 1, 0]
 
     inp = gt_storage.ones(backend=backend, shape=(2, 2, 2, 2), dtype=np.float64)
     inp[1, 0, 1, 0] = 42
