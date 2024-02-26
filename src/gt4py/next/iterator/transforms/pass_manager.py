@@ -43,7 +43,7 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 @enum.unique
 class LiftMode(enum.Enum):
     FORCE_INLINE = enum.auto()
-    FORCE_TEMPORARIES = enum.auto()
+    USE_TEMPORARIES = enum.auto()
     SIMPLE_HEURISTIC = enum.auto()
 
 
@@ -52,7 +52,7 @@ def _inline_lifts(ir, lift_mode):
         return InlineLifts().visit(ir)
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
         return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
-    elif lift_mode == LiftMode.FORCE_TEMPORARIES:
+    elif lift_mode == LiftMode.USE_TEMPORARIES:
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
@@ -115,6 +115,7 @@ def main_transforms(ir: itir.Node, lift_mode=None, icdlv_uids=None):
             # use_global_type_inference=inlined == ir,
             ignore_tuple_size=True,  # possibly dangerous
             use_global_type_inference=False,
+            flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
         # This pass is required such that a deref outside of a
         # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
@@ -197,8 +198,13 @@ def apply_common_transforms(
     # Since `CollapseTuple` relies on the type inference which does not support returning tuples
     # larger than the number of closure outputs as given by the unconditional collapse, we can
     # only run the unconditional version here instead of in the loop above.
-    # if unconditionally_collapse_tuples:
-    #    ir = CollapseTuple.apply(ir, ignore_tuple_size=unconditionally_collapse_tuples)
+    #if unconditionally_collapse_tuples:
+    #    ir = CollapseTuple.apply(
+    #        ir,
+    #        ignore_tuple_size=unconditionally_collapse_tuples,
+    #        # TODO(tehrengruber): disabled since it increases compile-time too much right now
+    #        flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+    #    )
 
     if lift_mode == LiftMode.FORCE_INLINE:
         ir = _inline_into_scan(ir)

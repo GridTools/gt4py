@@ -172,7 +172,6 @@ EMBEDDED_SKIP_LIST = [
         XFAIL,
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
-    (USES_MESH_WITH_SKIP_VALUES, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [

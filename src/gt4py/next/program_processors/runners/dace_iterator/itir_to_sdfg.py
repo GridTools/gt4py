@@ -11,6 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import warnings
 from typing import Any, Mapping, Optional, Sequence, cast
 
 import dace
@@ -116,17 +117,18 @@ def _make_array_shape_and_strides(
     tuple(shape, strides)
         The output tuple fields are arrays of dace symbolic expressions.
     """
-    dtype = dace.int64
-    sorted_dims = [dim for _, dim in get_sorted_dims(dims)] if sort_dims else dims
+    dtype = dace.int32
+    sorted_dims = get_sorted_dims(dims) if sort_dims else enumerate(dims)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
             if dim.kind == DimensionKind.LOCAL
-            else dace.symbol(unique_name(f"{name}_shape{i}"), dtype)
+            # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+            else dace.symbol(f"__{name}_size_{i}", dtype)
         )
-        for i, dim in enumerate(sorted_dims)
+        for i, dim in sorted_dims
     ]
-    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in enumerate(shape)]
+    strides = [dace.symbol(unique_name(f"{name}_stride{i}"), dtype) for i, _ in sorted_dims]
     return shape, strides
 
 
@@ -175,23 +177,26 @@ class ItirToSDFG(eve.NodeVisitor):
         name: str,
         type_: ts.TypeSpec,
         neighbor_tables: Mapping[str, NeighborTable],
-        has_offset: bool = True,
         sort_dimensions: bool = True,
     ):
         if isinstance(type_, ts.FieldType):
             shape, strides = _make_array_shape_and_strides(
                 name, type_.dims, neighbor_tables, sort_dimensions
             )
-            offset = (
-                [dace.symbol(unique_name(f"{name}_offset{i}_")) for i in range(len(type_.dims))]
-                if has_offset
-                else None
-            )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(name, shape=shape, strides=strides, offset=offset, dtype=dtype)
+            sdfg.add_array(
+                name,
+                shape=shape,
+                strides=strides,
+                dtype=dtype,
+            )
 
         elif isinstance(type_, ts.ScalarType):
-            sdfg.add_symbol(name, as_dace_type(type_))
+            dtype = as_dace_type(type_)
+            if name in sdfg.symbols:
+                assert sdfg.symbols[name].dtype == dtype
+            else:
+                sdfg.add_symbol(name, dtype)
 
         else:
             raise NotImplementedError()
@@ -242,22 +247,27 @@ class ItirToSDFG(eve.NodeVisitor):
             # Another option, in the future, is to use symbolic strides and apply auto-tuning or some heuristics
             # to assign optimal stride values.
             tmp_shape, _ = new_array_symbols(tmp_name, len(dims))
-            tmp_offset = [
-                dace.symbol(unique_name(f"{tmp_name}_offset{i}")) for i in range(len(dims))
-            ]
             _, tmp_array = program_sdfg.add_array(
-                tmp_name, tmp_shape, as_dace_type(type_.dtype), offset=tmp_offset, transient=True
+                tmp_name, tmp_shape, as_dace_type(type_.dtype), transient=True
             )
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
             # These expressions are later mapped to interstate symbols.
-            for (_, (begin, end)), offset_sym, shape_sym in zip(
+            for (_, (begin, end)), shape_sym in zip(
                 tmp_domain,
-                tmp_array.offset,
                 tmp_array.shape,
             ):
-                tmp_symbols[str(offset_sym)] = f"0 - {begin.value}"
-                tmp_symbols[str(shape_sym)] = f"{end.value} - {begin.value}"
+                """
+                The temporary field has a dimension range defined by `begin` and `end` values.
+                Therefore, the actual size is given by the difference `end.value - begin.value`.
+                Instead of allocating the actual size, we allocate space to enable indexing from 0
+                because we want to avoid using dace array offsets (which will be deprecated soon).
+                The result should still be valid, but the stencil will be using only a subset
+                of the array.
+                """
+                if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
+                    warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
+                tmp_symbols[str(shape_sym)] = end.value
 
         return tmp_symbols
 
@@ -312,7 +322,6 @@ class ItirToSDFG(eve.NodeVisitor):
                 connectivity_identifier(offset),
                 type_,
                 neighbor_tables,
-                has_offset=False,
                 sort_dimensions=False,
             )
 
@@ -429,7 +438,6 @@ class ItirToSDFG(eve.NodeVisitor):
         for name, type_ in self.storage_types.items():
             if isinstance(type_, ts.ScalarType):
                 dtype = as_dace_type(type_)
-                closure_sdfg.add_symbol(name, dtype)
                 if name in input_names:
                     out_name = unique_var_name()
                     closure_sdfg.add_scalar(out_name, dtype, transient=True)
@@ -657,7 +665,6 @@ class ItirToSDFG(eve.NodeVisitor):
             output_name,
             shape=(array_table[node.output.id].shape[scan_dim_index],),
             strides=(array_table[node.output.id].strides[scan_dim_index],),
-            offset=(array_table[node.output.id].offset[scan_dim_index],),
             dtype=array_table[node.output.id].dtype,
         )
 
@@ -764,7 +771,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def _visit_domain(
         self, node: itir.FunCall, context: Context
-    ) -> tuple[tuple[str, tuple[ValueExpr, ValueExpr]], ...]:
+    ) -> tuple[tuple[str, tuple[SymbolExpr | ValueExpr, SymbolExpr | ValueExpr]], ...]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 

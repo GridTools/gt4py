@@ -75,6 +75,9 @@ class Dimension:
     def __str__(self):
         return f"{self.value}[{self.kind}]"
 
+    def __call__(self, val: int) -> NamedIndex:
+        return self, val
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -272,7 +275,10 @@ NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTupl
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+NamedSlice: TypeAlias = (
+    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
+)
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -305,6 +311,10 @@ def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
+
+
+def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return isinstance(obj, slice) and (is_named_index(obj.start) and is_named_index(obj.stop))
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
@@ -732,7 +742,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but breaks in another place
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -748,6 +758,10 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -840,6 +854,7 @@ def _connectivity(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 
@@ -917,6 +932,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def codomain(self) -> DimT:
         return self.dimension
+
+    @property
+    def skip_value(self) -> None:
+        return None
 
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
@@ -1083,4 +1102,4 @@ class FieldBuiltinFuncRegistry:
 #: Numeric value used to represent missing values in connectivities.
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
-SKIP_VALUE: Final[int] = -1
+_DEFAULT_SKIP_VALUE: Final[int] = -1

@@ -186,6 +186,7 @@ repos:
     - cytoolz==0.12.3
     - deepdiff==6.7.1
     - devtools==0.12.2
+    - factory-boy==3.3.0
     - frozendict==2.4.0
     - gridtools-cpp==2.3.2
     - importlib-resources==6.1.1

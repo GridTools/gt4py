@@ -63,7 +63,7 @@ def test_maxover_execution_(unstructured_case, strategy):
         inp.asnumpy()[v2e_table],
         axis=1,
         initial=np.min(inp.asnumpy()),
-        where=v2e_table != common.SKIP_VALUE,
+        where=v2e_table != common._DEFAULT_SKIP_VALUE,
     )
     cases.verify(unstructured_case, testee, inp, ref=ref, out=out)
 
@@ -83,31 +83,65 @@ def test_minover_execution(unstructured_case):
             edge_f[v2e_table],
             axis=1,
             initial=np.max(edge_f),
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
 
+@gtx.field_operator
+def reduction_e_field(edge_f: cases.EField) -> cases.VField:
+    return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+
+@gtx.field_operator
+def reduction_ek_field(
+    edge_f: common.Field[[Edge, KDim], np.int32]
+) -> common.Field[[Vertex, KDim], np.int32]:
+    return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+
+@gtx.field_operator
+def reduction_ke_field(
+    edge_f: common.Field[[KDim, Edge], np.int32]
+) -> common.Field[[KDim, Vertex], np.int32]:
+    return neighbor_sum(edge_f(V2E), axis=V2EDim)
+
+
 @pytest.mark.uses_unstructured_shift
-def test_reduction_execution(unstructured_case):
-    @gtx.field_operator
-    def reduction(edge_f: cases.EField) -> cases.VField:
-        return neighbor_sum(edge_f(V2E), axis=V2EDim)
-
-    @gtx.program
-    def fencil(edge_f: cases.EField, out: cases.VField):
-        reduction(edge_f, out=out)
-
+@pytest.mark.parametrize(
+    "fop", [reduction_e_field, reduction_ek_field, reduction_ke_field], ids=lambda fop: fop.__name__
+)
+def test_neighbor_sum(unstructured_case, fop):
     v2e_table = unstructured_case.offset_provider["V2E"].table
-    cases.verify_with_default_data(
+
+    edge_f = cases.allocate(unstructured_case, fop, "edge_f")()
+
+    local_dim_idx = edge_f.domain.dims.index(Edge) + 1
+    adv_indexing = tuple(
+        slice(None) if dim is not Edge else v2e_table for dim in edge_f.domain.dims
+    )
+
+    broadcast_slice = []
+    for dim in edge_f.domain.dims:
+        if dim is Edge:
+            broadcast_slice.append(slice(None))
+            broadcast_slice.append(slice(None))
+        else:
+            broadcast_slice.append(None)
+
+    broadcasted_table = v2e_table[tuple(broadcast_slice)]
+    ref = np.sum(
+        edge_f.asnumpy()[adv_indexing],
+        axis=local_dim_idx,
+        initial=0,
+        where=broadcasted_table != common._DEFAULT_SKIP_VALUE,
+    )
+    cases.verify(
         unstructured_case,
-        fencil,
-        ref=lambda edge_f: np.sum(
-            edge_f[v2e_table],
-            axis=1,
-            initial=0,
-            where=v2e_table != common.SKIP_VALUE,
-        ),
+        fop,
+        edge_f,
+        out=cases.allocate(unstructured_case, fop, cases.RETURN)(),
+        ref=ref,
     )
 
 
@@ -143,7 +177,7 @@ def test_reduction_execution_with_offset(unstructured_case):
             field.asnumpy()[:, 1][v2e_table],
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ).reshape(out.shape),
         offset_provider=unstructured_case.offset_provider | {"Koff": KDim},
     )
@@ -171,7 +205,7 @@ def test_reduction_expression_in_call(unstructured_case):
             -edge_f[v2e_table] ** 2 * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
@@ -190,7 +224,7 @@ def test_reduction_with_common_expression(unstructured_case):
             flux[v2e_table] * 2,
             axis=1,
             initial=0,
-            where=v2e_table != common.SKIP_VALUE,
+            where=v2e_table != common._DEFAULT_SKIP_VALUE,
         ),
     )
 
