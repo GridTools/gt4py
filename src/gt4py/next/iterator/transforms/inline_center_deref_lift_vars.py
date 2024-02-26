@@ -79,8 +79,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                 if common_pattern_matcher.is_applied_lift(arg) and is_center_derefed_only(param):
                     eligible_params[i] = True
                     bound_arg_name = self.uids.sequential_id(prefix="_icdlv")
-                    capture_lift = im.lift(im.lambda_()(bound_arg_name))()
-                    assert capture_lift == im.promote_to_const_iterator(bound_arg_name)
+                    capture_lift = im.promote_to_const_iterator(bound_arg_name)
                     copy_recorded_shifts(from_=param, to=capture_lift)
                     new_args.append(capture_lift)
                     # since we deref an applied lift here we can (but don't need to) immediately
