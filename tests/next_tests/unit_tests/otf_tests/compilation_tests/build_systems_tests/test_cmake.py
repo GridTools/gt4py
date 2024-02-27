@@ -20,7 +20,7 @@ from gt4py.next.otf.compilation.build_systems import cmake
 
 def test_default_cmake_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = cmake.CMakeFactory()(
-        source=compilable_source_example, cache_storage=cache.SESSION_STORAGE
+        source=compilable_source_example, cache_strategy=cache.Strategy.SESSION
     )
     assert not build_data.contains_data(otf_builder.root_path)
 

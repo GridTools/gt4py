@@ -105,7 +105,7 @@ def compilable_source_example(program_source_example):
 
 @pytest.fixture
 def clean_example_session_cache(compilable_source_example):
-    cache_dir = cache.get_cache_folder(compilable_source_example, cache.SESSION_STORAGE)
+    cache_dir = cache.get_cache_folder(compilable_source_example, cache.Strategy.SESSION)
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
     yield

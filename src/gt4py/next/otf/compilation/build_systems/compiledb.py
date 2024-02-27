@@ -55,7 +55,7 @@ class CompiledbFactory(
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
-        cache_storage: str,
+        cache_strategy: cache.Strategy,
     ) -> CompiledbProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -74,17 +74,17 @@ class CompiledbFactory(
         )
 
         if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_storage)
+            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_strategy)
         ):
             compiledb_template = _cc_create_compiledb(
                 cc_prototype_program_source,
                 build_type=self.cmake_build_type,
                 cmake_flags=self.cmake_extra_flags or [],
-                cache_storage=cache_storage,
+                cache_strategy=cache_strategy,
             )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_storage),
+            root_path=cache.get_cache_folder(source, cache_strategy),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
@@ -232,10 +232,10 @@ def _cc_prototype_program_source(
 
 
 def _cc_find_compiledb(
-    prototype_program_source: stages.ProgramSource, cache_storage: str
+    prototype_program_source: stages.ProgramSource, cache_strategy: cache.Strategy
 ) -> Optional[pathlib.Path]:
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_storage
+        stages.CompilableSource(prototype_program_source, None), cache_strategy
     )
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
@@ -247,11 +247,11 @@ def _cc_create_compiledb(
     prototype_program_source: stages.ProgramSource,
     build_type: cmake.BuildType,
     cmake_flags: list[str],
-    cache_storage: str,
+    cache_strategy: cache.Strategy,
 ) -> pathlib.Path:
     name = prototype_program_source.entry_point.name
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_storage
+        stages.CompilableSource(prototype_program_source, None), cache_strategy
     )
 
     header_ext = prototype_program_source.language_settings.header_extension
