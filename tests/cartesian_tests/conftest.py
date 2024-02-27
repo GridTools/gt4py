@@ -26,9 +26,9 @@ from gt4py.cartesian import config as gt_config
 def pytest_configure(config):
     # HealthCheck.too_slow causes more trouble than good -- especially in CIs.
     hyp.settings.register_profile(
-        "slow", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow], deadline=None)
+        "lenient", hyp.settings(suppress_health_check=[hyp.HealthCheck.too_slow, hyp.HealthCheck.data_too_large], deadline=None)
     )
-    hyp.settings.load_profile("slow")
+    hyp.settings.load_profile("lenient")
 
 
 # Setup cache folder
