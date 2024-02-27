@@ -14,6 +14,7 @@
 
 import functools
 import types
+import typing
 from typing import Any, Callable, Iterator, Type, TypeGuard, cast
 
 import numpy as np
@@ -86,9 +87,24 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
     )
 
 
+@typing.overload
 def primitive_constituents(
     symbol_type: ts.TypeSpec,
-) -> XIterable[ts.TypeSpec]:
+    with_path_arg: typing.Literal[False] = False,
+) -> XIterable[ts.TypeSpec]: ...
+
+
+@typing.overload
+def primitive_constituents(
+    symbol_type: ts.TypeSpec,
+    with_path_arg: typing.Literal[True],
+) -> XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]: ...
+
+
+def primitive_constituents(
+    symbol_type: ts.TypeSpec,
+    with_path_arg: bool = False,
+) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -106,22 +122,28 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.TypeSpec):
+    def constituents_yielder(symbol_type: ts.TypeSpec, path: tuple[int, ...]):
         if isinstance(symbol_type, ts.TupleType):
-            for el_type in symbol_type.types:
-                yield from constituents_yielder(el_type)
+            for i, el_type in enumerate(symbol_type.types):
+                yield from constituents_yielder(el_type, (*path, i))
         else:
-            yield symbol_type
+            if with_path_arg:
+                yield (symbol_type, path)
+            else:
+                yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type))
+    return xiter(constituents_yielder(symbol_type, ()))
 
 
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
-    fun: Callable[[ts.TypeSpec], ts.TypeSpec]
-    | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec],
-    with_path_arg=False,
+    fun: (
+        Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec]
+    ),
     _path=(),
+    *,
+    with_path_arg=False,
+    tuple_constructor=lambda *elements: ts.TupleType(types=[*elements]),
 ):
     """
     Apply function to all primitive constituents of a type.
@@ -132,10 +154,14 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return ts.TupleType(
-            types=[
+        return tuple_constructor(
+            *[
                 apply_to_primitive_constituents(
-                    el, fun, _path=(*_path, i), with_path_arg=with_path_arg
+                    el,
+                    fun,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
                 )
                 for i, el in enumerate(symbol_type.types)
             ]

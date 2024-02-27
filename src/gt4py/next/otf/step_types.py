@@ -46,8 +46,7 @@ class BindingStep(Protocol[SrcL, LS, TgtL]):
 
     def __call__(
         self, program_source: stages.ProgramSource[SrcL, LS]
-    ) -> stages.CompilableSource[SrcL, LS, TgtL]:
-        ...
+    ) -> stages.CompilableSource[SrcL, LS, TgtL]: ...
 
 
 class CompilationStep(
@@ -56,5 +55,6 @@ class CompilationStep(
 ):
     """Compile program source code and bindings into a python callable (CompilableSource -> CompiledProgram)."""
 
-    def __call__(self, source: stages.CompilableSource[SrcL, LS, TgtL]) -> stages.CompiledProgram:
-        ...
+    def __call__(
+        self, source: stages.CompilableSource[SrcL, LS, TgtL]
+    ) -> stages.CompiledProgram: ...

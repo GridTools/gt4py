@@ -16,16 +16,18 @@ import functools
 import warnings
 from typing import Any
 
+import factory
 import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import common
-from gt4py.next.iterator.transforms import LiftMode
-from gt4py.next.otf import languages, recipes, stages, step_types, workflow
+from gt4py.next import common, config
+from gt4py.next.iterator import transforms
+from gt4py.next.iterator.transforms import global_tmps
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
-from gt4py.next.otf.compilation import cache, compiler
+from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import otf_compile_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
@@ -113,103 +115,89 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     )
 
 
-GTFN_DEFAULT_TRANSLATION_STEP: step_types.TranslationStep[
-    languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-] = gtfn_module.GTFNTranslationStep(
-    enable_itir_transforms=True,
-    use_imperative_backend=False,
-    device_type=core_defs.DeviceType.CPU,
-)
+class GTFNCompileWorkflowFactory(factory.Factory):
+    class Meta:
+        model = recipes.OTFCompileWorkflow
 
-GTFN_GPU_TRANSLATION_STEP: step_types.TranslationStep[
-    languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings
-] = gtfn_module.GTFNTranslationStep(
-    enable_itir_transforms=True,
-    use_imperative_backend=False,
-    device_type=core_defs.DeviceType.CUDA,
-)
+    class Params:
+        device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+        cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
+            lambda: config.CMAKE_BUILD_TYPE
+        )
+        builder_factory: compiler.BuildSystemProjectGenerator = factory.LazyAttribute(
+            lambda o: compiledb.CompiledbFactory(cmake_build_type=o.cmake_build_type)
+        )
 
-GTFN_DEFAULT_COMPILE_STEP: step_types.CompilationStep = compiler.Compiler(
-    cache_strategy=cache.Strategy.SESSION, builder_factory=compiledb.CompiledbFactory()
-)
-
-
-GTFN_DEFAULT_WORKFLOW = recipes.OTFCompileWorkflow(
-    translation=GTFN_DEFAULT_TRANSLATION_STEP,
-    bindings=nanobind.bind_source,
-    compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=convert_args,
-)
-
-
-GTFN_GPU_WORKFLOW = recipes.OTFCompileWorkflow(
-    translation=GTFN_GPU_TRANSLATION_STEP,
-    bindings=nanobind.bind_source,
-    compilation=GTFN_DEFAULT_COMPILE_STEP,
-    decoration=functools.partial(convert_args, device=core_defs.DeviceType.CUDA),
-)
+    translation = factory.SubFactory(
+        gtfn_module.GTFNTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
+    )
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource] = (
+        nanobind.bind_source
+    )
+    compilation = factory.SubFactory(
+        compiler.CompilerFactory,
+        cache_lifetime=factory.LazyFunction(lambda: config.BUILD_CACHE_LIFETIME),
+        builder_factory=factory.SelfAttribute("..builder_factory"),
+    )
+    decoration = factory.LazyAttribute(
+        lambda o: functools.partial(convert_args, device=o.device_type)
+    )
 
 
-gtfn_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn", otf_workflow=GTFN_DEFAULT_WORKFLOW
-)
-run_gtfn = otf_compile_executor.OTFBackend(
-    executor=gtfn_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
+class GTFNBackendFactory(factory.Factory):
+    class Meta:
+        model = otf_compile_executor.OTFBackend
 
-gtfn_imperative_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_imperative",
-    otf_workflow=gtfn_executor.otf_workflow.replace(
-        translation=gtfn_executor.otf_workflow.translation.replace(use_imperative_backend=True),
-    ),
-)
-run_gtfn_imperative = otf_compile_executor.OTFBackend(
-    executor=gtfn_imperative_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-# TODO(ricoh): add API for converting an executor to a cached version of itself and vice versa
-gtfn_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_cached",
-    otf_workflow=workflow.CachedStep(
-        step=gtfn_executor.otf_workflow, hash_function=compilation_hash
-    ),
-)
-run_gtfn_cached = otf_compile_executor.OTFBackend(
-    executor=gtfn_cached_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-
-run_gtfn_with_temporaries = otf_compile_executor.OTFBackend(
-    executor=otf_compile_executor.OTFCompileExecutor(
-        name="run_gtfn_with_temporaries",
-        otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(
-                lift_mode=LiftMode.FORCE_TEMPORARIES
+    class Params:
+        name_device = "cpu"
+        name_cached = ""
+        name_temps = ""
+        name_postfix = ""
+        gpu = factory.Trait(
+            allocator=next_allocators.StandardGPUFieldBufferAllocator(),
+            device_type=core_defs.DeviceType.CUDA,
+            name_device="gpu",
+        )
+        cached = factory.Trait(
+            executor=factory.LazyAttribute(
+                lambda o: otf_compile_executor.CachedOTFCompileExecutor(
+                    otf_workflow=workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function),
+                    name=o.name,
+                )
             ),
-        ),
-    ),
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+            name_cached="_cached",
+        )
+        use_temporaries = factory.Trait(
+            otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
+            otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+            name_temps="_with_temporaries",
+        )
+        device_type = core_defs.DeviceType.CPU
+        hash_function = compilation_hash
+        otf_workflow = factory.SubFactory(
+            GTFNCompileWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+        )
+        name = factory.LazyAttribute(
+            lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
+        )
+
+    executor = factory.LazyAttribute(
+        lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=o.otf_workflow, name=o.name)
+    )
+    allocator = next_allocators.StandardCPUFieldBufferAllocator()
+
+
+run_gtfn = GTFNBackendFactory()
+
+run_gtfn_imperative = GTFNBackendFactory(
+    name_postfix="_imperative",
+    otf_workflow__translation__use_imperative_backend=True,
 )
 
-gtfn_gpu_executor = otf_compile_executor.OTFCompileExecutor(
-    name="run_gtfn_gpu", otf_workflow=GTFN_GPU_WORKFLOW
-)
-run_gtfn_gpu = otf_compile_executor.OTFBackend(
-    executor=gtfn_gpu_executor,
-    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-)
+run_gtfn_cached = GTFNBackendFactory(cached=True)
 
+run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 
-gtfn_gpu_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_gpu_cached",
-    otf_workflow=workflow.CachedStep(
-        step=gtfn_gpu_executor.otf_workflow, hash_function=compilation_hash
-    ),
-)
-run_gtfn_gpu_cached = otf_compile_executor.OTFBackend(
-    executor=gtfn_gpu_cached_executor,
-    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-)
+run_gtfn_gpu = GTFNBackendFactory(gpu=True)
+
+run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)

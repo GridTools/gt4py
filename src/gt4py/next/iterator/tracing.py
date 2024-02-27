@@ -147,6 +147,8 @@ for builtin_name in builtins.BUILTINS:
 def make_node(o):
     if isinstance(o, Node):
         return o
+    if isinstance(o, common.Dimension):
+        return AxisLiteral(value=o.value)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -156,8 +158,6 @@ def make_node(o):
         return OffsetLiteral(value=o.value)
     if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
-    if isinstance(o, common.Dimension):
-        return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
@@ -254,7 +254,7 @@ def _contains_tuple_dtype_field(arg):
     #  other `np.int32`). We just ignore the error here and postpone fixing this to when
     #  the new storages land (The implementation here works for LocatedFieldImpl).
 
-    return common.is_field(arg) and any(dim is None for dim in arg.__gt_dims__)
+    return common.is_field(arg) and any(dim is None for dim in arg.domain.dims)
 
 
 def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:

@@ -22,6 +22,7 @@ import gt4py.next as gtx
 from gt4py.next import (
     astype,
     broadcast,
+    common,
     errors,
     float32,
     float64,
@@ -51,8 +52,8 @@ from next_tests.integration_tests.cases import (
     unstructured_case,
 )
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
-    fieldview_backend,
-    reduction_setup,
+    exec_alloc_descriptor,
+    mesh_descriptor,
 )
 
 
@@ -320,6 +321,21 @@ def test_scalar_scan_vertical_offset(cartesian_case):  # noqa: F811 # fixtures
     cases.verify(cartesian_case, testee, inp, out=out, ref=expected)
 
 
+def test_single_value_field(cartesian_case):
+    @gtx.field_operator
+    def testee_fo(a: cases.IKField) -> cases.IKField:
+        return a
+
+    @gtx.program
+    def testee_prog(a: cases.IKField):
+        testee_fo(a, out=a[1:2, 3:4])
+
+    a = cases.allocate(cartesian_case, testee_prog, "a")()
+    ref = a[1, 3]
+
+    cases.verify(cartesian_case, testee_prog, a, inout=a[1, 3], ref=ref)
+
+
 def test_astype_int(cartesian_case):  # noqa: F811 # fixtures
     @gtx.field_operator
     def testee(a: cases.IFloatField) -> gtx.Field[[IDim], int64]:
@@ -473,7 +489,7 @@ def test_offset_field(cartesian_case):
         offset_field,
         out=out,
         offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field, True, dtype=bool),
+        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
         comparison=lambda out, ref: np.all(out == ref),
     )
 
@@ -499,19 +515,22 @@ def test_nested_tuple_return(cartesian_case):
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_nested_reduction(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.EField) -> cases.EField:
-        tmp = neighbor_sum(a(V2E), axis=V2EDim)
-        tmp_2 = neighbor_sum(tmp(E2V), axis=E2VDim)
+    def testee(a: cases.VField) -> cases.VField:
+        tmp = neighbor_sum(a(E2V), axis=E2VDim)
+        tmp_2 = neighbor_sum(tmp(V2E), axis=V2EDim)
         return tmp_2
 
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)[
-                unstructured_case.offset_provider["E2V"].table
-            ],
+            np.sum(
+                a[unstructured_case.offset_provider["E2V"].table],
+                axis=1,
+                initial=0,
+            )[unstructured_case.offset_provider["V2E"].table],
             axis=1,
+            where=unstructured_case.offset_provider["V2E"].table != common._DEFAULT_SKIP_VALUE,
         ),
         comparison=lambda a, tmp_2: np.all(a == tmp_2),
     )
@@ -568,11 +587,15 @@ def test_tuple_with_local_field_in_reduction_shifted(unstructured_case):
         tmp = red(E2V[0])
         return tmp
 
+    v2e = unstructured_case.offset_provider["V2E"]
     cases.verify_with_default_data(
         unstructured_case,
         reduce_tuple_element,
         ref=lambda e, v: np.sum(
-            e[unstructured_case.offset_provider["V2E"].table] + np.tile(v, (4, 1)).T, axis=1
+            e[v2e.table] + np.tile(v, (v2e.max_neighbors, 1)).T,
+            axis=1,
+            initial=0,
+            where=v2e.table != common._DEFAULT_SKIP_VALUE,
         )[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
 
@@ -589,6 +612,7 @@ def test_tuple_arg(cartesian_case):
 
 
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.parametrize("forward", [True, False])
 def test_fieldop_from_scan(cartesian_case, forward):
     init = 1.0
@@ -611,15 +635,9 @@ def test_fieldop_from_scan(cartesian_case, forward):
 
 @pytest.mark.uses_scan
 @pytest.mark.uses_lift_expressions
+@pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("Nested `scan`s requires creating temporaries.")
-    if cartesian_case.backend == gtfn.run_gtfn_with_temporaries:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -670,7 +688,7 @@ def test_ternary_operator(cartesian_case, left, right):
     def testee(left: int32, right: int32) -> cases.IField:
         return broadcast(3, (IDim,)) if left > right else broadcast(4, (IDim,))
 
-    e = np.asarray(a) if left < right else np.asarray(b)
+    e = a if left < right else b
     cases.verify(
         cartesian_case,
         testee,
@@ -708,20 +726,24 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
         return tmp
 
+    v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(b[unstructured_case.offset_provider["V2E"].table], axis=1)
-            if 2 < 3
-            else np.sum(a[unstructured_case.offset_provider["V2E"].table], axis=1)
+            np.sum(
+                b[v2e_table],
+                axis=1,
+                initial=0,
+                where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            )
         ),
     )
 
 
 @pytest.mark.uses_scan
 def test_ternary_scan(cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
@@ -743,9 +765,10 @@ def test_ternary_scan(cartesian_case):
 
 @pytest.mark.parametrize("forward", [True, False])
 @pytest.mark.uses_scan
+@pytest.mark.uses_scan_without_field_args
 @pytest.mark.uses_tuple_returns
 def test_scan_nested_tuple_output(forward, cartesian_case):
-    if cartesian_case.backend in [gtfn.run_gtfn_with_temporaries]:
+    if cartesian_case.executor in [gtfn.run_gtfn_with_temporaries]:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     init = (1, (2, 3))
@@ -768,9 +791,9 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
         cartesian_case,
         testee,
         ref=lambda: (expected + 1.0, (expected + 2.0, expected + 3.0)),
-        comparison=lambda ref, out: np.all(np.asarray(out[0]) == ref[0])
-        and np.all(np.asarray(out[1][0]) == ref[1][0])
-        and np.all(np.asarray(out[1][1]) == ref[1][1]),
+        comparison=lambda ref, out: np.all(out[0] == ref[0])
+        and np.all(out[1][0] == ref[1][0])
+        and np.all(out[1][1] == ref[1][1]),
     )
 
 
@@ -898,26 +921,6 @@ def test_docstring(cartesian_case):
     cases.verify(cartesian_case, test_docstring, a, inout=a, ref=a)
 
 
-def test_with_bound_args(cartesian_case):
-    @gtx.field_operator
-    def fieldop_bound_args(a: cases.IField, scalar: int32, condition: bool) -> cases.IField:
-        if not condition:
-            scalar = 0
-        return a + a + scalar
-
-    @gtx.program
-    def program_bound_args(a: cases.IField, scalar: int32, condition: bool, out: cases.IField):
-        fieldop_bound_args(a, scalar, condition, out=out)
-
-    a = cases.allocate(cartesian_case, program_bound_args, "a")()
-    scalar = int32(1)
-    ref = a + a + 1
-    out = cases.allocate(cartesian_case, program_bound_args, "out")()
-
-    prog_bounds = program_bound_args.with_bound_args(scalar=scalar, condition=True)
-    cases.verify(cartesian_case, prog_bounds, a, out, inout=out, ref=ref)
-
-
 def test_domain(cartesian_case):
     @gtx.field_operator
     def fieldop_domain(a: cases.IField) -> cases.IField:
@@ -936,15 +939,8 @@ def test_domain(cartesian_case):
     cases.verify(cartesian_case, program_domain, a, out, inout=out, ref=ref)
 
 
+@pytest.mark.uses_floordiv
 def test_domain_input_bounds(cartesian_case):
-    if cartesian_case.backend in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_gpu,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
-    ]:
-        pytest.xfail("FloorDiv not fully supported in gtfn.")
-
     lower_i = 1
     upper_i = 10
 
@@ -990,7 +986,7 @@ def test_domain_input_bounds_1(cartesian_case):
     def fieldop_domain(a: cases.IJField) -> cases.IJField:
         return a + a
 
-    @gtx.program(backend=cartesian_case.backend)
+    @gtx.program(backend=cartesian_case.executor)
     def program_domain(
         a: cases.IJField,
         out: cases.IJField,
@@ -1083,15 +1079,15 @@ def test_where_k_offset(cartesian_case):
     )()
     out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
 
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), 2)
+    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
 
-    cases.verify(cartesian_case, prog, inp, k_index, out=out[:, 1:], ref=ref[:, 1:])
+    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
     with pytest.raises(errors.DSLError, match="Undeclared symbol"):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def return_undefined():
             return undefined_symbol
 
@@ -1130,7 +1126,12 @@ def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
     def unpack(
         inp: cases.IField,
-    ) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField,]:
+    ) -> tuple[
+        cases.IField,
+        cases.IField,
+        cases.IField,
+        cases.IField,
+    ]:
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
@@ -1191,7 +1192,7 @@ def test_tuple_unpacking_too_many_values(cartesian_case):
         match=(r"Too many values to unpack \(expected 3\)."),
     ):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def _star_unpack() -> tuple[int32, float64, int32]:
             a, b, c = (1, 2.0, 3, 4, 5, 6, 7.0)
             return a, b, c
@@ -1202,7 +1203,7 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
         errors.DSLError, match=(r"Assignment value must be of type tuple, got 'int32'.")
     ):
 
-        @gtx.field_operator(backend=cartesian_case.backend)
+        @gtx.field_operator(backend=cartesian_case.executor)
         def _invalid_unpack() -> tuple[int32, float64, int32]:
             a, b, c = 1
             return a
@@ -1221,5 +1222,7 @@ def test_constant_closure_vars(cartesian_case):
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(
-        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
+        cartesian_case,
+        consume_constants,
+        ref=lambda input: constants.PI * constants.E * input,
     )

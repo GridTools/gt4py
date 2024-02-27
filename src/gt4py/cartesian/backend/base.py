@@ -305,8 +305,7 @@ class BaseBackend(Backend):
 
 
 class MakeModuleSourceCallable(Protocol):
-    def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str:
-        ...
+    def __call__(self, *, args_data: Optional[ModuleData] = None, **kwargs: Any) -> str: ...
 
 
 class PurePythonBackendCLIMixin(CLIBackendMixin):

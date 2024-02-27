@@ -15,12 +15,13 @@
 import dataclasses
 from typing import Any, Callable, Optional
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
     field_operator_ast as foast,
+    lowering_utils,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
@@ -39,7 +40,7 @@ def promote_to_list(
 
 
 @dataclasses.dataclass
-class FieldOperatorLowering(NodeTranslator):
+class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     """
     Lower FieldOperator AST (FOAST) to Iterator IR (ITIR).
 
@@ -61,7 +62,7 @@ class FieldOperatorLowering(NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params
+    >>> lowered.params # doctest: +ELLIPSIS
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
@@ -83,7 +84,8 @@ class FieldOperatorLowering(NodeTranslator):
 
     def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-        new_body = im.deref(func_definition.expr)
+
+        new_body = func_definition.expr
 
         return itir.FunctionDefinition(
             id=func_definition.id,
@@ -94,27 +96,54 @@ class FieldOperatorLowering(NodeTranslator):
     def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
         # note: we don't need the axis here as this is handled by the program
         #  decorator
+        assert isinstance(node.type, ts_ffront.ScanOperatorType)
 
         # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
         # In iterator IR we didn't properly specify if this is legal,
         # however after lift-inlining the expressions are transformed back to literals.
         forward = im.deref(self.visit(node.forward, **kwargs))
-        init = im.deref(self.visit(node.init, **kwargs))
+        init = lowering_utils.process_elements(
+            im.deref, self.visit(node.init, **kwargs), node.init.type
+        )
 
         # lower definition function
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-        new_body = func_definition.expr
-
-        # promote carry to iterator
-        # (this is the only place in the lowering were a variable is captured in a lifted lambda)
         new_body = im.let(
             func_definition.params[0].id,
-            im.promote_to_const_iterator(func_definition.params[0].id),
-        )(im.deref(new_body))
-        definition = itir.Lambda(params=func_definition.params, expr=new_body)
-        body = im.call(im.call("scan")(definition, forward, init))(
-            *(param.id for param in definition.params[1:])
+            # promote carry to iterator of tuples
+            # (this is the only place in the lowering were a variable is captured in a lifted lambda)
+            lowering_utils.to_tuples_of_iterator(
+                im.promote_to_const_iterator(func_definition.params[0].id),
+                [*node.type.definition.pos_or_kw_args.values()][0],
+            ),
+        )(
+            # the function itself returns a tuple of iterators, deref element-wise
+            lowering_utils.process_elements(
+                im.deref, func_definition.expr, node.type.definition.returns
+            )
         )
+
+        stencil_args = []
+        assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
+        for param, arg_type in zip(
+            func_definition.params[1:],
+            [*node.type.definition.pos_or_kw_args.values()][1:],
+            strict=True,
+        ):
+            if isinstance(arg_type, ts.TupleType):
+                # convert into iterator of tuples
+                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
+
+                new_body = im.let(
+                    param.id,
+                    lowering_utils.to_tuples_of_iterator(param.id, arg_type),
+                )(new_body)
+            else:
+                stencil_args.append(param.id)
+
+        definition = itir.Lambda(params=func_definition.params, expr=new_body)
+
+        body = im.lift(im.call("scan")(definition, forward, init))(*stencil_args)
 
         return itir.FunctionDefinition(
             id=node.id,
@@ -142,7 +171,7 @@ class FieldOperatorLowering(NodeTranslator):
         self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
-        #  from a scalar value (and not a field)
+        # from a scalar value (and not a field)
         assert (
             isinstance(node.condition.type, ts.ScalarType)
             and node.condition.type.kind == ts.ScalarKind.BOOL
@@ -216,14 +245,10 @@ class FieldOperatorLowering(NodeTranslator):
         return im.ref(node.id)
 
     def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.Expr:
-        return im.promote_to_lifted_stencil(lambda tuple_: im.tuple_get(node.index, tuple_))(
-            self.visit(node.value, **kwargs)
-        )
+        return im.tuple_get(node.index, self.visit(node.value, **kwargs))
 
     def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.Expr:
-        return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
-            *[self.visit(el, **kwargs) for el in node.elts],
-        )
+        return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
@@ -243,7 +268,19 @@ class FieldOperatorLowering(NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
-        return self._map("if_", node.condition, node.true_expr, node.false_expr)
+        op = "if_"
+        args = (node.condition, node.true_expr, node.false_expr)
+        lowered_args = [
+            lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
+            for arg in args
+        ]
+        if any(type_info.contains_local_field(arg.type) for arg in args):
+            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+            op = im.call("map_")(op)
+
+        return lowering_utils.to_tuples_of_iterator(
+            im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
+        )
 
     def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -280,28 +317,11 @@ class FieldOperatorLowering(NodeTranslator):
         elif isinstance(
             node.func.type,
             (
+                ts.FunctionType,
                 ts_ffront.FieldOperatorType,
                 ts_ffront.ScanOperatorType,
             ),
         ):
-            # Operators are lowered into lifted stencils.
-            lowered_func = self.visit(node.func, **kwargs)
-            # ITIR has no support for keyword arguments. Instead, we concatenate both positional
-            # and keyword arguments and use the unique order as given in the function signature.
-            lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
-                node.func.type,
-                [self.visit(arg, **kwargs) for arg in node.args],
-                {name: self.visit(arg, **kwargs) for name, arg in node.kwargs.items()},
-                use_signature_ordering=True,
-            )
-            call_args = [f"__arg{i}" for i in range(len(lowered_args))]
-            call_kwargs = [f"__kwarg_{name}" for name in lowered_kwargs.keys()]
-            return im.lift(
-                im.lambda_(*call_args, *call_kwargs)(
-                    im.call(lowered_func)(*call_args, *call_kwargs)
-                )
-            )(*lowered_args, *lowered_kwargs.values())
-        elif isinstance(node.func.type, ts.FunctionType):
             # ITIR has no support for keyword arguments. Instead, we concatenate both positional
             # and keyword arguments and use the unique order as given in the function signature.
             lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
@@ -310,7 +330,17 @@ class FieldOperatorLowering(NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
-            return im.call(self.visit(node.func, **kwargs))(*lowered_args, *lowered_kwargs.values())
+            result = im.call(self.visit(node.func, **kwargs))(
+                *lowered_args, *lowered_kwargs.values()
+            )
+
+            # scan operators return an iterator of tuples, transform into tuples of iterator again
+            if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+                result = lowering_utils.to_tuples_of_iterator(
+                    result, node.func.type.definition.returns
+                )
+
+            return result
 
         raise AssertionError(
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
@@ -319,12 +349,23 @@ class FieldOperatorLowering(NodeTranslator):
     def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
-        return self._process_elements(
-            lambda x: im.call("cast_")(x, str(new_type)), obj, obj.type, **kwargs
+        return lowering_utils.process_elements(
+            lambda x: im.promote_to_lifted_stencil(
+                im.lambda_("it")(im.call("cast_")("it", str(new_type)))
+            )(x),
+            self.visit(obj, **kwargs),
+            obj.type,
         )
 
     def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self._map("if_", *node.args)
+        condition, true_value, false_value = node.args
+
+        lowered_condition = self.visit(condition, **kwargs)
+        return lowering_utils.process_elements(
+            lambda tv, fv: im.promote_to_lifted_stencil("if_")(lowered_condition, tv, fv),
+            [self.visit(true_value, **kwargs), self.visit(false_value, **kwargs)],
+            node.type,
+        )
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
@@ -379,13 +420,8 @@ class FieldOperatorLowering(NodeTranslator):
         # TODO(havogt): lifted nullary lambdas are not supported in iterator.embedded due to an implementation detail;
         # the following constructs work if they are removed by inlining.
         if isinstance(type_, ts.TupleType):
-            return im.promote_to_const_iterator(
-                im.make_tuple(
-                    *(
-                        im.deref(self._make_literal(val, type_))
-                        for val, type_ in zip(val, type_.types)
-                    )
-                )
+            return im.make_tuple(
+                *(self._make_literal(val, type_) for val, type_ in zip(val, type_.types))
             )
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
@@ -403,32 +439,5 @@ class FieldOperatorLowering(NodeTranslator):
 
         return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
 
-    def _process_elements(
-        self,
-        process_func: Callable[[itir.Expr], itir.Expr],
-        obj: foast.Expr,
-        current_el_type: ts.TypeSpec,
-        current_el_expr: itir.Expr = im.ref("expr"),
-    ):
-        """Recursively applies a processing function to all primitive constituents of a tuple."""
-        if isinstance(current_el_type, ts.TupleType):
-            # TODO(ninaburg): Refactor to avoid duplicating lowered obj expression for each tuple element.
-            return im.promote_to_lifted_stencil(lambda *elts: im.make_tuple(*elts))(
-                *[
-                    self._process_elements(
-                        process_func,
-                        obj,
-                        current_el_type.types[i],
-                        im.tuple_get(i, current_el_expr),
-                    )
-                    for i in range(len(current_el_type.types))
-                ]
-            )
-        elif type_info.contains_local_field(current_el_type):
-            raise NotImplementedError("Processing fields with local dimension is not implemented.")
-        else:
-            return self._map(im.lambda_("expr")(process_func(current_el_expr)), obj)
 
-
-class FieldOperatorLoweringError(Exception):
-    ...
+class FieldOperatorLoweringError(Exception): ...

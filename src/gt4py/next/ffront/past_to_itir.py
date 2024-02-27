@@ -18,8 +18,9 @@ from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
+from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -40,7 +41,9 @@ def _flatten_tuple_expr(
     raise ValueError("Only 'past.Name', 'past.Subscript' or 'past.TupleExpr' thereof are allowed.")
 
 
-class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
+class ProgramLowering(
+    traits.PreserveLocationVisitor, traits.VisitorWithSymbolTableTrait, NodeTranslator
+):
     """
     Lower Program AST (PAST) to Iterator IR (ITIR).
 
@@ -139,18 +142,42 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+        args, node_kwargs = type_info.canonicalize_arguments(
             node.func.type,
-            self.visit(node.args, **kwargs),
-            self.visit(node_kwargs, **kwargs),
+            node.args,
+            node_kwargs,
             use_signature_ordering=True,
         )
 
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        stencil_params = []
+        stencil_args = []
+        for i, arg in enumerate([*args, *node_kwargs]):
+            stencil_params.append(f"__stencil_arg{i}")
+            if isinstance(arg.type, ts.TupleType):
+                # convert into tuple of iterators
+                stencil_args.append(
+                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                )
+            else:
+                stencil_args.append(f"__stencil_arg{i}")
+
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # scan operators return an iterator of tuples, just deref directly
+            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+        else:
+            # field operators return a tuple of iterators, deref element-wise
+            stencil_body = lowering_utils.process_elements(
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+            )
+
         return itir.StencilClosure(
             domain=lowered_domain,
-            stencil=itir.SymRef(id=node.func.id),
+            stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
+            location=node.location,
         )
 
     def _visit_slice_bound(
@@ -175,17 +202,22 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 lowered_bound = self.visit(slice_bound, **kwargs)
         else:
             raise AssertionError("Expected 'None' or 'past.Constant'.")
+        if slice_bound:
+            lowered_bound.location = slice_bound.location
         return lowered_bound
 
     def _construct_itir_out_arg(self, node: past.Expr) -> itir.Expr:
         if isinstance(node, past.Name):
-            return itir.SymRef(id=node.id)
+            return itir.SymRef(id=node.id, location=node.location)
         elif isinstance(node, past.Subscript):
-            return self._construct_itir_out_arg(node.value)
+            itir_node = self._construct_itir_out_arg(node.value)
+            itir_node.location = node.location
+            return itir_node
         elif isinstance(node, past.TupleExpr):
             return itir.FunCall(
                 fun=itir.SymRef(id="make_tuple"),
                 args=[self._construct_itir_out_arg(el) for el in node.elts],
+                location=node.location,
             )
         else:
             raise ValueError(
@@ -199,7 +231,6 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
-        domain_args = []
 
         assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
@@ -214,6 +245,8 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                 " caught in type deduction already."
             )
 
+        domain_args = []
+        domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
@@ -239,15 +272,25 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
                 )
             )
+            domain_args_kind.append(dim.kind)
 
         if self.grid_type == GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
         elif self.grid_type == GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
+            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
+            if domain_args_kind[0] == DimensionKind.VERTICAL:
+                assert len(domain_args) == 2
+                assert domain_args_kind[1] == DimensionKind.HORIZONTAL
+                domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
 
-        return itir.FunCall(fun=itir.SymRef(id=domain_builtin), args=domain_args)
+        return itir.FunCall(
+            fun=itir.SymRef(id=domain_builtin),
+            args=domain_args,
+            location=(node_domain or out_field).location,
+        )
 
     def _construct_itir_initialized_domain_arg(
         self,
@@ -293,7 +336,7 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
-            #  inspection of the PAST to emulate the behaviour
+            # inspection of the PAST to emulate the behaviour
             out_field_name: past.Name = out_arg.value
             return (
                 self._construct_itir_out_arg(out_field_name),
@@ -370,12 +413,11 @@ class ProgramLowering(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         )
 
     def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
-        if node.func.id in ["maximum", "minimum"] and len(node.args) == 2:
+        if node.func.id in ["maximum", "minimum"]:
+            assert len(node.args) == 2
             return itir.FunCall(
                 fun=itir.SymRef(id=node.func.id),
                 args=[self.visit(node.args[0]), self.visit(node.args[1])],
             )
         else:
-            raise AssertionError(
-                "Only 'minimum' and 'maximum' builtins supported supported currently."
-            )
+            raise NotImplementedError("Only 'minimum', and 'maximum' builtins supported currently.")
