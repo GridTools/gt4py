@@ -271,7 +271,9 @@ class BaseBackend(Backend):
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
             warnings.warn(
-                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+                f"Unknown options '{unknown_options}' for backend '{self.name}'",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
     def make_module(

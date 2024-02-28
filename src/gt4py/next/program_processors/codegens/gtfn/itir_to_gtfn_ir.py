@@ -472,7 +472,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
-                args=[self._visit_output_argument(node.output)] + self.visit(node.inputs),
+                args=[self._visit_output_argument(node.output), *self.visit(node.inputs)],
                 axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(

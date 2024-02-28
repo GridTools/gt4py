@@ -19,11 +19,11 @@ import pytest
 from gt4py import eve
 from gt4py.eve import codegen
 
-from .test_utils import name_with_cases  # noqa: F401
+from .test_utils import name_with_cases  # noqa: F401 [unused-import]
 
 
 # -- Name tests --
-def test_name(name_with_cases):  # noqa: F811  # pytest fixture not detected
+def test_name(name_with_cases):
     name = codegen.Name(name_with_cases.pop("words"))
     for case, cased_string in name_with_cases.items():
         assert name.as_case(case) == cased_string

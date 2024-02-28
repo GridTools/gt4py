@@ -197,7 +197,7 @@ class _Renamer:
         # Pop the node out of the parents dict as its hash could change after modification
         popped = self._parents.pop(node, None)
 
-        # Update the node’s field
+        # Update the node's field
         setattr(node, field, replacement)
 
         # Register `node` to be the new parent of `replacement`

@@ -516,7 +516,7 @@ class DaCeComputationCodegen:
                     break
             for i, line in enumerate(lines):
                 if "#include <dace/dace.h>" in line:
-                    cuda_code = [co.clean_code for co in code_objects if co.title == "CUDA"][0]
+                    cuda_code = next(co.clean_code for co in code_objects if co.title == "CUDA")
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 

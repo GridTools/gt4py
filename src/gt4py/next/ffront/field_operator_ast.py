@@ -51,7 +51,7 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 #       class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
 #
 class Symbol(LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # shadowing a python builtin
+    id: Coerced[SymbolName]
     type: Union[SymbolT, ts.DeferredType]  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
@@ -79,7 +79,7 @@ class Expr(LocatedNode):
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # shadowing a python builtin
+    id: Coerced[SymbolRef]
 
 
 class Constant(Expr):
@@ -157,7 +157,7 @@ class Stmt(LocatedNode): ...
 
 
 class Starred(Expr):
-    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]  # shadowing a python builtin
+    id: Union[FieldSymbol, TupleSymbol, ScalarSymbol]
 
 
 class Assign(Stmt):
@@ -198,7 +198,7 @@ class IfStmt(Stmt):
 
 
 class FunctionDefinition(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # shadowing a python builtin
+    id: Coerced[SymbolName]
     params: list[DataSymbol]
     body: BlockStmt
     closure_vars: list[Symbol]
@@ -206,7 +206,7 @@ class FunctionDefinition(LocatedNode, SymbolTableTrait):
 
 
 class FieldOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # shadowing a python builtin
+    id: Coerced[SymbolName]
     definition: FunctionDefinition
     type: Union[ts_ffront.FieldOperatorType, ts.DeferredType] = ts.DeferredType(
         constraint=ts_ffront.FieldOperatorType
@@ -214,7 +214,7 @@ class FieldOperator(LocatedNode, SymbolTableTrait):
 
 
 class ScanOperator(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # shadowing a python builtin
+    id: Coerced[SymbolName]
     axis: Constant
     forward: Constant
     init: Constant

@@ -193,7 +193,8 @@ class GTFNTranslationStep(
         if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
             warnings.warn(
                 f"GTFN Backend was configured for LiftMode `{self.lift_mode!s}`, but "
-                f"overriden to be {runtime_lift_mode!s} at runtime."
+                f"overriden to be {runtime_lift_mode!s} at runtime.",
+                stacklevel=2,
             )
 
         if not self.enable_itir_transforms:

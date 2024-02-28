@@ -15,7 +15,7 @@
 import dataclasses
 import inspect
 import typing
-from typing import List
+from typing import ClassVar, List
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
@@ -208,8 +208,8 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
-    fundefs: List[FunctionDefinition] = []
-    closures: List[StencilClosure] = []
+    fundefs: ClassVar[List[FunctionDefinition]] = []
+    closures: ClassVar[List[StencilClosure]] = []
 
     @classmethod
     def add_fundef(cls, fun):

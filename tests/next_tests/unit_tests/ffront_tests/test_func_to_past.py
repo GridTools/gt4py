@@ -109,7 +109,7 @@ def test_undefined_field_program(identity_def):
     identity = gtx.field_operator(identity_def)
 
     def undefined_field_program(in_field: gtx.Field[[IDim], "float64"]):
-        identity(in_field, out=out_field)  # noqa: F821  # undefined on purpose
+        identity(in_field, out=out_field)  # noqa: F821 [undefined-name]
 
     with pytest.raises(
         errors.DSLError,

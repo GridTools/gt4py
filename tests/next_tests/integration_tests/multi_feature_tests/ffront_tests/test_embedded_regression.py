@@ -19,14 +19,14 @@ from gt4py import next as gtx
 from gt4py.next import errors
 
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 # fixtures
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 # fixtures
+from next_tests.integration_tests.cases import IField, cartesian_case  # noqa: F401 [unused-import]
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
     KDim,
     exec_alloc_descriptor,
 )
 
 
-def test_default_backend_is_respected_field_operator(cartesian_case):  # noqa: F811 # fixtures
+def test_default_backend_is_respected_field_operator(cartesian_case):
     """Test that manually calling the field operator without setting the backend raises an error."""
 
     # Important not to set the backend here!
@@ -43,7 +43,7 @@ def test_default_backend_is_respected_field_operator(cartesian_case):  # noqa: F
         _ = copy(a, out=a, offset_provider={})
 
 
-def test_default_backend_is_respected_scan_operator(cartesian_case):  # noqa: F811 # fixtures
+def test_default_backend_is_respected_scan_operator(cartesian_case):
     """Test that manually calling the scan operator without setting the backend raises an error."""
 
     # Important not to set the backend here!
@@ -58,7 +58,7 @@ def test_default_backend_is_respected_scan_operator(cartesian_case):  # noqa: F8
         _ = sum(a, out=a, offset_provider={})
 
 
-def test_default_backend_is_respected_program(cartesian_case):  # noqa: F811 # fixtures
+def test_default_backend_is_respected_program(cartesian_case):
     """Test that manually calling the program without setting the backend raises an error."""
 
     @gtx.field_operator
@@ -78,7 +78,7 @@ def test_default_backend_is_respected_program(cartesian_case):  # noqa: F811 # f
         _ = copy_program(a, b, offset_provider={})
 
 
-def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
+def test_missing_arg_field_operator(cartesian_case):
     """Test that calling a field_operator without required args raises an error."""
 
     @gtx.field_operator(backend=cartesian_case.executor)
@@ -94,7 +94,7 @@ def test_missing_arg_field_operator(cartesian_case):  # noqa: F811 # fixtures
         _ = copy(a, out=a)
 
 
-def test_missing_arg_scan_operator(cartesian_case):  # noqa: F811 # fixtures
+def test_missing_arg_scan_operator(cartesian_case):
     """Test that calling a scan_operator without required args raises an error."""
 
     @gtx.scan_operator(backend=cartesian_case.executor, axis=KDim, init=0.0, forward=True)
@@ -110,7 +110,7 @@ def test_missing_arg_scan_operator(cartesian_case):  # noqa: F811 # fixtures
         _ = sum(a, out=a)
 
 
-def test_missing_arg_program(cartesian_case):  # noqa: F811 # fixtures
+def test_missing_arg_program(cartesian_case):
     """Test that calling a program without required args raises an error."""
 
     @gtx.field_operator
