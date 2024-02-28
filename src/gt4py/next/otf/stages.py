@@ -15,9 +15,12 @@
 from __future__ import annotations
 
 import dataclasses
+import types
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
+from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.ffront import program_ast as past
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
 
@@ -28,6 +31,14 @@ SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
 SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
 TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
+
+@dataclasses.dataclass(frozen=True)
+class ProgramIRStage:
+    """Program IR representation of a program together with the DSL function definition for it."""
+
+    definition: types.FunctionType
+    past_node: past.Program
+    grid_type: common.GridType
 
 
 @dataclasses.dataclass(frozen=True)

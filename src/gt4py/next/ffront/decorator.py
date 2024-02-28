@@ -61,74 +61,12 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.otf import transforms as otf_transforms, stages
+from gt4py.next.program_processors import processor_interface as ppi, otf_compile_executor
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: Callable = None
-
-
-def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
-    all_closure_vars = collections.ChainMap(closure_vars)
-
-    for closure_var in closure_vars.values():
-        if isinstance(closure_var, GTCallable):
-            # if the closure ref has closure refs by itself, also add them
-            if child_closure_vars := closure_var.__gt_closure_vars__():
-                all_child_closure_vars = _get_closure_vars_recursively(child_closure_vars)
-
-                collisions: list[str] = []
-                for potential_collision in set(closure_vars) & set(all_child_closure_vars):
-                    if (
-                        closure_vars[potential_collision]
-                        != all_child_closure_vars[potential_collision]
-                    ):
-                        collisions.append(potential_collision)
-                if collisions:
-                    raise NotImplementedError(
-                        f"Using closure vars with same name but different value "
-                        f"across functions is not implemented yet. \n"
-                        f"Collisions: '{',  '.join(collisions)}'."
-                    )
-
-                all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
-    return dict(all_closure_vars)
-
-
-def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> dict[str, Any]:
-    return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
-
-
-def _deduce_grid_type(
-    requested_grid_type: Optional[GridType],
-    offsets_and_dimensions: Iterable[FieldOffset | Dimension],
-) -> GridType:
-    """
-    Derive grid type from actually occurring dimensions and check against optional user request.
-
-    Unstructured grid type is consistent with any kind of offset, cartesian
-    is easier to optimize for but only allowed in the absence of unstructured
-    dimensions and offsets.
-    """
-
-    def is_cartesian_offset(o: FieldOffset):
-        return len(o.target) == 1 and o.source == o.target[0]
-
-    deduced_grid_type = GridType.CARTESIAN
-    for o in offsets_and_dimensions:
-        if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
-            deduced_grid_type = GridType.UNSTRUCTURED
-            break
-        if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
-            deduced_grid_type = GridType.UNSTRUCTURED
-            break
-
-    if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
-        raise ValueError(
-            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
-        )
-
-    return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
 
 def _field_constituents_shape_and_dims(
@@ -200,7 +138,7 @@ class Program:
         )
 
     def __post_init__(self):
-        function_closure_vars = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
+        function_closure_vars = otf_transforms._filter_closure_vars_by_type(self.closure_vars, GTCallable)
         misnamed_functions = [
             f"{name} vs. {func.id}"
             for name, func in function_closure_vars.items()
@@ -276,16 +214,16 @@ class Program:
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
-        return _get_closure_vars_recursively(self.closure_vars)
+        return otf_transforms._get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        offsets_and_dimensions = _filter_closure_vars_by_type(
+        offsets_and_dimensions = otf_transforms._filter_closure_vars_by_type(
             self._all_closure_vars, FieldOffset, Dimension
         )
-        grid_type = _deduce_grid_type(self.grid_type, offsets_and_dimensions.values())
+        grid_type = otf_transforms._deduce_grid_type(self.grid_type, offsets_and_dimensions.values())
 
-        gt_callables = _filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
+        gt_callables = otf_transforms._filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -302,6 +240,20 @@ class Program:
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
+            return
+        elif isinstance(self.backend, otf_compile_executor.OTFBackend):
+            self.backend(
+                stages.ProgramIRStage(
+                    definition=self.definition,
+                    past_node=self.past_node,
+                    grid_type=self.grid_type
+                ),
+                *rewritten_args,
+                *size_args,
+                **kwargs,
+                offset_provider=offset_provider,
+                column_axis=self._column_axis,
+            )
             return
 
         ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
