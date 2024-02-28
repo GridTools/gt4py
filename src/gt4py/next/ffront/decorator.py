@@ -241,12 +241,16 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
             return
-        elif isinstance(self.backend, otf_compile_executor.OTFBackend):
+        elif isinstance(self.backend, otf_compile_executor.OTFCompileExecutor):
             self.backend(
-                stages.ProgramIRStage(
-                    definition=self.definition,
-                    past_node=self.past_node,
-                    grid_type=self.grid_type
+                stages.PastClosure(
+                    pirs = stages.ProgramIRStage(
+                        definition=self.definition,
+                        past_node=self.past_node,
+                        grid_type=self.grid_type
+                    ),
+                    args = rewritten_args,
+                    kwargs = kwargs | {"offset_provider": offset_provider, "column_axis": self._column_axis}
                 ),
                 *rewritten_args,
                 *size_args,
@@ -337,7 +341,7 @@ class Program:
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in _filter_closure_vars_by_type(
+        for name, gt_callable in otf_transforms._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
             if isinstance(

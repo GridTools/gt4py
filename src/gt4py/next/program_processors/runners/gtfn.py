@@ -183,7 +183,7 @@ class GTFNBackendFactory(factory.Factory):
         transform_workflow = factory.SubFactory(otf_transforms.PastToItirFactory)
 
     executor = factory.LazyAttribute(
-        lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=workflow.StepSequence([o.transform_workflow, o.otf_workflow]), name=o.name)
+        lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=o.transform_workflow.chain(o.otf_workflow), name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
 

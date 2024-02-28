@@ -42,6 +42,13 @@ class ProgramIRStage:
 
 
 @dataclasses.dataclass(frozen=True)
+class PastClosure:
+    pirs: ProgramIRStage
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
 class ProgramCall:
     """Iterator IR representaion of a program together with arguments to be passed to it."""
 

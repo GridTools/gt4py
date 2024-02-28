@@ -10,8 +10,10 @@ from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import stages
+from gt4py.next.otf import stages, workflow
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
+from gt4py.next.otf.stages import ProgramCall
+
 
 def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
     all_closure_vars = collections.ChainMap(closure_vars)
@@ -76,18 +78,22 @@ def _deduce_grid_type(
 
 
 @dataclasses.dataclass(frozen=True)
-class PastToItir:
-    def __call__(self, inp: stages.ProgramIRStage) -> itir.FencilDefinition:
-        closure_vars = _get_closure_vars_recursively(get_closure_vars_from_function(inp.definition))
+class PastToItir(workflow.ChainableWorkflowMixin):
+    def __call__(self, inp: stages.PastClosure) -> itir.FencilDefinition:
+        closure_vars = _get_closure_vars_recursively(get_closure_vars_from_function(inp.pirs.definition))
         offsets_and_dimensions = _filter_closure_vars_by_type(
             _get_closure_vars_recursively(closure_vars), FieldOffset, common.Dimension
         )
-        grid_type = _deduce_grid_type(inp.grid_type, offsets_and_dimensions.values())
+        grid_type = _deduce_grid_type(inp.pirs.grid_type, offsets_and_dimensions.values())
 
         gt_callables = _filter_closure_vars_by_type(_get_closure_vars_recursively(closure_vars), GTCallable).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
-        return ProgramLowering.apply(
-            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        return ProgramCall(
+            ProgramLowering.apply(
+                inp.pirs.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+            ),
+            inp.args,
+            inp.kwargs
         )
 
 
