@@ -249,7 +249,7 @@ class Program:
                         past_node=self.past_node,
                         grid_type=self.grid_type
                     ),
-                    args = rewritten_args,
+                    args = [*rewritten_args, *size_args],
                     kwargs = kwargs | {"offset_provider": offset_provider, "column_axis": self._column_axis}
                 ),
                 *rewritten_args,
