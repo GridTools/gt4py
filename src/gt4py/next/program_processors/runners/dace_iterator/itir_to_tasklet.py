@@ -34,7 +34,6 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
-    create_memlet_at,
     create_memlet_full,
     dace_debuginfo,
     filter_neighbor_tables,
@@ -426,7 +425,12 @@ def builtin_neighbors(
             neighbor_value_node,
         )
     else:
-        data_access_index = ",".join(f"{dim}_v" for dim in sorted(iterator.dimensions))
+        sorted_dims = (
+            sorted(iterator.dimensions)
+            if transformer.use_field_canonical_representation
+            else iterator.dimensions
+        )
+        data_access_index = ",".join(f"{dim}_v" for dim in sorted_dims)
         connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
         data_access_tasklet = state.add_tasklet(
             "data_access",
@@ -579,7 +583,10 @@ def builtin_if(
         symbol_map = copy.deepcopy(transformer.context.symbol_map)
         node_context = Context(sdfg, state, symbol_map)
         node_taskgen = PythonTaskletCodegen(
-            transformer.offset_provider, node_context, transformer.node_types
+            transformer.offset_provider,
+            node_context,
+            transformer.node_types,
+            transformer.use_field_canonical_representation,
         )
         return node_taskgen.visit(arg)
 
@@ -899,16 +906,19 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     offset_provider: dict[str, Any]
     context: Context
     node_types: dict[int, next_typing.Type]
+    use_field_canonical_representation: bool
 
     def __init__(
         self,
         offset_provider: dict[str, Any],
         context: Context,
         node_types: dict[int, next_typing.Type],
+        use_field_canonical_representation: bool,
     ):
         self.offset_provider = offset_provider
         self.context = context
         self.node_types = node_types
+        self.use_field_canonical_representation = use_field_canonical_representation
 
     def visit_FunctionDefinition(self, node: itir.FunctionDefinition, **kwargs):
         raise NotImplementedError()
@@ -968,7 +978,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             lambda_symbols_pass.symbol_refs,
             reduce_identity=self.context.reduce_identity,
         )
-        lambda_taskgen = PythonTaskletCodegen(self.offset_provider, lambda_context, self.node_types)
+        lambda_taskgen = PythonTaskletCodegen(
+            self.offset_provider,
+            lambda_context,
+            self.node_types,
+            self.use_field_canonical_representation,
+        )
 
         results: list[ValueExpr] = []
         # We are flattening the returned list of value expressions because the multiple outputs of a lambda
@@ -1113,7 +1128,11 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
-        sorted_dims = sorted(iterator.dimensions)
+        sorted_dims = (
+            sorted(iterator.dimensions)
+            if self.use_field_canonical_representation
+            else iterator.dimensions
+        )
         if all([dim in iterator.indices for dim in iterator.dimensions]):
             # The deref iterator has index values on all dimensions: the result will be a scalar
             args = [ValueExpr(iterator.field, iterator.dtype)] + [
@@ -1334,8 +1353,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             input_args = [arg[0] for arg in args]
             input_valid_args = [arg[1] for arg in args if len(arg) == 2]
 
-            nreduce_index = tuple(f"_i{i}" for i in range(len(nreduce_shape)))
-            nreduce_domain = {idx: f"0:{size}" for idx, size in zip(nreduce_index, nreduce_shape)}
+            assert len(nreduce_shape) == 1
+            nreduce_index = unique_name("_i")
+            nreduce_domain = {nreduce_index: f"0:{nreduce_shape[0]}"}
 
             reduce_input_name = unique_var_name()
             self.context.body.add_array(
@@ -1353,12 +1373,14 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 param: (
                     dace.Memlet(data=arg.value.data, subset="0")
                     if arg.value.desc(self.context.body).shape == (1,)
-                    else create_memlet_at(arg.value.data, nreduce_index)
+                    else dace.Memlet(data=arg.value.data, subset=nreduce_index)
                 )
                 for (param, _), arg in zip(inner_inputs, input_args)
             }
             output_mapping = {
-                inner_outputs[0].value.data: create_memlet_at(reduce_input_name, nreduce_index)
+                inner_outputs[0].value.data: dace.Memlet(
+                    data=reduce_input_name, subset=nreduce_index
+                )
             }
             symbol_mapping = map_nested_sdfg_symbols(
                 self.context.body, lambda_context.body, input_mapping
@@ -1377,8 +1399,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 lambda_output_node = inner_outputs[0].value
                 # add input connector to nested sdfg
                 lambda_context.body.add_scalar("_valid_neighbor", dace.dtypes.bool)
-                input_mapping["_valid_neighbor"] = create_memlet_at(
-                    input_valid_node.data, nreduce_index
+                input_mapping["_valid_neighbor"] = dace.Memlet(
+                    data=input_valid_node.data, subset=nreduce_index
                 )
                 # add select tasklet before writing to output node
                 # TODO: consider replacing it with a select-memlet once it is supported by DaCe SDFG API
@@ -1529,6 +1551,7 @@ def closure_to_tasklet_sdfg(
     inputs: Sequence[tuple[str, ts.TypeSpec]],
     connectivities: Sequence[tuple[dace.ndarray, str]],
     node_types: dict[int, next_typing.Type],
+    use_field_canonical_representation: bool,
 ) -> tuple[Context, Sequence[ValueExpr]]:
     body = dace.SDFG("tasklet_toplevel")
     body.debuginfo = dace_debuginfo(node)
@@ -1565,7 +1588,9 @@ def closure_to_tasklet_sdfg(
         body.add_array(name, shape=shape, strides=strides, dtype=arr.dtype)
 
     context = Context(body, state, symbol_map)
-    translator = PythonTaskletCodegen(offset_provider, context, node_types)
+    translator = PythonTaskletCodegen(
+        offset_provider, context, node_types, use_field_canonical_representation
+    )
 
     args = [itir.SymRef(id=name) for name, _ in inputs]
     if is_scan(node.stencil):
