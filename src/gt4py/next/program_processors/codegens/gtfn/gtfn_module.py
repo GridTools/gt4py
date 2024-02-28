@@ -237,11 +237,11 @@ class GTFNTranslationStep(
         column_axis: Optional[common.Dimension],
         runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
-        program_hash = get_hash(pickle.dumps(
+        program_hash = utils.content_hash(
             (program,
              sorted(offset_provider.items(), key=lambda el: el[0]),
              column_axis,
-             runtime_lift_mode)))
+             runtime_lift_mode))
 
         cache_path = gt4py.next.config.BUILD_CACHE_DIR / ("gtfn_" + program.id + "_" + program_hash)
 
