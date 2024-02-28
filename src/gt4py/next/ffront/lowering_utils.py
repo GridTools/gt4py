@@ -105,10 +105,12 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = [objs]
 
-    _current_el_exprs = [im.ref(f"__val_{eve_utils.content_hash(obj)[0:12]}") for i, obj in enumerate(objs)]
+    _current_el_exprs = [
+        im.ref(f"__val_{eve_utils.content_hash(obj)[0:12]}") for i, obj in enumerate(objs)
+    ]
     body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
 
-    return im.let(*((f"__val_{_expr_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
+    return im.let(*((f"__val_{eve_utils.content_hash(obj)[0:12]}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
         body
     )
 
