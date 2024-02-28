@@ -11,14 +11,14 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import hashlib
+import pickle
 from typing import Callable, TypeVar
 
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
-import pickle
-import hashlib
 
 
 def _expr_hash(expr: itir.Expr | str) -> str:
