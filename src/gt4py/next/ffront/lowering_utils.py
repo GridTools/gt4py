@@ -30,7 +30,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
     (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
-    param = f"__toi_{eve_utils.content_hash(expr)[:12]}"
+    param = f"__toi_{eve_utils.content_hash(expr)}"
 
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
@@ -56,7 +56,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
     (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(arg)
     """
-    param = f"__iot_{eve_utils.content_hash(expr)[:12]}"
+    param = f"__iot_{eve_utils.content_hash(expr)}"
 
     type_constituents = [
         ti_ffront.promote_scalars_to_zero_dim_field(type_)
@@ -106,11 +106,11 @@ def process_elements(
         objs = [objs]
 
     _current_el_exprs = [
-        im.ref(f"__val_{eve_utils.content_hash(obj)[0:12]}") for i, obj in enumerate(objs)
+        im.ref(f"__val_{eve_utils.content_hash(obj)}") for i, obj in enumerate(objs)
     ]
     body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
 
-    return im.let(*((f"__val_{eve_utils.content_hash(obj)[0:12]}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
+    return im.let(*((f"__val_{eve_utils.content_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
         body
     )
 
