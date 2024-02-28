@@ -220,7 +220,7 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     params: List[Sym]
     closures: List[StencilClosure]
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in sorted(BUILTINS)]  # sorted for serialization stability
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
