@@ -212,8 +212,7 @@ class InlineLifts(
         ]
         result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
         # TODO: describe everywhere
-        if hasattr(node.annex, "recorded_shifts"):
-            copy_recorded_shifts(from_=node, to=result)
+        copy_recorded_shifts(from_=node, to=result, required=False)
         return self.visit(result, recurse=False, **kwargs)
 
     def transform_inline_deref_lift(self, node: ir.FunCall, is_eligible=None, **kwargs):
@@ -365,8 +364,7 @@ class InlineLifts(
 
             new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
             new_applied_lift = im.lift(new_stencil)(*new_arg_exprs.values())
-            if hasattr(node.annex, "recorded_shifts"):
-                copy_recorded_shifts(from_=node, to=new_applied_lift)
+            copy_recorded_shifts(from_=node, to=new_applied_lift, required=False)
             return new_applied_lift
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
@@ -378,8 +376,7 @@ class InlineLifts(
                 fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **fun_kwargs),
                 args=self.generic_visit(node.args, **kwargs),
             )
-            if hasattr(node.annex, "recorded_shifts"):
-                copy_recorded_shifts(from_=node, to=new_node)
+            copy_recorded_shifts(from_=node, to=new_node, required=False)
         else:
             new_node = node
 
