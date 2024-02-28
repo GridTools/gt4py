@@ -11,6 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import hashlib
+import pickle
 from typing import Callable, TypeVar
 
 from gt4py.next.ffront import type_info as ti_ffront
@@ -21,7 +23,9 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 def _expr_hash(expr: itir.Expr | str) -> str:
     """Small utility function that returns a string hash of an expression."""
-    return str(abs(hash(expr)) % (10**12)).zfill(12)
+    m = hashlib.sha1()
+    m.update(pickle.dumps(expr))
+    return m.hexdigest()[0:12]
 
 
 def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
