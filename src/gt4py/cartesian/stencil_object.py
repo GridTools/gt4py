@@ -376,8 +376,8 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except Exception:
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
+        except Exception as ex:
+            raise ValueError("Invalid 'domain' value ({})".format(domain)) from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
@@ -420,7 +420,8 @@ class StencilObject(abc.ABC):
                     warnings.warn(
                         f"The layout of the field '{name}' is not recommended for this backend."
                         f"This may lead to performance degradation. Please consider using the"
-                        f"provided allocators in `gt4py.storage`."
+                        f"provided allocators in `gt4py.storage`.",
+                        stacklevel=2,
                     )
 
                 field_dtype = self.field_info[name].dtype

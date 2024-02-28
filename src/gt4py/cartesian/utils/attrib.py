@@ -83,7 +83,6 @@ def _make_type_validator(t):
     if isinstance(t, type):
         return attr.validators.instance_of(t)
     else:
-        # isinstance(t, _TypeDescriptor)
         return t.validator
 
 
@@ -97,12 +96,12 @@ def _make_sequence_validator(type_list, container_types=(list, tuple)):
         try:
             assert isinstance(value, tuple(container_types))
             assert isinstance([item_validator(instance, attribute, v) for v in value], list)
-        except Exception:
+        except Exception as ex:
             raise ValueError(
                 "Expr ({value}) does not match the '{name}' specification".format(
                     value=value, name=attribute.name
                 )
-            )
+            ) from ex
 
     return _is_sequence_of_validator
 
@@ -126,12 +125,12 @@ def _make_dict_validator(type_list):
             assert isinstance(
                 [value_validator(instance, attribute, v) for v in value.values()], list
             )
-        except Exception:
+        except Exception as ex:
             raise ValueError(
                 "Expr ({value}) does not match the '{name}' specification".format(
                     value=value, name=attribute.name
                 )
-            )
+            ) from ex
 
     return _is_dict_of_validator
 
@@ -151,12 +150,12 @@ def _make_tuple_validator(type_list):
                 ],
                 list,
             )
-        except Exception:
+        except Exception as ex:
             raise ValueError(
                 "Expr ({value}) does not match the '{name}' specification".format(
                     value=value, name=attribute.name
                 )
-            )
+            ) from ex
 
     return _is_tuple_of_validator
 
@@ -224,7 +223,7 @@ def attribute(of, optional=False, **kwargs):
         attr_type_hint = of.type_hint
 
     elif isinstance(of, type):
-        # assert of in (bool, float, str, int, enum.Enum)
+        # assert of in (bool, float, str, int, enum.Enum) # noqa: ERA001 [commented-out-code]
         attr_validator = attr.validators.instance_of(of)
         attr_type_hint = of
 
@@ -234,7 +233,6 @@ def attribute(of, optional=False, **kwargs):
     if optional:
         attr_validator = attr.validators.optional(attr_validator)
         kwargs.setdefault("default", None)
-        # kwargs["kw_only"] = True
 
     return attr.ib(validator=attr_validator, type=attr_type_hint, **kwargs)
 

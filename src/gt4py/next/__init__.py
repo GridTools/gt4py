@@ -31,7 +31,7 @@ from .embedded import (  # Just for registering field implementations
 )
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
-from .ffront.fbuiltins import *  # noqa: F403  # fbuiltins defines __all__ and we explicitly want to reexport everything here
+from .ffront.fbuiltins import *  # noqa: F403 [undefined-local-with-import-star]  explicitly reexport all from fbuiltins.__all__
 from .ffront.fbuiltins import FieldOffset
 from .iterator.embedded import (
     NeighborTableOffsetProvider,

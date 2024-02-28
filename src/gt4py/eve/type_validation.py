@@ -112,7 +112,7 @@ class TypeValidatorFactory(Protocol):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -124,7 +124,7 @@ class TypeValidatorFactory(Protocol):
     ) -> Optional[FixedTypeValidator]: ...
 
     @abc.abstractmethod
-    def __call__(  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -169,7 +169,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # redefinion of unused member
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -180,7 +180,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]: ...
 
-    def __call__(  # redefinion of unused member / complex but well organized in cases
+    def __call__(
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,

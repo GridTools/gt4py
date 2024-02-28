@@ -695,7 +695,7 @@ class UIDGenerator:
         if warn_unsafe is None:
             warn_unsafe = self.warn_unsafe
         if warn_unsafe and start < next(self._counter):
-            warnings.warn("Unsafe reset of UIDGenerator ({self})")
+            warnings.warn("Unsafe reset of UIDGenerator ({self})", stacklevel=2)
         self._counter = itertools.count(start)
 
         return self
@@ -783,9 +783,7 @@ class XIterable(Iterable[T]):
             raise ValueError(f"Invalid function or callable: '{func}'.")
         return XIterable(map(func, self.iterator))
 
-    def filter(  # A003: shadowing a python builtin
-        self, func: Callable[..., bool]
-    ) -> XIterable[T]:
+    def filter(self, func: Callable[..., bool]) -> XIterable[T]:  # A003: shadowing a python builtin
         """Filter elements with callables.
 
         Equivalent to ``filter(func, self)``.

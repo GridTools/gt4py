@@ -29,7 +29,7 @@ import gt4py.storage.cartesian.utils as storage_utils
 @eve.utils.with_fluid_partial
 def empty(
     domain: common.DomainLike,
-    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
+    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocationUtil] = None,
@@ -96,7 +96,7 @@ def empty(
 @eve.utils.with_fluid_partial
 def zeros(
     domain: common.DomainLike,
-    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
+    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
@@ -128,7 +128,7 @@ def zeros(
 @eve.utils.with_fluid_partial
 def ones(
     domain: common.DomainLike,
-    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),
+    dtype: core_defs.DTypeLike = core_defs.Float64DType(()),  # noqa: B008 [function-call-in-default-argument]
     *,
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
@@ -205,7 +205,7 @@ def as_field(
     aligned_index: Optional[Sequence[common.NamedIndex]] = None,
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
-    # copy=False, TODO
+    # TODO: copy=False
 ) -> nd_array_field.NdArrayField:
     """Create a Field from an array-like object using the given (or device-default) allocator.
 
@@ -307,7 +307,7 @@ def as_connectivity(
     allocator: Optional[next_allocators.FieldBufferAllocatorProtocol] = None,
     device: Optional[core_defs.Device] = None,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-    # copy=False, TODO
+    # TODO: copy=False
 ) -> common.ConnectivityField:
     """
     Construct a connectivity field from the given domain, codomain, and data.

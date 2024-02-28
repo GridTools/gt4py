@@ -211,15 +211,15 @@ class AxisIntervalParser(gt_meta.ASTPass):
         right = self.visit(node.right)
 
         if isinstance(node.op, ast.Add):
-            bin_op = lambda x, y: x + y  # noqa: E731
-            u_op = lambda x: x  # noqa: E731
+            bin_op = lambda x, y: x + y  # noqa: E731 [lambda-assignment]
+            u_op = lambda x: x  # noqa: E731 [lambda-assignment]
         elif isinstance(node.op, ast.Sub):
-            bin_op = lambda x, y: x - y  # noqa: E731
-            u_op = lambda x: -x  # noqa: E731
+            bin_op = lambda x, y: x - y  # noqa: E731 [lambda-assignment]
+            u_op = lambda x: -x  # noqa: E731 [lambda-assignment]
         elif isinstance(node.op, ast.Mult):
             if left.level != right.level or not isinstance(left.level, nodes.LevelMarker):
                 raise self.interval_error
-            bin_op = lambda x, y: x * y  # noqa: E731
+            bin_op = lambda x, y: x * y  # noqa: E731 [lambda-assignment]
             u_op = None
         else:
             raise GTScriptSyntaxError("Unexpected binary operator found in interval expression")
@@ -249,7 +249,7 @@ class AxisIntervalParser(gt_meta.ASTPass):
 
     def visit_UnaryOp(self, node: ast.UnaryOp) -> nodes.AxisBound:
         if isinstance(node.op, ast.USub):
-            op = lambda x: -x  # noqa: E731
+            op = lambda x: -x  # noqa: E731 [lambda-assignment]
         else:
             raise self.interval_error
 
@@ -417,9 +417,7 @@ class CallInliner(ast.NodeTransformer):
         else:
             return self.generic_visit(node)
 
-    def visit_Call(  # Cyclomatic complexity too high
-        self, node: ast.Call, *, target_node=None
-    ):
+    def visit_Call(self, node: ast.Call, *, target_node=None):  # Cyclomatic complexity too high
         call_name = gt_meta.get_qualified_name_from_node(node.func)
 
         if call_name in self.call_stack:
@@ -461,10 +459,10 @@ class CallInliner(ast.NodeTransformer):
                 if name not in call_args:
                     assert arg_infos[name] != nodes.Empty
                     call_args[name] = ast.Constant(value=arg_infos[name])
-        except Exception:
+        except Exception as ex:
             raise GTScriptSyntaxError(
                 message="Invalid call signature", loc=nodes.Location.from_ast_node(node)
-            )
+            ) from ex
 
         # Rename local names in subroutine to avoid conflicts with caller context names
         try:
@@ -601,7 +599,7 @@ class CompiledIfInliner(ast.NodeTransformer):
             and node.test.func.id == "__INLINED"
             and len(node.test.args) == 1
         ):
-            warnings.warn(
+            warnings.warn(  # noqa: B028 [no-explicit-stacklevel]
                 f"stencil {self.stencil_name}, line {node.lineno}, column {node.col_offset}: compile-time if condition via __INLINED deprecated",
                 category=DeprecationWarning,
             )
@@ -1059,10 +1057,10 @@ class IRMaker(ast.NodeVisitor):
         for index_node in index_nodes:
             try:
                 value = gt_meta.ast_eval(index_node, axis_context)
-            except Exception:
+            except Exception as ex:
                 raise GTScriptSyntaxError(
                     message="Could not evaluate axis shift expression.", loc=index_node
-                )
+                ) from ex
             if not isinstance(value, (gtscript.ShiftedAxis, gtscript.Axis)):
                 raise GTScriptSyntaxError(
                     message=f"Axis shift expression evaluated to unrecognized type {type(value)}.",

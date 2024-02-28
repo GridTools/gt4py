@@ -79,9 +79,9 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
         for type_ in type_info.primitive_constituents(arg_type)
     ]
     assert all(
-        isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims
+        isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims  # type: ignore[attr-defined]  # ensure by assert above
         for type_ in type_constituents
-    )  # type: ignore[attr-defined]  # ensure by assert above
+    )
 
     def fun(_, path):
         param_name = "__iot_el"

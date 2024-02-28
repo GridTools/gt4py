@@ -38,7 +38,9 @@ class AdjacentLoopMerging(NodeTranslator):
     def _merge(a: oir.VerticalLoop, b: oir.VerticalLoop) -> oir.VerticalLoop:
         sections = a.sections + b.sections
         if a.caches or b.caches:
-            warnings.warn("AdjacentLoopMerging pass removed previously declared caches")
+            warnings.warn(
+                "AdjacentLoopMerging pass removed previously declared caches", stacklevel=2
+            )
         return oir.VerticalLoop(
             loop_order=a.loop_order,
             sections=sections,

@@ -266,7 +266,9 @@ class ItirToSDFG(eve.NodeVisitor):
                 of the array.
                 """
                 if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
-                    warnings.warn(f"Domain start offset for temporary {tmp_name} is ignored.")
+                    warnings.warn(
+                        f"Domain start offset for temporary {tmp_name} is ignored.", stacklevel=2
+                    )
                 tmp_symbols[str(shape_sym)] = end.value
 
         return tmp_symbols

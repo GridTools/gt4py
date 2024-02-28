@@ -12,8 +12,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-# flake8: noqa: F401
-
 """GridTools storages utilities."""
 
 from . import cartesian
