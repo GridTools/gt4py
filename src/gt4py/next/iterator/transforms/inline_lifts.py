@@ -215,33 +215,33 @@ class InlineLifts(
         copy_recorded_shifts(from_=node, to=result, required=False)
         return self.visit(result, recurse=False, **kwargs)
 
-    def transform_inline_deref_lift(self, node: ir.FunCall, is_eligible=None, **kwargs):
+    def transform_inline_deref_lift_impl(self, node: ir.FunCall, **kwargs):
         # TODO: this does not work for neighbors(..., lift(...)), which is essentially also a deref
-        is_scan_pass_context = kwargs["is_scan_pass_context"]
+        assert isinstance(node.args[0], ir.FunCall) and isinstance(node.args[0].fun, ir.FunCall)
+        assert len(node.args[0].fun.args) == 1
+        f = node.args[0].fun.args[0]
+        args = node.args[0].args
+        new_node = ir.FunCall(fun=f, args=args)
+        if isinstance(f, ir.Lambda):
+            new_node = inline_lambda(new_node, opcount_preserving=True)
+        return self.visit(new_node, **kwargs)
+
+    def transform_inline_deref_lift(self, node: ir.FunCall, **kwargs):
         if not node.fun == ir.SymRef(id="deref"):
             return None
-        assert len(node.args) == 1
-        is_lift = _is_lift(node.args[0])
-        is_eligible = is_eligible or (
-            is_lift and self.predicate(node.args[0], is_scan_pass_context)
-        )
-
-        if is_eligible:
-            assert isinstance(node.args[0], ir.FunCall) and isinstance(node.args[0].fun, ir.FunCall)
-            assert len(node.args[0].fun.args) == 1
-            f = node.args[0].fun.args[0]
-            args = node.args[0].args
-            new_node = ir.FunCall(fun=f, args=args)
-            if isinstance(f, ir.Lambda):
-                new_node = inline_lambda(new_node, opcount_preserving=True)
-            return self.visit(new_node, **kwargs)
-        return None
+        is_scan_pass_context = kwargs["is_scan_pass_context"]
+        is_eligible = _is_lift(node.args[0]) and self.predicate(node.args[0], is_scan_pass_context)
+        if not is_eligible:
+            return None
+        return self.transform_inline_deref_lift_impl(node, **kwargs)
 
     def transform_inline_trivial_deref_lift(self, node: ir.FunCall, **kwargs):
         if not node.fun == ir.SymRef(id="deref"):
             return None
         is_trivial = _is_lift(node.args[0]) and len(node.args[0].args) == 0  # type: ignore[attr-defined] # mypy not smart enough
-        return self.transform_inline_deref_lift(node, is_trivial, **kwargs)
+        if not is_trivial:
+            return None
+        return self.transform_inline_deref_lift_impl(node, **kwargs)
 
     def transform_propagate_can_deref(self, node: ir.FunCall, **kwargs):
         if not node.fun == ir.SymRef(id="can_deref"):

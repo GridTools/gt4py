@@ -85,9 +85,11 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     new_args.append(capture_lift)
                     # since we deref an applied lift here we can (but don't need to) immediately
                     # inline
-                    bound_scalars[bound_arg_name] = InlineLifts(
-                        flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
-                    ).visit(im.deref(arg), recurse=False)
+                    bound_scalars[bound_arg_name] = InlineLifts.apply(
+                        im.deref(arg),
+                        flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT,
+                        recurse=False,
+                    )
                 else:
                     new_args.append(arg)
 
