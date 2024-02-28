@@ -15,17 +15,11 @@ import hashlib
 import pickle
 from typing import Callable, TypeVar
 
+from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
-
-
-def _expr_hash(expr: itir.Expr | str) -> str:
-    """Small utility function that returns a string hash of an expression."""
-    m = hashlib.sha1()
-    m.update(pickle.dumps(expr))
-    return m.hexdigest()[0:12]
 
 
 def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
@@ -38,7 +32,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
     (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
-    param = f"__toi_{_expr_hash(expr)}"
+    param = f"__toi_{eve_utils.content_hash(expr)[:12]}"
 
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
@@ -64,7 +58,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
     (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(arg)
     """
-    param = f"__iot_{_expr_hash(expr)}"
+    param = f"__iot_{eve_utils.content_hash(expr)[:12]}"
 
     type_constituents = [
         ti_ffront.promote_scalars_to_zero_dim_field(type_)
