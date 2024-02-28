@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Optional, Sequence, cast
+from typing import Any, Optional, Sequence
 
 import dace
 
@@ -69,25 +69,6 @@ def filter_neighbor_tables(offset_provider: dict[str, Any]):
 
 def connectivity_identifier(name: str):
     return f"__connectivity_{name}"
-
-
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    return dace.Memlet.from_array(source_identifier, source_array)
-
-
-def create_memlet_at(
-    source_identifier: str,
-    storage_type: ts.TypeSpec,
-    index: dict[str, str],
-    use_field_canonical_representation: bool,
-):
-    field_type = cast(ts.FieldType, storage_type)
-    if use_field_canonical_representation:
-        field_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
-    else:
-        field_index = [index[dim.value] for dim in field_type.dims]
-    subset = ", ".join(field_index)
-    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:

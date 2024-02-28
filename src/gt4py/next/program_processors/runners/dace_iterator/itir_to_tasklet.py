@@ -34,7 +34,6 @@ from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
     connectivity_identifier,
-    create_memlet_full,
     dace_debuginfo,
     filter_neighbor_tables,
     flatten_list,
@@ -242,11 +241,11 @@ def _visit_lift_in_neighbors_reduction(
     parent_state = transformer.context.state
 
     input_mapping = {
-        connector: create_memlet_full(node.data, node.desc(parent_sdfg))
+        connector: dace.Memlet.from_array(node.data, node.desc(parent_sdfg))
         for connector, node in input_nodes.items()
     }
     connectivity_mapping = {
-        name: create_memlet_full(name, parent_sdfg.arrays[name]) for name in connectivity_names
+        name: dace.Memlet.from_array(name, parent_sdfg.arrays[name]) for name in connectivity_names
     }
     array_mapping = {**input_mapping, **connectivity_mapping}
     symbol_mapping = map_nested_sdfg_symbols(parent_sdfg, lift_context.body, array_mapping)
@@ -395,7 +394,7 @@ def builtin_neighbors(
         state.add_access(table_name, debuginfo=di),
         me,
         shift_tasklet,
-        memlet=create_memlet_full(table_name, sdfg.arrays[table_name]),
+        memlet=dace.Memlet.from_array(table_name, sdfg.arrays[table_name]),
         dst_conn="__table",
     )
     state.add_memlet_path(
@@ -448,7 +447,7 @@ def builtin_neighbors(
             iterator.field,
             me,
             data_access_tasklet,
-            memlet=create_memlet_full(iterator.field.data, field_desc),
+            memlet=dace.Memlet.from_array(iterator.field.data, field_desc),
             dst_conn="__field",
         )
         for dim in iterator.dimensions:
@@ -1060,24 +1059,26 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         nsdfg_inputs = {}
         for name, value in func_inputs:
             if isinstance(value, ValueExpr):
-                nsdfg_inputs[name] = create_memlet_full(
+                nsdfg_inputs[name] = dace.Memlet.from_array(
                     value.value.data, self.context.body.arrays[value.value.data]
                 )
             else:
                 assert isinstance(value, IteratorExpr)
                 field = name[0]
                 indices = name[1]
-                nsdfg_inputs[field] = create_memlet_full(
+                nsdfg_inputs[field] = dace.Memlet.from_array(
                     value.field.data, self.context.body.arrays[value.field.data]
                 )
                 for dim, var in indices.items():
                     store = value.indices[dim].data
-                    nsdfg_inputs[var] = create_memlet_full(store, self.context.body.arrays[store])
+                    nsdfg_inputs[var] = dace.Memlet.from_array(
+                        store, self.context.body.arrays[store]
+                    )
 
         neighbor_tables = filter_neighbor_tables(self.offset_provider)
         for offset in neighbor_tables.keys():
             var = connectivity_identifier(offset)
-            nsdfg_inputs[var] = create_memlet_full(var, self.context.body.arrays[var])
+            nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])
 
         symbol_mapping = map_nested_sdfg_symbols(self.context.body, func_context.body, nsdfg_inputs)
 
@@ -1116,7 +1117,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             self.context.body.add_scalar(name, result.dtype, transient=True)
             result_access = self.context.state.add_access(name, debuginfo=nsdfg_node.debuginfo)
             result_exprs.append(ValueExpr(result_access, result.dtype))
-            memlet = create_memlet_full(name, self.context.body.arrays[name])
+            memlet = dace.Memlet.from_array(name, self.context.body.arrays[name])
             self.context.state.add_edge(nsdfg_node, result.value.data, result_access, None, memlet)
 
         return result_exprs
@@ -1529,7 +1530,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             if used:
                 continue
             elif not isinstance(arg, SymbolExpr):
-                memlet = create_memlet_full(
+                memlet = dace.Memlet.from_array(
                     arg.value.data, self.context.body.arrays[arg.value.data]
                 )
                 self.context.state.add_edge(arg.value, None, expr_tasklet, internal, memlet)

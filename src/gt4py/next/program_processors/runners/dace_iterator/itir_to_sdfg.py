@@ -43,8 +43,6 @@ from .utility import (
     as_dace_type,
     as_scalar_type,
     connectivity_identifier,
-    create_memlet_at,
-    create_memlet_full,
     dace_debuginfo,
     filter_neighbor_tables,
     flatten_list,
@@ -284,6 +282,19 @@ class ItirToSDFG(eve.NodeVisitor):
 
         return tmp_symbols
 
+    def create_memlet_at(
+        self,
+        field_name: str,
+        index: dict[str, str],
+    ):
+        field_type = cast(ts.FieldType, self.storage_types[field_name])
+        if self.use_field_canonical_representation:
+            field_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
+        else:
+            field_index = [index[dim.value] for dim in field_type.dims]
+        subset = ", ".join(field_index)
+        return dace.Memlet(data=field_name, subset=subset)
+
     def get_output_nodes(
         self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
@@ -358,10 +369,12 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Create memlets to transfer the program parameters
             input_mapping = {
-                name: create_memlet_full(name, program_sdfg.arrays[name]) for name in input_names
+                name: dace.Memlet.from_array(name, program_sdfg.arrays[name])
+                for name in input_names
             }
             output_mapping = {
-                name: create_memlet_full(name, program_sdfg.arrays[name]) for name in output_names
+                name: dace.Memlet.from_array(name, program_sdfg.arrays[name])
+                for name in output_names
             }
 
             symbol_mapping = map_nested_sdfg_symbols(program_sdfg, closure_sdfg, input_mapping)
@@ -429,7 +442,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 closure_init_state.add_nedge(
                     closure_init_state.add_access(name, debuginfo=closure_sdfg.debuginfo),
                     closure_init_state.add_access(transient_name, debuginfo=closure_sdfg.debuginfo),
-                    create_memlet_full(name, closure_sdfg.arrays[name]),
+                    dace.Memlet.from_array(name, closure_sdfg.arrays[name]),
                 )
                 input_transients_mapping[name] = transient_name
             elif isinstance(self.storage_types[name], ts.FieldType):
@@ -495,7 +508,7 @@ class ItirToSDFG(eve.NodeVisitor):
             for input_name in input_names
         ]
         input_memlets = [
-            create_memlet_full(name, closure_sdfg.arrays[name])
+            dace.Memlet.from_array(name, closure_sdfg.arrays[name])
             for name in [*input_local_names, *connectivity_names]
         ]
 
@@ -523,14 +536,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 )
                 for dim, _ in closure_domain
             }
-            output_memlets = [
-                create_memlet_at(
-                    output_name,
-                    self.storage_types[output_name],
-                    domain_subset,
-                    self.use_field_canonical_representation,
-                )
-            ]
+            output_memlets = [self.create_memlet_at(output_name, domain_subset)]
         else:
             nsdfg, map_ranges, results = self._visit_parallel_stencil_closure(
                 node, closure_sdfg.arrays, closure_domain
@@ -539,12 +545,7 @@ class ItirToSDFG(eve.NodeVisitor):
             output_subset = "0"
 
             output_memlets = [
-                create_memlet_at(
-                    output_name,
-                    self.storage_types[output_name],
-                    {dim: f"i_{dim}" for dim, _ in closure_domain},
-                    self.use_field_canonical_representation,
-                )
+                self.create_memlet_at(output_name, {dim: f"i_{dim}" for dim, _ in closure_domain})
                 for output_name in output_connectors_mapping.values()
             ]
 
@@ -718,10 +719,10 @@ class ItirToSDFG(eve.NodeVisitor):
         lambda_output_names = [connector.value.data for connector in lambda_outputs]
 
         input_memlets = [
-            create_memlet_full(name, scan_sdfg.arrays[name]) for name in lambda_input_names
+            dace.Memlet.from_array(name, scan_sdfg.arrays[name]) for name in lambda_input_names
         ]
         connectivity_memlets = [
-            create_memlet_full(name, scan_sdfg.arrays[name]) for name in connectivity_names
+            dace.Memlet.from_array(name, scan_sdfg.arrays[name]) for name in connectivity_names
         ]
         input_mapping = {param: arg for param, arg in zip(lambda_input_names, input_memlets)}
         connectivity_mapping = {
