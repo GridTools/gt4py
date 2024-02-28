@@ -374,45 +374,37 @@ def test_cartesian_remap_implementation():
 @pytest.mark.parametrize(
     "new_dims,field,expected_domain",
     [
-        (
-            (
-                (IDim,),
-                common._field(
-                    np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-                ),
-                Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
-            )
-        ),
-        (
-            (
-                (IDim, JDim),
-                common._field(
-                    np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
-                ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinite())),
-            )
-        ),
-        (
-            (
-                (IDim, JDim),
-                common._field(
-                    np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-                ),
-                Domain(dims=(IDim, JDim), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
-            )
-        ),
-        (
-            (
-                (IDim, JDim, KDim),
-                common._field(
-                    np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
-                ),
-                Domain(
-                    dims=(IDim, JDim, KDim),
-                    ranges=(UnitRange.infinite(), UnitRange(0, 10), UnitRange.infinite()),
-                ),
-            )
-        ),
+        ((
+            (IDim,),
+            common._field(
+                np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+            ),
+            Domain(dims=(IDim,), ranges=(UnitRange(0, 10),)),
+        )),
+        ((
+            (IDim, JDim),
+            common._field(
+                np.arange(10), domain=common.Domain(dims=(IDim,), ranges=(UnitRange(0, 10),))
+            ),
+            Domain(dims=(IDim, JDim), ranges=(UnitRange(0, 10), UnitRange.infinite())),
+        )),
+        ((
+            (IDim, JDim),
+            common._field(
+                np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
+            ),
+            Domain(dims=(IDim, JDim), ranges=(UnitRange.infinite(), UnitRange(0, 10))),
+        )),
+        ((
+            (IDim, JDim, KDim),
+            common._field(
+                np.arange(10), domain=common.Domain(dims=(JDim,), ranges=(UnitRange(0, 10),))
+            ),
+            Domain(
+                dims=(IDim, JDim, KDim),
+                ranges=(UnitRange.infinite(), UnitRange(0, 10), UnitRange.infinite()),
+            ),
+        )),
     ],
 )
 def test_field_broadcast(new_dims, field, expected_domain):
@@ -758,12 +750,10 @@ def test_connectivity_field_inverse_image_2d_domain():
 
     c2v_conn = common._connectivity(
         np.asarray([[0, 0, 2], [1, 1, 2], [2, 2, 2]]),
-        domain=common.domain(
-            [
-                common.named_range((C, (C_START, C_STOP))),
-                common.named_range((C2V, (C2V_START, C2V_STOP))),
-            ]
-        ),
+        domain=common.domain([
+            common.named_range((C, (C_START, C_STOP))),
+            common.named_range((C2V, (C2V_START, C2V_STOP))),
+        ]),
         codomain=V,
     )
 
@@ -839,12 +829,10 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
 
     c2v_conn = common._connectivity(
         np.asarray([[-1, 0, 2, -1], [1, 1, 2, 2], [2, 2, -1, -1], [-1, 2, -1, -1]]),
-        domain=common.domain(
-            [
-                common.named_range((C, (C_START, C_STOP))),
-                common.named_range((C2V, (C2V_START, C2V_STOP))),
-            ]
-        ),
+        domain=common.domain([
+            common.named_range((C, (C_START, C_STOP))),
+            common.named_range((C2V, (C2V_START, C2V_STOP))),
+        ]),
         codomain=V,
         skip_value=-1,
     )

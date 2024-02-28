@@ -276,9 +276,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
                 if param.id in self.sym_table:
-                    kwargs["localized_symbols"][
-                        param.id
-                    ] = f"{param.id}_{self.uids.sequential_id()}_local"
+                    kwargs["localized_symbols"][param.id] = (
+                        f"{param.id}_{self.uids.sequential_id()}_local"
+                    )
                     self.imp_list_ir.append(
                         InitStmt(
                             lhs=gtfn_ir_common.Sym(id=kwargs["localized_symbols"][param.id]),

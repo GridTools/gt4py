@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -651,7 +651,7 @@ class _FieldDescriptor:
         return None
 
     def __repr__(self):
-        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
+        args = f"dtype={self.dtype!r}, axes={self.axes!r}, data_dims={self.data_dims!r}"
         return f"_FieldDescriptor({args})"
 
     def __str__(self):

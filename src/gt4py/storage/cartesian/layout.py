@@ -73,7 +73,7 @@ def check_layout(layout_map, strides):
 
 
 def layout_maker_factory(
-    base_layout: Tuple[int, ...]
+    base_layout: Tuple[int, ...],
 ) -> Callable[[Tuple[str, ...]], Tuple[int, ...]]:
     def layout_maker(dimensions: Tuple[str, ...]) -> Tuple[int, ...]:
         mask = [dim in dimensions for dim in "IJK"]

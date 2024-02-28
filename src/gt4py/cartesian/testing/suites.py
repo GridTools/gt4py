@@ -392,10 +392,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
 
         .. code-block:: python
 
-                    {
-                        'float_symbols' : (np.float32, np.float64),
-                        'int_symbols' : (int, np.int_, np.int64)
-                    }
+                    {"float_symbols": (np.float32, np.float64), "int_symbols": (int, np.int_, np.int64)}
 
     domain_range : `Sequence` of pairs like `((int, int), (int, int) ... )`
         Required class attribute.
@@ -473,7 +470,7 @@ class StencilTestSuite(metaclass=SuiteMeta):
         test["implementations"].append(implementation)
 
     @classmethod
-    def _run_test_implementation(cls, parameters_dict, implementation):  # noqa: C901  # too complex
+    def _run_test_implementation(cls, parameters_dict, implementation):  # too complex
         input_data, exec_info = parameters_dict
 
         origin = cls.origin
@@ -504,9 +501,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         referenced_inputs = {
             name: info for name, info in implementation.field_info.items() if info is not None
         }
-        referenced_inputs.update(
-            {name: info for name, info in implementation.parameter_info.items() if info is not None}
-        )
+        referenced_inputs.update({
+            name: info for name, info in implementation.parameter_info.items() if info is not None
+        })
 
         # set externals for validation method
         for k, v in implementation.constants.items():

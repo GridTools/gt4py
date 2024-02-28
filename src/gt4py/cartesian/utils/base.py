@@ -206,12 +206,10 @@ def classmethod_to_function(class_method, instance=None, owner=type(None), remov
 
 def namespace_from_nested_dict(nested_dict):
     assert isinstance(nested_dict, dict)
-    return types.SimpleNamespace(
-        **{
-            key: namespace_from_nested_dict(value) if isinstance(value, dict) else value
-            for key, value in nested_dict.items()
-        }
-    )
+    return types.SimpleNamespace(**{
+        key: namespace_from_nested_dict(value) if isinstance(value, dict) else value
+        for key, value in nested_dict.items()
+    })
 
 
 def make_local_dir(dir_name, base_dir=None, *, mode=0o777, is_package=False, is_cache=False):
