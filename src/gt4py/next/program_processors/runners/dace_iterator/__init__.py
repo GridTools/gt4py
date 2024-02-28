@@ -22,7 +22,6 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
-from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
@@ -53,8 +52,19 @@ def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.FiniteUnitRa
 _build_type = "Release"
 
 
-def convert_arg(arg: Any):
+def convert_arg(arg: Any, sdfg_param: str):
     if common.is_field(arg):
+        # field domain offsets are not supported
+        non_zero_offsets = [
+            (dim, dim_range)
+            for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges)
+            if dim_range.start != 0
+        ]
+        if non_zero_offsets:
+            dim, dim_range = non_zero_offsets[0]
+            raise RuntimeError(
+                f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
+            )
         sorted_dims = get_sorted_dims(arg.domain.dims)
         ndim = len(sorted_dims)
         dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -99,7 +109,7 @@ def preprocess_program(
 
 def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
+    return {sdfg_param: convert_arg(arg, sdfg_param) for sdfg_param, arg in zip(sdfg_params, args)}
 
 
 def _ensure_is_on_device(
@@ -138,20 +148,6 @@ def get_shape_args(
                     f"Expected shape {arrays[name].shape} for arg {name}, got {value.shape}."
                 )
     return shape_args
-
-
-def get_offset_args(
-    sdfg: dace.SDFG,
-    args: Sequence[Any],
-) -> Mapping[str, int]:
-    sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
-    sdfg_params: Sequence[str] = sdfg.arg_names
-    return {
-        str(sym): -drange.start
-        for sdfg_param, arg in zip(sdfg_params, args)
-        if common.is_field(arg)
-        for sym, drange in zip(sdfg_arrays[sdfg_param].offset, get_sorted_dim_ranges(arg.domain))
-    }
 
 
 def get_stride_args(
@@ -236,7 +232,6 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    dace_offsets = get_offset_args(sdfg, args)
     all_args = {
         **dace_args,
         **dace_conn_args,
@@ -244,7 +239,6 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
         **dace_conn_shapes,
         **dace_strides,
         **dace_conn_strides,
-        **dace_offsets,
     }
 
     if check_args:
@@ -301,9 +295,6 @@ def build_sdfg_from_itir(
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
-    elif tmps:
-        # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
-        sdfg.apply_transformations_repeated(RefineNestedAccess)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
@@ -331,6 +322,8 @@ def build_sdfg_from_itir(
         symbols: dict[str, int] = {}
         device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
+    elif on_gpu:
+        autoopt.apply_gpu_storage(sdfg)
 
     if on_gpu:
         sdfg.apply_gpu_transformations()

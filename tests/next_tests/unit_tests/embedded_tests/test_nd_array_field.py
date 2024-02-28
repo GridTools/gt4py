@@ -19,6 +19,7 @@ from typing import Callable, Iterable
 import numpy as np
 import pytest
 
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.common import Dimension, Domain, UnitRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
@@ -69,9 +70,14 @@ def unary_logical_op(request):
     yield request.param
 
 
-def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=None):
+def _make_field_or_scalar(
+    lst: Iterable | core_defs.Scalar, nd_array_implementation, *, domain=None, dtype=None
+):
+    """Creates a field from an Iterable or returns a scalar."""
     if not dtype:
-        dtype = nd_array_implementation.float32
+        dtype = np.float32
+    if isinstance(lst, core_defs.SCALAR_TYPES):
+        return dtype(lst)
     buffer = nd_array_implementation.asarray(lst, dtype=dtype)
     if domain is None:
         domain = tuple(
@@ -80,6 +86,18 @@ def _make_field(lst: Iterable, nd_array_implementation, *, domain=None, dtype=No
     return common._field(
         buffer,
         domain=domain,
+    )
+
+
+def _np_asarray_or_scalar(value: Iterable | core_defs.Scalar, dtype=None):
+    """Creates a numpy array from an Iterable or returns a scalar."""
+    if not dtype:
+        dtype = np.float32
+
+    return (
+        dtype(value)
+        if isinstance(value, core_defs.SCALAR_TYPES)
+        else np.asarray(value, dtype=dtype)
     )
 
 
@@ -94,7 +112,7 @@ def test_math_function_builtins(builtin_name: str, inputs, nd_array_implementati
 
     expected = ref_impl(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
+    field_inputs = [_make_field_or_scalar(inp, nd_array_implementation) for inp in inputs]
 
     builtin = getattr(fbuiltins, builtin_name)
     result = builtin(*field_inputs)
@@ -107,7 +125,9 @@ def test_where_builtin(nd_array_implementation):
     true_ = np.asarray([1.0, 2.0], dtype=np.float32)
     false_ = np.asarray([3.0, 4.0], dtype=np.float32)
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in [cond, true_, false_]]
+    field_inputs = [
+        _make_field_or_scalar(inp, nd_array_implementation) for inp in [cond, true_, false_]
+    ]
     expected = np.where(cond, true_, false_)
 
     result = fbuiltins.where(*field_inputs)
@@ -147,37 +167,54 @@ def test_where_builtin_with_tuple(nd_array_implementation):
     expected0 = np.where(cond, true0, false0)
     expected1 = np.where(cond, true1, false1)
 
-    cond_field = _make_field(cond, nd_array_implementation, dtype=bool)
-    field_true = tuple(_make_field(inp, nd_array_implementation) for inp in [true0, true1])
-    field_false = tuple(_make_field(inp, nd_array_implementation) for inp in [false0, false1])
+    cond_field = _make_field_or_scalar(cond, nd_array_implementation, dtype=bool)
+    field_true = tuple(
+        _make_field_or_scalar(inp, nd_array_implementation) for inp in [true0, true1]
+    )
+    field_false = tuple(
+        _make_field_or_scalar(inp, nd_array_implementation) for inp in [false0, false1]
+    )
 
     result = fbuiltins.where(cond_field, field_true, field_false)
     assert np.allclose(result[0].ndarray, expected0)
     assert np.allclose(result[1].ndarray, expected1)
 
 
-def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation):
-    inp_a = [-1.0, 4.2, 42]
-    inp_b = [2.0, 3.0, -3.0]
-    inputs = [inp_a, inp_b]
+@pytest.mark.parametrize(
+    "lhs, rhs",
+    [
+        ([-1.0, 4.2, 42], [2.0, 3.0, -3.0]),
+        (2.0, [2.0, 3.0, -3.0]),  # scalar with field, tests reverse operators
+    ],
+)
+def test_binary_arithmetic_ops(binary_arithmetic_op, nd_array_implementation, lhs, rhs):
+    inputs = [lhs, rhs]
 
-    expected = binary_arithmetic_op(*[np.asarray(inp, dtype=np.float32) for inp in inputs])
+    expected = binary_arithmetic_op(*[_np_asarray_or_scalar(inp) for inp in inputs])
 
-    field_inputs = [_make_field(inp, nd_array_implementation) for inp in inputs]
+    field_inputs = [_make_field_or_scalar(inp, nd_array_implementation) for inp in inputs]
 
     result = binary_arithmetic_op(*field_inputs)
 
     assert np.allclose(result.ndarray, expected)
 
 
-def test_binary_logical_ops(binary_logical_op, nd_array_implementation):
-    inp_a = [True, True, False, False]
-    inp_b = [True, False, True, False]
-    inputs = [inp_a, inp_b]
+@pytest.mark.parametrize(
+    "lhs, rhs",
+    [
+        ([True, True, False, False], [True, False, True, False]),
+        (True, [True, False]),
+        (False, [True, False]),
+    ],
+)
+def test_binary_logical_ops(binary_logical_op, nd_array_implementation, lhs, rhs):
+    inputs = [lhs, rhs]
 
-    expected = binary_logical_op(*[np.asarray(inp) for inp in inputs])
+    expected = binary_logical_op(*[_np_asarray_or_scalar(inp, dtype=bool) for inp in inputs])
 
-    field_inputs = [_make_field(inp, nd_array_implementation, dtype=bool) for inp in inputs]
+    field_inputs = [
+        _make_field_or_scalar(inp, nd_array_implementation, dtype=bool) for inp in inputs
+    ]
 
     result = binary_logical_op(*field_inputs)
 
@@ -192,7 +229,7 @@ def test_unary_logical_ops(unary_logical_op, nd_array_implementation):
 
     expected = unary_logical_op(np.asarray(inp))
 
-    field_input = _make_field(inp, nd_array_implementation, dtype=bool)
+    field_input = _make_field_or_scalar(inp, nd_array_implementation, dtype=bool)
 
     result = unary_logical_op(field_input)
 
@@ -204,7 +241,7 @@ def test_unary_arithmetic_ops(unary_arithmetic_op, nd_array_implementation):
 
     expected = unary_arithmetic_op(np.asarray(inp, dtype=np.float32))
 
-    field_input = _make_field(inp, nd_array_implementation)
+    field_input = _make_field_or_scalar(inp, nd_array_implementation)
 
     result = unary_arithmetic_op(field_input)
 
@@ -255,8 +292,8 @@ def test_mixed_fields(product_nd_array_implementation):
 
     expected = np.asarray(inp_a) + np.asarray(inp_b)
 
-    field_inp_a = _make_field(inp_a, first_impl)
-    field_inp_b = _make_field(inp_b, second_impl)
+    field_inp_a = _make_field_or_scalar(inp_a, first_impl)
+    field_inp_b = _make_field_or_scalar(inp_b, second_impl)
 
     result = field_inp_a + field_inp_b
     assert np.allclose(result.ndarray, expected)
@@ -273,9 +310,9 @@ def test_non_dispatched_function():
 
     expected = np.asarray(inp_a) * np.asarray(inp_b) + np.asarray(inp_c)
 
-    field_inp_a = _make_field(inp_a, np)
-    field_inp_b = _make_field(inp_b, np)
-    field_inp_c = _make_field(inp_c, np)
+    field_inp_a = _make_field_or_scalar(inp_a, np)
+    field_inp_b = _make_field_or_scalar(inp_b, np)
+    field_inp_c = _make_field_or_scalar(inp_c, np)
 
     result = fma(field_inp_a, field_inp_b, field_inp_c)
     assert np.allclose(result.ndarray, expected)
@@ -461,6 +498,49 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     assert common.is_field(indexed_field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
+
+
+def test_absolute_indexing_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[JDim(8) : JDim(10), IDim(5) : IDim(9)]
+    expected = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == expected
+
+
+def test_absolute_indexing_dim_sliced_single_slice():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    indexed_field_1 = field[KDim(11)]
+    indexed_field_2 = field[(KDim, 11)]
+
+    assert common.is_field(indexed_field_1)
+    assert indexed_field_1 == indexed_field_2
+
+
+def test_absolute_indexing_wrong_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+
+    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'JDim' and 'IDim'."):
+        field[JDim(8) : IDim(10)]
+
+
+def test_absolute_indexing_empty_dim_sliced():
+    domain = common.Domain(
+        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+    )
+    field = common._field(np.ones((5, 10, 15)), domain=domain)
+    with pytest.raises(IndexError, match="Lower bound needs to be specified"):
+        field[: IDim(10)]
 
 
 def test_absolute_indexing_value_return():
@@ -669,60 +749,60 @@ def test_connectivity_field_inverse_image():
 
 def test_connectivity_field_inverse_image_2d_domain():
     V = Dimension("V")
-    E = Dimension("E")
-    E2V = Dimension("E2V")
+    C = Dimension("C")
+    C2V = Dimension("C2V")
 
     V_START, V_STOP = 0, 3
-    E_START, E_STOP = 0, 3
-    E2V_START, E2V_STOP = 0, 3
+    C_START, C_STOP = 0, 3
+    C2V_START, C2V_STOP = 0, 3
 
-    e2v_conn = common._connectivity(
+    c2v_conn = common._connectivity(
         np.asarray([[0, 0, 2], [1, 1, 2], [2, 2, 2]]),
         domain=common.domain(
             [
-                common.named_range((E, (E_START, E_STOP))),
-                common.named_range((E2V, (E2V_START, E2V_STOP))),
+                common.named_range((C, (C_START, C_STOP))),
+                common.named_range((C2V, (C2V_START, C2V_STOP))),
             ]
         ),
         codomain=V,
     )
 
-    # e2c_conn:
-    #  ---E2V----
+    # c2v_conn:
+    #  ---C2V----
     #  |[[0 0 2]
-    #  E [1 1 2]
+    #  C [1 1 2]
     #  | [2 2 2]]
 
     # Test contiguous and non-contiguous ranges.
-    # For the 'e2c_conn' defined above, the only valid range including 2
+    # For the 'c2v_conn' defined above, the only valid range including 2
     # is [0, 3). Otherwise, the inverse image would be non-contiguous.
     image_range = UnitRange(V_START, V_STOP)
-    result = e2v_conn.inverse_image(image_range)
+    result = c2v_conn.inverse_image(image_range)
 
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(E_START, E_STOP))
-    assert result[1] == (E2V, UnitRange(E2V_START, E2V_STOP))
+    assert result[0] == (C, UnitRange(C_START, C_STOP))
+    assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 2))
+    result = c2v_conn.inverse_image(UnitRange(0, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(0, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(0, 1))
+    result = c2v_conn.inverse_image(UnitRange(0, 1))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(0, 1))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(0, 1))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
-    result = e2v_conn.inverse_image(UnitRange(1, 2))
+    result = c2v_conn.inverse_image(UnitRange(1, 2))
     assert len(result) == 2
-    assert result[0] == (E, UnitRange(1, 2))
-    assert result[1] == (E2V, UnitRange(0, 2))
+    assert result[0] == (C, UnitRange(1, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(1, 3))
+        result = c2v_conn.inverse_image(UnitRange(1, 3))
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
-        result = e2v_conn.inverse_image(UnitRange(2, 3))
+        result = c2v_conn.inverse_image(UnitRange(2, 3))
 
 
 def test_connectivity_field_inverse_image_non_contiguous():
@@ -746,3 +826,85 @@ def test_connectivity_field_inverse_image_non_contiguous():
 
     with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
         e2v_conn.inverse_image(UnitRange(V_START, V_STOP))
+
+
+def test_connectivity_field_inverse_image_2d_domain_skip_values():
+    V = Dimension("V")
+    C = Dimension("C")
+    C2V = Dimension("C2V")
+
+    V_START, V_STOP = 0, 3
+    C_START, C_STOP = 0, 4
+    C2V_START, C2V_STOP = 0, 4
+
+    c2v_conn = common._connectivity(
+        np.asarray([[-1, 0, 2, -1], [1, 1, 2, 2], [2, 2, -1, -1], [-1, 2, -1, -1]]),
+        domain=common.domain(
+            [
+                common.named_range((C, (C_START, C_STOP))),
+                common.named_range((C2V, (C2V_START, C2V_STOP))),
+            ]
+        ),
+        codomain=V,
+        skip_value=-1,
+    )
+
+    # c2v_conn:
+    #  ---C2V---------
+    #  |[[-1  0  2 -1]
+    #  C [ 1  1  2  2]
+    #  | [ 2  2 -1 -1]
+    #  | [-1  2 -1 -1]]
+
+    image_range = UnitRange(V_START, V_STOP)
+    result = c2v_conn.inverse_image(image_range)
+
+    assert len(result) == 2
+    assert result[0] == (C, UnitRange(C_START, C_STOP))
+    assert result[1] == (C2V, UnitRange(C2V_START, C2V_STOP))
+
+    result = c2v_conn.inverse_image(UnitRange(0, 2))
+    assert len(result) == 2
+    assert result[0] == (C, UnitRange(0, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
+
+    result = c2v_conn.inverse_image(UnitRange(0, 1))
+    assert len(result) == 2
+    assert result[0] == (C, UnitRange(0, 1))
+    assert result[1] == (C2V, UnitRange(1, 2))
+
+    result = c2v_conn.inverse_image(UnitRange(1, 2))
+    assert len(result) == 2
+    assert result[0] == (C, UnitRange(1, 2))
+    assert result[1] == (C2V, UnitRange(0, 2))
+
+    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+        result = c2v_conn.inverse_image(UnitRange(1, 3))
+
+    with pytest.raises(ValueError, match="generates non-contiguous dimensions"):
+        result = c2v_conn.inverse_image(UnitRange(2, 3))
+
+
+@pytest.mark.parametrize(
+    "index_array, expected",
+    [
+        ([0, 0, 1], [(0, 2)]),
+        ([0, 1, 0], None),
+        ([0, -1, 0], [(0, 3)]),
+        ([[1, 1, 1], [1, 0, 0]], [(1, 2), (1, 3)]),
+        (
+            [[1, 0, -1], [1, 0, 0]],
+            [(0, 2), (1, 3)],
+        ),
+    ],
+)
+def test_hypercube(index_array, expected):
+    index_array = np.asarray(index_array)
+    image_range = common.UnitRange(0, 1)
+    skip_value = -1
+
+    expected = [common.unit_range(e) for e in expected] if expected is not None else None
+
+    result = nd_array_field._hypercube(index_array, image_range, np, skip_value)
+
+    assert result == expected

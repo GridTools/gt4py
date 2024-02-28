@@ -14,13 +14,14 @@
 
 import pathlib
 
+from gt4py.next import config
 from gt4py.next.otf.compilation import build_data, cache, importer
 from gt4py.next.otf.compilation.build_systems import compiledb
 
 
 def test_default_compiledb_factory(compilable_source_example, clean_example_session_cache):
     otf_builder = compiledb.CompiledbFactory()(
-        compilable_source_example, cache_strategy=cache.Strategy.SESSION
+        compilable_source_example, cache_lifetime=config.BuildCacheLifetime.SESSION
     )
 
     # make sure the example project has not been written yet
