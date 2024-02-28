@@ -54,18 +54,21 @@ def test_indent():
 
 
 def test_cost():
-    assert PrettyPrinter()._cost(["This is a single line."]) < PrettyPrinter()._cost(
-        ["These are", "multiple", "short", "lines."]
-    )
-    assert PrettyPrinter()._cost(["This is a short line."]) < PrettyPrinter()._cost(
-        [
-            "This is a very long line; longer than the maximum allowed line length. "
-            "So it should get a penalty for its length."
-        ]
-    )
-    assert PrettyPrinter()._cost(
-        ["Equal length!", "Equal length!", "Equal length!"]
-    ) < PrettyPrinter()._cost(["Unequal length.", "Short…", "Looooooooooooooooooong…"])
+    assert PrettyPrinter()._cost(["This is a single line."]) < PrettyPrinter()._cost([
+        "These are",
+        "multiple",
+        "short",
+        "lines.",
+    ])
+    assert PrettyPrinter()._cost(["This is a short line."]) < PrettyPrinter()._cost([
+        "This is a very long line; longer than the maximum allowed line length. "
+        "So it should get a penalty for its length."
+    ])
+    assert PrettyPrinter()._cost([
+        "Equal length!",
+        "Equal length!",
+        "Equal length!",
+    ]) < PrettyPrinter()._cost(["Unequal length.", "Short…", "Looooooooooooooooooong…"])
 
 
 def test_optimum():

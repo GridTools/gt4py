@@ -24,6 +24,7 @@ on the program and (optionally) input values are program formatters.
 For more information refer to
 ``gt4py/docs/functional/architecture/007-Program-Processors.md``
 """
+
 from __future__ import annotations
 
 import functools
@@ -237,7 +238,8 @@ class ProgramBackend(
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory(obj)
 
 
@@ -245,5 +247,6 @@ def is_program_backend_for(
     obj: Callable, device: core_defs.DeviceTypeT
 ) -> TypeGuard[ProgramBackend[core_defs.DeviceTypeT]]:
     return is_processor_kind(
-        obj, ProgramExecutor  # type: ignore[type-abstract]  # ProgramExecutor is abstract
+        obj,
+        ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory_for(obj, device)

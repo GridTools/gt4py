@@ -172,7 +172,7 @@ def _make_union_validator(type_list):
                 validator(instance, attribute, value)
                 break
 
-            except Exception as e:
+            except Exception:
                 pass
         else:
             passed = False

@@ -74,21 +74,24 @@ float64 = np.float64
 BoolScalar: TypeAlias = Union[bool_, bool]
 BoolT = TypeVar("BoolT", bound=BoolScalar)
 BOOL_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], BoolScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    BoolScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
 IntScalar: TypeAlias = Union[int8, int16, int32, int64, int]
 IntT = TypeVar("IntT", bound=IntScalar)
 INT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], IntScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    IntScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
 UnsignedIntScalar: TypeAlias = Union[uint8, uint16, uint32, uint64]
 UnsignedIntT = TypeVar("UnsignedIntT", bound=UnsignedIntScalar)
 UINT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], UnsignedIntScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    UnsignedIntScalar.__args__,  # type: ignore[attr-defined]
 )
 
 
@@ -100,7 +103,8 @@ INTEGRAL_TYPES: Final[Tuple[type, ...]] = (*INT_TYPES, *UINT_TYPES)
 FloatingScalar: TypeAlias = Union[float32, float64, float]
 FloatingT = TypeVar("FloatingT", bound=FloatingScalar)
 FLOAT_TYPES: Final[Tuple[type, ...]] = cast(
-    Tuple[type, ...], FloatingScalar.__args__  # type: ignore[attr-defined]
+    Tuple[type, ...],
+    FloatingScalar.__args__,  # type: ignore[attr-defined]
 )
 
 

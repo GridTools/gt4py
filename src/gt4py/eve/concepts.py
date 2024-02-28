@@ -14,7 +14,6 @@
 
 """Definitions of basic Eve concepts."""
 
-
 from __future__ import annotations
 
 import copy

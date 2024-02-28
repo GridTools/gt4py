@@ -61,11 +61,7 @@ class SingleAssignTargetPass(NodeYielder):
     ...     a = b = 1
     ...     return a, b
     >>>
-    >>> print(ast.unparse(
-    ...     SingleAssignTargetPass.apply(
-    ...         ast.parse(inspect.getsource(foo))
-    ...     )
-    ... ))
+    >>> print(ast.unparse(SingleAssignTargetPass.apply(ast.parse(inspect.getsource(foo)))))
     def foo():
         __sat_tmp0 = 1
         a = __sat_tmp0

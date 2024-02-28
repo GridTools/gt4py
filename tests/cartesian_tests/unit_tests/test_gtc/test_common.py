@@ -312,13 +312,15 @@ def test_symbolref_validation_for_valid_tree():
     SymbolTableRootNode(
         nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
     )
-    SymbolTableRootNode(  # noqa: B018
-        nodes=[
-            SymbolChildNode(name="foo"),
-            SymbolRefChildNode(name="foo"),
-            SymbolRefChildNode(name="foo"),
-        ],
-    ),
+    (
+        SymbolTableRootNode(  # noqa: B018
+            nodes=[
+                SymbolChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+                SymbolRefChildNode(name="foo"),
+            ],
+        ),
+    )
     SymbolTableRootNode(
         nodes=[
             SymbolChildNode(name="outer_scope"),

@@ -29,7 +29,7 @@ def _number_to_ordinal_number(number: int) -> str:
     Convert number into ordinal number.
 
     >>> for i in range(0, 5):
-    ...   print(_number_to_ordinal_number(i))
+    ...     print(_number_to_ordinal_number(i))
     0th
     1st
     2nd
@@ -150,22 +150,24 @@ def apply_to_primitive_constituents(
 
     >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> tuple_type = ts.TupleType(types=[int_type, int_type])
-    >>> print(apply_to_primitive_constituents(tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)))
+    >>> print(
+    ...     apply_to_primitive_constituents(
+    ...         tuple_type, lambda primitive_type: ts.FieldType(dims=[], dtype=primitive_type)
+    ...     )
+    ... )
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(
-            *[
-                apply_to_primitive_constituents(
-                    el,
-                    fun,
-                    _path=(*_path, i),
-                    with_path_arg=with_path_arg,
-                    tuple_constructor=tuple_constructor,
-                )
-                for i, el in enumerate(symbol_type.types)
-            ]
-        )
+        return tuple_constructor(*[
+            apply_to_primitive_constituents(
+                el,
+                fun,
+                _path=(*_path, i),
+                with_path_arg=with_path_arg,
+                tuple_constructor=tuple_constructor,
+            )
+            for i, el in enumerate(symbol_type.types)
+        ])
     if with_path_arg:
         return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:
@@ -298,7 +300,9 @@ def is_type_or_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) ->
     >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
     >>> is_type_or_tuple_of_type(field_type, ts.FieldType)
     True
-    >>> is_type_or_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType))
+    >>> is_type_or_tuple_of_type(
+    ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
+    ... )
     True
     >>> is_type_or_tuple_of_type(scalar_type, ts.FieldType)
     False
@@ -318,7 +322,9 @@ def is_tuple_of_type(type_: ts.TypeSpec, expected_type: type | tuple) -> TypeGua
     >>> field_type = ts.FieldType(dims=[], dtype=scalar_type)
     >>> is_tuple_of_type(field_type, ts.FieldType)
     False
-    >>> is_tuple_of_type(ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType))
+    >>> is_tuple_of_type(
+    ...     ts.TupleType(types=[scalar_type, field_type]), (ts.ScalarType, ts.FieldType)
+    ... )
     True
     >>> is_tuple_of_type(ts.TupleType(types=[scalar_type]), ts.FieldType)
     False
@@ -381,38 +387,37 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     Examples:
     ---------
     >>> is_concretizable(
-    ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
+    ...     ts.ScalarType(kind=ts.ScalarKind.INT64), to_type=ts.ScalarType(kind=ts.ScalarKind.INT64)
     ... )
     True
 
     >>> is_concretizable(
     ...     ts.ScalarType(kind=ts.ScalarKind.INT64),
-    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ...     to_type=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
     ... )
     False
 
     >>> is_concretizable(
     ...     ts.DeferredType(constraint=None),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
     ... )
     True
 
     >>> is_concretizable(
     ...     ts.DeferredType(constraint=ts.DataType),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
     ... )
     True
 
     >>> is_concretizable(
     ...     ts.DeferredType(constraint=ts.OffsetType),
-    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[])
+    ...     to_type=ts.FieldType(dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL), dims=[]),
     ... )
     False
 
     >>> is_concretizable(
     ...     ts.DeferredType(constraint=ts.TypeSpec),
-    ...     to_type=ts.DeferredType(constraint=ts.ScalarType)
+    ...     to_type=ts.DeferredType(constraint=ts.ScalarType),
     ... )
     True
 
@@ -437,17 +442,14 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.INT64)
     >>> I, J, K = (common.Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promoted: ts.FieldType = promote(
-    ...     ts.FieldType(dims=[I, J], dtype=dtype),
-    ...     ts.FieldType(dims=[I, J, K], dtype=dtype),
-    ...     dtype
+    ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[I, J, K], dtype=dtype), dtype
     ... )
     >>> promoted.dims == [I, J, K] and promoted.dtype == dtype
     True
 
     >>> promote(
-    ...     ts.FieldType(dims=[I, J], dtype=dtype),
-    ...     ts.FieldType(dims=[K], dtype=dtype)
-    ... ) # doctest: +ELLIPSIS
+    ...     ts.FieldType(dims=[I, J], dtype=dtype), ts.FieldType(dims=[K], dtype=dtype)
+    ... )  # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
@@ -636,7 +638,7 @@ def function_signature_incompatibilities(
 
 
 @function_signature_incompatibilities.register
-def function_signature_incompatibilities_func(  # noqa: C901
+def function_signature_incompatibilities_func(
     func_type: ts.FunctionType,
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
@@ -700,7 +702,12 @@ def function_signature_incompatibilities_field(
     # TODO: This code does not handle ellipses for dimensions. Fix it.
     assert field_type.dims is not ...
     if field_type.dims and source_dim not in field_type.dims:
-        yield f"Incompatible offset can not shift field defined on " f"{', '.join([dim.value for dim in field_type.dims])} from " f"{source_dim.value} to target dim(s): " f"{', '.join([dim.value for dim in target_dims])}"
+        yield (
+            f"Incompatible offset can not shift field defined on "
+            f"{', '.join([dim.value for dim in field_type.dims])} from "
+            f"{source_dim.value} to target dim(s): "
+            f"{', '.join([dim.value for dim in target_dims])}"
+        )
 
 
 def accepts_args(
@@ -724,7 +731,7 @@ def accepts_args(
         ...     pos_only_args=[bool_type],
         ...     pos_or_kw_args={"foo": bool_type},
         ...     kw_only_args={},
-        ...     returns=ts.VoidType()
+        ...     returns=ts.VoidType(),
         ... )
         >>> accepts_args(func_type, with_args=[bool_type], with_kwargs={"foo": bool_type})
         True
