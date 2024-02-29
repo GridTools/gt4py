@@ -35,11 +35,10 @@ class OTFCompileExecutor(ppi.ProgramExecutor):
     otf_workflow: recipes.OTFCompileWorkflow
     name: Optional[str] = None
 
-    def __call__(self, program: stages.ProgramIRStage, *args, **kwargs: Any) -> None:
+    def __call__(
+        self, program: stages.ProgramIRStage | itir.FencilDefinition, *args, **kwargs: Any
+    ) -> None:
         self.otf_workflow(program)(*args, offset_provider=kwargs["offset_provider"])
-        # self.otf_workflow(stages.ProgramCall(program, args, kwargs))(
-        #     *args, offset_provider=kwargs["offset_provider"]
-        # )
 
     @property
     def __name__(self) -> str:
