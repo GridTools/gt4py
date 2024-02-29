@@ -92,7 +92,7 @@ def _extract_array_infos(
 
 
 def _extract_stencil_arrays(
-    array_infos: Dict[str, Optional[ArgsInfo]]
+    array_infos: Dict[str, Optional[ArgsInfo]],
 ) -> Dict[str, Optional[FieldType]]:
     return {name: info.array if info is not None else None for name, info in array_infos.items()}
 
@@ -283,7 +283,7 @@ class StencilObject(abc.ABC):
 
     @staticmethod
     def _make_origin_dict(
-        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None]
+        origin: Union[Dict[str, Tuple[int, ...]], Tuple[int, ...], int, None],
     ) -> Dict[str, Tuple[int, ...]]:
         try:
             if isinstance(origin, dict):
@@ -349,7 +349,7 @@ class StencilObject(abc.ABC):
         else:
             return max_domain
 
-    def _validate_args(  # noqa: C901  # Function is too complex
+    def _validate_args(  # Function is too complex
         self,
         arg_infos: Dict[str, Optional[ArgsInfo]],
         param_args: Dict[str, Any],
@@ -376,8 +376,8 @@ class StencilObject(abc.ABC):
 
         try:
             domain = Shape(domain)
-        except Exception:
-            raise ValueError("Invalid 'domain' value ({})".format(domain))
+        except Exception as ex:
+            raise ValueError("Invalid 'domain' value ({})".format(domain)) from ex
 
         if not domain > Shape.zeros(domain_ndim):
             raise ValueError(f"Compute domain contains zero sizes '{domain}')")
@@ -420,7 +420,8 @@ class StencilObject(abc.ABC):
                     warnings.warn(
                         f"The layout of the field '{name}' is not recommended for this backend."
                         f"This may lead to performance degradation. Please consider using the"
-                        f"provided allocators in `gt4py.storage`."
+                        f"provided allocators in `gt4py.storage`.",
+                        stacklevel=2,
                     )
 
                 field_dtype = self.field_info[name].dtype

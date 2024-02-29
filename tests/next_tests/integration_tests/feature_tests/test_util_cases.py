@@ -20,7 +20,7 @@ from gt4py.next import errors
 
 from next_tests import definitions
 from next_tests.integration_tests import cases
-from next_tests.integration_tests.cases import (  # noqa: F401 # fixtures
+from next_tests.integration_tests.cases import (  # noqa: F401 [unused-import]
     cartesian_case,
     exec_alloc_descriptor,
 )
@@ -38,7 +38,7 @@ def mixed_args(
     return (a, (c, a))
 
 
-def test_allocate_default_unique(cartesian_case):  # noqa: F811 # fixtures
+def test_allocate_default_unique(cartesian_case):
     a = cases.allocate(cartesian_case, mixed_args, "a")()
 
     assert np.min(a.asnumpy()) == 0
@@ -54,7 +54,7 @@ def test_allocate_default_unique(cartesian_case):  # noqa: F811 # fixtures
     assert np.max(c.asnumpy()) == np.prod(tuple(cartesian_case.default_sizes.values())) * 2
 
 
-def test_allocate_return_default_zeros(cartesian_case):  # noqa: F811 # fixtures
+def test_allocate_return_default_zeros(cartesian_case):
     a, (b, c) = cases.allocate(cartesian_case, mixed_args, cases.RETURN)()
 
     assert np.all(a.asnumpy() == 0)
@@ -62,7 +62,7 @@ def test_allocate_return_default_zeros(cartesian_case):  # noqa: F811 # fixtures
     assert np.all(c.asnumpy() == 0)
 
 
-def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
+def test_allocate_const(cartesian_case):
     a = cases.allocate(cartesian_case, mixed_args, "a").strategy(cases.ConstInitializer(42))()
     assert np.all(a.asnumpy() == 42)
 
@@ -71,7 +71,7 @@ def test_allocate_const(cartesian_case):  # noqa: F811 # fixtures
 
 
 @pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
-def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixtures
+def test_verify_fails_with_wrong_reference(cartesian_case):
     a = cases.allocate(cartesian_case, addition, "a")()
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
@@ -82,7 +82,7 @@ def test_verify_fails_with_wrong_reference(cartesian_case):  # noqa: F811 # fixt
 
 
 @pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
-def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
+def test_verify_fails_with_wrong_type(cartesian_case):
     a = cases.allocate(cartesian_case, addition, "a").dtype(np.float32)()
     b = cases.allocate(cartesian_case, addition, "b")()
     out = cases.allocate(cartesian_case, addition, cases.RETURN)()
@@ -93,7 +93,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):  # noqa: F811 # fixtures
 
 @pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
 def test_verify_with_default_data_fails_with_wrong_reference(
-    cartesian_case,  # noqa: F811 # fixtures
+    cartesian_case,
 ):
     def wrong_ref(a, b):
         return a - b

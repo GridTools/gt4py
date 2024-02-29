@@ -42,7 +42,11 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
     axis: common.Dimension
 
-    def __call__(self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
+    def __call__(  # type: ignore[override]
+        self,
+        *args: common.Field | core_defs.Scalar,
+        **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
+    ) -> common.Field:
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
@@ -50,9 +54,9 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         domain_intersection = _intersect_scan_args(*all_args)
         non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
 
-        out_domain = common.Domain(
-            *[scan_range if nr[0] == scan_axis else nr for nr in domain_intersection]
-        )
+        out_domain = common.Domain(*[
+            scan_range if nr[0] == scan_axis else nr for nr in domain_intersection
+        ])
         if scan_axis not in out_domain.dims:
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
@@ -143,15 +147,15 @@ def _tuple_assign_field(
 
 
 def _intersect_scan_args(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> common.Domain:
-    return embedded_common.intersect_domains(
-        *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
-    )
+    return embedded_common.intersect_domains(*[
+        arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)
+    ])
 
 
 def _get_array_ns(
-    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...]
+    *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> ModuleType:
     for arg in utils.flatten_nested_tuple(args):
         if hasattr(arg, "array_ns"):

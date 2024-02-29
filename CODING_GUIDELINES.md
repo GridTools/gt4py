@@ -21,8 +21,8 @@ We follow the [Google Python Style Guide][google-style-guide] with a few minor c
 
 We deviate from the [Google Python Style Guide][google-style-guide] only in the following points:
 
-- We use [`flake8`][flake8] with some plugins instead of [`pylint`][pylint].
-- We use [`black`][black] and [`isort`][isort] for source code and imports formatting, which may work differently than indicated by the guidelines in section [_3. Python Style Rules_](https://google.github.io/styleguide/pyguide.html#3-python-style-rules). For example, maximum line length is set to 100 instead of 79 (although docstring lines should still be limited to 79).
+- We use [`ruff-linter`][ruff-linter] instead of [`pylint`][pylint].
+- We use [`ruff-formatter`][ruff-formatter] for source code and imports formatting, which may work differently than indicated by the guidelines in section [_3. Python Style Rules_](https://google.github.io/styleguide/pyguide.html#3-python-style-rules). For example, maximum line length is set to 100 instead of 79 (although docstring lines should still be limited to 79).
 - According to subsection [_2.19 Power Features_](https://google.github.io/styleguide/pyguide.html#219-power-features), direct use of _power features_ (e.g. custom metaclasses, import hacks, reflection) should be avoided, but standard library classes that internally use these power features are accepted. Following the same spirit, we allow the use of power features in infrastructure code with similar functionality and scope as the Python standard library.
 - According to subsection [_3.19.12 Imports For Typing_](https://google.github.io/styleguide/pyguide.html#31912-imports-for-typing), symbols from `typing` and `collections.abc` modules used in type annotations _"can be imported directly to keep common annotations concise and match standard typing practices"_. Following the same spirit, we allow symbols to be imported directly from third-party or internal modules when they only contain a collection of frequently used typying definitions.
 
@@ -107,7 +107,7 @@ In general, you should structure new Python modules in the following way:
 1. _shebang_ line: `#! /usr/bin/env python3` (only for **executable scripts**!).
 2. License header (see `LICENSE_HEADER.txt`).
 3. Module docstring.
-4. Imports, alphabetically ordered within each block (fixed automatically by `isort`):
+4. Imports, alphabetically ordered within each block (fixed automatically by `ruff-formatter`):
    1. Block of imports from the standard library.
    2. Block of imports from general third party libraries using standard shortcuts when customary (e.g. `numpy as np`).
    3. Block of imports from specific modules of the project.
@@ -126,10 +126,17 @@ Consider configuration files as another type of source code and apply the same c
 
 ### Ignoring QA errors
 
-You may occasionally need to disable checks from _quality assurance_ (QA) tools (e.g. linters, type checkers, etc.) on specific lines as some tool might not be able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting your code to pass QA checks would make it less readable. Additionally, you should add a brief comment for future reference, e.g.:
+You may occasionally need to disable checks from _quality assurance_ (QA) tools (e.g. linters, type checkers, etc.) on specific lines as some tool might not be able to fully understand why a certain piece of code is needed. This is usually done with special comments, e.g. `# noqa: F401`, `# type: ignore`. However, you should **only** ignore QA errors when you fully understand their source and rewriting your code to pass QA checks would make it less readable. Additionally, you should add a short descriptive code if possible (check [ruff rules][ruff-rules] and [mypy error codes][mypy-error-codes] for reference):
 
 ```python
-f = lambda: 'empty'  # noqa: E731  # assign lambda expression for testing
+f = lambda: 'empty'  # noqa: E731 [lambda-assignment]
+```
+
+and, if needed, a brief comment for future reference:
+
+```python
+...
+return undeclared_symbol  # noqa: F821 [undefined-name] on purpose to trigger black-magic
 ```
 
 ## Testing
@@ -213,13 +220,15 @@ https://testandcode.com/116
 
 <!-- Reference links -->
 
-[black]: https://black.readthedocs.io/en/stable/
 [doctest]: https://docs.python.org/3/library/doctest.html
-[flake8]: https://flake8.pycqa.org/
 [google-style-guide]: https://google.github.io/styleguide/pyguide.html
-[isort]: https://pycqa.github.io/isort/
+[mypy]: https://mypy.readthedocs.io/
+[mypy-error-codes]: https://mypy.readthedocs.io/en/stable/error_code_list.html
 [pre-commit]: https://pre-commit.com/
 [pylint]: https://pylint.pycqa.org/
+[ruff-formatter]: https://docs.astral.sh/ruff/formatter/
+[ruff-linter]: https://docs.astral.sh/ruff/linter/
+[ruff-rules]: https://docs.astral.sh/ruff/rules/
 [sphinx]: https://www.sphinx-doc.org
 [sphinx-autodoc]: https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html
 [sphinx-napoleon]: https://sphinxcontrib-napoleon.readthedocs.io/en/latest/index.html#

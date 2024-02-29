@@ -70,7 +70,8 @@ def _ensure_is_on_device(
 
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
             )
             return cp.asarray(connectivity_arg)
     return connectivity_arg
@@ -103,16 +104,14 @@ def extract_connectivity_args(
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
-    return hash(
-        (
-            otf_closure.program,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
-        )
-    )
+    return hash((
+        otf_closure.program,
+        # As the frontend types contain lists they are not hashable. As a workaround we just
+        # use content_hash here.
+        content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+        id(offset_provider) if offset_provider else None,
+        otf_closure.kwargs.get("column_axis", None),
+    ))
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):

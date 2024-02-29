@@ -54,7 +54,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     >>>
     >>> IDim = Dimension("IDim")
     >>> def fieldop(inp: Field[[IDim], "float64"]):
-    ...    return inp
+    ...     return inp
     >>>
     >>> parsed = FieldOperatorParser.apply_to_function(fieldop)
     >>> lowered = FieldOperatorLowering.apply(parsed)
@@ -62,7 +62,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     <class 'gt4py.next.iterator.ir.FunctionDefinition'>
     >>> lowered.id
     SymbolName('fieldop')
-    >>> lowered.params # doctest: +ELLIPSIS
+    >>> lowered.params  # doctest: +ELLIPSIS
     [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
     """
 
@@ -114,7 +114,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             # (this is the only place in the lowering were a variable is captured in a lifted lambda)
             lowering_utils.to_tuples_of_iterator(
                 im.promote_to_const_iterator(func_definition.params[0].id),
-                [*node.type.definition.pos_or_kw_args.values()][0],
+                [*node.type.definition.pos_or_kw_args.values()][0],  # noqa: RUF015 [unnecessary-iterable-allocation-for-first-element]
             ),
         )(
             # the function itself returns a tuple of iterators, deref element-wise

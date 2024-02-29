@@ -13,15 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from typing import Callable, TypeVar
 
+from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
-
-
-def _expr_hash(expr: itir.Expr | str) -> str:
-    """Small utility function that returns a string hash of an expression."""
-    return str(abs(hash(expr)) % (10**12)).zfill(12)
 
 
 def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
@@ -30,11 +26,17 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
 
     Supports arbitrary nesting.
 
-    >>> print(to_tuples_of_iterator("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))   # doctest: +ELLIPSIS
+    >>> print(
+    ...     to_tuples_of_iterator(
+    ...         "arg",
+    ...         ts.TupleType(
+    ...             types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]
+    ...         ),
+    ...     )
+    ... )  # doctest: +ELLIPSIS
     (λ(__toi_...) → {(↑(λ(it) → (·it)[0]))(__toi_...)})(arg)
     """
-    param = f"__toi_{_expr_hash(expr)}"
+    param = f"__toi_{eve_utils.content_hash(expr)}"
 
     def fun(primitive_type, path):
         inner_expr = im.deref("it")
@@ -56,17 +58,26 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
 
     Supports arbitrary nesting.
 
-    >>> print(to_iterator_of_tuples("arg", ts.TupleType(types=[ts.FieldType(dims=[],
-    ...   dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))])))  # doctest: +ELLIPSIS
+    >>> print(
+    ...     to_iterator_of_tuples(
+    ...         "arg",
+    ...         ts.TupleType(
+    ...             types=[ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32))]
+    ...         ),
+    ...     )
+    ... )  # doctest: +ELLIPSIS
     (λ(__iot_...) → (↑(λ(__iot_el_0) → {·__iot_el_0}))(__iot_...[0]))(arg)
     """
-    param = f"__iot_{_expr_hash(expr)}"
+    param = f"__iot_{eve_utils.content_hash(expr)}"
 
     type_constituents = [
         ti_ffront.promote_scalars_to_zero_dim_field(type_)
         for type_ in type_info.primitive_constituents(arg_type)
     ]
-    assert all(isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims for type_ in type_constituents)  # type: ignore[attr-defined]  # ensure by assert above
+    assert all(
+        isinstance(type_, ts.FieldType) and type_.dims == type_constituents[0].dims  # type: ignore[attr-defined]  # ensure by assert above
+        for type_ in type_constituents
+    )
 
     def fun(_, path):
         param_name = "__iot_el"
@@ -109,10 +120,12 @@ def process_elements(
     if isinstance(objs, itir.Expr):
         objs = [objs]
 
-    _current_el_exprs = [im.ref(f"__val_{_expr_hash(obj)}") for i, obj in enumerate(objs)]
+    _current_el_exprs = [
+        im.ref(f"__val_{eve_utils.content_hash(obj)}") for i, obj in enumerate(objs)
+    ]
     body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
 
-    return im.let(*((f"__val_{_expr_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
+    return im.let(*((f"__val_{eve_utils.content_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
         body
     )
 
@@ -126,16 +139,14 @@ def _process_elements_impl(
     current_el_type: ts.TypeSpec,
 ):
     if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(
-            *[
-                _process_elements_impl(
-                    process_func,
-                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                    current_el_type.types[i],
-                )
-                for i in range(len(current_el_type.types))
-            ]
-        )
+        result = im.make_tuple(*[
+            _process_elements_impl(
+                process_func,
+                [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
+                current_el_type.types[i],
+            )
+            for i in range(len(current_el_type.types))
+        ])
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")
     else:

@@ -57,7 +57,7 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
-    id: Coerced[eve.SymbolName]  # noqa: A003
+    id: Coerced[eve.SymbolName]
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
@@ -318,7 +318,10 @@ def split_closures(
                             domain=AUTO_DOMAIN,
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
-                            inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            inputs=[
+                                closure_param_arg_mapping[param.id]  # type: ignore[attr-defined]
+                                for param in lift_expr.args
+                            ],
                             location=current_closure.location,
                         )
                     )
@@ -452,12 +455,10 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
+        return im.call(self.grid_type)(*[
+            im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+            for d, r in self.ranges.items()
+        ])
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:

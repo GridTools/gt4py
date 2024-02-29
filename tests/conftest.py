@@ -14,6 +14,5 @@
 
 """Global configuration of pytest for collecting and running tests."""
 
-
 # Ignore hidden folders and disabled tests
 collect_ignore_glob = [".*", "_disabled*"]

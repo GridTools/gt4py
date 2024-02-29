@@ -29,8 +29,8 @@ SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)
 
 
 class Symbol(eve.GenericNode, LocatedNode, Generic[SymbolT]):
-    id: Coerced[SymbolName]  # noqa: A003
-    type: Union[SymbolT, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]
+    type: Union[SymbolT, ts.DeferredType]  # A003
     namespace: dialect_ast_enums.Namespace = dialect_ast_enums.Namespace(
         dialect_ast_enums.Namespace.LOCAL
     )
@@ -50,7 +50,7 @@ TupleSymbol = Symbol[TupleTypeT]
 
 
 class Expr(LocatedNode):
-    type: Optional[ts.TypeSpec] = None  # noqa A003
+    type: Optional[ts.TypeSpec] = None  # A003
 
 
 class BinOp(Expr):
@@ -60,7 +60,7 @@ class BinOp(Expr):
 
 
 class Name(Expr):
-    id: Coerced[SymbolRef]  # noqa: A003
+    id: Coerced[SymbolRef]
 
 
 class Call(Expr):
@@ -97,8 +97,8 @@ class Stmt(LocatedNode): ...
 
 
 class Program(LocatedNode, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
-    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # noqa A003
+    id: Coerced[SymbolName]
+    type: Union[ts_ffront.ProgramType, ts.DeferredType]  # A003
     params: list[DataSymbol]
     body: list[Call]
     closure_vars: list[Symbol]

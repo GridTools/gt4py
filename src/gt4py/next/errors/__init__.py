@@ -14,9 +14,7 @@
 
 """Contains the exception classes and other utilities for error handling."""
 
-from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
-    excepthook,
-)
+from . import excepthook  # noqa: F401 [unused-import]
 from .exceptions import (
     DSLError,
     InvalidParameterAnnotationError,

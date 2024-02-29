@@ -14,7 +14,6 @@
 
 """Caching for compiled backend artifacts."""
 
-
 import hashlib
 import pathlib
 import tempfile

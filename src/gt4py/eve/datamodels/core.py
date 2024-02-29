@@ -34,7 +34,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401
+    import toolz
 
 from .. import exceptions, extended_typing as xtyping, type_validation as type_val, utils
 from ..extended_typing import (
@@ -267,7 +267,7 @@ def datamodel(
     cls: Literal[None] = None,
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -282,11 +282,11 @@ def datamodel(
 
 
 @overload
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Type[_T],
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -301,11 +301,11 @@ def datamodel(  # noqa: F811  # redefinion of unused symbol
 
 
 # TODO(egparedes): Use @dataclass_transform(eq_default=True, field_specifiers=("field",))
-def datamodel(  # noqa: F811  # redefinion of unused symbol
+def datamodel(  # redefinion of unused symbol
     cls: Optional[Type[_T]] = None,
     /,
     *,
-    repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+    repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
     eq: bool = _EQ_DEFAULT,
     order: bool = _ORDER_DEFAULT,
     unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -394,7 +394,7 @@ class _DataModelDecoratorTP(Protocol[_T]):
         cls: Optional[Type[_T]] = None,
         /,
         *,
-        repr: bool = _REPR_DEFAULT,  # noqa: A002  # shadowing 'repr' python builtin
+        repr: bool = _REPR_DEFAULT,  # noqa: A002 [builtin-argument-shadowing]
         eq: bool = _EQ_DEFAULT,
         order: bool = _ORDER_DEFAULT,
         unsafe_hash: bool = _UNSAFE_HASH_DEFAULT,
@@ -446,7 +446,7 @@ else:
             cls,
             /,
             *,
-            repr: (  # noqa: A002  # shadowing 'repr' python builtin
+            repr: (  # noqa: A002 [builtin-argument-shadowing]
                 bool | None | Literal["inherited"]
             ) = "inherited",
             eq: bool | None | Literal["inherited"] = "inherited",
@@ -507,8 +507,8 @@ def field(
     default: Any = NOTHING,
     default_factory: Optional[Callable[[], Any]] = None,
     init: bool = True,
-    repr: bool = True,  # noqa: A002   # shadowing 'repr' python builtin
-    hash: Optional[bool] = None,  # noqa: A002   # shadowing 'hash' python builtin
+    repr: bool = True,  # noqa: A002 [builtin-argument-shadowing]
+    hash: Optional[bool] = None,  # noqa: A002 [builtin-argument-shadowing]
     compare: bool = True,
     metadata: Optional[Mapping[Any, Any]] = None,
     kw_only: bool = _KW_ONLY_DEFAULT,
@@ -543,7 +543,7 @@ def field(
             have their own key, to use as a namespace in the metadata.
         kw_only: If ``True`` (default is ``False``), make this field keyword-only in the
             generated ``__init__`` (if ``init`` is ``False``, this parameter is ignored).
-        converter: Callable that is automatically called to convert attribute’s value.
+        converter: Callable that is automatically called to convert attribute's value.
             It is given the passed-in value, and the returned value will be used as the
             new value of the attribute before being passed to the validator, if any.
             If ``"coerce"`` is passed, a naive coercer converter will be generated.
@@ -559,7 +559,7 @@ def field(
         >>> from typing import List
         >>> @datamodel
         ... class C:
-        ...     mylist: List[int] = field(default_factory=lambda : [1, 2, 3])
+        ...     mylist: List[int] = field(default_factory=lambda: [1, 2, 3])
         >>> c = C()
         >>> c.mylist
         [1, 2, 3]
@@ -660,7 +660,7 @@ def get_fields(model: Union[DataModel, Type[DataModel]]) -> utils.FrozenNamespac
         >>> fields(Model)  # doctest:+ELLIPSIS
         FrozenNamespace(...name=Attribute(name='name', default=NOTHING, ...
 
-    """  # noqa: RST201  # doctest conventions confuse RST validator
+    """
     if not is_datamodel(model):
         raise TypeError(f"Invalid datamodel instance or class: '{model}'.")
     if not isinstance(model, type):
@@ -694,8 +694,8 @@ def asdict(
         ...     x: int
         ...     y: int
         >>> c = C(x=1, y=2)
-        >>> assert asdict(c) == {'x': 1, 'y': 2}
-    """  # noqa: RST301  # sphinx.napoleon conventions confuse RST validator
+        >>> assert asdict(c) == {"x": 1, "y": 2}
+    """
     if not is_datamodel(instance) or isinstance(instance, type):
         raise TypeError(f"Invalid datamodel instance: '{instance}'.")
     return attrs.asdict(instance, value_serializer=value_serializer)
@@ -784,7 +784,7 @@ def concretize(
     *type_args: Type,
     class_name: Optional[str] = None,
     module: Optional[str] = None,
-    support_pickling: bool = True,  # noqa
+    support_pickling: bool = True,
     overwrite_definition: bool = True,
 ) -> Type[DataModelT]:
     """Generate a new concrete subclass of a generic Data Model.
@@ -805,9 +805,12 @@ def concretize(
         overwrite_definition: If ``True``, a previous definition of the class in
             the target module will be overwritten.
 
-    """  # noqa: RST301  # doctest conventions confuse RST validator
+    """
     concrete_cls: Type[DataModelT] = _make_concrete_with_cache(
-        datamodel_cls, *type_args, class_name=class_name, module=module  # type: ignore[arg-type]
+        datamodel_cls,  # type: ignore[arg-type]
+        *type_args,
+        class_name=class_name,
+        module=module,
     )
     assert isinstance(concrete_cls, type) and is_datamodel(concrete_cls)
 
@@ -822,7 +825,8 @@ def concretize(
                 RuntimeWarning(
                     f"Existing '{class_name}' symbol in module '{module}' contains a reference"
                     "to a different object."
-                )
+                ),
+                stacklevel=2,
             )
 
     return concrete_cls
@@ -1018,10 +1022,10 @@ def _make_type_converter(type_annotation: TypeAnnotation, name: str) -> TypeConv
 _KNOWN_MUTABLE_TYPES: Final = (list, dict, set)
 
 
-def _make_datamodel(  # noqa: C901  # too complex but still readable and documented
+def _make_datamodel(
     cls: Type[_T],
     *,
-    repr: bool,  # noqa: A002   # shadowing 'repr' python builtin
+    repr: bool,  # noqa: A002 [builtin-argument-shadowing]
     eq: bool,
     order: bool,
     unsafe_hash: bool,
@@ -1069,7 +1073,7 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
 
         # Create type validator if validation is enabled
         if type_validation_factory is None or _UNCHECKED_TYPE_TAG in type_extras:
-            type_validator = lambda a, b, c: None  # noqa: E731
+            type_validator = lambda a, b, c: None  # noqa: E731 [lambda-assignment]
         else:
             type_validator = type_validation_factory(type_hint, qualified_field_name)
 
@@ -1180,7 +1184,8 @@ def _make_datamodel(  # noqa: C901  # too complex but still readable and documen
         cls.__attrs_pre_init__ = cls.__pre_init__  # type: ignore[attr-defined]  # adding new attribute
 
     if "__attrs_post_init__" in cls.__dict__ and not hasattr(
-        cls.__attrs_post_init__, _DATAMODEL_TAG  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
+        cls.__attrs_post_init__,  # type: ignore[attr-defined]  # mypy doesn't know about __attr_post_init__
+        _DATAMODEL_TAG,
     ):
         raise TypeError(f"'{cls.__name__}' class contains forbidden custom '__attrs_post_init__'.")
     cls.__attrs_post_init__ = _make_post_init(has_post_init="__post_init__" in cls.__dict__)  # type: ignore[attr-defined]  # adding new attribute

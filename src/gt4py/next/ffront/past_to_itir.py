@@ -56,19 +56,19 @@ class ProgramLowering(
     >>> float64 = float
     >>> IDim = Dimension("IDim")
     >>>
-    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
-    ...    ...
+    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
-    ...    fieldop(inp, out=out)
+    ...     fieldop(inp, out=out)
     >>>
     >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
     >>> fieldop_def = ir.FunctionDefinition(
     ...     id="fieldop",
     ...     params=[ir.Sym(id="inp")],
-    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")])
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")]),
     ... )  # doctest: +SKIP
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
-    ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
+    >>> lowered = ProgramLowering.apply(
+    ...     parsed, [fieldop_def], grid_type=GridType.CARTESIAN
+    ... )  # doctest: +SKIP
     >>> type(lowered)  # doctest: +SKIP
     <class 'gt4py.next.iterator.ir.FencilDefinition'>
     >>> lowered.id  # doctest: +SKIP
@@ -231,7 +231,6 @@ class ProgramLowering(
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
-
         assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
