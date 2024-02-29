@@ -25,7 +25,7 @@ from gt4py.eve.utils import content_hash
 from gt4py.next import common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.otf import recipes, stages, workflow, transforms as otf_transforms
+from gt4py.next.otf import recipes, stages, transforms as otf_transforms, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -182,7 +182,9 @@ class GTFNBackendFactory(factory.Factory):
         transform_workflow = factory.SubFactory(otf_transforms.PastToItirFactory)
 
     executor = factory.LazyAttribute(
-        lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=o.transform_workflow.chain(o.otf_workflow), name=o.name)
+        lambda o: otf_compile_executor.OTFCompileExecutor(
+            otf_workflow=o.transform_workflow.chain(o.otf_workflow), name=o.name
+        )
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
 

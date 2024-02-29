@@ -18,13 +18,12 @@
 
 from __future__ import annotations
 
-import collections
 import dataclasses
 import functools
 import types
 import typing
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import Generator, Generic, TypeVar
 
 from devtools import debug
@@ -34,7 +33,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
-from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -61,8 +60,8 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.otf import transforms as otf_transforms, stages
-from gt4py.next.program_processors import processor_interface as ppi, otf_compile_executor
+from gt4py.next.otf import stages, transforms as otf_transforms
+from gt4py.next.program_processors import otf_compile_executor, processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -138,7 +137,9 @@ class Program:
         )
 
     def __post_init__(self):
-        function_closure_vars = otf_transforms._filter_closure_vars_by_type(self.closure_vars, GTCallable)
+        function_closure_vars = otf_transforms._filter_closure_vars_by_type(
+            self.closure_vars, GTCallable
+        )
         misnamed_functions = [
             f"{name} vs. {func.id}"
             for name, func in function_closure_vars.items()
@@ -221,9 +222,13 @@ class Program:
         offsets_and_dimensions = otf_transforms._filter_closure_vars_by_type(
             self._all_closure_vars, FieldOffset, Dimension
         )
-        grid_type = otf_transforms._deduce_grid_type(self.grid_type, offsets_and_dimensions.values())
+        grid_type = otf_transforms._deduce_grid_type(
+            self.grid_type, offsets_and_dimensions.values()
+        )
 
-        gt_callables = otf_transforms._filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
+        gt_callables = otf_transforms._filter_closure_vars_by_type(
+            self._all_closure_vars, GTCallable
+        ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
@@ -245,13 +250,14 @@ class Program:
         elif isinstance(self.backend, otf_compile_executor.OTFCompileExecutor):
             self.backend(
                 stages.PastClosure(
-                    pirs = stages.ProgramIRStage(
+                    pirs=stages.ProgramIRStage(
                         definition=self.definition,
                         past_node=self.past_node,
-                        grid_type=self.grid_type
+                        grid_type=self.grid_type,
                     ),
-                    args = [*rewritten_args, *size_args],
-                    kwargs = kwargs | {"offset_provider": offset_provider, "column_axis": self._column_axis}
+                    args=[*rewritten_args, *size_args],
+                    kwargs=kwargs
+                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
                 ),
                 *rewritten_args,
                 *size_args,

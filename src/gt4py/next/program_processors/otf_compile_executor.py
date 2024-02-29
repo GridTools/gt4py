@@ -36,9 +36,7 @@ class OTFCompileExecutor(ppi.ProgramExecutor):
     name: Optional[str] = None
 
     def __call__(self, program: stages.ProgramIRStage, *args, **kwargs: Any) -> None:
-        self.otf_workflow(program)(
-            *args, offset_provider=kwargs["offset_provider"]
-        )
+        self.otf_workflow(program)(*args, offset_provider=kwargs["offset_provider"])
         # self.otf_workflow(stages.ProgramCall(program, args, kwargs))(
         #     *args, offset_provider=kwargs["offset_provider"]
         # )
