@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import textwrap
 import types
 import typing
 import warnings
@@ -30,7 +31,7 @@ from devtools import debug
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
+from gt4py.eve import codegen, utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
 from gt4py.next.common import Dimension, GridType
@@ -663,14 +664,23 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
+        dims = set(
+            i for j in [type_info.extract_dims(arg_type) for arg_type in arg_types] for i in j
+        )
+        source_code = ProgamFuncGen.apply(past_node)
+        local_context = {dim.value: dim for dim in dims}
+        local_context[self.definition.__name__] = self.definition
+        exec(source_code, {}, local_context)
+        function_definition = local_context[past_node.id]
 
         self._program_cache[hash_] = Program(
             past_node=past_node,
             closure_vars=closure_vars,
-            definition=None,
+            definition=function_definition,
             backend=self.backend,
             grid_type=self.grid_type,
         )
+
         return self._program_cache[hash_]
 
     def __call__(
@@ -828,3 +838,23 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
+
+
+class ProgamFuncGen(codegen.TemplatedGenerator):
+    def visit_Program(self, node: past.Program, **kwargs) -> str:
+        imports = "from gt4py.next import *"
+        params = self.visit(node.params)
+        signature = ", ".join(params)
+        body = textwrap.indent("\n".join(self.visit(node.body)), prefix=" " * 4)
+        return f"{imports}\n\n\ndef {node.id}({signature}) -> None:\n{body}"
+
+    Symbol = codegen.FormatTemplate("{id}: {type}")
+
+    def visit_Call(self, node: past.Call, **kwargs) -> str:
+        args = ", ".join(self.visit(node.args))
+        kwargs_list = [f"{name}={self.visit(value)}" for name, value in node.kwargs.items()]
+        kwargs = ", ".join(kwargs_list)
+        params = ", ".join([args, kwargs])
+        return f"{self.visit(node.func)}({params})"
+
+    Name = codegen.FormatTemplate("{id}")
