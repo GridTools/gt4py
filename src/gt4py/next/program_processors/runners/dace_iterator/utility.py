@@ -71,15 +71,6 @@ def connectivity_identifier(name: str):
     return f"__connectivity_{name}"
 
 
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    return dace.Memlet.from_array(source_identifier, source_array)
-
-
-def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
-
-
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
     return sorted(enumerate(dims), key=lambda v: v[1].value)
 
