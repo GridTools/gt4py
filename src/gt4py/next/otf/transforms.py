@@ -99,20 +99,20 @@ def _deduce_grid_type(
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: stages.PastClosure) -> itir.FencilDefinition:
         closure_vars = _get_closure_vars_recursively(
-            get_closure_vars_from_function(inp.pirs.definition)
+            get_closure_vars_from_function(inp.definition)
         )
         offsets_and_dimensions = _filter_closure_vars_by_type(
-            _get_closure_vars_recursively(closure_vars), FieldOffset, common.Dimension
+            closure_vars, FieldOffset, common.Dimension
         )
-        grid_type = _deduce_grid_type(inp.pirs.grid_type, offsets_and_dimensions.values())
+        grid_type = _deduce_grid_type(inp.grid_type, offsets_and_dimensions.values())
 
         gt_callables = _filter_closure_vars_by_type(
-            _get_closure_vars_recursively(closure_vars), GTCallable
+            closure_vars, GTCallable
         ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramCall(
             ProgramLowering.apply(
-                inp.pirs.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+                inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
             ),
             inp.args,
             inp.kwargs,

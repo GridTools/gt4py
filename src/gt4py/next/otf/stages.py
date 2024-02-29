@@ -34,17 +34,10 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramIRStage:
-    """Program IR representation of a program together with the DSL function definition for it."""
-
+class PastClosure:
     definition: types.FunctionType
     past_node: past.Program
     grid_type: common.GridType
-
-
-@dataclasses.dataclass(frozen=True)
-class PastClosure:
-    pirs: ProgramIRStage
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 
