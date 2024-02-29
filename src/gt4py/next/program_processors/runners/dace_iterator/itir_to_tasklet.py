@@ -424,11 +424,7 @@ def builtin_neighbors(
             neighbor_value_node,
         )
     else:
-        sorted_dims = (
-            sorted(iterator.dimensions)
-            if transformer.use_field_canonical_representation
-            else iterator.dimensions
-        )
+        sorted_dims = transformer.get_sorted_field_dimensions(iterator.dimensions)
         data_access_index = ",".join(f"{dim}_v" for dim in sorted_dims)
         connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
         data_access_tasklet = state.add_tasklet(
@@ -919,6 +915,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         self.node_types = node_types
         self.use_field_canonical_representation = use_field_canonical_representation
 
+    def get_sorted_field_dimensions(self, dims: Sequence[str]):
+        return sorted(dims) if self.use_field_canonical_representation else dims
+
     def visit_FunctionDefinition(self, node: itir.FunctionDefinition, **kwargs):
         raise NotImplementedError()
 
@@ -1129,11 +1128,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             # already a list of ValueExpr
             return iterator
 
-        sorted_dims = (
-            sorted(iterator.dimensions)
-            if self.use_field_canonical_representation
-            else iterator.dimensions
-        )
+        sorted_dims = self.get_sorted_field_dimensions(iterator.dimensions)
         if all([dim in iterator.indices for dim in iterator.dimensions]):
             # The deref iterator has index values on all dimensions: the result will be a scalar
             args = [ValueExpr(iterator.field, iterator.dtype)] + [

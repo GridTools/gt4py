@@ -64,6 +64,7 @@ def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: b
         )
     if not use_field_canonical_representation:
         return arg.ndarray
+    # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
     sorted_dims = get_sorted_dims(arg.domain.dims)
     ndim = len(sorted_dims)
     dim_indices = [dim_index for dim_index, _ in sorted_dims]
@@ -287,7 +288,7 @@ def build_sdfg_from_itir(
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         cache_id:            The id of the cache entry, used to disambiguate stored sdfgs.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
-        use_field_canonical_representation: If `True`,  assume that the fields dimensions always are sorted alphabetically.
+        use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
