@@ -24,7 +24,6 @@ from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
-from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import stages, workflow
 from gt4py.next.otf.stages import ProgramCall
 
@@ -97,7 +96,7 @@ def _deduce_grid_type(
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
-    def __call__(self, inp: stages.PastClosure) -> itir.FencilDefinition:
+    def __call__(self, inp: stages.PastClosure) -> ProgramCall:
         closure_vars = _get_closure_vars_recursively(
             get_closure_vars_from_function(inp.pirs.definition)
         )
