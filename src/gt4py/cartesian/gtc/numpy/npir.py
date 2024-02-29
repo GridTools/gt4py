@@ -22,7 +22,7 @@ from gt4py.eve import datamodels
 
 # --- Misc ---
 class AxisName(eve.StrEnum):
-    I = "I"  # noqa: E741 (ambiguous variable name)
+    I = "I"  # noqa: E741 [ambiguous-variable-name]
     J = "J"
     K = "K"
 

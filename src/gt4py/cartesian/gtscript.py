@@ -22,7 +22,7 @@ import collections
 import inspect
 import numbers
 import types
-from typing import Callable, Dict, Optional, Type
+from typing import Callable, Dict, Type
 
 import numpy as np
 
@@ -94,7 +94,7 @@ builtins = {
 
 IGNORE_WHEN_INLINING = {*MATH_BUILTINS, "compile_assert"}
 
-__all__ = list(builtins) + ["function", "stencil", "lazy_stencil"]
+__all__ = [*list(builtins), "function", "stencil", "lazy_stencil"]
 
 __externals__ = "Placeholder"
 __gtscript__ = "Placeholder"
@@ -581,7 +581,7 @@ class Axis:
         return ShiftedAxis(self.name, -shift)
 
 
-I = Axis("I")
+I = Axis("I")  # noqa: E741 [ambiguous name]
 """I axes (parallel)."""
 
 J = Axis("J")
@@ -634,8 +634,8 @@ class _FieldDescriptor:
                     data_dims = dtype.shape
                 if dtype not in _VALID_DATA_TYPES:
                     raise ValueError("Invalid data type descriptor")
-            except:
-                raise ValueError("Invalid data type descriptor")
+            except ValueError as ex:
+                raise ValueError("Invalid data type descriptor") from ex
             self.dtype = np.dtype(dtype)
         self.axes = axes if isinstance(axes, collections.abc.Collection) else [axes]
         if data_dims:
@@ -651,7 +651,7 @@ class _FieldDescriptor:
         return None
 
     def __repr__(self):
-        args = f"dtype={repr(self.dtype)}, axes={repr(self.axes)}, data_dims={repr(self.data_dims)}"
+        args = f"dtype={self.dtype!r}, axes={self.axes!r}, data_dims={self.data_dims!r}"
         return f"_FieldDescriptor({args})"
 
     def __str__(self):
@@ -674,14 +674,14 @@ class _FieldDescriptorMaker:
         data_dims = ()
 
         if isinstance(field_spec, str) or not isinstance(field_spec, collections.abc.Collection):
-            # Field[dtype]
+            # Field[dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         elif _FieldDescriptorMaker._is_axes_spec(field_spec[0]):
-            # Field[axes, dtype]
+            # Field[axes, dtype] # noqa: ERA001 [commented-out-code]
             assert len(field_spec) == 2
             axes, dtype = field_spec
         elif len(field_spec) == 2 and not _FieldDescriptorMaker._is_axes_spec(field_spec[1]):
-            # Field[high_dimensional_dtype]
+            # Field[high_dimensional_dtype] # noqa: ERA001 [commented-out-code]
             dtype = field_spec
         else:
             raise ValueError("Invalid field type descriptor")
@@ -765,17 +765,17 @@ def compile_assert(expr):
 
 
 # GTScript builtins: math functions
-def abs(x):
+def abs(x):  # noqa: A001 [builtin-variable-shadowing]
     """Return the absolute value of the argument"""
     pass
 
 
-def min(x, y):
+def min(x, y):  # noqa: A001 [builtin-variable-shadowing]
     """Return the smallest of two or more arguments."""
     pass
 
 
-def max(x, y):
+def max(x, y):  # noqa: A001 [builtin-variable-shadowing]
     """Return the largest of two or more arguments."""
     pass
 

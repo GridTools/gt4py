@@ -48,7 +48,7 @@ class CastExpr(Expr):
 
 class Literal(Expr):
     value: str
-    type: str  # noqa: A003
+    type: str
 
 
 class IntegralConstant(Expr):
@@ -70,13 +70,13 @@ class FunCall(Expr):
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: list[Sym]
     expr: Expr
 
 
 class ScanPassDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: list[Sym]
     expr: Expr
     forward: bool
@@ -128,7 +128,7 @@ class ScanExecution(Node):
 
 
 class TemporaryAllocation(Node):
-    id: SymbolName  # noqa: A003
+    id: SymbolName
     dtype: str
     domain: Union[SymRef, CartesianDomain, UnstructuredDomain]
 
@@ -160,7 +160,7 @@ class TagDefinition(Node):
 
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
-    id: SymbolName  # noqa: A003
+    id: SymbolName
     params: list[Sym]
     function_definitions: list[
         Union[FunctionDefinition, ScanPassDefinition, ImperativeFunctionDefinition]

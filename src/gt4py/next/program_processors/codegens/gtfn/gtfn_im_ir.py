@@ -50,6 +50,6 @@ class ReturnStmt(Stmt):
 
 
 class ImperativeFunctionDefinition(Node, SymbolTableTrait):
-    id: Coerced[SymbolName]  # noqa: A003
+    id: Coerced[SymbolName]
     params: List[Sym]
     fun: List[Stmt]

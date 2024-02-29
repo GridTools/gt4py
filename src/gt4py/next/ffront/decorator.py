@@ -186,8 +186,8 @@ class Program:
 
         >>> import gt4py.next as gtx
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
-        ...     sample_field_operator(condition, out=out)  # noqa: F821
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ...     sample_field_operator(condition, out=out)  # noqa: F821 [undefined-name]
 
         Create a new program from `program` with the `condition` parameter set to `True`:
 
@@ -196,8 +196,8 @@ class Program:
         The resulting program is equivalent to
 
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
-        ...     sample_field_operator(condition=True, out=out)  # noqa: F821
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ...     sample_field_operator(condition=True, out=out)  # noqa: F821 [undefined-name]
 
         and can be executed without passing `condition`.
 
@@ -236,7 +236,8 @@ class Program:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
-                )
+                ),
+                stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
@@ -469,18 +470,18 @@ def program(
     Generate an implementation of a program from a Python function object.
 
     Examples:
-        >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        >>> @program  # noqa: F821 [undefined-name]  # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
-        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        >>> @program(backend="roundtrip")  # noqa: F821 [undefined-name]  # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
@@ -580,7 +581,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
-            return getattr(self, "__cached_itir")  # noqa: B009
+            return getattr(self, "__cached_itir")
 
         itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
 
@@ -598,9 +599,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-        hash_ = eve_utils.content_hash(
-            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
-        )
+        hash_ = eve_utils.content_hash((
+            tuple(arg_types),
+            tuple((name, arg) for name, arg in kwarg_types.items()),
+        ))
         try:
             return self._program_cache[hash_]
         except KeyError:
@@ -643,7 +645,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=params_decl + [out_sym],
+            params=[*params_decl, out_sym],
             body=[
                 past.Call(
                     func=past.Name(id=self.foast_node.id, location=loc),
@@ -729,14 +731,14 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
-        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> field_op(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
     """
 
@@ -802,9 +804,9 @@ def scan_operator(
         >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
         >>> inp = gtx.as_field([KDim], np.ones((10,)))
         >>> out = gtx.as_field([KDim], np.zeros((10,)))
-        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
         ... def scan_operator(carry: float, val: float) -> float:
-        ...     return carry+val
+        ...     return carry + val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
         >>> out.array()  # doctest: +SKIP
         array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])

@@ -18,7 +18,7 @@ import enum
 import numbers
 import types
 import typing
-from typing import Set  # noqa: F401 # imported but unused (used in exec() context)
+from typing import Set  # noqa: F401 [unused-import] used in exec() context
 from typing import (
     Any,
     Callable,

@@ -30,23 +30,23 @@ def deduce_stmt_return_kind(node: foast.Stmt) -> StmtReturnKind:
     Example with ``StmtReturnKind.UNCONDITIONAL_RETURN``::
 
         if cond:
-          return 1
+            return 1
         else:
-          return 2
+            return 2
 
     Example with ``StmtReturnKind.CONDITIONAL_RETURN``::
 
         if cond:
-          return 1
+            return 1
         else:
-          result = 2
+            result = 2
 
     Example with ``StmtReturnKind.NO_RETURN``::
 
         if cond:
-          result = 1
+            result = 1
         else:
-          result = 2
+            result = 2
     """
     if isinstance(node, foast.IfStmt):
         return_kinds = (

@@ -80,7 +80,7 @@ def test_fo_type_deduction_error():
     line = inspect.getframeinfo(inspect.currentframe()).lineno
 
     def field_operator_with_undeclared_symbol():
-        return undeclared_symbol  # noqa: F821  # undefined on purpose
+        return undeclared_symbol  # noqa: F821 [undefined-name]
 
     with pytest.raises(errors.DSLError) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(field_operator_with_undeclared_symbol)

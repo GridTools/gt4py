@@ -51,9 +51,9 @@ class nabla_setup:
         build_node_to_edge_connectivity(mesh)
         build_median_dual_mesh(mesh)
 
-        edges_per_node = max(
-            [mesh.nodes.edge_connectivity.cols(node) for node in range(0, fs_nodes.size)]
-        )
+        edges_per_node = max([
+            mesh.nodes.edge_connectivity.cols(node) for node in range(0, fs_nodes.size)
+        ])
 
         self.mesh = mesh
         self.fs_edges = fs_edges

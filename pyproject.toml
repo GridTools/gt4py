@@ -376,10 +376,13 @@ line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
 show-fixes = true
 # show-source = true
-target-version = 'py310'
+target-version = 'py38'
 
 [tool.ruff.format]
 docstring-code-format = true
+# Reevaluate once ruff adds support for single-line ellipsis in the stable style.
+# Track: https://github.com/astral-sh/ruff/issues/8678)
+preview = true
 
 [tool.ruff.lint]
 # # Rules sets:
@@ -393,14 +396,7 @@ docstring-code-format = true
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
 ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  # 'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905',  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-  # 'D1',  # Public code object needs docstring
-  # 'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'RUF100'
+  'E501'  # [line-too-long]
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
@@ -455,6 +451,7 @@ split-on-trailing-comma = false
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
+"src/gt4py/cartesian/*" = ["RUF012"]
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
 'src/gt4py/next/__init__.py' = ['F401']
 

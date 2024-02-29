@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Command line interface."""
+
 import functools
 import importlib
 import pathlib
@@ -152,9 +153,7 @@ class BackendOption(click.ParamType):
         try:
             value = self._convert_value(backend.options[name]["type"], value, param, ctx)
         except click.BadParameter as conversion_error:
-            self.fail(
-                f'Invalid value for backend option "{name}": {conversion_error.message}'  # noqa: B306
-            )
+            self.fail(f'Invalid value for backend option "{name}": {conversion_error.message}')
         return (name, value)
 
 

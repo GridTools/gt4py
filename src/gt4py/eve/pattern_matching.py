@@ -14,7 +14,6 @@
 
 """Basic pattern matching utilities."""
 
-
 from __future__ import annotations
 
 from functools import singledispatch
@@ -31,9 +30,9 @@ class ObjectPattern:
 
     Examples:
         >>> class Foo:
-        ...    def __init__(self, bar, baz):
-        ...        self.bar = bar
-        ...        self.baz = baz
+        ...     def __init__(self, bar, baz):
+        ...         self.bar = bar
+        ...         self.baz = baz
         >>> assert ObjectPattern(Foo, bar=1).match(Foo(1, 2))
     """
 
@@ -53,16 +52,16 @@ class ObjectPattern:
         if raise_exception:
             diffs = [*get_differences(self, other)]
             if len(diffs) > 0:
-                diffs_str = "\n  ".join(
-                    [f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs]
-                )
+                diffs_str = "\n  ".join([
+                    f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs
+                ])
                 raise ValueError(f"Object and pattern don't match:\n  {diffs_str}")
             return True
 
         return next(get_differences(self, other), None) is None
 
     def __str__(self) -> str:
-        attrs_str = ", ".join([f"{str(k)}={str(v)}" for k, v in self.fields.items()])
+        attrs_str = ", ".join([f"{k!s}={v!s}" for k, v in self.fields.items()])
         return f"{self.cls.__name__}({attrs_str})"
 
 

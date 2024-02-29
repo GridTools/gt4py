@@ -23,7 +23,7 @@ from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
+        I = 0  # noqa: E741 [ambiguous-variable-name]
         J = 1
         K = 2
 
@@ -436,9 +436,9 @@ class FrameTuple(tuple):
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_func = right_func or left_func
-        return type(self)(
-            [tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)]
-        )
+        return type(self)([
+            tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)
+        ])
 
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])

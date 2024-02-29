@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 """Stencil Object that allows for deferred building."""
+
 from typing import TYPE_CHECKING, Any, Dict
 
 from cached_property import cached_property
