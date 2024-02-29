@@ -142,7 +142,11 @@ def native_functions(field_a: Field3D, field_b: Field3D):
         field_b = (
             trunc_res
             if isfinite(trunc_res)
-            else field_a if isinf(trunc_res) else field_b if isnan(trunc_res) else 0.0
+            else field_a
+            if isinf(trunc_res)
+            else field_b
+            if isnan(trunc_res)
+            else 0.0
         )
 
 

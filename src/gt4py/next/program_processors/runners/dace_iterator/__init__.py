@@ -22,13 +22,11 @@ import numpy as np
 from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
-from dace.transformation.interstate import RefineNestedAccess
 
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
-import gt4py.next.program_processors.otf_compile_executor as otf_exec
 import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next import common
+from gt4py.next import backend, common
 from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -43,27 +41,37 @@ except ImportError:
     cp = None
 
 
-def get_sorted_dim_ranges(domain: common.Domain) -> Sequence[common.FiniteUnitRange]:
-    assert common.Domain.is_finite(domain)
-    sorted_dims = get_sorted_dims(domain.dims)
-    return [domain.ranges[dim_index] for dim_index, _ in sorted_dims]
-
-
 """ Default build configuration in DaCe backend """
 _build_type = "Release"
+_default_on_gpu = False
+_default_use_field_canonical_representation = False
 
 
-def convert_arg(arg: Any):
-    if common.is_field(arg):
-        sorted_dims = get_sorted_dims(arg.domain.dims)
-        ndim = len(sorted_dims)
-        dim_indices = [dim_index for dim_index, _ in sorted_dims]
-        if isinstance(arg.ndarray, np.ndarray):
-            return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
-        else:
-            assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
-            return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
-    return arg
+def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
+    if not common.is_field(arg):
+        return arg
+    # field domain offsets are not supported
+    non_zero_offsets = [
+        (dim, dim_range)
+        for dim, dim_range in zip(arg.domain.dims, arg.domain.ranges)
+        if dim_range.start != 0
+    ]
+    if non_zero_offsets:
+        dim, dim_range = non_zero_offsets[0]
+        raise RuntimeError(
+            f"Field '{sdfg_param}' passed as array slice with offset {dim_range.start} on dimension {dim.value}."
+        )
+    if not use_field_canonical_representation:
+        return arg.ndarray
+    # the canonical representation requires alphabetical ordering of the dimensions in field domain definition
+    sorted_dims = get_sorted_dims(arg.domain.dims)
+    ndim = len(sorted_dims)
+    dim_indices = [dim_index for dim_index, _ in sorted_dims]
+    if isinstance(arg.ndarray, np.ndarray):
+        return np.moveaxis(arg.ndarray, range(ndim), dim_indices)
+    else:
+        assert cp is not None and isinstance(arg.ndarray, cp.ndarray)
+        return cp.moveaxis(arg.ndarray, range(ndim), dim_indices)
 
 
 def preprocess_program(
@@ -97,9 +105,14 @@ def preprocess_program(
     return fencil_definition, tmps
 
 
-def get_args(sdfg: dace.SDFG, args: Sequence[Any]) -> dict[str, Any]:
+def get_args(
+    sdfg: dace.SDFG, args: Sequence[Any], use_field_canonical_representation: bool
+) -> dict[str, Any]:
     sdfg_params: Sequence[str] = sdfg.arg_names
-    return {sdfg_param: convert_arg(arg) for sdfg_param, arg in zip(sdfg_params, args)}
+    return {
+        sdfg_param: convert_arg(arg, sdfg_param, use_field_canonical_representation)
+        for sdfg_param, arg in zip(sdfg_params, args)
+    }
 
 
 def _ensure_is_on_device(
@@ -108,7 +121,8 @@ def _ensure_is_on_device(
     if device == dace.dtypes.DeviceType.GPU:
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
             )
             return cp.asarray(connectivity_arg)
     return connectivity_arg
@@ -140,20 +154,6 @@ def get_shape_args(
     return shape_args
 
 
-def get_offset_args(
-    sdfg: dace.SDFG,
-    args: Sequence[Any],
-) -> Mapping[str, int]:
-    sdfg_arrays: Mapping[str, dace.data.Array] = sdfg.arrays
-    sdfg_params: Sequence[str] = sdfg.arg_names
-    return {
-        str(sym): -drange.start
-        for sdfg_param, arg in zip(sdfg_params, args)
-        if common.is_field(arg)
-        for sym, drange in zip(sdfg_arrays[sdfg_param].offset, get_sorted_dim_ranges(arg.domain))
-    }
-
-
 def get_stride_args(
     arrays: Mapping[str, dace.data.Array], args: Mapping[str, Any]
 ) -> Mapping[str, int]:
@@ -165,8 +165,13 @@ def get_stride_args(
                 raise ValueError(
                     f"Stride ({stride_size} bytes) for argument '{sym}' must be a multiple of item size ({value.itemsize} bytes)."
                 )
-            stride_args[str(sym)] = stride
-
+            if isinstance(sym, dace.symbol):
+                assert sym.name not in stride_args
+                stride_args[str(sym)] = stride
+            elif sym != stride:
+                raise RuntimeError(
+                    f"Expected stride {arrays[name].strides} for arg {name}, got {value.strides}."
+                )
     return stride_args
 
 
@@ -215,29 +220,30 @@ def get_cache_id(
     return m.hexdigest()
 
 
-def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
+def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
     This function can handle the same arguments that are passed to `run_dace_iterator()`.
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
-    """  # noqa: D401
+    """
     offset_provider = kwargs["offset_provider"]
-    on_gpu = kwargs.get("on_gpu", False)
+    on_gpu = kwargs.get("on_gpu", _default_on_gpu)
+    use_field_canonical_representation = kwargs.get(
+        "use_field_canonical_representation", _default_use_field_canonical_representation
+    )
 
     neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
-    sdfg_sig = sdfg.signature_arglist(with_types=False)
-    dace_args = get_args(sdfg, args)
+    dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
     dace_conn_strides = get_stride_args(sdfg.arrays, dace_conn_args)
-    dace_offsets = get_offset_args(sdfg, args)
     all_args = {
         **dace_args,
         **dace_conn_args,
@@ -245,11 +251,14 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, **kwargs) -> dict[str, Any]:
         **dace_conn_shapes,
         **dace_strides,
         **dace_conn_strides,
-        **dace_offsets,
     }
-    expected_args = {key: all_args[key] for key in sdfg_sig}
 
-    return expected_args
+    if check_args:
+        # return only arguments expected in SDFG signature (note hat `signature_arglist` takes time)
+        sdfg_sig = sdfg.signature_arglist(with_types=False)
+        return {key: all_args[key] for key in sdfg_sig}
+
+    return all_args
 
 
 def build_sdfg_from_itir(
@@ -263,6 +272,7 @@ def build_sdfg_from_itir(
     load_sdfg_from_file: bool = False,
     cache_id: Optional[str] = None,
     save_sdfg: bool = True,
+    use_field_canonical_representation: bool = True,
 ) -> dace.SDFG:
     """Translate a Fencil into an SDFG.
 
@@ -277,6 +287,7 @@ def build_sdfg_from_itir(
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         cache_id:            The id of the cache entry, used to disambiguate stored sdfgs.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
+        use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
@@ -294,20 +305,21 @@ def build_sdfg_from_itir(
 
     # visit ITIR and generate SDFG
     program, tmps = preprocess_program(program, offset_provider, lift_mode)
-    sdfg_genenerator = ItirToSDFG(arg_types, offset_provider, tmps, column_axis)
+    sdfg_genenerator = ItirToSDFG(
+        arg_types, offset_provider, tmps, use_field_canonical_representation, column_axis
+    )
     sdfg = sdfg_genenerator.visit(program)
     if sdfg is None:
         raise RuntimeError(f"Visit failed for program {program.id}.")
-    elif tmps:
-        # This pass is needed to avoid transformation errors in SDFG inlining, because temporaries are using offsets
-        sdfg.apply_transformations_repeated(RefineNestedAccess)
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
-            _, frameinfo = warnings.warn(
-                f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
-            ), getframeinfo(
-                currentframe()  # type: ignore
+            _, frameinfo = (
+                warnings.warn(
+                    f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg.",
+                    stacklevel=2,
+                ),
+                getframeinfo(currentframe()),  # type: ignore[arg-type]
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
                 start_line=frameinfo.lineno,
@@ -328,6 +340,8 @@ def build_sdfg_from_itir(
         symbols: dict[str, int] = {}
         device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
         sdfg = autoopt.auto_optimize(sdfg, device, symbols=symbols, use_gpu_storage=on_gpu)
+    elif on_gpu:
+        autoopt.apply_gpu_storage(sdfg)
 
     if on_gpu:
         sdfg.apply_gpu_transformations()
@@ -344,9 +358,12 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     build_cache = kwargs.get("build_cache", None)
     compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
     build_type = kwargs.get("build_type", "RelWithDebInfo")
-    on_gpu = kwargs.get("on_gpu", False)
+    on_gpu = kwargs.get("on_gpu", _default_on_gpu)
     auto_optimize = kwargs.get("auto_optimize", True)
     lift_mode = kwargs.get("lift_mode", itir_transforms.LiftMode.FORCE_INLINE)
+    use_field_canonical_representation = kwargs.get(
+        "use_field_canonical_representation", _default_use_field_canonical_representation
+    )
     # ITIR parameters
     column_axis = kwargs.get("column_axis", None)
     offset_provider = kwargs["offset_provider"]
@@ -375,6 +392,7 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
             load_sdfg_from_file=load_sdfg_from_file,
             cache_id=cache_id,
             save_sdfg=save_sdfg,
+            use_field_canonical_representation=use_field_canonical_representation,
         )
 
         sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
@@ -390,12 +408,12 @@ def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
         if build_cache is not None:
             build_cache[cache_id] = sdfg_program
 
-    expected_args = get_sdfg_args(sdfg, *args, **kwargs)
+    sdfg_args = get_sdfg_args(sdfg, *args, **kwargs)
 
     with dace.config.temporary_config():
         dace.config.Config.set("compiler", "allow_view_arguments", value=True)
         dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg_program(**expected_args)
+        sdfg_program(**sdfg_args)
 
 
 def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
@@ -418,7 +436,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     )
 
 
-run_dace_cpu = otf_exec.OTFBackend(
+run_dace_cpu = backend.Backend(
     executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
@@ -441,7 +459,7 @@ else:
         raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
 
 
-run_dace_gpu = otf_exec.OTFBackend(
+run_dace_gpu = backend.Backend(
     executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )

@@ -38,7 +38,7 @@ import next_tests
 @pytest.fixture(
     params=[
         transforms.LiftMode.FORCE_INLINE,
-        transforms.LiftMode.FORCE_TEMPORARIES,
+        transforms.LiftMode.USE_TEMPORARIES,
         transforms.LiftMode.SIMPLE_HEURISTIC,
     ],
     ids=lambda p: f"lift_mode={p.name}",

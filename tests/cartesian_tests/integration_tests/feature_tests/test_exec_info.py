@@ -49,7 +49,10 @@ class TestExecInfo:
 
     @staticmethod
     def diffusion_def(
-        in_phi: gtscript.Field[float], out_phi: gtscript.Field[float], *, alpha: float  # type: ignore
+        in_phi: gtscript.Field[float],
+        out_phi: gtscript.Field[float],
+        *,
+        alpha: float,  # type: ignore
     ):
         with computation(PARALLEL), interval(...):  # type: ignore  # noqa
             lap1 = (

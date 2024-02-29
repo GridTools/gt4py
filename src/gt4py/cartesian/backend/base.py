@@ -271,7 +271,9 @@ class BaseBackend(Backend):
         unknown_options = set(options.backend_opts.keys()) - set(self.options.keys())
         if unknown_options:
             warnings.warn(
-                f"Unknown options '{unknown_options}' for backend '{self.name}'", RuntimeWarning
+                f"Unknown options '{unknown_options}' for backend '{self.name}'",
+                RuntimeWarning,
+                stacklevel=2,
             )
 
     def make_module(
@@ -409,8 +411,9 @@ class BasePyExtBackend(BaseBackend):
 
         assert module_name == qualified_pyext_name
 
-        self.builder.with_backend_data(
-            {"pyext_module_name": module_name, "pyext_file_path": file_path}
-        )
+        self.builder.with_backend_data({
+            "pyext_module_name": module_name,
+            "pyext_file_path": file_path,
+        })
 
         return module_name, file_path

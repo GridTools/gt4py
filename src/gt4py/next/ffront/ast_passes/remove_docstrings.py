@@ -27,17 +27,15 @@ class RemoveDocstrings(ast.NodeTransformer):
     >>> def example_docstring():
     ...     a = 1
     ...     "This is a docstring"
+    ...
     ...     def example_docstring_2():
-    ...          a = 2.0
-    ...          "This is a new docstring"
-    ...          return a
+    ...         a = 2.0
+    ...         "This is a new docstring"
+    ...         return a
+    ...
     ...     a = example_docstring_2()
     ...     return a
-    >>> print(ast.unparse(
-    ...     RemoveDocstrings.apply(
-    ...         ast.parse(inspect.getsource(example_docstring))
-    ...     )
-    ... ))
+    >>> print(ast.unparse(RemoveDocstrings.apply(ast.parse(inspect.getsource(example_docstring)))))
     def example_docstring():
         a = 1
     <BLANKLINE>

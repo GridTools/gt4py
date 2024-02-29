@@ -387,7 +387,7 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
 OFFSET_TAG_DTYPE = Primitive(name="offset_tag")
 
-# Some helpers to define the builtins’ types
+# Some helpers to define the builtins' types
 T0 = TypeVar.fresh()
 T1 = TypeVar.fresh()
 T2 = TypeVar.fresh()
@@ -558,16 +558,16 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
         current_loc_out = current_loc_in
         for arg in shift_args:
             if not isinstance(arg, ir.OffsetLiteral):
-                # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+                # probably some dynamically computed offset, thus we assume it's a number not an axis and just ignore it (see comment below)
                 continue
             offset = arg.value
             if isinstance(offset, int):
-                continue  # ignore ‘application’ of (partial) shifts
+                continue  # ignore 'application' of (partial) shifts
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
                 if isinstance(axis, gtx.Dimension):
-                    continue  # Cartesian shifts don’t change the location type
+                    continue  # Cartesian shifts don't change the location type
                 elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
@@ -618,24 +618,23 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         result = TypeVar.fresh()
         if node.kind:
             kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
-            self.constraints.add(
-                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
-            )
+            self.constraints.add((
+                Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()),
+                result,
+            ))
         if node.dtype:
             assert node.dtype is not None
             dtype: Primitive | List = Primitive(name=node.dtype[0])
             if node.dtype[1]:
                 dtype = List(dtype=dtype)
-            self.constraints.add(
-                (
-                    Val(
-                        dtype=dtype,
-                        current_loc=TypeVar.fresh(),
-                        defined_loc=TypeVar.fresh(),
-                    ),
-                    result,
-                )
-            )
+            self.constraints.add((
+                Val(
+                    dtype=dtype,
+                    current_loc=TypeVar.fresh(),
+                    defined_loc=TypeVar.fresh(),
+                ),
+                result,
+            ))
         return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
@@ -751,18 +750,16 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         dtype_ = TypeVar.fresh()
         size = TypeVar.fresh()
         it = self.visit(node.args[1], **kwargs)
-        self.constraints.add(
-            (
-                it,
-                Val(
-                    kind=Iterator(),
-                    dtype=dtype_,
-                    size=size,
-                    current_loc=current_loc_in,
-                    defined_loc=current_loc_out,
-                ),
-            )
-        )
+        self.constraints.add((
+            it,
+            Val(
+                kind=Iterator(),
+                dtype=dtype_,
+                size=size,
+                current_loc=current_loc_in,
+                defined_loc=current_loc_out,
+            ),
+        ))
         lst = List(
             dtype=dtype_,
             max_length=max_length,
@@ -780,16 +777,14 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
         size = TypeVar.fresh()
 
-        self.constraints.add(
-            (
-                val_arg_type,
-                Val(
-                    kind=Value(),
-                    dtype=TypeVar.fresh(),
-                    size=size,
-                ),
-            )
-        )
+        self.constraints.add((
+            val_arg_type,
+            Val(
+                kind=Value(),
+                dtype=TypeVar.fresh(),
+                size=size,
+            ),
+        ))
 
         return Val(
             kind=Value(),
@@ -832,12 +827,10 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_domain(self, node: ir.FunCall, **kwargs) -> Type:
         for arg in node.args:
-            self.constraints.add(
-                (
-                    Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-                    self.visit(arg, **kwargs),
-                )
-            )
+            self.constraints.add((
+                Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+                self.visit(arg, **kwargs),
+            ))
         return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
 
     def _visit_cartesian_domain(self, node: ir.FunCall, **kwargs) -> Type:
@@ -891,50 +884,45 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         output = self.visit(node.output, **kwargs)
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
-        self.constraints.add(
-            (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
-        )
-        self.constraints.add(
-            (
-                output,
-                Val(
-                    kind=Iterator(),
-                    dtype=output_dtype,
-                    size=Column(),
-                    defined_loc=output_loc,
-                ),
-            )
-        )
+        self.constraints.add((
+            domain,
+            Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()),
+        ))
+        self.constraints.add((
+            output,
+            Val(
+                kind=Iterator(),
+                dtype=output_dtype,
+                size=Column(),
+                defined_loc=output_loc,
+            ),
+        ))
 
         inputs: list[Type] = self.visit(node.inputs, **kwargs)
         stencil_params = []
         for input_ in inputs:
             stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
-            self.constraints.add(
-                (
-                    input_,
-                    Val(
-                        kind=stencil_param.kind,
-                        dtype=stencil_param.dtype,
-                        size=stencil_param.size,
-                        # closure input and stencil param differ in `current_loc`
-                        current_loc=ANYWHERE,
-                        # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
-                        defined_loc=stencil_param.defined_loc,
-                    ),
-                )
-            )
+            self.constraints.add((
+                input_,
+                Val(
+                    kind=stencil_param.kind,
+                    dtype=stencil_param.dtype,
+                    size=stencil_param.size,
+                    # closure input and stencil param differ in `current_loc`
+                    current_loc=ANYWHERE,
+                    # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
+                    defined_loc=stencil_param.defined_loc,
+                ),
+            ))
             stencil_params.append(stencil_param)
 
-        self.constraints.add(
-            (
-                stencil,
-                FunctionType(
-                    args=Tuple.from_elems(*stencil_params),
-                    ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
-                ),
-            )
-        )
+        self.constraints.add((
+            stencil,
+            FunctionType(
+                args=Tuple.from_elems(*stencil_params),
+                ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
+            ),
+        ))
         return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
     def visit_FencilWithTemporaries(self, node: FencilWithTemporaries, **kwargs):
@@ -967,14 +955,14 @@ def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
             child_node.annex.type = types[id(child_node)]
-        except KeyError:
+        except KeyError as ex:
             if not (
                 isinstance(child_node, ir.SymRef)
                 and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
                     f"Expected a type to be inferred for node '{child_node}', but none was found."
-                )
+                ) from ex
 
 
 def infer_all(
@@ -1005,9 +993,10 @@ def infer_all(
     )
 
     if reindex:
-        unified_types, unsatisfiable_constraints = reindex_vars(
-            (unified_types, unsatisfiable_constraints)
-        )
+        unified_types, unsatisfiable_constraints = reindex_vars((
+            unified_types,
+            unsatisfiable_constraints,
+        ))
 
     result = {
         id_: unified_type

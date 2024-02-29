@@ -54,8 +54,8 @@ def as_dace_type(type_: ts.ScalarType):
 def as_scalar_type(typestr: str) -> ts.ScalarType:
     try:
         kind = getattr(ts.ScalarKind, typestr.upper())
-    except AttributeError:
-        raise ValueError(f"Data type {typestr} not supported.")
+    except AttributeError as ex:
+        raise ValueError(f"Data type {typestr} not supported.") from ex
     return ts.ScalarType(kind)
 
 
@@ -69,15 +69,6 @@ def filter_neighbor_tables(offset_provider: dict[str, Any]):
 
 def connectivity_identifier(name: str):
     return f"__connectivity_{name}"
-
-
-def create_memlet_full(source_identifier: str, source_array: dace.data.Array):
-    return dace.Memlet.from_array(source_identifier, source_array)
-
-
-def create_memlet_at(source_identifier: str, index: tuple[str, ...]):
-    subset = ", ".join(index)
-    return dace.Memlet(data=source_identifier, subset=subset)
 
 
 def get_sorted_dims(dims: Sequence[Dimension]) -> Sequence[tuple[int, Dimension]]:
@@ -180,8 +171,9 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
-    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
+
     return f"{prefix}_{unique_id}"
 
 
@@ -198,7 +190,7 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
-        itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
-        )
+        itertools.chain.from_iterable([
+            flatten_list(e) if e.__class__ == list else [e] for e in node_list
+        ])
     )

@@ -18,8 +18,9 @@ from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
 from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import program_ast as past, type_specifications as ts_ffront
+from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -55,19 +56,19 @@ class ProgramLowering(
     >>> float64 = float
     >>> IDim = Dimension("IDim")
     >>>
-    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]:
-    ...    ...
+    >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
-    ...    fieldop(inp, out=out)
+    ...     fieldop(inp, out=out)
     >>>
     >>> parsed = ProgramParser.apply_to_function(program)  # doctest: +SKIP
     >>> fieldop_def = ir.FunctionDefinition(
     ...     id="fieldop",
     ...     params=[ir.Sym(id="inp")],
-    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")])
+    ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")]),
     ... )  # doctest: +SKIP
-    >>> lowered = ProgramLowering.apply(parsed, [fieldop_def],
-    ...     grid_type=GridType.CARTESIAN)  # doctest: +SKIP
+    >>> lowered = ProgramLowering.apply(
+    ...     parsed, [fieldop_def], grid_type=GridType.CARTESIAN
+    ... )  # doctest: +SKIP
     >>> type(lowered)  # doctest: +SKIP
     <class 'gt4py.next.iterator.ir.FencilDefinition'>
     >>> lowered.id  # doctest: +SKIP
@@ -141,16 +142,39 @@ class ProgramLowering(
 
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
-        lowered_args, lowered_kwargs = type_info.canonicalize_arguments(
+        args, node_kwargs = type_info.canonicalize_arguments(
             node.func.type,
-            self.visit(node.args, **kwargs),
-            self.visit(node_kwargs, **kwargs),
+            node.args,
+            node_kwargs,
             use_signature_ordering=True,
         )
 
+        lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
+
+        stencil_params = []
+        stencil_args = []
+        for i, arg in enumerate([*args, *node_kwargs]):
+            stencil_params.append(f"__stencil_arg{i}")
+            if isinstance(arg.type, ts.TupleType):
+                # convert into tuple of iterators
+                stencil_args.append(
+                    lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
+                )
+            else:
+                stencil_args.append(f"__stencil_arg{i}")
+
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # scan operators return an iterator of tuples, just deref directly
+            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
+        else:
+            # field operators return a tuple of iterators, deref element-wise
+            stencil_body = lowering_utils.process_elements(
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+            )
+
         return itir.StencilClosure(
             domain=lowered_domain,
-            stencil=itir.SymRef(id=node.func.id),
+            stencil=im.lambda_(*stencil_params)(stencil_body),
             inputs=[*lowered_args, *lowered_kwargs.values()],
             output=output,
             location=node.location,
@@ -207,8 +231,6 @@ class ProgramLowering(
         node_domain: Optional[past.Expr],
         slices: Optional[list[past.Slice]] = None,
     ) -> itir.FunCall:
-        domain_args = []
-
         assert isinstance(out_field.type, ts.TypeSpec)
         out_field_types = type_info.primitive_constituents(out_field.type).to_list()
         out_dims = cast(ts.FieldType, out_field_types[0]).dims
@@ -222,6 +244,8 @@ class ProgramLowering(
                 " caught in type deduction already."
             )
 
+        domain_args = []
+        domain_args_kind = []
         for dim_i, dim in enumerate(out_dims):
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
@@ -247,11 +271,17 @@ class ProgramLowering(
                     args=[itir.AxisLiteral(value=dim.value), lower, upper],
                 )
             )
+            domain_args_kind.append(dim.kind)
 
         if self.grid_type == GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
         elif self.grid_type == GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
+            # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
+            if domain_args_kind[0] == DimensionKind.VERTICAL:
+                assert len(domain_args) == 2
+                assert domain_args_kind[1] == DimensionKind.HORIZONTAL
+                domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
 

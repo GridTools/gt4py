@@ -137,7 +137,7 @@ class UnrollVectorAssignments(IRNodeMapper):
     def _nested_list_dim(self, a: List) -> List[int]:
         if not isinstance(a, list):
             return []
-        return [len(a)] + self._nested_list_dim(a[0])
+        return [len(a), *self._nested_list_dim(a[0])]
 
     def visit_Assign(
         self, node: Assign, *, fields_decls: Dict[str, FieldDecl], **kwargs
@@ -181,7 +181,7 @@ class UnrollVectorExpressions(IRNodeMapper):
         # if the expression is just a scalar broadcast to the expected dimensions
         if not isinstance(result, list):
             result = functools.reduce(
-                lambda val, len: [val for _ in range(len)], reversed(expected_dim), result
+                lambda val, len_: [val for _ in range(len_)], reversed(expected_dim), result
             )
         return result
 

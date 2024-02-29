@@ -86,14 +86,12 @@ def _get_expansion_priority_cpu(node: StencilComputation):
     expansion_priority = []
     if node.has_splittable_regions():
         expansion_priority.append(["Sections", "Stages", "I", "J", "K"])
-    expansion_priority.extend(
-        [
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
-            ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
-            ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
-            ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
-        ]
-    )
+    expansion_priority.extend([
+        ["TileJ", "TileI", "IMap", "JMap", "Sections", "K", "Stages"],
+        ["TileJ", "TileI", "IMap", "JMap", "Sections", "Stages", "K"],
+        ["TileJ", "TileI", "Sections", "Stages", "IMap", "JMap", "K"],
+        ["TileJ", "TileI", "Sections", "K", "Stages", "JMap", "IMap"],
+    ])
     return expansion_priority
 
 
@@ -489,18 +487,16 @@ class DaCeComputationCodegen:
                         threadlocal_fmt,
                         "}}",
                     ]
-                    res.extend(
-                        [
-                            fmt.format(
-                                name=name,
-                                sdfg_id=array_sdfg.sdfg_id,
-                                dtype=array.dtype.ctype,
-                                size=f"omp_max_threads * ({array.total_size})",
-                                local_size=array.total_size,
-                            )
-                            for fmt in fmts
-                        ]
-                    )
+                    res.extend([
+                        fmt.format(
+                            name=name,
+                            sdfg_id=array_sdfg.sdfg_id,
+                            dtype=array.dtype.ctype,
+                            size=f"omp_max_threads * ({array.total_size})",
+                            local_size=array.total_size,
+                        )
+                        for fmt in fmts
+                    ])
         return res
 
     @staticmethod
@@ -520,7 +516,7 @@ class DaCeComputationCodegen:
                     break
             for i, line in enumerate(lines):
                 if "#include <dace/dace.h>" in line:
-                    cuda_code = [co.clean_code for co in code_objects if co.title == "CUDA"][0]
+                    cuda_code = next(co.clean_code for co in code_objects if co.title == "CUDA")
                     lines = lines[0:i] + cuda_code.split("\n") + lines[i + 1 :]
                     break
 
@@ -544,9 +540,14 @@ class DaCeComputationCodegen:
     def apply(cls, stencil_ir: gtir.Stencil, builder: "StencilBuilder", sdfg: dace.SDFG):
         self = cls()
         with dace.config.temporary_config():
+            # To prevent conflict with 3rd party usage of DaCe config always make sure that any
+            #  changes be under the temporary_config manager
             if gt_config.GT4PY_USE_HIP:
                 dace.config.Config.set("compiler", "cuda", "backend", value="hip")
             dace.config.Config.set("compiler", "cuda", "max_concurrent_streams", value=-1)
+            dace.config.Config.set(
+                "compiler", "cuda", "default_block_size", value=gt_config.DACE_DEFAULT_BLOCK_SIZE
+            )
             dace.config.Config.set("compiler", "cpu", "openmp_sections", value=False)
             code_objects = sdfg.generate_code()
         is_gpu = "CUDA" in {co.title for co in code_objects}
@@ -612,22 +613,18 @@ class DaCeComputationCodegen:
             # api field strides
             fmt = "gt::sid::get_stride<{dim}>(gt::sid::get_strides(__{name}_sid))"
 
-            symbols.update(
-                {
-                    f"__{name}_{dim}_stride": fmt.format(
-                        dim=f"gt::stencil::dim::{dim.lower()}", name=name
-                    )
-                    for dim in dims
-                }
-            )
-            symbols.update(
-                {
-                    f"__{name}_d{dim}_stride": fmt.format(
-                        dim=f"gt::integral_constant<int, {3 + dim}>", name=name
-                    )
-                    for dim in range(data_ndim)
-                }
-            )
+            symbols.update({
+                f"__{name}_{dim}_stride": fmt.format(
+                    dim=f"gt::stencil::dim::{dim.lower()}", name=name
+                )
+                for dim in dims
+            })
+            symbols.update({
+                f"__{name}_d{dim}_stride": fmt.format(
+                    dim=f"gt::integral_constant<int, {3 + dim}>", name=name
+                )
+                for dim in range(data_ndim)
+            })
 
             # api field pointers
             fmt = """gt::sid::multi_shifted(
@@ -741,14 +738,12 @@ class DaCeBindingsCodegen:
 
 class DaCePyExtModuleGenerator(PyExtModuleGenerator):
     def generate_imports(self):
-        return "\n".join(
-            [
-                *super().generate_imports().splitlines(),
-                "import dace",
-                "import copy",
-                "from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject",
-            ]
-        )
+        return "\n".join([
+            *super().generate_imports().splitlines(),
+            "import dace",
+            "import copy",
+            "from gt4py.cartesian.backend.dace_stencil_object import DaCeStencilObject",
+        ])
 
     def generate_base_class_name(self):
         return "DaCeStencilObject"

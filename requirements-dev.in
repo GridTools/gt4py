@@ -9,7 +9,6 @@ clang-format>=9.0
 cogapp>=3.3
 coverage[toml]>=5.0
 darglint>=1.6
-factory-boy>=3.1
 flake8>=5.0.4
 flake8-bugbear>=20.11.1
 flake8-builtins>=1.5.3

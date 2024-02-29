@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Callable, Union
+import typing
+from typing import Callable, Iterable, Union
 
 from gt4py._core import definitions as core_defs
 from gt4py.next.iterator import ir as itir
@@ -242,16 +243,29 @@ class let:
     --------
     >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
     '(λ(a) → a)(b)'
-    >>> str(let("a", 1,
-    ...         "b", 2
-    ... )(plus("a", "b")))
+    >>> str(let(("a", 1), ("b", 2))(plus("a", "b")))
     '(λ(a, b) → a + b)(1, 2)'
     """
 
-    def __init__(self, *vars_and_values):
-        assert len(vars_and_values) % 2 == 0
-        self.vars = vars_and_values[0::2]
-        self.init_forms = vars_and_values[1::2]
+    @typing.overload
+    def __init__(self, var: str | itir.Sym, init_form: itir.Expr | str): ...
+
+    @typing.overload
+    def __init__(self, *args: Iterable[tuple[str | itir.Sym, itir.Expr | str]]): ...
+
+    def __init__(self, *args):
+        if all(isinstance(arg, tuple) and len(arg) == 2 for arg in args):
+            assert isinstance(args, tuple)
+            assert all(isinstance(arg, tuple) and len(arg) == 2 for arg in args)
+            self.vars = [var for var, _ in args]
+            self.init_forms = [init_form for _, init_form in args]
+        elif len(args) == 2:
+            self.vars = [args[0]]
+            self.init_forms = [args[1]]
+        else:
+            raise TypeError(
+                "Invalid arguments: expected a variable name and an init form or a list thereof."
+            )
 
     def __call__(self, form):
         return call(lambda_(*self.vars)(form))(*self.init_forms)
@@ -285,7 +299,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     """
     Make a literal node from a value.
 
-    >>> literal_from_value(1.)
+    >>> literal_from_value(1.0)
     Literal(value='1.0', type='float64')
     >>> literal_from_value(1)
     Literal(value='1', type='int32')
@@ -353,7 +367,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     >>> str(promote_to_lifted_stencil("op")("a", "b"))
     '(↑(λ(__arg0, __arg1) → op(·__arg0, ·__arg1)))(a, b)'
     """
-    if isinstance(op, (str, itir.SymRef)):
+    if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
     def _impl(*its: itir.Expr) -> itir.Expr:

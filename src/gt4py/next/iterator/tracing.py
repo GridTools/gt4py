@@ -15,7 +15,7 @@
 import dataclasses
 import inspect
 import typing
-from typing import List
+from typing import ClassVar, List
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import Node
@@ -147,6 +147,8 @@ for builtin_name in builtins.BUILTINS:
 def make_node(o):
     if isinstance(o, Node):
         return o
+    if isinstance(o, common.Dimension):
+        return AxisLiteral(value=o.value)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
@@ -156,8 +158,6 @@ def make_node(o):
         return OffsetLiteral(value=o.value)
     if isinstance(o, core_defs.Scalar):
         return im.literal_from_value(o)
-    if isinstance(o, common.Dimension):
-        return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return _f("make_tuple", *(make_node(arg) for arg in o))
     if o is None:
@@ -208,8 +208,8 @@ iterator.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class TracerContext:
-    fundefs: List[FunctionDefinition] = []
-    closures: List[StencilClosure] = []
+    fundefs: ClassVar[List[FunctionDefinition]] = []
+    closures: ClassVar[List[StencilClosure]] = []
 
     @classmethod
     def add_fundef(cls, fun):

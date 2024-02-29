@@ -126,7 +126,7 @@ def _make_dense_acess(
         fun=gtfn_ir_common.SymRef(id="deref"),
         args=[
             gtfn_ir.FunCall(
-                fun=gtfn_ir_common.SymRef(id="shift"), args=shift_call.args + [nbh_iter]
+                fun=gtfn_ir_common.SymRef(id="shift"), args=[*shift_call.args, nbh_iter]
             )
         ],
     )
@@ -228,7 +228,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             ]
             rhs = gtfn_ir.FunCall(
                 fun=fun,
-                args=[gtfn_ir_common.SymRef(id=red_idx)] + plugged_in_args,
+                args=[gtfn_ir_common.SymRef(id=red_idx), *plugged_in_args],
             )
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
@@ -276,9 +276,9 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             args = [self.visit(arg, **kwargs) for arg in node.args]
             for param, arg in zip(params, args):
                 if param.id in self.sym_table:
-                    kwargs["localized_symbols"][
-                        param.id
-                    ] = f"{param.id}_{self.uids.sequential_id()}_local"
+                    kwargs["localized_symbols"][param.id] = (
+                        f"{param.id}_{self.uids.sequential_id()}_local"
+                    )
                     self.imp_list_ir.append(
                         InitStmt(
                             lhs=gtfn_ir_common.Sym(id=kwargs["localized_symbols"][param.id]),
@@ -339,7 +339,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return ImperativeFunctionDefinition(
             id=node.id,
             params=node.params,
-            fun=self.imp_list_ir + [ReturnStmt(ret=ret)],
+            fun=[*self.imp_list_ir, ReturnStmt(ret=ret)],
         )
 
     def visit_ScanPassDefinition(

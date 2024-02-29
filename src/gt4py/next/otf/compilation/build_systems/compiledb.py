@@ -22,6 +22,7 @@ import shutil
 import subprocess
 from typing import Optional, TypeVar
 
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -44,7 +45,7 @@ class CompiledbFactory(
     Generate a compiledb only if there isn't one for the given combination of cmake configuration and library dependencies.
     """
 
-    cmake_build_type: cmake.BuildType = cmake.BuildType.DEBUG
+    cmake_build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     cmake_extra_flags: list[str] = dataclasses.field(default_factory=list)
     renew_compiledb: bool = False
 
@@ -55,7 +56,7 @@ class CompiledbFactory(
             languages.LanguageWithHeaderFilesSettings,
             languages.Python,
         ],
-        cache_strategy: cache.Strategy,
+        cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
         if not source.binding_source:
             raise NotImplementedError(
@@ -74,17 +75,17 @@ class CompiledbFactory(
         )
 
         if self.renew_compiledb or not (
-            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_strategy)
+            compiledb_template := _cc_find_compiledb(cc_prototype_program_source, cache_lifetime)
         ):
             compiledb_template = _cc_create_compiledb(
                 cc_prototype_program_source,
                 build_type=self.cmake_build_type,
                 cmake_flags=self.cmake_extra_flags or [],
-                cache_strategy=cache_strategy,
+                cache_lifetime=cache_lifetime,
             )
 
         return CompiledbProject(
-            root_path=cache.get_cache_folder(source, cache_strategy),
+            root_path=cache.get_cache_folder(source, cache_lifetime),
             program_name=name,
             source_files={
                 header_name: source.program_source.source_code,
@@ -216,7 +217,7 @@ def _cc_prototype_program_name(
 
 def _cc_prototype_program_source(
     deps: tuple[interface.LibraryDependency, ...],
-    build_type: cmake.BuildType,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
     language: type[SrcL],
     language_settings: languages.LanguageWithHeaderFilesSettings,
@@ -232,10 +233,10 @@ def _cc_prototype_program_source(
 
 
 def _cc_find_compiledb(
-    prototype_program_source: stages.ProgramSource, cache_strategy: cache.Strategy
+    prototype_program_source: stages.ProgramSource, cache_lifetime: config.BuildCacheLifetime
 ) -> Optional[pathlib.Path]:
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
     compile_db_path = cache_path / "compile_commands.json"
     if compile_db_path.exists():
@@ -245,13 +246,13 @@ def _cc_find_compiledb(
 
 def _cc_create_compiledb(
     prototype_program_source: stages.ProgramSource,
-    build_type: cmake.BuildType,
+    build_type: config.CMakeBuildType,
     cmake_flags: list[str],
-    cache_strategy: cache.Strategy,
+    cache_lifetime: config.BuildCacheLifetime,
 ) -> pathlib.Path:
     name = prototype_program_source.entry_point.name
     cache_path = cache.get_cache_folder(
-        stages.CompilableSource(prototype_program_source, None), cache_strategy
+        stages.CompilableSource(prototype_program_source, None), cache_lifetime
     )
 
     header_ext = prototype_program_source.language_settings.header_extension

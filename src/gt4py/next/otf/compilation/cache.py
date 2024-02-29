@@ -14,29 +14,22 @@
 
 """Caching for compiled backend artifacts."""
 
-
-import enum
 import hashlib
 import pathlib
 import tempfile
 
+from gt4py.next import config
 from gt4py.next.otf import stages
 from gt4py.next.otf.binding import interface
-
-
-class Strategy(enum.Enum):
-    SESSION = 1
-    PERSISTENT = 2
 
 
 _session_cache_dir = tempfile.TemporaryDirectory(prefix="gt4py_session_")
 
 _session_cache_dir_path = pathlib.Path(_session_cache_dir.name)
-_persistent_cache_dir_path = pathlib.Path(tempfile.gettempdir()) / "gt4py_cache"
 
 
 def _serialize_param(parameter: interface.Parameter) -> str:
-    return f"{parameter.name}: {str(parameter.type_)}"
+    return f"{parameter.name}: {parameter.type_!s}"
 
 
 def _serialize_library_dependency(dependency: interface.LibraryDependency) -> str:
@@ -63,7 +56,7 @@ def _cache_folder_name(source: stages.ProgramSource) -> str:
 
 
 def get_cache_folder(
-    compilable_source: stages.CompilableSource, strategy: Strategy
+    compilable_source: stages.CompilableSource, lifetime: config.BuildCacheLifetime
 ) -> pathlib.Path:
     """
     Construct the path to where the build system project artifact of a compilable source should be cached.
@@ -73,13 +66,13 @@ def get_cache_folder(
     # TODO(ricoh): make dependent on binding source too or add alternative that depends on bindings
     folder_name = _cache_folder_name(compilable_source.program_source)
 
-    match strategy:
-        case Strategy.SESSION:
+    match lifetime:
+        case config.BuildCacheLifetime.SESSION:
             base_path = _session_cache_dir_path
-        case Strategy.PERSISTENT:
-            base_path = _persistent_cache_dir_path
+        case config.BuildCacheLifetime.PERSISTENT:
+            base_path = config.BUILD_CACHE_DIR
         case _:
-            raise ValueError("Unsupported caching strategy.")
+            raise ValueError("Unsupported caching lifetime.")
 
     base_path.mkdir(exist_ok=True)
 

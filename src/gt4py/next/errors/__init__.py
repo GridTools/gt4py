@@ -14,10 +14,7 @@
 
 """Contains the exception classes and other utilities for error handling."""
 
-from . import (  # noqa: module needs to be loaded for pretty printing of uncaught exceptions.
-    excepthook,
-)
-from .excepthook import set_verbose_exceptions
+from . import excepthook  # noqa: F401 [unused-import]
 from .exceptions import (
     DSLError,
     InvalidParameterAnnotationError,
@@ -37,5 +34,4 @@ __all__ = [
     "MissingArgumentError",
     "UndefinedSymbolError",
     "UnsupportedPythonFeatureError",
-    "set_verbose_exceptions",
 ]
