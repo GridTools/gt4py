@@ -57,6 +57,11 @@ class Python(LanguageTag):
     ...
 
 
+class JSON(LanguageTag):
+    settings_class = LanguageSettings
+    ...
+
+
 class NanobindSrcL(LanguageTag): ...
 
 
