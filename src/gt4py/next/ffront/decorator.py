@@ -671,15 +671,22 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         import linecache
 
+        import gt4py.next as gtx
+
         filename = "<generated>"
-        local_context = {dim.value: dim for dim in dims}
-        local_context[self.definition.__name__] = self.definition
+        globalns = {dim.value: dim for dim in dims}
+        globalns[self.definition.__name__] = self.definition
+        globalns |= gtx.__dict__
+        localns = {}
         code_obj = compile(source_code, filename, "exec")
-        exec(code_obj, {}, local_context)
+        exec(code_obj, globalns, localns)
+        # exec(code_obj)
         lines = [line + "\n" for line in source_code.splitlines()]
         linecache.cache[filename] = (len(source_code), None, lines, filename)
 
-        function_definition = local_context[past_node.id]
+        function_definition = localns[past_node.id]
+        # function_definition = locals()[past_node.id]
+        # function_definition.__globals__ = globalns
 
         # self._program_cache[hash_] = Program(
         #     past_node=past_node,
@@ -859,7 +866,7 @@ def scan_operator(
 
 class ProgamFuncGen(codegen.TemplatedGenerator):
     def visit_Program(self, node: past.Program, **kwargs) -> str:
-        imports = "from gt4py.next import *"
+        imports = "from __future__ import annotations\nfrom gt4py.next import *"
         params = self.visit(node.params)
         signature = ", ".join(params)
         body = textwrap.indent("\n".join(self.visit(node.body)), prefix=" " * 4)
