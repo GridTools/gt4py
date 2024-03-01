@@ -40,7 +40,9 @@ class DaCeCompilationStepFactory(factory.Factory):
 
 
 def _convert_args(
-    inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
+    inp: stages.CompiledProgram,
+    device: core_defs.DeviceType = core_defs.DeviceType.CPU,
+    use_field_canonical_representation: bool = False,
 ) -> stages.CompiledProgram:
     sdfg_program = cast(CompiledSDFG, inp)
     on_gpu = True if device == core_defs.DeviceType.CUDA else False
@@ -50,7 +52,12 @@ def _convert_args(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
         sdfg_args = get_sdfg_args(
-            sdfg, *args, check_args=False, offset_provider=offset_provider, on_gpu=on_gpu
+            sdfg,
+            *args,
+            check_args=False,
+            offset_provider=offset_provider,
+            on_gpu=on_gpu,
+            use_field_canonical_representation=use_field_canonical_representation,
         )
 
         with dace.config.temporary_config():
@@ -73,9 +80,14 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type: config.CMakeBuildType = factory.LazyFunction(
             lambda: config.CMAKE_BUILD_TYPE
         )
+        use_field_canonical_representation: bool = False
 
     translation = factory.SubFactory(
-        DaCeTranslationStepFactory, device_type=factory.SelfAttribute("..device_type")
+        DaCeTranslationStepFactory,
+        device_type=factory.SelfAttribute("..device_type"),
+        use_field_canonical_representation=factory.SelfAttribute(
+            "..use_field_canonical_representation"
+        ),
     )
     bindings = _no_bindings
     compilation = factory.SubFactory(
@@ -84,20 +96,33 @@ class DaCeWorkflowFactory(factory.Factory):
         cmake_build_type=factory.SelfAttribute("..cmake_build_type"),
     )
     decoration = factory.LazyAttribute(
-        lambda o: functools.partial(_convert_args, device=o.device_type)
+        lambda o: functools.partial(
+            _convert_args,
+            device=o.device_type,
+            use_field_canonical_representation=o.use_field_canonical_representation,
+        )
     )
 
 
 class DaCeBackendFactory(GTFNBackendFactory):
     class Params:
         otf_workflow = factory.SubFactory(
-            DaCeWorkflowFactory, device_type=factory.SelfAttribute("..device_type")
+            DaCeWorkflowFactory,
+            device_type=factory.SelfAttribute("..device_type"),
+            use_field_canonical_representation=factory.SelfAttribute(
+                "..use_field_canonical_representation"
+            ),
         )
         name = factory.LazyAttribute(
             lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
+        auto_optimize = factory.Trait(
+            otf_workflow__translation__auto_optimize=True,
+            name_temps="_opt",
+        )
+        use_field_canonical_representation: bool = False
 
 
-run_dace_cpu = DaCeBackendFactory(cached=True)
+run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
 
-run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True)
+run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)

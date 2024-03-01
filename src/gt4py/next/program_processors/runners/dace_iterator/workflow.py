@@ -41,7 +41,7 @@ class DaCeTranslator(
     ],
     step_types.TranslationStep[languages.JSON, languages.LanguageSettings],
 ):
-    auto_optimize: bool = True
+    auto_optimize: bool = False
     lift_mode: LiftMode = LiftMode.FORCE_INLINE
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
     temporary_extraction_heuristics: Optional[
