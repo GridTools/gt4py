@@ -19,17 +19,20 @@ from typing import TYPE_CHECKING, Any
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next import backend as next_backend
 from gt4py.next.program_processors.runners import roundtrip
-
+from gt4py.next.program_processors import modular_executor
+from gt4py.next.otf import transforms
 
 if TYPE_CHECKING:
     import gt4py.next.iterator.ir as itir
 
 
-@ppi.program_executor
-def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    roundtrip.execute_roundtrip(program, *args, dispatch_backend=roundtrip.executor, **kwargs)
-
-
+#@ppi.program_executor
+def executor() -> None:
+    #roundtrip.execute_roundtrip(program, *args, dispatch_backend=roundtrip.executor, **kwargs)
+    modular_executor.ModularExecutor(
+        otf_workflow=transforms.PastToItir().chain(roundtrip.ExecuteRoundtrip()),
+        name="roundtrip"
+    )
 backend = next_backend.Backend(
     executor=executor,
     allocator=roundtrip.backend.allocator,
