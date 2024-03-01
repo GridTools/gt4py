@@ -358,7 +358,7 @@ class Program(SDFGConvertible):
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items()}
+        return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items() if hasattr(v, "table")}
 
     def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
         args = []
