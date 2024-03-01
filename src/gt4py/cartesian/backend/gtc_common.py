@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Type, Union
 
 import gt4py.cartesian.gtc.utils
 import gt4py.cartesian.gtc.utils as gtc_utils
-from gt4py.cartesian import backend as gt_backend, utils as gt_utils
+from gt4py.cartesian import backend as gt_backend, config as gt_config, utils as gt_utils
 from gt4py.cartesian.backend import Backend
 from gt4py.cartesian.backend.module_generator import BaseModuleGenerator, ModuleData
 from gt4py.cartesian.gtc import gtir
@@ -229,7 +229,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
-        "debug_mode": {"versioning": True, "type": bool},
+        "opt_level": {"versioning": True, "type": int},
         "verbose": {"versioning": False, "type": bool},
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
     }
@@ -304,7 +304,9 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             verbose=self.builder.options.backend_opts.get("verbose", False),
             clean=self.builder.options.backend_opts.get("clean", False),
             **gt_backend.pyext_builder.get_gt_pyext_build_opts(
-                debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
+                opt_level=self.builder.options.backend_opts.get(
+                    "opt_level", gt_config.GT4PY_COMPILER_OPTIMIZATION_LEVEL
+                ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
                 gt_version=2,

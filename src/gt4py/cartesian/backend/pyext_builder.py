@@ -47,7 +47,7 @@ def get_cuda_compute_capability():
 
 def get_gt_pyext_build_opts(
     *,
-    debug_mode: bool = False,
+    opt_level: int = 3,
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
@@ -114,7 +114,9 @@ def get_gt_pyext_build_opts(
         ]
     extra_link_args = gt_config.build_settings["extra_link_args"]
 
-    mode_flags = ["-O0", "-ggdb"] if debug_mode else ["-O3", "-DNDEBUG"]
+    if not 0 <= opt_level <= 3:
+        raise ValueError(f"Invalid optimization level '{opt_level}'; should be between 0 and 3.")
+    mode_flags = [f"-O{opt_level}", "-DNDEBUG"]
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
