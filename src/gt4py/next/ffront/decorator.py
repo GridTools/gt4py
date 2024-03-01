@@ -668,17 +668,34 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             i for j in [type_info.extract_dims(arg_type) for arg_type in arg_types] for i in j
         )
         source_code = ProgamFuncGen.apply(past_node)
+
+        import linecache
+
+        filename = "<generated>"
         local_context = {dim.value: dim for dim in dims}
         local_context[self.definition.__name__] = self.definition
-        exec(source_code, {}, local_context)
+        code_obj = compile(source_code, filename, "exec")
+        exec(code_obj, {}, local_context)
+        lines = [line + "\n" for line in source_code.splitlines()]
+        linecache.cache[filename] = (len(source_code), None, lines, filename)
+
         function_definition = local_context[past_node.id]
 
-        self._program_cache[hash_] = Program(
-            past_node=past_node,
-            closure_vars=closure_vars,
-            definition=function_definition,
-            backend=self.backend,
-            grid_type=self.grid_type,
+        # self._program_cache[hash_] = Program(
+        #     past_node=past_node,
+        #     closure_vars=closure_vars,
+        #     definition=function_definition,
+        #     backend=self.backend,
+        #     grid_type=self.grid_type,
+        # )
+        linecache.cache[filename] = (
+            len(source_code),
+            None,
+            [line + "\n" for line in source_code.splitlines()],
+            filename,
+        )
+        self._program_cache[hash_] = Program.from_function(
+            function_definition, backend=self.backend
         )
 
         return self._program_cache[hash_]
