@@ -182,7 +182,7 @@ class Program(SDFGConvertible):
     definition: Optional[types.FunctionType]
     backend: Optional[ppi.ProgramExecutor]
     grid_type: Optional[GridType]
-    offset_provider: dict[str, Dimension] = None
+    sdfgConvertible_dict: Optional[dict[str, Any]] = None
 
     @classmethod
     def from_function(
@@ -238,8 +238,8 @@ class Program(SDFGConvertible):
         else:
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
-    def with_backend(self, backend: ppi.ProgramExecutor, offset_provider: dict[str, Dimension]=None) -> Program:
-        return dataclasses.replace(self, backend=backend, offset_provider=offset_provider)
+    def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
+        return dataclasses.replace(self, backend=backend, sdfgConvertible_dict={})
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(self, grid_type=grid_type)
@@ -337,30 +337,33 @@ class Program(SDFGConvertible):
                 *size_args,
                 return_sdfg=return_sdfg,
                 **kwargs,
-                offset_provider=self.offset_provider,
+                offset_provider=offset_provider,
                 column_axis=self._column_axis,
             )
             
-            return kwargs.get("sdfg_", None)
+            return kwargs["sdfg_"][0]
 
     def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
         return_sdfg: bool = True
-        sdfg = self.__call__(*args, return_sdfg=return_sdfg, offset_provider=None, **kwargs)[0]
-        if self.offset_provider:
-            for k in self.offset_provider:
-                sdfg.arg_names.append(f"__connectivity_{k}")
+        
+        # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
+        offset_provider = {str(k):v for k,v in kwargs.pop('offset_provider').items()}
+        self.sdfgConvertible_dict["offset_provider"] = offset_provider
+        
+        sdfg = self.__call__(*args, return_sdfg=return_sdfg, offset_provider=offset_provider, **kwargs)
+        
+        for k in offset_provider:
+            sdfg.arg_names.append(f"__connectivity_{k}")
+        
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        return {}
+        return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items()}
 
     def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
         args = []
         for arg in self.past_node.params:
             args.append(arg.id)
-        if self.offset_provider:
-            for k in self.offset_provider:
-                args.append(f"__connectivity_{k}")
         return (args, [])
 
     def format_itir(

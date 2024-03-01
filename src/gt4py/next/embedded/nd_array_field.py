@@ -30,6 +30,8 @@ from gt4py.next.embedded import common as embedded_common, context as embedded_c
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
 
+import dace
+
 
 try:
     import cupy as cp
@@ -121,6 +123,15 @@ class NdArrayField(
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
+        
+    def data_ptr(self) -> int:
+        if self.ndarray.__dlpack_device__()[0] == 1:
+            return self.ndarray.__array_interface__["data"][0]
+        else:
+            return self.ndarray.__cuda_array_interface__["data"][0]
+
+    def __descriptor__(self) -> dace.data.Data:
+        return dace.data.create_datadescriptor(self.ndarray)
 
     def asnumpy(self) -> np.ndarray:
         if self.array_ns == cp:
