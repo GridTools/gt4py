@@ -675,26 +675,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         filename = "<generated>"
         globalns = {dim.value: dim for dim in dims}
-        globalns[self.definition.__name__] = self.definition
+        globalns[self.definition.__name__] = self
         globalns |= gtx.__dict__
         localns = {}
         code_obj = compile(source_code, filename, "exec")
         exec(code_obj, globalns, localns)
-        # exec(code_obj)
         lines = [line + "\n" for line in source_code.splitlines()]
         linecache.cache[filename] = (len(source_code), None, lines, filename)
 
         function_definition = localns[past_node.id]
-        # function_definition = locals()[past_node.id]
-        # function_definition.__globals__ = globalns
-
-        # self._program_cache[hash_] = Program(
-        #     past_node=past_node,
-        #     closure_vars=closure_vars,
-        #     definition=function_definition,
-        #     backend=self.backend,
-        #     grid_type=self.grid_type,
-        # )
         linecache.cache[filename] = (
             len(source_code),
             None,
