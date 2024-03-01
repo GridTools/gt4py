@@ -13,58 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
-from typing import cast
 
-import dace
 import factory
-from dace.codegen.compiled_sdfg import CompiledSDFG
 
 import gt4py._core.definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import config
 from gt4py.next.otf import recipes, stages
-from gt4py.next.program_processors.runners.dace_iterator import (
-    get_sdfg_args,
-    workflow as dace_workflow,
+from gt4py.next.program_processors.runners.dace_iterator.workflow import (
+    DaCeCompilationStepFactory,
+    DaCeTranslationStepFactory,
+    convert_args,
 )
 from gt4py.next.program_processors.runners.gtfn import GTFNBackendFactory
-
-
-class DaCeTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = dace_workflow.DaCeTranslator
-
-
-class DaCeCompilationStepFactory(factory.Factory):
-    class Meta:
-        model = dace_workflow.DaCeCompiler
-
-
-def _convert_args(
-    inp: stages.CompiledProgram,
-    device: core_defs.DeviceType = core_defs.DeviceType.CPU,
-    use_field_canonical_representation: bool = False,
-) -> stages.CompiledProgram:
-    sdfg_program = cast(CompiledSDFG, inp)
-    on_gpu = True if device == core_defs.DeviceType.CUDA else False
-    sdfg = sdfg_program.sdfg
-
-    def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
-        sdfg_args = get_sdfg_args(
-            sdfg,
-            *args,
-            check_args=False,
-            offset_provider=offset_provider,
-            on_gpu=on_gpu,
-            use_field_canonical_representation=use_field_canonical_representation,
-        )
-
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            return inp(**sdfg_args)
-
-    return decorated_program
 
 
 def _no_bindings(inp: stages.ProgramSource) -> stages.CompilableSource:
@@ -97,7 +57,7 @@ class DaCeWorkflowFactory(factory.Factory):
     )
     decoration = factory.LazyAttribute(
         lambda o: functools.partial(
-            _convert_args,
+            convert_args,
             device=o.device_type,
             use_field_canonical_representation=o.use_field_canonical_representation,
         )

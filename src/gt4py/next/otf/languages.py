@@ -57,7 +57,7 @@ class Python(LanguageTag):
     ...
 
 
-class JSON(LanguageTag):
+class SDFG(LanguageTag):
     settings_class = LanguageSettings
     ...
 
