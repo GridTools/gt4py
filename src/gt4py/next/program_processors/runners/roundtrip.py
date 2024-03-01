@@ -227,7 +227,24 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
+# executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
+@dataclasses.dataclass
+class ExecuteRoundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
+    debug: ...
+    column_axis: Optional[common.Dimension]
+    lift_mode: ...
+    dispatch_backend: ...
+
+    def __call__(self, inp: ...):
+        execute_roundtrip(
+            inp.program, *inp.args, column_axis=self.column_axis, debug=self.debug, **inp.kwargs
+        )
+
+
+executor = modular_executor.ModularExecutor(
+    otf_workflow=PastToItir().chain(ExecuteRoundtrip()),
+    name="roundtrip"
+)
 
 backend = next_backend.Backend(
     executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
