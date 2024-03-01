@@ -62,7 +62,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.otf import stages, transforms as otf_transforms
-from gt4py.next.program_processors import otf_compile_executor, processor_interface as ppi
+from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -248,7 +248,7 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
             return
-        elif isinstance(self.backend, otf_compile_executor.OTFCompileExecutor):
+        elif isinstance(self.backend, modular_executor.ModularExecutor):
             self.backend(
                 stages.PastClosure(
                     definition=self.definition,

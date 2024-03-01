@@ -22,14 +22,14 @@ import numpy.typing as npt
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import common, config
+from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, transforms as otf_transforms, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import otf_compile_executor
+from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
@@ -145,7 +145,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
 class GTFNBackendFactory(factory.Factory):
     class Meta:
-        model = otf_compile_executor.OTFBackend
+        model = backend.Backend
 
     class Params:
         name_device = "cpu"
@@ -159,7 +159,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: otf_compile_executor.CachedOTFCompileExecutor(
+                lambda o: modular_executor.ModularExecutor(
                     otf_workflow=workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function),
                     name=o.name,
                 )
@@ -182,7 +182,7 @@ class GTFNBackendFactory(factory.Factory):
         transform_workflow = factory.SubFactory(otf_transforms.PastToItirFactory)
 
     executor = factory.LazyAttribute(
-        lambda o: otf_compile_executor.OTFCompileExecutor(
+        lambda o: modular_executor.ModularExecutor(
             otf_workflow=o.transform_workflow.chain(o.otf_workflow), name=o.name
         )
     )

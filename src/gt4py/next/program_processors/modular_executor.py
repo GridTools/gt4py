@@ -14,23 +14,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import dataclasses
+from typing import Any, Optional
 
 import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next import backend as next_backend
-from gt4py.next.program_processors.runners import roundtrip
+from gt4py.next.otf import stages, workflow
 
 
-if TYPE_CHECKING:
-    import gt4py.next.iterator.ir as itir
+@dataclasses.dataclass(frozen=True)
+class ModularExecutor(ppi.ProgramExecutor):
+    otf_workflow: workflow.Workflow[stages.PastClosure, stages.CompiledProgram]
+    name: Optional[str] = None
 
+    def __call__(self, program: stages.PastClosure, *args, **kwargs: Any) -> None:
+        self.otf_workflow(program)(*args, offset_provider=kwargs["offset_provider"])
 
-@ppi.program_executor
-def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
-    roundtrip.execute_roundtrip(program, *args, dispatch_backend=roundtrip.executor, **kwargs)
-
-
-backend = next_backend.Backend(
-    executor=executor,
-    allocator=roundtrip.backend.allocator,
-)
+    @property
+    def __name__(self) -> str:
+        return self.name or repr(self)
