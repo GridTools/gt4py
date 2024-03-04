@@ -17,7 +17,7 @@ import enum
 import functools
 import operator
 from collections.abc import Callable
-from typing import Optional
+from typing import Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits, utils as eve_utils
@@ -71,8 +71,8 @@ def _is_shift_lift(node: ir.Expr):
     )
 
 
-def _is_scan(node: ir.FunCall):
-    return node.fun == ir.SymRef(id="scan")
+def _is_scan(node: ir.Expr) -> TypeGuard[ir.FunCall]:
+    return isinstance(node, ir.FunCall) and node.fun == ir.SymRef(id="scan")
 
 
 def _transform_and_extract_lift_args(
@@ -116,7 +116,7 @@ def _transform_and_extract_lift_args(
             elif inner_stencil == im.ref("deref"):
                 recorded_shifts = ((),)
             elif _is_scan(inner_stencil) and isinstance(inner_stencil.args[0], ir.Lambda):
-                recorded_shifts = inner_stencil.args[0].params[i+1].annex.recorded_shifts
+                recorded_shifts = inner_stencil.args[0].params[i + 1].annex.recorded_shifts
             else:
                 raise AssertionError("Expected a Lambda function or deref as stencil.")
             new_symbol.annex.recorded_shifts = set()
@@ -289,7 +289,7 @@ class InlineLifts(
             # we don't want to inline non-centre lift args as this would disallow creating a
             #  temporary for them if the (outer) lift can not be extracted into a temporary.
             if self.inline_centre_lift_args_only:
-                if not param.annex.recorded_shifts in [set(), {()}]:
+                if param.annex.recorded_shifts not in [set(), {()}]:
                     continue
             eligible_lifted_args[i] = True
 
@@ -297,11 +297,18 @@ class InlineLifts(
             new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
             inlined_args: dict[ir.Sym, ir.Expr] = {}
 
-            reserved_symbol_names = list(set(symtable.keys()) | {param.id for param in stencil.params})
-            for param, arg, eligible in zip(stencil.params, node.args, eligible_lifted_args, strict=True):
+            reserved_symbol_names = list(
+                set(symtable.keys()) | {param.id for param in stencil.params}
+            )
+            for param, arg, eligible in zip(
+                stencil.params, node.args, eligible_lifted_args, strict=True
+            ):
                 if eligible:
                     transformed_arg, _ = _transform_and_extract_lift_args(
-                        arg, reserved_symbol_names, new_arg_exprs, getattr(param.annex, "recorded_shifts", None)
+                        arg,  # type: ignore[arg-type] # ensure by _is_lift on arg
+                        reserved_symbol_names,
+                        new_arg_exprs,
+                        getattr(param.annex, "recorded_shifts", None),
                     )
                     inlined_args[param] = transformed_arg
                 else:
@@ -310,20 +317,27 @@ class InlineLifts(
                     # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
                     #  pass. Since the tests of this transformation rely on it we preserve the
                     #  behaviour here for now.
-                    if isinstance(arg, ir.SymRef) and arg.id not in (reserved_symbol_names + list(new_arg_exprs.keys())):
+                    if isinstance(arg, ir.SymRef) and arg.id not in (
+                        reserved_symbol_names + list(new_arg_exprs.keys())
+                    ):
                         new_param = im.sym(arg.id)
-                        copy_recorded_shifts(from_=param, to=new_param, required=self.inline_centre_lift_args_only)
+                        copy_recorded_shifts(
+                            from_=param, to=new_param, required=self.inline_centre_lift_args_only
+                        )
                         new_arg_exprs[new_param] = arg
 
                         new_arg = im.ref(arg.id)
-                        copy_recorded_shifts(from_=param, to=new_arg, required=self.inline_centre_lift_args_only)
+                        copy_recorded_shifts(
+                            from_=param, to=new_arg, required=self.inline_centre_lift_args_only
+                        )
                         assert param not in inlined_args
                         inlined_args[param] = new_arg
                     else:
                         new_arg_exprs[param] = arg
 
-            new_stencil_body = im.let(*((param, inlined_lift) for param, inlined_lift in
-                                        inlined_args.items()))(stencil.expr)
+            new_stencil_body = im.let(
+                *((param, inlined_lift) for param, inlined_lift in inlined_args.items())  # type: ignore[arg-type] # mypy not smart enough
+            )(stencil.expr)
 
             new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
 

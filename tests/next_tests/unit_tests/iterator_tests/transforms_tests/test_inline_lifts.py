@@ -146,8 +146,10 @@ def inline_lift_center_only_test_data():
                 im.lift(
                     im.lambda_("arg1", "arg2")(
                         im.plus(
-                            im.plus(im.deref("arg1"), im.deref("arg1")),  # use it twice so that the lambda inliner keeps it as is
-                            im.deref(im.shift("I", 1)("arg2"))
+                            im.plus(
+                                im.deref("arg1"), im.deref("arg1")
+                            ),  # use it twice so that the lambda inliner keeps it as is
+                            im.deref(im.shift("I", 1)("arg2")),
                         )
                     )
                 )(trivial_lift("it1"), trivial_lift("it1"))
