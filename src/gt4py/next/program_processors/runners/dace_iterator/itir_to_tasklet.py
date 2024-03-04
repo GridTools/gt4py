@@ -1158,9 +1158,9 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             map_ranges = {
                 index_name: f"0:{offset_provider.max_neighbors}",
             }
-            src_subset = ",".join(
-                [f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims]
-            )
+            src_subset = ",".join([
+                f"_i_{dim}" if dim in iterator.indices else index_name for dim in sorted_dims
+            ])
             self.context.state.add_mapped_tasklet(
                 "deref",
                 map_ranges,

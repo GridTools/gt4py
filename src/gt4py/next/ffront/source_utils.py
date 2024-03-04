@@ -106,11 +106,11 @@ class SourceDefinition:
     >>> def foo(a):
     ...     return a
     >>> src_def = SourceDefinition.from_function(foo)
-    >>> print(src_def) # doctest:+ELLIPSIS
+    >>> print(src_def)  # doctest:+ELLIPSIS
     SourceDefinition(source='def foo(a):...', filename='...', line_offset=0, column_offset=0)
 
     >>> source, filename, starting_line = src_def
-    >>> print(source) # doctest:+ELLIPSIS
+    >>> print(source)  # doctest:+ELLIPSIS
     def foo(a):
         return a
     ...
@@ -139,10 +139,10 @@ class SymbolNames:
     """
 
     params: set[str]
-    locals: set[str]  # noqa: A003  # shadowing a python builtin
+    locals: set[str]  # shadowing a python builtin
     imported: set[str]
     nonlocals: set[str]
-    globals: set[str]  # noqa: A003  # shadowing a python builtin
+    globals: set[str]  # shadowing a python builtin
 
     @functools.cached_property
     def all_locals(self) -> set[str]:

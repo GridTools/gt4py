@@ -167,10 +167,10 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def __getitem__(self, index: int) -> int: ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: slice) -> UnitRange:  # redefine unused
         ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:  # redefine unused
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -275,9 +275,7 @@ NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTupl
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-NamedSlice: TypeAlias = (
-    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
-)
+NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
@@ -427,17 +425,17 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: slice) -> Self:  # redefine unused
         ...
 
     @overload
-    def __getitem__(  # noqa: F811 # redefine unused
+    def __getitem__(  # redefine unused
         self, index: Dimension
     ) -> tuple[Dimension, _Rng]: ...
 
-    def __getitem__(  # noqa: F811 # redefine unused
+    def __getitem__(  # redefine unused
         self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # noqa: F811 # redefine unused
+    ) -> NamedRange | Domain:  # redefine unused
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -1008,11 +1006,11 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
     True
-    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
+    >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
+    >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
