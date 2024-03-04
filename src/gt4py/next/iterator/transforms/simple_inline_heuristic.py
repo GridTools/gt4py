@@ -16,7 +16,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lifts import _is_lift
 
 
-def is_eligible_for_inlining(param: ir.Sym, arg: ir.FunCall, is_scan_pass_context: bool) -> bool:
+def is_eligible_for_inlining(arg: ir.FunCall, is_scan_pass_context: bool) -> bool:
     """
     Predicate for the InlineLifts transformation.
 
