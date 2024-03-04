@@ -673,7 +673,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 else [out_sym.type]
             ),
         ]
-        list(type_info.flatten(out_sym.type.types))
         dims = set(
             i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
         )
