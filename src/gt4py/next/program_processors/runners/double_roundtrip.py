@@ -31,6 +31,8 @@ def executor(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
 
 
 backend = next_backend.Backend(
-    executor=executor,
+    executor=roundtrip.RoundtripExecutorFactory(
+        dispatch_backend=roundtrip.execute_roundtrip,
+    ),
     allocator=roundtrip.backend.allocator,
 )
