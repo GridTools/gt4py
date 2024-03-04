@@ -179,12 +179,10 @@ class GTFNBackendFactory(factory.Factory):
         name = factory.LazyAttribute(
             lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
-        transform_workflow = factory.SubFactory(otf_transforms.PastToItirFactory)
 
+    transformer = factory.SubFactory(otf_transforms.PastToItirFactory)
     executor = factory.LazyAttribute(
-        lambda o: modular_executor.ModularExecutor(
-            otf_workflow=o.transform_workflow.chain(o.otf_workflow), name=o.name
-        )
+        lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
 

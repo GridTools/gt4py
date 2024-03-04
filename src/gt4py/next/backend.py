@@ -19,17 +19,18 @@ from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
 
 
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
+    transformer: workflow.Workflow[stages.PastClosure, stages.ProgramCall]
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
 
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:
-        self.executor.__call__(program, *args, **kwargs)
+    def __call__(self, program: stages.PastClosure, *args, **kwargs: Any) -> None:
+        self.executor(self.transformer(program), *args, **kwargs)
 
     @property
     def __name__(self) -> str:

@@ -23,10 +23,10 @@ from gt4py.next.otf import stages, workflow
 
 @dataclasses.dataclass(frozen=True)
 class ModularExecutor(ppi.ProgramExecutor):
-    otf_workflow: workflow.Workflow[stages.PastClosure, stages.CompiledProgram]
+    otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]
     name: Optional[str] = None
 
-    def __call__(self, program: stages.PastClosure, *args, **kwargs: Any) -> None:
+    def __call__(self, program: stages.ProgramCall, *args, **kwargs: Any) -> None:
         self.otf_workflow(program)(*args, offset_provider=kwargs["offset_provider"])
 
     @property

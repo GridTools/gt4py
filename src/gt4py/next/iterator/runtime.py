@@ -24,6 +24,7 @@ from gt4py.next import common
 from gt4py.next.iterator import builtins
 from gt4py.next.iterator.builtins import BackendNotSelectedError, builtin_dispatch
 from gt4py.next.iterator.ir import FencilDefinition
+from gt4py.next.otf import stages
 from gt4py.next.program_processors.processor_interface import (
     ProgramExecutor,
     ProgramFormatter,
@@ -91,7 +92,11 @@ class FendefDispatcher:
 
         if backend is not None:
             ensure_processor_kind(backend, ProgramExecutor)
-            backend(self.itir(*args, **kwargs), *args, **kwargs)
+            backend.executor(
+                stages.ProgramCall(program=self.itir(*args, **kwargs), args=args, kwargs=kwargs),
+                *args,
+                **kwargs,
+            )
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered.")

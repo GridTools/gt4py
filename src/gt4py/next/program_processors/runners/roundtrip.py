@@ -266,14 +266,15 @@ class RoundtripExecutorFactory(factory.Factory):
         model = RoundtripExecutor
 
     class Params:
-        transform_workflow = factory.SubFactory(otf_transforms.PastToItirFactory)
         roundtrip_workflow = factory.SubFactory(RoundtripFactory)
 
-    otf_workflow = factory.LazyAttribute(lambda o: o.transform_workflow.chain(o.roundtrip_workflow))
+    otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
 
 
 executor = RoundtripExecutorFactory(name="roundtrip")
 
 backend = next_backend.Backend(
-    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+    transformer=otf_transforms.PastToItirFactory(),
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )

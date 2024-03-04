@@ -28,6 +28,7 @@ import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.processor_interface as ppi
 from gt4py.next import backend, common
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.otf import transforms as otf_transforms
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -437,6 +438,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 run_dace_cpu = backend.Backend(
+    transformer=otf_transforms.PastToItirFactory(),
     executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
@@ -460,6 +462,7 @@ else:
 
 
 run_dace_gpu = backend.Backend(
+    transformer=otf_transforms.PastToItirFactory(),
     executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )
