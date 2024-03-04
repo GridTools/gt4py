@@ -221,6 +221,10 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
+    @property
+    def __name__(self) -> str:
+        return self.definition.__name__
+
     @functools.cached_property
     def __gt_allocator__(
         self,
@@ -344,7 +348,9 @@ class Program:
                 raise_exception=True,
             )
         except ValueError as err:
-            raise TypeError(f"Invalid argument types in call to '{self.past_node.id}'.") from err
+            raise errors.DSLError(
+                None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
+            ) from err
 
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
@@ -488,13 +494,13 @@ class ProgramWithBoundArgs(Program):
 
 
 @typing.overload
-def program(definition: types.FunctionType) -> Program:
-    ...
+def program(definition: types.FunctionType) -> Program: ...
 
 
 @typing.overload
-def program(*, backend: Optional[ppi.ProgramExecutor]) -> Callable[[types.FunctionType], Program]:
-    ...
+def program(
+    *, backend: Optional[ppi.ProgramExecutor]
+) -> Callable[[types.FunctionType], Program]: ...
 
 
 def program(
@@ -560,7 +566,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     backend: Optional[ppi.ProgramExecutor]
     grid_type: Optional[GridType]
     operator_attributes: Optional[dict[str, Any]] = None
-    _program_cache: dict = dataclasses.field(default_factory=dict)
+    _program_cache: dict = dataclasses.field(
+        init=False, default_factory=dict
+    )  # init=False ensure the cache is not copied in calls to replace
 
     @classmethod
     def from_function(
@@ -598,6 +606,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             grid_type=grid_type,
             operator_attributes=operator_attributes,
         )
+
+    @property
+    def __name__(self) -> str:
+        return self.definition.__name__
 
     def __gt_type__(self) -> ts.CallableType:
         type_ = self.foast_node.type
@@ -746,15 +758,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 @typing.overload
 def field_operator(
     definition: types.FunctionType, *, backend: Optional[ppi.ProgramExecutor]
-) -> FieldOperator[foast.FieldOperator]:
-    ...
+) -> FieldOperator[foast.FieldOperator]: ...
 
 
 @typing.overload
 def field_operator(
     *, backend: Optional[ppi.ProgramExecutor]
-) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]:
-    ...
+) -> Callable[[types.FunctionType], FieldOperator[foast.FieldOperator]]: ...
 
 
 def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
@@ -791,8 +801,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: Optional[str],
     grid_type: GridType,
-) -> FieldOperator[foast.ScanOperator]:
-    ...
+) -> FieldOperator[foast.ScanOperator]: ...
 
 
 @typing.overload
@@ -803,8 +812,7 @@ def scan_operator(
     init: core_defs.Scalar,
     backend: Optional[str],
     grid_type: GridType,
-) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]:
-    ...
+) -> Callable[[types.FunctionType], FieldOperator[foast.ScanOperator]]: ...
 
 
 def scan_operator(

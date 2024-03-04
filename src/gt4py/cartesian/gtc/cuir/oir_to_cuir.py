@@ -29,8 +29,7 @@ from gt4py.cartesian.gtc.passes.oir_optimizations.utils import (
 
 
 class SymbolNameCreator(Protocol):
-    def __call__(self, name: str) -> str:
-        ...
+    def __call__(self, name: str) -> str: ...
 
 
 def _make_axis_offset_expr(bound: common.AxisBound, axis_index: int) -> cuir.Expr:

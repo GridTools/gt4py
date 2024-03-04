@@ -17,7 +17,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 
-class MergeLet(eve.NodeTranslator):
+class MergeLet(eve.PreserveLocationVisitor, eve.NodeTranslator):
     """
     Merge let-like statements.
 

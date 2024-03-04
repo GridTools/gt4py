@@ -15,11 +15,11 @@
 import shutil
 
 import jinja2
-import numpy as np
 import pytest
 
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
+from gt4py.next import config
 from gt4py.next.otf import languages, stages
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
@@ -105,7 +105,7 @@ def compilable_source_example(program_source_example):
 
 @pytest.fixture
 def clean_example_session_cache(compilable_source_example):
-    cache_dir = cache.get_cache_folder(compilable_source_example, cache.Strategy.SESSION)
+    cache_dir = cache.get_cache_folder(compilable_source_example, config.BuildCacheLifetime.SESSION)
     if cache_dir.exists():
         shutil.rmtree(cache_dir)
     yield

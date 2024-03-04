@@ -18,7 +18,7 @@ import gt4py.next as gtx
 from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef
 from gt4py.next.iterator.tracing import trace_fencil_definition
-from gt4py.next.program_processors.codegens.gtfn.gtfn_backend import generate
+from gt4py.next.program_processors.runners.gtfn import run_gtfn
 
 
 IDim = gtx.Dimension("IDim")
@@ -48,7 +48,9 @@ if __name__ == "__main__":
     output_file = sys.argv[1]
 
     prog = trace_fencil_definition(copy_fencil, [None] * 5, use_arg_types=False)
-    generated_code = generate(prog, offset_provider={})
+    generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
+        prog, offset_provider={}, column_axis=None
+    )
 
     with open(output_file, "w+") as output:
         output.write(generated_code)

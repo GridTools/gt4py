@@ -1,6 +1,6 @@
 [build-system]
 build-backend = 'setuptools.build_meta'
-requires = ['setuptools>=60.6', 'wheel', 'cython']
+requires = ['setuptools>=65.5.0', 'wheel>=0.33.6', 'cython>=0.29.13']
 
 # ---- Project description ----
 # -- Standard options (PEP 621) --
@@ -17,6 +17,7 @@ classifiers = [
   'Programming Language :: Python :: 3.8',
   'Programming Language :: Python :: 3.9',
   'Programming Language :: Python :: 3.10',
+  'Programming Language :: Python :: 3.11',
   'Programming Language :: Python :: Implementation :: CPython',
   'Topic :: Scientific/Engineering :: Atmospheric Science',
   'Topic :: Scientific/Engineering :: Mathematics',
@@ -30,20 +31,21 @@ dependencies = [
   'cached-property>=1.5.1',
   'click>=8.0.0',
   'cmake>=3.22',
-  'cytoolz>=0.12.0',
+  'cytoolz>=0.12.1',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
+  'factory-boy>=3.3.0',
   'frozendict>=2.3',
-  'gridtools-cpp>=2.3.1,==2.*',
+  'gridtools-cpp>=2.3.2,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
   'jinja2>=3.0.0',
   'lark>=1.1.2',
   'mako>=1.1',
   'nanobind>=1.4.0 ',
   'ninja>=1.10',
-  'numpy>=1.21.2',
+  'numpy>=1.23.3',
   'packaging>=20.0',
-  'pybind11>=2.5',
+  'pybind11>=2.10.1',
   'setuptools>=65.5.0',
   'tabulate>=0.8.10',
   'typing-extensions>=4.2,<4.6.0',
@@ -66,23 +68,21 @@ readme = 'README.md'
 requires-python = '>=3.8'
 
 [project.optional-dependencies]
-cuda = ['cupy>=12.0']
-cuda11x = ['cupy-cuda11x>=12.0']
-cuda12x = ['cupy-cuda12x>=12.0']
-dace = ['dace>=0.14.2,<0.15', 'sympy>=1.7']
+# Bundles
+all-cpu = ['gt4py[dace,formatting,jax-cpu,performance,testing]']
+all-cuda11 = ['gt4py[cuda11,dace,formatting,jax-cuda11,performance,testing]']
+all-cuda12 = ['gt4py[cuda12,dace,formatting,jax-cuda12,performance,testing]']
+# Other extras
+cuda11 = ['cupy-cuda11x>=12.0']
+cuda12 = ['cupy-cuda12x>=12.0']
+dace = ['dace>=0.15.1,<0.16', 'sympy>=1.9']
 formatting = ['clang-format>=9.0']
-# Always add all extra packages to 'full' for a simple full gt4py installation
-full = [
-  'clang-format>=9.0',
-  'dace>=0.14.2,<0.15',
-  'hypothesis>=6.0.0',
-  'pytest>=7.0',
-  'sympy>=1.7',
-  'scipy>=1.7.2',
-  'jax[cpu]>=0.4.13'
-]
-jax = ['jax[cpu]>=0.4.13']
-performance = ['scipy>=1.7.2']
+gpu = ['cupy>=12.0']
+jax-cpu = ['jax[cpu]>=0.4.13']
+jax-cuda11 = ['jax[cuda11_pip]>=0.4.13']
+jax-cuda12 = ['jax[cuda12_pip]>=0.4.13']
+performance = ['scipy>=1.9.2']
+rocm-43 = ['cupy-rocm-4-3']
 testing = ['hypothesis>=6.0.0', 'pytest>=7.0']
 
 [project.scripts]
@@ -162,7 +162,9 @@ ignore = [
   'DAR',  # Disable dargling errors by default
   'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
   'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503'  # Line break occurred before a binary operator
+  'W503',  # Line break occurred before a binary operator
+  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
+  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
 ]
 max-complexity = 15
 max-line-length = 100  # It should be the same as in `tool.black.line-length` above
@@ -194,6 +196,7 @@ known_third_party = [
   'boltons',
   'cached_property',
   'click',
+  'cupy',
   'dace',
   'devtools',
   'factory',
@@ -216,7 +219,14 @@ lexicographical = true
 line_length = 100  # It should be the same as in `tool.black.line-length` above
 lines_after_imports = 2
 profile = 'black'
-sections = ['FUTURE', 'STDLIB', 'THIRDPARTY', 'FIRSTPARTY', 'TESTS', 'LOCALFOLDER']
+sections = [
+  'FUTURE',
+  'STDLIB',
+  'THIRDPARTY',
+  'FIRSTPARTY',
+  'TESTS',
+  'LOCALFOLDER'
+]
 skip_gitignore = true
 skip_glob = ['*.venv/**', '_local/**']
 
@@ -340,7 +350,11 @@ markers = [
   'uses_origin: tests that require backend support for domain origin',
   'uses_reduction_over_lift_expressions: tests that require backend support for reduction over lift expressions',
   'uses_reduction_with_only_sparse_fields: tests that require backend support for with sparse fields',
+  'uses_scan: tests that uses scan',
   'uses_scan_in_field_operator: tests that require backend support for scan in field operator',
+  'uses_scan_without_field_args: tests that require calls to scan that do not have any fields as arguments',
+  'uses_scan_nested: tests that use nested scans',
+  'uses_scan_requiring_projector: tests need a projector implementation in gtfn',
   'uses_sparse_fields: tests that require backend support for sparse fields',
   'uses_sparse_fields_as_output: tests that require backend support for writing sparse fields',
   'uses_strided_neighbor_offset: tests that require backend support for strided neighbor offset',
@@ -349,7 +363,8 @@ markers = [
   'uses_zero_dimensional_fields: tests that require backend support for zero-dimensional fields',
   'uses_cartesian_shift: tests that use a Cartesian connectivity',
   'uses_unstructured_shift: tests that use a unstructured connectivity',
-  'uses_scan: tests that uses scan',
+  'uses_max_over: tests that use the max_over builtin',
+  'uses_mesh_with_skip_values: tests that use a mesh with skip values',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', 'cpp_backend_tests/build*', '_local/*', '.*']
@@ -357,33 +372,38 @@ testpaths = 'tests'
 
 # -- ruff --
 [tool.ruff]
-ignore = [
-  'E501',
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905'  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-]
-ignore-init-module-imports = true
 line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
-# Rules:
+show-fixes = true
+# show-source = true
+target-version = 'py38'
+
+[tool.ruff.format]
+docstring-code-format = true
+# Reevaluate once ruff adds support for single-line ellipsis in the stable style.
+# Track: https://github.com/astral-sh/ruff/issues/8678)
+preview = true
+
+[tool.ruff.lint]
+# # Rules sets:
 # E: pycodestyle
 # F: Pyflakes
 # I: isort
 # B: flake8-bugbear
 # A: flake8-builtins
-# T100: flake8-debugger
+# T10: flake8-debugger
 # ERA: eradicate
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
-select = ['E', 'F', 'I', 'B', 'A', 'T100', 'ERA', 'NPY', 'RUF']
-show-fixes = true
-# show-source = true
-target-version = 'py310'
+ignore = [
+  'E501'  # [line-too-long]
+]
+ignore-init-module-imports = true
+select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
 typing-modules = ['gt4py.eve.extended_typing']
 unfixable = []
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 combine-as-imports = true
 # force-wrap-aliases = true
 known-first-party = ['gt4py', '__externals__', '__gtscript__']
@@ -393,6 +413,7 @@ known-third-party = [
   'boltons',
   'cached_property',
   'click',
+  'cupy',
   'dace',
   'devtools',
   'factory',
@@ -413,17 +434,26 @@ known-third-party = [
 ]
 lines-after-imports = 2
 order-by-type = true
-section-order = ['future', 'standard-library', 'third-party', 'first-party', 'tests', 'local-folder']
+section-order = [
+  'future',
+  'standard-library',
+  'third-party',
+  'first-party',
+  'tests',
+  'local-folder'
+]
 split-on-trailing-comma = false
 
-[tool.ruff.isort.sections]
+[tool.ruff.lint.isort.sections]
 'tests' = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
 
-[tool.ruff.mccabe]
+[tool.ruff.lint.mccabe]
 max-complexity = 15
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
+"src/gt4py/cartesian/*" = ["RUF012"]
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
+'src/gt4py/next/__init__.py' = ['F401']
 
 # -- setuptools build backend --
 [tool.setuptools]

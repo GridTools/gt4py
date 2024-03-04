@@ -16,7 +16,7 @@ import dataclasses
 from collections.abc import Iterable, Iterator
 from typing import TypeGuard
 
-from gt4py.eve import NodeTranslator
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
@@ -100,31 +100,36 @@ def _get_connectivity(
 
 def _make_shift(offsets: list[itir.Expr], iterator: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
-        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets), args=[iterator]
+        fun=itir.FunCall(fun=itir.SymRef(id="shift"), args=offsets),
+        args=[iterator],
+        location=iterator.location,
     )
 
 
 def _make_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator])
+    return itir.FunCall(fun=itir.SymRef(id="deref"), args=[iterator], location=iterator.location)
 
 
 def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="can_deref"), args=[iterator])
+    return itir.FunCall(
+        fun=itir.SymRef(id="can_deref"), args=[iterator], location=iterator.location
+    )
 
 
 def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
         fun=itir.SymRef(id="if_"),
         args=[cond, true_expr, false_expr],
+        location=cond.location,
     )
 
 
 def _make_list_get(offset: itir.Expr, expr: itir.Expr) -> itir.FunCall:
-    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr])
+    return itir.FunCall(fun=itir.SymRef(id="list_get"), args=[offset, expr], location=expr.location)
 
 
 @dataclasses.dataclass(frozen=True)
-class UnrollReduce(NodeTranslator):
+class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)

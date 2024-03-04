@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     Any,
     Callable,
     ClassVar,
+    Final,
     Generic,
     Never,
     Optional,
@@ -73,6 +74,9 @@ class Dimension:
 
     def __str__(self):
         return f"{self.value}[{self.kind}]"
+
+    def __call__(self, val: int) -> NamedIndex:
+        return self, val
 
 
 class Infinity(enum.Enum):
@@ -160,8 +164,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return f"UnitRange({self.start}, {self.stop})"
 
     @overload
-    def __getitem__(self, index: int) -> int:
-        ...
+    def __getitem__(self, index: int) -> int: ...
 
     @overload
     def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
@@ -189,11 +192,12 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         return UnitRange(max(self.start, other.start), min(self.stop, other.stop))
 
     def __contains__(self, value: Any) -> bool:
-        return (
-            isinstance(value, core_defs.INTEGRAL_TYPES)
-            and value >= self.start
-            and value < self.stop
-        )
+        # TODO(egparedes): use core_defs.IntegralScalar for `isinstance()` checks (see PEP 604)
+        #   and remove int cast, once the related mypy bug (#16358) gets fixed
+        if isinstance(value, core_defs.INTEGRAL_TYPES):
+            return self.start <= cast(int, value) < self.stop
+        else:
+            return False
 
     def __le__(self, other: UnitRange) -> bool:
         return self.start >= other.start and self.stop <= other.stop
@@ -271,7 +275,10 @@ NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTupl
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+NamedSlice: TypeAlias = (
+    slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
+)
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -304,6 +311,10 @@ def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
+
+
+def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return isinstance(obj, slice) and (is_named_index(obj.start) and is_named_index(obj.stop))
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
@@ -413,8 +424,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
     @overload
-    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]:
-        ...
+    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
     @overload
     def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
@@ -423,8 +433,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     @overload
     def __getitem__(  # noqa: F811 # redefine unused
         self, index: Dimension
-    ) -> tuple[Dimension, _Rng]:
-        ...
+    ) -> tuple[Dimension, _Rng]: ...
 
     def __getitem__(  # noqa: F811 # redefine unused
         self, index: int | slice | Dimension
@@ -576,8 +585,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R", _Value, tuple[_Value, ...])
 
     class GTBuiltInFuncDispatcher(Protocol):
-        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]:
-            ...
+        def __call__(self, func: fbuiltins.BuiltInFunction[_R, _P], /) -> Callable[_P, _R]: ...
 
 
 # TODO(havogt): we need to describe when this interface should be used instead of the `Field` protocol.
@@ -606,56 +614,48 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
-    def domain(self) -> Domain:
-        ...
+    def domain(self) -> Domain: ...
 
     @property
     def __gt_domain__(self) -> Domain:
         return self.domain
 
     @property
-    def codomain(self) -> type[core_defs.ScalarT] | Dimension:
-        ...
+    def codomain(self) -> type[core_defs.ScalarT] | Dimension: ...
 
     @property
-    def dtype(self) -> core_defs.DType[core_defs.ScalarT]:
-        ...
+    def dtype(self) -> core_defs.DType[core_defs.ScalarT]: ...
 
     @property
-    def ndarray(self) -> core_defs.NDArrayObject:
-        ...
+    def ndarray(self) -> core_defs.NDArrayObject: ...
 
     def __str__(self) -> str:
         return f"⟨{self.domain!s} → {self.dtype}⟩"
 
     @abc.abstractmethod
-    def asnumpy(self) -> np.ndarray:
-        ...
+    def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def restrict(self, item: AnyIndexSpec) -> Field: ...
+
+    @abc.abstractmethod
+    def as_scalar(self) -> core_defs.ScalarT: ...
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field:
-        ...
+    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field | core_defs.ScalarT:
-        ...
+    def __getitem__(self, item: AnyIndexSpec) -> Field: ...
 
     @abc.abstractmethod
-    def __abs__(self) -> Field:
-        ...
+    def __abs__(self) -> Field: ...
 
     @abc.abstractmethod
-    def __neg__(self) -> Field:
-        ...
+    def __neg__(self) -> Field: ...
 
     @abc.abstractmethod
     def __invert__(self) -> Field:
@@ -670,48 +670,37 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
         ...
 
     @abc.abstractmethod
-    def __add__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __add__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __radd__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __radd__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __sub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __sub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rsub__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __mul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __mul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rmul__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __floordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rfloordiv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __truediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __rtruediv__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
-    def __pow__(self, other: Field | core_defs.ScalarT) -> Field:
-        ...
+    def __pow__(self, other: Field | core_defs.ScalarT) -> Field: ...
 
     @abc.abstractmethod
     def __and__(self, other: Field | core_defs.ScalarT) -> Field:
@@ -739,8 +728,7 @@ def is_field(
 @extended_runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
-    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None:
-        ...
+    def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
 def is_mutable_field(
@@ -760,12 +748,11 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but breaks in another place
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
-    def codomain(self) -> DimT:
-        ...
+    def codomain(self) -> DimT: ...
 
     @property
     def kind(self) -> ConnectivityKind:
@@ -776,8 +763,11 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        ...
+    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -848,8 +838,10 @@ def is_connectivity_field(
     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
+# Utility function to construct a `Field` from different buffer representations.
+# Consider removing this function and using `Field` constructor directly. See also `_connectivity`.
 @functools.singledispatch
-def field(
+def _field(
     definition: Any,
     /,
     *,
@@ -859,14 +851,16 @@ def field(
     raise NotImplementedError
 
 
+# See comment for `_field`.
 @functools.singledispatch
-def connectivity(
+def _connectivity(
     definition: Any,
     /,
     codomain: Dimension,
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 
@@ -926,6 +920,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
+    def as_scalar(self) -> Never:
+        raise NotImplementedError()
+
     @functools.cached_property
     def domain(self) -> Domain:
         return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
@@ -941,6 +938,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     @functools.cached_property
     def codomain(self) -> DimT:
         return self.dimension
+
+    @property
+    def skip_value(self) -> None:
+        return None
 
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
@@ -977,15 +978,13 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     __call__ = remap
 
-    def restrict(self, index: AnyIndexSpec) -> core_defs.IntegralScalar:
-        if is_int_index(index):
-            return index + self.offset
+    def restrict(self, index: AnyIndexSpec) -> Never:
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
 
 
-connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
 
 
 @enum.unique
@@ -1078,9 +1077,9 @@ class FieldBuiltinFuncRegistry:
     dispatching (via ChainMap) to its parent's registries.
     """
 
-    _builtin_func_map: collections.ChainMap[
-        fbuiltins.BuiltInFunction, Callable
-    ] = collections.ChainMap()
+    _builtin_func_map: collections.ChainMap[fbuiltins.BuiltInFunction, Callable] = (
+        collections.ChainMap()
+    )
 
     def __init_subclass__(cls, **kwargs):
         cls._builtin_func_map = collections.ChainMap(
@@ -1104,4 +1103,9 @@ class FieldBuiltinFuncRegistry:
     @classmethod
     def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
         return cls._builtin_func_map.get(func, NotImplemented)
-        return cls._builtin_func_map.get(func, NotImplemented)
+
+
+#: Numeric value used to represent missing values in connectivities.
+#: Equivalent to the `_FillValue` attribute in the UGRID Conventions
+#: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
+_DEFAULT_SKIP_VALUE: Final[int] = -1

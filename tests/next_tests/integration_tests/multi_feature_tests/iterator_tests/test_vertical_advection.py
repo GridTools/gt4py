@@ -127,10 +127,7 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
         and lift_mode == LiftMode.FORCE_INLINE
     ):
         pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if (
-        program_processor == gtfn.run_gtfn_with_temporaries
-        or lift_mode == LiftMode.FORCE_TEMPORARIES
-    ):
+    if program_processor == gtfn.run_gtfn_with_temporaries or lift_mode == LiftMode.USE_TEMPORARIES:
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape

@@ -20,8 +20,7 @@ def test_renamer():
         bar: ti.Type
         baz: ti.Type
 
-    class Bar(ti.Type):
-        ...
+    class Bar(ti.Type): ...
 
     r = ti._Renamer()
     actual = [

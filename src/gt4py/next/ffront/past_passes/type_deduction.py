@@ -217,19 +217,19 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                         f"'{new_kwargs['out'].type}'."
                     )
             elif new_func.id in ["minimum", "maximum"]:
-                if new_args[0].type != new_args[1].type:
+                if arg_types[0] != arg_types[1]:
                     raise ValueError(
                         f"First and second argument in '{new_func.id}' must be of the same type."
-                        f"Got '{new_args[0].type}' and '{new_args[1].type}'."
+                        f"Got '{arg_types[0]}' and '{arg_types[1]}'."
                     )
-                return_type = new_args[0].type
+                return_type = arg_types[0]
             else:
                 raise AssertionError(
                     "Only calls to 'FieldOperator', 'ScanOperator' or 'minimum' and 'maximum' builtins allowed."
                 )
 
         except ValueError as ex:
-            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.") from ex
+            raise errors.DSLError(node.location, f"Invalid call to '{node.func.id}'.\n{ex}") from ex
 
         return past.Call(
             func=new_func,

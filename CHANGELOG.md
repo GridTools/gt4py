@@ -2,6 +2,37 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
+## [1.0.3] - 2024-02-07
+
+### General
+
+- Support for Python 3.11 and updated dependencies
+
+### Testing
+
+- Testing of Jupyter notebooks in CI
+
+### Next
+
+See commit history.
+
+## [1.0.2] - 2024-01-24
+
+### Cartesian
+
+- Compatibility of `gt4py.next` Fields with `gt4py.cartesian` computations.
+- Fixes for DaCe 0.15.1 compatibility.
+- Added `log10` as native function.
+- Make `scipy` optional: get `scipy` by installing `gt4py[full]` for best performance with `numpy` backend.
+
+### Storage
+
+- Refactored low-level storage allocation.
+
+### Next
+
+See commit history.
+
 ## [1.0.1] - 2023-02-20
 
 First version including the experimental `gt4py.next` aka _Declarative GT4Py_. The `gt4py.next` package is excluded from semantic versioning.
