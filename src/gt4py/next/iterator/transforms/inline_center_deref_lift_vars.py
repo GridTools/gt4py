@@ -87,7 +87,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     # inline
                     bound_scalars[bound_arg_name] = InlineLifts.apply(
                         im.deref(arg),
-                        flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT,
+                        flags=InlineLifts.Flag.INLINE_DEREF_LIFT,
                         recurse=False,
                     )
                 else:
