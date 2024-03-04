@@ -664,8 +664,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
+        inout_types = [*arg_types, out_sym.type]
         dims = set(
-            i for j in [type_info.extract_dims(arg_type) for arg_type in arg_types] for i in j
+            i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
         )
         source_code = ProgamFuncGen.apply(past_node)
 
