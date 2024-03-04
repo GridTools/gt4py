@@ -145,12 +145,15 @@ def inline_lift_center_only_test_data():
             im.deref(
                 im.lift(
                     im.lambda_("arg1", "arg2")(
-                        im.plus(im.deref("arg1"), im.deref(im.shift("I", 1)("arg2")))
+                        im.plus(
+                            im.plus(im.deref("arg1"), im.deref("arg1")),  # use it twice so that the lambda inliner keeps it as is
+                            im.deref(im.shift("I", 1)("arg2"))
+                        )
                     )
                 )(trivial_lift("it1"), trivial_lift("it1"))
             ),
             """
-            ·(↑(λ(it1, arg2) → (λ(_icdla_1) → ·(↑(λ() → _icdla_1))() + ·⟪Iₒ, 1ₒ⟫(arg2))(·it1)))(
+            ·(↑(λ(it1, arg2) → (λ(arg1) → ·arg1 + ·arg1 + ·⟪Iₒ, 1ₒ⟫(arg2))((↑(λ(it) → ·it))(it1))))(
                it1, (↑(λ(it) → ·it))(it1)
              )
             """,

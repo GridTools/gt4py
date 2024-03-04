@@ -77,7 +77,7 @@ def _is_scan(node: ir.FunCall):
 
 def _transform_and_extract_lift_args(
     node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
+    reserved_symbol_names: list[eve.SymbolName],
     extracted_args: dict[ir.Sym, ir.Expr],
     recorded_shifts_base=None,
 ):
@@ -95,26 +95,28 @@ def _transform_and_extract_lift_args(
     new_args = []
     for i, arg in enumerate(node.args):
         if isinstance(arg, ir.SymRef):
-            new_symbol = ir.Sym(id=arg.id)
+            new_symbol = im.sym(arg.id)
             assert new_symbol not in extracted_args or extracted_args[new_symbol] == arg
             extracted_args[new_symbol] = arg
             new_args.append(arg)
         else:
             new_symbol = _generate_unique_symbol(
                 desired_name=(inner_stencil, i),
-                occupied_names=symtable.keys(),
+                occupied_names=reserved_symbol_names,
                 occupied_symbols=extracted_args.keys(),
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
-            new_args.append(ir.SymRef(id=new_symbol.id))
+            new_args.append(im.ref(new_symbol.id))
 
         # todo: test this properly. not really sure about it...
         if recorded_shifts_base is not None:
             if isinstance(inner_stencil, ir.Lambda):
                 recorded_shifts = inner_stencil.params[i].annex.recorded_shifts
             elif inner_stencil == im.ref("deref"):
-                recorded_shifts = ()
+                recorded_shifts = ((),)
+            elif _is_scan(inner_stencil) and isinstance(inner_stencil.args[0], ir.Lambda):
+                recorded_shifts = inner_stencil.args[0].params[i+1].annex.recorded_shifts
             else:
                 raise AssertionError("Expected a Lambda function or deref as stencil.")
             new_symbol.annex.recorded_shifts = set()
@@ -282,90 +284,53 @@ class InlineLifts(
 
         eligible_lifted_args = [False] * len(node.args)
         for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
-            # TODO: if not isinstance(arg.fun.args[0], ir.Lambda) we have a scan. document this
-            if not _is_lift(arg) or not isinstance(arg.fun.args[0], ir.Lambda):  # type: ignore[attr-defined] # ensure by _is_lift
+            if not _is_lift(arg):
                 continue
-            if not self.predicate(arg, is_scan_pass_context):
-                continue
+            # we don't want to inline non-centre lift args as this would disallow creating a
+            #  temporary for them if the (outer) lift can not be extracted into a temporary.
             if self.inline_centre_lift_args_only:
-                if param.annex.recorded_shifts not in [set(), {()}]:
+                if not param.annex.recorded_shifts in [set(), {()}]:
                     continue
             eligible_lifted_args[i] = True
 
         if isinstance(stencil, ir.Lambda) and any(eligible_lifted_args):
             new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
-            bound_scalars: dict = {}
-            inlined_args = []
-            for i, (param, arg, eligible) in enumerate(
-                zip(stencil.params, node.args, eligible_lifted_args)
-            ):
+            inlined_args: dict[ir.Sym, ir.Expr] = {}
+
+            reserved_symbol_names = list(set(symtable.keys()) | {param.id for param in stencil.params})
+            for param, arg, eligible in zip(stencil.params, node.args, eligible_lifted_args, strict=True):
                 if eligible:
-                    assert isinstance(arg, ir.FunCall)
                     transformed_arg, _ = _transform_and_extract_lift_args(
-                        arg, symtable, new_arg_exprs, getattr(param.annex, "recorded_shifts", None)
+                        arg, reserved_symbol_names, new_arg_exprs, getattr(param.annex, "recorded_shifts", None)
                     )
-
-                    if self.inline_centre_lift_args_only and param.annex.recorded_shifts in [
-                        set(),
-                        {()},
-                    ]:
-                        assert self.uids
-                        bound_arg_name = self.uids.sequential_id(prefix="_icdla")
-                        bound_scalars[bound_arg_name] = InlineLifts.apply(
-                            im.deref(transformed_arg),
-                            flags=self.Flag.INLINE_TRIVIAL_DEREF_LIFT,
-                            recurse=False,
-                        )
-                        capture_lift = im.promote_to_const_iterator(bound_arg_name)
-                        assert arg.annex.recorded_shifts in [set(), {()}]  # just a sanity check
-                        copy_recorded_shifts(from_=arg, to=capture_lift)
-                        inlined_args.append(capture_lift)
-                    else:
-                        inlined_args.append(transformed_arg)
+                    inlined_args[param] = transformed_arg
                 else:
-                    if isinstance(arg, ir.SymRef):
-                        new_arg_sym = ir.Sym(id=arg.id)
+                    # the else-branch is completely sufficient, but this makes the resulting expression
+                    # much more readable
+                    # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
+                    #  pass. Since the tests of this transformation rely on it we preserve the
+                    #  behaviour here for now.
+                    if isinstance(arg, ir.SymRef) and arg.id not in (reserved_symbol_names + list(new_arg_exprs.keys())):
+                        new_param = im.sym(arg.id)
+                        copy_recorded_shifts(from_=param, to=new_param, required=self.inline_centre_lift_args_only)
+                        new_arg_exprs[new_param] = arg
+
+                        new_arg = im.ref(arg.id)
+                        copy_recorded_shifts(from_=param, to=new_arg, required=self.inline_centre_lift_args_only)
+                        assert param not in inlined_args
+                        inlined_args[param] = new_arg
                     else:
-                        new_arg_sym = _generate_unique_symbol(
-                            desired_name=(stencil, i),
-                            occupied_names=symtable.keys(),
-                            occupied_symbols=new_arg_exprs.keys(),
-                        )
+                        new_arg_exprs[param] = arg
 
-                    copy_recorded_shifts(
-                        from_=param, to=new_arg_sym, required=self.inline_centre_lift_args_only
-                    )
+            new_stencil_body = im.let(*((param, inlined_lift) for param, inlined_lift in
+                                        inlined_args.items()))(stencil.expr)
 
-                    if new_arg_sym in new_arg_exprs:
-                        for key in new_arg_exprs.keys():
-                            if key == new_arg_sym:
-                                new_arg_sym.annex.recorded_shifts.update(key.annex.recorded_shifts)
+            new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
 
-                    assert new_arg_sym not in new_arg_exprs or new_arg_exprs[new_arg_sym] == arg
-                    new_arg_exprs[new_arg_sym] = arg
-                    inlined_args.append(ir.SymRef(id=new_arg_sym.id))
-
-            inlined_call = self.visit(
-                inline_lambda(ir.FunCall(fun=stencil, args=inlined_args), opcount_preserving=True),
-                **kwargs,
-            )
-
-            if bound_scalars:
-                # TODO(tehrengruber): propagate let outwards
-                inlined_call = im.let(*bound_scalars.items())(inlined_call)
-            else:
-                inlined_call = inlined_call
-
-            if self.inline_centre_lift_args_only:
-                assert all(
-                    hasattr(new_arg_sym.annex, "recorded_shifts")
-                    for new_arg_sym in new_arg_exprs.keys()
-                )
-
-            new_stencil = im.lambda_(*new_arg_exprs.keys())(inlined_call)
+            new_stencil = im.lambda_(*new_arg_exprs.keys())(new_stencil_body)
             new_applied_lift = im.lift(new_stencil)(*new_arg_exprs.values())
             copy_recorded_shifts(from_=node, to=new_applied_lift, required=False)
-            return new_applied_lift
+            return self.visit(new_applied_lift, **kwargs)
 
     def visit_FunCall(self, node: ir.FunCall, **kwargs):
         recurse = kwargs["recurse"]
