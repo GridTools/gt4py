@@ -167,10 +167,9 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def __getitem__(self, index: int) -> int: ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> UnitRange: ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -425,17 +424,12 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(  # redefine unused
-        self, index: Dimension
-    ) -> tuple[Dimension, _Rng]: ...
+    def __getitem__(self, index: Dimension) -> tuple[Dimension, _Rng]: ...
 
-    def __getitem__(  # redefine unused
-        self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # redefine unused
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -446,8 +440,8 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             try:
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
-            except ValueError:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
+            except ValueError as ex:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
@@ -505,17 +499,11 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             )
         if index < 0:
             index += len(self.dims)
+        new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
+        dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
+        ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
 
-        ranges_dict = dict(named_ranges)
-        dims = self.dims[:index] + tuple(ranges_dict.keys()) + self.dims[index + 1 :]
-        # remove duplicate dims
-        unique_dims = dict.fromkeys(dims)
-        # extract ranges in equivalent order as unique_dims from either named_ranges or self.ranges
-        ranges = map(
-            lambda r: ranges_dict[r] if r in ranges_dict else self.ranges[self.dims.index(r)],
-            unique_dims,
-        )
-        return Domain(dims=tuple(unique_dims), ranges=tuple(ranges))
+        return Domain(dims=dims, ranges=ranges)
 
 
 FiniteDomain: TypeAlias = Domain[FiniteUnitRange]

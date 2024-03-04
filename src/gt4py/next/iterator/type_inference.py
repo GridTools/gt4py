@@ -387,7 +387,7 @@ NAMED_RANGE_DTYPE = Primitive(name="named_range")
 DOMAIN_DTYPE = Primitive(name="domain")
 OFFSET_TAG_DTYPE = Primitive(name="offset_tag")
 
-# Some helpers to define the builtins’ types
+# Some helpers to define the builtins' types
 T0 = TypeVar.fresh()
 T1 = TypeVar.fresh()
 T2 = TypeVar.fresh()
@@ -558,16 +558,16 @@ def _infer_shift_location_types(shift_args, offset_provider, constraints):
         current_loc_out = current_loc_in
         for arg in shift_args:
             if not isinstance(arg, ir.OffsetLiteral):
-                # probably some dynamically computed offset, thus we assume it’s a number not an axis and just ignore it (see comment below)
+                # probably some dynamically computed offset, thus we assume it's a number not an axis and just ignore it (see comment below)
                 continue
             offset = arg.value
             if isinstance(offset, int):
-                continue  # ignore ‘application’ of (partial) shifts
+                continue  # ignore 'application' of (partial) shifts
             else:
                 assert isinstance(offset, str)
                 axis = offset_provider[offset]
                 if isinstance(axis, gtx.Dimension):
-                    continue  # Cartesian shifts don’t change the location type
+                    continue  # Cartesian shifts don't change the location type
                 elif isinstance(axis, Connectivity):
                     assert (
                         axis.origin_axis.kind
@@ -955,14 +955,14 @@ def _save_types_to_annex(node: ir.Node, types: dict[int, Type]) -> None:
     for child_node in node.pre_walk_values().if_isinstance(*TYPED_IR_NODES):
         try:
             child_node.annex.type = types[id(child_node)]
-        except KeyError:
+        except KeyError as ex:
             if not (
                 isinstance(child_node, ir.SymRef)
                 and child_node.id in ir.GRAMMAR_BUILTINS | ir.TYPEBUILTINS
             ):
                 raise AssertionError(
                     f"Expected a type to be inferred for node '{child_node}', but none was found."
-                )
+                ) from ex
 
 
 def infer_all(

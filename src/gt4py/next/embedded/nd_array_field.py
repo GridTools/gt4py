@@ -27,7 +27,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import common as embedded_common, context as embedded_context
-from gt4py.next.ffront import experimental, fbuiltins
+from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
 
 
@@ -211,11 +211,8 @@ class NdArrayField(
             # then compute the index array
             xp = self.array_ns
             new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-            if self._ndarray.ndim > 1 and restricted_connectivity_domain == new_domain:
-                new_buffer = self._take_mdim(new_idx_array, axis=dim_idx)
-            else:
-                # finally, take the new array
-                new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+            # finally, take the new array
+            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
         return self.__class__.from_array(
             new_buffer,
@@ -326,24 +323,6 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
-
-    def _take_mdim(
-        self,
-        restricted_connectivity: core_defs.NDArrayObject,
-        axis: int,
-    ) -> core_defs.NDArrayObject:
-        xp = self.array_ns
-        dim = self.domain.dims[axis]
-        offset_abs = [
-            restricted_connectivity if d == dim else xp.indices(restricted_connectivity.shape)[d_i]
-            for d_i, d in enumerate(self.domain.dims)
-        ]
-        new_buffer_flat = xp.take(
-            xp.asarray(self._ndarray).flatten(),
-            xp.ravel_multi_index(tuple(offset_abs), self._ndarray.shape).flatten(),
-        )
-        new_buffer = new_buffer_flat.reshape(restricted_connectivity.shape)
-        return new_buffer
 
 
 @dataclasses.dataclass(frozen=True)
@@ -507,12 +486,12 @@ def _hypercube(
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(
-    fbuiltins.abs,
-    NdArrayField.__abs__,  # type: ignore[attr-defined]
+    fbuiltins.abs,  # type: ignore[attr-defined]
+    NdArrayField.__abs__,
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.power,
-    NdArrayField.__pow__,  # type: ignore[attr-defined]
+    fbuiltins.power,  # type: ignore[attr-defined]
+    NdArrayField.__pow__,
 )
 # TODO gamma
 
@@ -526,16 +505,16 @@ for name in (
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum,
-    _make_builtin("minimum", "minimum"),  # type: ignore[attr-defined]
+    fbuiltins.minimum,  # type: ignore[attr-defined]
+    _make_builtin("minimum", "minimum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum,
-    _make_builtin("maximum", "maximum"),  # type: ignore[attr-defined]
+    fbuiltins.maximum,  # type: ignore[attr-defined]
+    _make_builtin("maximum", "maximum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod,
-    _make_builtin("fmod", "fmod"),  # type: ignore[attr-defined]
+    fbuiltins.fmod,  # type: ignore[attr-defined]
+    _make_builtin("fmod", "fmod"),
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
@@ -689,20 +668,6 @@ def _astype(field: common.Field | core_defs.ScalarT | tuple, type_: type) -> NdA
 
 
 NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
-
-
-def _as_offset(offset_: fbuiltins.FieldOffset, field: common.Field) -> common.ConnectivityField:
-    if isinstance(field, NdArrayField):
-        # change field.ndarray from relative to absolute
-        offset_dim = field.domain.dims.index(offset_.source)
-        new_connectivity = field.array_ns.indices(field.ndarray.shape)[offset_dim] + field.ndarray
-        return common.connectivity(new_connectivity, codomain=offset_.source, domain=field.domain)
-    raise AssertionError(
-        "This is the NdArrayConnectivityField implementation of `experimental.as_offset`."
-    )
-
-
-NdArrayField.register_builtin_func(experimental.as_offset, _as_offset)  # type: ignore[has-type] #type specified in experimental
 
 
 def _get_slices_from_domain_slice(
