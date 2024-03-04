@@ -17,7 +17,7 @@ import copy
 import io
 import os
 import shutil
-from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast, overload
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union, cast, overload
 
 import pybind11
 import setuptools
@@ -47,7 +47,8 @@ def get_cuda_compute_capability():
 
 def get_gt_pyext_build_opts(
     *,
-    opt_level: int = 3,
+    opt_level: Literal["0", "1", "2", "3", "s"] = "3",
+    extra_opt_flags: str = "",
     add_profile_info: bool = False,
     uses_openmp: bool = True,
     uses_cuda: bool = False,
@@ -114,9 +115,7 @@ def get_gt_pyext_build_opts(
         ]
     extra_link_args = gt_config.build_settings["extra_link_args"]
 
-    if not 0 <= opt_level <= 3:
-        raise ValueError(f"Invalid optimization level '{opt_level}'; should be between 0 and 3.")
-    mode_flags = [f"-O{opt_level}", "-DNDEBUG"]
+    mode_flags = [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)

@@ -229,7 +229,8 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
-        "opt_level": {"versioning": True, "type": int},
+        "opt_level": {"versioning": True, "type": str},
+        "extra_opt_flags": {"versioning": True, "type": str},
         "verbose": {"versioning": False, "type": bool},
         "oir_pipeline": {"versioning": True, "type": OirPipeline},
     }
@@ -305,7 +306,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             clean=self.builder.options.backend_opts.get("clean", False),
             **gt_backend.pyext_builder.get_gt_pyext_build_opts(
                 opt_level=self.builder.options.backend_opts.get(
-                    "opt_level", gt_config.GT4PY_COMPILER_OPTIMIZATION_LEVEL
+                    "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+                ),
+                extra_opt_flags=self.builder.options.backend_opts.get(
+                    "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
                 ),
                 add_profile_info=self.builder.options.backend_opts.get("add_profile_info", False),
                 uses_cuda=uses_cuda,
