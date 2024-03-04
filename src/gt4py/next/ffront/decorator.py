@@ -33,7 +33,7 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen, utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
+from gt4py.next import allocators as next_allocators, backend as next_backend, embedded as next_embedded, errors
 from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -115,14 +115,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType]
-    backend: Optional[ppi.ProgramExecutor]
+    backend: Optional[next_backend.Backend]
     grid_type: Optional[GridType]
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor],
+        backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -138,7 +138,7 @@ class Program:
         )
 
     def __post_init__(self):
-        function_closure_vars = otf_transforms._filter_closure_vars_by_type(
+        function_closure_vars = otf_transforms.utils._filter_closure_vars_by_type(
             self.closure_vars, GTCallable
         )
         misnamed_functions = [
@@ -160,6 +160,7 @@ class Program:
             raise RuntimeError(
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
+
 
     @property
     def __name__(self) -> str:
@@ -216,18 +217,18 @@ class Program:
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
-        return otf_transforms._get_closure_vars_recursively(self.closure_vars)
+        return otf_transforms.utils._get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        offsets_and_dimensions = otf_transforms._filter_closure_vars_by_type(
+        offsets_and_dimensions = otf_transforms.utils._filter_closure_vars_by_type(
             self._all_closure_vars, FieldOffset, Dimension
         )
-        grid_type = otf_transforms._deduce_grid_type(
+        grid_type = otf_transforms.utils._deduce_grid_type(
             self.grid_type, offsets_and_dimensions.values()
         )
 
-        gt_callables = otf_transforms._filter_closure_vars_by_type(
+        gt_callables = otf_transforms.utils._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
@@ -251,7 +252,7 @@ class Program:
         elif isinstance(self.backend, modular_executor.ModularExecutor):
             self.backend(
                 stages.PastClosure(
-                    definition=self.definition,
+                    closure_vars=self.closure_vars,
                     past_node=self.past_node,
                     grid_type=self.grid_type,
                     args=[*rewritten_args, *size_args],
@@ -347,7 +348,7 @@ class Program:
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in otf_transforms._filter_closure_vars_by_type(
+        for name, gt_callable in otf_transforms.utils._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
             if isinstance(
@@ -665,6 +666,19 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
+        self.past_to_func(arg_types, out_sym, past_node)
+
+        self._program_cache[hash_] = Program(
+            past_node=past_node,
+            closure_vars=closure_vars,
+            definition=None,
+            backend=self.backend,
+            grid_type=self.grid_type,
+        )
+
+        return self._program_cache[hash_]
+
+    def past_to_func(self, arg_types, out_sym, past_node):
         inout_types = [
             *arg_types,
             *(
@@ -677,11 +691,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
         )
         source_code = ProgamFuncGen.apply(past_node)
-
         import linecache
-
         import gt4py.next as gtx
-
         filename = "<generated>"
         globalns = {dim.value: dim for dim in dims}
         globalns[self.definition.__name__] = self
@@ -691,7 +702,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         exec(code_obj, globalns, localns)
         lines = [line + "\n" for line in source_code.splitlines()]
         linecache.cache[filename] = (len(source_code), None, lines, filename)
-
         function_definition = localns[past_node.id]
         linecache.cache[filename] = (
             len(source_code),
@@ -699,11 +709,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             [line + "\n" for line in source_code.splitlines()],
             filename,
         )
-        self._program_cache[hash_] = Program.from_function(
-            function_definition, backend=self.backend
-        )
-
-        return self._program_cache[hash_]
+        return function_definition
 
     def __call__(
         self,

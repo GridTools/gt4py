@@ -35,7 +35,7 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 @dataclasses.dataclass(frozen=True)
 class PastClosure:
-    definition: types.FunctionType
+    closure_vars: dict[str, Any]
     past_node: past.Program
     grid_type: common.GridType
     args: tuple[Any, ...]
