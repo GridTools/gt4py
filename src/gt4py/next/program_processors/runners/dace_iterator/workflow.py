@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import warnings
 from typing import Callable, Optional, cast
 
 import dace
@@ -68,7 +69,22 @@ class DaCeTranslator(
 
         # ITIR parameters
         column_axis: Optional[Dimension] = inp.kwargs.get("column_axis", None)
-        offset_provider = inp.kwargs["offset_provider"]
+        offset_provider: dict[str, common.Dimension | common.Connectivity] = inp.kwargs[
+            "offset_provider"
+        ]
+        runtime_lift_mode: Optional[LiftMode] = inp.kwargs.get("lift_mode", None)
+
+        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
+        #  to the interface of all (or at least all of concern) backends, but instead should be
+        #  configured in the backend itself (like it is here), until then we respect the argument
+        #  here and warn the user if it differs from the one configured.
+        lift_mode = runtime_lift_mode or self.lift_mode
+        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
+            warnings.warn(
+                f"DaCe Backend was configured for LiftMode `{self.lift_mode!s}`, but "
+                f"overriden to be {runtime_lift_mode!s} at runtime.",
+                stacklevel=2,
+            )
 
         sdfg = build_sdfg_from_itir(
             program,
@@ -77,7 +93,7 @@ class DaCeTranslator(
             auto_optimize=self.auto_optimize,
             on_gpu=on_gpu,
             column_axis=column_axis,
-            lift_mode=self.lift_mode,
+            lift_mode=lift_mode,
             load_sdfg_from_file=False,
             save_sdfg=False,
             use_field_canonical_representation=self.use_field_canonical_representation,
