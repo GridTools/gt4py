@@ -667,8 +667,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         inout_types = [
             *arg_types,
-            *(out_sym.type.types if isinstance(out_sym.type, ts.TupleType) else [out_sym.type]),
+            *(
+                list(type_info.flatten(out_sym.type.types))
+                if isinstance(out_sym.type, ts.TupleType)
+                else [out_sym.type]
+            ),
         ]
+        list(type_info.flatten(out_sym.type.types))
         dims = set(
             i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
         )
