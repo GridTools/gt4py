@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-import textwrap
 import types
 import typing
 import warnings
@@ -31,9 +30,14 @@ from devtools import debug
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import codegen, utils as eve_utils
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, backend as next_backend, embedded as next_embedded, errors
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    embedded as next_embedded,
+    errors,
+)
 from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -62,6 +66,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.otf import stages, transforms as otf_transforms
+from gt4py.next.otf.transforms.past_to_func import past_to_fun_def
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -161,7 +166,6 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
-
     @property
     def __name__(self) -> str:
         return self.definition.__name__
@@ -247,6 +251,15 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                if self.definition is None:
+                    self.definition = past_to_fun_def(stages.PastClosure(
+                    closure_vars=self.closure_vars,
+                    past_node=self.past_node,
+                    grid_type=self.grid_type,
+                    args=[*rewritten_args, *size_args],
+                    kwargs=kwargs
+                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+                ))
                 ctx.run(self.definition, *rewritten_args, **kwargs)
             return
         elif isinstance(self.backend, modular_executor.ModularExecutor):
@@ -666,7 +679,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
-        self.past_to_func(arg_types, out_sym, past_node)
+        # past_closure = stages.PastClosure(
+        #     closure_vars=closure_vars,
+        #     past_node=past_node,
+        #     grid_type=self.grid_type,
+        #     args=past_node.params,
+        #     kwargs={},
+        # )
+        #
+        # past_to_fun_def(past_closure)
 
         self._program_cache[hash_] = Program(
             past_node=past_node,
@@ -677,39 +698,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
         return self._program_cache[hash_]
-
-    def past_to_func(self, arg_types, out_sym, past_node):
-        inout_types = [
-            *arg_types,
-            *(
-                list(type_info.flatten(out_sym.type.types))
-                if isinstance(out_sym.type, ts.TupleType)
-                else [out_sym.type]
-            ),
-        ]
-        dims = set(
-            i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
-        )
-        source_code = ProgamFuncGen.apply(past_node)
-        import linecache
-        import gt4py.next as gtx
-        filename = "<generated>"
-        globalns = {dim.value: dim for dim in dims}
-        globalns[self.definition.__name__] = self
-        globalns |= gtx.__dict__
-        localns = {}
-        code_obj = compile(source_code, filename, "exec")
-        exec(code_obj, globalns, localns)
-        lines = [line + "\n" for line in source_code.splitlines()]
-        linecache.cache[filename] = (len(source_code), None, lines, filename)
-        function_definition = localns[past_node.id]
-        linecache.cache[filename] = (
-            len(source_code),
-            None,
-            [line + "\n" for line in source_code.splitlines()],
-            filename,
-        )
-        return function_definition
 
     def __call__(
         self,
@@ -866,23 +854,3 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
-
-
-class ProgamFuncGen(codegen.TemplatedGenerator):
-    def visit_Program(self, node: past.Program, **kwargs) -> str:
-        imports = "from __future__ import annotations\nfrom gt4py.next import *"
-        params = self.visit(node.params)
-        signature = ", ".join(params)
-        body = textwrap.indent("\n".join(self.visit(node.body)), prefix=" " * 4)
-        return f"{imports}\n\n\ndef {node.id}({signature}) -> None:\n{body}"
-
-    Symbol = codegen.FormatTemplate("{id}: {type}")
-
-    def visit_Call(self, node: past.Call, **kwargs) -> str:
-        args = ", ".join(self.visit(node.args))
-        kwargs_list = [f"{name}={self.visit(value)}" for name, value in node.kwargs.items()]
-        kwargs = ", ".join(kwargs_list)
-        params = ", ".join([args, kwargs])
-        return f"{self.visit(node.func)}({params})"
-
-    Name = codegen.FormatTemplate("{id}")

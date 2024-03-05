@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import dataclasses
-import types
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from gt4py.next import common
