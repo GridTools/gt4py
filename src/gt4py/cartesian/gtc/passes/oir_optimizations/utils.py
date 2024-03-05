@@ -173,18 +173,16 @@ class AccessCollector(gt4py.eve.NodeVisitor):
 
     class GeneralAccessCollection(GenericAccessCollection[GeneralAccess, GeneralOffsetTuple]):
         def cartesian_accesses(self) -> "AccessCollector.CartesianAccessCollection":
-            return AccessCollector.CartesianAccessCollection(
-                [
-                    CartesianAccess(
-                        field=acc.field,
-                        offset=cast(Tuple[int, int, int], acc.offset),
-                        data_index=acc.data_index,
-                        is_write=acc.is_write,
-                    )
-                    for acc in self._ordered_accesses
-                    if acc.offset[2] is not None
-                ]
-            )
+            return AccessCollector.CartesianAccessCollection([
+                CartesianAccess(
+                    field=acc.field,
+                    offset=cast(Tuple[int, int, int], acc.offset),
+                    data_index=acc.data_index,
+                    is_write=acc.is_write,
+                )
+                for acc in self._ordered_accesses
+                if acc.offset[2] is not None
+            ])
 
         def has_variable_access(self) -> bool:
             return any(acc.offset[2] is None for acc in self._ordered_accesses)

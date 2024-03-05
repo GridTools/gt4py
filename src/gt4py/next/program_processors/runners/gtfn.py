@@ -24,7 +24,6 @@ import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import common, config
 from gt4py.next.iterator import transforms
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -103,16 +102,14 @@ def extract_connectivity_args(
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
-    return hash(
-        (
-            otf_closure.program,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
-        )
-    )
+    return hash((
+        otf_closure.program,
+        # As the frontend types contain lists they are not hashable. As a workaround we just
+        # use content_hash here.
+        content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+        id(offset_provider) if offset_provider else None,
+        otf_closure.kwargs.get("column_axis", None),
+    ))
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):

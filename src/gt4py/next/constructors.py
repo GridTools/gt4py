@@ -262,12 +262,10 @@ def as_field(
                 raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
         else:
             origin = {}
-        actual_domain = common.domain(
-            [
-                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
-                for d, s in zip(domain, data.shape)
-            ]
-        )
+        actual_domain = common.domain([
+            (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+            for d, s in zip(domain, data.shape)
+        ])
     else:
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")

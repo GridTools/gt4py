@@ -110,7 +110,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         INLINE_TRIVIAL_LET = enum.auto()
 
         @classmethod
-        def all(self):  # noqa: A003  # shadowing a python builtin
+        def all(self):  # shadowing a python builtin
             return functools.reduce(operator.or_, self.__members__.values())
 
     ignore_tuple_size: bool

@@ -19,7 +19,6 @@ from typing import Optional
 
 import gt4py.eve as eve
 import gt4py.next as gtx
-from gt4py.eve import datamodels
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
@@ -98,9 +97,6 @@ class FunctionType(Type):
 
     args: Type = eve.field(default_factory=TypeVar.fresh)
     ret: Type = eve.field(default_factory=TypeVar.fresh)
-
-
-import traceback
 
 
 class Location(Type):
@@ -631,24 +627,23 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         result = TypeVar.fresh()
         if node.kind:
             kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
-            self.constraints.add(
-                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
-            )
+            self.constraints.add((
+                Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()),
+                result,
+            ))
         if node.dtype:
             assert node.dtype is not None
             dtype: Primitive | List = Primitive(name=node.dtype[0])
             if node.dtype[1]:
                 dtype = List(dtype=dtype)
-            self.constraints.add(
-                (
-                    Val(
-                        dtype=dtype,
-                        current_loc=TypeVar.fresh(),
-                        defined_loc=TypeVar.fresh(),
-                    ),
-                    result,
-                )
-            )
+            self.constraints.add((
+                Val(
+                    dtype=dtype,
+                    current_loc=TypeVar.fresh(),
+                    defined_loc=TypeVar.fresh(),
+                ),
+                result,
+            ))
         return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:
@@ -765,18 +760,16 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         dtype_ = TypeVar.fresh()
         size = TypeVar.fresh()
         it = self.visit(node.args[1], **kwargs)
-        self.constraints.add(
-            (
-                it,
-                Val(
-                    kind=Iterator(),
-                    dtype=dtype_,
-                    size=size,
-                    current_loc=current_loc_in,
-                    defined_loc=current_loc_out,
-                ),
-            )
-        )
+        self.constraints.add((
+            it,
+            Val(
+                kind=Iterator(),
+                dtype=dtype_,
+                size=size,
+                current_loc=current_loc_in,
+                defined_loc=current_loc_out,
+            ),
+        ))
         lst = List(
             dtype=dtype_,
             max_length=max_length,
@@ -794,16 +787,14 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
         size = TypeVar.fresh()
 
-        self.constraints.add(
-            (
-                val_arg_type,
-                Val(
-                    kind=Value(),
-                    dtype=TypeVar.fresh(),
-                    size=size,
-                ),
-            )
-        )
+        self.constraints.add((
+            val_arg_type,
+            Val(
+                kind=Value(),
+                dtype=TypeVar.fresh(),
+                size=size,
+            ),
+        ))
 
         return Val(
             kind=Value(),
@@ -846,12 +837,10 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
     def _visit_domain(self, node: ir.FunCall, **kwargs) -> Type:
         for arg in node.args:
-            self.constraints.add(
-                (
-                    Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
-                    self.visit(arg, **kwargs),
-                )
-            )
+            self.constraints.add((
+                Val(kind=Value(), dtype=NAMED_RANGE_DTYPE, size=Scalar()),
+                self.visit(arg, **kwargs),
+            ))
         return Val(kind=Value(), dtype=DOMAIN_DTYPE, size=Scalar())
 
     def _visit_cartesian_domain(self, node: ir.FunCall, **kwargs) -> Type:
@@ -906,17 +895,15 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         output_loc = TypeVar.fresh()
         if isinstance(node.output, ir.SymRef) and node.output.id.startswith("_tmp"):
             output = self.visit(node.output, **kwargs)
-            self.constraints.add(
-                (
-                    output,
-                    Val(
-                        kind=Iterator(),
-                        dtype=output_dtype,
-                        size=Column(),
-                        defined_loc=output_loc,
-                    ),
-                )
-            )
+            self.constraints.add((
+                output,
+                Val(
+                    kind=Iterator(),
+                    dtype=output_dtype,
+                    size=Column(),
+                    defined_loc=output_loc,
+                ),
+            ))
         else:
             self.visit(node.output, **kwargs)
             output = Val(
@@ -925,41 +912,38 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 size=Column(),
                 defined_loc=output_loc,
             )
-        self.constraints.add(
-            (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
-        )
+        self.constraints.add((
+            domain,
+            Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()),
+        ))
 
         inputs: list[Type] = self.visit(node.inputs, **kwargs)
         stencil_params = []
         for input_ in inputs:
             stencil_param = Val(current_loc=output_loc, defined_loc=TypeVar.fresh())
-            self.constraints.add(
-                (
-                    input_,
-                    Val(
-                        kind=stencil_param.kind,
-                        dtype=stencil_param.dtype,
-                        size=stencil_param.size,
-                        # closure input and stencil param differ in `current_loc`
-                        # current_loc=ANYWHERE,
-                        current_loc=TypeVar.fresh(),
-                        # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
-                        # defined_loc=stencil_param.defined_loc,
-                        defined_loc=TypeVar.fresh(),
-                    ),
-                )
-            )
+            self.constraints.add((
+                input_,
+                Val(
+                    kind=stencil_param.kind,
+                    dtype=stencil_param.dtype,
+                    size=stencil_param.size,
+                    # closure input and stencil param differ in `current_loc`
+                    # current_loc=ANYWHERE,
+                    current_loc=TypeVar.fresh(),
+                    # TODO(tehrengruber): Seems to break for scalars. Use `TypeVar.fresh()`?
+                    # defined_loc=stencil_param.defined_loc,
+                    defined_loc=TypeVar.fresh(),
+                ),
+            ))
             stencil_params.append(stencil_param)
 
-        self.constraints.add(
-            (
-                stencil,
-                FunctionType(
-                    args=Tuple.from_elems(*stencil_params),
-                    ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
-                ),
-            )
-        )
+        self.constraints.add((
+            stencil,
+            FunctionType(
+                args=Tuple.from_elems(*stencil_params),
+                ret=Val(kind=Value(), dtype=output_dtype, size=Column()),
+            ),
+        ))
         return Closure(output=output, inputs=Tuple.from_elems(*inputs))
 
     def visit_FencilWithTemporaries(self, node: FencilWithTemporaries, **kwargs):
@@ -1030,9 +1014,10 @@ def infer_all(
     )
 
     if reindex:
-        unified_types, unsatisfiable_constraints = reindex_vars(
-            (unified_types, unsatisfiable_constraints)
-        )
+        unified_types, unsatisfiable_constraints = reindex_vars((
+            unified_types,
+            unsatisfiable_constraints,
+        ))
 
     result = {
         id_: unified_type

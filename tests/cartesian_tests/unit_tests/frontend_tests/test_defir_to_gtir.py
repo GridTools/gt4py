@@ -45,7 +45,8 @@ def defir_to_gtir():
 
 
 def test_stencil_definition(
-    defir_to_gtir, ijk_domain  # noqa: F811 [redefinition, reason: fixture]
+    defir_to_gtir,
+    ijk_domain,  # noqa: F811 [redefinition, reason: fixture]
 ):
     stencil_definition = (
         TDefinition(name="definition", domain=ijk_domain, fields=["a", "b"])

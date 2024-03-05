@@ -14,7 +14,6 @@
 
 """Definitions of node and visitor trait classes."""
 
-
 from __future__ import annotations
 
 import collections

@@ -14,7 +14,6 @@
 
 """Visitor classes to work with IR trees."""
 
-
 from __future__ import annotations
 
 import collections.abc

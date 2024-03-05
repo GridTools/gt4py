@@ -30,7 +30,7 @@ from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
-from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts

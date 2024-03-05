@@ -437,9 +437,9 @@ class DaCeIRBuilder(eve.NodeTranslator):
         )
         expansion_items = global_ctx.library_node.expansion_specification[stages_idx + 1 :]
 
-        iteration_ctx = iteration_ctx.push_axes_extents(
-            {k: v for k, v in zip(dcir.Axis.dims_horizontal(), extent)}
-        )
+        iteration_ctx = iteration_ctx.push_axes_extents({
+            k: v for k, v in zip(dcir.Axis.dims_horizontal(), extent)
+        })
         iteration_ctx = iteration_ctx.push_expansion_items(expansion_items)
 
         assert iteration_ctx.grid_subset == dcir.GridSubset.single_gridpoint()
