@@ -106,7 +106,9 @@ def domain_intersection(
 
     Example:
     >>> I = common.Dimension("I")
-    >>> domain_intersection(common.domain({I:(0,5)}), common.domain({I:(1,3)})) # doctest: +ELLIPSIS
+    >>> domain_intersection(
+    ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
+    ... )  # doctest: +ELLIPSIS
     Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
     return functools.reduce(
@@ -127,23 +129,23 @@ def intersect_domains(
     Example:
     >>> I = common.Dimension("I")
     >>> J = common.Dimension("J")
-    >>> res = intersect_domains(common.domain({I:(0,5), J:(1,2)}), common.domain({I:(1,3), J:(0,3)}), ignore_dims=J)
-    >>> assert res == (common.domain({I:(1,3), J:(1,2)}), common.domain({I:(1,3), J:(0,3)}))
+    >>> res = intersect_domains(
+    ...     common.domain({I: (0, 5), J: (1, 2)}),
+    ...     common.domain({I: (1, 3), J: (0, 3)}),
+    ...     ignore_dims=J,
+    ... )
+    >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
-    intersection_without_ignore_dims = domain_intersection(
-        *[
-            common.Domain(*[(d, r) for d, r in domain if d not in ignore_dims_tuple])
-            for domain in domains
-        ]
-    )
+    intersection_without_ignore_dims = domain_intersection(*[
+        common.Domain(*[(d, r) for d, r in domain if d not in ignore_dims_tuple])
+        for domain in domains
+    ])
     return tuple(
-        common.Domain(
-            *[
-                (d, r if d in ignore_dims_tuple else intersection_without_ignore_dims[d][1])
-                for d, r in domain
-            ]
-        )
+        common.Domain(*[
+            (d, r if d in ignore_dims_tuple else intersection_without_ignore_dims[d][1])
+            for d, r in domain
+        ])
         for domain in domains
     )
 
@@ -206,7 +208,12 @@ def _named_slice_to_named_range(
 ) -> common.NamedRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
-        idx_start_0, idx_start_1, idx_stop_0, idx_stop_1 = idx.start[0], idx.start[1], idx.stop[0], idx.stop[1]  # type: ignore[attr-defined]
+        idx_start_0, idx_start_1, idx_stop_0, idx_stop_1 = (
+            idx.start[0],
+            idx.start[1],
+            idx.stop[0],
+            idx.stop[1],
+        )  # type: ignore[attr-defined]
         if idx_start_0 != idx_stop_0:
             raise IndexError(
                 f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."

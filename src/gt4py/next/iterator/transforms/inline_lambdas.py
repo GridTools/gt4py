@@ -24,7 +24,7 @@ from gt4py.next.iterator.transforms.symbol_ref_utils import CountSymbolRefs
 
 # TODO(tehrengruber): Reduce complexity of the function by removing the different options here
 #  and introduce a generic predicate argument for the `eligible_params` instead.
-def inline_lambda(  # noqa: C901  # see todo above
+def inline_lambda(  # see todo above
     node: ir.FunCall,
     opcount_preserving=False,
     force_inline_lift_args=False,
@@ -42,7 +42,7 @@ def inline_lambda(  # noqa: C901  # see todo above
 
         for i, param in enumerate(node.fun.params):
             # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
-            #  ignore_shift(...)(it_sym)  # noqa: E800
+            #  ignore_shift(...)(it_sym)
             if ref_counts[param.id] > 1 and not isinstance(
                 node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
             ):
@@ -83,7 +83,7 @@ def inline_lambda(  # noqa: C901  # see todo above
         # TODO(tehrengruber): find a better way of generating new symbols
         #  in `name_map` that don't collide with each other. E.g. this
         #  must still work:
-        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: E800
+        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)
         name_map: dict[ir.SymRef, str] = {}
 
         def new_name(name):

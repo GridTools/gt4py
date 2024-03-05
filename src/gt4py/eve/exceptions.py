@@ -14,7 +14,6 @@
 
 """Definitions of specific Eve exceptions."""
 
-
 from __future__ import annotations
 
 from .extended_typing import Any, Dict, Optional

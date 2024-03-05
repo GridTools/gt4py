@@ -15,7 +15,7 @@
 import dataclasses
 import functools
 import inspect
-from builtins import bool, float, int, tuple  # noqa: A004
+from builtins import bool, float, int, tuple
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
@@ -146,9 +146,7 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(
-                where(mask, t, f) for t, f in zip(true_field, false_field)
-            )  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 
@@ -256,8 +254,8 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 def _make_unary_math_builtin(name):
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
-        # return getattr(math, name)(value)# noqa: E800 # commented code
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # commented code
+        # return getattr(math, name)(value)# commented code
         raise NotImplementedError()
 
     impl.__name__ = name

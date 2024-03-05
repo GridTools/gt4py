@@ -129,12 +129,9 @@ class AccessInfoCollector(eve.NodeVisitor):
         k_grid = dcir.GridSubset.from_interval(grid_subset.intervals[dcir.Axis.K], dcir.Axis.K)
         inner_infos = {name: info.apply_iteration(k_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update(
-            {
-                name: info.union(ctx.access_infos.get(name, info))
-                for name, info in inner_infos.items()
-            }
-        )
+        ctx.access_infos.update({
+            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
+        })
 
         return ctx.access_infos
 
@@ -170,12 +167,9 @@ class AccessInfoCollector(eve.NodeVisitor):
 
         inner_infos = {name: info.apply_iteration(ij_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update(
-            {
-                name: info.union(ctx.access_infos.get(name, info))
-                for name, info in inner_infos.items()
-            }
-        )
+        ctx.access_infos.update({
+            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
+        })
 
         return ctx.access_infos
 
@@ -419,7 +413,7 @@ def flatten_list(list_or_node: Union[List[Any], eve.Node]):
 
 
 def collect_toplevel_computation_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.ComputationNode"]:
     class ComputationNodeCollector(eve.NodeVisitor):
         def visit_ComputationNode(self, node: dcir.ComputationNode, *, collection: List):
@@ -431,7 +425,7 @@ def collect_toplevel_computation_nodes(
 
 
 def collect_toplevel_iteration_nodes(
-    list_or_node: Union[List[Any], eve.Node]
+    list_or_node: Union[List[Any], eve.Node],
 ) -> List["dcir.IterationNode"]:
     class IterationNodeCollector(eve.NodeVisitor):
         def visit_IterationNode(self, node: dcir.IterationNode, *, collection: List):

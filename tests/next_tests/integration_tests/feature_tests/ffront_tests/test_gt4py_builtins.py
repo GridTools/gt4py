@@ -95,14 +95,14 @@ def reduction_e_field(edge_f: cases.EField) -> cases.VField:
 
 @gtx.field_operator
 def reduction_ek_field(
-    edge_f: common.Field[[Edge, KDim], np.int32]
+    edge_f: common.Field[[Edge, KDim], np.int32],
 ) -> common.Field[[Vertex, KDim], np.int32]:
     return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
 
 @gtx.field_operator
 def reduction_ke_field(
-    edge_f: common.Field[[KDim, Edge], np.int32]
+    edge_f: common.Field[[KDim, Edge], np.int32],
 ) -> common.Field[[KDim, Vertex], np.int32]:
     return neighbor_sum(edge_f(V2E), axis=V2EDim)
 
@@ -202,7 +202,7 @@ def test_reduction_expression_in_call(unstructured_case):
         fencil,
         ref=lambda edge_f: 3
         * np.sum(
-            -edge_f[v2e_table] ** 2 * 2,
+            -(edge_f[v2e_table] ** 2) * 2,
             axis=1,
             initial=0,
             where=v2e_table != common._DEFAULT_SKIP_VALUE,

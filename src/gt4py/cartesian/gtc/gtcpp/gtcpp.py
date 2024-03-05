@@ -159,7 +159,7 @@ class GTExtent(LocNode):
 
 class GTAccessor(LocNode):
     name: eve.Coerced[eve.SymbolName]
-    id: int  # noqa: A003  # shadowing python builtin
+    id: int  # shadowing python builtin
     intent: Intent
     extent: GTExtent
     ndim: int = 3

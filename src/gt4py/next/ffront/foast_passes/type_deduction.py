@@ -41,7 +41,9 @@ def with_altered_scalar_kind(
     >>> print(with_altered_scalar_kind(scalar_t, ts.ScalarKind.BOOL))
     bool
 
-    >>> field_t = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    >>> field_t = ts.FieldType(
+    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    ... )
     >>> print(with_altered_scalar_kind(field_t, ts.ScalarKind.FLOAT32))
     Field[[I], float32]
     """
@@ -67,9 +69,14 @@ def construct_tuple_type(
     Examples:
     ---------
     >>> from gt4py.next import Dimension
-    >>> mask_type = ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL))
+    >>> mask_type = ts.FieldType(
+    ...     dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    ... )
     >>> true_branch_types = [ts.ScalarType(kind=ts.ScalarKind), ts.ScalarType(kind=ts.ScalarKind)]
-    >>> false_branch_types = [ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)), ts.ScalarType(kind=ts.ScalarKind)]
+    >>> false_branch_types = [
+    ...     ts.FieldType(dims=[Dimension(value="I")], dtype=ts.ScalarType(kind=ts.ScalarKind)),
+    ...     ts.ScalarType(kind=ts.ScalarKind),
+    ... ]
     >>> print(construct_tuple_type(true_branch_types, false_branch_types, mask_type))
     [FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None)), FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<enum 'ScalarKind'>, shape=None))]
     """
@@ -104,18 +111,20 @@ def promote_to_mask_type(
     >>> dtype = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
     >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.ScalarType(kind=dtype))
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None), shape=None))
-    >>> promote_to_mask_type(ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype))
+    >>> promote_to_mask_type(
+    ...     ts.FieldType(dims=[I, J], dtype=bool_type), ts.FieldType(dims=[I], dtype=dtype)
+    ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
-    >>> promote_to_mask_type(ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I,J], dtype=dtype))
+    >>> promote_to_mask_type(
+    ...     ts.FieldType(dims=[I], dtype=bool_type), ts.FieldType(dims=[I, J], dtype=dtype)
+    ... )
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     """
     if isinstance(input_type, ts.ScalarType) or not all(
         item in input_type.dims for item in mask_type.dims
     ):
         return_dtype = input_type.dtype if isinstance(input_type, ts.FieldType) else input_type
-        return type_info.promote(
-            input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype)
-        )  # type: ignore
+        return type_info.promote(input_type, ts.FieldType(dims=mask_type.dims, dtype=return_dtype))  # type: ignore
     else:
         return input_type
 
@@ -233,8 +242,9 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
     DeferredType(constraint=None)
 
     >>> typed_fieldop = FieldOperatorTypeDeduction.apply(untyped_fieldop)
-    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(dtype=ts.ScalarType(
-    ...     kind=ts.ScalarKind.FLOAT64), dims=[IDim])
+    >>> assert typed_fieldop.body.stmts[0].value.type == ts.FieldType(
+    ...     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64), dims=[IDim]
+    ... )
     """
 
     @classmethod
@@ -797,7 +807,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             field_dims_str = ", ".join(str(dim) for dim in field_type.dims)
             raise errors.DSLError(
                 node.location,
-                f"Incompatible field argument in call to '{str(node.func)}'. "
+                f"Incompatible field argument in call to '{node.func!s}'. "
                 f"Expected a field with dimension '{reduction_dim}', got "
                 f"'{field_dims_str}'.",
             )
@@ -861,7 +871,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_integral(arg_1):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': "
+                f"Incompatible argument in call to '{node.func!s}': "
                 f"expected integer for offset field dtype, got '{arg_1.dtype}'. "
                 f"{node.location}",
             )
@@ -869,7 +879,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if arg_0.source not in arg_1.dims:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': "
+                f"Incompatible argument in call to '{node.func!s}': "
                 f"'{arg_0.source}' not in list of offset field dimensions '{arg_1.dims}'. "
                 f"{node.location}",
             )
@@ -890,7 +900,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not type_info.is_logical(mask_type):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}': expected "
+                f"Incompatible argument in call to '{node.func!s}': expected "
                 f"a field with dtype 'bool', got '{mask_type}'.",
             )
 
@@ -908,7 +918,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             ):
                 raise errors.DSLError(
                     node.location,
-                    f"Return arguments need to be of same type in '{str(node.func)}', got "
+                    f"Return arguments need to be of same type in '{node.func!s}', got "
                     f"'{node.args[1].type}' and '{node.args[2].type}'.",
                 )
             else:
@@ -920,7 +930,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         except ValueError as ex:
             raise errors.DSLError(
                 node.location,
-                f"Incompatible argument in call to '{str(node.func)}'.",
+                f"Incompatible argument in call to '{node.func!s}'.",
             ) from ex
 
         return foast.Call(
@@ -940,7 +950,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if any([not (isinstance(elt.type, ts.DimensionType)) for elt in broadcast_dims_expr]):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimension type in '{str(node.func)}': expected "
+                f"Incompatible broadcast dimension type in '{node.func!s}': expected "
                 f"all broadcast dimensions to be of type 'Dimension'.",
             )
 
@@ -949,7 +959,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         if not set((arg_dims := type_info.extract_dims(arg_type))).issubset(set(broadcast_dims)):
             raise errors.DSLError(
                 node.location,
-                f"Incompatible broadcast dimensions in '{str(node.func)}': expected "
+                f"Incompatible broadcast dimensions in '{node.func!s}': expected "
                 f"broadcast dimension(s) '{set(arg_dims).difference(set(broadcast_dims))}' missing",
             )
 
