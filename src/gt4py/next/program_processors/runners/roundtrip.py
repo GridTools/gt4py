@@ -21,16 +21,16 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-import gt4py.eve.codegen as codegen
 import gt4py.next.allocators as next_allocators
 import gt4py.next.common as common
 import gt4py.next.iterator.embedded as embedded
 import gt4py.next.iterator.ir as itir
 import gt4py.next.iterator.transforms as itir_transforms
 import gt4py.next.iterator.transforms.global_tmps as gtmps_transform
-import gt4py.next.program_processors.otf_compile_executor as otf_compile_executor
 import gt4py.next.program_processors.processor_interface as ppi
+from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
+from gt4py.next import backend as next_backend
 
 
 def _create_tmp(axes, origin, shape, dtype):
@@ -229,6 +229,6 @@ def execute_roundtrip(
 
 executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
 
-backend = otf_compile_executor.OTFBackend(
+backend = next_backend.Backend(
     executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
 )
