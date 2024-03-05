@@ -42,9 +42,11 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
     init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
     axis: common.Dimension
 
-    def __call__(
-        self, *args: common.Field | core_defs.Scalar, **kwargs: common.Field | core_defs.Scalar
-    ) -> common.Field:  # type: ignore[override] # we cannot properly type annotate relative to self.fun
+    def __call__(  # type: ignore[override]
+        self,
+        *args: common.Field | core_defs.Scalar,
+        **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
+    ) -> common.Field:
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]

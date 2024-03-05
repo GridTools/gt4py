@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Any, Collection, Union
+from typing import Any, Collection, Final, Union
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
@@ -22,12 +22,12 @@ from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import pytype_t
 
 
 class GTFNCodegen(codegen.TemplatedGenerator):
-    _grid_type_str = {
+    _grid_type_str: Final = {
         common.GridType.CARTESIAN: "cartesian",
         common.GridType.UNSTRUCTURED: "unstructured",
     }
 
-    _builtins_mapping = {
+    _builtins_mapping: Final = {
         "abs": "std::abs",
         "sin": "std::sin",
         "cos": "std::cos",

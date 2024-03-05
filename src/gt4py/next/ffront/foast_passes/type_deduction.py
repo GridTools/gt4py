@@ -319,7 +319,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             )
         new_definition = self.visit(node.definition, **kwargs)
         new_def_type = new_definition.type
-        carry_type = list(new_def_type.pos_or_kw_args.values())[0]
+        carry_type = next(iter(new_def_type.pos_or_kw_args.values()))
         if new_init.type != new_def_type.returns:
             raise errors.DSLError(
                 node.location,
@@ -327,7 +327,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 f"expected '{new_def_type.returns}', got '{new_init.type}'.",
             )
         elif new_init.type != carry_type:
-            carry_arg_name = list(new_def_type.pos_or_kw_args.keys())[0]
+            carry_arg_name = next(iter(new_def_type.pos_or_kw_args.keys()))
             raise errors.DSLError(
                 node.location,
                 f"Argument 'init' to scan operator '{node.id}' must have same type as '{carry_arg_name}' argument: "

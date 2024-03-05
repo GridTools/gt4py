@@ -194,7 +194,7 @@ def build_pybind_ext(
     libraries: Optional[List[str]] = None,
     extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
     extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Type = None,
+    build_ext_class: Optional[Type] = None,
     verbose: bool = False,
     clean: bool = False,
 ) -> Tuple[str, str]: ...
@@ -211,7 +211,7 @@ def build_pybind_ext(
     libraries: Optional[List[str]] = None,
     extra_compile_args: Optional[Union[List[str], Dict[str, List[str]]]] = None,
     extra_link_args: Optional[List[str]] = None,
-    build_ext_class: Type = None,
+    build_ext_class: Optional[Type] = None,
     verbose: bool = False,
     clean: bool = False,
 ) -> Tuple[str, str]:
@@ -242,7 +242,6 @@ def build_pybind_ext(
         ext_modules=[py_extension],
         script_args=[
             "build_ext",
-            # "--parallel={}".format(gt_config.build_settings["parallel_jobs"]),
             "--build-temp={}".format(build_path),
             "--build-lib={}".format(build_path),
             "--force",
@@ -336,7 +335,7 @@ def build_pybind_cuda_ext(
 
 def _clean_build_flags(config_vars: Dict[str, str]) -> None:
     for key, value in config_vars.items():
-        if type(value) == str:
+        if isinstance(value, str):
             value = " " + value + " "
             for s in value.split(" "):
                 if (

@@ -49,7 +49,7 @@ except ImportError:
 
 
 _NDBuffer: TypeAlias = Union[
-    # xtyping.Buffer,  # TODO: add once we update typing_extensions
+    # TODO: add `xtyping.Buffer` once we update typing_extensions
     xtyping.ArrayInterface,
     xtyping.CUDAArrayInterface,
     xtyping.DLPackBuffer,

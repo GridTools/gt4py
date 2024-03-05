@@ -50,7 +50,7 @@ def parse_source_definition(source_definition: SourceDefinition) -> ast.AST:
                 else None
             ),
         )
-        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__)
+        raise errors.DSLError(loc, err.msg).with_traceback(err.__traceback__) from err
 
 
 @dataclass(frozen=True, kw_only=True)

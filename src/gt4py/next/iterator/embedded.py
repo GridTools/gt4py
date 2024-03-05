@@ -227,7 +227,7 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         return self.data.astype(dtype, copy=False)
 
     def _validate_kstart(self, args):
-        if wrong_kstarts := (  # noqa: F841 # wrong_kstarts looks unused
+        if wrong_kstarts := (  # noqa: F841 [unused-variable]
             set(arg.kstart for arg in args if isinstance(arg, Column)) - {self.kstart}
         ):
             raise ValueError(
@@ -1013,7 +1013,7 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], common.Field]:
-    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)
+    warnings.warn("`np_as_located_field()` is deprecated, use `gtx.as_field()`", DeprecationWarning)  # noqa: B028 [no-explicit-stacklevel]
 
     origin = origin or {}
 

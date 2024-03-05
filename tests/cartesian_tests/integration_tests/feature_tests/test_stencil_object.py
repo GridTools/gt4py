@@ -33,7 +33,7 @@ def test_stencil_object_cache(backend: str):
     @typing.no_type_check
     def stencil(in_field: Field[float], out_field: Field[float], *, offset: float):
         with computation(PARALLEL), interval(...):
-            out_field = (  # noqa: F841 # local variable 'out_field' is assigned to but never used
+            out_field = (  # noqa: F841 [unused-variable]
                 in_field + offset
             )
 
