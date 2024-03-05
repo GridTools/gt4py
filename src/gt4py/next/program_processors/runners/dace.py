@@ -83,8 +83,6 @@ class DaCeBackendFactory(GTFNBackendFactory):
         use_field_canonical_representation: bool = False
 
 
-run_dace_cpu = DaCeBackendFactory(auto_optimize=True)
-run_dace_cpu_cached = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
 
-run_dace_gpu = DaCeBackendFactory(gpu=True, auto_optimize=True)
-run_dace_gpu_cached = DaCeBackendFactory(cached=True, gpu=True, auto_optimize=True)
+run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
