@@ -312,8 +312,8 @@ class InlineLifts(
                     )
                     inlined_args[param] = transformed_arg
                 else:
-                    # the else-branch is completely sufficient, but this makes the resulting expression
-                    # much more readable
+                    # the else-branch is completely sufficient, but this makes the resulting
+                    # expression much more readable
                     # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
                     #  pass. Since the tests of this transformation rely on it we preserve the
                     #  behaviour here for now.
