@@ -33,7 +33,12 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import codegen, utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, backend as next_backend, embedded as next_embedded, errors
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    embedded as next_embedded,
+    errors,
+)
 from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
@@ -62,7 +67,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.otf import stages, transforms as otf_transforms
-from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -161,7 +166,6 @@ class Program:
                 f"The following closure variables are undefined: {', '.join(undefined_symbols)}."
             )
 
-
     @property
     def __name__(self) -> str:
         return self.definition.__name__
@@ -239,7 +243,7 @@ class Program:
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if self.backend is None:
+        if self.backend is None or self.backend.executor is None:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
@@ -249,30 +253,18 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
             return
-        elif isinstance(self.backend, modular_executor.ModularExecutor):
-            self.backend(
-                stages.PastClosure(
-                    closure_vars=self.closure_vars,
-                    past_node=self.past_node,
-                    grid_type=self.grid_type,
-                    args=[*rewritten_args, *size_args],
-                    kwargs=kwargs
-                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
-                ),
-                *rewritten_args,
-                *size_args,
-                **kwargs,
-                offset_provider=offset_provider,
-                column_axis=self._column_axis,
-            )
-            return
 
-        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
-        if "debug" in kwargs:
-            debug(self.itir)
+        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.itir,
+            stages.PastClosure(
+                closure_vars=self.closure_vars,
+                past_node=self.past_node,
+                grid_type=self.grid_type,
+                args=[*rewritten_args, *size_args],
+                kwargs=kwargs
+                | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+            ),
             *rewritten_args,
             *size_args,
             **kwargs,
@@ -692,7 +684,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         source_code = ProgamFuncGen.apply(past_node)
         import linecache
+
         import gt4py.next as gtx
+
         filename = "<generated>"
         globalns = {dim.value: dim for dim in dims}
         globalns[self.definition.__name__] = self

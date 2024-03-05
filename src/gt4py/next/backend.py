@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic
+from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
@@ -29,8 +29,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
 
-    def __call__(self, program: stages.PastClosure, *args, **kwargs: Any) -> None:
-        self.executor(self.transformer(program), *args, **kwargs)
+    def __call__(self, program: stages.PastClosure) -> None:
+        program_call = self.transformer(program)
+        self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 
     @property
     def __name__(self) -> str:

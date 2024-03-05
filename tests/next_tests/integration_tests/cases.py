@@ -28,9 +28,14 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import Self
-from gt4py.next import allocators as next_allocators, common, constructors, field_utils
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    common,
+    constructors,
+    field_utils,
+)
 from gt4py.next.ffront import decorator
-from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
@@ -477,7 +482,7 @@ def cartesian_case(
     exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
 ):
     yield Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor,
         offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
@@ -491,7 +496,7 @@ def unstructured_case(
     exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
 ):
     yield Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -601,7 +606,7 @@ def get_default_data(
 class Case:
     """Parametrizable components for single feature integration tests."""
 
-    executor: Optional[ppi.ProgramProcessor]
+    executor: Optional[next_backend.Backend]
     offset_provider: dict[str, common.Connectivity | gtx.Dimension]
     default_sizes: dict[gtx.Dimension, int]
     grid_type: common.GridType
