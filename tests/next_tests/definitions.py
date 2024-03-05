@@ -83,8 +83,8 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU = "gt4py.next.program_processors.runners.roundtrip.backend"
-    DACE_GPU = "gt4py.next.program_processors.runners.roundtrip.backend"
+    DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
+    DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
 
 
 class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):

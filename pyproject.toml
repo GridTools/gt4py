@@ -94,26 +94,6 @@ Homepage = 'https://gridtools.github.io/'
 Source = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- black --
-[tool.black]
-exclude = '''
-/(
-    \.git
-  | \.gt_cache
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-include = '\.pyi?$'
-line-length = 100
-target-version = ['py310']
-
 # -- coverage --
 [tool.coverage]
 
@@ -136,99 +116,6 @@ ignore_errors = true
 [tool.coverage.run]
 branch = true
 source_pkgs = ['gt4py']
-
-# -- flake8  --
-# flake8-pyproject plugin is used to load configuration settings
-# from this file, since flake8 doesn't support it natively.
-[tool.flake8]
-count = true
-doctests = true
-exclude = [
-  '.eggs',
-  '.gt_cache',
-  '.ipynb_checkpoints',
-  '.tox',
-  '_local/',
-  'build',
-  'dist',
-  'docs',
-  'tests/_disabled',
-  'setup.py'
-]
-ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
-  'D1',  # Public code object needs docstring
-  'DAR',  # Disable dargling errors by default
-  'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503',  # Line break occurred before a binary operator
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-]
-max-complexity = 15
-max-line-length = 100  # It should be the same as in `tool.black.line-length` above
-per-file-ignores = [
-  'src/gt4py/eve/extended_typing.py:F401,F405',
-  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
-]
-rst-roles = [
-  'py:mod, mod',
-  'py:func, func',
-  'py:data, data',
-  'py:const, const',
-  'py:class, class',
-  'py:meth, meth',
-  'py:attr, attr',
-  'py:exc, exc',
-  'py:obj, obj'
-]
-
-# -- isort --
-[tool.isort]
-combine_as_imports = true
-group_by_package = true
-known_first_party = ['gt4py', '__externals__', '__gtscript__']
-known_tests = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
-known_third_party = [
-  'attr',
-  'black',
-  'boltons',
-  'cached_property',
-  'click',
-  'cupy',
-  'dace',
-  'devtools',
-  'factory',
-  'hypothesis',
-  'importlib_resources',
-  'jinja2',
-  'mako',
-  'networkx',
-  'numpy',
-  'packaging',
-  'pybind11',
-  'pytest',
-  'pytest_factoryboy',
-  'setuptools',
-  'tabulate',
-  'typing_extensions',
-  'xxhash'
-]
-lexicographical = true
-line_length = 100  # It should be the same as in `tool.black.line-length` above
-lines_after_imports = 2
-profile = 'black'
-sections = [
-  'FUTURE',
-  'STDLIB',
-  'THIRDPARTY',
-  'FIRSTPARTY',
-  'TESTS',
-  'LOCALFOLDER'
-]
-skip_gitignore = true
-skip_glob = ['*.venv/**', '_local/**']
 
 # -- mypy  --
 [tool.mypy]
@@ -451,7 +338,7 @@ split-on-trailing-comma = false
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
-"src/gt4py/cartesian/*" = ["RUF012"]
+'src/gt4py/cartesian/*' = ['RUF012']
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
 'src/gt4py/next/__init__.py' = ['F401']
 

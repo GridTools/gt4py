@@ -690,6 +690,25 @@ class ParsingContext(enum.Enum):
     COMPUTATION = 2
 
 
+_DATADIMS_INDEXER = "A"
+
+
+def _is_datadims_indexing_name(name: str):
+    return name.endswith(f".{_DATADIMS_INDEXER}")
+
+
+def _trim_indexing_symbol(name: str):
+    return name[: -1 * (len(_DATADIMS_INDEXER) + 1)]
+
+
+def _is_datadims_indexing_node(node):
+    return (
+        isinstance(node.value, ast.Attribute)
+        and node.value.attr == _DATADIMS_INDEXER
+        and isinstance(node.value.value, ast.Name)
+    )
+
+
 class IRMaker(ast.NodeVisitor):
     def __init__(
         self,
@@ -1037,6 +1056,10 @@ class IRMaker(ast.NodeVisitor):
             result = nodes.VarRef(name=symbol, loc=nodes.Location.from_ast_node(node))
         elif self._is_local_symbol(symbol):
             raise AssertionError("Logic error")
+        elif _is_datadims_indexing_name(symbol):
+            result = nodes.FieldRef.datadims_index(
+                name=_trim_indexing_symbol(symbol), loc=nodes.Location.from_ast_node(node)
+            )
         else:
             raise AssertionError(f"Missing '{symbol}' symbol definition")
 
@@ -1145,12 +1168,16 @@ class IRMaker(ast.NodeVisitor):
                 field_axes = self.fields[result.name].axes
                 if index is not None:
                     if len(field_axes) != len(index):
+                        ro_field_message = ""
+                        if len(field_axes) == 0:
+                            ro_field_message = f"Did you mean .A{index}?"
                         raise GTScriptSyntaxError(
                             f"Incorrect offset specification detected. Found {index}, "
-                            f"but the field has dimensions ({', '.join(field_axes)})"
+                            f"but the field has dimensions ({', '.join(field_axes)}). "
+                            f"{ro_field_message}"
                         )
                     result.offset = {axis: value for axis, value in zip(field_axes, index)}
-            elif isinstance(node.value, ast.Subscript):
+            elif isinstance(node.value, ast.Subscript) or _is_datadims_indexing_node(node):
                 result.data_index = [
                     (
                         nodes.ScalarLiteral(value=value, data_type=nodes.DataType.INT32)
@@ -1601,6 +1628,11 @@ class CollectLocalSymbolsAstVisitor(ast.NodeVisitor):
                 elif isinstance(t, ast.Subscript):
                     if isinstance(t.value, ast.Name):
                         name_node = t.value
+                    elif _is_datadims_indexing_node(t):
+                        raise GTScriptSyntaxError(
+                            message="writing to an GlobalTable ('A' global indexation) is forbidden",
+                            loc=nodes.Location.from_ast_node(node),
+                        )
                     elif isinstance(t.value, ast.Subscript) and isinstance(t.value.value, ast.Name):
                         name_node = t.value.value
                     else:
@@ -1887,9 +1919,7 @@ class GTScriptParser(ast.NodeVisitor):
                         "{}.{}".format(value._gtscript_["qualified_name"], item_name): item_value
                         for item_name, item_value in value._gtscript_["nonlocals"].items()
                     }
-                    resolved_values_list.extend(  # noqa[B038] #editing a loop's mutable iterable (probably intended here)
-                        nested_inlined_values.items()
-                    )
+                    resolved_values_list.extend(nested_inlined_values.items())
 
                     for imported_name, imported_name_accesses in value._gtscript_[
                         "imported"
