@@ -181,17 +181,22 @@ def convert_args(
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
-        sdfg_args = get_sdfg_args(
-            sdfg,
-            *args,
-            check_args=False,
-            offset_provider=offset_provider,
-            on_gpu=on_gpu,
-            use_field_canonical_representation=use_field_canonical_representation,
-        )
+        if not sdfg_program._lastargs:
+            sdfg_args = get_sdfg_args(
+                sdfg,
+                *args,
+                check_args=False,
+                offset_provider=offset_provider,
+                on_gpu=on_gpu,
+                use_field_canonical_representation=use_field_canonical_representation,
+            )
+            with dace.config.temporary_config():
+                dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+                return inp(**sdfg_args)
 
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-            return inp(**sdfg_args)
+        else:
+            # TODO: the scalar arguments should be replaced with the actual value
+            # for field arguments, the data pointer and array symbols should remain the same
+            return sdfg_program.fast_call(*sdfg_program._lastargs)
 
     return decorated_program
