@@ -211,8 +211,11 @@ class NdArrayField(
             # then compute the index array
             xp = self.array_ns
             new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-            # finally, take the new array
-            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+            if self._ndarray.ndim > 1 and restricted_connectivity_domain == new_domain:
+                new_buffer = self._take_mdim(new_idx_array, axis=dim_idx)
+            else:
+                # finally, take the new array
+                new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
         return self.__class__.from_array(
             new_buffer,
@@ -323,6 +326,24 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+    def _take_mdim(
+        self,
+        restricted_connectivity: core_defs.NDArrayObject,
+        axis: int,
+    ) -> core_defs.NDArrayObject:
+        xp = self.array_ns
+        dim = self.domain.dims[axis]
+        offset_abs = [
+            restricted_connectivity if d == dim else xp.indices(restricted_connectivity.shape)[d_i]
+            for d_i, d in enumerate(self.domain.dims)
+        ]
+        new_buffer_flat = xp.take(
+            xp.asarray(self._ndarray).flatten(),
+            xp.ravel_multi_index(tuple(offset_abs), self._ndarray.shape).flatten(),
+        )
+        new_buffer = new_buffer_flat.reshape(restricted_connectivity.shape)
+        return new_buffer
 
 
 @dataclasses.dataclass(frozen=True)
