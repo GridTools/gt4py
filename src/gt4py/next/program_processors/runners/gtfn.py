@@ -169,7 +169,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         use_temporaries = factory.Trait(
             otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            #otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+            # otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
             name_temps="_with_temporaries",
         )
         device_type = core_defs.DeviceType.CPU
