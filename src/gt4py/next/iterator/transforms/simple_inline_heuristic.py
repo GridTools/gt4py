@@ -38,7 +38,7 @@ def is_eligible_for_inlining(arg: ir.FunCall, is_scan_pass_context: bool) -> boo
 
     assert isinstance(arg.fun, ir.FunCall)  # for mypy
     (stencil,) = arg.fun.args
-    # Don’t inline scans, i.e. exclude `↑(scan(...))(...)`
+    # Do not inline scans, i.e. exclude `↑(scan(...))(...)`
     if isinstance(stencil, ir.FunCall) and stencil.fun == ir.SymRef(id="scan"):
         return False
 
