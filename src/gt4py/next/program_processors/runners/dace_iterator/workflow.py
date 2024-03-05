@@ -14,13 +14,16 @@
 
 from __future__ import annotations
 
+import ctypes
 import dataclasses
+import functools
+import itertools
+import operator
 import warnings
-from typing import Callable, Optional, cast
+from typing import Callable, Optional
 
 import dace
 import factory
-from dace.codegen.compiled_sdfg import CompiledSDFG
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
@@ -121,15 +124,27 @@ class DaCeTranslationStepFactory(factory.Factory):
         model = DaCeTranslator
 
 
+class CompiledDaceProgram(stages.CompiledProgram):
+    sdfg_program: dace.CompiledSDFG
+    sdfg_scalar_args: dict[str, int]  # map arg to its position in program ABI
+
+    def __init__(self, program, scalar_args):
+        self.sdfg_program = program
+        self.sdfg_scalar_args = scalar_args
+
+    def __call__(self, *args, **kwargs) -> None:
+        self.sdfg_program(*args, **kwargs)
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
         stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-        stages.CompiledProgram,
+        CompiledDaceProgram,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-        stages.CompiledProgram,
+        CompiledDaceProgram,
     ],
     step_types.CompilationStep[languages.SDFG, languages.LanguageSettings, languages.Python],
 ):
@@ -142,7 +157,7 @@ class DaCeCompiler(
     def __call__(
         self,
         inp: stages.CompilableSource[languages.SDFG, languages.LanguageSettings, languages.Python],
-    ) -> stages.CompiledProgram:
+    ) -> CompiledDaceProgram:
         sdfg = dace.SDFG.from_json(inp.program_source.source_code)
 
         src_dir = cache.get_cache_folder(inp, self.cache_lifetime)
@@ -161,7 +176,18 @@ class DaCeCompiler(
                 dace.config.Config.set("compiler", "cpu", "args", value=compiler_args)
             sdfg_program = sdfg.compile(validate=False)
 
-        return sdfg_program
+        # extract position of scalar arguments from program ABI
+        array_symbols = functools.reduce(
+            operator.or_, itertools.chain(x.free_symbols for x in sdfg.arrays.values())
+        )
+        array_symbols = {str(x) for x in array_symbols}
+        sdfg_arglist = sdfg_program.sdfg.signature_arglist(with_types=False)
+        sdfg_scalar_args = {
+            param: pos
+            for pos, param in enumerate(sdfg_arglist)
+            if (param not in sdfg.arrays and param not in array_symbols)
+        }
+        return CompiledDaceProgram(sdfg_program, sdfg_scalar_args)
 
 
 class DaCeCompilationStepFactory(factory.Factory):
@@ -170,13 +196,13 @@ class DaCeCompilationStepFactory(factory.Factory):
 
 
 def convert_args(
-    inp: stages.CompiledProgram,
+    inp: CompiledDaceProgram,
     device: core_defs.DeviceType = core_defs.DeviceType.CPU,
     use_field_canonical_representation: bool = False,
 ) -> stages.CompiledProgram:
-    sdfg_program = cast(CompiledSDFG, inp)
-    on_gpu = True if device == core_defs.DeviceType.CUDA else False
+    sdfg_program = inp.sdfg_program
     sdfg = sdfg_program.sdfg
+    on_gpu = True if device == core_defs.DeviceType.CUDA else False
 
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
@@ -195,8 +221,14 @@ def convert_args(
                 return inp(**sdfg_args)
 
         else:
-            # TODO: the scalar arguments should be replaced with the actual value
+            # the scalar arguments should be replaced with the actual value
             # for field arguments, the data pointer and array symbols should remain the same
+            scalar_args_table = {
+                param: arg for param, arg in zip(sdfg.arg_names, args) if not common.is_field(arg)
+            }
+            for param, pos in inp.sdfg_scalar_args.items():
+                assert not isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
+                sdfg_program._lastargs[0][pos].value = scalar_args_table[param]
             return sdfg_program.fast_call(*sdfg_program._lastargs)
 
     return decorated_program
