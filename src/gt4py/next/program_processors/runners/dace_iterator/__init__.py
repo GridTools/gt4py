@@ -218,7 +218,7 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
-    """  # noqa: D401
+    """
     offset_provider = kwargs["offset_provider"]
     on_gpu = kwargs.get("on_gpu", False)
 
@@ -298,10 +298,13 @@ def build_sdfg_from_itir(
 
     for nested_sdfg in sdfg.all_sdfgs_recursive():
         if not nested_sdfg.debuginfo:
-            _, frameinfo = warnings.warn(
-                f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
-            ), getframeinfo(
-                currentframe()  # type: ignore
+            _, frameinfo = (
+                warnings.warn(
+                    f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
+                ),
+                getframeinfo(
+                    currentframe()  # type: ignore
+                ),
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
                 start_line=frameinfo.lineno,

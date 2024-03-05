@@ -14,7 +14,6 @@
 
 """Global configuration of storage test generation and execution (with Hypothesis and pytest)."""
 
-
 import hypothesis as hyp
 
 

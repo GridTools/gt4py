@@ -573,7 +573,7 @@ def execute_shift(
 
 
 def _is_list_of_complete_offsets(
-    complete_offsets: list[tuple[Any, Any]]
+    complete_offsets: list[tuple[Any, Any]],
 ) -> TypeGuard[list[CompleteOffset]]:
     return all(
         isinstance(tag, Tag) and isinstance(offset, (int, np.integer))

@@ -14,7 +14,6 @@
 
 """Generic interface and implementations of run-time type validation for arbitrary values."""
 
-
 from __future__ import annotations
 
 import abc
@@ -113,7 +112,7 @@ class TypeValidatorFactory(Protocol):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(  # redefinion of unused member
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -125,7 +124,7 @@ class TypeValidatorFactory(Protocol):
     ) -> Optional[FixedTypeValidator]: ...
 
     @abc.abstractmethod
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(  # redefinion of unused member
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -170,7 +169,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
     ) -> FixedTypeValidator: ...
 
     @overload
-    def __call__(  # noqa: F811  # redefinion of unused member
+    def __call__(  # redefinion of unused member
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,
@@ -181,7 +180,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
         **kwargs: Any,
     ) -> Optional[FixedTypeValidator]: ...
 
-    def __call__(  # noqa: F811,C901  # redefinion of unused member / complex but well organized in cases
+    def __call__(  # redefinion of unused member / complex but well organized in cases
         self,
         type_annotation: TypeAnnotation,
         name: Optional[str] = None,

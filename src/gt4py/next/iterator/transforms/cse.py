@@ -244,23 +244,28 @@ def extract_subexpression(
         >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
         >>> predicate = lambda subexpr, num_occurences: num_occurences > 1
         >>> new_expr, extracted_subexprs, _ = extract_subexpression(
-        ...                                     expr, predicate, UIDGenerator(prefix="_subexpr"))
+        ...     expr, predicate, UIDGenerator(prefix="_subexpr")
+        ... )
         >>> print(new_expr)
         _subexpr_1 + (_subexpr_1 + z)
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
 
         The order of the extraction can be configured using `deepest_expr_first`. By default, the nodes
         closer to the root are eliminated first:
 
-        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
-        >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(expr, predicate,
-        ...     UIDGenerator(prefix="_subexpr"), deepest_expr_first=False)
+        >>> expr = im.plus(
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ... )
+        >>> new_expr, extracted_subexprs, ignored_children = extract_subexpression(
+        ...     expr, predicate, UIDGenerator(prefix="_subexpr"), deepest_expr_first=False
+        ... )
         >>> print(new_expr)
         _subexpr_1 + _subexpr_1
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y + (x + y)`
 
         Since `(x+y)` is a child of one of the expressions it is ignored:
@@ -270,13 +275,21 @@ def extract_subexpression(
 
         Setting `deepest_expr_first` will extract nodes deeper in the tree first:
 
-        >>> expr = im.plus(im.plus(im.plus("x", "y"), im.plus("x", "y")), im.plus(im.plus("x", "y"), im.plus("x", "y")))
-        >>> new_expr, extracted_subexprs, _ = extract_subexpression(expr, predicate,
-        ...     UIDGenerator(prefix="_subexpr"), once_only=True, deepest_expr_first=True)
+        >>> expr = im.plus(
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ...     im.plus(im.plus("x", "y"), im.plus("x", "y")),
+        ... )
+        >>> new_expr, extracted_subexprs, _ = extract_subexpression(
+        ...     expr,
+        ...     predicate,
+        ...     UIDGenerator(prefix="_subexpr"),
+        ...     once_only=True,
+        ...     deepest_expr_first=True,
+        ... )
         >>> print(new_expr)
         _subexpr_1 + _subexpr_1 + (_subexpr_1 + _subexpr_1)
         >>> for sym, subexpr in extracted_subexprs.items():
-        ...    print(f"`{sym}`: `{subexpr}`")
+        ...     print(f"`{sym}`: `{subexpr}`")
         `_subexpr_1`: `x + y`
 
         Note that this requires `once_only` to be set right now.

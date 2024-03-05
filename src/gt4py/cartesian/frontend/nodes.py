@@ -142,22 +142,18 @@ storing a reference to the piece of source code which originated the node.
 import enum
 import operator
 import sys
-from typing import Generator, List, Optional, Sequence, Type
+from typing import List, Optional, Sequence
 
 import numpy as np
 
-from gt4py.cartesian.definitions import AccessKind, CartesianSpace
-from gt4py.cartesian.gtc.definitions import Extent, Index
+from gt4py.cartesian.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
     Dict as DictOf,
     List as ListOf,
-    Optional as OptionalOf,
-    Tuple as TupleOf,
     Union as UnionOf,
     attribkwclass as attribclass,
     attribute,
-    attributes_of,
 )
 
 

@@ -180,7 +180,7 @@ def add_mapped_nested_sdfg(
 
 
 def unique_name(prefix):
-    unique_id = getattr(unique_name, "_unique_id", 0)  # noqa: B010  # static variable
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
     setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010  # static variable
     return f"{prefix}_{unique_id}"
 
@@ -198,7 +198,7 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
-        itertools.chain.from_iterable(
-            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
-        )
+        itertools.chain.from_iterable([
+            flatten_list(e) if e.__class__ == list else [e] for e in node_list
+        ])
     )
