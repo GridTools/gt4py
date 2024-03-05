@@ -225,7 +225,7 @@ class TaskletCodegen(eve.codegen.TemplatedGenerator, eve.VisitorWithSymbolTableT
             indent = " " * 4
         body_code = [line for block in self.visit(body, **kwargs) for line in block.split("\n")]
         body_code = [indent + b for b in body_code]
-        return "\n".join([mask_str] + body_code)
+        return "\n".join([mask_str, *body_code])
 
     def visit_MaskStmt(self, node: dcir.MaskStmt, **kwargs):
         return self._visit_conditional(cond=node.mask, body=node.body, keyword="if", **kwargs)

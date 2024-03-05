@@ -248,8 +248,8 @@ class Program:
 
         >>> import gt4py.next as gtx
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
-        ...     sample_field_operator(condition, out=out)  # noqa: F821
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ...     sample_field_operator(condition, out=out)  # noqa: F821 [undefined-name]
 
         Create a new program from `program` with the `condition` parameter set to `True`:
 
@@ -258,8 +258,8 @@ class Program:
         The resulting program is equivalent to
 
         >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821
-        ...     sample_field_operator(condition=True, out=out)  # noqa: F821
+        ... def program(condition: bool, out: gtx.Field[[IDim], float]):  # noqa: F821 [undefined-name]
+        ...     sample_field_operator(condition=True, out=out)  # noqa: F821 [undefined-name]
 
         and can be executed without passing `condition`.
 
@@ -298,7 +298,8 @@ class Program:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
-                )
+                ),
+                stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 ctx.run(self.definition, *rewritten_args, **kwargs)
@@ -513,18 +514,18 @@ def program(
     Generate an implementation of a program from a Python function object.
 
     Examples:
-        >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
+        >>> @program  # noqa: F821 [undefined-name]  # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
-        >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
+        >>> @program(backend="roundtrip")  # noqa: F821 [undefined-name]  # doctest: +SKIP
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821 [undefined-name]
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
@@ -688,7 +689,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         untyped_past_node = past.Program(
             id=f"__field_operator_{self.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=params_decl + [out_sym],
+            params=[*params_decl, out_sym],
             body=[
                 past.Call(
                     func=past.Name(id=self.foast_node.id, location=loc),
@@ -774,14 +775,14 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
-        >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
+        >>> field_op(in_field, out=out_field)  # noqa: F821 [undefined-name]  # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821 [undefined-name]
         ...     ...
     """
 

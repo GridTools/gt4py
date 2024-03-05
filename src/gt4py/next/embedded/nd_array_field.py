@@ -486,12 +486,12 @@ def _hypercube(
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(
-    fbuiltins.abs,
-    NdArrayField.__abs__,  # type: ignore[attr-defined]
+    fbuiltins.abs,  # type: ignore[attr-defined]
+    NdArrayField.__abs__,
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.power,
-    NdArrayField.__pow__,  # type: ignore[attr-defined]
+    fbuiltins.power,  # type: ignore[attr-defined]
+    NdArrayField.__pow__,
 )
 # TODO gamma
 
@@ -505,16 +505,16 @@ for name in (
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum,
-    _make_builtin("minimum", "minimum"),  # type: ignore[attr-defined]
+    fbuiltins.minimum,  # type: ignore[attr-defined]
+    _make_builtin("minimum", "minimum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum,
-    _make_builtin("maximum", "maximum"),  # type: ignore[attr-defined]
+    fbuiltins.maximum,  # type: ignore[attr-defined]
+    _make_builtin("maximum", "maximum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod,
-    _make_builtin("fmod", "fmod"),  # type: ignore[attr-defined]
+    fbuiltins.fmod,  # type: ignore[attr-defined]
+    _make_builtin("fmod", "fmod"),
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 

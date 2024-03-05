@@ -71,8 +71,6 @@ PRECEDENCE: Final[dict[PropertyIdentifier, int]] = {
     (foast.Compare, "greater_equal"): 7,
     (foast.Compare, "not_eq"): 7,
     (foast.Compare, "eq"): 7,
-    # Boolean NOT
-    (foast.UnaryOp, "not_"): 6,
     # Boolean AND
     (foast.BinOp, "and_"): 5,
     # Boolean OR

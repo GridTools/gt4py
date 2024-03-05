@@ -16,8 +16,7 @@ import dataclasses
 import enum
 import functools
 import operator
-from collections.abc import Callable
-from typing import Optional, TypeGuard
+from typing import Callable, Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -170,11 +169,11 @@ class InlineLifts(
         def all(self):  # shadowing a python builtin
             return functools.reduce(operator.or_, self.__members__.values())
 
-    predicate: Callable[[ir.FunCall, bool], bool] = lambda _1, _2: True
+    predicate: Callable[[ir.FunCall, bool], bool] = lambda _1, _2: True  # noqa: E731  # assigning a lambda is fine in this special case
 
     inline_single_pos_deref_lift_args_only: bool = False
 
-    flags: Flag = Flag.all()
+    flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     @classmethod
     def apply(

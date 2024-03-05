@@ -31,7 +31,7 @@ from gt4py.next.iterator import ir
 BINARY_OPS: Final = {
     "plus": "+",
     "minus": "-",
-    "multiplies": "×",
+    "multiplies": "×",  # noqa: RUF001 [ambiguous-unicode-character-string]
     "divides": "/",
     "eq": "==",
     "less": "<",
@@ -39,7 +39,7 @@ BINARY_OPS: Final = {
     "greater": ">",
     "greater_equal": ">=",
     "and_": "∧",
-    "or_": "∨",
+    "or_": "∨",  # noqa: RUF001 [ambiguous-unicode-character-string]
 }
 
 # replacements for builtin unary operations
@@ -102,7 +102,7 @@ class PrettyPrinter(NodeTranslator):
 
     @staticmethod
     def _vmerge(*blocks: list[str]) -> list[str]:
-        return sum(blocks, [])
+        return [s for b in blocks for s in b]
 
     def _prec_parens(self, block: list[str], prec: int, op_prec: int) -> list[str]:
         if prec > op_prec:
@@ -199,11 +199,11 @@ class PrettyPrinter(NodeTranslator):
                 res = self._hmerge(dim, [": ["], start, [", "], end, [")"])
                 return self._prec_parens(res, prec, PRECEDENCE["__call__"])
             if fun_name == "cartesian_domain" and len(node.args) >= 1:
-                # cartesian_domain(x, y, ...) → c{ x × y × ... }
+                # cartesian_domain(x, y, ...) → c{ x × y × ... } # noqa: RUF003 [ambiguous-unicode-character-comment]
                 args = self.visit(node.args, prec=PRECEDENCE["__call__"])
                 return self._hmerge(["c⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
             if fun_name == "unstructured_domain" and len(node.args) >= 1:
-                # unstructured_domain(x, y, ...) → u{ x × y × ... }
+                # unstructured_domain(x, y, ...) → u{ x × y × ... } # noqa: RUF003 [ambiguous-unicode-character-comment]
                 args = self.visit(node.args, prec=PRECEDENCE["__call__"])
                 return self._hmerge(["u⟨ "], *self._hinterleave(args, ", "), [" ⟩"])
             if fun_name == "if_" and len(node.args) == 3:

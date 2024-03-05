@@ -17,7 +17,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Set, Union, cast
 
-from devtools import debug  # noqa: F401
+from devtools import debug  # noqa: F401 [unused-import]
 from typing_extensions import Protocol
 
 from gt4py import eve

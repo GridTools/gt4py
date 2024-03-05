@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-# flake8: noqa: F841
 
 import typing
 from typing import Callable, List, Tuple, TypedDict

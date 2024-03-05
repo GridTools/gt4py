@@ -42,7 +42,7 @@ GRAMMAR = """
         | "if" prec1 "then" prec1 "else" prec1 -> ifthenelse
 
     ?prec2: prec3
-        | prec2 "∨" prec3 -> bool_or
+        | prec2 "∨" prec3 -> bool_or  
 
     ?prec3: prec4
         | prec3 "∧" prec4 -> bool_and
@@ -85,7 +85,7 @@ GRAMMAR = """
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
-"""
+"""  # noqa: RUF001 [ambiguous-unicode-character-string]
 
 
 @lark_visitors.v_args(inline=True)
