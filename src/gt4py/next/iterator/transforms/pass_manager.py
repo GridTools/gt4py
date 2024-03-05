@@ -45,7 +45,7 @@ class LiftMode(enum.Enum):
     SIMPLE_HEURISTIC = enum.auto()
 
 
-def _inline_lifts(ir, lift_mode, uids):
+def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts.apply(ir)
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
@@ -60,7 +60,6 @@ def _inline_lifts(ir, lift_mode, uids):
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
             | InlineLifts.Flag.INLINE_LIFTED_ARGS,
             inline_center_lift_args_only=True,
-            uids=uids,
         )
     else:
         raise ValueError()
@@ -98,7 +97,6 @@ def apply_common_transforms(
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
     icdlv_uids = eve_utils.UIDGenerator()
-    inline_lift_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
         lift_mode = LiftMode.FORCE_INLINE
@@ -113,7 +111,7 @@ def apply_common_transforms(
         inlined = ir
 
         inlined = InlineCenterDerefLiftVars.apply(inlined, uids=icdlv_uids)  # type: ignore[arg-type]  # always a fencil
-        inlined = _inline_lifts(inlined, lift_mode, inline_lift_uids)
+        inlined = _inline_lifts(inlined, lift_mode)
 
         inlined = InlineLambdas.apply(
             inlined,
@@ -198,7 +196,7 @@ def apply_common_transforms(
             ir = unrolled
             ir = CollapseListGet().visit(ir)
             ir = NormalizeShifts().visit(ir)
-            ir = _inline_lifts(ir, LiftMode.FORCE_INLINE, inline_lift_uids)
+            ir = _inline_lifts(ir, LiftMode.FORCE_INLINE)
             ir = NormalizeShifts().visit(ir)
         else:
             raise RuntimeError("Reduction unrolling failed.")

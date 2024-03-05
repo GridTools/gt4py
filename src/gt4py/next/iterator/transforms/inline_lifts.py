@@ -20,7 +20,7 @@ from collections.abc import Callable
 from typing import Optional, TypeGuard
 
 import gt4py.eve as eve
-from gt4py.eve import NodeTranslator, traits, utils as eve_utils
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
@@ -146,10 +146,6 @@ class InlineLifts(
 
     PRESERVED_ANNEX_ATTRS = ("recorded_shifts",)
 
-    uids: Optional[eve_utils.UIDGenerator] = (
-        None  # optional since not all transformations need this.
-    )
-
     class Flag(enum.Flag):
         #: `shift(...)(lift(f)(args...))` -> `lift(f)(shift(...)(args)...)`
         PROPAGATE_SHIFT = enum.auto()
@@ -176,7 +172,7 @@ class InlineLifts(
 
     predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
 
-    inline_centre_lift_args_only: bool = False
+    inline_center_lift_args_only: bool = False
 
     flags: Flag = Flag.all()
 
@@ -186,20 +182,18 @@ class InlineLifts(
         node: ir.Node,
         *,
         flags: Flag = flags,
-        uids: Optional[eve_utils.UIDGenerator] = uids,
         predicate: Callable[[ir.Expr, bool], bool] = predicate,
         recurse: bool = True,
-        inline_center_lift_args_only: bool = inline_centre_lift_args_only,
+        inline_center_lift_args_only: bool = inline_center_lift_args_only,
     ):
         if inline_center_lift_args_only:
             assert isinstance(node, ir.FencilDefinition)
             TraceShifts.apply(node, inputs_only=False, save_to_annex=True)
 
         return cls(
-            uids=uids,
             flags=flags,
             predicate=predicate,
-            inline_centre_lift_args_only=inline_center_lift_args_only,
+            inline_center_lift_args_only=inline_center_lift_args_only,
         ).visit(node, recurse=recurse, is_scan_pass_context=False)
 
     def transform_propagate_shift(self, node: ir.FunCall, *, recurse, **kwargs):
@@ -288,7 +282,7 @@ class InlineLifts(
                 continue
             # we don't want to inline non-centre lift args as this would disallow creating a
             #  temporary for them if the (outer) lift can not be extracted into a temporary.
-            if self.inline_centre_lift_args_only:
+            if self.inline_center_lift_args_only:
                 if param.annex.recorded_shifts not in [set(), {()}]:
                     continue
             eligible_lifted_args[i] = True
@@ -322,13 +316,13 @@ class InlineLifts(
                     ):
                         new_param = im.sym(arg.id)
                         copy_recorded_shifts(
-                            from_=param, to=new_param, required=self.inline_centre_lift_args_only
+                            from_=param, to=new_param, required=self.inline_center_lift_args_only
                         )
                         new_arg_exprs[new_param] = arg
 
                         new_arg = im.ref(arg.id)
                         copy_recorded_shifts(
-                            from_=param, to=new_arg, required=self.inline_centre_lift_args_only
+                            from_=param, to=new_arg, required=self.inline_center_lift_args_only
                         )
                         assert param not in inlined_args
                         inlined_args[param] = new_arg
