@@ -52,7 +52,7 @@ def _generate_unique_symbol(
     return new_symbol
 
 
-def _is_lift(node: ir.Node):
+def _is_lift(node: ir.Node) -> TypeGuard[ir.FunCall]:
     return (
         isinstance(node, ir.FunCall)
         and isinstance(node.fun, ir.FunCall)
@@ -170,9 +170,9 @@ class InlineLifts(
         def all(self):  # noqa: A003  # shadowing a python builtin
             return functools.reduce(operator.or_, self.__members__.values())
 
-    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
+    predicate: Callable[[ir.FunCall, bool], bool] = lambda _1, _2: True
 
-    inline_center_lift_args_only: bool = False
+    inline_single_pos_deref_lift_args_only: bool = False
 
     flags: Flag = Flag.all()
 
@@ -182,18 +182,18 @@ class InlineLifts(
         node: ir.Node,
         *,
         flags: Flag = flags,
-        predicate: Callable[[ir.Expr, bool], bool] = predicate,
+        predicate: Callable[[ir.FunCall, bool], bool] = predicate,
         recurse: bool = True,
-        inline_center_lift_args_only: bool = inline_center_lift_args_only,
+        inline_single_pos_deref_lift_args_only: bool = inline_single_pos_deref_lift_args_only,
     ):
-        if inline_center_lift_args_only:
+        if inline_single_pos_deref_lift_args_only:
             assert isinstance(node, ir.FencilDefinition)
             TraceShifts.apply(node, inputs_only=False, save_to_annex=True)
 
         return cls(
             flags=flags,
             predicate=predicate,
-            inline_center_lift_args_only=inline_center_lift_args_only,
+            inline_single_pos_deref_lift_args_only=inline_single_pos_deref_lift_args_only,
         ).visit(node, recurse=recurse, is_scan_pass_context=False)
 
     def transform_propagate_shift(self, node: ir.FunCall, *, recurse, **kwargs):
@@ -234,7 +234,7 @@ class InlineLifts(
     def transform_inline_trivial_deref_lift(self, node: ir.FunCall, **kwargs):
         if not node.fun == ir.SymRef(id="deref"):
             return None
-        is_trivial = _is_lift(node.args[0]) and len(node.args[0].args) == 0  # type: ignore[attr-defined] # mypy not smart enough
+        is_trivial = _is_lift(node.args[0]) and len(node.args[0].args) == 0
         if not is_trivial:
             return None
         return self.transform_inline_deref_lift_impl(node, **kwargs)
@@ -280,9 +280,10 @@ class InlineLifts(
         for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
             if not _is_lift(arg):
                 continue
-            # we don't want to inline non-centre lift args as this would disallow creating a
-            #  temporary for them if the (outer) lift can not be extracted into a temporary.
-            if self.inline_center_lift_args_only:
+            # we don't want to inline lift args derefed at multiple positions as this would
+            # disallow creating a temporary for them if the (outer) lift can not be extracted into
+            # a temporary.
+            if self.inline_single_pos_deref_lift_args_only:
                 if param.annex.recorded_shifts not in [set(), {()}]:
                     continue
             eligible_lifted_args[i] = True
@@ -316,13 +317,17 @@ class InlineLifts(
                     ):
                         new_param = im.sym(arg.id)
                         copy_recorded_shifts(
-                            from_=param, to=new_param, required=self.inline_center_lift_args_only
+                            from_=param,
+                            to=new_param,
+                            required=self.inline_single_pos_deref_lift_args_only,
                         )
                         new_arg_exprs[new_param] = arg
 
                         new_arg = im.ref(arg.id)
                         copy_recorded_shifts(
-                            from_=param, to=new_arg, required=self.inline_center_lift_args_only
+                            from_=param,
+                            to=new_arg,
+                            required=self.inline_single_pos_deref_lift_args_only,
                         )
                         assert param not in inlined_args
                         inlined_args[param] = new_arg

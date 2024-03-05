@@ -34,7 +34,6 @@ from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
 from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 
 
@@ -53,13 +52,12 @@ def _inline_lifts(ir, lift_mode):
     elif lift_mode == LiftMode.USE_TEMPORARIES:
         # TODO: write comment why we need params, i.e. local shift, instead of arg to get recorded shifts
         # TODO: for lift it should be fine as long as shift only occurs once (not only centre)
-        TraceShifts.apply(ir, inputs_only=False, save_to_annex=True)
         return InlineLifts.apply(
             ir,
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
             | InlineLifts.Flag.INLINE_LIFTED_ARGS,
-            inline_center_lift_args_only=True,
+            inline_single_pos_deref_lift_args_only=True,
         )
     else:
         raise ValueError()

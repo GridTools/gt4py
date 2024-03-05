@@ -16,7 +16,6 @@ import textwrap
 
 import pytest
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
@@ -168,9 +167,8 @@ def test_inline_lifts_center_only(testee, expected):
     result = unwrap_from_fencil(
         InlineLifts.apply(
             wrap_in_fencil(testee),
-            inline_center_lift_args_only=True,
+            inline_single_pos_deref_lift_args_only=True,
             flags=InlineLifts.Flag.INLINE_LIFTED_ARGS,
-            uids=eve_utils.UIDGenerator(),
         )
     )
     assert str(result) == textwrap.dedent(expected).strip()
