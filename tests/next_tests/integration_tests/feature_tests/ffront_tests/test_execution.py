@@ -779,7 +779,7 @@ def test_scan_nested_tuple_output(forward, cartesian_case):
 
     @gtx.scan_operator(axis=KDim, forward=forward, init=init)
     def simple_scan_operator(
-        carry: tuple[int32, tuple[int32, int32]]
+        carry: tuple[int32, tuple[int32, int32]],
     ) -> tuple[int32, tuple[int32, int32]]:
         return (carry[0] + 1, (carry[1][0] + 1, carry[1][1] + 1))
 
@@ -812,12 +812,10 @@ def test_scan_nested_tuple_input(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray(
-        [
-            reduce(lambda prev, i: prev + inp1_np[i] + inp2_np[i], prev_levels_iterator(i), init)
-            for i in range(k_size)
-        ]
-    )
+    expected = np.asarray([
+        reduce(lambda prev, i: prev + inp1_np[i] + inp2_np[i], prev_levels_iterator(i), init)
+        for i in range(k_size)
+    ])
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
@@ -832,12 +830,10 @@ def test_scan_different_domain_in_tuple(cartesian_case):
     i_size = cartesian_case.default_sizes[IDim]
     k_size = cartesian_case.default_sizes[KDim]
 
-    inp1_np = np.ones(
-        (
-            i_size + 1,
-            k_size,
-        )
-    )  # i_size bigger than in the other argument
+    inp1_np = np.ones((
+        i_size + 1,
+        k_size,
+    ))  # i_size bigger than in the other argument
     inp2_np = np.fromfunction(lambda i, k: k, shape=(i_size, k_size), dtype=float)
     inp1 = cartesian_case.as_field([IDim, KDim], inp1_np)
     inp2 = cartesian_case.as_field([IDim, KDim], inp2_np)
@@ -846,16 +842,14 @@ def test_scan_different_domain_in_tuple(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray(
-        [
-            reduce(
-                lambda prev, k: prev + inp1_np[:-1, k] + inp2_np[:, k],
-                prev_levels_iterator(k),
-                init,
-            )
-            for k in range(k_size)
-        ]
-    ).transpose()
+    expected = np.asarray([
+        reduce(
+            lambda prev, k: prev + inp1_np[:-1, k] + inp2_np[:, k],
+            prev_levels_iterator(k),
+            init,
+        )
+        for k in range(k_size)
+    ]).transpose()
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def scan_op(carry: float, a: tuple[float, float]) -> float:
@@ -883,16 +877,14 @@ def test_scan_tuple_field_scalar_mixed(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray(
-        [
-            reduce(
-                lambda prev, k: prev + 1.0 + inp2_np[:, k],
-                prev_levels_iterator(k),
-                init,
-            )
-            for k in range(k_size)
-        ]
-    ).transpose()
+    expected = np.asarray([
+        reduce(
+            lambda prev, k: prev + 1.0 + inp2_np[:, k],
+            prev_levels_iterator(k),
+            init,
+        )
+        for k in range(k_size)
+    ]).transpose()
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def scan_op(carry: float, a: tuple[float, float]) -> float:

@@ -44,7 +44,7 @@ def identity_def():
 def make_tuple_op():
     @gtx.field_operator()
     def make_tuple_op_impl(
-        inp: gtx.Field[[IDim], float64]
+        inp: gtx.Field[[IDim], float64],
     ) -> Tuple[gtx.Field[[IDim], float64], gtx.Field[[IDim], float64]]:
         return inp, inp
 

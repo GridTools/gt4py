@@ -165,9 +165,11 @@ class TestParametricMix(gt_testing.StencilTestSuite):
                 factor = alpha_factor
             else:
                 factor = 1.0
-            field_out = factor * field_a[  # noqa: F841 # Local name is assigned to but never used
-                0, 0, 0
-            ] - (1 - factor) * (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+            field_out = (
+                factor
+                * field_a[0, 0, 0]  # noqa: F841 # Local name is assigned to but never used
+                - (1 - factor) * (field_b[0, 0, 0] - weight * field_c[0, 0, 0])
+            )
 
     def validation(
         field_a, field_b, field_c, field_out, *, weight, alpha_factor, domain, origin, **kwargs
@@ -225,9 +227,10 @@ class TestHorizontalDiffusion(gt_testing.StencilTestSuite):
             laplacian = 4.0 * u[0, 0, 0] - (u[1, 0, 0] + u[-1, 0, 0] + u[0, 1, 0] + u[0, -1, 0])
             flux_i = laplacian[1, 0, 0] - laplacian[0, 0, 0]
             flux_j = laplacian[0, 1, 0] - laplacian[0, 0, 0]
-            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
-                0, 0, 0
-            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            diffusion = (
+                u[0, 0, 0]  # noqa: F841 # Local name is assigned to but never used
+                - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            )
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -290,9 +293,10 @@ class TestHorizontalDiffusionSubroutines(gt_testing.StencilTestSuite):
         with computation(PARALLEL), interval(...):
             laplacian = lap_op(u=u)
             flux_i, flux_j = fwd_diff(field=laplacian)
-            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
-                0, 0, 0
-            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            diffusion = (
+                u[0, 0, 0]  # noqa: F841 # Local name is assigned to but never used
+                - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            )
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -330,9 +334,10 @@ class TestHorizontalDiffusionSubroutines2(gt_testing.StencilTestSuite):
                 flux_j = fwd_diff_op_y(field=laplacian)
             else:
                 flux_i, flux_j = fwd_diff_op_xy(field=laplacian)
-            diffusion = u[  # noqa: F841 # Local name is assigned to but never used
-                0, 0, 0
-            ] - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            diffusion = (
+                u[0, 0, 0]  # noqa: F841 # Local name is assigned to but never used
+                - weight * (flux_i[0, 0, 0] - flux_i[-1, 0, 0] + flux_j[0, 0, 0] - flux_j[0, -1, 0])
+            )
 
     def validation(u, diffusion, *, weight, domain, origin, **kwargs):
         laplacian = 4.0 * u[1:-1, 1:-1, :] - (
@@ -792,9 +797,7 @@ class TestVariableKRead(gt_testing.StencilTestSuite):
 
     def definition(field_in, field_out, index):
         with computation(PARALLEL), interval(1, None):
-            field_out = field_in[  # noqa: F841  # Local name is assigned to but never used
-                0, 0, index
-            ]
+            field_out = field_in[0, 0, index]  # noqa: F841  # Local name is assigned to but never used
 
     def validation(field_in, field_out, index, *, domain, origin):
         field_out[:, :, 1:] = field_in[:, :, (np.arange(field_in.shape[-1]) + index)[1:]]

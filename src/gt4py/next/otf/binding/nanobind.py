@@ -14,7 +14,6 @@
 
 """Python bindings generator for C++ functions."""
 
-
 from __future__ import annotations
 
 from typing import Any, Sequence, TypeVar, Union

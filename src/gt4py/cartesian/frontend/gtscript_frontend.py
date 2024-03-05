@@ -417,7 +417,7 @@ class CallInliner(ast.NodeTransformer):
         else:
             return self.generic_visit(node)
 
-    def visit_Call(  # noqa: C901 # Cyclomatic complexity too high
+    def visit_Call(  # Cyclomatic complexity too high
         self, node: ast.Call, *, target_node=None
     ):
         call_name = gt_meta.get_qualified_name_from_node(node.func)
@@ -618,7 +618,7 @@ class CompiledIfInliner(ast.NodeTransformer):
 
 
 def _make_temp_decls(
-    descriptors: Dict[str, gtscript._FieldDescriptor]
+    descriptors: Dict[str, gtscript._FieldDescriptor],
 ) -> Dict[str, nodes.FieldDecl]:
     return {
         name: nodes.FieldDecl(
@@ -1495,9 +1495,9 @@ class IRMaker(ast.NodeVisitor):
 
             self.parsing_horizontal_region = True
             intervals_dicts = self._visit_with_horizontal(node.items[0], loc)
-            all_stmts = gt_utils.flatten(
-                [gtc_utils.listify(self.visit(stmt)) for stmt in node.body]
-            )
+            all_stmts = gt_utils.flatten([
+                gtc_utils.listify(self.visit(stmt)) for stmt in node.body
+            ])
             self.parsing_horizontal_region = False
             stmts = list(filter(lambda stmt: isinstance(stmt, nodes.Decl), all_stmts))
             body_block = nodes.BlockStmt(
@@ -1511,12 +1511,10 @@ class IRMaker(ast.NodeVisitor):
                     "The following variables are"
                     f"written before being referenced with an offset in a horizontal region: {', '.join(written_then_offset)}"
                 )
-            stmts.extend(
-                [
-                    nodes.HorizontalIf(intervals=intervals_dict, body=body_block)
-                    for intervals_dict in intervals_dicts
-                ]
-            )
+            stmts.extend([
+                nodes.HorizontalIf(intervals=intervals_dict, body=body_block)
+                for intervals_dict in intervals_dicts
+            ])
             return stmts
         else:
             # If we find nested `with` blocks flatten them, i.e. transform
@@ -1874,14 +1872,12 @@ class GTScriptParser(ast.NodeVisitor):
             for name, accesses in resolved_imports.items():
                 if accesses:
                     for attr_name, attr_nodes in accesses.items():
-                        resolved_values_list.append(
-                            (
-                                attr_name,
-                                GTScriptParser.eval_external(
-                                    attr_name, context, nodes.Location.from_ast_node(attr_nodes[0])
-                                ),
-                            )
-                        )
+                        resolved_values_list.append((
+                            attr_name,
+                            GTScriptParser.eval_external(
+                                attr_name, context, nodes.Location.from_ast_node(attr_nodes[0])
+                            ),
+                        ))
 
                 elif not exhaustive:
                     resolved_values_list.append((name, GTScriptParser.eval_external(name, context)))

@@ -72,9 +72,9 @@ def test_shift_by_one_execution(cartesian_case):
     def shift_by_one_program(in_field: cases.IFloatField, out_field: cases.IFloatField):
         shift_by_one(in_field, out=out_field[:-1])
 
-    in_field = cases.allocate(cartesian_case, shift_by_one_program, "in_field").extend(
-        {IDim: (0, 1)}
-    )()
+    in_field = cases.allocate(cartesian_case, shift_by_one_program, "in_field").extend({
+        IDim: (0, 1)
+    })()
     out_field = cases.allocate(cartesian_case, shift_by_one_program, "out_field")()
 
     cases.verify(
@@ -107,12 +107,10 @@ def test_copy_restricted_execution(cartesian_case, copy_restrict_program_def):
     cases.verify_with_default_data(
         cartesian_case,
         copy_restrict_program,
-        ref=lambda in_field: np.array(
-            [
-                in_field[i] if i in range(1, 2) else 0
-                for i in range(0, cartesian_case.default_sizes[IDim])
-            ]
-        ),
+        ref=lambda in_field: np.array([
+            in_field[i] if i in range(1, 2) else 0
+            for i in range(0, cartesian_case.default_sizes[IDim])
+        ]),
     )
 
 

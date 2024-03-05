@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.type_system.type_translation import (  # noqa: F401
+from gt4py.next.type_system.type_translation import (
     from_type_hint as from_type_hint,
     from_value as from_value,
     get_scalar_kind as get_scalar_kind,

@@ -122,8 +122,14 @@ def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryD
 
     Examples:
     ---------
-    >>> libs_a = (interface.LibraryDependency("foo", "1.2.3"), interface.LibraryDependency("common", "1.0.0"))
-    >>> libs_b = (interface.LibraryDependency("common", "1.0.0"), interface.LibraryDependency("bar", "1.2.3"))
+    >>> libs_a = (
+    ...     interface.LibraryDependency("foo", "1.2.3"),
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ... )
+    >>> libs_b = (
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ...     interface.LibraryDependency("bar", "1.2.3"),
+    ... )
     >>> _unique_libs(*libs_a, *libs_b)
     (LibraryDependency(name='foo', version='1.2.3'), LibraryDependency(name='common', version='1.0.0'), LibraryDependency(name='bar', version='1.2.3'))
     """

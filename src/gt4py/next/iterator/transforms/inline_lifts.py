@@ -167,7 +167,7 @@ class InlineLifts(
         INLINE_LIFTED_ARGS = enum.auto()
 
         @classmethod
-        def all(self):  # noqa: A003  # shadowing a python builtin
+        def all(self):  # shadowing a python builtin
             return functools.reduce(operator.or_, self.__members__.values())
 
     predicate: Callable[[ir.FunCall, bool], bool] = lambda _1, _2: True
@@ -262,9 +262,10 @@ class InlineLifts(
             return res
         return None
 
-    def transform_inline_lifted_args(self, node: ir.FunCall, **kwargs):  # noqa: C901
-        symtable, is_scan_pass_context = kwargs["symtable"], kwargs.get(
-            "is_scan_pass_context", False
+    def transform_inline_lifted_args(self, node: ir.FunCall, **kwargs):
+        symtable, is_scan_pass_context = (
+            kwargs["symtable"],
+            kwargs.get("is_scan_pass_context", False),
         )
         if not (
             _is_lift(node) and len(node.args) > 0 and self.predicate(node, is_scan_pass_context)

@@ -514,17 +514,17 @@ def program(
 
     Examples:
         >>> @program  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> # the above is equivalent to
         >>> @program(backend="roundtrip")  # noqa: F821 # doctest: +SKIP
-        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]): # noqa: F821
+        ... def program(in_field: Field[[TDim], float64], out_field: Field[[TDim], float64]):  # noqa: F821
         ...     field_op(in_field, out=out_field)
-        >>> program(in_field, out=out_field) # noqa: F821 # doctest: +SKIP
+        >>> program(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
     """
 
     def program_inner(definition: types.FunctionType) -> Program:
@@ -624,7 +624,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
         if hasattr(self, "__cached_itir"):
-            return getattr(self, "__cached_itir")  # noqa: B009
+            return getattr(self, "__cached_itir")
 
         itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
 
@@ -642,9 +642,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-        hash_ = eve_utils.content_hash(
-            (tuple(arg_types), tuple((name, arg) for name, arg in kwarg_types.items()))
-        )
+        hash_ = eve_utils.content_hash((
+            tuple(arg_types),
+            tuple((name, arg) for name, arg in kwarg_types.items()),
+        ))
         try:
             return self._program_cache[hash_]
         except KeyError:
@@ -773,14 +774,14 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
 
     Examples:
         >>> @field_operator  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
         ...     ...
         >>> field_op(in_field, out=out_field)  # noqa: F821 # doctest: +SKIP
 
         >>> # the backend can optionally be passed if already decided
         >>> # not passing it will result in embedded execution by default
         >>> @field_operator(backend="roundtrip")  # doctest: +SKIP
-        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]: # noqa: F821
+        ... def field_op(in_field: Field[[TDim], float64]) -> Field[[TDim], float64]:  # noqa: F821
         ...     ...
     """
 
@@ -846,9 +847,9 @@ def scan_operator(
         >>> KDim = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
         >>> inp = gtx.as_field([KDim], np.ones((10,)))
         >>> out = gtx.as_field([KDim], np.zeros((10,)))
-        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.)
+        >>> @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
         ... def scan_operator(carry: float, val: float) -> float:
-        ...     return carry+val
+        ...     return carry + val
         >>> scan_operator(inp, out=out, offset_provider={})  # doctest: +SKIP
         >>> out.array()  # doctest: +SKIP
         array([ 1.,  2.,  3.,  4.,  5.,  6.,  7.,  8.,  9., 10.])

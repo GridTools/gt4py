@@ -66,14 +66,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     If a syntax error is encountered, it will point to the location in the source code.
 
     >>> def wrong_syntax(inp: Field[[IDim], int]):
-    ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
+    ...     for i in [1, 2, 3]:  # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
     >>>
-    >>> try:                # doctest: +ELLIPSIS
+    >>> try:  # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except errors.DSLError as err:
-    ...     print(f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})")
+    ...     print(
+    ...         f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})"
+    ...     )
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
 

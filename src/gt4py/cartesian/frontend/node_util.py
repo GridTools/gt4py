@@ -13,7 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import collections
-import copy
 import operator
 from typing import Generator, Optional, Type
 
@@ -21,8 +20,6 @@ import boltons.typeutils
 
 import gt4py.cartesian.gtc.utils as gtc_utils
 from gt4py import eve
-from gt4py.cartesian import utils as gt_utils
-from gt4py.cartesian.gtc import common
 
 from .nodes import Location, Node
 
