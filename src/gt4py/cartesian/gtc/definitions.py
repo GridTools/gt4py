@@ -23,7 +23,7 @@ from gt4py.cartesian.gtc.utils import filter_mask, interpolate_mask
 class CartesianSpace:
     @enum.unique
     class Axis(enum.Enum):
-        I = 0  # noqa: E741  # Do not use variables named 'I', 'O', or 'l'
+        I = 0  # noqa: E741 [ambiguous-variable-name]
         J = 1
         K = 2
 

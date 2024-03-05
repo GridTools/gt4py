@@ -16,8 +16,7 @@ import dataclasses
 import enum
 import functools
 import operator
-from collections.abc import Callable
-from typing import Optional, TypeGuard
+from typing import Callable, Optional, TypeGuard
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits

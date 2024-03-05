@@ -42,7 +42,7 @@ try:
     import cytoolz as toolz
 except ModuleNotFoundError:
     # Fall back to pure Python toolz
-    import toolz  # noqa: F401  # imported but unused
+    import toolz  # noqa: F401 [unused-import]
 
 
 TreeKey = Union[int, str]
@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     TreeLike = Any
 else:
 
-    class TreeLike(abc.ABC):  # noqa: B024
+    class TreeLike(abc.ABC):  # noqa: B024 [abstract-base-class-without-abstract-method]
         ...
 
 

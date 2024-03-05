@@ -41,8 +41,7 @@ def inline_lambda(  # see todo above
         ref_counts = CountSymbolRefs.apply(node.fun.expr, [p.id for p in node.fun.params])
 
         for i, param in enumerate(node.fun.params):
-            # TODO(tehrengruber): allow inlining more complicated zero-op expressions like
-            #  ignore_shift(...)(it_sym)
+            # TODO(tehrengruber): allow inlining more complicated zero-op expressions like ignore_shift(...)(it_sym)
             if ref_counts[param.id] > 1 and not isinstance(
                 node.args[i], (ir.SymRef, ir.Literal, ir.OffsetLiteral)
             ):
@@ -80,10 +79,8 @@ def inline_lambda(  # see todo above
     clashes = refs & syms
     expr = node.fun.expr
     if clashes:
-        # TODO(tehrengruber): find a better way of generating new symbols
-        #  in `name_map` that don't collide with each other. E.g. this
-        #  must still work:
-        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)
+        # TODO(tehrengruber): find a better way of generating new symbols in `name_map` that don't collide with each other. E.g. this must still work:
+        # (lambda arg, arg_: (lambda arg_: ...)(arg))(a, b)  # noqa: ERA001 [commented-out-code]
         name_map: dict[ir.SymRef, str] = {}
 
         def new_name(name):

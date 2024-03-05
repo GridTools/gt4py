@@ -153,7 +153,7 @@ class UnrollReduce(PreserveLocationVisitor, NodeTranslator):
         fun, init = node.fun.args
 
         elems = [_make_list_get(offset, arg) for arg in node.args]
-        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc] + elems)
+        step_fun: itir.Expr = itir.FunCall(fun=fun, args=[acc, *elems])
         if has_skip_values:
             check_arg = next(_get_neighbors_args(node.args))
             offset_tag, it = check_arg.args

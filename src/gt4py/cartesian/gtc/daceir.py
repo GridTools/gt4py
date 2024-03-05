@@ -43,7 +43,7 @@ class Stmt(common.Stmt):
 
 
 class Axis(eve.StrEnum):
-    I = "I"  # noqa: E741 ambiguous variable name 'I'
+    I = "I"  # noqa: E741 [ambiguous-variable-name]
     J = "J"
     K = "K"
 

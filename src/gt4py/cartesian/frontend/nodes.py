@@ -322,15 +322,6 @@ class ScalarLiteral(Literal):
     loc = attribute(of=Location, optional=True)
 
 
-# @attribclass
-# class TupleLiteral(Node):
-#     items = attribute(of=TupleOf[Expr])
-#
-#     @property
-#     def length(self):
-#         return len(self.items)
-
-
 @attribclass
 class BuiltinLiteral(Literal):
     value = attribute(of=Builtin)
@@ -593,12 +584,6 @@ class Statement(Node):
     pass
 
 
-# @attribclass
-# class ExprStmt(Statement):
-#     expr = attribute(of=Expr)
-#     loc = attribute(of=Location, optional=True)
-
-
 class Decl(Statement):
     pass
 
@@ -722,9 +707,6 @@ class AxisInterval(Node):
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
 
     def disjoint_from(self, other: "AxisInterval") -> bool:
-        # This made-up constant must be larger than any LevelMarker.offset used
-        DOMAIN_SIZE: int = 1000
-
         def get_offset(bound: AxisBound) -> int:
             return (
                 0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset
