@@ -202,13 +202,4 @@ run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
 
-run_gtfn_with_temporaries_cached_executor = otf_compile_executor.CachedOTFCompileExecutor(
-    name="run_gtfn_with_temporaries_cached",
-    otf_workflow=workflow.CachedStep(
-        step=run_gtfn_with_temporaries.executor.otf_workflow, hash_function=compilation_hash
-    ),
-)
-run_gtfn_with_temporaries_cached = otf_compile_executor.OTFBackend(
-    executor=run_gtfn_with_temporaries_cached_executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
+run_gtfn_with_temporaries_cached_executor = GTFNBackendFactory(use_temporaries=True, cached=True)
