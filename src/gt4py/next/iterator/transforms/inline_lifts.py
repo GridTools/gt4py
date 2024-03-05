@@ -14,8 +14,7 @@
 
 import dataclasses
 import enum
-from collections.abc import Callable
-from typing import Optional
+from typing import Callable, Optional
 
 import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
@@ -141,7 +140,7 @@ class InlineLifts(
         #: when we see that it is not required.
         INLINE_LIFTED_ARGS = 16
 
-    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True
+    predicate: Callable[[ir.Expr, bool], bool] = lambda _1, _2: True  # noqa: E731 [lambda-assignment]
 
     flags: int = (
         Flag.PROPAGATE_SHIFT

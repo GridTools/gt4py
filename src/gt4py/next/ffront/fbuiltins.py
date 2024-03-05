@@ -24,8 +24,8 @@ from numpy import float32, float64, int32, int64
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
-from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401
+from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
+from gt4py.next.ffront.experimental import as_offset  # noqa: F401 [unused-import]
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -40,7 +40,8 @@ TYPE_BUILTINS = [
     int64,
     float32,
     float64,
-] + PYTHON_TYPE_BUILTINS
+    *PYTHON_TYPE_BUILTINS,
+]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 # Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
@@ -244,8 +245,8 @@ UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 def _make_unary_math_builtin(name):
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # commented code
-        # return getattr(math, name)(value)# commented code
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: ERA001 [commented-out-code]
+        # return getattr(math, name)(value)# noqa: ERA001 [commented-out-code]
         raise NotImplementedError()
 
     impl.__name__ = name
@@ -295,7 +296,8 @@ FUN_BUILTIN_NAMES = [
     "where",
     "astype",
     "as_offset",
-] + MATH_BUILTIN_NAMES
+    *MATH_BUILTIN_NAMES,
+]
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 

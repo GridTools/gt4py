@@ -256,7 +256,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             or first_has_variable_access()
             or first_has_horizontal_restriction()
         ):
-            return [first] + self._merge(others, symtable, new_symbol_name, protected_fields)
+            return [first, *self._merge(others, symtable, new_symbol_name, protected_fields)]
 
         first_scalars = {decl.name for decl in first.declarations}
         writes = first_accesses.write_fields()

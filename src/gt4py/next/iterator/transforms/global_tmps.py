@@ -319,8 +319,9 @@ def split_closures(
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
                             inputs=[
-                                closure_param_arg_mapping[param.id] for param in lift_expr.args
-                            ],  # type: ignore[attr-defined]
+                                closure_param_arg_mapping[param.id]  # type: ignore[attr-defined]
+                                for param in lift_expr.args
+                            ],
                             location=current_closure.location,
                         )
                     )

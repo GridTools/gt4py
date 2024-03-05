@@ -118,7 +118,8 @@ def _ensure_is_on_device(
     if device == dace.dtypes.DeviceType.GPU:
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
             )
             return cp.asarray(connectivity_arg)
     return connectivity_arg
@@ -300,11 +301,10 @@ def build_sdfg_from_itir(
         if not nested_sdfg.debuginfo:
             _, frameinfo = (
                 warnings.warn(
-                    f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg."
+                    f"{nested_sdfg.label} does not have debuginfo. Consider adding them in the corresponding nested sdfg.",
+                    stacklevel=2,
                 ),
-                getframeinfo(
-                    currentframe()  # type: ignore
-                ),
+                getframeinfo(currentframe()),  # type: ignore[arg-type]
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
                 start_line=frameinfo.lineno,

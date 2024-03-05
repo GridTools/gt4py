@@ -33,12 +33,12 @@ import pickle as _pickle
 import sys as _sys
 import types as _types
 import typing as _typing
-from typing import *  # noqa: F403
+from typing import *  # noqa: F403 [undefined-local-with-import-star]
 from typing import overload  # Only needed to avoid false flake8 errors
 
 import numpy.typing as npt
 import typing_extensions as _typing_extensions
-from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403
+from typing_extensions import *  # type: ignore[assignment,no-redef]  # noqa: F403 [undefined-local-with-import-star]
 
 
 if _sys.version_info >= (3, 9):
@@ -180,11 +180,9 @@ class NonDataDescriptor(Protocol[_C, _V]):
     ) -> NonDataDescriptor[_C, _V]: ...
 
     @overload
-    def __get__(  # redefinion of unused member
-        self, _instance: _C, _owner_type: Optional[Type[_C]] = None
-    ) -> _V: ...
+    def __get__(self, _instance: _C, _owner_type: Optional[Type[_C]] = None) -> _V: ...
 
-    def __get__(  # redefinion of unused member
+    def __get__(
         self, _instance: Optional[_C], _owner_type: Optional[Type[_C]] = None
     ) -> _V | NonDataDescriptor[_C, _V]: ...
 
@@ -351,7 +349,7 @@ def extended_runtime_checkable(
 ) -> _ProtoT: ...
 
 
-def extended_runtime_checkable(  # too complex but unavoidable
+def extended_runtime_checkable(
     maybe_cls: Optional[_ProtoT] = None,
     *,
     instance_check_shortcut: bool = True,
@@ -697,7 +695,7 @@ class CallableKwargsInfo:
     data: Dict[str, Any]
 
 
-def infer_type(  # function is complex but well organized in independent cases
+def infer_type(
     value: Any,
     *,
     annotate_callable_kwargs: bool = False,

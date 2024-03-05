@@ -70,7 +70,8 @@ def _ensure_is_on_device(
 
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
             )
             return cp.asarray(connectivity_arg)
     return connectivity_arg

@@ -167,10 +167,9 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def __getitem__(self, index: int) -> int: ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> UnitRange: ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -425,17 +424,12 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(  # redefine unused
-        self, index: Dimension
-    ) -> tuple[Dimension, _Rng]: ...
+    def __getitem__(self, index: Dimension) -> tuple[Dimension, _Rng]: ...
 
-    def __getitem__(  # redefine unused
-        self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # redefine unused
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -446,8 +440,8 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             try:
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
-            except ValueError:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
+            except ValueError as ex:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 

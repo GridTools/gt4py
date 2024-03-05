@@ -11,6 +11,8 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+from __future__ import annotations
+
 import dataclasses
 import enum
 import functools
@@ -110,12 +112,12 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         INLINE_TRIVIAL_LET = enum.auto()
 
         @classmethod
-        def all(self):  # shadowing a python builtin
+        def all(self) -> CollapseTuple.Flag:
             return functools.reduce(operator.or_, self.__members__.values())
 
     ignore_tuple_size: bool
     use_global_type_inference: bool
-    flags: Flag = Flag.all()
+    flags: Flag = Flag.all()  # noqa: RUF009 [function-call-in-dataclass-default-argument]
 
     PRESERVED_ANNEX_ATTRS = ("type",)
 

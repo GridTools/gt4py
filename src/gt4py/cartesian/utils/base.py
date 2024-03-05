@@ -197,7 +197,7 @@ def shashed_id(*args, length=10, hash_algorithm=None):
     return shash(*args, hash_algorithm=hash_algorithm)[:length]
 
 
-def classmethod_to_function(class_method, instance=None, owner=type(None), remove_cls_arg=False):
+def classmethod_to_function(class_method, instance=None, owner=None, remove_cls_arg=False):
     if remove_cls_arg:
         return functools.partial(class_method.__get__(instance, owner), None)
     else:

@@ -34,7 +34,7 @@ from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from next_tests import definitions as test_definitions
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 #  fixture and aliases
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (  # noqa: F401 [unused-import]
     C2E,
     C2V,
     E2V,
@@ -474,7 +474,7 @@ def verify_with_default_data(
 
 @pytest.fixture
 def cartesian_case(
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
 ):
     yield Case(
         exec_alloc_descriptor.executor,
@@ -487,8 +487,8 @@ def cartesian_case(
 
 @pytest.fixture
 def unstructured_case(
-    mesh_descriptor,  # noqa: F811 # fixtures
-    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,  # noqa: F811 # fixtures
+    mesh_descriptor,
+    exec_alloc_descriptor: test_definitions.ExecutionAndAllocatorDescriptor,
 ):
     yield Case(
         exec_alloc_descriptor.executor,
