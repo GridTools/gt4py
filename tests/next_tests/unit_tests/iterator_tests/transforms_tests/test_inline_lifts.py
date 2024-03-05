@@ -12,8 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import textwrap
+
 import pytest
 
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 
@@ -81,8 +84,8 @@ def inline_lift_test_data():
                 # resolved.
                 im.lift(im.lambda_(im.sym("arg1"))(im.deref("arg1")))(im.call("f")()),
             ),
-            # (↑(λ(arg1, arg1_) → ·arg1 + ·arg1_))(arg1, f())
-            im.lift(im.lambda_("arg1", "arg1_")(im.plus(im.deref("arg1"), im.deref("arg1_"))))(
+            # (↑(λ(arg1, arg1ᐞ0) → ·arg1 + ·arg1_))(arg1, f())
+            im.lift(im.lambda_("arg1", "arg1ᐞ0")(im.plus(im.deref("arg1"), im.deref("arg1ᐞ0"))))(
                 im.ref("arg1"), im.call("f")()
             ),
         ),
@@ -95,9 +98,9 @@ def inline_lift_test_data():
                     im.lift(im.lambda_(im.sym("arg1"))(im.deref("arg1")))(im.call("f")())
                 )
             ),
-            # λ(arg1) → (↑(λ(arg1_) → ·arg1_ + arg1))(f())
+            # λ(arg1) → (↑(λ(arg1ᐞ0) → ·arg1ᐞ0 + arg1))(f())
             im.lambda_("arg1")(
-                im.lift(im.lambda_(im.sym("arg1_"))(im.plus(im.deref("arg1_"), im.ref("arg1"))))(
+                im.lift(im.lambda_(im.sym("arg1ᐞ0"))(im.plus(im.deref("arg1ᐞ0"), im.ref("arg1"))))(
                     im.call("f")()
                 )
             ),
@@ -109,6 +112,66 @@ def inline_lift_test_data():
 
 
 @pytest.mark.parametrize("testee, expected", inline_lift_test_data())
-def test_deref_lift(testee, expected):
-    result = InlineLifts().visit(testee)
+def test_inline_lifts(testee, expected):
+    result = InlineLifts.apply(testee)
     assert result == expected
+
+
+def wrap_in_fencil(expr: itir.Expr) -> itir.FencilDefinition:
+    return itir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("d"), im.sym("inp1"), im.sym("inp2"), im.sym("out")],
+        closures=[
+            itir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("it1", "it2")(expr),
+                output=im.ref("out"),
+                inputs=[im.ref("inp1"), im.ref("inp2")],
+            )
+        ],
+    )
+
+
+def unwrap_from_fencil(fencil: itir.FencilDefinition) -> itir.Expr:
+    return fencil.closures[0].stencil.expr
+
+
+def inline_lift_center_only_test_data():
+    def trivial_lift(arg):
+        return im.lift(im.lambda_("it")(im.call("deref")("it")))(arg)
+
+    return [
+        # (testee, expected)
+        (
+            im.deref(
+                im.lift(
+                    im.lambda_("arg1", "arg2")(
+                        im.plus(
+                            im.plus(
+                                im.deref("arg1"), im.deref("arg1")
+                            ),  # use it twice so that the lambda inliner keeps it as is
+                            im.deref(im.shift("I", 1)("arg2")),
+                        )
+                    )
+                )(trivial_lift("it1"), trivial_lift("it1"))
+            ),
+            """
+            ·(↑(λ(it1, arg2) → (λ(arg1) → ·arg1 + ·arg1 + ·⟪Iₒ, 1ₒ⟫(arg2))((↑(λ(it) → ·it))(it1))))(
+               it1, (↑(λ(it) → ·it))(it1)
+             )
+            """,
+        )
+    ]
+
+
+@pytest.mark.parametrize("testee, expected", inline_lift_center_only_test_data())
+def test_inline_lifts_center_only(testee, expected):
+    result = unwrap_from_fencil(
+        InlineLifts.apply(
+            wrap_in_fencil(testee),
+            inline_single_pos_deref_lift_args_only=True,
+            flags=InlineLifts.Flag.INLINE_LIFTED_ARGS,
+        )
+    )
+    assert str(result) == textwrap.dedent(expected).strip()

@@ -31,7 +31,7 @@ from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineC
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
-from gt4py.next.iterator.transforms.inline_lifts import InlineLifts, ValidateRecordedShiftsAnnex
+from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
@@ -49,16 +49,19 @@ class LiftMode(enum.Enum):
 
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
-        return InlineLifts().visit(ir)
+        return InlineLifts.apply(ir)
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
+        return InlineLifts.apply(ir, predicate=simple_inline_heuristic.is_eligible_for_inlining)
     elif lift_mode == LiftMode.USE_TEMPORARIES:
-        return InlineLifts(
+        # TODO: write comment why we need params, i.e. local shift, instead of arg to get recorded shifts
+        # TODO: for lift it should be fine as long as shift only occurs once (not only centre)
+        return InlineLifts.apply(
+            ir,
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
-            | InlineLifts.Flag.INLINE_CENTRE_ONLY_LIFT_ARGS
-            | InlineLifts.Flag.REMOVE_UNUSED_LIFT_ARGS
-        ).visit(ir)
+            | InlineLifts.Flag.INLINE_LIFTED_ARGS,
+            inline_single_pos_deref_lift_args_only=True,
+        )
     else:
         raise ValueError()
 
@@ -178,7 +181,7 @@ def apply_common_transforms(
         ir = ConstantFolding.apply(ir)
 
         for _ in range(10):
-            inlined = InlineLifts().visit(ir)
+            inlined = InlineLifts.apply(ir)
             inlined = InlineLambdas.apply(
                 inlined,
                 opcount_preserving=True,

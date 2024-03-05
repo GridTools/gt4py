@@ -40,13 +40,14 @@ class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
         self.generic_visit(node)
 
 
-def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+def copy_recorded_shifts(from_: ir.Node, to: ir.Node, *, required: bool = True) -> None:
     """
     Copy `recorded_shifts` annex attribute from one node to another.
 
     This function mainly exists for readability reasons.
     """
-    to.annex.recorded_shifts = from_.annex.recorded_shifts
+    if required or hasattr(from_.annex, "recorded_shifts"):
+        to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
 class Sentinel(enum.Enum):
@@ -329,10 +330,11 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
+        return node
 
     @classmethod
     def apply(
-        cls, node: ir.StencilClosure, *, inputs_only=True, save_to_annex=False
+        cls, node: ir.StencilClosure | ir.FencilDefinition, *, inputs_only=True, save_to_annex=False
     ) -> (
         dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
     ):
@@ -348,6 +350,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
                 ValidateRecordedShiftsAnnex().visit(node)
 
         if inputs_only:
+            assert isinstance(node, ir.StencilClosure)
             inputs_shifts = {}
             for inp in node.inputs:
                 inputs_shifts[str(inp.id)] = recorded_shifts[id(inp)]

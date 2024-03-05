@@ -16,7 +16,7 @@ from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_lifts import _is_lift
 
 
-def is_eligible_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bool:
+def is_eligible_for_inlining(arg: ir.FunCall, is_scan_pass_context: bool) -> bool:
     """
     Predicate for the InlineLifts transformation.
 
@@ -34,10 +34,10 @@ def is_eligible_for_inlining(node: ir.FunCall, is_scan_pass_context: bool) -> bo
     - Don’t inline the first lifted function call within a scan (otherwise, all stencils would get
       inlined into the scans, leading to reduced parallelism/scan-only computation)
     """
-    assert _is_lift(node)
+    assert _is_lift(arg)
 
-    assert isinstance(node.fun, ir.FunCall)  # for mypy
-    (stencil,) = node.fun.args
+    assert isinstance(arg.fun, ir.FunCall)  # for mypy
+    (stencil,) = arg.fun.args
     # Don’t inline scans, i.e. exclude `↑(scan(...))(...)`
     if isinstance(stencil, ir.FunCall) and stencil.fun == ir.SymRef(id="scan"):
         return False
