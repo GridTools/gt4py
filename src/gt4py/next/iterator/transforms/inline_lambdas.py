@@ -123,9 +123,12 @@ def inline_lambda(  # noqa: C901  # see todo above
 
 @dataclasses.dataclass
 class InlineLambdas(PreserveLocationVisitor, NodeTranslator):
-    """Inline lambda calls by substituting every argument by its value."""
+    """
+    Inline lambda calls by substituting every argument by its value.
 
-    # TODO: document that these annex attrs are preserved, but not used by the pass itself.
+    Note: This pass preserves, but doesn't use the `type` and `recorded_shifts` annex.
+    """
+
     PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts")
 
     opcount_preserving: bool
