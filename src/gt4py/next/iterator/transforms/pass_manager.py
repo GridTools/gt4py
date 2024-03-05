@@ -119,6 +119,8 @@ def main_transforms(ir: itir.Node, lift_mode=None, icdlv_uids=None):
             ignore_tuple_size=True,  # possibly dangerous
             use_global_type_inference=False,
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
+            # since we run the lambda inliner anyway we can disable this
+            remove_letified_make_tuple_elements=False
         )
         # This pass is required such that a deref outside of a
         # `tuple_get(make_tuple(let(...), ...))` call is propagated into the let after the
