@@ -338,6 +338,8 @@ class InlineLifts(
                 *((param, inlined_lift) for param, inlined_lift in inlined_args.items())  # type: ignore[arg-type] # mypy not smart enough
             )(stencil.expr)
 
+            # it is likely that some of the let args can be immediately inlined. do this eagerly
+            # here
             new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
 
             new_stencil = im.lambda_(*new_arg_exprs.keys())(new_stencil_body)

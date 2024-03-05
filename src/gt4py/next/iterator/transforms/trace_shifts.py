@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import enum
+import sys
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
@@ -264,6 +265,8 @@ _START_CTX: Final = {
 }
 
 
+# TODO(tehrengruber): This pass is unnecessarily very inefficient and easily exceeds the default
+#  recursion limit.
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
@@ -338,8 +341,13 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     ) -> (
         dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
     ):
+        old_recursionlimit = sys.getrecursionlimit()
+        sys.setrecursionlimit(100000000)
+
         instance = cls()
         instance.visit(node)
+
+        sys.setrecursionlimit(old_recursionlimit)
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
