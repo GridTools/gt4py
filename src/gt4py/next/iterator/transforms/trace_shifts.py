@@ -357,6 +357,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
                 ValidateRecordedShiftsAnnex().visit(node)
 
         if inputs_only:
+            assert isinstance(node, ir.StencilClosure)
             inputs_shifts = {}
             for inp in node.inputs:
                 inputs_shifts[str(inp.id)] = recorded_shifts[id(inp)]
