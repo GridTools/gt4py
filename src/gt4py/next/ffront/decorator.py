@@ -67,7 +67,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 )
 from gt4py.next.otf import stages, transforms as otf_transforms
 from gt4py.next.otf.transforms.past_to_func import past_to_fun_def
-from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -269,35 +269,20 @@ class Program:
                     definition = self.definition
                 ctx.run(definition, *rewritten_args, **kwargs)
             return
-        elif isinstance(self.backend, modular_executor.ModularExecutor):
-            self.backend(
-                stages.PastClosure(
-                    closure_vars=self.closure_vars,
-                    past_node=self.past_node,
-                    grid_type=self.grid_type,
-                    args=[*rewritten_args, *size_args],
-                    kwargs=kwargs
-                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
-                ),
-                *rewritten_args,
-                *size_args,
-                **kwargs,
-                offset_provider=offset_provider,
-                column_axis=self._column_axis,
-            )
-            return
 
         ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
         if "debug" in kwargs:
             debug(self.itir)
 
         self.backend(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            column_axis=self._column_axis,
+            stages.PastClosure(
+                closure_vars=self.closure_vars,
+                past_node=self.past_node,
+                grid_type=self.grid_type,
+                args=[*rewritten_args, *size_args],
+                kwargs=kwargs
+                | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+            )
         )
 
     def format_itir(
