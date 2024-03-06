@@ -14,6 +14,7 @@
 
 import dataclasses
 
+import devtools
 import factory
 
 from gt4py.next import common, config
@@ -29,18 +30,14 @@ from . import utils
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: stages.PastClosure) -> ProgramCall:
-        all_closure_vars = utils._get_closure_vars_recursively(
-            inp.closure_vars)
+        all_closure_vars = utils._get_closure_vars_recursively(inp.closure_vars)
         offsets_and_dimensions = utils._filter_closure_vars_by_type(
             all_closure_vars, FieldOffset, common.Dimension
         )
-        grid_type = utils._deduce_grid_type(
-            inp.grid_type, offsets_and_dimensions.values())
+        grid_type = utils._deduce_grid_type(inp.grid_type, offsets_and_dimensions.values())
 
-        gt_callables = utils._filter_closure_vars_by_type(
-            all_closure_vars, GTCallable).values()
-        lowered_funcs = [gt_callable.__gt_itir__()
-                         for gt_callable in gt_callables]
+        gt_callables = utils._filter_closure_vars_by_type(all_closure_vars, GTCallable).values()
+        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
 
         itir_program = ProgramLowering.apply(
             inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type

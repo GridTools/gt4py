@@ -50,15 +50,13 @@ def test_make_program_processor(dummy_formatter):
     assert processor.__name__ == "new_name"
     assert processor(None) == other_func(None)
     assert processor(1, 2, a="A", b="B") == other_func(1, 2, a="A", b="B")
-    assert processor(1, 2, 3, 4, a="A", b="B", c="C") != other_func(
-        1, 2, 3, 4, a="A", b="B", c="C")
+    assert processor(1, 2, 3, 4, a="A", b="B", c="C") != other_func(1, 2, 3, 4, a="A", b="B", c="C")
 
     with pytest.raises(ValueError, match="accepted arguments cannot be a negative number"):
         make_program_processor(my_func, ProgramFormatter, accept_args=-1)
 
     with pytest.raises(ValueError, match="invalid list of keyword argument names"):
-        make_program_processor(my_func, ProgramFormatter,
-                               accept_kwargs=["a", None])
+        make_program_processor(my_func, ProgramFormatter, accept_kwargs=["a", None])
 
 
 @pytest.fixture
@@ -101,10 +99,8 @@ def test_is_program_backend():
 
     @dataclasses.dataclass
     class DummyBackend:
-        executor: DummyProgramExecutor = dataclasses.field(
-            default_factory=DummyProgramExecutor)
-        allocator: DummyAllocatorFactory = dataclasses.field(
-            default_factory=DummyAllocatorFactory)
+        executor: DummyProgramExecutor = dataclasses.field(default_factory=DummyProgramExecutor)
+        allocator: DummyAllocatorFactory = dataclasses.field(default_factory=DummyAllocatorFactory)
 
         @property
         def __gt_allocator__(self):

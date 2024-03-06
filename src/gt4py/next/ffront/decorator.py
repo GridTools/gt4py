@@ -177,8 +177,7 @@ class Program:
         if self.backend:
             return self.backend.__gt_allocator__
         else:
-            raise RuntimeError(
-                f"Program '{self}' does not have a backend set.")
+            raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
         return dataclasses.replace(self, backend=backend)
@@ -213,8 +212,7 @@ class Program:
         """
         for key in kwargs.keys():
             if all(key != param.id for param in self.past_node.params):
-                raise TypeError(
-                    f"Keyword argument '{key}' is not a valid program parameter.")
+                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
             bound_args=kwargs,
@@ -237,8 +235,7 @@ class Program:
         gt_callables = otf_transforms.utils._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).values()
-        lowered_funcs = [gt_callable.__gt_itir__()
-                         for gt_callable in gt_callables]
+        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
         return ProgramLowering.apply(
             self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
         )
@@ -255,12 +252,12 @@ class Program:
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 if self.definition is None:
-                    self.definition = past_to_fun_def(
+                    definition = past_to_fun_def(
                         stages.PastClosure(
                             closure_vars=self.closure_vars,
                             past_node=self.past_node,
                             grid_type=self.grid_type,
-                            args=[*rewritten_args, *size_args],
+                            args=args,
                             kwargs=kwargs
                             | {
                                 "offset_provider": offset_provider,
@@ -268,20 +265,39 @@ class Program:
                             },
                         )
                     )
-                ctx.run(self.definition, *rewritten_args, **kwargs)
+                else:
+                    definition = self.definition
+                ctx.run(definition, *rewritten_args, **kwargs)
+            return
+        elif isinstance(self.backend, modular_executor.ModularExecutor):
+            self.backend(
+                stages.PastClosure(
+                    closure_vars=self.closure_vars,
+                    past_node=self.past_node,
+                    grid_type=self.grid_type,
+                    args=[*rewritten_args, *size_args],
+                    kwargs=kwargs
+                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+                ),
+                *rewritten_args,
+                *size_args,
+                **kwargs,
+                offset_provider=offset_provider,
+                column_axis=self._column_axis,
+            )
             return
 
-        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
+        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
+        if "debug" in kwargs:
+            debug(self.itir)
 
         self.backend(
-            stages.PastClosure(
-                closure_vars=self.closure_vars,
-                past_node=self.past_node,
-                grid_type=self.grid_type,
-                args=[*rewritten_args, *size_args],
-                kwargs=kwargs
-                | {"offset_provider": offset_provider, "column_axis": self._column_axis},
-            ),
+            self.itir,
+            *rewritten_args,
+            *size_args,
+            **kwargs,
+            offset_provider=offset_provider,
+            column_axis=self._column_axis,
         )
 
     def format_itir(
@@ -305,8 +321,7 @@ class Program:
 
     def _validate_args(self, *args, **kwargs) -> None:
         arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(
-            v) for k, v in kwargs.items()}
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
         try:
             type_info.accepts_args(
@@ -323,8 +338,7 @@ class Program:
     def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
         self._validate_args(*args, **kwargs)
 
-        args, kwargs = type_info.canonicalize_arguments(
-            self.past_node.type, args, kwargs)
+        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
 
         implicit_domain = any(
             isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
@@ -336,8 +350,7 @@ class Program:
         rewritten_args = list(args)
         for param_idx, param in enumerate(self.past_node.params):
             if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-                shapes_and_dims = [
-                    *_field_constituents_shape_and_dims(args[param_idx], param.type)]
+                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
                 shape, dims = shapes_and_dims[0]
                 if not all(
                     el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
@@ -406,16 +419,14 @@ class ProgramWithBoundArgs(Program):
         )
 
         arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(
-            v) for k, v in kwargs.items()}
+        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
 
         try:
             # This error is also catched using `accepts_args`, but we do it manually here to give
             # a better error message.
             for name in self.bound_args.keys():
                 if name in kwargs:
-                    raise ValueError(
-                        f"Parameter '{name}' already set as a bound argument.")
+                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
                 new_type,
@@ -424,8 +435,7 @@ class ProgramWithBoundArgs(Program):
                 raise_exception=True,
             )
         except ValueError as err:
-            bound_arg_names = ", ".join(
-                [f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
+            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
                 f"Invalid argument types in call to program '{self.past_node.id}' with "
                 f"bound arguments '{bound_arg_names}'."
@@ -479,8 +489,7 @@ def program(
 def program(
     definition=None,
     *,
-    # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
-    backend=eve.NOTHING,
+    backend=eve.NOTHING,  # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -559,12 +568,10 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         source_def = SourceDefinition.from_function(definition)
         closure_vars = get_closure_vars_from_function(definition)
         annotations = typing.get_type_hints(definition)
-        foast_definition_node = FieldOperatorParser.apply(
-            source_def, closure_vars, annotations)
+        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
         loc = foast_definition_node.location
         operator_attribute_nodes = {
-            key: foast.Constant(
-                value=value, type=type_translation.from_value(value), location=loc)
+            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
             for key, value in operator_attributes.items()
         }
         untyped_foast_node = operator_node_cls(
@@ -602,8 +609,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         if hasattr(self, "__cached_itir"):
             return getattr(self, "__cached_itir")
 
-        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(
-            self.foast_node)
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
 
         object.__setattr__(self, "__cached_itir", itir_node)
 
@@ -629,8 +635,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             pass
 
         loc = self.foast_node.location
-        # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
+        param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
@@ -642,20 +647,17 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
             for arg_type in arg_types
         ]
-        params_ref = [past.Name(id=pdecl.id, location=loc)
-                      for pdecl in params_decl]
+        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
         out_sym: past.Symbol = past.DataSymbol(
             id="out",
-            type=type_info.return_type(
-                type_, with_args=arg_types, with_kwargs=kwarg_types),
+            type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
             namespace=dialect_ast_enums.Namespace.LOCAL,
             location=loc,
         )
         out_ref = past.Name(id="out", location=loc)
 
         if self.foast_node.id in self.closure_vars:
-            raise RuntimeError(
-                "A closure variable has the same name as the field operator itself.")
+            raise RuntimeError("A closure variable has the same name as the field operator itself.")
         closure_vars = {self.foast_node.id: self}
         closure_symbols = [
             past.Symbol(
@@ -681,8 +683,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             closure_vars=closure_symbols,
             location=loc,
         )
-        untyped_past_node = ProgramClosureVarTypeDeduction.apply(
-            untyped_past_node, closure_vars)
+        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
 
         self._program_cache[hash_] = Program(
@@ -703,15 +704,13 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         if not next_embedded.context.within_context() and self.backend is not None:
             # non embedded execution
             if "offset_provider" not in kwargs:
-                raise errors.MissingArgumentError(
-                    None, "offset_provider", True)
+                raise errors.MissingArgumentError(None, "offset_provider", True)
             offset_provider = kwargs.pop("offset_provider")
 
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
-            args, kwargs = type_info.canonicalize_arguments(
-                self.foast_node.type, args, kwargs)
+            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
             # TODO(tehrengruber): check all offset providers are given
             # deduce argument types
             arg_types = []
@@ -735,8 +734,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 forward = self.operator_attributes["forward"]
                 init = self.operator_attributes["init"]
                 axis = self.operator_attributes["axis"]
-                op = embedded_operators.ScanOperator(
-                    self.definition, forward, init, axis)
+                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
             else:
                 op = embedded_operators.EmbeddedOperator(self.definition)
             return embedded_operators.field_operator_call(op, args, kwargs)
@@ -849,8 +847,7 @@ def scan_operator(
             DEFAULT_BACKEND if backend is eve.NOTHING else backend,
             grid_type,
             operator_node_cls=foast.ScanOperator,
-            operator_attributes={"axis": axis,
-                                 "forward": forward, "init": init},
+            operator_attributes={"axis": axis, "forward": forward, "init": init},
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)

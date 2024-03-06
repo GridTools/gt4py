@@ -17,18 +17,20 @@ import textwrap
 
 import gt4py.next as gtx
 from gt4py.eve import codegen
-from gt4py.next.ffront import program_ast as past
+from gt4py.next.ffront import program_ast as past, type_translation
 from gt4py.next.otf import stages
 from gt4py.next.type_system import type_info
 
 
 def past_to_fun_def(past_closure: stages.PastClosure):
     node = past_closure.past_node
-    inout_types_ls = [
-        type_info.apply_to_primitive_constituents(arg.type, lambda primitive_type: primitive_type)
-        for arg in past_closure.args
+    arg_types = [type_translation.from_value(arg) for arg in past_closure.args]
+    kwarg_types = [
+        type_translation.from_value(v)
+        for k, v in past_closure.kwargs.items()
+        if k not in ("offset_provider", "column_axis")
     ]
-    inout_types = list(type_info.flatten(inout_types_ls))
+    inout_types = list(type_info.flatten(arg_types + kwarg_types))
     dims = set(
         i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
     )
@@ -37,6 +39,7 @@ def past_to_fun_def(past_closure: stages.PastClosure):
     filename = "<generated>"
     globalns = {dim.value: dim for dim in dims}
     globalns |= gtx.__dict__
+    globalns |= past_closure.closure_vars
     localns: dict = {}
     code_obj = compile(source_code, filename, "exec")
     exec(code_obj, globalns, localns)
