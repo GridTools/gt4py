@@ -34,7 +34,15 @@ JDim = Dimension("JDim")
 KDim = Dimension("KDim")
 
 
-@pytest.fixture(params=nd_array_field._nd_array_implementations)
+def nd_array_implementation_params():
+    for xp in nd_array_field._nd_array_implementations:
+        if hasattr(nd_array_field, "cp") and xp == nd_array_field.cp:
+            yield pytest.param(xp, marks=pytest.mark.requires_gpu)
+        else:
+            yield xp
+
+
+@pytest.fixture(params=nd_array_implementation_params())
 def nd_array_implementation(request):
     yield request.param
 
