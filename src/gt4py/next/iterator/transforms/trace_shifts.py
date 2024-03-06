@@ -16,8 +16,37 @@ import enum
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
+from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+
+
+class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
+    """Ensure every applied lift and its arguments have the `recorded_shifts` annex populated."""
+
+    def visit_FunCall(self, node: ir.FunCall):
+        if is_applied_lift(node):
+            assert hasattr(node.annex, "recorded_shifts")
+
+            if len(node.annex.recorded_shifts) == 0:
+                return
+
+            if isinstance(node.fun.args[0], ir.Lambda):  # type: ignore[attr-defined]  # ensured by is_applied_lift
+                stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_lift
+                for param in stencil.params:
+                    assert hasattr(param.annex, "recorded_shifts")
+
+        self.generic_visit(node)
+
+
+def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+    """
+    Copy `recorded_shifts` annex attribute from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
+    to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
 class Sentinel(enum.Enum):
@@ -246,7 +275,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
-        return _combine
+        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
+            return _combine
+        raise ValueError(f"Undefined symbol {node.id}")
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):
@@ -301,7 +332,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
     @classmethod
     def apply(
-        cls, node: ir.StencilClosure, *, inputs_only=True
+        cls, node: ir.StencilClosure, *, inputs_only=True, save_to_annex=False
     ) -> (
         dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
     ):
@@ -310,6 +341,12 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
+        if save_to_annex:
+            _save_to_annex(node, recorded_shifts)
+
+            if __debug__:
+                ValidateRecordedShiftsAnnex().visit(node)
+
         if inputs_only:
             inputs_shifts = {}
             for inp in node.inputs:
@@ -317,3 +354,12 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return inputs_shifts
 
         return recorded_shifts
+
+
+def _save_to_annex(
+    node: ir.Node,
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]],
+) -> None:
+    for child_node in node.pre_walk_values():
+        if id(child_node) in recorded_shifts:
+            child_node.annex.recorded_shifts = recorded_shifts[id(child_node)]
