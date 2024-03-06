@@ -497,11 +497,11 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
 
 def test_absolute_indexing_dim_sliced():
     domain = common.Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[JDim(8) : JDim(10), IDim(5) : IDim(9)]
-    expected = field[(IDim, UnitRange(5, 9)), (JDim, UnitRange(8, 10))]
+    indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
+    expected = field[(D0, UnitRange(5, 9)), (D1, UnitRange(8, 10))]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == expected
@@ -509,11 +509,11 @@ def test_absolute_indexing_dim_sliced():
 
 def test_absolute_indexing_dim_sliced_single_slice():
     domain = common.Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[KDim(11)]
-    indexed_field_2 = field[(KDim, 11)]
+    indexed_field_1 = field[D2(11)]
+    indexed_field_2 = field[(D2, 11)]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == indexed_field_2
@@ -521,21 +521,21 @@ def test_absolute_indexing_dim_sliced_single_slice():
 
 def test_absolute_indexing_wrong_dim_sliced():
     domain = common.Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
 
-    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'JDim' and 'IDim'."):
-        field[JDim(8) : IDim(10)]
+    with pytest.raises(IndexError, match="Dimensions slicing mismatch between 'D1' and 'D0'."):
+        field[D1(8) : D0(10)]
 
 
 def test_absolute_indexing_empty_dim_sliced():
     domain = common.Domain(
-        dims=(IDim, JDim, KDim), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
+        dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     with pytest.raises(IndexError, match="Lower bound needs to be specified"):
-        field[: IDim(10)]
+        field[: D0(10)]
 
 
 def test_absolute_indexing_value_return():
