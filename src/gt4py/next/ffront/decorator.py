@@ -270,7 +270,7 @@ class Program:
                 ctx.run(definition, *rewritten_args, **kwargs)
             return
 
-        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
+        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
             stages.PastClosure(
