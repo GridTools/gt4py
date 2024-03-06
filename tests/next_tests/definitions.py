@@ -83,20 +83,8 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_cpu"
-    DACE_GPU = "gt4py.next.program_processors.runners.dace_iterator.run_dace_gpu"
-
-
-class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
-    GTFN_CPU_EXECUTOR = f"{ProgramBackendId.GTFN_CPU}.executor"
-    GTFN_CPU_IMPERATIVE_EXECUTOR = f"{ProgramBackendId.GTFN_CPU_IMPERATIVE}.executor"
-    GTFN_CPU_WITH_TEMPORARIES = f"{ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES}.executor"
-    ROUNDTRIP = f"{ProgramBackendId.ROUNDTRIP}.executor"
-    DOUBLE_ROUNDTRIP = f"{ProgramBackendId.DOUBLE_ROUNDTRIP}.executor"
-
-
-class OptionalProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
-    DACE_CPU_EXECUTOR = f"{OptionalProgramBackendId.DACE_CPU}.executor"
+    DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
+    DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
