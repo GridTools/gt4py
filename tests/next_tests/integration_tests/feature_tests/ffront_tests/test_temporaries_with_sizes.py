@@ -17,6 +17,7 @@ from numpy import int32, int64
 
 from gt4py import next as gtx
 from gt4py.next import backend, common
+from gt4py.next.otf import transforms as otf_transforms
 from gt4py.next.iterator.transforms import LiftMode, apply_common_transforms
 from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.runners.gtfn import run_gtfn_with_temporaries
@@ -39,6 +40,7 @@ from next_tests.toy_connectivity import Cell, Edge
 @pytest.fixture
 def run_gtfn_with_temporaries_and_symbolic_sizes():
     return backend.Backend(
+        transformer=otf_transforms.PastToItirFactory(),
         executor=modular_executor.ModularExecutor(
             name="run_gtfn_with_temporaries_and_sizes",
             otf_workflow=run_gtfn_with_temporaries.executor.otf_workflow.replace(
@@ -77,7 +79,7 @@ def testee():
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
+        run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
@@ -92,7 +94,8 @@ def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh
     a = cases.allocate(unstructured_case, testee, "a")()
     out = cases.allocate(unstructured_case, testee, "out")()
 
-    first_nbs, second_nbs = (mesh_descriptor.offset_provider["E2V"].table[:, i] for i in [0, 1])
+    first_nbs, second_nbs = (
+        mesh_descriptor.offset_provider["E2V"].table[:, i] for i in [0, 1])
     ref = (a.ndarray * 2)[first_nbs] + (a.ndarray * 2)[second_nbs]
 
     cases.verify(

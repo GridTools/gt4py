@@ -30,7 +30,8 @@ from next_tests.unit_tests.conftest import lift_mode, program_processor, run_pro
 def tridiag_forward(state, a, b, c, d):
     return make_tuple(
         deref(c) / (deref(b) - deref(a) * tuple_get(0, state)),
-        (deref(d) - deref(a) * tuple_get(1, state)) / (deref(b) - deref(a) * tuple_get(0, state)),
+        (deref(d) - deref(a) * tuple_get(1, state)) /
+        (deref(b) - deref(a) * tuple_get(0, state)),
     )
 
 
@@ -119,15 +120,19 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
     if (
         program_processor
         in [
-            gtfn.run_gtfn,
-            gtfn.run_gtfn_imperative,
-            gtfn.run_gtfn_with_temporaries,
+            gtfn.run_gtfn.executor,
+            gtfn.run_gtfn_imperative.executor,
+            gtfn.run_gtfn_with_temporaries.executor,
             gtfn_formatters.format_cpp,
         ]
         and lift_mode == LiftMode.FORCE_INLINE
     ):
-        pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if program_processor == gtfn.run_gtfn_with_temporaries or lift_mode == LiftMode.USE_TEMPORARIES:
+        pytest.skip(
+            "gtfn does only support lifted scans when using temporaries")
+    if (
+        program_processor == gtfn.run_gtfn_with_temporaries.executor
+        or lift_mode == LiftMode.USE_TEMPORARIES
+    ):
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
