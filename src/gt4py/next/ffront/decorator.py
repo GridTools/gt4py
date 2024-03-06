@@ -252,14 +252,19 @@ class Program:
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 if self.definition is None:
-                    self.definition = past_to_fun_def(stages.PastClosure(
-                    closure_vars=self.closure_vars,
-                    past_node=self.past_node,
-                    grid_type=self.grid_type,
-                    args=[*rewritten_args, *size_args],
-                    kwargs=kwargs
-                    | {"offset_provider": offset_provider, "column_axis": self._column_axis},
-                ))
+                    self.definition = past_to_fun_def(
+                        stages.PastClosure(
+                            closure_vars=self.closure_vars,
+                            past_node=self.past_node,
+                            grid_type=self.grid_type,
+                            args=[*rewritten_args, *size_args],
+                            kwargs=kwargs
+                            | {
+                                "offset_provider": offset_provider,
+                                "column_axis": self._column_axis,
+                            },
+                        )
+                    )
                 ctx.run(self.definition, *rewritten_args, **kwargs)
             return
         elif isinstance(self.backend, modular_executor.ModularExecutor):
@@ -678,16 +683,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
-
-        # past_closure = stages.PastClosure(
-        #     closure_vars=closure_vars,
-        #     past_node=past_node,
-        #     grid_type=self.grid_type,
-        #     args=past_node.params,
-        #     kwargs={},
-        # )
-        #
-        # past_to_fun_def(past_closure)
 
         self._program_cache[hash_] = Program(
             past_node=past_node,

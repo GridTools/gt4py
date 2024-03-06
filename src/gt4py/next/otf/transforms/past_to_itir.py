@@ -23,13 +23,16 @@ from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import get_closure_vars_from_function
 from gt4py.next.otf import stages, workflow
 from gt4py.next.otf.stages import ProgramCall
+
 from . import utils
 
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: stages.PastClosure) -> ProgramCall:
-        closure_vars = utils._get_closure_vars_recursively(get_closure_vars_from_function(inp.definition))
+        closure_vars = utils._get_closure_vars_recursively(
+            get_closure_vars_from_function(inp.definition)
+        )
         offsets_and_dimensions = utils._filter_closure_vars_by_type(
             closure_vars, FieldOffset, common.Dimension
         )

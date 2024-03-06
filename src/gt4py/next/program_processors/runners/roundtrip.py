@@ -233,7 +233,7 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = None
+    debug: bool = False
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
@@ -256,7 +256,7 @@ class RoundtripFactory(factory.Factory):
 class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
-    def __call__(self, program: stages.PastClosure, *args, **kwargs) -> None:
+    def __call__(self, program: stages.ProgramCall, *args, **kwargs) -> None:
         kwargs["backend"] = self.dispatch_backend
         super().__call__(program, *args, **kwargs)
 

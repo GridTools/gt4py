@@ -36,9 +36,8 @@ def past_to_fun_def(past_closure: stages.PastClosure):
 
     filename = "<generated>"
     globalns = {dim.value: dim for dim in dims}
-    # globalns[node.id] = node
     globalns |= gtx.__dict__
-    localns = {}
+    localns: dict = {}
     code_obj = compile(source_code, filename, "exec")
     exec(code_obj, globalns, localns)
     lines = [line + "\n" for line in source_code.splitlines()]
@@ -64,10 +63,10 @@ class ProgamFuncGen(codegen.TemplatedGenerator):
     Symbol = codegen.FormatTemplate("{id}: {type}")
 
     def visit_Call(self, node: past.Call, **kwargs) -> str:
-        args = ", ".join(self.visit(node.args))
+        args_joined = ", ".join(self.visit(node.args))
         kwargs_list = [f"{name}={self.visit(value)}" for name, value in node.kwargs.items()]
-        kwargs = ", ".join(kwargs_list)
-        params = ", ".join([args, kwargs])
+        kwargs_joined = ", ".join(kwargs_list)
+        params = ", ".join([args_joined, kwargs_joined])
         return f"{self.visit(node.func)}({params})"
 
     Name = codegen.FormatTemplate("{id}")
