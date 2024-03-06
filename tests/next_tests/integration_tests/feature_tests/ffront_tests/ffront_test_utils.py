@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
+from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
@@ -39,9 +39,17 @@ import next_tests
 
 
 @ppi.program_executor
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+class NoBackend(next_backend.Backend):
+    def __call__(self, program) -> None:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+no_backend = NoBackend(executor=no_exec, transformer=None, allocator=None)
 
 
 OPTIONAL_PROCESSORS = []

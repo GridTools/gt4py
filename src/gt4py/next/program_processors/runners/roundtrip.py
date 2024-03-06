@@ -55,7 +55,8 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     AxisLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
-    StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
+    StencilClosure = as_mako(
+        "closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
     FencilDefinition = as_mako(
         """
 ${''.join(function_definitions)}
@@ -94,13 +95,16 @@ def ${id}(${','.join(params)}):
             "unstructured_domain",
         )
         assert all(
-            isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
+            isinstance(r, itir.FunCall) and r.fun == itir.SymRef(
+                id="named_range")
             for r in node.domain.args
         )
         domain_ranges = [self.visit(r.args) for r in node.domain.args]
         axes = ", ".join(label for label, _, _ in domain_ranges)
-        origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
-        shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
+        origin = "{" + ", ".join(f"{label}: -{start}" for label,
+                                 start, _ in domain_ranges) + "}"
+        shape = "(" + ", ".join(f"{stop}-{start}" for _,
+                                start, stop in domain_ranges) + ")"
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 
@@ -130,7 +134,8 @@ def fencil_generator(
     """
     # TODO(tehrengruber): just a temporary solution until we have a proper generic
     #  caching mechanism
-    cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
+    cache_key = hash((ir, lift_mode, debug, use_embedded,
+                     tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
         return _FENCIL_CACHE[cache_key]
 
@@ -184,14 +189,16 @@ def fencil_generator(
         source_file.write(program)
 
     try:
-        spec = importlib.util.spec_from_file_location("module.name", source_file_name)
+        spec = importlib.util.spec_from_file_location(
+            "module.name", source_file_name)
         mod = importlib.util.module_from_spec(spec)  # type: ignore
         spec.loader.exec_module(mod)  # type: ignore
     finally:
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries))
+    assert isinstance(ir, (itir.FencilDefinition,
+                      gtmps_transform.FencilWithTemporaries))
     fencil_name = (
         ir.fencil.id + "_wrapper"
         if isinstance(ir, gtmps_transform.FencilWithTemporaries)
@@ -204,6 +211,7 @@ def fencil_generator(
     return fencil
 
 
+@ppi.program_executor
 def execute_roundtrip(
     ir: itir.Node,
     *args,
@@ -256,9 +264,11 @@ class RoundtripFactory(factory.Factory):
 class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
-    def __call__(self, program: stages.ProgramCall, *args, **kwargs) -> None:
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         kwargs["backend"] = self.dispatch_backend
-        super().__call__(program, *args, **kwargs)
+        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
+            *args, **kwargs
+        )
 
 
 class RoundtripExecutorFactory(factory.Factory):
@@ -266,8 +276,12 @@ class RoundtripExecutorFactory(factory.Factory):
         model = RoundtripExecutor
 
     class Params:
-        roundtrip_workflow = factory.SubFactory(RoundtripFactory)
+        roundtrip_workflow = factory.SubFactory(
+            RoundtripFactory, dispatch_backend=factory.SelfAttribute(
+                "..dispatch_backend")
+        )
 
+    dispatch_backend = None
     otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
 
 

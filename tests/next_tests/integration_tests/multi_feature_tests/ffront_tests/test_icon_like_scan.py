@@ -59,7 +59,8 @@ def _solve_nonhydro_stencil_52_like(
     z_q: gtx.Field[[Cell, KDim], float],
     w: gtx.Field[[Cell, KDim], float],
 ) -> tuple[
-    gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], float], gtx.Field[[Cell, KDim], bool]
+    gtx.Field[[Cell, KDim], float], gtx.Field[[
+        Cell, KDim], float], gtx.Field[[Cell, KDim], bool]
 ]:
     """No projector required as we write all output of the scan (including dummy field)"""
     z_a = z_beta(Koff[-1]) * z_alpha(Koff[-1])
@@ -139,7 +140,8 @@ def solve_nonhydro_stencil_52_like_z_q(
     w: gtx.Field[[Cell, KDim], float],
     z_q_out: gtx.Field[[Cell, KDim], float],
 ):
-    _solve_nonhydro_stencil_52_like_z_q(z_alpha, z_beta, z_q, w, out=z_q_out[:, 1:])
+    _solve_nonhydro_stencil_52_like_z_q(
+        z_alpha, z_beta, z_q, w, out=z_q_out[:, 1:])
 
 
 @gtx.field_operator
@@ -164,7 +166,8 @@ def solve_nonhydro_stencil_52_like_z_q_tup(
     w: gtx.Field[[Cell, KDim], float],
     z_q_out: gtx.Field[[Cell, KDim], float],
 ):
-    _solve_nonhydro_stencil_52_like_z_q_tup(z_alpha, z_beta, z_q, w, out=(z_q_out[:, 1:],))
+    _solve_nonhydro_stencil_52_like_z_q_tup(
+        z_alpha, z_beta, z_q, w, out=(z_q_out[:, 1:],))
 
 
 def reference(
@@ -195,7 +198,7 @@ def reference(
 @pytest.fixture
 def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
@@ -208,20 +211,27 @@ def test_setup(exec_alloc_descriptor):
         cell_size = test_case.default_sizes[Cell]
         k_size = test_case.default_sizes[KDim]
         z_alpha = test_case.as_field(
-            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size + 1))
+            [Cell, KDim], np.random.default_rng().uniform(
+                size=(cell_size, k_size + 1))
         )
         z_beta = test_case.as_field(
-            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+            [Cell, KDim], np.random.default_rng().uniform(
+                size=(cell_size, k_size))
         )
         z_q = test_case.as_field(
-            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+            [Cell, KDim], np.random.default_rng().uniform(
+                size=(cell_size, k_size))
         )
         w = test_case.as_field(
-            [Cell, KDim], np.random.default_rng().uniform(size=(cell_size, k_size))
+            [Cell, KDim], np.random.default_rng().uniform(
+                size=(cell_size, k_size))
         )
-        z_q_ref, w_ref = reference(z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
-        dummy = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
-        z_q_out = test_case.as_field([Cell, KDim], np.zeros((cell_size, k_size)))
+        z_q_ref, w_ref = reference(
+            z_alpha.ndarray, z_beta.ndarray, z_q.ndarray, w.ndarray)
+        dummy = test_case.as_field(
+            [Cell, KDim], np.zeros((cell_size, k_size), dtype=bool))
+        z_q_out = test_case.as_field(
+            [Cell, KDim], np.zeros((cell_size, k_size)))
 
     return setup()
 
@@ -242,7 +252,8 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
         comparison=lambda ref, a: np.allclose(ref[:, 1:], a[:, 1:]),
     )
 
-    assert np.allclose(test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
+    assert np.allclose(
+        test_setup.z_q_ref[:, 1:], test_setup.z_q_out[:, 1:].asnumpy())
 
 
 @pytest.mark.uses_tuple_returns
@@ -256,7 +267,8 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
             "again after CollapseTuple."
         )
     if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
-        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
+        pytest.xfail(
+            "Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.verify(
         test_setup.case,
@@ -278,7 +290,8 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
         test_setup.case.executor
         == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
     ):
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
+        pytest.xfail(
+            "Temporary extraction does not work correctly in combination with scans.")
 
     cases.run(
         test_setup.case,
@@ -300,9 +313,11 @@ def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
         test_setup.case.executor
         == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
     ):
-        pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
+        pytest.xfail(
+            "Temporary extraction does not work correctly in combination with scans.")
     if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
-        pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
+        pytest.xfail(
+            "Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.run(
         test_setup.case,

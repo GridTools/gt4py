@@ -636,7 +636,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))

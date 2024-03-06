@@ -18,6 +18,7 @@ import dataclasses
 from typing import Any, Optional
 
 import gt4py.next.program_processors.processor_interface as ppi
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import stages, workflow
 
 
@@ -26,9 +27,15 @@ class ModularExecutor(ppi.ProgramExecutor):
     otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]
     name: Optional[str] = None
 
-    def __call__(self, program: stages.ProgramCall, *args, **kwargs: Any) -> None:
-        self.otf_workflow(program)(*args, offset_provider=kwargs["offset_provider"])
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:
+        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
+            *args, offset_provider=kwargs["offset_provider"]
+        )
 
     @property
     def __name__(self) -> str:
         return self.name or repr(self)
+
+    @property
+    def kind(self) -> type[ppi.ProgramExecutor]:
+        return ppi.ProgramExecutor

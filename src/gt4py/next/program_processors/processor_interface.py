@@ -237,8 +237,10 @@ class ProgramBackend(
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
+    if not hasattr(obj, "executor"):
+        return False
     return is_processor_kind(
-        obj,
+        obj.executor,
         ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory(obj)
 
