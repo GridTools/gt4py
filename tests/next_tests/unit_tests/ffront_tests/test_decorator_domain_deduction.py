@@ -15,7 +15,7 @@
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.ffront.decorator import _deduce_grid_type
+from gt4py.next.otf.transforms.utils import _deduce_grid_type
 
 
 Dim = gtx.Dimension("Dim")

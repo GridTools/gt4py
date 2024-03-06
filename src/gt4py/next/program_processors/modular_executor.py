@@ -35,3 +35,7 @@ class ModularExecutor(ppi.ProgramExecutor):
     @property
     def __name__(self) -> str:
         return self.name or repr(self)
+
+    @property
+    def kind(self) -> type[ppi.ProgramExecutor]:
+        return ppi.ProgramExecutor

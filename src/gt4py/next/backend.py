@@ -38,10 +38,6 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         return getattr(self.executor, "__name__", None) or repr(self)
 
     @property
-    def kind(self) -> type[ppi.ProgramExecutor]:
-        return self.executor.kind
-
-    @property
     def __gt_allocator__(
         self,
     ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:

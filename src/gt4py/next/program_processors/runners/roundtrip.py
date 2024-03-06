@@ -183,6 +183,10 @@ def fencil_generator(
         source_file.write("\n")
         source_file.write(program)
 
+        import black
+
+        print(black.format_str(program, mode=black.mode.Mode()))
+
     try:
         spec = importlib.util.spec_from_file_location("module.name", source_file_name)
         mod = importlib.util.module_from_spec(spec)  # type: ignore
@@ -204,6 +208,7 @@ def fencil_generator(
     return fencil
 
 
+@ppi.program_executor
 def execute_roundtrip(
     ir: itir.Node,
     *args,
@@ -258,7 +263,9 @@ class RoundtripExecutor(modular_executor.ModularExecutor):
 
     def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
         kwargs["backend"] = self.dispatch_backend
-        super().__call__(program, *args, **kwargs)
+        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
+            *args, **kwargs
+        )
 
 
 class RoundtripExecutorFactory(factory.Factory):
@@ -266,8 +273,11 @@ class RoundtripExecutorFactory(factory.Factory):
         model = RoundtripExecutor
 
     class Params:
-        roundtrip_workflow = factory.SubFactory(RoundtripFactory)
+        roundtrip_workflow = factory.SubFactory(
+            RoundtripFactory, dispatch_backend=factory.SelfAttribute("..dispatch_backend")
+        )
 
+    dispatch_backend = None
     otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
 
 

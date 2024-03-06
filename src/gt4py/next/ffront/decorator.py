@@ -243,7 +243,7 @@ class Program:
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
 
-        if self.backend is None or self.backend.executor is None:
+        if self.backend is None:
             warnings.warn(
                 UserWarning(
                     f"Field View Program '{self.itir.id}': Using Python execution, consider selecting a perfomance backend."
@@ -265,11 +265,6 @@ class Program:
                 kwargs=kwargs
                 | {"offset_provider": offset_provider, "column_axis": self._column_axis},
             ),
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            column_axis=self._column_axis,
         )
 
     def format_itir(
@@ -657,8 +652,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
         past_node = ProgramTypeDeduction.apply(untyped_past_node)
-
-        self.past_to_func(arg_types, out_sym, past_node)
 
         self._program_cache[hash_] = Program(
             past_node=past_node,

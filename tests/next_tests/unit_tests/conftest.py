@@ -88,6 +88,8 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
 
     processor = processor_id.load()
     assert is_backend == ppi.is_program_backend(processor)
+    if is_backend:
+        processor = processor.executor
 
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []
@@ -104,6 +106,9 @@ def run_processor(
     *args,
     **kwargs,
 ) -> None:
+    import devtools
+
+    devtools.debug(processor)
     if processor is None or ppi.is_processor_kind(processor, ppi.ProgramExecutor):
         program(*args, backend=processor, **kwargs)
     elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):

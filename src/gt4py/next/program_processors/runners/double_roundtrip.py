@@ -22,7 +22,7 @@ from gt4py.next.program_processors.runners import roundtrip
 backend = next_backend.Backend(
     transformer=otf_transforms.PastToItirFactory(),
     executor=roundtrip.RoundtripExecutorFactory(
-        dispatch_backend=roundtrip.execute_roundtrip,
+        dispatch_backend=roundtrip.RoundtripExecutorFactory(),
     ),
     allocator=roundtrip.backend.allocator,
 )
