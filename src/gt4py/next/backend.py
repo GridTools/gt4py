@@ -19,17 +19,21 @@ from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.otf import stages, transforms as otf_transforms, workflow
+from gt4py.next.ffront import past_process_args_wf, past_to_itir_wf
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
+
+
+DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
+    past_process_args_wf.past_process_args.chain(past_to_itir_wf.PastToItirFactory())
+)
 
 
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transformer: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
-        otf_transforms.DEFAULT_TRANSFORMS
-    )
+    transformer: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = DEFAULT_TRANSFORMS
 
     def __call__(self, program: stages.PastClosure) -> None:
         program_call = self.transformer(program)

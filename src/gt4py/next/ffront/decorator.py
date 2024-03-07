@@ -43,7 +43,11 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
+    past_process_args_wf,
+    past_to_func_wf,
+    past_to_itir_wf,
     program_ast as past,
+    transform_utils,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
@@ -63,7 +67,7 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.otf import stages, transforms as otf_transforms
+from gt4py.next.otf import stages
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -140,7 +144,7 @@ class Program:
         )
 
     def __post_init__(self):
-        function_closure_vars = otf_transforms.utils._filter_closure_vars_by_type(
+        function_closure_vars = transform_utils._filter_closure_vars_by_type(
             self.closure_vars, GTCallable
         )
         misnamed_functions = [
@@ -218,11 +222,11 @@ class Program:
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
-        return otf_transforms.utils._get_closure_vars_recursively(self.closure_vars)
+        return transform_utils._get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        return otf_transforms.PastToItirFactory()(
+        return past_to_itir_wf.PastToItirFactory()(
             stages.PastClosure(
                 past_node=self.past_node,
                 closure_vars=self.closure_vars,
@@ -243,7 +247,7 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 # TODO(ricoh): move into test
                 if self.definition is None:
-                    definition = otf_transforms.past_to_fun_def(
+                    definition = past_to_func_wf.past_to_func(
                         stages.PastClosure(
                             closure_vars=self.closure_vars,
                             past_node=self.past_node,
@@ -259,7 +263,7 @@ class Program:
                 else:
                     definition = self.definition
                 # TODO(ricoh): check if rewriting still needed
-                rewritten_args, size_args, kwargs = otf_transforms.past_process_args._process_args(
+                rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
                     self.past_node, args, kwargs
                 )
                 ctx.run(definition, *rewritten_args, **kwargs)
@@ -286,7 +290,7 @@ class Program:
         **kwargs,
     ) -> str:
         ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
-        rewritten_args, size_args, kwargs = otf_transforms.past_process_args._process_args(
+        rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
             self.past_node, args, kwargs
         )
         if "debug" in kwargs:
@@ -305,7 +309,7 @@ class Program:
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in otf_transforms.utils._filter_closure_vars_by_type(
+        for name, gt_callable in transform_utils._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
             if isinstance(

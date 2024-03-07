@@ -18,22 +18,22 @@ import devtools
 import factory
 
 from gt4py.next import common, config
-from gt4py.next.ffront import fbuiltins, gtcallable, past_to_itir
+from gt4py.next.ffront import fbuiltins, gtcallable, past_to_itir, transform_utils
 from gt4py.next.otf import stages, workflow
-
-from . import utils
 
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
     def __call__(self, inp: stages.PastClosure) -> stages.ProgramCall:
-        all_closure_vars = utils._get_closure_vars_recursively(inp.closure_vars)
-        offsets_and_dimensions = utils._filter_closure_vars_by_type(
+        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
             all_closure_vars, fbuiltins.FieldOffset, common.Dimension
         )
-        grid_type = utils._deduce_grid_type(inp.grid_type, offsets_and_dimensions.values())
+        grid_type = transform_utils._deduce_grid_type(
+            inp.grid_type, offsets_and_dimensions.values()
+        )
 
-        gt_callables = utils._filter_closure_vars_by_type(
+        gt_callables = transform_utils._filter_closure_vars_by_type(
             all_closure_vars, gtcallable.GTCallable
         ).values()
         lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]

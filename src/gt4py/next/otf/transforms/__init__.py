@@ -12,22 +12,14 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.otf import stages, workflow
-
-from .past_process_args import past_process_args_wf
-from .past_to_func import past_to_fun_def
-from .past_to_itir import PastToItir, PastToItirFactory
+from gt4py.next.ffront.past_process_args_wf import past_process_args
+from gt4py.next.ffront.past_to_func_wf import past_to_func
+from gt4py.next.ffront.past_to_itir_wf import PastToItir, PastToItirFactory
 
 
 __all__ = [
     "PastToItir",
     "PastToItirFactory",
-    "past_to_fun_def",
-    "past_process_args_wf",
-    "DEFAULT_TRANSFORMS",
+    "past_to_func",
+    "past_process_args",
 ]
-
-
-DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
-    past_process_args_wf.chain(PastToItirFactory())
-)

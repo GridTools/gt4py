@@ -15,12 +15,10 @@
 from __future__ import annotations
 
 from gt4py.next import backend as next_backend
-from gt4py.next.otf import transforms as otf_transforms
 from gt4py.next.program_processors.runners import roundtrip
 
 
 backend = next_backend.Backend(
-    transformer=otf_transforms.DEFAULT_TRANSFORMS,
     executor=roundtrip.RoundtripExecutorFactory(
         dispatch_backend=roundtrip.RoundtripExecutorFactory(),
     ),

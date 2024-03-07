@@ -33,7 +33,7 @@ import gt4py.next.iterator.transforms.global_tmps as gtmps_transform
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import backend as next_backend
-from gt4py.next.otf import stages, transforms as otf_transforms, workflow
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
 
@@ -280,7 +280,6 @@ class RoundtripExecutorFactory(factory.Factory):
 executor = RoundtripExecutorFactory(name="roundtrip")
 
 backend = next_backend.Backend(
-    transformer=otf_transforms.DEFAULT_TRANSFORMS,
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )

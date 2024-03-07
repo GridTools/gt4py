@@ -22,7 +22,7 @@ from gt4py.next.otf import stages
 from gt4py.next.type_system import type_info
 
 
-def past_to_fun_def(past_closure: stages.PastClosure):
+def past_to_func(past_closure: stages.PastClosure):
     node = past_closure.past_node
     arg_types = [type_translation.from_value(arg) for arg in past_closure.args]
     kwarg_types = [
