@@ -97,7 +97,6 @@ def _absolute_sub_domain(
     return common.Domain(*named_ranges)
 
 
-# TODO tests
 def domain_intersection(
     *domains: common.Domain,
 ) -> common.Domain:
@@ -118,7 +117,6 @@ def domain_intersection(
     )
 
 
-# TODO tests
 def intersect_domains(
     *domains: common.Domain,
     ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,

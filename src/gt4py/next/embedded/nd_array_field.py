@@ -572,11 +572,11 @@ def _to_field(
     )
 
 
-# TODO move to common and test
 def _intersect_fields(
     *fields: common.Field | core_defs.Scalar,
     ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
 ) -> tuple[common.Field, ...]:
+    # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations
     nd_array_class = _get_nd_array_class(*fields)
     promoted_dims = common.promote_dims(*[f.domain.dims for f in fields if common.is_field(f)])
     broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
