@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar
+from typing import ClassVar, Iterable
 
 import numpy as np
 from numpy import typing as npt
@@ -548,8 +548,11 @@ def _compute_mask_ranges(
     return res
 
 
-def _trim_empty_domains(lst: list[tuple[bool, common.Domain]]) -> list[tuple[bool, common.Domain]]:
+def _trim_empty_domains(
+    lst: Iterable[tuple[bool, common.Domain]],
+) -> list[tuple[bool, common.Domain]]:
     """Remove empty domains from beginning and end of the list."""
+    lst = list(lst)
     if not lst:
         return lst
     if lst[0][1].is_empty:
@@ -644,32 +647,37 @@ def _concat_where(
     t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
 
     # compute the consecutive ranges (first relative, then domain) of true and false values
-    mask_values, mask_relative_ranges = zip(*_compute_mask_ranges(mask_field.ndarray))
-    mask_domains = (
-        _relative_ranges_to_domain((relative_range,), mask_field.domain)
-        for relative_range in mask_relative_ranges
+    mask_values_to_relative_range_mapping: Iterable[tuple[bool, common.UnitRange]] = (
+        _compute_mask_ranges(mask_field.ndarray)
+    )
+    mask_values_to_domain_mapping: Iterable[tuple[bool, common.Domain]] = (
+        (mask, _relative_ranges_to_domain((relative_range,), mask_field.domain))
+        for mask, relative_range in mask_values_to_relative_range_mapping
     )
     # mask domains intersected with the respective fields
-    intersected_domains = (
-        embedded_common.domain_intersection(
-            t_broadcasted.domain if mask_value else f_broadcasted.domain, mask_domain
+    mask_values_to_intersected_domains_mapping: Iterable[tuple[bool, common.Domain]] = (
+        (
+            mask_value,
+            embedded_common.domain_intersection(
+                t_broadcasted.domain if mask_value else f_broadcasted.domain, mask_domain
+            ),
         )
-        for mask_value, mask_domain in zip(mask_values, mask_domains)
+        for mask_value, mask_domain in mask_values_to_domain_mapping
     )
 
     # remove the empty domains from the beginning and end
-    mask_values, intersected_domains = tuple(
-        zip(*_trim_empty_domains(list(zip(mask_values, intersected_domains))))
-    ) or ([], [])
-    if any(d.is_empty for d in intersected_domains):
+    mask_values_to_intersected_domains_mapping = _trim_empty_domains(
+        mask_values_to_intersected_domains_mapping
+    )
+    if any(d.is_empty for _, d in mask_values_to_intersected_domains_mapping):
         raise embedded_exceptions.NonContiguousDomain(
-            f"In 'concat_where', cannot concatenate the following 'Domain's: {list(intersected_domains)}."
+            f"In 'concat_where', cannot concatenate the following 'Domain's: {[d for _, d in mask_values_to_intersected_domains_mapping]}."
         )
 
     # slice the fields with the domain ranges
     transformed = [
         t_broadcasted[d] if v else f_broadcasted[d]
-        for v, d in zip(mask_values, intersected_domains)
+        for v, d in mask_values_to_intersected_domains_mapping
     ]
 
     # stack the fields together
