@@ -182,7 +182,7 @@ class GTFNBackendFactory(factory.Factory):
             lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
 
-    transformer = factory.SubFactory(otf_transforms.PastToItirFactory)
+    transformer = otf_transforms.DEFAULT_TRANSFORMS
     executor = factory.LazyAttribute(
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )

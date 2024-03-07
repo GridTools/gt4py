@@ -46,7 +46,6 @@ from gt4py.next.ffront import (
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -56,7 +55,6 @@ from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
     ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
 )
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.ir_makers import (
@@ -66,7 +64,6 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.otf import stages, transforms as otf_transforms
-from gt4py.next.otf.transforms.past_to_func import past_to_fun_def
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -225,24 +222,17 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        offsets_and_dimensions = otf_transforms.utils._filter_closure_vars_by_type(
-            self._all_closure_vars, FieldOffset, Dimension
-        )
-        grid_type = otf_transforms.utils._deduce_grid_type(
-            self.grid_type, offsets_and_dimensions.values()
-        )
-
-        gt_callables = otf_transforms.utils._filter_closure_vars_by_type(
-            self._all_closure_vars, GTCallable
-        ).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
-        return ProgramLowering.apply(
-            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
-        )
+        return otf_transforms.PastToItirFactory()(
+            stages.PastClosure(
+                past_node=self.past_node,
+                closure_vars=self.closure_vars,
+                grid_type=self.grid_type,
+                args=[],
+                kwargs={},
+            )
+        ).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
-
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -251,8 +241,9 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
+                # TODO(ricoh): move into test
                 if self.definition is None:
-                    definition = past_to_fun_def(
+                    definition = otf_transforms.past_to_fun_def(
                         stages.PastClosure(
                             closure_vars=self.closure_vars,
                             past_node=self.past_node,
@@ -267,6 +258,8 @@ class Program:
                     )
                 else:
                     definition = self.definition
+                # TODO(ricoh): check if rewriting still needed
+                rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
                 ctx.run(definition, *rewritten_args, **kwargs)
             return
 
@@ -277,7 +270,7 @@ class Program:
                 closure_vars=self.closure_vars,
                 past_node=self.past_node,
                 grid_type=self.grid_type,
-                args=[*rewritten_args, *size_args],
+                args=args,
                 kwargs=kwargs
                 | {"offset_provider": offset_provider, "column_axis": self._column_axis},
             )
@@ -382,7 +375,7 @@ class Program:
 class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
-    def _process_args(self, args: tuple, kwargs: dict):
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
         type_ = self.past_node.type
         new_type = ts_ffront.ProgramType(
             definition=ts.FunctionType(
@@ -433,7 +426,7 @@ class ProgramWithBoundArgs(Program):
                 else:
                     full_kwargs[str(param.id)] = self.bound_args[param.id]
 
-        return super()._process_args(tuple(full_args), full_kwargs)
+        return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
 
     @functools.cached_property
     def itir(self):
@@ -472,7 +465,8 @@ def program(
 def program(
     definition=None,
     *,
-    backend=eve.NOTHING,  # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
+    # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
+    backend=eve.NOTHING,
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -618,7 +612,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             pass
 
         loc = self.foast_node.location
-        param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
+        # use a new UID generator to allow caching
+        param_sym_uids = eve_utils.UIDGenerator()
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [

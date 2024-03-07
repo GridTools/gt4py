@@ -357,7 +357,8 @@ def build_sdfg_from_itir(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # build parameters
     build_cache = kwargs.get("build_cache", None)
-    compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
+    # `None` will take default.
+    compiler_args = kwargs.get("compiler_args", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", _default_on_gpu)
     auto_optimize = kwargs.get("auto_optimize", True)
@@ -438,7 +439,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
 
 
 run_dace_cpu = backend.Backend(
-    transformer=otf_transforms.PastToItirFactory(),
+    transformer=otf_transforms.DEFAULT_TRANSFORMS,
     executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
@@ -462,7 +463,7 @@ else:
 
 
 run_dace_gpu = backend.Backend(
-    transformer=otf_transforms.PastToItirFactory(),
+    transformer=otf_transforms.DEFAULT_TRANSFORMS,
     executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )

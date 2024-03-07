@@ -280,7 +280,7 @@ class RoundtripExecutorFactory(factory.Factory):
 executor = RoundtripExecutorFactory(name="roundtrip")
 
 backend = next_backend.Backend(
-    transformer=otf_transforms.PastToItirFactory(),
+    transformer=otf_transforms.DEFAULT_TRANSFORMS,
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
