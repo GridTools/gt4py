@@ -26,8 +26,6 @@ import warnings
 from collections.abc import Callable
 from typing import Generator, Generic, TypeVar
 
-from devtools import debug
-
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
@@ -95,10 +93,6 @@ def _field_constituents_shape_and_dims(
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
-# TODO(ricoh): factor out the generated ITIR together with arguments rewriting
-# so that using fencil processors on `some_program.itir` becomes trivial without
-# prior knowledge of the fencil signature rewriting done by `Program`.
-# After that, drop the `.format_itir()` method, since it won't be needed.
 @dataclasses.dataclass(frozen=True)
 class Program:
     """
@@ -262,27 +256,6 @@ class Program:
                 kwargs=kwargs
                 | {"offset_provider": offset_provider, "column_axis": self._column_axis},
             )
-        )
-
-    def format_itir(
-        self,
-        *args,
-        formatter: ppi.ProgramFormatter,
-        offset_provider: dict[str, Dimension],
-        **kwargs,
-    ) -> str:
-        ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
-        rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
-            self.past_node, args, kwargs
-        )
-        if "debug" in kwargs:
-            debug(self.itir)
-        return formatter(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
         )
 
     @functools.cached_property
