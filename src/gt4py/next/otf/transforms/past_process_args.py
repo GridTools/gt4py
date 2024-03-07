@@ -21,7 +21,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 @workflow.make_step
-def past_process_args(inp: stages.PastClosure) -> stages.PastClosure:
+def past_process_args_wf(inp: stages.PastClosure) -> stages.PastClosure:
     extra_kwarg_names = ["offset_provider", "column_axis"]
     extra_kwargs = {k: v for k, v in inp.kwargs.items() if k in extra_kwarg_names}
     kwargs = {k: v for k, v in inp.kwargs.items() if k not in extra_kwarg_names}
@@ -32,7 +32,7 @@ def past_process_args(inp: stages.PastClosure) -> stages.PastClosure:
         past_node=inp.past_node,
         closure_vars=inp.closure_vars,
         grid_type=inp.grid_type,
-        args=tuple(*rewritten_args, *size_args),
+        args=tuple([*rewritten_args, *size_args]),
         kwargs=kwargs | extra_kwargs,
     )
 

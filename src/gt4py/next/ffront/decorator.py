@@ -259,7 +259,9 @@ class Program:
                 else:
                     definition = self.definition
                 # TODO(ricoh): check if rewriting still needed
-                rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+                rewritten_args, size_args, kwargs = otf_transforms.past_process_args._process_args(
+                    self.past_node, args, kwargs
+                )
                 ctx.run(definition, *rewritten_args, **kwargs)
             return
 
@@ -284,7 +286,9 @@ class Program:
         **kwargs,
     ) -> str:
         ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
-        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+        rewritten_args, size_args, kwargs = otf_transforms.past_process_args._process_args(
+            self.past_node, args, kwargs
+        )
         if "debug" in kwargs:
             debug(self.itir)
         return formatter(
@@ -294,49 +298,6 @@ class Program:
             **kwargs,
             offset_provider=offset_provider,
         )
-
-    def _validate_args(self, *args, **kwargs) -> None:
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
-
-        try:
-            type_info.accepts_args(
-                self.past_node.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
-        except ValueError as err:
-            raise errors.DSLError(
-                None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
-            ) from err
-
-    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        self._validate_args(*args, **kwargs)
-
-        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
-
-        implicit_domain = any(
-            isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
-            for stmt in self.past_node.body
-        )
-
-        # extract size of all field arguments
-        size_args: list[Optional[tuple[int, ...]]] = []
-        rewritten_args = list(args)
-        for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
-                shape, dims = shapes_and_dims[0]
-                if not all(
-                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
-                ):
-                    raise ValueError(
-                        "Constituents of composite arguments (e.g. the elements of a"
-                        " tuple) need to have the same shape and dimensions."
-                    )
-                size_args.extend(shape if shape else [None] * len(dims))
-        return tuple(rewritten_args), tuple(size_args), kwargs
 
     @functools.cached_property
     def _column_axis(self):

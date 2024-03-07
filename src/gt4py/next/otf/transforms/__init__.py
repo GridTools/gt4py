@@ -14,7 +14,7 @@
 
 from gt4py.next.otf import stages, workflow
 
-from .past_process_args import past_process_args
+from .past_process_args import past_process_args_wf
 from .past_to_func import past_to_fun_def
 from .past_to_itir import PastToItir, PastToItirFactory
 
@@ -23,11 +23,11 @@ __all__ = [
     "PastToItir",
     "PastToItirFactory",
     "past_to_fun_def",
-    "past_process_args",
+    "past_process_args_wf",
     "DEFAULT_TRANSFORMS",
 ]
 
 
 DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
-    past_process_args.chain(PastToItirFactory())
+    past_process_args_wf.chain(PastToItirFactory())
 )
