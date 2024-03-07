@@ -50,8 +50,6 @@ def _inline_lifts(ir, lift_mode):
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
         return InlineLifts.apply(ir, predicate=simple_inline_heuristic.is_eligible_for_inlining)
     elif lift_mode == LiftMode.USE_TEMPORARIES:
-        # TODO: write comment why we need params, i.e. local shift, instead of arg to get recorded shifts
-        # TODO: for lift it should be fine as long as shift only occurs once (not only centre)
         return InlineLifts.apply(
             ir,
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT

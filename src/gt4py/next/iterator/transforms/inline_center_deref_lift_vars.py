@@ -88,7 +88,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                         im.deref(arg),
                         flags=InlineLifts.Flag.INLINE_DEREF_LIFT,
                         recurse=False,
-                    )
+                    )  # type: ignore[assignment]  # when we pass an itir.Expr we get an itir.Expr back.
                 else:
                     new_args.append(arg)
 
@@ -99,6 +99,8 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                 )
                 # TODO(tehrengruber): propagate let outwards
                 # todo: inherit recorded shifts
-                return im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
+                result = im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
+                copy_recorded_shifts(from_=new_node, to=result, required=False)
+                return result
 
         return node
