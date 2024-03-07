@@ -640,13 +640,16 @@ def _concat_where(
         )
     mask_dim = mask_field.domain.dims[0]
 
+    # intersect the field in dimensions orthogonal to the mask, then all slices in the mask field have same domain
     t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
 
+    # compute the consecutive ranges (first relative, then domain) of true and false values
     mask_values, mask_relative_ranges = zip(*_compute_mask_ranges(mask_field.ndarray))
     mask_domains = (
         _relative_ranges_to_domain((relative_range,), mask_field.domain)
         for relative_range in mask_relative_ranges
     )
+    # mask domains intersected with the respective fields
     intersected_domains = (
         embedded_common.domain_intersection(
             t_broadcasted.domain if mask_value else f_broadcasted.domain, mask_domain
@@ -654,6 +657,7 @@ def _concat_where(
         for mask_value, mask_domain in zip(mask_values, mask_domains)
     )
 
+    # remove the empty domains from the beginning and end
     mask_values, intersected_domains = tuple(
         zip(*_trim_empty_domains(list(zip(mask_values, intersected_domains))))
     ) or ([], [])
@@ -662,11 +666,13 @@ def _concat_where(
             f"In 'concat_where', cannot concatenate the following 'Domain's: {list(intersected_domains)}."
         )
 
+    # slice the fields with the domain ranges
     transformed = [
         t_broadcasted[d] if v else f_broadcasted[d]
         for v, d in zip(mask_values, intersected_domains)
     ]
 
+    # stack the fields together
     if transformed:
         return _concat(*transformed, dim=mask_dim)
     else:
