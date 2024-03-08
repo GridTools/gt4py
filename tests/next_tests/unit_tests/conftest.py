@@ -106,9 +106,6 @@ def run_processor(
     *args,
     **kwargs,
 ) -> None:
-    import devtools
-
-    devtools.debug(processor)
     if processor is None or ppi.is_processor_kind(processor, ppi.ProgramExecutor):
         program(*args, backend=processor, **kwargs)
     elif ppi.is_processor_kind(processor, ppi.ProgramFormatter):

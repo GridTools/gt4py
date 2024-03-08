@@ -24,16 +24,12 @@ from typing import Any, Optional
 
 import factory
 
-import gt4py.next.allocators as next_allocators
-import gt4py.next.common as common
-import gt4py.next.iterator.embedded as embedded
-import gt4py.next.iterator.ir as itir
-import gt4py.next.iterator.transforms as itir_transforms
-import gt4py.next.iterator.transforms.global_tmps as gtmps_transform
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import backend as next_backend
-from gt4py.next.otf import stages, transforms as otf_transforms, workflow
+from gt4py.next import allocators as next_allocators, backend as next_backend, common
+from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
 
@@ -236,7 +232,7 @@ def execute_roundtrip(
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
     debug: bool = False
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
-    dispatch_backend: Optional[ppi.ProgramExecutor] = None
+    use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
         return fencil_generator(
@@ -244,7 +240,7 @@ class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
             offset_provider=inp.kwargs.get("offset_provider", None),
             debug=self.debug,
             lift_mode=self.lift_mode,
-            use_embedded=self.dispatch_backend is None,
+            use_embedded=self.use_embedded,
         )
 
 
@@ -269,8 +265,9 @@ class RoundtripExecutorFactory(factory.Factory):
         model = RoundtripExecutor
 
     class Params:
+        use_embedded = factory.LazyAttribute(lambda o: o.dispatch_backend is None)
         roundtrip_workflow = factory.SubFactory(
-            RoundtripFactory, dispatch_backend=factory.SelfAttribute("..dispatch_backend")
+            RoundtripFactory, use_embedded=factory.SelfAttribute("..use_embedded")
         )
 
     dispatch_backend = None
@@ -280,7 +277,6 @@ class RoundtripExecutorFactory(factory.Factory):
 executor = RoundtripExecutorFactory(name="roundtrip")
 
 backend = next_backend.Backend(
-    transformer=otf_transforms.PastToItirFactory(),
     executor=executor,
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )

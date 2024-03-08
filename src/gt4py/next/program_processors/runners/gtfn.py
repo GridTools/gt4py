@@ -25,7 +25,7 @@ from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
-from gt4py.next.otf import recipes, stages, transforms as otf_transforms, workflow
+from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
@@ -182,7 +182,6 @@ class GTFNBackendFactory(factory.Factory):
             lambda o: f"run_gtfn_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
 
-    transformer = factory.SubFactory(otf_transforms.PastToItirFactory)
     executor = factory.LazyAttribute(
         lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )

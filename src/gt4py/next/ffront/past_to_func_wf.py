@@ -15,14 +15,14 @@
 import linecache
 import textwrap
 
-import gt4py.next as gtx
-from gt4py.eve import codegen
+from gt4py import next as gtx
+from gt4py.eve import codegen, utils as eve_utils
 from gt4py.next.ffront import program_ast as past, type_translation
 from gt4py.next.otf import stages
 from gt4py.next.type_system import type_info
 
 
-def past_to_fun_def(past_closure: stages.PastClosure):
+def past_to_func(past_closure: stages.PastClosure):
     node = past_closure.past_node
     arg_types = [type_translation.from_value(arg) for arg in past_closure.args]
     kwarg_types = [
@@ -32,7 +32,7 @@ def past_to_fun_def(past_closure: stages.PastClosure):
     ]
     inout_types = list(type_info.flatten(arg_types + kwarg_types))
     dims = set(
-        i for j in [type_info.extract_dims(inout_type) for inout_type in inout_types] for i in j
+        eve_utils.flatten_iter(type_info.extract_dims(inout_type) for inout_type in inout_types)
     )
     source_code = ProgamFuncGen.apply(node)
 
