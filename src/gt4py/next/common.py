@@ -641,7 +641,11 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset, *args) -> Field: ...
+    def __call__(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> Field: ...
 
     @abc.abstractmethod
     def __getitem__(self, item: AnyIndexSpec) -> Field: ...
