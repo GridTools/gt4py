@@ -308,6 +308,12 @@ class InlineLifts(
         if not isinstance(stencil, ir.Lambda):
             return None
 
+        # if the node is never derefed we must not further transform it as some child nodes don't
+        # have the `recorded_shifts` attribute. Since this code is never executed it doesn't matter
+        # too much.
+        if self.inline_single_pos_deref_lift_args_only and len(node.annex.recorded_shifts) == 0:
+            return None
+
         eligible_lifted_args = _lift_args_eligible_for_inlining(
             node, self.inline_single_pos_deref_lift_args_only
         )
@@ -365,6 +371,10 @@ class InlineLifts(
         # it is likely that some of the let args can be immediately inlined. do this eagerly
         # here
         new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
+
+        assert not self.inline_single_pos_deref_lift_args_only or all(
+            hasattr(param.annex, "recorded_shifts") for param in new_arg_exprs.keys()
+        )
 
         new_stencil = im.lambda_(*new_arg_exprs.keys())(new_stencil_body)
         new_applied_lift = im.lift(new_stencil)(*new_arg_exprs.values())
