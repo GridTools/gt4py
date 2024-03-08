@@ -667,7 +667,7 @@ def function_signature_incompatibilities_func(
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             if i < len(func_type.pos_only_args):
-                arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
+                arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
                 arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."
