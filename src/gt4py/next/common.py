@@ -602,7 +602,7 @@ class Dims(Generic[Unpack[ShapeT]]):
 
 
 @extended_runtime_checkable
-class Field(GTFieldInterface, Protocol[ShapeT, core_defs.ScalarT]):
+class Field(GTFieldInterface, Protocol[Unpack[ShapeT], core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
