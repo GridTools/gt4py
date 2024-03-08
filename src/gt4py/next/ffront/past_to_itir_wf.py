@@ -13,12 +13,19 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+from typing import Any
 
 import devtools
 import factory
 
 from gt4py.next import common, config
-from gt4py.next.ffront import fbuiltins, gtcallable, past_to_itir, transform_utils
+from gt4py.next.ffront import (
+    fbuiltins,
+    gtcallable,
+    past_to_itir,
+    transform_utils,
+    type_specifications as ts_ffront,
+)
 from gt4py.next.otf import stages, workflow
 
 
@@ -48,10 +55,42 @@ class PastToItir(workflow.ChainableWorkflowMixin):
         return stages.ProgramCall(
             itir_program,
             inp.args,
-            inp.kwargs,
+            inp.kwargs | {"column_axis": _column_axis(all_closure_vars)},
         )
 
 
 class PastToItirFactory(factory.Factory):
     class Meta:
         model = PastToItir
+
+
+def _column_axis(all_closure_vars: dict[str, Any]) -> common.Dimension:
+    # construct mapping from column axis to scan operators defined on
+    #  that dimension. only one column axis is allowed, but we can use
+    #  this mapping to provide good error messages.
+    scanops_per_axis: dict[common.Dimension, str] = {}
+    for name, gt_callable in transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).items():
+        if isinstance(
+            (type_ := gt_callable.__gt_type__()),
+            ts_ffront.ScanOperatorType,
+        ):
+            scanops_per_axis.setdefault(type_.axis, []).append(name)
+
+    if len(scanops_per_axis.values()) == 0:
+        return None
+
+    if len(scanops_per_axis.values()) != 1:
+        scanops_per_axis_strs = [
+            f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
+        ]
+
+        raise TypeError(
+            "Only 'ScanOperator's defined on the same axis "
+            + "can be used in a 'Program', found:\n"
+            + "\n".join(scanops_per_axis_strs)
+            + "."
+        )
+
+    return iter(scanops_per_axis.keys()).__next__()

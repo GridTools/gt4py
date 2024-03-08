@@ -253,42 +253,9 @@ class Program:
                 past_node=self.past_node,
                 grid_type=self.grid_type,
                 args=args,
-                kwargs=kwargs
-                | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+                kwargs=kwargs | {"offset_provider": offset_provider},
             )
         )
-
-    @functools.cached_property
-    def _column_axis(self):
-        # construct mapping from column axis to scan operators defined on
-        #  that dimension. only one column axis is allowed, but we can use
-        #  this mapping to provide good error messages.
-        scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in transform_utils._filter_closure_vars_by_type(
-            self._all_closure_vars, GTCallable
-        ).items():
-            if isinstance(
-                (type_ := gt_callable.__gt_type__()),
-                ts_ffront.ScanOperatorType,
-            ):
-                scanops_per_axis.setdefault(type_.axis, []).append(name)
-
-        if len(scanops_per_axis.values()) == 0:
-            return None
-
-        if len(scanops_per_axis.values()) != 1:
-            scanops_per_axis_strs = [
-                f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
-            ]
-
-            raise TypeError(
-                "Only 'ScanOperator's defined on the same axis "
-                + "can be used in a 'Program', found:\n"
-                + "\n".join(scanops_per_axis_strs)
-                + "."
-            )
-
-        return iter(scanops_per_axis.keys()).__next__()
 
 
 @dataclasses.dataclass(frozen=True)
