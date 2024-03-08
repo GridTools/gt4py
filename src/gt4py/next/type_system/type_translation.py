@@ -156,7 +156,7 @@ def _extract_dims(dim_arg: Any, dims: list[common.Dimension] | type(...)) -> lis
     common.Dimension
 ] | type(...):
     if isinstance(dim_arg, list):
-        if dim_arg[0] is Ellipsis and len(dim_arg) == 1:
+        if len(dim_arg) == 1 and dim_arg[0] is Ellipsis:
             dims = dim_arg[0]
         else:
             for d in dim_arg:
