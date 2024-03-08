@@ -26,6 +26,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
+import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
@@ -77,6 +78,14 @@ class Dimension:
 
     def __call__(self, val: int) -> NamedIndex:
         return self, val
+
+    def __add__(self, offset: int):
+        assert isinstance(self.value, str)
+        return gtx.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
+
+    def __sub__(self, offset: int):
+        assert isinstance(self.value, str)
+        return gtx.FieldOffset(f"{self.value}off", source=self, target=(self,))[-offset]
 
 
 class Infinity(enum.Enum):
@@ -632,7 +641,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
+    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset, *args) -> Field: ...
 
     @abc.abstractmethod
     def __getitem__(self, item: AnyIndexSpec) -> Field: ...

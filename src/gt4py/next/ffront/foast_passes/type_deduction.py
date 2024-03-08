@@ -594,6 +594,13 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs,
     ) -> Optional[ts.TypeSpec]:
+        if (
+            isinstance(left.type, ts.DimensionType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_integral(right.type)
+        ):
+            return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
             dialect_ast_enums.BinaryOperator.BIT_OR,

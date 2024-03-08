@@ -220,7 +220,13 @@ class NdArrayField(
             dtype=self.dtype,
         )
 
-    __call__ = remap  # type: ignore[assignment]
+    def __call__(
+        self, index_field: common.ConnectivityField | fbuiltins.FieldOffset, *args
+    ) -> common.Field:
+        tmp = self.remap(index_field)
+        for arg in args:
+            tmp = tmp.remap(arg)
+        return tmp
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)

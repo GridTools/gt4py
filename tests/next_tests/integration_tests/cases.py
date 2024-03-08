@@ -478,7 +478,14 @@ def cartesian_case(
 ):
     yield Case(
         exec_alloc_descriptor.executor,
-        offset_provider={"Ioff": IDim, "Joff": JDim, "Koff": KDim},
+        offset_provider={
+            "Ioff": IDim,
+            "Joff": JDim,
+            "Koff": KDim,
+            "IDimoff": IDim,
+            "JDimoff": JDim,
+            "KDimoff": KDim,
+        },
         default_sizes={IDim: 10, JDim: 10, KDim: 10},
         grid_type=common.GridType.CARTESIAN,
         allocator=exec_alloc_descriptor.allocator,

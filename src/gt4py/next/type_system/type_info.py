@@ -685,8 +685,8 @@ def function_signature_incompatibilities_field(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
-    if len(args) != 1:
-        yield f"Function takes 1 argument, but {len(args)} were given."
+    if len(args) < 1:  # Todo: is this the right condition in general?
+        yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
 
     if not isinstance(args[0], ts.OffsetType):
