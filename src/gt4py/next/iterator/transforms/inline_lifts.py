@@ -22,8 +22,8 @@ import gt4py.eve as eve
 from gt4py.eve import NodeTranslator, traits
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.inline_lambdas import inline_lambda
-from gt4py.next.iterator.transforms.trace_shifts import TraceShifts, copy_recorded_shifts
 
 
 def _generate_unique_symbol(
@@ -78,14 +78,23 @@ def _transform_and_extract_lift_args(
     node: ir.FunCall,
     reserved_symbol_names: list[eve.SymbolName],
     extracted_args: dict[ir.Sym, ir.Expr],
-    recorded_shifts_base=None,
-):
+    recorded_shifts_base: Optional[set[tuple[ir.OffsetLiteral, ...]]] = None,
+) -> tuple[ir.FunCall, dict[ir.Sym, ir.Expr]]:
     """
     Transform and extract non-symbol arguments of a lifted stencil call.
 
     E.g. ``lift(lambda a, b: ...)(sym1, expr1)`` is transformed into
     ``lift(lambda a, b: ...)(sym1, sym2)`` with the extracted arguments
     being ``{sym1: sym1, sym2: expr1}``.
+
+    Arguments:
+        node: The applied lift expression to transform and extract from.
+        reserved_symbol_names: Do not declare any symbols in this list.
+        extracted_args: A dictionary into which the arguments are extracted to.
+        recorded_shifts_base: When extracting an argument we generate a symbol (key in the
+            `extracted_args` dict). Prepend the given shifts to the `recorded_shifts` annex of this
+            symbol (the tail is inherited from the stencil argument).
+
     """
     assert _is_lift(node)
     assert isinstance(node.fun, ir.FunCall)
@@ -106,7 +115,9 @@ def _transform_and_extract_lift_args(
             )
             assert new_symbol not in extracted_args
             extracted_args[new_symbol] = arg
-            new_args.append(im.ref(new_symbol.id))
+            new_arg = im.ref(new_symbol.id)
+            trace_shifts.copy_recorded_shifts(from_=arg, to=new_arg, required=False)
+            new_args.append(new_arg)
 
         # todo: test this properly. not really sure about it...
         if recorded_shifts_base is not None:
@@ -124,10 +135,30 @@ def _transform_and_extract_lift_args(
                     new_symbol.annex.recorded_shifts.add((*outer_shift, *inner_shift))
 
     new_lift = im.lift(inner_stencil)(*new_args)
-    if hasattr(node.annex, "recorded_shifts"):
-        copy_recorded_shifts(from_=node, to=new_lift)
+    trace_shifts.copy_recorded_shifts(from_=node, to=new_lift, required=False)
     new_lift.location = node.location
     return (new_lift, extracted_args)
+
+
+def _lift_args_eligible_for_inlining(
+    node: ir.FunCall, inline_single_pos_deref_lift_args_only: bool
+) -> list[bool]:
+    assert _is_lift(node)
+    stencil = node.fun.args[0]  # type: ignore[attr-defined] # ensured by _is_lift
+
+    eligible_lifted_args = [False] * len(node.args)
+    for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
+        if not _is_lift(arg):
+            continue
+        # we don't want to inline lift args derefed at multiple positions as this would
+        # disallow creating a temporary for them if the (outer) lift can not be extracted into
+        # a temporary.
+        if inline_single_pos_deref_lift_args_only:
+            if len(param.annex.recorded_shifts) > 0:
+                continue
+        eligible_lifted_args[i] = True
+
+    return eligible_lifted_args
 
 
 # TODO(tehrengruber): This pass has many different options that should be written as dedicated
@@ -184,10 +215,10 @@ class InlineLifts(
         predicate: Callable[[ir.FunCall, bool], bool] = predicate,
         recurse: bool = True,
         inline_single_pos_deref_lift_args_only: bool = inline_single_pos_deref_lift_args_only,
-    ):
+    ) -> ir.Node:
         if inline_single_pos_deref_lift_args_only:
             assert isinstance(node, ir.FencilDefinition)
-            TraceShifts.apply(node, inputs_only=False, save_to_annex=True)
+            trace_shifts.TraceShifts.apply(node, inputs_only=False, save_to_annex=True)
 
         return cls(
             flags=flags,
@@ -195,7 +226,9 @@ class InlineLifts(
             inline_single_pos_deref_lift_args_only=inline_single_pos_deref_lift_args_only,
         ).visit(node, recurse=recurse, is_scan_pass_context=False)
 
-    def transform_propagate_shift(self, node: ir.FunCall, *, recurse, **kwargs):
+    def transform_propagate_shift(
+        self, node: ir.FunCall, *, recurse: bool, **kwargs
+    ) -> Optional[ir.Node]:
         if not _is_shift_lift(node):
             return None
         shift = node.fun
@@ -206,11 +239,10 @@ class InlineLifts(
             for arg in lift_call.args  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
         ]
         result = ir.FunCall(fun=lift_call.fun, args=new_args)  # type: ignore[attr-defined] # lift_call already asserted to be of type ir.FunCall
-        # TODO: describe everywhere
-        copy_recorded_shifts(from_=node, to=result, required=False)
+        trace_shifts.copy_recorded_shifts(from_=node, to=result, required=False)
         return self.visit(result, recurse=False, **kwargs)
 
-    def transform_inline_deref_lift_impl(self, node: ir.FunCall, **kwargs):
+    def transform_inline_deref_lift_impl(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         # TODO: this does not work for neighbors(..., lift(...)), which is essentially also a deref
         assert isinstance(node.args[0], ir.FunCall) and isinstance(node.args[0].fun, ir.FunCall)
         assert len(node.args[0].fun.args) == 1
@@ -221,7 +253,7 @@ class InlineLifts(
             new_node = inline_lambda(new_node, opcount_preserving=True)
         return self.visit(new_node, **kwargs)
 
-    def transform_inline_deref_lift(self, node: ir.FunCall, **kwargs):
+    def transform_inline_deref_lift(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         if not node.fun == ir.SymRef(id="deref"):
             return None
         is_scan_pass_context = kwargs["is_scan_pass_context"]
@@ -230,7 +262,7 @@ class InlineLifts(
             return None
         return self.transform_inline_deref_lift_impl(node, **kwargs)
 
-    def transform_inline_trivial_deref_lift(self, node: ir.FunCall, **kwargs):
+    def transform_inline_trivial_deref_lift(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         if not node.fun == ir.SymRef(id="deref"):
             return None
         is_trivial = _is_lift(node.args[0]) and len(node.args[0].args) == 0
@@ -238,7 +270,7 @@ class InlineLifts(
             return None
         return self.transform_inline_deref_lift_impl(node, **kwargs)
 
-    def transform_propagate_can_deref(self, node: ir.FunCall, **kwargs):
+    def transform_propagate_can_deref(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         if not node.fun == ir.SymRef(id="can_deref"):
             return None
         # TODO(havogt): this `can_deref` transformation doesn't look into lifted functions,
@@ -261,7 +293,7 @@ class InlineLifts(
             return res
         return None
 
-    def transform_inline_lifted_args(self, node: ir.FunCall, **kwargs):
+    def transform_inline_lifted_args(self, node: ir.FunCall, **kwargs) -> Optional[ir.Node]:
         symtable, is_scan_pass_context = (
             kwargs["symtable"],
             kwargs.get("is_scan_pass_context", False),
@@ -276,79 +308,71 @@ class InlineLifts(
         if not isinstance(stencil, ir.Lambda):
             return None
 
-        eligible_lifted_args = [False] * len(node.args)
-        for i, (param, arg) in enumerate(zip(stencil.params, node.args, strict=True)):
-            if not _is_lift(arg):
-                continue
-            # we don't want to inline lift args derefed at multiple positions as this would
-            # disallow creating a temporary for them if the (outer) lift can not be extracted into
-            # a temporary.
-            if self.inline_single_pos_deref_lift_args_only:
-                if param.annex.recorded_shifts not in [set(), {()}]:
-                    continue
-            eligible_lifted_args[i] = True
+        eligible_lifted_args = _lift_args_eligible_for_inlining(
+            node, self.inline_single_pos_deref_lift_args_only
+        )
 
-        if isinstance(stencil, ir.Lambda) and any(eligible_lifted_args):
-            new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
-            inlined_args: dict[ir.Sym, ir.Expr] = {}
+        if not isinstance(stencil, ir.Lambda) or not any(eligible_lifted_args):
+            return None
 
-            reserved_symbol_names = list(
-                set(symtable.keys()) | {param.id for param in stencil.params}
-            )
-            for param, arg, eligible in zip(
-                stencil.params, node.args, eligible_lifted_args, strict=True
-            ):
-                if eligible:
-                    transformed_arg, _ = _transform_and_extract_lift_args(
-                        arg,  # type: ignore[arg-type] # ensure by _is_lift on arg
-                        reserved_symbol_names,
-                        new_arg_exprs,
-                        getattr(param.annex, "recorded_shifts", None),
+        new_arg_exprs: dict[ir.Sym, ir.Expr] = {}
+        inlined_args: dict[ir.Sym, ir.Expr] = {}
+
+        reserved_symbol_names = list(set(symtable.keys()) | {param.id for param in stencil.params})
+        for param, arg, eligible in zip(
+            stencil.params, node.args, eligible_lifted_args, strict=True
+        ):
+            if eligible:
+                transformed_arg, _ = _transform_and_extract_lift_args(
+                    arg,  # type: ignore[arg-type] # ensure by _is_lift on arg
+                    reserved_symbol_names,
+                    new_arg_exprs,
+                    getattr(param.annex, "recorded_shifts", None),
+                )
+                inlined_args[param] = transformed_arg
+            else:
+                # the false-branch is completely sufficient, but this makes the resulting
+                # expression much more readable
+                # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
+                #  pass. Since the tests of this transformation rely on it we preserve the
+                #  behaviour here for now.
+                if isinstance(arg, ir.SymRef) and arg.id not in (
+                    reserved_symbol_names + list(new_arg_exprs.keys())
+                ):
+                    new_param = im.sym(arg.id)
+                    trace_shifts.copy_recorded_shifts(
+                        from_=param,
+                        to=new_param,
+                        required=self.inline_single_pos_deref_lift_args_only,
                     )
-                    inlined_args[param] = transformed_arg
+                    new_arg_exprs[new_param] = arg
+
+                    new_arg = im.ref(arg.id)
+                    trace_shifts.copy_recorded_shifts(
+                        from_=param,
+                        to=new_arg,
+                        required=self.inline_single_pos_deref_lift_args_only,
+                    )
+                    assert param not in inlined_args
+                    inlined_args[param] = new_arg
                 else:
-                    # the else-branch is completely sufficient, but this makes the resulting
-                    # expression much more readable
-                    # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
-                    #  pass. Since the tests of this transformation rely on it we preserve the
-                    #  behaviour here for now.
-                    if isinstance(arg, ir.SymRef) and arg.id not in (
-                        reserved_symbol_names + list(new_arg_exprs.keys())
-                    ):
-                        new_param = im.sym(arg.id)
-                        copy_recorded_shifts(
-                            from_=param,
-                            to=new_param,
-                            required=self.inline_single_pos_deref_lift_args_only,
-                        )
-                        new_arg_exprs[new_param] = arg
+                    new_arg_exprs[param] = arg
 
-                        new_arg = im.ref(arg.id)
-                        copy_recorded_shifts(
-                            from_=param,
-                            to=new_arg,
-                            required=self.inline_single_pos_deref_lift_args_only,
-                        )
-                        assert param not in inlined_args
-                        inlined_args[param] = new_arg
-                    else:
-                        new_arg_exprs[param] = arg
+        new_stencil_body = im.let(
+            *((param, inlined_lift) for param, inlined_lift in inlined_args.items())  # type: ignore[arg-type] # mypy not smart enough
+        )(stencil.expr)
 
-            new_stencil_body = im.let(
-                *((param, inlined_lift) for param, inlined_lift in inlined_args.items())  # type: ignore[arg-type] # mypy not smart enough
-            )(stencil.expr)
+        # it is likely that some of the let args can be immediately inlined. do this eagerly
+        # here
+        new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
 
-            # it is likely that some of the let args can be immediately inlined. do this eagerly
-            # here
-            new_stencil_body = inline_lambda(new_stencil_body, opcount_preserving=True)
+        new_stencil = im.lambda_(*new_arg_exprs.keys())(new_stencil_body)
+        new_applied_lift = im.lift(new_stencil)(*new_arg_exprs.values())
+        trace_shifts.copy_recorded_shifts(from_=node, to=new_applied_lift, required=False)
+        return self.visit(new_applied_lift, **kwargs)
 
-            new_stencil = im.lambda_(*new_arg_exprs.keys())(new_stencil_body)
-            new_applied_lift = im.lift(new_stencil)(*new_arg_exprs.values())
-            copy_recorded_shifts(from_=node, to=new_applied_lift, required=False)
-            return self.visit(new_applied_lift, **kwargs)
-
-    def visit_FunCall(self, node: ir.FunCall, **kwargs):
-        recurse = kwargs["recurse"]
+    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> ir.Node:
+        recurse: bool = kwargs["recurse"]
 
         if recurse:
             fun_kwargs = {k: v for k, v in kwargs.items() if k != "is_scan_pass_context"}
@@ -356,7 +380,7 @@ class InlineLifts(
                 fun=self.generic_visit(node.fun, is_scan_pass_context=_is_scan(node), **fun_kwargs),
                 args=self.generic_visit(node.args, **kwargs),
             )
-            copy_recorded_shifts(from_=node, to=new_node, required=False)
+            trace_shifts.copy_recorded_shifts(from_=node, to=new_node, required=False)
         else:
             new_node = node
 
@@ -365,6 +389,7 @@ class InlineLifts(
                 assert isinstance(transformation.name, str)
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 transformed_node = method(new_node, **kwargs)
+                # if the transformation returned `None` it did not apply and we continue.
                 if transformed_node is not None:
                     return transformed_node
 
