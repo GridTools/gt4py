@@ -42,6 +42,8 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
+    TypeVarTuple,
+    Unpack,
     cast,
     extended_runtime_checkable,
     overload,
@@ -52,7 +54,7 @@ from gt4py.eve.type_definitions import StrEnum
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
 DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
-
+ShapeT = TypeVarTuple("ShapeT")
 
 Tag: TypeAlias = str
 
@@ -595,8 +597,12 @@ class GTFieldInterface(core_defs.GTDimsInterface, core_defs.GTOriginInterface, P
         return tuple(d.value for d in self.__gt_domain__.dims)
 
 
+class Dims(Generic[Unpack[ShapeT]]):
+    shape: tuple[Unpack[ShapeT]]
+
+
 @extended_runtime_checkable
-class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
+class Field(GTFieldInterface, Protocol[ShapeT, core_defs.ScalarT]):
     __gt_builtin_func__: ClassVar[GTBuiltInFuncDispatcher]
 
     @property
@@ -712,7 +718,7 @@ def is_field(
 
 
 @extended_runtime_checkable
-class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
+class MutableField(Field[ShapeT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 

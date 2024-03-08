@@ -116,6 +116,11 @@ def from_type_hint(
                     dims.append(d)
             elif dim_arg is Ellipsis:
                 dims = dim_arg
+            elif typing.get_origin(dim_arg) is common.Dims:
+                for d in typing.get_args(dim_arg):
+                    if not isinstance(d, common.Dimension):
+                        raise ValueError(f"Invalid field dimension definition '{d}'.")
+                    dims.append(d)
             else:
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
