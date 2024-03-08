@@ -754,18 +754,3 @@ def accepts_args(
         return True
 
     return next(errors, None) is None
-
-
-def flatten(arg: list | tuple | ts.TupleType):
-    if (
-        not isinstance(arg, ts.TupleType)
-        and not isinstance(arg, list)
-        and not isinstance(arg, tuple)
-    ):
-        yield arg
-    elif isinstance(arg, list) or isinstance(arg, tuple):
-        for sub in arg:
-            yield from flatten(sub)
-    elif isinstance(arg, ts.TupleType):
-        for sub in arg.types:
-            yield from flatten(sub)

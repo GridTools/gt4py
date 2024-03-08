@@ -30,7 +30,7 @@ def past_to_func(past_closure: stages.PastClosure):
         for k, v in past_closure.kwargs.items()
         if k not in ("offset_provider", "column_axis")
     ]
-    inout_types = list(type_info.flatten(arg_types + kwarg_types))
+    inout_types = eve_utils.flatten_iter(arg_types + kwarg_types)
     dims = set(
         eve_utils.flatten_iter(type_info.extract_dims(inout_type) for inout_type in inout_types)
     )
@@ -38,7 +38,7 @@ def past_to_func(past_closure: stages.PastClosure):
 
     filename = "<generated>"
     globalns = {dim.value: dim for dim in dims}
-    globalns |= gtx.__dict__
+    globalns |= {k: v for k, v in gtx.__dict__.items() if not k.startswith("__")}
     globalns |= past_closure.closure_vars
     localns: dict = {}
     code_obj = compile(source_code, filename, "exec")
@@ -57,11 +57,10 @@ def past_to_func(past_closure: stages.PastClosure):
 
 class ProgamFuncGen(codegen.TemplatedGenerator):
     def visit_Program(self, node: past.Program, **kwargs) -> str:
-        imports = "from __future__ import annotations\nfrom gt4py.next import *"
         params = self.visit(node.params)
         signature = ", ".join(params)
         body = textwrap.indent("\n".join(self.visit(node.body)), prefix=" " * 4)
-        return f"{imports}\n\n\ndef {node.id}({signature}) -> None:\n{body}"
+        return f"def {node.id}({signature}) -> None:\n{body}"
 
     Symbol = codegen.FormatTemplate("{id}: {type}")
 
