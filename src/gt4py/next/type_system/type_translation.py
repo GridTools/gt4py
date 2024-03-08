@@ -106,23 +106,12 @@ def from_type_hint(
         case common.Field:
             if (n_args := len(args)) != 2:
                 raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
-
-            dims: Union[Ellipsis, list[common.Dimension]] = []
+            dims: Union[type(...), list[common.Dimension]] = []
             dim_arg, dtype_arg = args
-            if isinstance(dim_arg, list):
-                for d in dim_arg:
-                    if not isinstance(d, common.Dimension):
-                        raise ValueError(f"Invalid field dimension definition '{d}'.")
-                    dims.append(d)
-            elif dim_arg is Ellipsis:
-                dims = dim_arg
-            elif typing.get_origin(dim_arg) is common.Dims:
-                for d in typing.get_args(dim_arg):
-                    if not isinstance(d, common.Dimension):
-                        raise ValueError(f"Invalid field dimension definition '{d}'.")
-                    dims.append(d)
+            if typing.get_origin(dim_arg) is common.Dims:
+                dims = _extract_dims(list(typing.get_args(dim_arg)), dims)
             else:
-                raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
+                dims = _extract_dims(dim_arg, dims)
 
             try:
                 dtype = recursive_make_symbol(dtype_arg)
@@ -161,6 +150,24 @@ def from_type_hint(
             )
 
     raise ValueError(f"'{type_hint}' type is not supported.")
+
+
+def _extract_dims(dim_arg: Any, dims: list[common.Dimension] | type(...)) -> list[
+    common.Dimension
+] | type(...):
+    if isinstance(dim_arg, list):
+        if dim_arg[0] is Ellipsis and len(dim_arg) == 1:
+            dims = dim_arg[0]
+        else:
+            for d in dim_arg:
+                if not isinstance(d, common.Dimension):
+                    raise ValueError(f"Invalid field dimension definition '{d}'.")
+                dims.append(d)
+    elif dim_arg is Ellipsis:
+        dims = dim_arg
+    else:
+        raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
+    return dims
 
 
 def from_value(value: Any) -> ts.TypeSpec:

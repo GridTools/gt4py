@@ -166,3 +166,21 @@ def test_invalid_symbol_types():
         type_translation.from_type_hint(typing.Callable[[int], str])
     with pytest.raises(ValueError, match="Invalid callable annotations"):
         type_translation.from_type_hint(typing.Callable[[int], float])
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (common.Dims[IDim, JDim], [IDim, JDim]),
+        (common.Dims[IDim, np.float64], ValueError),
+        (common.Dims["IDim"], ValueError),
+        (common.Dims[IDim, ...], ValueError),
+        (common.Dims[...], Ellipsis),
+    ],
+)
+def test_generic_variadic_dims(value, expected):
+    if expected == ValueError:
+        with pytest.raises(ValueError, match="Invalid field dimension definition"):
+            type_translation.from_type_hint(gtx.Field[value, np.int32])
+    else:
+        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected
