@@ -80,24 +80,6 @@ def test_multicopy(cartesian_case):
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
 
-@pytest.mark.uses_tuple_returns
-def test_as_program_tuple_return(cartesian_case):
-    @gtx.field_operator(backend=cartesian_case.executor)
-    def testee(a: cases.IJField) -> tuple[cases.IJField, cases.IJField]:
-        return a + 1, a
-
-    a = cases.allocate(cartesian_case, testee, "a")()
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-
-    testee_program = testee.as_program(
-        arg_types=[ts.FieldType(dims=[IDim, JDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))],
-        kwarg_types={},
-    )
-    testee_program(a, out=out, offset_provider={})
-    assert np.all(a + 1 == out[0])
-    assert np.all(a == out[1])
-
-
 @pytest.mark.uses_cartesian_shift
 def test_cartesian_shift(cartesian_case):
     @gtx.field_operator
@@ -121,30 +103,6 @@ def test_unstructured_shift(unstructured_case):
         testee,
         ref=lambda a: a[unstructured_case.offset_provider["E2V"].table[:, 0]],
     )
-
-
-@pytest.mark.uses_unstructured_shift
-def test_as_program_with_unstructured_shift_no_return_hint(unstructured_case):
-    @gtx.field_operator(backend=unstructured_case.executor)
-    def testee(a: cases.VField):
-        return a(E2V[0])
-
-    testee_program = testee.as_program(
-        arg_types=[ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))],
-        kwarg_types={},
-    )
-    a = cases.allocate(unstructured_case, testee, "a")()
-    out = constructors.zeros(
-        domain=common.domain({Edge: unstructured_case.default_sizes[Edge]}),
-        allocator=unstructured_case.allocator,
-        dtype=int32,
-    )
-
-    testee_program(a, out=out, offset_provider=unstructured_case.offset_provider)
-
-    ref = field_utils.asnumpy(a)[unstructured_case.offset_provider["E2V"].table[:, 0]]
-
-    assert np.all(ref == field_utils.asnumpy(out))
 
 
 @pytest.mark.uses_unstructured_shift

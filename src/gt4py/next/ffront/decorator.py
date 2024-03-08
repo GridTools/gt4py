@@ -44,7 +44,6 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     past_process_args_wf,
-    past_to_func_wf,
     past_to_itir_wf,
     program_ast as past,
     transform_utils,
@@ -245,28 +244,11 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                # TODO(ricoh): move into test
-                if self.definition is None:
-                    definition = past_to_func_wf.past_to_func(
-                        stages.PastClosure(
-                            closure_vars=self.closure_vars,
-                            past_node=self.past_node,
-                            grid_type=self.grid_type,
-                            args=args,
-                            kwargs=kwargs
-                            | {
-                                "offset_provider": offset_provider,
-                                "column_axis": self._column_axis,
-                            },
-                        )
-                    )
-                else:
-                    definition = self.definition
                 # TODO(ricoh): check if rewriting still needed
                 rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
                     self.past_node, args, kwargs
                 )
-                ctx.run(definition, *rewritten_args, **kwargs)
+                ctx.run(self.definition, *rewritten_args, **kwargs)
             return
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
