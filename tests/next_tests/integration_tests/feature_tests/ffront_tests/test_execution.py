@@ -75,16 +75,20 @@ def test_multicopy(cartesian_case):
 
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a, b: (a, b))
 
+
 def test_as_program(cartesian_case):
     from gt4py.next.type_system import type_specifications as ts
+
     @gtx.field_operator(backend=None)
     def testee(a: cases.IJField) -> cases.IJField:
         return a
 
     a = cases.allocate(cartesian_case, testee, "a")()
 
-    t_pr = testee.as_program(arg_types=[ts.FieldType(dims=[IDim, JDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))],
-                      kwarg_types={})
+    t_pr = testee.as_program(
+        arg_types=[ts.FieldType(dims=[IDim, JDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32))],
+        kwarg_types={},
+    )
     t_pr(a, out=a, offset_provider={})
 
 
