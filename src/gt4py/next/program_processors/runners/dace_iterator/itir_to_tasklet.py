@@ -598,14 +598,14 @@ def builtin_if(
         stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
     )
     sdfg.add_edge(tbr_state, join_state, dace.InterstateEdge())
-    tbr_values = build_if_state(node_args[1], tbr_state)
+    tbr_values = flatten_list(build_if_state(node_args[1], tbr_state))
     #
     fbr_state = sdfg.add_state("false_branch")
     sdfg.add_edge(
         stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
     )
     sdfg.add_edge(fbr_state, join_state, dace.InterstateEdge())
-    fbr_values = build_if_state(node_args[2], fbr_state)
+    fbr_values = flatten_list(build_if_state(node_args[2], fbr_state))
 
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
