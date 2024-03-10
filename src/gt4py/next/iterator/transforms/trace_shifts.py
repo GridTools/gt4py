@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import enum
+import sys
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
@@ -263,6 +264,8 @@ _START_CTX: Final = {
 }
 
 
+# TODO(tehrengruber): This pass is unnecessarily very inefficient and easily exceeds the default
+#  recursion limit.
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
@@ -329,15 +332,21 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
+        return node
 
     @classmethod
     def apply(
-        cls, node: ir.StencilClosure, *, inputs_only=True, save_to_annex=False
+        cls, node: ir.StencilClosure | ir.FencilDefinition, *, inputs_only=True, save_to_annex=False
     ) -> (
         dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
     ):
+        old_recursionlimit = sys.getrecursionlimit()
+        sys.setrecursionlimit(100000000)
+
         instance = cls()
         instance.visit(node)
+
+        sys.setrecursionlimit(old_recursionlimit)
 
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
@@ -348,6 +357,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
                 ValidateRecordedShiftsAnnex().visit(node)
 
         if inputs_only:
+            assert isinstance(node, ir.StencilClosure)
             inputs_shifts = {}
             for inp in node.inputs:
                 inputs_shifts[str(inp.id)] = recorded_shifts[id(inp)]
