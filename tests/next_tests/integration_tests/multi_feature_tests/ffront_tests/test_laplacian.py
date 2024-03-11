@@ -30,7 +30,7 @@ pytestmark = pytest.mark.uses_cartesian_shift
 def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
     return (
         -4.0 * in_field
-        + in_field(Ioff[1])
+        + in_field(IDim + 1)
         + in_field(JDim + 1)
         + in_field(IDim - 1)
         + in_field(JDim - 1)
