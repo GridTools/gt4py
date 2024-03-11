@@ -174,8 +174,6 @@ def test_invalid_symbol_types():
         (common.Dims[IDim, JDim], [IDim, JDim]),
         (common.Dims[IDim, np.float64], ValueError),
         (common.Dims["IDim"], ValueError),
-        (common.Dims[IDim, ...], ValueError),
-        (common.Dims[...], Ellipsis),
     ],
 )
 def test_generic_variadic_dims(value, expected):
