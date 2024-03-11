@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Optional, cast
 
 from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.next import errors
 from gt4py.next.common import Dimension, DimensionKind, GridType
 from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
 from gt4py.next.iterator import ir as itir
@@ -324,9 +325,10 @@ class ProgramLowering(
         node_dims_ls = cast(ts.FieldType, node.type).dims
         assert isinstance(node_dims_ls, list)
         if isinstance(node.type, ts.FieldType) and len(out_field_slice_) != len(node_dims_ls):
-            raise ValueError(
+            raise errors.DSLError(
+                node.location,
                 f"Too many indices for field '{out_field_name}': field is {len(node_dims_ls)}"
-                f"-dimensional, but {len(out_field_slice_)} were indexed."
+                f"-dimensional, but {len(out_field_slice_)} were indexed.",
             )
         return out_field_slice_
 

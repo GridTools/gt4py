@@ -295,9 +295,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 left=foast.Name(id=dimension),
                 right=foast.Constant(value=offset_index),
             ):
-                shift_offset = im.shift(
-                    dimension, offset_index
-                )  # shift_offset = im.shift(node.args[0].left.type.dim.value, node.args[0].right.value)
+                if node.args[0].op == dialect_ast_enums.BinaryOperator.SUB:
+                    offset_index *= -1
+                shift_offset = im.shift(f"{dimension}off", offset_index)
+            # shift_offset = im.shift(node.args[0].left.type.dim.value, node.args[0].right.value)
             case foast.Name(id=offset_name):
                 return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
             case foast.Call(func=foast.Name(id="as_offset")):

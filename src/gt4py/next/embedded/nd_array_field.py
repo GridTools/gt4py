@@ -225,9 +225,7 @@ class NdArrayField(
         index_field: common.ConnectivityField | fbuiltins.FieldOffset,
         *args: common.ConnectivityField | fbuiltins.FieldOffset,
     ) -> common.Field:
-        if not args:
-            return self.remap(index_field)
-        return self.__call__(index_field, *args[1:]).remap(args[0])
+        return functools.reduce(lambda field, connectivity: field.remap(connectivity), [index_field, *args], self)
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
         new_domain, buffer_slice = self._slice(index)

@@ -26,7 +26,6 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 import numpy.typing as npt
 
-import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
@@ -80,12 +79,16 @@ class Dimension:
         return self, val
 
     def __add__(self, offset: int):
+        from gt4py.next.ffront import fbuiltins
+
         assert isinstance(self.value, str)
-        return gtx.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
+        return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
 
     def __sub__(self, offset: int):
+        from gt4py.next.ffront import fbuiltins
+
         assert isinstance(self.value, str)
-        return gtx.FieldOffset(f"{self.value}off", source=self, target=(self,))[-offset]
+        return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[-offset]
 
 
 class Infinity(enum.Enum):

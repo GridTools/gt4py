@@ -100,6 +100,8 @@ def test_ffront_lap(cartesian_case):
         ref=lap_ref(in_field.ndarray),
     )
 
+
+def test_ffront_skewedlap(cartesian_case):
     in_field = cases.allocate(cartesian_case, skewedlap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, skewedlap_program, "out_field")()
 
@@ -112,6 +114,8 @@ def test_ffront_lap(cartesian_case):
         ref=skewedlap_ref(in_field.ndarray),
     )
 
+
+def test_ffront_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
