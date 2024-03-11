@@ -14,7 +14,6 @@
 import operator
 from typing import Optional, Pattern
 
-import numpy as np
 import pytest
 
 from gt4py.next.common import (
@@ -22,7 +21,6 @@ from gt4py.next.common import (
     DimensionKind,
     Domain,
     Infinity,
-    NamedRange,
     UnitRange,
     domain,
     named_range,
@@ -92,10 +90,12 @@ def test_unbounded_max_min(value):
     assert min(Infinity.NEGATIVE, value) == Infinity.NEGATIVE
 
 
-def test_empty_range():
+@pytest.mark.parametrize("empty_range", [UnitRange(1, 0), UnitRange(1, -1)])
+def test_empty_range(empty_range):
     expected = UnitRange(0, 0)
-    assert UnitRange(1, 1) == expected
-    assert UnitRange(1, -1) == expected
+
+    assert empty_range == expected
+    assert empty_range.is_empty
 
 
 @pytest.fixture
@@ -255,6 +255,20 @@ def test_named_range_like(named_rng_like):
 
 def test_domain_length(a_domain):
     assert len(a_domain) == 3
+
+
+@pytest.mark.parametrize(
+    "empty_domain, expected",
+    [
+        (Domain(), False),
+        (Domain((IDim, UnitRange(0, 10))), False),
+        (Domain((IDim, UnitRange(0, 0))), True),
+        (Domain((IDim, UnitRange(0, 0)), (JDim, UnitRange(0, 1))), True),
+        (Domain((IDim, UnitRange(0, 1)), (JDim, UnitRange(0, 0))), True),
+    ],
+)
+def test_empty_domain(empty_domain, expected):
+    assert empty_domain.is_empty == expected
 
 
 @pytest.mark.parametrize(
