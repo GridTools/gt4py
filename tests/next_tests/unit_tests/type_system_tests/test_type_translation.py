@@ -176,7 +176,7 @@ def test_invalid_symbol_types():
         (common.Dims["IDim"], ValueError),
     ],
 )
-def test_generic_variadic_dims(value, expected):
+def test_generic_variadic_dims(value, expected_dims):
     if expected == ValueError:
         with pytest.raises(ValueError, match="Invalid field dimension definition"):
             type_translation.from_type_hint(gtx.Field[value, np.int32])
