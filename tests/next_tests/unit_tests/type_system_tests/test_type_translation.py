@@ -169,7 +169,7 @@ def test_invalid_symbol_types():
 
 
 @pytest.mark.parametrize(
-    "value,expected",
+    "value, expected_dims",
     [
         (common.Dims[IDim, JDim], [IDim, JDim]),
         (common.Dims[IDim, np.float64], ValueError),
@@ -177,8 +177,8 @@ def test_invalid_symbol_types():
     ],
 )
 def test_generic_variadic_dims(value, expected_dims):
-    if expected == ValueError:
+    if expected_dims == ValueError:
         with pytest.raises(ValueError, match="Invalid field dimension definition"):
             type_translation.from_type_hint(gtx.Field[value, np.int32])
     else:
-        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected
+        assert type_translation.from_type_hint(gtx.Field[value, np.int32]).dims == expected_dims
