@@ -31,7 +31,7 @@ from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
 )
-from gt4py.next.ffront import fbuiltins
+from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
 
 
@@ -693,7 +693,7 @@ def _concat_where(
     return cls_.from_array(result_array, domain=result_domain)
 
 
-NdArrayField.register_builtin_func(fbuiltins.concat_where, _concat_where)  # type: ignore[arg-type] # tuples are handled in the base implementation
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[arg-type] # tuples are handled in the base implementation
 
 
 def _make_reduction(
