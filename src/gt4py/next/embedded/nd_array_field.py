@@ -540,7 +540,9 @@ def _compute_mask_ranges(
     ind = 0
     res = []
     for i in range(1, mask.shape[0]):
-        if (mask_i := bool(mask[i].item())) != cur:
+        if (
+            mask_i := bool(mask[i].item())
+        ) != cur:  # `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
             res.append((cur, common.UnitRange(ind, i)))
             cur = mask_i
             ind = i
@@ -579,12 +581,13 @@ def _intersect_fields(
     *fields: common.Field | core_defs.Scalar,
     ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
 ) -> tuple[common.Field, ...]:
-    # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations
+    # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
+    # currently blocked, because requiring the `_to_field` function, see comment there.
     nd_array_class = _get_nd_array_class(*fields)
-    promoted_dims = common.promote_dims(*[f.domain.dims for f in fields if common.is_field(f)])
+    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if common.is_field(f)))
     broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
 
-    intersected_domains = embedded_common.intersect_domains(
+    intersected_domains = embedded_common.restrict_to_intersection(
         *[f.domain for f in broadcasted_fields], ignore_dims=ignore_dims
     )
 
@@ -597,7 +600,7 @@ def _intersect_fields(
     )
 
 
-def _concat_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
+def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
     if not domains:
         return common.Domain()
     dim_start = domains[0][dim][1].start
@@ -619,7 +622,7 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
         and not embedded_common.domain_intersection(*[f.domain for f in fields]).is_empty
     ):
         raise ValueError("Fields to concatenate must not overlap.")
-    new_domain = _concat_domains(*[f.domain for f in fields], dim=dim)
+    new_domain = _stack_domains(*[f.domain for f in fields], dim=dim)
     if new_domain is None:
         raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
     nd_array_class = _get_nd_array_class(*fields)
@@ -646,6 +649,7 @@ def _concat_where(
     # intersect the field in dimensions orthogonal to the mask, then all slices in the mask field have same domain
     t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
 
+    # TODO(havogt): for clarity, most of it could be implemented on named_range in the masked dimension, but we currently lack the utils
     # compute the consecutive ranges (first relative, then domain) of true and false values
     mask_values_to_relative_range_mapping: Iterable[tuple[bool, common.UnitRange]] = (
         _compute_mask_ranges(mask_field.ndarray)

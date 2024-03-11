@@ -24,7 +24,7 @@ from gt4py.next.embedded.common import (
     canonicalize_any_index_sequence,
     iterate_domain,
     sub_domain,
-    intersect_domains,
+    restrict_to_intersection,
     domain_intersection,
 )
 
@@ -194,9 +194,14 @@ def test_domain_intersection():
     assert result == expected
 
 
+def test_domain_intersection_empty():
+    result = domain_intersection()
+    assert result == common.Domain()
+
+
 def test_intersect_domains():
     testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
-    result = intersect_domains(*testee, ignore_dims=J)
+    result = restrict_to_intersection(*testee, ignore_dims=J)
 
     expected = (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
     assert result == expected
@@ -204,7 +209,7 @@ def test_intersect_domains():
 
 def test_intersect_domains_ignore_dims_none():
     testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
-    result = intersect_domains(*testee)
+    result = restrict_to_intersection(*testee)
 
     expected = (domain_intersection(*testee),) * 2
     assert result == expected
@@ -212,7 +217,7 @@ def test_intersect_domains_ignore_dims_none():
 
 def test_intersect_domains_ignore_all_dims():
     testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
-    result = intersect_domains(*testee, ignore_dims=(I, J))
+    result = restrict_to_intersection(*testee, ignore_dims=(I, J))
 
     expected = testee
     assert result == expected

@@ -104,11 +104,11 @@ def domain_intersection(
     Return the intersection of the given domains.
 
     Example:
-    >>> I = common.Dimension("I")
-    >>> domain_intersection(
-    ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
-    ... )  # doctest: +ELLIPSIS
-    Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
+        >>> I = common.Dimension("I")
+        >>> domain_intersection(
+        ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
+        ... )  # doctest: +ELLIPSIS
+        Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
     return functools.reduce(
         operator.and_,
@@ -117,7 +117,7 @@ def domain_intersection(
     )
 
 
-def intersect_domains(
+def restrict_to_intersection(
     *domains: common.Domain,
     ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
 ) -> tuple[common.Domain, ...]:
@@ -125,14 +125,14 @@ def intersect_domains(
     Return the with each other intersected domains, ignoring 'ignore_dims' dimensions for the intersection.
 
     Example:
-    >>> I = common.Dimension("I")
-    >>> J = common.Dimension("J")
-    >>> res = intersect_domains(
-    ...     common.domain({I: (0, 5), J: (1, 2)}),
-    ...     common.domain({I: (1, 3), J: (0, 3)}),
-    ...     ignore_dims=J,
-    ... )
-    >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
+        >>> I = common.Dimension("I")
+        >>> J = common.Dimension("J")
+        >>> res = intersect_domains(
+        ...     common.domain({I: (0, 5), J: (1, 2)}),
+        ...     common.domain({I: (1, 3), J: (0, 3)}),
+        ...     ignore_dims=J,
+        ... )
+        >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
     intersection_without_ignore_dims = domain_intersection(*[

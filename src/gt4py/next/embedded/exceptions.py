@@ -39,6 +39,8 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
 
 
 class NonContiguousDomain(gt4py_exceptions.GT4PyError):
+    """Describes an error where a domain would become non-contiguous after an operation."""
+
     msg: str
 
     def __init__(self, msg: str):
