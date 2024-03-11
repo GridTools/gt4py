@@ -972,7 +972,11 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         assert isinstance(image_range, UnitRange)
         return ((self.codomain, image_range - self.offset),)
 
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
+    def remap(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> ConnectivityField:
         raise NotImplementedError()
 
     __call__ = remap

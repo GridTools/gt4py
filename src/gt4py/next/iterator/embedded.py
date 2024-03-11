@@ -1084,7 +1084,11 @@ class IndexField(common.Field):
         assert self._cur_index is not None
         return self._cur_index
 
-    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def remap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
@@ -1203,7 +1207,11 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def remap(self, index_field: common.ConnectivityField | fbuiltins.FieldOffset) -> common.Field:
+    def remap(
+        self,
+        index_field: common.ConnectivityField | fbuiltins.FieldOffset,
+        *args: common.ConnectivityField | fbuiltins.FieldOffset,
+    ) -> common.Field:
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
