@@ -17,7 +17,7 @@ import collections.abc
 import functools
 import types
 import typing
-from typing import Any, ForwardRef, Optional, Union
+from typing import Any, ForwardRef, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -106,7 +106,7 @@ def from_type_hint(
         case common.Field:
             if (n_args := len(args)) != 2:
                 raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
-            dims: Union[type(...), list[common.Dimension]] = []
+            dims: list[common.Dimension] = []
             dim_arg, dtype_arg = args
             dim_arg = (
                 list(typing.get_args(dim_arg))
