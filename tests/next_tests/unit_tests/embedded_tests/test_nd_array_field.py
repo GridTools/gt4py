@@ -954,6 +954,20 @@ def test_hypercube(index_array, expected):
             ([6, 7, 8, 9, 10], None),
             ([42, 7, 42, 9, 42], None),
         ),
+        (
+            # parts of mask_ranges are concatenated
+            ([True, True, False, False], None),
+            ([1, 2], {D0: (1, 3)}),
+            ([3, 4], {D0: (1, 3)}),
+            ([1, 4], {D0: (1, 3)}),
+        ),
+        (
+            # parts of mask_ranges are concatenated and yield non-contiguous domain
+            ([True, False, True, False], None),
+            ([1, 2], {D0: (0, 2)}),
+            ([3, 4], {D0: (2, 4)}),
+            None,
+        ),
     ],
 )
 def test_concat_where(
