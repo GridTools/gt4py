@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.14.0
+    jupytext_version: 1.15.2
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -70,18 +70,16 @@ b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, 
 Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, `empty`, `full`. These require domain, dtype, and allocator (e.g. a backend) specifications.
 
 ```{code-cell} ipython3
-from gt4py._core import definitions as core_defs
+I = gtx.Dimension("I")
+J = gtx.Dimension("J")
+                     
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
-field_of_ones = gtx.constructors.ones(
+field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
-    dtype=core_defs.dtype(np.float64),
+    dtype=np.float64,
     allocator=gtx.program_processors.runners.roundtrip.backend
 )
 ```
-
-_Note: The interface to construct fields is provisional only and will change soon._
-
-+++
 
 #### Field operators
 
@@ -162,7 +160,7 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 
 The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
 
-| ![grid_topo](connectivity_numbered_grid.svg) |
+| ![grid_topo](images/connectivity_numbered_grid.svg) |
 | :------------------------------------------: |
 |         _The mesh with the indices_          |
 
@@ -216,7 +214,7 @@ cell_values = gtx.as_field([CellDim], np.array([1.0, 1.0, 2.0, 3.0, 5.0, 8.0]))
 edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
-| ![cell_values](connectivity_cell_field.svg) |
+| ![cell_values](images/connectivity_cell_field.svg) |
 | :-----------------------------------------: |
 |                _Cell values_                |
 
@@ -238,7 +236,7 @@ E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
+E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2, has_skip_values=False)
 ```
 
 The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
@@ -261,7 +259,7 @@ print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 
 Running the above snippet results in the following edge field:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](connectivity_edge_0th_cell.svg) |
+| ![nearest_cell_values](images/connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](images/connectivity_edge_0th_cell.svg) |
 | :----------------------------------------------------: | :-------: | :------------------------------------------: |
 |                    _Domain (edges)_                    |           |                _Edge values_                 |
 
@@ -288,7 +286,7 @@ print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
-| ![nearest_cell_values](connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](connectivity_edge_cell_sum.svg) |
+| ![nearest_cell_values](images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](images/connectivity_edge_cell_sum.svg) |
 | :----------------------------------------------------: | :-------: | :--------------------------------------------: |
 |                    _Domain (edges)_                    |           |                 _Edge values_                  |
 
@@ -386,7 +384,7 @@ As explained in the section outline, the pseudo-laplacian needs the cell-to-edge
 C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
-C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
+C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3, False)
 ```
 
 **Weights of edge differences:**
