@@ -277,9 +277,17 @@ def unit_range(r: RangeLike) -> UnitRange:
     raise ValueError(f"'{r!r}' cannot be interpreted as 'UnitRange'.")
 
 
+@dataclasses.dataclass(frozen=True)
+class NamedRange:
+    dims: Dimension
+    urange: UnitRange
+
+    def __str__(self) -> str:
+        return f"{self.dims}={self.urange}"
+
+
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
-NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
@@ -309,7 +317,7 @@ def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
 
 
 def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
-    return UnitRange.is_finite(v[1])
+    return UnitRange.is_finite(v.urange)
 
 
 def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
@@ -351,7 +359,7 @@ def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
 
 
 def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
-    return (v[0], unit_range(v[1]))
+    return NamedRange(dims=v[0], urange=unit_range(v[1]))
 
 
 _Rng = TypeVar(
@@ -439,7 +447,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
 
     def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
-            return self.dims[index], self.ranges[index]
+            return named_range((self.dims[index], self.ranges[index]))
         elif isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
@@ -447,7 +455,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         elif isinstance(index, Dimension):
             try:
                 index_pos = self.dims.index(index)
-                return self.dims[index_pos], self.ranges[index_pos]
+                return named_range((self.dims[index_pos], self.ranges[index_pos]))
             except ValueError as ex:
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:
@@ -957,15 +965,15 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):
-            if image_range[0] != self.codomain:
+            if image_range.dims != self.codomain:
                 raise ValueError(
-                    f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
+                    f"Dimension '{image_range.dims}' does not match the codomain dimension '{self.codomain}'."
                 )
 
-            image_range = image_range[1]
+            image_range = image_range.urange
 
         assert isinstance(image_range, UnitRange)
-        return ((self.codomain, image_range - self.offset),)
+        return (named_range((self.codomain, image_range - self.offset)),)
 
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
         raise NotImplementedError()
