@@ -130,10 +130,10 @@ class ProgramLowering(
     --------
     >>> from gt4py.next.ffront.func_to_past import ProgramParser
     >>> from gt4py.next.iterator import ir
-    >>> from gt4py.next import common.Dimension, Field
+    >>> from gt4py.next import Dimension, Field
     >>>
     >>> float64 = float
-    >>> IDim = common.Dimension("IDim")
+    >>> IDim = Dimension("IDim")
     >>>
     >>> def fieldop(inp: Field[[IDim], "float64"]) -> Field[[IDim], "float64"]: ...
     >>> def program(inp: Field[[IDim], "float64"], out: Field[[IDim], "float64"]):
