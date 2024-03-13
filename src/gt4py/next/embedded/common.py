@@ -47,6 +47,7 @@ def _relative_sub_domain(
         )
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for dom, idx in zip(domain, expanded, strict=True):
+        assert isinstance(dom, common.NamedRange)
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(dom.urange, idx)

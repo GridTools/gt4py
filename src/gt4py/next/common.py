@@ -379,7 +379,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
 
     def __init__(
         self,
-        *args: tuple[Dimension, _Rng],
+        *args: NamedRange,
         dims: Optional[Sequence[Dimension]] = None,
         ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
@@ -412,11 +412,10 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
                 raise ValueError(
                     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
                 )
-            dims = (args[i].dim for i in range(len(args))) if args else ()
-            ranges = (args[i].urange for i in range(len(args))) if args else ()
-            # dims, ranges = zip(*args) if args else ((), ())
-            object.__setattr__(self, "dims", tuple(dims))
-            object.__setattr__(self, "ranges", tuple(ranges))
+            dims_new = (arg.dim for arg in args) if args else ()
+            ranges_new = (arg.urange for arg in args) if args else ()
+            object.__setattr__(self, "dims", tuple(dims_new))
+            object.__setattr__(self, "ranges", tuple(ranges_new))
 
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")

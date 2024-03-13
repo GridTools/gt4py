@@ -1491,7 +1491,9 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = column_range_cvar.get()[1]
+        columns = column_range_cvar.get()
+        assert isinstance(columns, tuple)
+        column_range = columns[1]
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
