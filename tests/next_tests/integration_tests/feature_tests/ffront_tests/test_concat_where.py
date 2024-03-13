@@ -54,3 +54,9 @@ def test_boundary_same_size_fields(cartesian_case):
     ref[:, :, 1:] = interior.asnumpy()[:, :, 1:]
 
     cases.verify(cartesian_case, testee, k, interior, boundary, out=out, ref=ref)
+
+
+# TODO:
+# - IJField as boundary
+# - IJKField with 1 level as boundary
+# - mask that contains multiple regions of true/false
