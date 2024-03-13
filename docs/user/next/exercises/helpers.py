@@ -16,7 +16,7 @@ import numpy as np
 
 import gt4py.next as gtx
 from gt4py.next.iterator.embedded import MutableLocatedField
-from gt4py.next import neighbor_sum, where
+from gt4py.next import neighbor_sum, where, Dims
 from gt4py.next import Dimension, DimensionKind, FieldOffset
 from gt4py.next.program_processors.runners import roundtrip
 from gt4py.next.program_processors.runners.gtfn import (
