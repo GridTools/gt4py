@@ -908,7 +908,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
-                domain_slice.append((d, common.UnitRange(v.start, v.stop)))
+                domain_slice.append(common.named_range((d, common.UnitRange(v.start, v.stop))))
             elif isinstance(v, list):
                 assert len(v) == 1  # only 1 sparse dimension is supported
                 assert common.is_int_index(
