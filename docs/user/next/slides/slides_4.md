@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.15.2
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where
+from gt4py.next import float64
 ```
 
 ```{code-cell} ipython3

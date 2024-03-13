@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.15.2
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import neighbor_sum, where
+from gt4py.next import where, Dims
 ```
 
 ```{code-cell} ipython3
@@ -50,8 +50,8 @@ false_field = gtx.as_field([Cell], np.asarray([21.0, 22.0, 23.0, 24.0, 25.0]))
 result = gtx.zeros(gtx.domain({Cell:5}))
 
 @gtx.field_operator
-def conditional(mask: gtx.Field[[Cell], bool], true_field: gtx.Field[[Cell], gtx.float64], false_field: gtx.Field[[Cell], gtx.float64]
-) -> gtx.Field[[Cell], gtx.float64]:
+def conditional(mask: gtx.Field[Dims[Cell], bool], true_field: gtx.Field[Dims[Cell], gtx.float64], false_field: gtx.Field[Dims[Cell], gtx.float64]
+) -> gtx.Field[Dims[Cell], gtx.float64]:
     return where(mask, true_field, false_field)
 
 conditional(mask, true_field, false_field, out=result, offset_provider={})
@@ -67,14 +67,14 @@ By default the whole `out` field is updated. If only a subset should be updated,
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def add(a: gtx.Field[[Cell, K], gtx.float64],
-        b: gtx.Field[[Cell, K], gtx.float64]) -> gtx.Field[[Cell, K], gtx.float64]:
+def add(a: gtx.Field[Dims[Cell, K], gtx.float64],
+        b: gtx.Field[Dims[Cell, K], gtx.float64]) -> gtx.Field[Dims[Cell, K], gtx.float64]:
     return a + b   # 2.0 + 3.0
 
 @gtx.program
-def run_add_domain(a : gtx.Field[[Cell, K], gtx.float64],
-            b : gtx.Field[[Cell, K], gtx.float64],
-            result : gtx.Field[[Cell, K], gtx.float64]):
+def run_add_domain(a : gtx.Field[Dims[Cell, K], gtx.float64],
+            b : gtx.Field[Dims[Cell, K], gtx.float64],
+            result : gtx.Field[Dims[Cell, K], gtx.float64]):
     add(a, b, out=result, domain={Cell: (1, 3), K: (1, 4)})
 ```
 

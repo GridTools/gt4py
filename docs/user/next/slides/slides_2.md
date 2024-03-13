@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.15.2
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where
+from gt4py.next import float64, neighbor_sum, Dims
 ```
 
 ```{code-cell} ipython3
@@ -55,7 +55,7 @@ In GT4Py we express this by
 Koff = gtx.FieldOffset("Koff", source=K, target=(K,))
 
 @gtx.field_operator
-def a_offset(a_off: gtx.Field[[K], float64]) -> gtx.Field[[K], float64]:
+def a_offset(a_off: gtx.Field[DimsDims[K], float64]) -> gtx.Field[Dims[K], float64]:
     return a_off(Koff[1])
 
 result = gtx.zeros(gtx.domain({K: 6}))
@@ -156,11 +156,11 @@ E2C_offset_provider = gtx.NeighborTableOffsetProvider(e2c_table, Edge, Cell, 2)
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def nearest_cell_to_edge(cell_field: gtx.Field[[Cell], float64]) -> gtx.Field[[Edge], float64]:
+def nearest_cell_to_edge(cell_field: gtx.Field[Dims[Cell], float64]) -> gtx.Field[Dims[Edge], float64]:
     return cell_field(E2C[0]) # 0th index to isolate edge dimension
 
 @gtx.program(backend=gtx.gtfn_cpu) # uses skip_values, therefore we cannot use embedded
-def run_nearest_cell_to_edge(cell_field: gtx.Field[[Cell], float64], edge_field: gtx.Field[[Edge], float64]):
+def run_nearest_cell_to_edge(cell_field: gtx.Field[Dims[Cell], float64], edge_field: gtx.Field[Dims[Edge], float64]):
     nearest_cell_to_edge(cell_field, out=edge_field)
 
 run_nearest_cell_to_edge(cell_field, edge_field, offset_provider={"E2C": E2C_offset_provider})
@@ -197,11 +197,11 @@ To sum up all the cells adjacent to an edge the `neighbor_sum` builtin function 
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def sum_adjacent_cells(cell_field : gtx.Field[[Cell], float64]) -> gtx.Field[[Edge], float64]:
+def sum_adjacent_cells(cell_field : gtx.Field[Dims[Cell], float64]) -> gtx.Field[Dims[Edge], float64]:
     return neighbor_sum(cell_field(E2C), axis=E2CDim)
 
 @gtx.program(backend=gtx.gtfn_cpu) # uses skip_values, therefore we cannot use embedded
-def run_sum_adjacent_cells(cell_field : gtx.Field[[Cell], float64], edge_field: gtx.Field[[Edge], float64]):
+def run_sum_adjacent_cells(cell_field : gtx.Field[Dims[Cell], float64], edge_field: gtx.Field[Dims[Edge], float64]):
     sum_adjacent_cells(cell_field, out=edge_field)
 
 run_sum_adjacent_cells(cell_field, edge_field, offset_provider={"E2C": E2C_offset_provider})
@@ -214,3 +214,7 @@ For the border edges, the results are unchanged compared to the previous example
 | ![nearest_cell_values](../images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](../images/connectivity_edge_cell_sum.svg) |
 | :--------------------------------------------------------------: | :-------: | :------------------------------------------------------: |
 |                         _Domain (edges)_                         |           |                      _Edge values_                       |
+
+```{code-cell} ipython3
+
+```

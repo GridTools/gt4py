@@ -84,7 +84,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where, Dims
+from gt4py.next import float64, Dims
 ```
 
 ## Key concepts and application structure
@@ -175,7 +175,7 @@ This example below calls the `add` field operator twice:
 @gtx.program
 def run_add(a : gtx.Field[Dims[Cell, K], float64],
             b : gtx.Field[Dims[Cell, K], float64],
-            result : gtx.Field[[Cell, K], float64]):
+            result : gtx.Field[Dims[Cell, K], float64]):
     add(a, b, out=result)
     add(b, result, out=result)
 ```
@@ -185,4 +185,8 @@ result = gtx.zeros(domain, dtype=float64)
 run_add(a, b, result, offset_provider={})
 
 print("result array: \n {}".format(result.asnumpy()))
+```
+
+```{code-cell} ipython3
+
 ```
