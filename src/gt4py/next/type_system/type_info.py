@@ -688,6 +688,11 @@ def function_signature_incompatibilities_field(
     if len(args) < 1:  # Todo: is this the right condition in general?
         yield f"Function takes at least 1 argument, but {len(args)} were given."
         return
+    if len(args) > 1:
+        for arg in args:
+            if arg.source.value != arg.target[0].value:
+                yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."
+                return
 
     if not isinstance(args[0], ts.OffsetType):
         yield f"Expected first argument to be of type '{ts.OffsetType}', got '{args[0]}'."
