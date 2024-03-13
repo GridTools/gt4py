@@ -279,11 +279,11 @@ def unit_range(r: RangeLike) -> UnitRange:
 
 @dataclasses.dataclass(frozen=True)
 class NamedRange:
-    dims: Dimension
+    dim: Dimension
     urange: UnitRange
 
     def __str__(self) -> str:
-        return f"{self.dims}={self.urange}"
+        return f"{self.dim}={self.urange}"
 
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
@@ -309,10 +309,9 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
 
 def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
-        isinstance(v, tuple)
-        and len(v) == 2
-        and isinstance(v[0], Dimension)
-        and isinstance(v[1], UnitRange)
+        isinstance(v, NamedRange)
+        and isinstance(v.dim, Dimension)
+        and isinstance(v.urange, UnitRange)
     )
 
 
@@ -359,7 +358,7 @@ def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
 
 
 def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
-    return NamedRange(dims=v[0], urange=unit_range(v[1]))
+    return NamedRange(dim=v[0], urange=unit_range(v[1]))
 
 
 _Rng = TypeVar(
@@ -413,7 +412,9 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
                 raise ValueError(
                     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
                 )
-            dims, ranges = zip(*args) if args else ((), ())
+            dims = (args[i].dim for i in range(len(args))) if args else ()
+            ranges = (args[i].urange for i in range(len(args))) if args else ()
+            # dims, ranges = zip(*args) if args else ((), ())
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
 
@@ -965,9 +966,9 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):
-            if image_range.dims != self.codomain:
+            if image_range.dim != self.codomain:
                 raise ValueError(
-                    f"Dimension '{image_range.dims}' does not match the codomain dimension '{self.codomain}'."
+                    f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                 )
 
             image_range = image_range.urange

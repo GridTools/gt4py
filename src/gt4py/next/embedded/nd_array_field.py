@@ -116,7 +116,7 @@ class NdArrayField(
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
         assert common.Domain.is_finite(self._domain)
-        return tuple(-r.start for _, r in self._domain)
+        return tuple(-r.start for r in self._domain.ranges)
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -407,12 +407,12 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
-                if image_range[0] != self.codomain:
+                if image_range.dim != self.codomain:
                     raise ValueError(
-                        f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
+                        f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                     )
 
-                image_range = image_range[1]
+                image_range = image_range.urange
 
             assert isinstance(image_range, common.UnitRange)
 
@@ -690,8 +690,10 @@ def _get_slices_from_domain_slice(
     """
     slice_indices: list[slice | common.IntIndex] = []
 
-    for pos_old, (dim, _) in enumerate(domain):
-        if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
+    for pos_old in range(domain.ndim):
+        if (
+            pos := embedded_common._find_index_of_dim(domain.dims[pos_old], domain_slice)
+        ) is not None:
             index_or_range = domain_slice[pos][1]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:

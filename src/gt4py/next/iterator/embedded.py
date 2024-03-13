@@ -748,7 +748,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = column_range_cvar.get().urange
+        column_range = column_range_cvar.get()[1]
         assert column_range is not None
 
         col: list[
@@ -825,7 +825,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.urange))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range[1]))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -866,7 +866,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        column_range = column_range_cvar.get().urange
+        column_range = column_range_cvar.get()[1]
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_axis] = column_range.start
@@ -1491,7 +1491,7 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = column_range_cvar.get().urange
+        column_range = column_range_cvar.get()[1]
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
