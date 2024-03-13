@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import Iterator, Optional
 
 from gt4py.eve.type_definitions import IntEnum
 from gt4py.next import common as func_common
@@ -98,6 +98,9 @@ class TupleType(DataType):
 
     def __str__(self):
         return f"tuple[{', '.join(map(str, self.types))}]"
+
+    def __iter__(self) -> Iterator[DataType]:
+        yield from self.types
 
 
 @dataclass(frozen=True)

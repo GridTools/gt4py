@@ -18,13 +18,12 @@
 
 from __future__ import annotations
 
-import collections
 import dataclasses
 import functools
 import types
 import typing
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import Generator, Generic, TypeVar
 
 from devtools import debug
@@ -33,16 +32,24 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
-from gt4py.next import allocators as next_allocators, embedded as next_embedded, errors
-from gt4py.next.common import Dimension, DimensionKind, GridType
+from gt4py.next import (
+    allocators as next_allocators,
+    backend as next_backend,
+    embedded as next_embedded,
+    errors,
+)
+from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
+    past_process_args,
+    past_to_func,
+    past_to_itir,
     program_ast as past,
+    transform_utils,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.fbuiltins import FieldOffset
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
 from gt4py.next.ffront.func_to_foast import FieldOperatorParser
@@ -52,7 +59,6 @@ from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
     ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
 )
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.ir_makers import (
@@ -61,74 +67,12 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
+from gt4py.next.otf import stages
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 DEFAULT_BACKEND: Callable = None
-
-
-def _get_closure_vars_recursively(closure_vars: dict[str, Any]) -> dict[str, Any]:
-    all_closure_vars = collections.ChainMap(closure_vars)
-
-    for closure_var in closure_vars.values():
-        if isinstance(closure_var, GTCallable):
-            # if the closure ref has closure refs by itself, also add them
-            if child_closure_vars := closure_var.__gt_closure_vars__():
-                all_child_closure_vars = _get_closure_vars_recursively(child_closure_vars)
-
-                collisions: list[str] = []
-                for potential_collision in set(closure_vars) & set(all_child_closure_vars):
-                    if (
-                        closure_vars[potential_collision]
-                        != all_child_closure_vars[potential_collision]
-                    ):
-                        collisions.append(potential_collision)
-                if collisions:
-                    raise NotImplementedError(
-                        f"Using closure vars with same name but different value "
-                        f"across functions is not implemented yet. \n"
-                        f"Collisions: '{',  '.join(collisions)}'."
-                    )
-
-                all_closure_vars = collections.ChainMap(all_closure_vars, all_child_closure_vars)
-    return dict(all_closure_vars)
-
-
-def _filter_closure_vars_by_type(closure_vars: dict[str, Any], *types: type) -> dict[str, Any]:
-    return {name: value for name, value in closure_vars.items() if isinstance(value, types)}
-
-
-def _deduce_grid_type(
-    requested_grid_type: Optional[GridType],
-    offsets_and_dimensions: Iterable[FieldOffset | Dimension],
-) -> GridType:
-    """
-    Derive grid type from actually occurring dimensions and check against optional user request.
-
-    Unstructured grid type is consistent with any kind of offset, cartesian
-    is easier to optimize for but only allowed in the absence of unstructured
-    dimensions and offsets.
-    """
-
-    def is_cartesian_offset(o: FieldOffset):
-        return len(o.target) == 1 and o.source == o.target[0]
-
-    deduced_grid_type = GridType.CARTESIAN
-    for o in offsets_and_dimensions:
-        if isinstance(o, FieldOffset) and not is_cartesian_offset(o):
-            deduced_grid_type = GridType.UNSTRUCTURED
-            break
-        if isinstance(o, Dimension) and o.kind == DimensionKind.LOCAL:
-            deduced_grid_type = GridType.UNSTRUCTURED
-            break
-
-    if requested_grid_type == GridType.CARTESIAN and deduced_grid_type == GridType.UNSTRUCTURED:
-        raise ValueError(
-            "'grid_type == GridType.CARTESIAN' was requested, but unstructured 'FieldOffset' or local 'Dimension' was found."
-        )
-
-    return deduced_grid_type if requested_grid_type is None else requested_grid_type
 
 
 def _field_constituents_shape_and_dims(
@@ -177,14 +121,14 @@ class Program:
     past_node: past.Program
     closure_vars: dict[str, Any]
     definition: Optional[types.FunctionType]
-    backend: Optional[ppi.ProgramExecutor]
+    backend: Optional[next_backend.Backend]
     grid_type: Optional[GridType]
 
     @classmethod
     def from_function(
         cls,
         definition: types.FunctionType,
-        backend: Optional[ppi.ProgramExecutor],
+        backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
     ) -> Program:
         source_def = SourceDefinition.from_function(definition)
@@ -200,7 +144,9 @@ class Program:
         )
 
     def __post_init__(self):
-        function_closure_vars = _filter_closure_vars_by_type(self.closure_vars, GTCallable)
+        function_closure_vars = transform_utils._filter_closure_vars_by_type(
+            self.closure_vars, GTCallable
+        )
         misnamed_functions = [
             f"{name} vs. {func.id}"
             for name, func in function_closure_vars.items()
@@ -276,24 +222,21 @@ class Program:
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
-        return _get_closure_vars_recursively(self.closure_vars)
+        return transform_utils._get_closure_vars_recursively(self.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        offsets_and_dimensions = _filter_closure_vars_by_type(
-            self._all_closure_vars, FieldOffset, Dimension
-        )
-        grid_type = _deduce_grid_type(self.grid_type, offsets_and_dimensions.values())
-
-        gt_callables = _filter_closure_vars_by_type(self._all_closure_vars, GTCallable).values()
-        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
-        return ProgramLowering.apply(
-            self.past_node, function_definitions=lowered_funcs, grid_type=grid_type
-        )
+        return past_to_itir.PastToItirFactory()(
+            stages.PastClosure(
+                past_node=self.past_node,
+                closure_vars=self.closure_vars,
+                grid_type=self.grid_type,
+                args=[],
+                kwargs={},
+            )
+        ).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
-        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
-
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -302,20 +245,41 @@ class Program:
                 stacklevel=2,
             )
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
-                ctx.run(self.definition, *rewritten_args, **kwargs)
+                # TODO(ricoh): move into test
+                if self.definition is None:
+                    definition = past_to_func.past_to_func(
+                        stages.PastClosure(
+                            closure_vars=self.closure_vars,
+                            past_node=self.past_node,
+                            grid_type=self.grid_type,
+                            args=args,
+                            kwargs=kwargs
+                            | {
+                                "offset_provider": offset_provider,
+                                "column_axis": self._column_axis,
+                            },
+                        )
+                    )
+                else:
+                    definition = self.definition
+                # TODO(ricoh): check if rewriting still needed
+                rewritten_args, size_args, kwargs = past_process_args._process_args(
+                    self.past_node, args, kwargs
+                )
+                ctx.run(definition, *rewritten_args, **kwargs)
             return
 
-        ppi.ensure_processor_kind(self.backend, ppi.ProgramExecutor)
-        if "debug" in kwargs:
-            debug(self.itir)
+        ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.itir,
-            *rewritten_args,
-            *size_args,
-            **kwargs,
-            offset_provider=offset_provider,
-            column_axis=self._column_axis,
+            stages.PastClosure(
+                closure_vars=self.closure_vars,
+                past_node=self.past_node,
+                grid_type=self.grid_type,
+                args=args,
+                kwargs=kwargs
+                | {"offset_provider": offset_provider, "column_axis": self._column_axis},
+            )
         )
 
     def format_itir(
@@ -326,7 +290,9 @@ class Program:
         **kwargs,
     ) -> str:
         ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
-        rewritten_args, size_args, kwargs = self._process_args(args, kwargs)
+        rewritten_args, size_args, kwargs = past_process_args._process_args(
+            self.past_node, args, kwargs
+        )
         if "debug" in kwargs:
             debug(self.itir)
         return formatter(
@@ -337,56 +303,13 @@ class Program:
             offset_provider=offset_provider,
         )
 
-    def _validate_args(self, *args, **kwargs) -> None:
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
-
-        try:
-            type_info.accepts_args(
-                self.past_node.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
-            )
-        except ValueError as err:
-            raise errors.DSLError(
-                None, f"Invalid argument types in call to '{self.past_node.id}'.\n{err}"
-            ) from err
-
-    def _process_args(self, args: tuple, kwargs: dict) -> tuple[tuple, tuple, dict[str, Any]]:
-        self._validate_args(*args, **kwargs)
-
-        args, kwargs = type_info.canonicalize_arguments(self.past_node.type, args, kwargs)
-
-        implicit_domain = any(
-            isinstance(stmt, past.Call) and "domain" not in stmt.kwargs
-            for stmt in self.past_node.body
-        )
-
-        # extract size of all field arguments
-        size_args: list[Optional[tuple[int, ...]]] = []
-        rewritten_args = list(args)
-        for param_idx, param in enumerate(self.past_node.params):
-            if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
-                shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
-                shape, dims = shapes_and_dims[0]
-                if not all(
-                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
-                ):
-                    raise ValueError(
-                        "Constituents of composite arguments (e.g. the elements of a"
-                        " tuple) need to have the same shape and dimensions."
-                    )
-                size_args.extend(shape if shape else [None] * len(dims))
-        return tuple(rewritten_args), tuple(size_args), kwargs
-
     @functools.cached_property
     def _column_axis(self):
         # construct mapping from column axis to scan operators defined on
         #  that dimension. only one column axis is allowed, but we can use
         #  this mapping to provide good error messages.
         scanops_per_axis: dict[Dimension, str] = {}
-        for name, gt_callable in _filter_closure_vars_by_type(
+        for name, gt_callable in transform_utils._filter_closure_vars_by_type(
             self._all_closure_vars, GTCallable
         ).items():
             if isinstance(
@@ -417,7 +340,7 @@ class Program:
 class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
-    def _process_args(self, args: tuple, kwargs: dict):
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
         type_ = self.past_node.type
         new_type = ts_ffront.ProgramType(
             definition=ts.FunctionType(
@@ -468,7 +391,7 @@ class ProgramWithBoundArgs(Program):
                 else:
                     full_kwargs[str(param.id)] = self.bound_args[param.id]
 
-        return super()._process_args(tuple(full_args), full_kwargs)
+        return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
 
     @functools.cached_property
     def itir(self):
@@ -507,7 +430,8 @@ def program(
 def program(
     definition=None,
     *,
-    backend=eve.NOTHING,  # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
+    # `NOTHING` -> default backend, `None` -> no backend (embedded execution)
+    backend=eve.NOTHING,
     grid_type=None,
 ) -> Program | Callable[[types.FunctionType], Program]:
     """
@@ -653,7 +577,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             pass
 
         loc = self.foast_node.location
-        param_sym_uids = eve_utils.UIDGenerator()  # use a new UID generator to allow caching
+        # use a new UID generator to allow caching
+        param_sym_uids = eve_utils.UIDGenerator()
 
         type_ = self.__gt_type__()
         params_decl: list[past.Symbol] = [
@@ -711,6 +636,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=self.backend,
             grid_type=self.grid_type,
         )
+
         return self._program_cache[hash_]
 
     def __call__(

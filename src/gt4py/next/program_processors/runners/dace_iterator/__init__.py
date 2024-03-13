@@ -26,7 +26,7 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
 import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next import backend, common
+from gt4py.next import backend as next_backend, common
 from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
@@ -356,7 +356,8 @@ def build_sdfg_from_itir(
 def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
     # build parameters
     build_cache = kwargs.get("build_cache", None)
-    compiler_args = kwargs.get("compiler_args", None)  # `None` will take default.
+    # `None` will take default.
+    compiler_args = kwargs.get("compiler_args", None)
     build_type = kwargs.get("build_type", "RelWithDebInfo")
     on_gpu = kwargs.get("on_gpu", _default_on_gpu)
     auto_optimize = kwargs.get("auto_optimize", True)
@@ -436,7 +437,7 @@ def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
     )
 
 
-run_dace_cpu = backend.Backend(
+run_dace_cpu = next_backend.Backend(
     executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
     allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )
@@ -459,7 +460,7 @@ else:
         raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
 
 
-run_dace_gpu = backend.Backend(
+run_dace_gpu = next_backend.Backend(
     executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
     allocator=next_allocators.StandardGPUFieldBufferAllocator(),
 )

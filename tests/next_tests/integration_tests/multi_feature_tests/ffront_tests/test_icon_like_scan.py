@@ -195,7 +195,7 @@ def reference(
 @pytest.fixture
 def test_setup(exec_alloc_descriptor):
     test_case = cases.Case(
-        exec_alloc_descriptor.executor,
+        exec_alloc_descriptor if exec_alloc_descriptor.executor else None,
         offset_provider={"Koff": KDim},
         default_sizes={Cell: 14, KDim: 10},
         grid_type=common.GridType.UNSTRUCTURED,
@@ -249,13 +249,13 @@ def test_solve_nonhydro_stencil_52_like_z_q(test_setup):
 def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
     if (
         test_setup.case.executor
-        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
     ):
         pytest.xfail(
             "Needs implementation of scan projector. Breaks in type inference as executed"
             "again after CollapseTuple."
         )
-    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.verify(
@@ -276,7 +276,7 @@ def test_solve_nonhydro_stencil_52_like_z_q_tup(test_setup):
 def test_solve_nonhydro_stencil_52_like(test_setup):
     if (
         test_setup.case.executor
-        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
     ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
@@ -298,10 +298,10 @@ def test_solve_nonhydro_stencil_52_like(test_setup):
 def test_solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(test_setup):
     if (
         test_setup.case.executor
-        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load().executor
+        == test_definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES.load()
     ):
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
-    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load().executor:
+    if test_setup.case.executor == test_definitions.ProgramBackendId.ROUNDTRIP.load():
         pytest.xfail("Needs proper handling of tuple[Column] <-> Column[tuple].")
 
     cases.run(

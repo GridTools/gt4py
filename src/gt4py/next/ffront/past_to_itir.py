@@ -14,14 +14,61 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Optional, cast
 
+import devtools
+import factory
+
 from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
+from gt4py.next import common, config
+from gt4py.next.ffront import (
+    fbuiltins,
+    gtcallable,
+    lowering_utils,
+    program_ast as past,
+    transform_utils,
+    type_specifications as ts_ffront,
+)
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+@dataclasses.dataclass(frozen=True)
+class PastToItir(workflow.ChainableWorkflowMixin):
+    def __call__(self, inp: stages.PastClosure) -> stages.ProgramCall:
+        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+        )
+        grid_type = transform_utils._deduce_grid_type(
+            inp.grid_type, offsets_and_dimensions.values()
+        )
+
+        gt_callables = transform_utils._filter_closure_vars_by_type(
+            all_closure_vars, gtcallable.GTCallable
+        ).values()
+        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+        itir_program = ProgramLowering.apply(
+            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        )
+
+        if config.DEBUG or "debug" in inp.kwargs:
+            devtools.debug(itir_program)
+
+        return stages.ProgramCall(
+            itir_program,
+            inp.args,
+            inp.kwargs,
+        )
+
+
+class PastToItirFactory(factory.Factory):
+    class Meta:
+        model = PastToItir
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
@@ -67,7 +114,7 @@ class ProgramLowering(
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")]),
     ... )  # doctest: +SKIP
     >>> lowered = ProgramLowering.apply(
-    ...     parsed, [fieldop_def], grid_type=GridType.CARTESIAN
+    ...     parsed, [fieldop_def], grid_type=common.GridType.CARTESIAN
     ... )  # doctest: +SKIP
     >>> type(lowered)  # doctest: +SKIP
     <class 'gt4py.next.iterator.ir.FencilDefinition'>
@@ -85,7 +132,7 @@ class ProgramLowering(
         cls,
         node: past.Program,
         function_definitions: list[itir.FunctionDefinition],
-        grid_type: GridType,
+        grid_type: common.GridType,
     ) -> itir.FencilDefinition:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
@@ -97,7 +144,7 @@ class ProgramLowering(
         size_params = []
         for param in node.params:
             if type_info.is_type_or_tuple_of_type(param.type, ts.FieldType):
-                fields_dims: list[list[Dimension]] = (
+                fields_dims: list[list[common.Dimension]] = (
                     type_info.primitive_constituents(param.type).getattr("dims").to_list()
                 )
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
@@ -263,8 +310,8 @@ class ProgramLowering(
                     slices[dim_i].upper if slices else None, dim_size, dim_size
                 )
 
-            if dim.kind == DimensionKind.LOCAL:
-                raise ValueError(f"Dimension '{dim.value}' must not be local.")
+            if dim.kind == common.DimensionKind.LOCAL:
+                raise ValueError(f"common.Dimension '{dim.value}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
@@ -273,14 +320,14 @@ class ProgramLowering(
             )
             domain_args_kind.append(dim.kind)
 
-        if self.grid_type == GridType.CARTESIAN:
+        if self.grid_type == common.GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
-        elif self.grid_type == GridType.UNSTRUCTURED:
+        elif self.grid_type == common.GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
             # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
-            if domain_args_kind[0] == DimensionKind.VERTICAL:
+            if domain_args_kind[0] == common.DimensionKind.VERTICAL:
                 assert len(domain_args) == 2
-                assert domain_args_kind[1] == DimensionKind.HORIZONTAL
+                assert domain_args_kind[1] == common.DimensionKind.HORIZONTAL
                 domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
@@ -294,14 +341,14 @@ class ProgramLowering(
     def _construct_itir_initialized_domain_arg(
         self,
         dim_i: int,
-        dim: Dimension,
+        dim: common.Dimension,
         node_domain: past.Dict,
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
             raise ValueError(
-                "Dimensions in out field and field domain are not equivalent:"
+                "common.Dimensions in out field and field domain are not equivalent:"
                 f"expected '{dim}', got '{keys_dims_types}'."
             )
 
