@@ -600,6 +600,12 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             and type_info.is_integral(right.type)
         ):
             return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
+        if (
+            isinstance(left.type, ts.OffsetType)
+            and isinstance(right.type, ts.ScalarType)
+            and type_info.is_integral(right.type)
+        ):
+            return ts.OffsetType(source=left.type.source, target=(left.type.source,))
 
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,

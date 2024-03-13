@@ -328,7 +328,7 @@ class ProgramLowering(
             raise errors.DSLError(
                 node.location,
                 f"Too many indices for field '{out_field_name}': field is {len(node_dims_ls)}"
-                f"-dimensional, but {len(out_field_slice_)} were indexed."
+                f"-dimensional, but {len(out_field_slice_)} were indexed.",
             )
         return out_field_slice_
 

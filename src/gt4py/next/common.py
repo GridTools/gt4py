@@ -787,14 +787,20 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def __ne__(self, other: Any) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
+        if isinstance(other, int):
+            return CartesianConnectivity(dimension=self.codomain, offset=self.offset + other)
+        else:
+            raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
+        if isinstance(other, int):
+            return CartesianConnectivity(dimension=self.codomain, offset=self.offset - other)
+        else:
+            raise TypeError("'ConnectivityField' does not support this operation.")
 
     def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
