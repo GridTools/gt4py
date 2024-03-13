@@ -38,7 +38,6 @@ The concepts are demonstrated through a simple application that adds two fields.
 
 +++
 
-
 #### Importing features
 
 The following snippet imports the most commonly used features that are needed to run the code in this document. Numpy is also required by the examples.
