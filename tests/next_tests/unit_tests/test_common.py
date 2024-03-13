@@ -95,7 +95,7 @@ def test_empty_range(empty_range):
     expected = UnitRange(0, 0)
 
     assert empty_range == expected
-    assert empty_range.is_empty
+    assert empty_range.is_empty()
 
 
 @pytest.fixture
@@ -268,7 +268,7 @@ def test_domain_length(a_domain):
     ],
 )
 def test_empty_domain(empty_domain, expected):
-    assert empty_domain.is_empty == expected
+    assert empty_domain.is_empty() == expected
 
 
 @pytest.mark.parametrize(

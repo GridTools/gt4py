@@ -557,9 +557,9 @@ def _trim_empty_domains(
     lst = list(lst)
     if not lst:
         return lst
-    if lst[0][1].is_empty:
+    if lst[0][1].is_empty():
         return _trim_empty_domains(lst[1:])
-    if lst[-1][1].is_empty:
+    if lst[-1][1].is_empty():
         return _trim_empty_domains(lst[:-1])
     return lst
 
@@ -619,7 +619,7 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
 
     if (
         len(fields) > 1
-        and not embedded_common.domain_intersection(*[f.domain for f in fields]).is_empty
+        and not embedded_common.domain_intersection(*[f.domain for f in fields]).is_empty()
     ):
         raise ValueError("Fields to concatenate must not overlap.")
     new_domain = _stack_domains(*[f.domain for f in fields], dim=dim)
@@ -673,7 +673,7 @@ def _concat_where(
     mask_values_to_intersected_domains_mapping = _trim_empty_domains(
         mask_values_to_intersected_domains_mapping
     )
-    if any(d.is_empty for _, d in mask_values_to_intersected_domains_mapping):
+    if any(d.is_empty() for _, d in mask_values_to_intersected_domains_mapping):
         raise embedded_exceptions.NonContiguousDomain(
             f"In 'concat_where', cannot concatenate the following 'Domain's: {[d for _, d in mask_values_to_intersected_domains_mapping]}."
         )
