@@ -42,7 +42,7 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
     past_process_args_wf,
-    past_to_itir_wf,
+    past_to_itir,
     program_ast as past,
     transform_utils,
     type_specifications as ts_ffront,
@@ -219,7 +219,7 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        return past_to_itir_wf.PastToItirFactory()(
+        return past_to_itir.PastToItirFactory()(
             stages.PastClosure(
                 past_node=self.past_node,
                 closure_vars=self.closure_vars,
