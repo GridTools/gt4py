@@ -32,6 +32,7 @@ K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 ```
 
 ## Offsets
+
 Fields can be shifted with a (Cartesian) offset.
 
 Take the following array:
@@ -45,8 +46,8 @@ print("a_off array: \n {}".format(a_off.asnumpy()))
 Visually, offsetting this field by 1 would result in the following:
 
 | ![Coff](../images/simple_offset.png) |
-| :------------------------: |
-|  _CellDim Offset (Coff)_   |
+| :----------------------------------: |
+|       _CellDim Offset (Coff)_        |
 
 In GT4Py we express this by
 
@@ -64,11 +65,12 @@ print(f"result field: \n {result} \n {result.asnumpy()}")
 ```
 
 ## Defining the mesh and its connectivities
+
 Take an unstructured mesh with numbered cells (in red) and edges (in blue).
 
 | ![grid_topo](../images/connectivity_numbered_grid.svg) |
-| :------------------------------------------: |
-|         _The mesh with the indices_          |
+| :----------------------------------------------------: |
+|              _The mesh with the indices_               |
 
 ```{code-cell} ipython3
 Cell = gtx.Dimension("Cell")
@@ -77,7 +79,7 @@ Edge = gtx.Dimension("Edge")
 
 Connectivity among mesh elements is expressed through connectivity tables.
 
-For example, `e2c_table` lists for each edge its adjacent cells. 
+For example, `e2c_table` lists for each edge its adjacent cells.
 
 Similarly, `c2e_table` lists the edges that are neighbors to a particular cell.
 
@@ -119,8 +121,8 @@ edge_field = gtx.as_field([Edge], np.zeros((12,)))
 ```
 
 | ![cell_values](../images/connectivity_cell_field.svg) |
-| :-----------------------------------------: |
-|                _Cell values_                |
+| :---------------------------------------------------: |
+|                     _Cell values_                     |
 
 +++
 
@@ -129,18 +131,19 @@ edge_field = gtx.as_field([Edge], np.zeros((12,)))
 +++
 
 Field remappings are just composition of mappings
+
 - Field defined on cells: $f_C: C \to \mathbb{R}$
 - Connectivity from _edges to cells_: $c_{E \to C_0}$
 - We define a new field on edges composing both mappings
-$$ f_E: E \to \mathbb{R}, e \mapsto (f_C \circ c_{E \to C_0})(e) := f_c(c_{E \to C_0}(e)) $$
+  $$ f*E: E \to \mathbb{R}, e \mapsto (f_C \circ c*{E \to C*0})(e) := f_c(c*{E \to C_0}(e)) $$
 - In point-free notation: $f_E = f_C(c_{E \to C_0}) \Rightarrow$ `f_c(E2C[0])`
 
-
 We extend the connectivities to refer to more than just one neighbor
+
 - `E2CDim` is the local dimension of all cell neighbors of an edge
 
-$$ c_{E \to C}: E \times E2CDim \to C $$
-$$ f_E(e, l) := f_C(c_{E \to C}(e, l)), e \in E, l \in \{0,1\} $$
+$$ c*{E \to C}: E \times E2CDim \to C $$
+$$ f_E(e, l) := f_C(c*{E \to C}(e, l)), e \in E, l \in \{0,1\} $$
 
 ```{code-cell} ipython3
 E2CDim = gtx.Dimension("E2C", kind=gtx.DimensionKind.LOCAL)
@@ -168,8 +171,8 @@ print("0th adjacent cell's value: {}".format(edge_field.asnumpy()))
 Running the above snippet results in the following edge field:
 
 | ![nearest_cell_values](../images/connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](../images/connectivity_edge_0th_cell.svg) |
-| :----------------------------------------------------: | :-------: | :------------------------------------------: |
-|                    _Domain (edges)_                    |           |                _Edge values_                 |
+| :--------------------------------------------------------------: | :-------: | :----------------------------------------------------: |
+|                         _Domain (edges)_                         |           |                     _Edge values_                      |
 
 +++
 
@@ -177,16 +180,14 @@ Running the above snippet results in the following edge field:
 
 Creating fields on edges from fields on vertices using an **E2V** connectivity:
 
-| <div><img src="../images/remap-field.png" width="75%"/></div> |
-| :-----------------------------------------: |
+|   <div><img src="../images/remap-field.png" width="75%"/></div>    |
+| :----------------------------------------------------------------: |
 | <div><img src="../images/remap-field-code.png" width="50%"/></div> |
 
-We can create two edge fields from the same vertex field, by taking the values from the start or from the end vertex, and then you can operate wi to the 
+We can create two edge fields from the same vertex field, by taking the values from the start or from the end vertex, and then you can operate wi to the
 | <div><img src="../images/e2v-add.png" width="75%"/></div> |
 | :-----------------------------------------: |
 | <div><img src="../images/e2v-add-code.png" width="50%"/></div> |
-
-
 
 +++
 
@@ -211,5 +212,5 @@ print("sum of adjacent cells: {}".format(edge_field.asnumpy()))
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
 | ![nearest_cell_values](../images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](../images/connectivity_edge_cell_sum.svg) |
-| :----------------------------------------------------: | :-------: | :--------------------------------------------: |
-|                    _Domain (edges)_                    |           |                 _Edge values_                  |
+| :--------------------------------------------------------------: | :-------: | :------------------------------------------------------: |
+|                         _Domain (edges)_                         |           |                      _Edge values_                       |

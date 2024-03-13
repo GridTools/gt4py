@@ -33,9 +33,10 @@ K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 
 ## Using conditionals on fields
 
-To conditionally compose a field from two inputs, we borrow the `where` function from numpy. 
+To conditionally compose a field from two inputs, we borrow the `where` function from numpy.
 
 This function takes 3 input arguments:
+
 - mask: a field of booleans
 - true branch: a tuple, a field, or a scalar
 - false branch: a tuple, a field, of a scalar
@@ -74,7 +75,7 @@ def add(a: gtx.Field[[Cell, K], gtx.float64],
 def run_add_domain(a : gtx.Field[[Cell, K], gtx.float64],
             b : gtx.Field[[Cell, K], gtx.float64],
             result : gtx.Field[[Cell, K], gtx.float64]):
-    add(a, b, out=result, domain={Cell: (1, 3), K: (1, 4)}) 
+    add(a, b, out=result, domain={Cell: (1, 3), K: (1, 4)})
 ```
 
 ```{code-cell} ipython3

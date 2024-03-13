@@ -41,21 +41,22 @@ def partial_sum(x):
         if i > 0:
             x[i] = x[i-1] + x[i]
     return x
-print(f"input:\n {x}") 
+print(f"input:\n {x}")
 print(f"partial sum:\n {partial_sum(x)}")
 ```
 
-Visually, this is what `partial_sum` is doing: 
+Visually, this is what `partial_sum` is doing:
 
 | ![scan_operator](../images/scan_operator.png) |
-| :---------------------------------: |
-|         _Iterative sum over K_      |
+| :-------------------------------------------: |
+|            _Iterative sum over K_             |
 
 +++
 
 In GT4Py the a scan pattern is implemented with the so-called `scan_operator` where the return statement expresses the computation at the current position in the scan direction. This value is additionally injected as the first argument to the next position, usually called `state` or `carry`.
 
 The `scan_operator` decorator takes 3 arguments:
+
 - `axis`: a `Dimension` that specifies the scan axis; note: the `Dimension` has to be of kind `VERTICAL`
 - `forward`: True if order of operations is from bottom to top, False if from top to bottom
 - `init`: value that is injected as the `state` at the start

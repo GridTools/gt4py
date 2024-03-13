@@ -31,13 +31,14 @@ GT4Py is part of the GridTools framework: a set of libraries and utilities to de
 
 ## Description
 
-GT4Py is a Python library for expressing computational motifs as found in weather and climate applications. 
+GT4Py is a Python library for expressing computational motifs as found in weather and climate applications.
 
 These computations are expressed in a domain specific language (DSL) which is translated to high-performance implementations for CPUs and GPUs.
 
 In addition, GT4Py provides functions to allocate arrays with memory layout suited for a particular backend.
 
 The following backends are supported:
+
 - `None` aka _embedded_: runs the DSL code directly via the Python interpreter (experimental)
 - `gtfn_cpu` and `gtfn_gpu`: transpiles the DSL to C++ code using the GridTools library
 - `dace`: uses the DaCe library to generate optimized code (experimental)
@@ -46,7 +47,7 @@ In this workshop we will mainly use the _embedded_ backend.
 
 ## Current efforts
 
-GT4Py is being used to port the ICON model from FORTRAN. Currently the **dycore**, **diffusion**, and **microphysics** are complete. 
+GT4Py is being used to port the ICON model from FORTRAN. Currently the **dycore**, **diffusion**, and **microphysics** are complete.
 
 The ultimate goal is to have a more flexible and modularized model that can be run on CSCS Alps infrastructure as well as other hardware.
 
@@ -95,10 +96,11 @@ from gt4py.next import float64, neighbor_sum, where
 +++
 
 ### Fields
+
 Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[[dimensions], dtype]`.
 
-| <div><img src="../images/field.png" width="66%"/></div> |
-| :-----------------------------------------: |
+|   <div><img src="../images/field.png" width="66%"/></div>    |
+| :----------------------------------------------------------: |
 | <div><img src="../images/field-code.png" width="50%"/></div> |
 
 +++
@@ -112,6 +114,7 @@ Fields can be constructed with the following functions, inspired by numpy:
 The first argument is the domain of the field, which can be constructed from a mapping from `Dimension` to range.
 
 Optional we can pass
+
 - `dtype` the description of type of the field
 - `allocator` which describes how and where (e.g. GPU) the buffer is allocated.
 
@@ -135,7 +138,7 @@ print("c array: \n {}".format(c.asnumpy()))
 
 ### Field operators
 
-Field operators perform operations on a set of fields, i.e. elementwise addition or reduction along a dimension. 
+Field operators perform operations on a set of fields, i.e. elementwise addition or reduction along a dimension.
 
 They are written as Python functions by using the `@field_operator` decorator.
 
@@ -146,7 +149,8 @@ def add(a: gtx.Field[[Cell, K], float64],
     return a + b
 ```
 
-Direct calls to field operators require two additional arguments: 
+Direct calls to field operators require two additional arguments:
+
 - `out`: a field to write the return value to
 - `offset_provider`: empty dict for now, explanation will follow
 
@@ -163,7 +167,7 @@ print("result array \n {}".format(result.asnumpy()))
 
 Programs are used to call field operators to mutate the latter's output arguments.
 
-They are written as Python functions by using the `@program` decorator. 
+They are written as Python functions by using the `@program` decorator.
 
 This example below calls the `add` field operator twice:
 

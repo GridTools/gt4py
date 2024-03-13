@@ -72,7 +72,7 @@ Additional numpy-equivalent constructors are available, namely `ones`, `zeros`, 
 ```{code-cell} ipython3
 I = gtx.Dimension("I")
 J = gtx.Dimension("J")
-                     
+
 array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
@@ -161,8 +161,8 @@ This section approaches the pseudo-laplacian by introducing the required APIs pr
 The examples related to unstructured meshes use the mesh below. The edges (in blue) and the cells (in red) are numbered with zero-based indices.
 
 | ![grid_topo](images/connectivity_numbered_grid.svg) |
-| :------------------------------------------: |
-|         _The mesh with the indices_          |
+| :-------------------------------------------------: |
+|             _The mesh with the indices_             |
 
 +++
 
@@ -215,8 +215,8 @@ edge_values = gtx.as_field([EdgeDim], np.zeros((12,)))
 ```
 
 | ![cell_values](images/connectivity_cell_field.svg) |
-| :-----------------------------------------: |
-|                _Cell values_                |
+| :------------------------------------------------: |
+|                   _Cell values_                    |
 
 +++
 
@@ -260,8 +260,8 @@ print("0th adjacent cell's value: {}".format(edge_values.asnumpy()))
 Running the above snippet results in the following edge field:
 
 | ![nearest_cell_values](images/connectivity_numbered_grid.svg) | $\mapsto$ | ![grid_topo](images/connectivity_edge_0th_cell.svg) |
-| :----------------------------------------------------: | :-------: | :------------------------------------------: |
-|                    _Domain (edges)_                    |           |                _Edge values_                 |
+| :-----------------------------------------------------------: | :-------: | :-------------------------------------------------: |
+|                       _Domain (edges)_                        |           |                    _Edge values_                    |
 
 +++
 
@@ -287,8 +287,8 @@ print("sum of adjacent cells: {}".format(edge_values.asnumpy()))
 For the border edges, the results are unchanged compared to the previous example, but the inner edges now contain the sum of the two adjacent cells:
 
 | ![nearest_cell_values](images/connectivity_numbered_grid.svg) | $\mapsto$ | ![cell_values](images/connectivity_edge_cell_sum.svg) |
-| :----------------------------------------------------: | :-------: | :--------------------------------------------: |
-|                    _Domain (edges)_                    |           |                 _Edge values_                  |
+| :-----------------------------------------------------------: | :-------: | :---------------------------------------------------: |
+|                       _Domain (edges)_                        |           |                     _Edge values_                     |
 
 +++
 

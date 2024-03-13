@@ -31,8 +31,8 @@ vscode:
   - ms-toolsai.jupyter-renderers
   - genuitecllc.codetogether
 ports:
-  - port: 8888
-    onOpen: open-browser
+- port: 8888
+  onOpen: open-browser
 github:
   prebuilds:
     # enable for the master/default branch (defaults to true)
