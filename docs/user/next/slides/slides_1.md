@@ -5,7 +5,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.15.2
+    jupytext_version: 1.16.1
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -84,7 +84,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where
+from gt4py.next import float64, neighbor_sum, where, Dims
 ```
 
 ## Key concepts and application structure
@@ -97,7 +97,7 @@ from gt4py.next import float64, neighbor_sum, where
 
 ### Fields
 
-Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[[dimensions], dtype]`.
+Fields are **multi-dimensional array** defined over a set of dimensions and a dtype: `gtx.Field[Dims[dimensions], dtype]`.
 
 |   <div><img src="../images/field.png" width="66%"/></div>    |
 | :----------------------------------------------------------: |
@@ -144,8 +144,8 @@ They are written as Python functions by using the `@field_operator` decorator.
 
 ```{code-cell} ipython3
 @gtx.field_operator
-def add(a: gtx.Field[[Cell, K], float64],
-        b: gtx.Field[[Cell, K], float64]) -> gtx.Field[[Cell, K], float64]:
+def add(a: gtx.Field[Dims[Cell, K], float64],
+        b: gtx.Field[Dims[Cell, K], float64]) -> gtx.Field[Dims[Cell, K], float64]:
     return a + b
 ```
 
@@ -173,8 +173,8 @@ This example below calls the `add` field operator twice:
 
 ```{code-cell} ipython3
 @gtx.program
-def run_add(a : gtx.Field[[Cell, K], float64],
-            b : gtx.Field[[Cell, K], float64],
+def run_add(a : gtx.Field[Dims[Cell, K], float64],
+            b : gtx.Field[Dims[Cell, K], float64],
             result : gtx.Field[[Cell, K], float64]):
     add(a, b, out=result)
     add(b, result, out=result)
