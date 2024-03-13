@@ -24,6 +24,7 @@ from gt4py.next.ffront import (
     lowering_utils,
     type_specifications as ts_ffront,
 )
+from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
 from gt4py.next.ffront.fbuiltins import FUN_BUILTIN_NAMES, MATH_BUILTIN_NAMES, TYPE_BUILTIN_NAMES
 from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_return_kind
 from gt4py.next.iterator import ir as itir
@@ -309,7 +310,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return self._visit_shift(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
-        elif isinstance(node.func, foast.Name) and node.func.id in FUN_BUILTIN_NAMES:
+        elif (
+            isinstance(node.func, foast.Name)
+            and node.func.id in FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
+        ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in TYPE_BUILTIN_NAMES:

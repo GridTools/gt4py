@@ -25,7 +25,6 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401 [unused-import]
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -295,9 +294,7 @@ FUN_BUILTIN_NAMES = [
     "min_over",
     "broadcast",
     "where",
-    "concat_where",
     "astype",
-    "as_offset",
     *MATH_BUILTIN_NAMES,
 ]
 
