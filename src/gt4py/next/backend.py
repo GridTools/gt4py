@@ -19,13 +19,13 @@ from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.ffront import past_process_args_wf, past_to_itir
+from gt4py.next.ffront import past_process_args, past_to_itir
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
 
 
 DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
-    past_process_args_wf.past_process_args.chain(past_to_itir.PastToItirFactory())
+    past_process_args.past_process_args.chain(past_to_itir.PastToItirFactory())
 )
 
 

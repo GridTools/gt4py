@@ -43,8 +43,8 @@ from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     dialect_ast_enums,
     field_operator_ast as foast,
-    past_process_args_wf,
-    past_to_func_wf,
+    past_process_args,
+    past_to_func,
     past_to_itir,
     program_ast as past,
     transform_utils,
@@ -247,7 +247,7 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 # TODO(ricoh): move into test
                 if self.definition is None:
-                    definition = past_to_func_wf.past_to_func(
+                    definition = past_to_func.past_to_func(
                         stages.PastClosure(
                             closure_vars=self.closure_vars,
                             past_node=self.past_node,
@@ -263,7 +263,7 @@ class Program:
                 else:
                     definition = self.definition
                 # TODO(ricoh): check if rewriting still needed
-                rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
+                rewritten_args, size_args, kwargs = past_process_args._process_args(
                     self.past_node, args, kwargs
                 )
                 ctx.run(definition, *rewritten_args, **kwargs)
@@ -290,7 +290,7 @@ class Program:
         **kwargs,
     ) -> str:
         ppi.ensure_processor_kind(formatter, ppi.ProgramFormatter)
-        rewritten_args, size_args, kwargs = past_process_args_wf._process_args(
+        rewritten_args, size_args, kwargs = past_process_args._process_args(
             self.past_node, args, kwargs
         )
         if "debug" in kwargs:
