@@ -113,7 +113,7 @@ def get_gt_pyext_build_opts(
             "--compiler-options",
             "-fPIC",
         ]
-    extra_link_args = gt_config.build_settings["extra_link_args"]
+    extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
     mode_flags = [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
     extra_compile_args["cxx"].extend(mode_flags)
