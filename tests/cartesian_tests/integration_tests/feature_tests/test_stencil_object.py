@@ -81,4 +81,4 @@ def test_warning_for_unsupported_backend_option(backend):
         @gtscript.stencil(backend=backend, **{"this_option_is_not_supported": "foo"})
         def foo(f: Field[float]):
             with computation(PARALLEL), interval(...):  # type: ignore
-                f = 42.0  # noqa F841
+                f = 42.0  # noqa: F841 [unused-variable]

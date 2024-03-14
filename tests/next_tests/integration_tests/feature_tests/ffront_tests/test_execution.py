@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -23,7 +22,9 @@ from gt4py.next import (
     astype,
     broadcast,
     common,
+    constructors,
     errors,
+    field_utils,
     float32,
     float64,
     int32,
@@ -34,6 +35,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -48,6 +50,7 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
+    Edge,
     cartesian_case,
     unstructured_case,
 )
@@ -637,7 +640,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_lift_expressions
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))

@@ -694,9 +694,22 @@ class _FieldDescriptorMaker:
         return _FieldDescriptor(dtype, axes, data_dims)
 
 
+class _GlobalTableDescriptorMaker(_FieldDescriptorMaker):
+    def __getitem__(self, field_spec):
+        if not isinstance(field_spec, collections.abc.Collection) and not len(field_spec) == 2:
+            raise ValueError("GlobalTable is defined by a tuple (type, [axes_size..])")
+
+        dtype, data_dims = field_spec
+
+        return _FieldDescriptor(dtype, [], data_dims)
+
+
 # GTScript builtins: variable annotations
 Field = _FieldDescriptorMaker()
 """Field descriptor."""
+
+GlobalTable = _GlobalTableDescriptorMaker()
+"""Data array with no spatial dimension descriptor."""
 
 
 class _SequenceDescriptor:
