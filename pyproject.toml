@@ -207,6 +207,11 @@ disallow_incomplete_defs = false
 module = 'gt4py.next.*'
 
 [[tool.mypy.overrides]]
+# TODO: temporarily to propagate it to all of next
+disallow_incomplete_defs = true
+module = 'gt4py.next.ffront.*'
+
+[[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.ffront.decorator'
 
