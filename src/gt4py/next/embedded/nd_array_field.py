@@ -647,10 +647,10 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            named_ranges.append((dim, field.domain[pos][1]))
+            named_ranges.append(common.named_range((dim, field.domain.ranges[pos])))
         else:
             domain_slice.append(np.newaxis)
-            named_ranges.append((dim, common.UnitRange.infinite()))
+            named_ranges.append(common.named_range((dim, common.UnitRange.infinite())))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -676,7 +676,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+    domain_slice: common.Domain | Sequence[Any],
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 

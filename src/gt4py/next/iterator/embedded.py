@@ -1092,10 +1092,11 @@ class IndexField(common.Field):
 
     def restrict(self, item: common.AnyIndexSpec) -> common.Field:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
-            d, r = item.dims
+            assert common.is_named_index(item[0])  # for mypy errors on multiple lines below
+            d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
-            return self.__class__(self._dimension, r)  # type: ignore[arg-type] # not sure why the assert above does not work
+            return self.__class__(self._dimension, r)
         # TODO set a domain...
         raise NotImplementedError()
 

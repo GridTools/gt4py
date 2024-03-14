@@ -182,7 +182,7 @@ def _named_slice_to_named_range(
                 f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
             )
         assert isinstance(idx_start_1, int) and isinstance(idx_stop_1, int)
-        return (idx_start_0, common.UnitRange(idx_start_1, idx_stop_1))
+        return common.named_range((idx_start_0, common.UnitRange(idx_start_1, idx_stop_1)))
     if common.is_named_index(idx.start) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
     if common.is_named_index(idx.stop) and idx.start is None:

@@ -252,6 +252,14 @@ RangeLike: TypeAlias = (
     | None
 )
 
+_Rng = TypeVar(
+    "_Rng",
+    UnitRange[int, int],
+    UnitRange[Infinity, int],
+    UnitRange[int, Infinity],
+    UnitRange[Infinity, Infinity],
+)
+
 
 def unit_range(r: RangeLike) -> UnitRange:
     if isinstance(r, UnitRange):
@@ -288,7 +296,7 @@ class NamedRange(Generic[_Rng]):
 
 IntIndex: TypeAlias = int | core_defs.IntegralScalar
 NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTuple
-FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
+FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
@@ -319,7 +327,7 @@ def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
     return UnitRange.is_finite(v.urange)
 
 
-def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
+def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedIndex]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
@@ -359,15 +367,6 @@ def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
 
 def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
     return NamedRange(dim=v[0], urange=unit_range(v[1]))
-
-
-_Rng = TypeVar(
-    "_Rng",
-    UnitRange[int, int],
-    UnitRange[Infinity, int],
-    UnitRange[int, Infinity],
-    UnitRange[Infinity, Infinity],
-)
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -445,9 +444,9 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     @overload
     def __getitem__(self, index: Dimension) -> tuple[Dimension, _Rng]: ...
 
-    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
+    def __getitem__(self, index: int | slice | Dimension) -> tuple[Dimension, _Rng] | Domain:
         if isinstance(index, int):
-            return named_range((self.dims[index], self.ranges[index]))
+            return (self.dims[index], self.ranges[index])
         elif isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
@@ -455,7 +454,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         elif isinstance(index, Dimension):
             try:
                 index_pos = self.dims.index(index)
-                return named_range((self.dims[index_pos], self.ranges[index_pos]))
+                return (self.dims[index_pos], self.ranges[index_pos])
             except ValueError as ex:
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:

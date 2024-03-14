@@ -52,10 +52,23 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         scan_axis = scan_range.dim
         all_args = [*args, *kwargs.values()]
         domain_intersection = _intersect_scan_args(*all_args)
-        non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])
+        non_scan_domain = common.Domain(*[
+            common.named_range((
+                domain_intersection.dims[idx_nr],
+                domain_intersection.ranges[idx_nr],
+            ))
+            for idx_nr, nr in enumerate(domain_intersection.dims)
+            if nr != scan_axis
+        ])
 
         out_domain = common.Domain(*[
-            scan_range if nr[0] == scan_axis else nr for nr in domain_intersection
+            scan_range
+            if nr == scan_axis
+            else common.named_range((
+                domain_intersection.dims[idx_nr],
+                domain_intersection.ranges[idx_nr],
+            ))
+            for idx_nr, nr in enumerate(domain_intersection.dims)
         ])
         if scan_axis not in out_domain.dims:
             # even if the scan dimension is not in the input, we can scan over it
@@ -66,7 +79,7 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
 
         def scan_loop(hpos):
             acc = self.init
-            for k in scan_range[1] if self.forward else reversed(scan_range[1]):
+            for k in scan_range.urange if self.forward else reversed(scan_range.urange):
                 pos = (*hpos, (scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
@@ -124,8 +137,14 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
         return op(*args, **kwargs)
 
 
-def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
-    vertical_dim_filtered = [nr for nr in domain.dims if nr.kind == common.DimensionKind.VERTICAL]
+def _get_vertical_range(
+    domain: common.Domain,
+) -> common.NamedRange | eve.NothingType:
+    vertical_dim_filtered = [
+        common.named_range((domain.dims[idx_nr], domain.ranges[idx_nr]))
+        for idx_nr, nr in enumerate(domain.dims)
+        if nr.kind == common.DimensionKind.VERTICAL
+    ]
     assert len(vertical_dim_filtered) <= 1
     return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
 
