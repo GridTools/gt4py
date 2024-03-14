@@ -15,29 +15,33 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Generic
+from typing import Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.iterator import ir as itir
+from gt4py.next.ffront import past_process_args, past_to_itir
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
+
+
+DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
+    past_process_args.past_process_args.chain(past_to_itir.PastToItirFactory())
+)
 
 
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+    transformer: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = DEFAULT_TRANSFORMS
 
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:
-        self.executor.__call__(program, *args, **kwargs)
+    def __call__(self, program: stages.PastClosure) -> None:
+        program_call = self.transformer(program)
+        self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 
     @property
     def __name__(self) -> str:
         return getattr(self.executor, "__name__", None) or repr(self)
-
-    @property
-    def kind(self) -> type[ppi.ProgramExecutor]:
-        return self.executor.kind
 
     @property
     def __gt_allocator__(
