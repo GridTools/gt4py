@@ -47,9 +47,9 @@ def _relative_sub_domain(
         )
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for dom, idx in zip(domain, expanded, strict=True):
+        dom = common.named_range(dom)
         if isinstance(idx, slice):
             try:
-                assert common.is_named_range(dom)
                 sliced = _slice_range(dom.urange, idx)
                 named_ranges.append(common.named_range((dom.dim, sliced)))
             except IndexError as ex:
@@ -127,7 +127,7 @@ def _expand_ellipsis(
 
 def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
     if slice_obj == slice(None):
-        return common.UnitRange(input_range.start, input_range.stop)
+        return input_range
 
     start = (
         input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop
