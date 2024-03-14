@@ -47,23 +47,26 @@ def _relative_sub_domain(
         )
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for dom, idx in zip(domain, expanded, strict=True):
-        dom = common.named_range(dom)
+        new_dom = common.named_range(dom)
         if isinstance(idx, slice):
             try:
-                sliced = _slice_range(dom.urange, idx)
-                named_ranges.append(common.named_range((dom.dim, sliced)))
+                sliced = _slice_range(new_dom.urange, idx)
+                named_ranges.append(common.named_range((new_dom.dim, sliced)))
             except IndexError as ex:
                 raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain, indices=index, index=idx, dim=dom.dim
+                    domain=domain,
+                    indices=index,
+                    index=idx,
+                    dim=new_dom.dim,
                 ) from ex
         else:
             # not in new domain
             assert common.is_int_index(idx)
-            assert common.is_named_range(dom) and common.is_finite_named_range(dom.urange)
-            new_index = (dom.urange.start if idx >= 0 else dom.urange.stop) + idx  # type: ignore[attr-defined] # urange attr checked in assert above
-            if new_index < dom.urange.start or new_index >= dom.urange.stop:  # type: ignore[attr-defined] # urange attr checked in assert above
+            assert common.is_finite_named_range(new_dom.urange)
+            new_index = (new_dom.urange.start if idx >= 0 else new_dom.urange.stop) + idx  # type: ignore[attr-defined] # urange attr checked in assert above
+            if new_index < new_dom.urange.start or new_index >= new_dom.urange.stop:  # type: ignore[attr-defined] # urange attr checked in assert above
                 raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain, indices=index, index=idx, dim=dom.dim
+                    domain=domain, indices=index, index=idx, dim=new_dom.dim
                 )
 
     return common.Domain(*named_ranges)
