@@ -36,7 +36,7 @@ class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait
     def apply(cls, node: past.Program, closure_vars: dict[str, Any]) -> past.Program:
         return cls(closure_vars=closure_vars).visit(node)
 
-    def visit_Program(self, node: past.Program, **kwargs) -> past.Program:
+    def visit_Program(self, node: past.Program, **kwargs: Any) -> past.Program:
         new_closure_vars: list[past.Symbol] = []
         for sym in node.closure_vars:
             if not isinstance(self.closure_vars[sym.id], type):

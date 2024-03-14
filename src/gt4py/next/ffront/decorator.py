@@ -24,7 +24,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Generator, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -70,25 +70,6 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 
 DEFAULT_BACKEND: Callable = None
-
-
-def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.FieldType | ts.ScalarType | ts.TupleType
-) -> Generator[tuple[tuple[int, ...], list[Dimension]]]:
-    if isinstance(arg_type, ts.TupleType):
-        for el, el_type in zip(arg, arg_type.types):
-            yield from _field_constituents_shape_and_dims(el, el_type)
-    elif isinstance(arg_type, ts.FieldType):
-        dims = type_info.extract_dims(arg_type)
-        if hasattr(arg, "shape"):
-            assert len(arg.shape) == len(dims)
-            yield (arg.shape, dims)
-        else:
-            yield (None, dims)
-    elif isinstance(arg_type, ts.ScalarType):
-        yield (None, [])
-    else:
-        raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")
 
 
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
@@ -179,7 +160,7 @@ class Program:
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(self, grid_type=grid_type)
 
-    def with_bound_args(self, **kwargs) -> ProgramWithBoundArgs:
+    def with_bound_args(self, **kwargs: Any) -> ProgramWithBoundArgs:
         """
         Bind scalar, i.e. non field, program arguments.
 
@@ -229,7 +210,7 @@ class Program:
             )
         ).program
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
         if self.backend is None:
             warnings.warn(
                 UserWarning(
@@ -376,7 +357,9 @@ def program(
 
     def program_inner(definition: types.FunctionType) -> Program:
         return Program.from_function(
-            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+            definition,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
         )
 
     return program_inner if definition is None else program_inner(definition)
@@ -634,9 +617,13 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
         ...     ...
     """
 
-    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
+    def field_operator_inner(
+        definition: types.FunctionType,
+    ) -> FieldOperator[foast.FieldOperator]:
         return FieldOperator.from_function(
-            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
+            definition,
+            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
+            grid_type,
         )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)
