@@ -16,6 +16,7 @@ import dataclasses
 from typing import Any, Callable, Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
+from gt4py.eve.extended_typing import Never
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -74,7 +75,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node)
 
     def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
+        self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> itir.FunctionDefinition:
         params = self.visit(node.params)
         return itir.FunctionDefinition(
@@ -83,7 +84,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             expr=self.visit_BlockStmt(node.body, inner_expr=None),
         )  # `expr` is a lifted stencil
 
-    def visit_FieldOperator(self, node: foast.FieldOperator, **kwargs) -> itir.FunctionDefinition:
+    def visit_FieldOperator(
+        self, node: foast.FieldOperator, **kwargs: Any
+    ) -> itir.FunctionDefinition:
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
 
         new_body = func_definition.expr
@@ -94,7 +97,9 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             expr=new_body,
         )
 
-    def visit_ScanOperator(self, node: foast.ScanOperator, **kwargs) -> itir.FunctionDefinition:
+    def visit_ScanOperator(
+        self, node: foast.ScanOperator, **kwargs: Any
+    ) -> itir.FunctionDefinition:
         # note: we don't need the axis here as this is handled by the program
         #  decorator
         assert isinstance(node.type, ts_ffront.ScanOperatorType)
@@ -124,7 +129,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             )
         )
 
-        stencil_args = []
+        stencil_args: list[itir.Expr] = []
         assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
         for param, arg_type in zip(
             func_definition.params[1:],
@@ -140,7 +145,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                     lowering_utils.to_tuples_of_iterator(param.id, arg_type),
                 )(new_body)
             else:
-                stencil_args.append(param.id)
+                stencil_args.append(im.ref(param.id))
 
         definition = itir.Lambda(params=func_definition.params, expr=new_body)
 
@@ -152,16 +157,16 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             expr=body,
         )
 
-    def visit_Stmt(self, node: foast.Stmt, **kwargs):
+    def visit_Stmt(self, node: foast.Stmt, **kwargs: Any) -> Never:
         raise AssertionError("Statements must always be visited in the context of a function.")
 
     def visit_Return(
-        self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs
+        self, node: foast.Return, *, inner_expr: Optional[itir.Expr], **kwargs: Any
     ) -> itir.Expr:
         return self.visit(node.value, **kwargs)
 
     def visit_BlockStmt(
-        self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs
+        self, node: foast.BlockStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
     ) -> itir.Expr:
         for stmt in reversed(node.stmts):
             inner_expr = self.visit(stmt, inner_expr=inner_expr, **kwargs)
@@ -169,7 +174,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return inner_expr
 
     def visit_IfStmt(
-        self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs
+        self, node: foast.IfStmt, *, inner_expr: Optional[itir.Expr], **kwargs: Any
     ) -> itir.Expr:
         # the lowered if call doesn't need to be lifted as the condition can only originate
         # from a scalar value (and not a field)
@@ -227,13 +232,13 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return im.if_(im.deref(cond), true_branch, false_branch)
 
     def visit_Assign(
-        self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs
+        self, node: foast.Assign, *, inner_expr: Optional[itir.Expr], **kwargs: Any
     ) -> itir.Expr:
         return im.let(self.visit(node.target, **kwargs), self.visit(node.value, **kwargs))(
             inner_expr
         )
 
-    def visit_Symbol(self, node: foast.Symbol, **kwargs) -> itir.Sym:
+    def visit_Symbol(self, node: foast.Symbol, **kwargs: Any) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
         if isinstance(node.type, ts.FieldType):
             kind = "Iterator"
@@ -242,19 +247,22 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return im.sym(node.id)
 
-    def visit_Name(self, node: foast.Name, **kwargs) -> itir.SymRef:
+    def visit_Name(self, node: foast.Name, **kwargs: Any) -> itir.SymRef:
         return im.ref(node.id)
 
-    def visit_Subscript(self, node: foast.Subscript, **kwargs) -> itir.Expr:
+    def visit_Subscript(self, node: foast.Subscript, **kwargs: Any) -> itir.Expr:
         return im.tuple_get(node.index, self.visit(node.value, **kwargs))
 
-    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs) -> itir.Expr:
+    def visit_TupleExpr(self, node: foast.TupleExpr, **kwargs: Any) -> itir.Expr:
         return im.make_tuple(*[self.visit(el, **kwargs) for el in node.elts])
 
-    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs) -> itir.Expr:
+    def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> itir.Expr:
         # TODO(tehrengruber): extend iterator ir to support unary operators
         dtype = type_info.extract_dtype(node.type)
-        if node.op in [dialect_ast_enums.UnaryOperator.NOT, dialect_ast_enums.UnaryOperator.INVERT]:
+        if node.op in [
+            dialect_ast_enums.UnaryOperator.NOT,
+            dialect_ast_enums.UnaryOperator.INVERT,
+        ]:
             if dtype.kind != ts.ScalarKind.BOOL:
                 raise NotImplementedError(f"'{node.op}' is only supported on 'bool' arguments.")
             return self._map("not_", node.operand)
@@ -265,13 +273,13 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             node.operand,
         )
 
-    def visit_BinOp(self, node: foast.BinOp, **kwargs) -> itir.FunCall:
+    def visit_BinOp(self, node: foast.BinOp, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
 
-    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs) -> itir.FunCall:
+    def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
         op = "if_"
         args = (node.condition, node.true_expr, node.false_expr)
-        lowered_args = [
+        lowered_args: list[itir.Expr] = [
             lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
             for arg in args
         ]
@@ -283,10 +291,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
         )
 
-    def visit_Compare(self, node: foast.Compare, **kwargs) -> itir.FunCall:
+    def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
 
-    def _visit_shift(self, node: foast.Call, **kwargs) -> itir.Expr:
+    def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
                 shift_offset = im.shift(offset_name, offset_index)
@@ -305,7 +313,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             self.visit(node.func, **kwargs)
         )
 
-    def visit_Call(self, node: foast.Call, **kwargs) -> itir.Expr:
+    def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
             return self._visit_shift(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
@@ -349,7 +357,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             f"Call to object of type '{type(node.func.type).__name__}' not understood."
         )
 
-    def _visit_astype(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
         return lowering_utils.process_elements(
@@ -360,7 +368,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             obj.type,
         )
 
-    def _visit_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         condition, true_value, false_value = node.args
 
         lowered_condition = self.visit(condition, **kwargs)
@@ -372,10 +380,10 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     _visit_concat_where = _visit_where
 
-    def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
 
-    def _visit_math_built_in(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args)
 
     def _make_reduction_expr(
@@ -383,31 +391,31 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         node: foast.Call,
         op: str | itir.SymRef,
         init_expr: itir.Expr,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> itir.Expr:
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
         it = self.visit(node.args[0], **kwargs)
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
         val = im.call(im.call("reduce")(op, im.deref(init_expr)))
         return im.promote_to_lifted_stencil(val)(it)
 
-    def _visit_neighbor_sum(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
         return self._make_reduction_expr(node, "plus", self._make_literal("0", dtype), **kwargs)
 
-    def _visit_max_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_max_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
         min_value, _ = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(min_value), dtype)
         return self._make_reduction_expr(node, "maximum", init_expr, **kwargs)
 
-    def _visit_min_over(self, node: foast.Call, **kwargs) -> itir.FunCall:
+    def _visit_min_over(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
         _, max_value = type_info.arithmetic_bounds(dtype)
         init_expr = self._make_literal(str(max_value), dtype)
         return self._make_reduction_expr(node, "minimum", init_expr, **kwargs)
 
-    def _visit_type_constr(self, node: foast.Call, **kwargs) -> itir.Expr:
+    def _visit_type_constr(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if isinstance(node.args[0], foast.Constant):
             node_kind = self.visit(node.type).kind.name.lower()
             target_type = fbuiltins.BUILTINS[node_kind]
@@ -433,7 +441,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return im.promote_to_const_iterator(im.literal(str(val), typename))
         raise ValueError(f"Unsupported literal type '{type_}'.")
 
-    def visit_Constant(self, node: foast.Constant, **kwargs) -> itir.Expr:
+    def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
         return self._make_literal(node.value, node.type)
 
     def _map(self, op, *args, **kwargs):

@@ -20,7 +20,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
-def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
+def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.FunCall:
     """
     Convert iterator of tuples into tuples of iterator.
 
@@ -52,7 +52,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec):
     )
 
 
-def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec):
+def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.FunCall:
     """
     Convert tuples of iterator into iterator of tuples.
 
@@ -106,7 +106,7 @@ def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | list[itir.Expr],
     current_el_type: ts.TypeSpec,
-):
+) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
 
@@ -137,7 +137,7 @@ def _process_elements_impl(
     process_func: Callable[..., itir.Expr],
     _current_el_exprs: list[T],
     current_el_type: ts.TypeSpec,
-):
+) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(*[
             _process_elements_impl(

@@ -63,7 +63,7 @@ def _deduce_grid_type(
     dimensions and offsets.
     """
 
-    def is_cartesian_offset(o: fbuiltins.FieldOffset):
+    def is_cartesian_offset(o: fbuiltins.FieldOffset) -> bool:
         return len(o.target) == 1 and o.source == o.target[0]
 
     deduced_grid_type = common.GridType.CARTESIAN
