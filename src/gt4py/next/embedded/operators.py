@@ -48,8 +48,8 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
     ) -> common.Field:
         scan_range = embedded_context.closure_column_range.get()
-        assert self.axis == scan_range[0]
-        scan_axis = scan_range[0]
+        assert self.axis == scan_range.dim
+        scan_axis = scan_range.dim
         all_args = [*args, *kwargs.values()]
         domain_intersection = _intersect_scan_args(*all_args)
         non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr[0] != scan_axis])

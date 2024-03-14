@@ -748,7 +748,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = column_range_cvar.get()[1]
+        column_range = column_range_cvar.get().urange
         assert column_range is not None
 
         col: list[
@@ -825,7 +825,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range[1]))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.urange))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -866,7 +866,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        column_range = column_range_cvar.get()[1]
+        column_range = column_range_cvar.get().urange
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_axis] = column_range.start
@@ -1059,7 +1059,7 @@ class IndexField(common.Field):
     @property
     def domain(self) -> common.Domain:
         if self._cur_index is None:
-            return common.Domain((self._dimension, common.UnitRange.infinite()))
+            return common.Domain(common.named_range((self._dimension, common.UnitRange.infinite())))
         else:
             return common.Domain()
 
@@ -1492,8 +1492,8 @@ def _column_dtype(elem: Any) -> np.dtype:
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
         columns = column_range_cvar.get()
-        assert isinstance(columns, tuple)
-        column_range = columns[1]
+        assert isinstance(columns, common.NamedRange)
+        column_range = columns.urange
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1546,10 +1546,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            column_range = (
+            column_range = common.named_range((
                 column_axis,
                 common.UnitRange(column.col_range.start, column.col_range.stop),
-            )
+            ))
 
         out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 

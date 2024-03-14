@@ -72,7 +72,7 @@ def _relative_sub_domain(
 def _absolute_sub_domain(
     domain: common.Domain, index: common.AbsoluteIndexSequence
 ) -> common.Domain:
-    named_ranges: list[tuple[common.Dimension, Any]] = []
+    named_ranges: list[common.NamedRange] = []
     for i in range(domain.ndim):
         if (pos := _find_index_of_dim(domain.dims[i], index)) is not None:
             named_idx = index[pos]
