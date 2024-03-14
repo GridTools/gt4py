@@ -47,9 +47,9 @@ def _relative_sub_domain(
         )
     expanded += (slice(None),) * (len(domain) - len(expanded))
     for dom, idx in zip(domain, expanded, strict=True):
-        assert isinstance(dom, common.NamedRange)
         if isinstance(idx, slice):
             try:
+                assert common.is_named_range(dom)
                 sliced = _slice_range(dom.urange, idx)
                 named_ranges.append(common.named_range((dom.dim, sliced)))
             except IndexError as ex:
@@ -59,9 +59,9 @@ def _relative_sub_domain(
         else:
             # not in new domain
             assert common.is_int_index(idx)
-            assert common.UnitRange.is_finite(dom.urange)
-            new_index = (dom.urange.start if idx >= 0 else dom.urange.stop) + idx
-            if new_index < dom.urange.start or new_index >= dom.urange.stop:
+            assert common.is_named_range(dom) and common.is_finite_named_range(dom.urange)
+            new_index = (dom.urange.start if idx >= 0 else dom.urange.stop) + idx  # type: ignore[attr-defined] # urange attr checked in assert above
+            if new_index < dom.urange.start or new_index >= dom.urange.stop:  # type: ignore[attr-defined] # urange attr checked in assert above
                 raise embedded_exceptions.IndexOutOfBounds(
                     domain=domain, indices=index, index=idx, dim=dom.dim
                 )
@@ -144,7 +144,7 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
 
 def _find_index_of_dim(
     dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+    domain_slice: common.Domain | Sequence[common.NamedIndex | Any],
 ) -> Optional[int]:
     if isinstance(domain_slice, common.Domain):
         for i in range(domain_slice.ndim):
