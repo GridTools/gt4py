@@ -17,7 +17,7 @@ import collections.abc
 import functools
 import types
 import typing
-from typing import Any, ForwardRef, Optional, Union
+from typing import Any, ForwardRef, Optional
 
 import numpy as np
 import numpy.typing as npt
@@ -106,16 +106,18 @@ def from_type_hint(
         case common.Field:
             if (n_args := len(args)) != 2:
                 raise ValueError(f"Field type requires two arguments, got {n_args}: '{type_hint}'.")
-
-            dims: Union[Ellipsis, list[common.Dimension]] = []
+            dims: list[common.Dimension] = []
             dim_arg, dtype_arg = args
+            dim_arg = (
+                list(typing.get_args(dim_arg))
+                if typing.get_origin(dim_arg) is common.Dims
+                else dim_arg
+            )
             if isinstance(dim_arg, list):
                 for d in dim_arg:
                     if not isinstance(d, common.Dimension):
                         raise ValueError(f"Invalid field dimension definition '{d}'.")
                     dims.append(d)
-            elif dim_arg is Ellipsis:
-                dims = dim_arg
             else:
                 raise ValueError(f"Invalid field dimensions '{dim_arg}'.")
 
