@@ -426,7 +426,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
     def is_empty(self) -> bool:
-        return any(rng.is_empty for rng in self.ranges)
+        return any(rng.is_empty() for rng in self.ranges)
 
     @overload
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...

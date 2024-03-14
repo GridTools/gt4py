@@ -127,7 +127,7 @@ def restrict_to_intersection(
     Example:
         >>> I = common.Dimension("I")
         >>> J = common.Dimension("J")
-        >>> res = intersect_domains(
+        >>> res = restrict_to_intersection(
         ...     common.domain({I: (0, 5), J: (1, 2)}),
         ...     common.domain({I: (1, 3), J: (0, 3)}),
         ...     ignore_dims=J,
