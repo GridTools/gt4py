@@ -23,7 +23,7 @@ warnings.filterwarnings('ignore')
 ```{code-cell} ipython3
 import numpy as np
 import gt4py.next as gtx
-from gt4py.next import float64, neighbor_sum, where
+from gt4py.next import float64, Dims
 ```
 
 ```{code-cell} ipython3
