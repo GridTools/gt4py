@@ -286,49 +286,59 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def _visit_shift(self, node: foast.Call, **kwargs) -> itir.Expr:
-        match node.args[0]:
-            case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                shift_offset = im.shift(offset_name, offset_index)
-            case foast.BinOp(
-                op=dialect_ast_enums.BinaryOperator.ADD
-                | dialect_ast_enums.BinaryOperator.SUB,
-                left=foast.Name(id=dimension),
-                right=foast.Constant(value=offset_index),
-            ):
-                if node.args[0].op == dialect_ast_enums.BinaryOperator.SUB:
-                    offset_index *= -1
-                shift_offset = im.shift(f"{dimension}off", offset_index)
-            case foast.BinOp(
-                op=dialect_ast_enums.BinaryOperator.ADD
-                | dialect_ast_enums.BinaryOperator.SUB,
-                left=foast.BinOp(
+        shift_offsets = []
+        for i in range(len(node.args)):
+            match node.args[i]:
+                case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
+                    shift_offsets.append(im.shift(offset_name, offset_index))
+                case foast.BinOp(
                     op=dialect_ast_enums.BinaryOperator.ADD
                     | dialect_ast_enums.BinaryOperator.SUB,
                     left=foast.Name(id=dimension),
-                    right=foast.Constant(value=offset_index_left),
-                ),
-                right=foast.Constant(value=offset_index),
-            ):
-                if node.args[0].op == dialect_ast_enums.BinaryOperator.SUB:
-                    offset_index *= -1
-                shift_offset = im.shift(
-                    f"{dimension}off", offset_index_left + offset_index
-                )  # shift_offset = im.shift(node.args[0].left.type.dim.value, node.args[0].right.value)
+                    right=foast.Constant(value=offset_index),
+                ):
+                    if node.args[i].op == dialect_ast_enums.BinaryOperator.SUB:
+                        offset_index *= -1
+                    shift_offsets.append(im.shift(f"{dimension}off", offset_index))
+                case foast.BinOp(
+                    op=dialect_ast_enums.BinaryOperator.ADD
+                    | dialect_ast_enums.BinaryOperator.SUB,
+                    left=foast.BinOp(
+                        op=dialect_ast_enums.BinaryOperator.ADD
+                        | dialect_ast_enums.BinaryOperator.SUB,
+                        left=foast.Name(id=dimension),
+                        right=foast.Constant(value=offset_index_left),
+                    ),
+                    right=foast.Constant(value=offset_index),
+                ):
+                    if node.args[i].op == dialect_ast_enums.BinaryOperator.SUB:
+                        offset_index *= -1
+                    shift_offsets.append(
+                        im.shift(f"{dimension}off", offset_index_left + offset_index)
+                    )  # shift_offset = im.shift(node.args[i].left.type.dim.value, node.args[i].right.value)
+                case foast.Name(id=offset_name):
+                    return im.lifted_neighbors(
+                        str(offset_name), self.visit(node.func, **kwargs)
+                    )  # Todo: fix return statement to take care of several args
+                case foast.Call(func=foast.Name(id="as_offset")):
+                    func_args = node.args[i]
+                    offset_dim = func_args.args[0]
+                    assert isinstance(offset_dim, foast.Name)
+                    shift_offsets.append(
+                        im.shift(offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs)))
+                    )
+                case _:
+                    raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-            case foast.Name(id=offset_name):
-                return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
-            case foast.Call(func=foast.Name(id="as_offset")):
-                func_args = node.args[0]
-                offset_dim = func_args.args[0]
-                assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift(
-                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
-                )
-            case _:
-                raise FieldOperatorLoweringError("Unexpected shift arguments!")
-        return im.lift(im.lambda_("it")(im.deref(shift_offset("it"))))(
-            self.visit(node.func, **kwargs)
-        )
+        ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[0]("it"))))
+        for i in range(len(shift_offsets) - 1):
+            ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[i + 1]("it"))))(
+                ret(self.visit(node.func, **kwargs))
+            )
+        if len(shift_offsets) == 1:
+            return ret(self.visit(node.func, **kwargs))
+        else:
+            return ret
 
     def visit_Call(self, node: foast.Call, **kwargs) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:

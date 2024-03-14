@@ -30,10 +30,10 @@ pytestmark = pytest.mark.uses_cartesian_shift
 def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
     return (
         -4.0 * in_field
-        + in_field(IDim + 1)
-        + in_field(JDim + 1)
-        + in_field(IDim - 1)
-        + in_field(JDim - 1)
+        + in_field(IDim + 1 + 0)
+        + 2.0 * in_field(JDim + 0 + 1)
+        + 3.0 * in_field(IDim - 1)
+        + 4.0 * in_field(JDim - 1)
     )
 
 
@@ -42,9 +42,9 @@ def skewedlap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JD
     return (
         -4.0 * in_field
         + in_field(IDim + 1, JDim + 1)
-        + in_field(IDim + 1, JDim - 1)
-        + in_field(IDim - 1, JDim + 1)
-        + in_field(IDim - 1, JDim - 1)
+        + 2.0 * in_field(IDim + 1, JDim - 1)
+        + 3.0 * in_field(IDim - 1, JDim + 1)
+        + 4.0 * in_field(IDim - 1, JDim - 1)
     )
 
 
@@ -79,12 +79,24 @@ def laplap_program(
 
 def lap_ref(inp):
     """Compute the laplacian using numpy"""
-    return -4.0 * inp[1:-1, 1:-1] + inp[:-2, 1:-1] + inp[2:, 1:-1] + inp[1:-1, :-2] + inp[1:-1, 2:]
+    return (
+        -4.0 * inp[1:-1, 1:-1]
+        + inp[2:, 1:-1]
+        + 2.0 * inp[1:-1, 2:]
+        + 3.0 * inp[:-2, 1:-1]
+        + 4.0 * inp[1:-1, :-2]
+    )
 
 
 def skewedlap_ref(inp):
     """Compute the laplacian using numpy"""
-    return -4.0 * inp[1:-1, 1:-1] + inp[:-2, :-2] + inp[2:, 2:] + inp[2:, :-2] + inp[:-2, 2:]
+    return (
+        -4.0 * inp[1:-1, 1:-1]
+        + inp[2:, 2:]
+        + 2.0 * inp[2:, :-2]
+        + 3.0 * inp[:-2, 2:]
+        + 4.0 * inp[:-2, :-2]
+    )
 
 
 def test_ffront_lap(cartesian_case):
