@@ -58,6 +58,10 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
+    elif t is FieldOffset:
+        return ts.OffsetType
+    elif t is common.ConnectivityField:
+        return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
@@ -147,7 +151,7 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(self(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 

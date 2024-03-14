@@ -310,9 +310,8 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             return self._visit_shift(node, **kwargs)
         elif isinstance(node.func, foast.Name) and node.func.id in MATH_BUILTIN_NAMES:
             return self._visit_math_built_in(node, **kwargs)
-        elif (
-            isinstance(node.func, foast.Name)
-            and node.func.id in FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
+        elif isinstance(node.func, foast.Name) and node.func.id in (
+            FUN_BUILTIN_NAMES + EXPERIMENTAL_FUN_BUILTIN_NAMES
         ):
             visitor = getattr(self, f"_visit_{node.func.id}")
             return visitor(node, **kwargs)
@@ -371,8 +370,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             node.type,
         )
 
-    def _visit_concat_where(self, node: foast.Call, **kwargs) -> itir.FunCall:
-        return self._map("if_", *node.args)
+    _visit_concat_where = _visit_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs) -> itir.FunCall:
         return self.visit(node.args[0], **kwargs)
