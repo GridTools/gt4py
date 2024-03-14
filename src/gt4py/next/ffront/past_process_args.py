@@ -90,7 +90,8 @@ def _process_args(
 
 
 def _field_constituents_shape_and_dims(
-    arg, arg_type: ts.DataType
+    arg: Any,  # TODO(havogt): improve typing
+    arg_type: ts.DataType,
 ) -> Iterator[tuple[tuple[int, ...], list[common.Dimension]]]:
     match arg_type:
         case ts.TupleType():
