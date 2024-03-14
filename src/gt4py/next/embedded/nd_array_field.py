@@ -693,7 +693,7 @@ def _concat_where(
     return cls_.from_array(result_array, domain=result_domain)
 
 
-NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[has-type]
 
 
 def _make_reduction(
