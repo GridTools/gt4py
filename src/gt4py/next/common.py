@@ -515,9 +515,11 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             )
         if index < 0:
             index += len(self.dims)
-        new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
-        dims = self.dims[:index] + new_dims + self.dims[index + 1 :]
-        ranges = self.ranges[:index] + new_ranges + self.ranges[index + 1 :]
+        new_dims = (arg.dim for arg in named_ranges) if len(named_ranges) > 0 else ()
+        new_ranges = (arg.urange for arg in named_ranges) if len(named_ranges) > 0 else ()
+        # new_dims, new_ranges = zip(*named_ranges) if len(named_ranges) > 0 else ((), ())
+        dims = self.dims[:index] + tuple(new_dims) + self.dims[index + 1 :]
+        ranges = self.ranges[:index] + tuple(new_ranges) + self.ranges[index + 1 :]
 
         return Domain(dims=dims, ranges=ranges)
 

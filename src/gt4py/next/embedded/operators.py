@@ -125,7 +125,7 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
 
 
 def _get_vertical_range(domain: common.Domain) -> common.NamedRange | eve.NothingType:
-    vertical_dim_filtered = [nr for nr in domain if nr[0].kind == common.DimensionKind.VERTICAL]
+    vertical_dim_filtered = [nr for nr in domain.dims if nr.kind == common.DimensionKind.VERTICAL]
     assert len(vertical_dim_filtered) <= 1
     return vertical_dim_filtered[0] if vertical_dim_filtered else eve.NOTHING
 

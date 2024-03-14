@@ -76,14 +76,17 @@ def _absolute_sub_domain(
     for i in range(domain.ndim):
         if (pos := _find_index_of_dim(domain.dims[i], index)) is not None:
             named_idx = index[pos]
-            idx = named_idx[1]
+            if not isinstance(named_idx, common.NamedRange):
+                idx = named_idx[1]
+            else:
+                idx = named_idx.urange
             if isinstance(idx, common.UnitRange):
                 if not idx <= domain.ranges[i]:
                     raise embedded_exceptions.IndexOutOfBounds(
                         domain=domain, indices=index, index=named_idx, dim=domain.dims[i]
                     )
 
-                named_ranges.append((domain.dims[i], idx))
+                named_ranges.append(common.named_range((domain.dims[i], idx)))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
@@ -93,7 +96,7 @@ def _absolute_sub_domain(
                     )
         else:
             # dimension not mentioned in slice
-            named_ranges.append((domain.dims[i], domain.ranges[i]))
+            named_ranges.append(common.named_range((domain.dims[i], domain.ranges[i])))
 
     return common.Domain(*named_ranges)
 
@@ -143,6 +146,10 @@ def _find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> Optional[int]:
+    if isinstance(domain_slice, common.Domain):
+        for i in range(domain_slice.ndim):
+            if domain_slice.dims[i] == dim:
+                return i
     for i, (d, _) in enumerate(domain_slice):
         if dim == d:
             return i

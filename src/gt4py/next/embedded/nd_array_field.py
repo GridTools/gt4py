@@ -190,7 +190,7 @@ class NdArrayField(
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
 
-        current_range: common.UnitRange = self.domain[dim_idx][1]
+        current_range: common.UnitRange = self.domain.ranges[dim_idx]
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = self.domain.replace(dim_idx, *new_ranges)
 
@@ -545,7 +545,7 @@ def _make_reduction(
             axis.value
         ]  # assumes offset and local dimension have same name
         assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
-        new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+        new_domain = common.Domain(*[common.named_range((field.domain.dims[idx], field.domain.ranges[idx])) for idx, dim in enumerate(field.domain.dims) if dim != axis])
 
         broadcast_slice = tuple(
             slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
@@ -694,7 +694,7 @@ def _get_slices_from_domain_slice(
         if (
             pos := embedded_common._find_index_of_dim(domain.dims[pos_old], domain_slice)
         ) is not None:
-            index_or_range = domain_slice[pos][1]
+            index_or_range = domain_slice[pos][1] if isinstance(domain_slice, tuple) else domain_slice.ranges[pos]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))
