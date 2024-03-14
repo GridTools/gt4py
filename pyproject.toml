@@ -217,10 +217,6 @@ module = 'gt4py.next.ffront.decorator'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
-module = 'gt4py.next.type_system.type_translation'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
 module = 'gt4py.next.iterator.runtime'
 
 # -- pytest --
