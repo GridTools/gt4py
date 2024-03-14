@@ -124,7 +124,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
 class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
-    def __call__(self, *args, **kwargs) -> None: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

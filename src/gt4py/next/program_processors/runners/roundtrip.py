@@ -203,7 +203,7 @@ def fencil_generator(
 @ppi.program_executor  # type: ignore[arg-type]
 def execute_roundtrip(
     ir: itir.Node,
-    *args,
+    *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
     debug: bool = False,
@@ -253,7 +253,7 @@ class RoundtripFactory(factory.Factory):
 class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         kwargs["backend"] = self.dispatch_backend
         self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
             *args, **kwargs

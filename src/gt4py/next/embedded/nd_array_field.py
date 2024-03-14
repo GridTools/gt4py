@@ -54,7 +54,7 @@ def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArra
 
 
 def _make_builtin(
-    builtin_name: str, array_builtin_name: str, reverse=False
+    builtin_name: str, array_builtin_name: str, reverse: bool = False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         cls_ = _get_nd_array_class(*fields)

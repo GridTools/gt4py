@@ -164,12 +164,14 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     # stable across multiple runs (required for caching to properly work)
     uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
 
-    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs):
+    def visit_SymRef(self, node: gtfn_ir_common.SymRef, **kwargs: Any) -> gtfn_ir_common.SymRef:
         if "localized_symbols" in kwargs and node.id in kwargs["localized_symbols"]:
             return gtfn_ir_common.SymRef(id=kwargs["localized_symbols"][node.id])
         return node
 
-    def commit_args(self, node: gtfn_ir.FunCall, tmp_id: str, fun_id: str, **kwargs):
+    def commit_args(
+        self, node: gtfn_ir.FunCall, tmp_id: str, fun_id: str, **kwargs: Any
+    ) -> gtfn_ir.FunCall:
         for i, arg in enumerate(node.args):
             expr = self.visit(arg, **kwargs)
             self.imp_list_ir.append(InitStmt(lhs=gtfn_ir_common.Sym(id=f"{tmp_id}_{i}"), rhs=expr))
@@ -182,8 +184,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         new_args: List[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         fun, init = node.fun.args  # type: ignore
         param_to_args = dict(zip([param.id for param in fun.params[1:]], new_args))
         acc = fun.params[0]
@@ -212,8 +214,8 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         new_args: List[gtfn_ir.FunCall],
         red_idx: str,
         max_neighbors: int,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         fun, init = node.fun.args  # type: ignore
 
         red_lit = gtfn_ir_common.Sym(id=f"{red_idx}")
@@ -232,7 +234,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             )
             self.imp_list_ir.append(AssignStmt(lhs=gtfn_ir_common.SymRef(id=red_idx), rhs=rhs))
 
-    def handle_Reduction(self, node: gtfn_ir.FunCall, **kwargs):
+    def handle_Reduction(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.SymRef:
         offset_provider = kwargs["offset_provider"]
         assert offset_provider is not None
 
@@ -258,7 +260,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
         return gtfn_ir_common.SymRef(id=red_idx)
 
-    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> gtfn_ir_common.Expr:
         if any(
             isinstance(
                 arg,
@@ -309,7 +311,7 @@ class GTFN_IM_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             args=[self.visit(arg, **kwargs) for arg in node.args],
         )
 
-    def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr, **kwargs):
+    def visit_TernaryExpr(self, node: gtfn_ir.TernaryExpr, **kwargs: Any) -> gtfn_ir_common.SymRef:
         cond = self.visit(node.cond, **kwargs)
         if_ = self.visit(node.true_expr, **kwargs)
         else_ = self.visit(node.false_expr, **kwargs)

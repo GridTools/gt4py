@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars as cvars
-from typing import Any
+from typing import Any, Generator
 
 import gt4py.eve as eve
 import gt4py.next.common as common
@@ -39,7 +39,7 @@ def new_context(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
-):
+) -> Generator[cvars.Context, None, None]:
     import gt4py.next.embedded.context as this_module
 
     updates: list[tuple[cvars.ContextVar[Any], Any]] = []

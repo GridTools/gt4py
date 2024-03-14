@@ -20,7 +20,7 @@ from gt4py.eve.concepts import SymbolName
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
+from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -48,7 +48,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
 
 
-def pytype_to_cpptype(t: str):
+def pytype_to_cpptype(t: str) -> Optional[str]:
     try:
         return {
             "float32": "float",
@@ -135,7 +135,7 @@ def _collect_offset_definitions(
     node: itir.Node,
     grid_type: common.GridType,
     offset_provider: dict[str, common.Dimension | common.Connectivity],
-):
+) -> dict[str, TagDefinition]:
     used_offset_tags: set[itir.OffsetLiteral] = (
         node.walk_values()
         .if_isinstance(itir.OffsetLiteral)
@@ -191,6 +191,16 @@ def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
     return IntegralConstant(value=int(node.value))
 
 
+def _is_scan(node: itir.Node) -> bool:
+    return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
+
+
+def _bool_from_literal(node: itir.Node) -> bool:
+    assert isinstance(node, itir.Literal)
+    assert node.type == "bool" and node.value in ("True", "False")
+    return node.value == "True"
+
+
 @dataclasses.dataclass(frozen=True)
 class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     _binary_op_map: ClassVar[dict[str, str]] = {
@@ -222,12 +232,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @classmethod
     def apply(
         cls,
-        node: itir.FencilDefinition | FencilWithTemporaries,
+        node: itir.FencilDefinition | global_tmps.FencilWithTemporaries,
         *,
         offset_provider: dict,
         column_axis: Optional[common.Dimension],
-    ):
-        if isinstance(node, FencilWithTemporaries):
+    ) -> FencilDefinition:
+        if isinstance(node, global_tmps.FencilWithTemporaries):
             fencil_definition = node.fencil
         elif isinstance(node, itir.FencilDefinition):
             fencil_definition = node
@@ -294,7 +304,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs: Any) -> Literal:
         return Literal(value=node.value, type="axis_literal")
 
-    def _make_domain(self, node: itir.FunCall):
+    def _make_domain(self, node: itir.FunCall) -> tuple[TaggedValues, TaggedValues]:
         tags = []
         sizes = []
         offsets = []
@@ -431,32 +441,22 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             expr=self.visit(node.expr, **kwargs),
         )
 
-    @staticmethod
-    def _is_scan(node: itir.Node):
-        return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
-
-    def _visit_output_argument(self, node: itir.Expr):
+    def _visit_output_argument(self, node: itir.Expr) -> SidComposite | SymRef:
         if isinstance(node, itir.SymRef):
             return self.visit(node)
         elif isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="make_tuple"):
             return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
         raise ValueError("Expected 'SymRef' or 'make_tuple' in output argument.")
 
-    @staticmethod
-    def _bool_from_literal(node: itir.Node):
-        assert isinstance(node, itir.Literal)
-        assert node.type == "bool" and node.value in ("True", "False")
-        return node.value == "True"
-
     def visit_StencilClosure(
         self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
     ) -> Union[ScanExecution, StencilExecution]:
         backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
-        if self._is_scan(node.stencil):
+        if _is_scan(node.stencil):
             scan_id = self.uids.sequential_id(prefix="_scan")
             assert isinstance(node.stencil, itir.FunCall)
             scan_lambda = self.visit(node.stencil.args[0], **kwargs)
-            forward = self._bool_from_literal(node.stencil.args[1])
+            forward = _bool_from_literal(node.stencil.args[1])
             scan_def = ScanPassDefinition(
                 id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
             )
@@ -556,7 +556,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             temporaries=[],
         )
 
-    def visit_Temporary(self, node, *, params: list, **kwargs) -> TemporaryAllocation:
+    def visit_Temporary(
+        self, node: global_tmps.Temporary, *, params: list, **kwargs: Any
+    ) -> TemporaryAllocation:
         def dtype_to_cpp(x):
             if isinstance(x, int):
                 return f"std::remove_const_t<::gridtools::sid::element_type<decltype({params[x]})>>"
@@ -569,7 +571,9 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
         )
 
-    def visit_FencilWithTemporaries(self, node, **kwargs) -> FencilDefinition:
+    def visit_FencilWithTemporaries(
+        self, node: global_tmps.FencilWithTemporaries, **kwargs: Any
+    ) -> FencilDefinition:
         fencil = self.visit(node.fencil, **kwargs)
         return FencilDefinition(
             id=fencil.id,

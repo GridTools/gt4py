@@ -14,7 +14,7 @@
 
 import dataclasses
 from types import ModuleType
-from typing import Any, Callable, Generic, ParamSpec, Sequence, TypeVar
+from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
 
 import numpy as np
 
@@ -91,7 +91,7 @@ def _get_out_domain(
     ])
 
 
-def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
+def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) -> Optional[_R]:
     if "out" in kwargs:
         # called from program or direct field_operator as program
         new_context_kwargs = {}
@@ -121,6 +121,7 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
                 res,
                 domain=out_domain,
             )
+        return None
     else:
         # called from other field_operator or missing `out` argument
         if "offset_provider" in kwargs:
@@ -139,9 +140,9 @@ def _tuple_assign_field(
     target: tuple[common.MutableField | tuple, ...] | common.MutableField,
     source: tuple[common.Field | tuple, ...] | common.Field,
     domain: common.Domain,
-):
+) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: common.Field):
+    def impl(target: common.MutableField, source: common.Field) -> None:
         if common.is_field(source):
             target[domain] = source[domain]
         else:
@@ -169,8 +170,12 @@ def _get_array_ns(
 
 
 def _construct_scan_array(
-    domain: common.Domain, xp: ModuleType
-):  # TODO(havogt) introduce a NDArrayNamespace protocol
+    domain: common.Domain,
+    xp: ModuleType,  # TODO(havogt) introduce a NDArrayNamespace protocol
+) -> Callable[
+    [core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
+    common.Field | tuple[common.Field | tuple, ...],
+]:
     @utils.tree_map
     def impl(init: core_defs.Scalar) -> common.Field:
         return common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
@@ -184,7 +189,7 @@ def _tuple_assign_value(
     source: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: core_defs.Scalar):
+    def impl(target: common.MutableField, source: core_defs.Scalar) -> None:
         target[pos] = source
 
     impl(target, source)

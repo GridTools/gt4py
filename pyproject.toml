@@ -203,13 +203,16 @@ warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
 # # TODO: this should be changed to true after a transition period
-disallow_incomplete_defs = false
+disallow_incomplete_defs = true
 module = 'gt4py.next.*'
 
 [[tool.mypy.overrides]]
-# TODO: temporarily to propagate it to all of next
-disallow_incomplete_defs = true
-module = 'gt4py.next.ffront.*'
+disallow_incomplete_defs = false
+module = 'gt4py.next.iterator.*'
+
+[[tool.mypy.overrides]]
+disallow_incomplete_defs = false
+module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true

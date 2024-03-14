@@ -15,7 +15,7 @@
 import functools
 import types
 import typing
-from typing import Any, Callable, Iterator, Type, TypeGuard, cast
+from typing import Any, Callable, Generator, Iterator, Protocol, Type, TypeGuard, cast
 
 import numpy as np
 
@@ -98,13 +98,13 @@ def primitive_constituents(
 def primitive_constituents(
     symbol_type: ts.TypeSpec,
     with_path_arg: typing.Literal[True],
-) -> XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]: ...
+) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
     symbol_type: ts.TypeSpec,
     with_path_arg: bool = False,
-) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]:
+) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -122,7 +122,12 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.TypeSpec, path: tuple[int, ...]):
+    def constituents_yielder(
+        symbol_type: ts.TypeSpec, path: tuple[int, ...]
+    ) -> (
+        Generator[ts.TypeSpec, None, None]
+        | Generator[tuple[ts.TypeSpec, tuple[int, ...]], None, None]
+    ):
         if isinstance(symbol_type, ts.TupleType):
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
@@ -132,7 +137,11 @@ def primitive_constituents(
             else:
                 yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type, ()))
+    return xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
+
+
+class TupleConstructorType(Protocol):
+    def __call__(self, *args: ts.TypeSpec) -> ts.TupleType: ...
 
 
 def apply_to_primitive_constituents(
@@ -140,11 +149,11 @@ def apply_to_primitive_constituents(
     fun: (
         Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec]
     ),
-    _path=(),
+    _path: tuple[int, ...] = (),
     *,
-    with_path_arg=False,
-    tuple_constructor=lambda *elements: ts.TupleType(types=[*elements]),
-):
+    with_path_arg: bool = False,
+    tuple_constructor: TupleConstructorType = lambda *elements: ts.TupleType(types=[*elements]),
+) -> ts.TypeSpec:
     """
     Apply function to all primitive constituents of a type.
 
@@ -280,9 +289,9 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def arithmetic_bounds(arithmetic_type: ts.ScalarType):
+def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    return {
+    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
         ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
@@ -532,8 +541,8 @@ def canonicalize_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
@@ -544,8 +553,8 @@ def canonicalize_function_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
@@ -649,8 +658,8 @@ def function_signature_incompatibilities_func(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
     *,
-    skip_canonicalization=False,
-    skip_structural_checks=False,
+    skip_canonicalization: bool = False,
+    skip_structural_checks: bool = False,
 ) -> Iterator[str]:
     if not skip_canonicalization:
         args, kwargs = canonicalize_arguments(func_type, args, kwargs, ignore_errors=True)

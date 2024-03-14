@@ -115,7 +115,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
     CastExpr = as_fmt("static_cast<{new_dtype}>({obj_expr})")
 
-    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
+    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs: Any) -> str:
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
@@ -135,7 +135,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
-    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
             and node.fun.id in self.user_defined_function_ids
@@ -144,7 +144,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         else:
             fun_name = self.visit(node.fun)
 
-        return self.generic_visit(node, fun_name=fun_name)
+        res = self.generic_visit(node, fun_name=fun_name)
+        assert isinstance(res, str)
+        return res
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -179,7 +181,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any):
         expr_ = "return " + self.visit(node.expr)
         return self.generic_visit(node, expr_=expr_)
 

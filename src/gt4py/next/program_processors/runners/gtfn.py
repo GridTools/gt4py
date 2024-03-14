@@ -50,8 +50,8 @@ def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
+        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+    ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
         return inp(
