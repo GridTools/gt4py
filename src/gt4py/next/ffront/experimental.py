@@ -12,30 +12,17 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from dataclasses import dataclass
-
-from gt4py.next.type_system import type_specifications as ts
-
-
-@dataclass
-class BuiltInFunction:
-    __gt_type: ts.FunctionType
-
-    def __call__(self, *args, **kwargs):
-        """Act as an empty place holder for the built in function."""
-
-    def __gt_type__(self):
-        return self.__gt_type
+from gt4py.next import common
+from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset
 
 
-as_offset = BuiltInFunction(
-    ts.FunctionType(
-        pos_only_args=[
-            ts.DeferredType(constraint=ts.OffsetType),
-            ts.DeferredType(constraint=ts.FieldType),
-        ],
-        pos_or_kw_args={},
-        kw_only_args={},
-        returns=ts.DeferredType(constraint=ts.OffsetType),
-    )
-)
+@BuiltInFunction
+def as_offset(
+    offset_: FieldOffset,
+    field: common.Field,
+    /,
+) -> common.ConnectivityField:
+    raise NotImplementedError()
+
+
+EXPERIMENTAL_FUN_BUILTIN_NAMES = ["as_offset"]

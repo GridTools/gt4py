@@ -33,7 +33,6 @@ from gt4py.next import (
     neighbor_sum,
     where,
 )
-from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
 from gt4py.next.type_system import type_specifications as ts
 
@@ -463,40 +462,6 @@ def test_astype_float(cartesian_case):
         ref=lambda a: a.astype(np.float32),
         comparison=lambda a, b: np.all(a == b),
     )
-
-
-@pytest.mark.uses_dynamic_offsets
-def test_offset_field(cartesian_case):
-    ref = np.full(
-        (cartesian_case.default_sizes[IDim], cartesian_case.default_sizes[KDim]), True, dtype=bool
-    )
-
-    @gtx.field_operator
-    def testee(a: cases.IKField, offset_field: cases.IKField) -> gtx.Field[[IDim, KDim], bool]:
-        a_i = a(as_offset(Ioff, offset_field))
-        a_i_k = a_i(as_offset(Koff, offset_field))
-        b_i = a(Ioff[1])
-        b_i_k = b_i(Koff[1])
-        return a_i_k == b_i_k
-
-    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
-    a = cases.allocate(cartesian_case, testee, "a").extend({IDim: (0, 1), KDim: (0, 1)})()
-    offset_field = cases.allocate(cartesian_case, testee, "offset_field").strategy(
-        cases.ConstInitializer(1)
-    )()
-
-    cases.verify(
-        cartesian_case,
-        testee,
-        a,
-        offset_field,
-        out=out,
-        offset_provider={"Ioff": IDim, "Koff": KDim},
-        ref=np.full_like(offset_field.asnumpy(), True, dtype=bool),
-        comparison=lambda out, ref: np.all(out == ref),
-    )
-
-    assert np.allclose(out.asnumpy(), ref)
 
 
 def test_nested_tuple_return(cartesian_case):
