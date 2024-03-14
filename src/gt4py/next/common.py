@@ -278,9 +278,9 @@ def unit_range(r: RangeLike) -> UnitRange:
 
 
 @dataclasses.dataclass(frozen=True)
-class NamedRange:
+class NamedRange(Generic[_Rng]):
     dim: Dimension
-    urange: UnitRange
+    urange: _Rng
 
     def __str__(self) -> str:
         return f"{self.dim}={self.urange}"
