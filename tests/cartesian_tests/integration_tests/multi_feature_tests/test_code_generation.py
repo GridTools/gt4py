@@ -65,9 +65,7 @@ def test_generation(name, backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lazy_stencil(backend):
     @gtscript.lazy_stencil(backend=backend)
-    def definition(
-        field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]
-    ):
+    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
         with computation(PARALLEL), interval(...):
             field_a = field_b
 
@@ -150,9 +148,7 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(
-        field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]
-    ):
+    def stencil(field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]):
         with computation(BACKWARD):
             with interval(-2, -1):  # block 1
                 field_out = field_in
@@ -297,9 +293,7 @@ def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
 
-    inp_f = gt_storage.from_array(
-        np.random.randn(10, 10), aligned_index=(0, 0), backend=backend
-    )
+    inp_f = gt_storage.from_array(np.random.randn(10, 10), aligned_index=(0, 0), backend=backend)
     outp_f = gt_storage.from_array(
         np.random.randn(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
     )
@@ -484,9 +478,7 @@ def test_write_data_dim_indirect_addressing(backend):
         full_shape, backend=backend, aligned_index=aligned_index, dtype=INT32_VEC2
     )
 
-    gtscript.stencil(definition=stencil, backend=backend)(
-        input_field, output_field, index := 1
-    )
+    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
     assert output_field[0, 0, 0, index] == 1
 
 
@@ -583,9 +575,7 @@ def test_origin_k_fields(backend):
     inp = storage_utils.cpu_copy(inp)
     outp = storage_utils.cpu_copy(outp)
     np.testing.assert_allclose(data, inp)
-    np.testing.assert_allclose(
-        np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1]
-    )
+    np.testing.assert_allclose(np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1])
     np.testing.assert_allclose(0.0, outp[:, :, 0])
     np.testing.assert_allclose(0.0, outp[:, :, -1])
 
@@ -693,9 +683,7 @@ def test_K_offset_write_conditional(backend):
     K_values = arraylib.arange(start=40, stop=44)
 
     @gtscript.stencil(backend=backend)
-    def column_physics_conditional(
-        A: Field[np.float64], B: Field[np.float64], scalar: np.float64
-    ):
+    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
         with computation(BACKWARD), interval(1, None):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
