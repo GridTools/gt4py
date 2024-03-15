@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
+import types
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from gt4py.next import common
@@ -33,10 +34,23 @@ SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant
 
 
 @dataclasses.dataclass(frozen=True)
+class ProgramDefinition:
+    definition: types.FunctionType
+    grid_type: Optional[common.GridType] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramPast:
+    past_node: past.Program
+    closure_vars: dict[str, Any]
+    grid_type: Optional[common.GridType] = None
+
+
+@dataclasses.dataclass(frozen=True)
 class PastClosure:
     closure_vars: dict[str, Any]
     past_node: past.Program
-    grid_type: common.GridType
+    grid_type: Optional[common.GridType]
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
 

@@ -15,22 +15,49 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+import dataclasses
+import typing
 from typing import Any, cast
 
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
+    source_utils,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-@dataclass(frozen=True, kw_only=True)
+@workflow.make_step
+def func_to_past(inp: stages.ProgramDefinition) -> stages.ProgramPast:
+    source_def = source_utils.SourceDefinition.from_function(inp.definition)
+    closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
+    annotations = typing.get_type_hints(inp.definition)
+    return stages.ProgramPast(
+        past_node=ProgramParser.apply(source_def, closure_vars, annotations),
+        closure_vars=closure_vars,
+        grid_type=inp.grid_type,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToPast(workflow.SkippableStep):
+    step: workflow.Workflow[stages.ProgramDefinition, stages.ProgramPast] = func_to_past
+
+    def skip_condition(self, inp: stages.ProgramPast | stages.ProgramDefinition) -> bool:
+        match inp:
+            case stages.ProgramDefinition():
+                return False
+            case stages.ProgramPast():
+                return True
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
