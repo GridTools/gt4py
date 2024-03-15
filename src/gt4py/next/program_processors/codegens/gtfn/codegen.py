@@ -144,9 +144,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         else:
             fun_name = self.visit(node.fun)
 
-        res = self.generic_visit(node, fun_name=fun_name)
-        assert isinstance(res, str)
-        return res
+        return self.generic_visit(node, fun_name=fun_name)
 
     FunCall = as_fmt("{fun_name}({','.join(args)})")
 
@@ -181,7 +179,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any):
+    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any) -> str:
         expr_ = "return " + self.visit(node.expr)
         return self.generic_visit(node, expr_=expr_)
 
@@ -332,14 +330,14 @@ class GTFNIMCodegen(GTFNCodegen):
 
     ReturnStmt = as_fmt("return {ret};")
 
-    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs):
+    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs: Any) -> str:
         if_rhs_ = self.visit(node.if_stmt.rhs)
         else_rhs_ = self.visit(node.else_stmt.rhs)
         return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
 
     def visit_ImperativeFunctionDefinition(
-        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs
-    ):
+        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs: Any
+    ) -> str:
         expr_ = "".join(self.visit(stmt) for stmt in node.fun)
         return self.generic_visit(node, expr_=expr_)
 

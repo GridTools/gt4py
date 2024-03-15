@@ -162,9 +162,7 @@ class BindingCodeGenerator(TemplatedGenerator):
         kwargs["composite_ids"] = (
             f"gridtools::integral_constant<int,{i}>" for i in range(len(node.elems))
         )
-        res = self.generic_visit(node, **kwargs)
-        assert isinstance(res, str)
-        return res
+        return self.generic_visit(node, **kwargs)
 
     CompositeSID = as_jinja(
         "gridtools::sid::composite::keys<{{','.join(composite_ids)}}>::make_values({{','.join(elems)}})"

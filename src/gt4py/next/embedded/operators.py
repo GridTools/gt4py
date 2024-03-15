@@ -46,7 +46,7 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         self,
         *args: common.Field | core_defs.Scalar,
         **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
-    ) -> common.Field:
+    ) -> common.Field | tuple[common.Field | tuple, ...]:
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
@@ -118,7 +118,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
             res = ctx.run(op, *args, **kwargs)
             _tuple_assign_field(
                 out,
-                res,
+                res,  # type: ignore[arg-type] # maybe can't inferred properly because decorator.py is not properly typed yet
                 domain=out_domain,
             )
         return None
