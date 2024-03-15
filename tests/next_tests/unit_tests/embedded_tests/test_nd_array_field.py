@@ -21,7 +21,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Domain, UnitRange
+from gt4py.next.common import Dimension, Domain, UnitRange, NamedRange
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -430,7 +430,7 @@ def test_field_broadcast(new_dims, field, expected_domain):
 @pytest.mark.parametrize(
     "domain_slice",
     [
-        ((D0, UnitRange(0, 10)),),
+        (NamedRange(D0, UnitRange(0, 10)),),
         common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),)),
     ],
 )
@@ -446,7 +446,7 @@ def test_get_slices_with_named_index():
     field_domain = common.Domain(
         dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = ((D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
+    named_index = (NamedRange(D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
@@ -513,7 +513,9 @@ def test_absolute_indexing_dim_sliced():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
-    expected = field[(D0, UnitRange(5, 9)), (D1, UnitRange(8, 10))]
+    expected = field[
+        NamedRange(dim=D0, urange=UnitRange(5, 9)), NamedRange(dim=D1, urange=UnitRange(8, 10))
+    ]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == expected

@@ -921,7 +921,9 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
-        return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
+        # TODO: change this back
+        return self._ndarrayfield[self._translate_named_indices(named_indices)].ndarray.item()
+        # return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
         if common.is_mutable_field(self._ndarrayfield):

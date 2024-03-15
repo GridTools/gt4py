@@ -412,10 +412,11 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
             if not all(is_named_range(arg) for arg in args):
+                # TODO: put error back
                 args = tuple(named_range(arg) for arg in args)
-                raise ValueError(
-                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
-                )
+                # raise ValueError(
+                #     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                # )
             dims_new = (arg.dim for arg in args) if args else ()
             ranges_new = (arg.urange for arg in args) if args else ()
             object.__setattr__(self, "dims", tuple(dims_new))
@@ -491,10 +492,10 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
                 _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         )
-        return Domain(dims=broadcast_dims, ranges=intersected_ranges)
+        return Domain(dims=broadcast_dims, ranges=intersected_ranges)  # TODO
 
     def __str__(self) -> str:
-        return f"Domain({', '.join(f'{e[0]}={e[1]}' for e in self)})"
+        return f"Domain({', '.join(f'{e.dim}={e.urange}' for e in self)})"
 
     def dim_index(self, dim: Dimension) -> Optional[int]:
         return self.dims.index(dim) if dim in self.dims else None
@@ -567,10 +568,7 @@ def domain(domain_like: DomainLike) -> Domain:
         if all(isinstance(elem, core_defs.INTEGRAL_TYPES) for elem in domain_like.values()):
             return Domain(
                 dims=tuple(domain_like.keys()),
-                ranges=tuple(
-                    UnitRange(0, s)
-                    for s in domain_like.values()
-                ),
+                ranges=tuple(UnitRange(0, s) for s in domain_like.values()),
             )
         return Domain(
             dims=tuple(domain_like.keys()),

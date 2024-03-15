@@ -128,7 +128,9 @@ def field_operator_call(op: EmbeddedOperator, args: Any, kwargs: Any):
         new_context_kwargs["closure_column_range"] = _get_vertical_range(out_domain)
 
         with embedded_context.new_context(**new_context_kwargs) as ctx:
-            res = ctx.run(op, *args, **kwargs)
+            res = ctx.run(
+                op, *args, **kwargs
+            )  # TODO res output with wrong domain for test_unstructured_shift
             _tuple_assign_field(
                 out,
                 res,

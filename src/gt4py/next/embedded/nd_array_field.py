@@ -248,7 +248,7 @@ class NdArrayField(
         target_domain, target_slice = self._slice(index)
 
         if common.is_field(value):
-            if not value.domain == target_domain:
+            if value.domain != target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
                 )
