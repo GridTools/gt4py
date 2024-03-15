@@ -436,17 +436,17 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
     @overload
-    def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
+    def __getitem__(self, index: int) -> NamedRange: ...
 
     @overload
     def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(self, index: Dimension) -> tuple[Dimension, _Rng]: ...
+    def __getitem__(self, index: Dimension) -> NamedRange: ...
 
-    def __getitem__(self, index: int | slice | Dimension) -> tuple[Dimension, _Rng] | Domain:
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
-            return (self.dims[index], self.ranges[index])
+            return NamedRange(dim=self.dims[index], urange=self.ranges[index])
         elif isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
@@ -454,7 +454,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         elif isinstance(index, Dimension):
             try:
                 index_pos = self.dims.index(index)
-                return (self.dims[index_pos], self.ranges[index_pos])
+                return NamedRange(dim=self.dims[index_pos], urange=self.ranges[index_pos])
             except ValueError as ex:
                 raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:
