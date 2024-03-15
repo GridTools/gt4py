@@ -33,7 +33,7 @@ from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
 
-def _create_tmp(axes, origin, shape, dtype):
+def _create_tmp(axes: str, origin: str, shape: str, dtype: Any) -> str:
     if isinstance(dtype, tuple):
         return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
     else:
@@ -69,7 +69,9 @@ def ${id}(${','.join(params)}):
     )
 
     # extension required by global_tmps
-    def visit_FencilWithTemporaries(self, node, **kwargs):
+    def visit_FencilWithTemporaries(
+        self, node: gtmps_transform.FencilWithTemporaries, **kwargs: Any
+    ) -> str:
         params = self.visit(node.params)
 
         tmps = "\n    ".join(self.visit(node.tmps))
@@ -84,10 +86,15 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node, **kwargs):
-        assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
-            "cartesian_domain",
-            "unstructured_domain",
+    def visit_Temporary(self, node: gtmps_transform.Temporary, **kwargs: Any) -> str:
+        assert (
+            isinstance(node.domain, itir.FunCall)
+            and isinstance(node.domain.fun, itir.SymRef)
+            and node.domain.fun.id
+            in (
+                "cartesian_domain",
+                "unstructured_domain",
+            )
         )
         assert all(
             isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")

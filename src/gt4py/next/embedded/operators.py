@@ -64,7 +64,7 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         xp = _get_array_ns(*all_args)
         res = _construct_scan_array(out_domain, xp)(self.init)
 
-        def scan_loop(hpos):
+        def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
             acc = self.init
             for k in scan_range[1] if self.forward else reversed(scan_range[1]):
                 pos = (*hpos, (scan_axis, k))
@@ -174,11 +174,13 @@ def _construct_scan_array(
     xp: ModuleType,  # TODO(havogt) introduce a NDArrayNamespace protocol
 ) -> Callable[
     [core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]],
-    common.Field | tuple[common.Field | tuple, ...],
+    common.MutableField | tuple[common.MutableField | tuple, ...],
 ]:
     @utils.tree_map
-    def impl(init: core_defs.Scalar) -> common.Field:
-        return common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
+    def impl(init: core_defs.Scalar) -> common.MutableField:
+        res = common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
+        assert common.is_mutable_field(res)
+        return res
 
     return impl
 

@@ -15,7 +15,7 @@
 import functools
 import types
 import typing
-from typing import Any, Callable, Generator, Iterator, Protocol, Type, TypeGuard, cast
+from typing import Any, Callable, Generator, Iterator, Protocol, Type, TypeGuard, TypeVar, cast
 
 import numpy as np
 
@@ -144,16 +144,17 @@ class TupleConstructorType(Protocol):
     def __call__(self, *args: ts.TypeSpec) -> ts.TupleType: ...
 
 
+_T = TypeVar("_T")
+
+
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
-    fun: (
-        Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec]
-    ),
+    fun: (Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
     _path: tuple[int, ...] = (),
     *,
     with_path_arg: bool = False,
     tuple_constructor: TupleConstructorType = lambda *elements: ts.TupleType(types=[*elements]),
-) -> ts.TypeSpec:
+) -> _T:
     """
     Apply function to all primitive constituents of a type.
 

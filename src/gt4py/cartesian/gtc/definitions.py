@@ -27,7 +27,7 @@ class CartesianSpace:
         J = 1
         K = 2
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.name
 
     names = [ax.name for ax in Axis]
@@ -191,7 +191,7 @@ class NumericTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -384,7 +384,7 @@ class FrameTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property

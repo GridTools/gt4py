@@ -51,7 +51,7 @@ def new_context(
     # Create new context with provided values
     ctx = cvars.copy_context()
 
-    def ctx_updater(*args):
+    def ctx_updater(*args: tuple[cvars.ContextVar[Any], Any]) -> None:
         for cvar, value in args:
             cvar.set(value)
 

@@ -150,6 +150,8 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
 ignore_missing_imports = false
 module = 'gt4py.*'
 
@@ -202,16 +204,13 @@ module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-# # TODO: this should be changed to true after a transition period
-disallow_incomplete_defs = true
-module = 'gt4py.next.*'
-
-[[tool.mypy.overrides]]
 disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
 disallow_incomplete_defs = false
+disallow_untyped_defs = false
 module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]

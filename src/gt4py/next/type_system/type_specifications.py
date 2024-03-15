@@ -67,7 +67,7 @@ class OffsetType(TypeSpec):
     source: func_common.Dimension
     target: tuple[func_common.Dimension] | tuple[func_common.Dimension, func_common.Dimension]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Offset[{self.source}, {self.target}]"
 
 
@@ -85,7 +85,7 @@ class ScalarType(DataType):
     kind: ScalarKind
     shape: Optional[list[int]] = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         kind_str = self.kind.name.lower()
         if self.shape is None:
             return kind_str
@@ -96,7 +96,7 @@ class ScalarType(DataType):
 class TupleType(DataType):
     types: list[DataType]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"tuple[{', '.join(map(str, self.types))}]"
 
     def __iter__(self) -> Iterator[DataType]:
@@ -108,7 +108,7 @@ class FieldType(DataType, CallableType):
     dims: list[func_common.Dimension]
     dtype: ScalarType
 
-    def __str__(self):
+    def __str__(self) -> str:
         dims = "..." if self.dims is Ellipsis else f"[{', '.join(dim.value for dim in self.dims)}]"
         return f"Field[{dims}, {self.dtype}]"
 
@@ -120,7 +120,7 @@ class FunctionType(TypeSpec, CallableType):
     kw_only_args: dict[str, DataType | DeferredType]
     returns: DataType | DeferredType | VoidType
 
-    def __str__(self):
+    def __str__(self) -> str:
         arg_strs = [str(arg) for arg in self.pos_only_args]
         kwarg_strs = [f"{key}: {value}" for key, value in self.pos_or_kw_args.items()]
         args_str = ", ".join((*arg_strs, *kwarg_strs))
