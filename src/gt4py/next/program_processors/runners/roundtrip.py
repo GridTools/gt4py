@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import pathlib
 import tempfile
@@ -21,16 +22,15 @@ import textwrap
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
-import gt4py.eve.codegen as codegen
-import gt4py.next.allocators as next_allocators
-import gt4py.next.common as common
-import gt4py.next.iterator.embedded as embedded
-import gt4py.next.iterator.ir as itir
-import gt4py.next.iterator.transforms as itir_transforms
-import gt4py.next.iterator.transforms.global_tmps as gtmps_transform
-import gt4py.next.program_processors.otf_compile_executor as otf_compile_executor
-import gt4py.next.program_processors.processor_interface as ppi
+import factory
+
+from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
+from gt4py.next import allocators as next_allocators, backend as next_backend, common
+from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
+from gt4py.next.otf import stages, workflow
+from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
 
 def _create_tmp(axes, origin, shape, dtype):
@@ -200,6 +200,7 @@ def fencil_generator(
     return fencil
 
 
+@ppi.program_executor  # type: ignore[arg-type]
 def execute_roundtrip(
     ir: itir.Node,
     *args,
@@ -227,8 +228,55 @@ def execute_roundtrip(
     return fencil(*args, **new_kwargs)
 
 
-executor = ppi.program_executor(execute_roundtrip)  # type: ignore[arg-type]
+@dataclasses.dataclass(frozen=True)
+class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
+    debug: bool = False
+    lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
+    use_embedded: bool = True
 
-backend = otf_compile_executor.OTFBackend(
-    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+    def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+        return fencil_generator(
+            inp.program,
+            offset_provider=inp.kwargs.get("offset_provider", None),
+            debug=self.debug,
+            lift_mode=self.lift_mode,
+            use_embedded=self.use_embedded,
+        )
+
+
+class RoundtripFactory(factory.Factory):
+    class Meta:
+        model = Roundtrip
+
+
+@dataclasses.dataclass(frozen=True)
+class RoundtripExecutor(modular_executor.ModularExecutor):
+    dispatch_backend: Optional[ppi.ProgramExecutor] = None
+
+    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
+        kwargs["backend"] = self.dispatch_backend
+        self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
+            *args, **kwargs
+        )
+
+
+class RoundtripExecutorFactory(factory.Factory):
+    class Meta:
+        model = RoundtripExecutor
+
+    class Params:
+        use_embedded = factory.LazyAttribute(lambda o: o.dispatch_backend is None)
+        roundtrip_workflow = factory.SubFactory(
+            RoundtripFactory, use_embedded=factory.SelfAttribute("..use_embedded")
+        )
+
+    dispatch_backend = None
+    otf_workflow = factory.LazyAttribute(lambda o: o.roundtrip_workflow)
+
+
+executor = RoundtripExecutorFactory(name="roundtrip")
+
+backend = next_backend.Backend(
+    executor=executor,
+    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
 )

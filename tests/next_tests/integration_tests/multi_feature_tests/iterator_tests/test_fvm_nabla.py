@@ -38,7 +38,7 @@ from gt4py.next.iterator.builtins import (
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.iterator.transforms.pass_manager import LiftMode
 
-from next_tests.integration_tests.multi_feature_tests.iterator_tests.fvm_nabla_setup import (
+from next_tests.integration_tests.multi_feature_tests.fvm_nabla_setup import (
     assert_close,
     nabla_setup,
 )

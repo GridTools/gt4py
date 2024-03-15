@@ -42,6 +42,8 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
+    TypeVarTuple,
+    Unpack,
     cast,
     extended_runtime_checkable,
     overload,
@@ -51,8 +53,14 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+ShapeT = TypeVarTuple("ShapeT")
 
+
+class Dims(Generic[Unpack[ShapeT]]):
+    shape: tuple[Unpack[ShapeT]]
+
+
+DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 
 Tag: TypeAlias = str
 
@@ -74,6 +82,9 @@ class Dimension:
 
     def __str__(self):
         return f"{self.value}[{self.kind}]"
+
+    def __call__(self, val: int) -> NamedIndex:
+        return self, val
 
 
 class Infinity(enum.Enum):
@@ -157,6 +168,11 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE
 
+    def is_empty(self) -> bool:
+        return (
+            self.start == 0 and self.stop == 0
+        )  # post_init ensures that empty is represented as UnitRange(0, 0)
+
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
 
@@ -164,10 +180,9 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def __getitem__(self, index: int) -> int: ...
 
     @overload
-    def __getitem__(self, index: slice) -> UnitRange:  # noqa: F811 # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> UnitRange: ...
 
-    def __getitem__(self, index: int | slice) -> int | UnitRange:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice) -> int | UnitRange:
         assert UnitRange.is_finite(self)
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
@@ -272,7 +287,8 @@ NamedIndex: TypeAlias = tuple[Dimension, IntIndex]  # TODO: convert to NamedTupl
 NamedRange: TypeAlias = tuple[Dimension, UnitRange]  # TODO: convert to NamedTuple
 FiniteNamedRange: TypeAlias = tuple[Dimension, FiniteUnitRange]  # TODO: convert to NamedTuple
 RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
-AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange
+NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
+AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
 AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
@@ -305,6 +321,10 @@ def is_named_index(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
     return (
         isinstance(v, tuple) and len(v) == 2 and isinstance(v[0], Dimension) and is_int_index(v[1])
     )
+
+
+def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[NamedRange]:
+    return isinstance(obj, slice) and (is_named_index(obj.start) and is_named_index(obj.stop))
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
@@ -413,21 +433,19 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
+    def is_empty(self) -> bool:
+        return any(rng.is_empty() for rng in self.ranges)
+
     @overload
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
     @overload
-    def __getitem__(self, index: slice) -> Self:  # noqa: F811 # redefine unused
-        ...
+    def __getitem__(self, index: slice) -> Self: ...
 
     @overload
-    def __getitem__(  # noqa: F811 # redefine unused
-        self, index: Dimension
-    ) -> tuple[Dimension, _Rng]: ...
+    def __getitem__(self, index: Dimension) -> tuple[Dimension, _Rng]: ...
 
-    def __getitem__(  # noqa: F811 # redefine unused
-        self, index: int | slice | Dimension
-    ) -> NamedRange | Domain:  # noqa: F811 # redefine unused
+    def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
         if isinstance(index, int):
             return self.dims[index], self.ranges[index]
         elif isinstance(index, slice):
@@ -438,8 +456,8 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             try:
                 index_pos = self.dims.index(index)
                 return self.dims[index_pos], self.ranges[index_pos]
-            except ValueError:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.")
+            except ValueError as ex:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         else:
             raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
@@ -732,7 +750,7 @@ class ConnectivityKind(enum.Flag):
 
 
 @extended_runtime_checkable
-# type: ignore[misc] # DimT should be covariant, but break in another place
+# type: ignore[misc] # DimT should be covariant, but breaks in another place
 class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT]):
     @property
     @abc.abstractmethod
@@ -748,6 +766,10 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+
+    @property
+    @abc.abstractmethod
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]: ...
 
     # Operators
     def __abs__(self) -> Never:
@@ -840,6 +862,7 @@ def _connectivity(
     *,
     domain: Optional[DomainLike] = None,
     dtype: Optional[core_defs.DType] = None,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
 ) -> ConnectivityField:
     raise NotImplementedError
 
@@ -918,6 +941,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def codomain(self) -> DimT:
         return self.dimension
 
+    @property
+    def skip_value(self) -> None:
+        return None
+
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
         return ConnectivityKind(0)
@@ -983,11 +1010,11 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
     >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
     True
-    >>> promote_dims([I, J], [K]) # doctest: +ELLIPSIS
+    >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-    >>> promote_dims([I, J], [J, I]) # doctest: +ELLIPSIS
+    >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
     Traceback (most recent call last):
      ...
     ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
@@ -1083,4 +1110,4 @@ class FieldBuiltinFuncRegistry:
 #: Numeric value used to represent missing values in connectivities.
 #: Equivalent to the `_FillValue` attribute in the UGRID Conventions
 #: (see: http://ugrid-conventions.github.io/ugrid-conventions/).
-SKIP_VALUE: Final[int] = -1
+_DEFAULT_SKIP_VALUE: Final[int] = -1

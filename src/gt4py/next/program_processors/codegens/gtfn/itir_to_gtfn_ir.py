@@ -472,7 +472,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return ScanExecution(
                 backend=backend,
                 scans=[scan],
-                args=[self._visit_output_argument(node.output)] + self.visit(node.inputs),
+                args=[self._visit_output_argument(node.output), *self.visit(node.inputs)],
                 axis=SymRef(id=column_axis.value),
             )
         return StencilExecution(
@@ -489,7 +489,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     @staticmethod
     def _merge_scans(
-        executions: list[Union[StencilExecution, ScanExecution]]
+        executions: list[Union[StencilExecution, ScanExecution]],
     ) -> list[Union[StencilExecution, ScanExecution]]:
         def merge(a: ScanExecution, b: ScanExecution) -> ScanExecution:
             assert a.backend == b.backend

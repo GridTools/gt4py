@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar
+from typing import ClassVar, Iterable
 
 import numpy as np
 from numpy import typing as npt
@@ -26,8 +26,13 @@ from numpy import typing as npt
 from gt4py._core import definitions as core_defs
 from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
-from gt4py.next.embedded import common as embedded_common
-from gt4py.next.ffront import fbuiltins
+from gt4py.next.embedded import (
+    common as embedded_common,
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+)
+from gt4py.next.ffront import experimental, fbuiltins
+from gt4py.next.iterator import embedded as itir_embedded
 
 
 try:
@@ -41,16 +46,24 @@ except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
-def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., NdArrayField]:
+def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
+    for f in fields:
+        if isinstance(f, NdArrayField):
+            return f.__class__
+    raise AssertionError("No 'NdArrayField' found in the arguments.")
+
+
+def _make_builtin(
+    builtin_name: str, array_builtin_name: str, reverse=False
+) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
-        first = fields[0]
-        assert isinstance(first, NdArrayField)
-        xp = first.__class__.array_ns
+        cls_ = _get_nd_array_class(*fields)
+        xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.intersect_domains(
-            *[f.domain for f in fields if common.is_field(f)]
-        )
+        domain_intersection = embedded_common.domain_intersection(*[
+            f.domain for f in fields if common.is_field(f)
+        ])
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
@@ -66,9 +79,10 @@ def _make_builtin(builtin_name: str, array_builtin_name: str) -> Callable[..., N
             else:
                 assert core_defs.is_scalar_type(f)
                 transformed.append(f)
-
+        if reverse:
+            transformed.reverse()
         new_data = op(*transformed)
-        return first.__class__.from_array(new_data, domain=domain_intersection)
+        return cls_.from_array(new_data, domain=domain_intersection)
 
     _builtin_op.__name__ = builtin_name
     return _builtin_op
@@ -170,8 +184,11 @@ class NdArrayField(
         if not common.is_connectivity_field(connectivity):
             assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
-
         assert common.is_connectivity_field(connectivity)
+
+        # Current implementation relies on skip_value == -1:
+        # if we assume the indexed array has at least one element, we wrap around without out of bounds
+        assert connectivity.skip_value is None or connectivity.skip_value == -1
 
         # Compute the new domain
         dim = connectivity.codomain
@@ -244,17 +261,21 @@ class NdArrayField(
 
     __pos__ = _make_builtin("pos", "positive")
 
-    __sub__ = __rsub__ = _make_builtin("sub", "subtract")
+    __sub__ = _make_builtin("sub", "subtract")
+    __rsub__ = _make_builtin("sub", "subtract", reverse=True)
 
     __mul__ = __rmul__ = _make_builtin("mul", "multiply")
 
-    __truediv__ = __rtruediv__ = _make_builtin("div", "divide")
+    __truediv__ = _make_builtin("div", "divide")
+    __rtruediv__ = _make_builtin("div", "divide", reverse=True)
 
-    __floordiv__ = __rfloordiv__ = _make_builtin("floordiv", "floor_divide")
+    __floordiv__ = _make_builtin("floordiv", "floor_divide")
+    __rfloordiv__ = _make_builtin("floordiv", "floor_divide", reverse=True)
 
     __pow__ = _make_builtin("pow", "power")
 
-    __mod__ = __rmod__ = _make_builtin("mod", "mod")
+    __mod__ = _make_builtin("mod", "mod")
+    __rmod__ = _make_builtin("mod", "mod", reverse=True)
 
     __ne__ = _make_builtin("not_equal", "not_equal")  # type: ignore # mypy wants return `bool`
 
@@ -297,6 +318,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
+        index = embedded_common.canonicalize_any_index_sequence(index)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -315,6 +337,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     NdArrayField[common.DimsT, core_defs.IntegralScalar],
 ):
     _codomain: common.DimT
+    _skip_value: Optional[core_defs.IntegralScalar]
 
     @functools.cached_property
     def _cache(self) -> dict:
@@ -328,6 +351,10 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     # type: ignore[override] # TODO(havogt): instead of inheriting from NdArrayField, steal implementation or common base
     def codomain(self) -> common.DimT:
         return self._codomain
+
+    @property
+    def skip_value(self) -> Optional[core_defs.IntegralScalar]:
+        return self._skip_value
 
     @functools.cached_property
     def kind(self) -> common.ConnectivityKind:
@@ -349,6 +376,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
         *,
         domain: common.DomainLike,
         dtype: Optional[core_defs.DTypeLike] = None,
+        skip_value: Optional[core_defs.IntegralScalar] = None,
     ) -> NdArrayConnectivityField:
         domain = common.domain(domain)
         xp = cls.array_ns
@@ -367,7 +395,12 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(domain, array, codomain)
+        return cls(
+            domain,
+            array,
+            codomain,
+            _skip_value=skip_value,
+        )
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -390,47 +423,13 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             assert isinstance(image_range, common.UnitRange)
 
             assert common.UnitRange.is_finite(image_range)
-            restricted_mask = (self._ndarray >= image_range.start) & (
-                self._ndarray < image_range.stop
-            )
-            # indices of non-zero elements in each dimension
-            nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(restricted_mask)
 
-            new_dims = []
-            non_contiguous_dims = []
+            relative_ranges = _hypercube(self._ndarray, image_range, xp, self.skip_value)
 
-            for i, dim_nnz_indices in enumerate(nnz):
-                # Check if the indices are contiguous
-                first_data_index = dim_nnz_indices[0]
-                assert isinstance(first_data_index, core_defs.INTEGRAL_TYPES)
-                last_data_index = dim_nnz_indices[-1]
-                assert isinstance(last_data_index, core_defs.INTEGRAL_TYPES)
-                indices, counts = xp.unique(dim_nnz_indices, return_counts=True)
-                dim_range = self._domain[i]
+            if relative_ranges is None:
+                raise ValueError("Restriction generates non-contiguous dimensions.")
 
-                if len(xp.unique(counts)) == 1 and (
-                    len(indices) == last_data_index - first_data_index + 1
-                ):
-                    idx_offset = dim_range[1].start
-                    start = idx_offset + first_data_index
-                    assert common.is_int_index(start)
-                    stop = idx_offset + last_data_index + 1
-                    assert common.is_int_index(stop)
-                    new_dims.append(
-                        common.named_range(
-                            (
-                                dim_range[0],
-                                (start, stop),
-                            )
-                        )
-                    )
-                else:
-                    non_contiguous_dims.append(dim_range[0])
-
-            if non_contiguous_dims:
-                raise ValueError(
-                    f"Restriction generates non-contiguous dimensions '{non_contiguous_dims}'."
-                )
+            new_dims = _relative_ranges_to_domain(relative_ranges, self.domain)
 
             self._cache[cache_key] = new_dims
 
@@ -444,7 +443,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             xp = cls.array_ns
             new_domain, buffer_slice = self._slice(index)
             new_buffer = xp.asarray(self.ndarray[buffer_slice])
-            restricted_connectivity = cls(new_domain, new_buffer, self.codomain)
+            restricted_connectivity = cls(new_domain, new_buffer, self.codomain, self.skip_value)
             self._cache[cache_key] = restricted_connectivity
 
         return restricted_connectivity
@@ -452,13 +451,58 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
+def _relative_ranges_to_domain(
+    relative_ranges: Sequence[common.UnitRange], domain: common.Domain
+) -> common.Domain:
+    return common.Domain(
+        dims=domain.dims, ranges=[rr + ar.start for ar, rr in zip(domain.ranges, relative_ranges)]
+    )
+
+
+def _hypercube(
+    index_array: core_defs.NDArrayObject,
+    image_range: common.UnitRange,
+    xp: ModuleType,
+    skip_value: Optional[core_defs.IntegralScalar] = None,
+) -> Optional[list[common.UnitRange]]:
+    """
+    Return the hypercube that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+
+    If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
+    A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+    Example:
+    index_array =  0  1 -1
+                   3  4 -1
+                  -1 -1 -1
+    skip_value = -1
+    would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+    """
+    select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
+
+    nnz: tuple[core_defs.NDArrayObject, ...] = xp.nonzero(select_mask)
+
+    slices = tuple(
+        slice(xp.min(dim_nnz_indices), xp.max(dim_nnz_indices) + 1) for dim_nnz_indices in nnz
+    )
+    hcube = select_mask[tuple(slices)]
+    if skip_value is not None:
+        ignore_mask = index_array == skip_value
+        hcube |= ignore_mask[tuple(slices)]
+    if not xp.all(hcube):
+        return None
+
+    return [common.UnitRange(s.start, s.stop) for s in slices]
+
+
 # -- Specialized implementations for builtin operations on array fields --
 
 NdArrayField.register_builtin_func(
-    fbuiltins.abs, NdArrayField.__abs__  # type: ignore[attr-defined]
+    fbuiltins.abs,  # type: ignore[attr-defined]
+    NdArrayField.__abs__,
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.power, NdArrayField.__pow__  # type: ignore[attr-defined]
+    fbuiltins.power,  # type: ignore[attr-defined]
+    NdArrayField.__pow__,
 )
 # TODO gamma
 
@@ -472,32 +516,229 @@ for name in (
     NdArrayField.register_builtin_func(getattr(fbuiltins, name), _make_builtin(name, name))
 
 NdArrayField.register_builtin_func(
-    fbuiltins.minimum, _make_builtin("minimum", "minimum")  # type: ignore[attr-defined]
+    fbuiltins.minimum,  # type: ignore[attr-defined]
+    _make_builtin("minimum", "minimum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.maximum, _make_builtin("maximum", "maximum")  # type: ignore[attr-defined]
+    fbuiltins.maximum,  # type: ignore[attr-defined]
+    _make_builtin("maximum", "maximum"),
 )
 NdArrayField.register_builtin_func(
-    fbuiltins.fmod, _make_builtin("fmod", "fmod")  # type: ignore[attr-defined]
+    fbuiltins.fmod,  # type: ignore[attr-defined]
+    _make_builtin("fmod", "fmod"),
 )
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
+def _compute_mask_ranges(
+    mask: core_defs.NDArrayObject,
+) -> list[tuple[bool, common.UnitRange]]:
+    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to ranges."""
+    # TODO: does it make sense to upgrade this naive algorithm to numpy?
+    assert mask.ndim == 1
+    cur = bool(mask[0].item())
+    ind = 0
+    res = []
+    for i in range(1, mask.shape[0]):
+        if (
+            mask_i := bool(mask[i].item())
+        ) != cur:  # `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
+            res.append((cur, common.UnitRange(ind, i)))
+            cur = mask_i
+            ind = i
+    res.append((cur, common.UnitRange(ind, mask.shape[0])))
+    return res
+
+
+def _trim_empty_domains(
+    lst: Iterable[tuple[bool, common.Domain]],
+) -> list[tuple[bool, common.Domain]]:
+    """Remove empty domains from beginning and end of the list."""
+    lst = list(lst)
+    if not lst:
+        return lst
+    if lst[0][1].is_empty():
+        return _trim_empty_domains(lst[1:])
+    if lst[-1][1].is_empty():
+        return _trim_empty_domains(lst[:-1])
+    return lst
+
+
+def _to_field(
+    value: common.Field | core_defs.Scalar, nd_array_field_type: type[NdArrayField]
+) -> common.Field:
+    # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
+    return (
+        value
+        if common.is_field(value)
+        else nd_array_field_type.from_array(
+            nd_array_field_type.array_ns.asarray(value), domain=common.Domain()
+        )
+    )
+
+
+def _intersect_fields(
+    *fields: common.Field | core_defs.Scalar,
+    ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
+) -> tuple[common.Field, ...]:
+    # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
+    # currently blocked, because requiring the `_to_field` function, see comment there.
+    nd_array_class = _get_nd_array_class(*fields)
+    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if common.is_field(f)))
+    broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
+
+    intersected_domains = embedded_common.restrict_to_intersection(
+        *[f.domain for f in broadcasted_fields], ignore_dims=ignore_dims
+    )
+
+    return tuple(
+        nd_array_class.from_array(
+            f.ndarray[_get_slices_from_domain_slice(f.domain, intersected_domain)],
+            domain=intersected_domain,
+        )
+        for f, intersected_domain in zip(broadcasted_fields, intersected_domains, strict=True)
+    )
+
+
+def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
+    if not domains:
+        return common.Domain()
+    dim_start = domains[0][dim][1].start
+    dim_stop = dim_start
+    for domain in domains:
+        if not domain[dim][1].start == dim_stop:
+            return None
+        else:
+            dim_stop = domain[dim][1].stop
+    return domains[0].replace(dim, (dim, common.UnitRange(dim_start, dim_stop)))
+
+
+def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
+    # TODO(havogt): this function could be extended to a general concat
+    # currently only concatenate along the given dimension and requires the fields to be ordered
+
+    if (
+        len(fields) > 1
+        and not embedded_common.domain_intersection(*[f.domain for f in fields]).is_empty()
+    ):
+        raise ValueError("Fields to concatenate must not overlap.")
+    new_domain = _stack_domains(*[f.domain for f in fields], dim=dim)
+    if new_domain is None:
+        raise embedded_exceptions.NonContiguousDomain(f"Cannot concatenate fields along {dim}.")
+    nd_array_class = _get_nd_array_class(*fields)
+    return nd_array_class.from_array(
+        nd_array_class.array_ns.concatenate(
+            [nd_array_class.array_ns.broadcast_to(f.ndarray, f.domain.shape) for f in fields],
+            axis=new_domain.dim_index(dim),
+        ),
+        domain=new_domain,
+    )
+
+
+def _concat_where(
+    mask_field: common.Field, true_field: common.Field, false_field: common.Field
+) -> common.Field:
+    cls_ = _get_nd_array_class(mask_field, true_field, false_field)
+    xp = cls_.array_ns
+    if mask_field.domain.ndim != 1:
+        raise NotImplementedError(
+            "'concat_where': Can only concatenate fields with a 1-dimensional mask."
+        )
+    mask_dim = mask_field.domain.dims[0]
+
+    # intersect the field in dimensions orthogonal to the mask, then all slices in the mask field have same domain
+    t_broadcasted, f_broadcasted = _intersect_fields(true_field, false_field, ignore_dims=mask_dim)
+
+    # TODO(havogt): for clarity, most of it could be implemented on named_range in the masked dimension, but we currently lack the utils
+    # compute the consecutive ranges (first relative, then domain) of true and false values
+    mask_values_to_relative_range_mapping: Iterable[tuple[bool, common.UnitRange]] = (
+        _compute_mask_ranges(mask_field.ndarray)
+    )
+    mask_values_to_domain_mapping: Iterable[tuple[bool, common.Domain]] = (
+        (mask, _relative_ranges_to_domain((relative_range,), mask_field.domain))
+        for mask, relative_range in mask_values_to_relative_range_mapping
+    )
+    # mask domains intersected with the respective fields
+    mask_values_to_intersected_domains_mapping: Iterable[tuple[bool, common.Domain]] = (
+        (
+            mask_value,
+            embedded_common.domain_intersection(
+                t_broadcasted.domain if mask_value else f_broadcasted.domain, mask_domain
+            ),
+        )
+        for mask_value, mask_domain in mask_values_to_domain_mapping
+    )
+
+    # remove the empty domains from the beginning and end
+    mask_values_to_intersected_domains_mapping = _trim_empty_domains(
+        mask_values_to_intersected_domains_mapping
+    )
+    if any(d.is_empty() for _, d in mask_values_to_intersected_domains_mapping):
+        raise embedded_exceptions.NonContiguousDomain(
+            f"In 'concat_where', cannot concatenate the following 'Domain's: {[d for _, d in mask_values_to_intersected_domains_mapping]}."
+        )
+
+    # slice the fields with the domain ranges
+    transformed = [
+        t_broadcasted[d] if v else f_broadcasted[d]
+        for v, d in mask_values_to_intersected_domains_mapping
+    ]
+
+    # stack the fields together
+    if transformed:
+        return _concat(*transformed, dim=mask_dim)
+    else:
+        result_domain = common.Domain((mask_dim, common.UnitRange(0, 0)))
+        result_array = xp.empty(result_domain.shape)
+    return cls_.from_array(result_array, domain=result_domain)
+
+
+NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # type: ignore[has-type]
+
+
+def _make_reduction(
+    builtin_name: str, array_builtin_name: str, initial_value_op: Callable
+) -> Callable[
     ...,
     NdArrayField[common.DimsT, core_defs.ScalarT],
 ]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
+        xp = field.array_ns
+
         if not axis.kind == common.DimensionKind.LOCAL:
             raise ValueError("Can only reduce local dimensions.")
         if axis not in field.domain.dims:
             raise ValueError(f"Field can not be reduced as it doesn't have dimension '{axis}'.")
+        if len([d for d in field.domain.dims if d.kind is common.DimensionKind.LOCAL]) > 1:
+            raise NotImplementedError(
+                "Reducing a field with more than one local dimension is not supported."
+            )
         reduce_dim_index = field.domain.dims.index(axis)
+        current_offset_provider = embedded_context.offset_provider.get(None)
+        assert current_offset_provider is not None
+        offset_definition = current_offset_provider[
+            axis.value
+        ]  # assumes offset and local dimension have same name
+        assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
         new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+
+        broadcast_slice = tuple(
+            slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
+            for d in field.domain.dims
+        )
+        masked_array = xp.where(
+            xp.asarray(offset_definition.table[broadcast_slice]) != common._DEFAULT_SKIP_VALUE,
+            field.ndarray,
+            initial_value_op(field),
+        )
+
         return field.__class__.from_array(
-            getattr(field.array_ns, array_builtin_name)(field.ndarray, axis=reduce_dim_index),
+            getattr(xp, array_builtin_name)(
+                masked_array,
+                axis=reduce_dim_index,
+            ),
             domain=new_domain,
         )
 
@@ -505,9 +746,15 @@ def _make_reduction(builtin_name: str, array_builtin_name: str) -> Callable[
     return _builtin_op
 
 
-NdArrayField.register_builtin_func(fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum"))
-NdArrayField.register_builtin_func(fbuiltins.max_over, _make_reduction("max_over", "max"))
-NdArrayField.register_builtin_func(fbuiltins.min_over, _make_reduction("min_over", "min"))
+NdArrayField.register_builtin_func(
+    fbuiltins.neighbor_sum, _make_reduction("neighbor_sum", "sum", lambda x: x.dtype.scalar_type(0))
+)
+NdArrayField.register_builtin_func(
+    fbuiltins.max_over, _make_reduction("max_over", "max", lambda x: x.array_ns.min(x._ndarray))
+)
+NdArrayField.register_builtin_func(
+    fbuiltins.min_over, _make_reduction("min_over", "min", lambda x: x.array_ns.max(x._ndarray))
+)
 
 
 # -- Concrete array implementations --
@@ -565,7 +812,9 @@ if jnp:
     common._field.register(jnp.ndarray, JaxArrayField.from_array)
 
 
-def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]) -> common.Field:
+def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) -> common.Field:
+    if field.domain.dims == new_dimensions:
+        return field
     domain_slice: list[slice | None] = []
     named_ranges = []
     for dim in new_dimensions:
@@ -573,7 +822,7 @@ def _broadcast(field: common.Field, new_dimensions: tuple[common.Dimension, ...]
             domain_slice.append(slice(None))
             named_ranges.append((dim, field.domain[pos][1]))
         else:
-            domain_slice.append(np.newaxis)
+            domain_slice.append(None)  # np.newaxis
             named_ranges.append((dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 

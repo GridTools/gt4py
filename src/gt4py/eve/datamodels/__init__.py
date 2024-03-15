@@ -113,5 +113,5 @@ Examples:
 
 """
 
-from . import core as core, validators as validators  # noqa: F401  # imported but unused
-from .core import *  # noqa:   # star unused import
+from . import core as core, validators as validators  # imported but unused
+from .core import *  # noqa: F403 [undefined-local-with-import-star]

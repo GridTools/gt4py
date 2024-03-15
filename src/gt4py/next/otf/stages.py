@@ -17,6 +17,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
+from gt4py.next import common
+from gt4py.next.ffront import program_ast as past
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
@@ -28,6 +30,15 @@ SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
 SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
 TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class PastClosure:
+    closure_vars: dict[str, Any]
+    past_node: past.Program
+    grid_type: common.GridType
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -122,8 +133,14 @@ def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryD
 
     Examples:
     ---------
-    >>> libs_a = (interface.LibraryDependency("foo", "1.2.3"), interface.LibraryDependency("common", "1.0.0"))
-    >>> libs_b = (interface.LibraryDependency("common", "1.0.0"), interface.LibraryDependency("bar", "1.2.3"))
+    >>> libs_a = (
+    ...     interface.LibraryDependency("foo", "1.2.3"),
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ... )
+    >>> libs_b = (
+    ...     interface.LibraryDependency("common", "1.0.0"),
+    ...     interface.LibraryDependency("bar", "1.2.3"),
+    ... )
     >>> _unique_libs(*libs_a, *libs_b)
     (LibraryDependency(name='foo', version='1.2.3'), LibraryDependency(name='common', version='1.0.0'), LibraryDependency(name='bar', version='1.2.3'))
     """

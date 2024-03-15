@@ -34,6 +34,7 @@ dependencies = [
   'cytoolz>=0.12.1',
   'deepdiff>=5.6.0',
   'devtools>=0.6',
+  'factory-boy>=3.3.0',
   'frozendict>=2.3',
   'gridtools-cpp>=2.3.2,==2.*',
   "importlib-resources>=5.0;python_version<'3.9'",
@@ -93,26 +94,6 @@ Homepage = 'https://gridtools.github.io/'
 Source = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
-# -- black --
-[tool.black]
-exclude = '''
-/(
-    \.git
-  | \.gt_cache
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-include = '\.pyi?$'
-line-length = 100
-target-version = ['py310']
-
 # -- coverage --
 [tool.coverage]
 
@@ -135,99 +116,6 @@ ignore_errors = true
 [tool.coverage.run]
 branch = true
 source_pkgs = ['gt4py']
-
-# -- flake8  --
-# flake8-pyproject plugin is used to load configuration settings
-# from this file, since flake8 doesn't support it natively.
-[tool.flake8]
-count = true
-doctests = true
-exclude = [
-  '.eggs',
-  '.gt_cache',
-  '.ipynb_checkpoints',
-  '.tox',
-  '_local/',
-  'build',
-  'dist',
-  'docs',
-  'tests/_disabled',
-  'setup.py'
-]
-ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review this ignore
-  'D1',  # Public code object needs docstring
-  'DAR',  # Disable dargling errors by default
-  'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'W503',  # Line break occurred before a binary operator
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'E704'  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-]
-max-complexity = 15
-max-line-length = 100  # It should be the same as in `tool.black.line-length` above
-per-file-ignores = [
-  'src/gt4py/eve/extended_typing.py:F401,F405',
-  'src/gt4py/next/__init__.py:F401'  # We import stuff there in order to reexport.
-]
-rst-roles = [
-  'py:mod, mod',
-  'py:func, func',
-  'py:data, data',
-  'py:const, const',
-  'py:class, class',
-  'py:meth, meth',
-  'py:attr, attr',
-  'py:exc, exc',
-  'py:obj, obj'
-]
-
-# -- isort --
-[tool.isort]
-combine_as_imports = true
-group_by_package = true
-known_first_party = ['gt4py', '__externals__', '__gtscript__']
-known_tests = ['cartesian_tests', 'eve_tests', 'next_tests', 'storage_tests']
-known_third_party = [
-  'attr',
-  'black',
-  'boltons',
-  'cached_property',
-  'click',
-  'cupy',
-  'dace',
-  'devtools',
-  'factory',
-  'hypothesis',
-  'importlib_resources',
-  'jinja2',
-  'mako',
-  'networkx',
-  'numpy',
-  'packaging',
-  'pybind11',
-  'pytest',
-  'pytest_factoryboy',
-  'setuptools',
-  'tabulate',
-  'typing_extensions',
-  'xxhash'
-]
-lexicographical = true
-line_length = 100  # It should be the same as in `tool.black.line-length` above
-lines_after_imports = 2
-profile = 'black'
-sections = [
-  'FUTURE',
-  'STDLIB',
-  'THIRDPARTY',
-  'FIRSTPARTY',
-  'TESTS',
-  'LOCALFOLDER'
-]
-skip_gitignore = true
-skip_glob = ['*.venv/**', '_local/**']
 
 # -- mypy  --
 [tool.mypy]
@@ -319,12 +207,13 @@ disallow_incomplete_defs = false
 module = 'gt4py.next.*'
 
 [[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.ffront.decorator'
+# TODO: temporarily to propagate it to all of next
+disallow_incomplete_defs = true
+module = 'gt4py.next.ffront.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
-module = 'gt4py.next.type_system.type_translation'
+module = 'gt4py.next.ffront.decorator'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
@@ -375,10 +264,13 @@ line-length = 100  # It should be the same as in `tool.black.line-length` above
 respect-gitignore = true
 show-fixes = true
 # show-source = true
-target-version = 'py310'
+target-version = 'py38'
 
 [tool.ruff.format]
 docstring-code-format = true
+# Reevaluate once ruff adds support for single-line ellipsis in the stable style.
+# Track: https://github.com/astral-sh/ruff/issues/8678)
+preview = true
 
 [tool.ruff.lint]
 # # Rules sets:
@@ -392,14 +284,7 @@ docstring-code-format = true
 # NPY: NumPy-specific rules
 # RUF: Ruff-specific rules
 ignore = [
-  'B008',  # Do not perform function calls in argument defaults
-  # 'B028',  # Consider replacing f"'{foo}'" with f"{foo!r}"  # TODO: review
-  'B905',  # B905 `zip()` without an explicit `strict=` parameter  # TODO: review
-  # 'D1',  # Public code object needs docstring
-  # 'E203',  # Whitespace before ':' (black formatter breaks this sometimes)
-  'E501',  # Line too long (using Bugbear's B950 warning)
-  'E701',  # Multiple statements on one line, see https://github.com/psf/black/issues/3887
-  'RUF100'
+  'E501'  # [line-too-long]
 ]
 ignore-init-module-imports = true
 select = ['E', 'F', 'I', 'B', 'A', 'T10', 'ERA', 'NPY', 'RUF']
@@ -454,6 +339,7 @@ split-on-trailing-comma = false
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
+'src/gt4py/cartesian/*' = ['RUF012']
 'src/gt4py/eve/extended_typing.py' = ['F401', 'F405']
 'src/gt4py/next/__init__.py' = ['F401']
 

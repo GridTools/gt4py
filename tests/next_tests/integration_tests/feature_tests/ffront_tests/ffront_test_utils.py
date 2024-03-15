@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # GT4Py - GridTools Framework
 #
 # Copyright (c) 2014-2023, ETH Zurich
@@ -21,7 +20,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next import common
+from gt4py.next import backend as next_backend, common
 from gt4py.next.ffront import decorator
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors import processor_interface as ppi
@@ -40,19 +39,30 @@ import next_tests
 
 
 @ppi.program_executor
-def no_backend(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
+def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
     """Temporary default backend to not accidentally test the wrong backend."""
     raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+class NoBackend(next_backend.Backend):
+    def __call__(self, program) -> None:
+        raise ValueError("No backend selected! Backend selection is mandatory in tests.")
+
+
+no_backend = NoBackend(executor=no_exec, transformer=None, allocator=None)
 
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
     OPTIONAL_PROCESSORS.append(next_tests.definitions.OptionalProgramBackendId.DACE_CPU)
-    OPTIONAL_PROCESSORS.append(
-        pytest.param(
-            next_tests.definitions.OptionalProgramBackendId.DACE_GPU, marks=pytest.mark.requires_gpu
-        )
-    ),
+    (
+        OPTIONAL_PROCESSORS.append(
+            pytest.param(
+                next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
+                marks=pytest.mark.requires_gpu,
+            )
+        ),
+    )
 
 
 @pytest.fixture(
@@ -239,12 +249,12 @@ def skip_value_mesh() -> MeshDescriptor:
 
     v2e_arr = np.array(
         [
-            [1, 8, 7, 0, -1],
-            [2, 8, 1, -1, -1],
-            [3, 9, 8, 2, -1],
-            [4, 10, 3, -1, -1],
-            [5, 11, 4, -1, -1],
-            [0, 6, 4, -1, -1],
+            [1, 8, 7, 0, common._DEFAULT_SKIP_VALUE],
+            [2, 8, 1, common._DEFAULT_SKIP_VALUE, common._DEFAULT_SKIP_VALUE],
+            [3, 9, 8, 2, common._DEFAULT_SKIP_VALUE],
+            [4, 10, 3, common._DEFAULT_SKIP_VALUE, common._DEFAULT_SKIP_VALUE],
+            [5, 11, 4, common._DEFAULT_SKIP_VALUE, common._DEFAULT_SKIP_VALUE],
+            [0, 6, 4, common._DEFAULT_SKIP_VALUE, common._DEFAULT_SKIP_VALUE],
             [6, 7, 9, 10, 11],
         ],
         dtype=gtx.IndexType,

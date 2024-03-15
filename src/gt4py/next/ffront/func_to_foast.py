@@ -66,14 +66,16 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     If a syntax error is encountered, it will point to the location in the source code.
 
     >>> def wrong_syntax(inp: Field[[IDim], int]):
-    ...     for i in [1, 2, 3]: # for is not part of the field operator syntax
+    ...     for i in [1, 2, 3]:  # for is not part of the field operator syntax
     ...         tmp = inp
     ...     return tmp
     >>>
-    >>> try:                # doctest: +ELLIPSIS
+    >>> try:  # doctest: +ELLIPSIS
     ...     FieldOperatorParser.apply_to_function(wrong_syntax)
     ... except errors.DSLError as err:
-    ...     print(f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})")
+    ...     print(
+    ...         f"Error at [{err.location.line}, {err.location.column}] in {err.location.filename})"
+    ...     )
     Error at [2, 5] in ...func_to_foast.FieldOperatorParser[...]>)
     """
 
@@ -148,7 +150,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         return result, to_be_inserted.keys()
 
-    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs) -> foast.FunctionDefinition:
+    def visit_FunctionDef(self, node: ast.FunctionDef, **kwargs: Any) -> foast.FunctionDefinition:
         loc = self.get_location(node)
         closure_var_symbols, skip_names = self._builtin_type_constructor_symbols(
             self.closure_vars, self.get_location(node)
@@ -190,7 +192,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             raise errors.InvalidParameterAnnotationError(loc, node.arg, new_type)
         return foast.DataSymbol(id=node.arg, location=loc, type=new_type)
 
-    def visit_Assign(self, node: ast.Assign, **kwargs) -> foast.Assign | foast.TupleTargetAssign:
+    def visit_Assign(
+        self, node: ast.Assign, **kwargs: Any
+    ) -> foast.Assign | foast.TupleTargetAssign:
         target = node.targets[0]  # there is only one element after assignment passes
 
         if isinstance(target, ast.Tuple):
@@ -221,7 +225,9 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     )
 
             return foast.TupleTargetAssign(
-                targets=new_targets, value=self.visit(node.value), location=self.get_location(node)
+                targets=new_targets,
+                value=self.visit(node.value),
+                location=self.get_location(node),
             )
 
         if not isinstance(target, ast.Name):
@@ -245,7 +251,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self.get_location(node),
         )
 
-    def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs) -> foast.Assign:
+    def visit_AnnAssign(self, node: ast.AnnAssign, **kwargs: Any) -> foast.Assign:
         if not isinstance(node.target, ast.Name):
             raise errors.DSLError(self.get_location(node), "Can only assign to names.")
 
@@ -284,7 +290,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 return node.operand.value
         raise ValueError(f"Not an index: '{node}'.")
 
-    def visit_Subscript(self, node: ast.Subscript, **kwargs) -> foast.Subscript:
+    def visit_Subscript(self, node: ast.Subscript, **kwargs: Any) -> foast.Subscript:
         try:
             index = self._match_index(node.slice)
         except ValueError:
@@ -300,15 +306,18 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         return foast.Attribute(
-            value=self.visit(node.value), attr=node.attr, location=self.get_location(node)
+            value=self.visit(node.value),
+            attr=node.attr,
+            location=self.get_location(node),
         )
 
-    def visit_Tuple(self, node: ast.Tuple, **kwargs) -> foast.TupleExpr:
+    def visit_Tuple(self, node: ast.Tuple, **kwargs: Any) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts], location=self.get_location(node)
+            elts=[self.visit(item) for item in node.elts],
+            location=self.get_location(node),
         )
 
-    def visit_Return(self, node: ast.Return, **kwargs) -> foast.Return:
+    def visit_Return(self, node: ast.Return, **kwargs: Any) -> foast.Return:
         loc = self.get_location(node)
         if not node.value:
             raise errors.DSLError(loc, "Must return a value, not None")
@@ -317,29 +326,29 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def visit_Expr(self, node: ast.Expr) -> foast.Expr:
         return self.visit(node.value)
 
-    def visit_Name(self, node: ast.Name, **kwargs) -> foast.Name:
+    def visit_Name(self, node: ast.Name, **kwargs: Any) -> foast.Name:
         return foast.Name(id=node.id, location=self.get_location(node))
 
-    def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs) -> foast.UnaryOp:
+    def visit_UnaryOp(self, node: ast.UnaryOp, **kwargs: Any) -> foast.UnaryOp:
         return foast.UnaryOp(
             op=self.visit(node.op),
             operand=self.visit(node.operand),
             location=self.get_location(node),
         )
 
-    def visit_UAdd(self, node: ast.UAdd, **kwargs) -> dialect_ast_enums.UnaryOperator:
+    def visit_UAdd(self, node: ast.UAdd, **kwargs: Any) -> dialect_ast_enums.UnaryOperator:
         return dialect_ast_enums.UnaryOperator.UADD
 
-    def visit_USub(self, node: ast.USub, **kwargs) -> dialect_ast_enums.UnaryOperator:
+    def visit_USub(self, node: ast.USub, **kwargs: Any) -> dialect_ast_enums.UnaryOperator:
         return dialect_ast_enums.UnaryOperator.USUB
 
-    def visit_Not(self, node: ast.Not, **kwargs) -> dialect_ast_enums.UnaryOperator:
+    def visit_Not(self, node: ast.Not, **kwargs: Any) -> dialect_ast_enums.UnaryOperator:
         return dialect_ast_enums.UnaryOperator.NOT
 
-    def visit_Invert(self, node: ast.Invert, **kwargs) -> dialect_ast_enums.UnaryOperator:
+    def visit_Invert(self, node: ast.Invert, **kwargs: Any) -> dialect_ast_enums.UnaryOperator:
         return dialect_ast_enums.UnaryOperator.INVERT
 
-    def visit_BinOp(self, node: ast.BinOp, **kwargs) -> foast.BinOp:
+    def visit_BinOp(self, node: ast.BinOp, **kwargs: Any) -> foast.BinOp:
         return foast.BinOp(
             op=self.visit(node.op),
             left=self.visit(node.left),
@@ -347,42 +356,42 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self.get_location(node),
         )
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Add(self, node: ast.Add, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Sub(self, node: ast.Sub, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Mult(self, node: ast.Mult, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Div(self, node: ast.Div, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Pow(self, node: ast.Pow, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Mod(self, node: ast.Mod, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitOr(self, node: ast.BitOr, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_OR
 
-    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitXor(self, node: ast.BitXor, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_XOR
 
-    def visit_BoolOp(self, node: ast.BoolOp, **kwargs) -> None:
+    def visit_BoolOp(self, node: ast.BoolOp, **kwargs: Any) -> None:
         raise errors.UnsupportedPythonFeatureError(
             self.get_location(node), "logical operators `and`, `or`"
         )
 
-    def visit_IfExp(self, node: ast.IfExp, **kwargs) -> foast.TernaryExpr:
+    def visit_IfExp(self, node: ast.IfExp, **kwargs: Any) -> foast.TernaryExpr:
         return foast.TernaryExpr(
             condition=self.visit(node.test),
             true_expr=self.visit(node.body),
@@ -391,7 +400,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             type=ts.DeferredType(constraint=ts.DataType),
         )
 
-    def visit_If(self, node: ast.If, **kwargs) -> foast.IfStmt:
+    def visit_If(self, node: ast.If, **kwargs: Any) -> foast.IfStmt:
         loc = self.get_location(node)
         return foast.IfStmt(
             condition=self.visit(node.test, **kwargs),
@@ -401,14 +410,14 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
         )
 
     def _visit_stmts(
-        self, stmts: list[ast.stmt], location: eve.SourceLocation, **kwargs
+        self, stmts: list[ast.stmt], location: eve.SourceLocation, **kwargs: Any
     ) -> foast.BlockStmt:
         return foast.BlockStmt(
             stmts=[self.visit(el, **kwargs) for el in stmts if not isinstance(el, ast.Pass)],
             location=location,
         )
 
-    def visit_Compare(self, node: ast.Compare, **kwargs) -> foast.Compare:
+    def visit_Compare(self, node: ast.Compare, **kwargs: Any) -> foast.Compare:
         loc = self.get_location(node)
         if len(node.ops) != 1 or len(node.comparators) != 1:
             # Remove comparison chains in a preprocessing pass
@@ -421,25 +430,25 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=loc,
         )
 
-    def visit_Gt(self, node: ast.Gt, **kwargs) -> foast.CompareOperator:
+    def visit_Gt(self, node: ast.Gt, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.GT
 
-    def visit_Lt(self, node: ast.Lt, **kwargs) -> foast.CompareOperator:
+    def visit_Lt(self, node: ast.Lt, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.LT
 
-    def visit_Eq(self, node: ast.Eq, **kwargs) -> foast.CompareOperator:
+    def visit_Eq(self, node: ast.Eq, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.EQ
 
-    def visit_LtE(self, node: ast.LtE, **kwargs) -> foast.CompareOperator:
+    def visit_LtE(self, node: ast.LtE, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.LTE
 
-    def visit_GtE(self, node: ast.GtE, **kwargs) -> foast.CompareOperator:
+    def visit_GtE(self, node: ast.GtE, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.GTE
 
-    def visit_NotEq(self, node: ast.NotEq, **kwargs) -> foast.CompareOperator:
+    def visit_NotEq(self, node: ast.NotEq, **kwargs: Any) -> foast.CompareOperator:
         return foast.CompareOperator.NOTEQ
 
-    def _verify_builtin_type_constructor(self, node: ast.Call):
+    def _verify_builtin_type_constructor(self, node: ast.Call) -> None:
         if len(node.args) > 0 and not isinstance(node.args[0], ast.Constant):
             raise errors.DSLError(
                 self.get_location(node),
@@ -449,7 +458,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
     def _func_name(self, node: ast.Call) -> str:
         return node.func.id  # type: ignore[attr-defined] # We want this to fail if the attribute does not exist unexpectedly.
 
-    def visit_Call(self, node: ast.Call, **kwargs) -> foast.Call:
+    def visit_Call(self, node: ast.Call, **kwargs: Any) -> foast.Call:
         # TODO(tehrengruber): is this still needed or redundant with the checks in type deduction?
         if isinstance(node.func, ast.Name):
             func_name = self._func_name(node)
@@ -463,7 +472,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             location=self.get_location(node),
         )
 
-    def visit_Constant(self, node: ast.Constant, **kwargs) -> foast.Constant:
+    def visit_Constant(self, node: ast.Constant, **kwargs: Any) -> foast.Constant:
         loc = self.get_location(node)
         try:
             type_ = type_translation.from_value(node.value)

@@ -19,6 +19,7 @@ import functools
 import warnings
 from typing import Any, Callable, Final, Optional
 
+import factory
 import numpy as np
 
 from gt4py._core import definitions as core_defs
@@ -191,8 +192,9 @@ class GTFNTranslationStep(
         lift_mode = runtime_lift_mode or self.lift_mode
         if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
             warnings.warn(
-                f"GTFN Backend was configured for LiftMode `{str(self.lift_mode)}`, but "
-                f"overriden to be {str(runtime_lift_mode)} at runtime."
+                f"GTFN Backend was configured for LiftMode `{self.lift_mode!s}`, but "
+                f"overriden to be {runtime_lift_mode!s} at runtime.",
+                stacklevel=2,
             )
 
         if not self.enable_itir_transforms:
@@ -349,6 +351,11 @@ class GTFNTranslationStep(
             f"{self.__class__.__name__} is not implemented for "
             f"device type {self.device_type.name}"
         )
+
+
+class GTFNTranslationStepFactory(factory.Factory):
+    class Meta:
+        model = GTFNTranslationStep
 
 
 translate_program_cpu: Final[step_types.TranslationStep] = GTFNTranslationStep()

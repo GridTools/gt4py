@@ -14,7 +14,6 @@
 
 """Global configuration of test generation and execution with pytest."""
 
-
 import pytest
 
 from . import definitions

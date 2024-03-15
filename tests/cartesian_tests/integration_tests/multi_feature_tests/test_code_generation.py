@@ -23,6 +23,7 @@ from gt4py.cartesian.gtscript import (
     FORWARD,
     PARALLEL,
     Field,
+    GlobalTable,
     I,
     J,
     computation,
@@ -64,7 +65,9 @@ def test_generation(name, backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_lazy_stencil(backend):
     @gtscript.lazy_stencil(backend=backend)
-    def definition(field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]):
+    def definition(
+        field_a: gtscript.Field[np.float_], field_b: gtscript.Field[np.float_]
+    ):
         with computation(PARALLEL), interval(...):
             field_a = field_b
 
@@ -147,7 +150,9 @@ def test_stage_merger_induced_interval_block_reordering(backend):
     )
 
     @gtscript.stencil(backend=backend)
-    def stencil(field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]):
+    def stencil(
+        field_in: gtscript.Field[np.float_], field_out: gtscript.Field[np.float_]
+    ):
         with computation(BACKWARD):
             with interval(-2, -1):  # block 1
                 field_out = field_in
@@ -195,12 +200,20 @@ def test_lower_dimensional_inputs(backend):
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
-        full_shape[:-1], dtype, backend=backend, aligned_index=aligned_index[:-1], dimensions="IJ"
+        full_shape[:-1],
+        dtype,
+        backend=backend,
+        aligned_index=aligned_index[:-1],
+        dimensions="IJ",
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        full_shape[-1:], dtype, backend=backend, aligned_index=(aligned_index[-1],), dimensions="K"
+        full_shape[-1:],
+        dtype,
+        backend=backend,
+        aligned_index=(aligned_index[-1],),
+        dimensions="K",
     )
     assert list(field_1d.shape) == [full_shape[-1]]
 
@@ -278,12 +291,15 @@ def test_lower_dimensional_masked_2dcond(backend):
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        inp: gtscript.Field[gtscript.IJ, np.float_], outp: gtscript.Field[gtscript.IJK, np.float_]
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
 
-    inp_f = gt_storage.from_array(np.random.randn(10, 10), aligned_index=(0, 0), backend=backend)
+    inp_f = gt_storage.from_array(
+        np.random.randn(10, 10), aligned_index=(0, 0), backend=backend
+    )
     outp_f = gt_storage.from_array(
         np.random.randn(10, 10, 10), aligned_index=(0, 0, 0), backend=backend
     )
@@ -468,7 +484,9 @@ def test_write_data_dim_indirect_addressing(backend):
         full_shape, backend=backend, aligned_index=aligned_index, dtype=INT32_VEC2
     )
 
-    gtscript.stencil(definition=stencil, backend=backend)(input_field, output_field, index := 1)
+    gtscript.stencil(definition=stencil, backend=backend)(
+        input_field, output_field, index := 1
+    )
     assert output_field[0, 0, 0, index] == 1
 
 
@@ -565,7 +583,9 @@ def test_origin_k_fields(backend):
     inp = storage_utils.cpu_copy(inp)
     outp = storage_utils.cpu_copy(outp)
     np.testing.assert_allclose(data, inp)
-    np.testing.assert_allclose(np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1])
+    np.testing.assert_allclose(
+        np.broadcast_to(data[2:], shape=(2, 2, 8)), outp[:, :, 1:-1]
+    )
     np.testing.assert_allclose(0.0, outp[:, :, 0])
     np.testing.assert_allclose(0.0, outp[:, :, -1])
 
@@ -666,14 +686,16 @@ def test_K_offset_write_conditional(backend):
     # the read-connector is used which means you can never
     # update the field in a while.
     if backend.startswith("dace") or backend == "cuda":
-        pytest.skip("DaCe backends have a bug when handling while loop")
+        pytest.skip("DaCe backends have a bug when handling while loop.")
 
     arraylib = _get_array_library(backend)
     array_shape = (1, 1, 4)
     K_values = arraylib.arange(start=40, stop=44)
 
     @gtscript.stencil(backend=backend)
-    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+    def column_physics_conditional(
+        A: Field[np.float64], B: Field[np.float64], scalar: np.float64
+    ):
         with computation(BACKWARD), interval(1, None):
             if A > 0 and B > 0:
                 A[0, 0, -1] = scalar
@@ -694,3 +716,19 @@ def test_K_offset_write_conditional(backend):
     column_physics_conditional(A, B, 2.0)
     assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
     assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_direct_datadims_index(backend):
+    F64_VEC4 = (np.float64, (2, 2, 2, 2))
+
+    @gtscript.stencil(backend=backend)
+    def test(out: Field[np.float64], inp: GlobalTable[F64_VEC4]):
+        with computation(PARALLEL), interval(...):
+            out = inp.A[1, 0, 1, 0]
+
+    inp = gt_storage.ones(backend=backend, shape=(2, 2, 2, 2), dtype=np.float64)
+    inp[1, 0, 1, 0] = 42
+    out = gt_storage.zeros(backend=backend, shape=(2, 2, 2), dtype=np.float64)
+    test(out, inp)
+    assert (out[:] == 42).all()
