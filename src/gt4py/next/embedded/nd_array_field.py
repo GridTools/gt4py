@@ -135,10 +135,10 @@ class NdArrayField(
             return np.asarray(self._ndarray)
 
     def as_scalar(self) -> core_defs.ScalarT:
-        # if self.domain.ndim != 0:
-        #     raise ValueError(
-        #         "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-        #     )
+        if self.domain.ndim != 0:
+            raise ValueError(
+                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+            )
         return self.ndarray.item()
 
     @property

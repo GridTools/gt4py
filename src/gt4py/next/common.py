@@ -413,9 +413,9 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         else:
             if not all(is_named_range(arg) for arg in args):
                 args = tuple(named_range(arg) for arg in args)
-                # raise ValueError(
-                #     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
-                # )
+                raise ValueError(
+                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                )
             dims_new = (arg.dim for arg in args) if args else ()
             ranges_new = (arg.urange for arg in args) if args else ()
             object.__setattr__(self, "dims", tuple(dims_new))
