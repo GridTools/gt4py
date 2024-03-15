@@ -228,6 +228,7 @@ class CLIBackendMixin(Backend):
 
 class BaseBackend(Backend):
     MODULE_GENERATOR_CLASS: ClassVar[Type["BaseModuleGenerator"]]
+    deprecated: bool = False
 
     def load(self) -> Optional[Type["StencilObject"]]:
         build_info = self.builder.options.build_info

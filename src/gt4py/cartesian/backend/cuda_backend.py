@@ -147,12 +147,14 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
+    deprecated = not GT4PY_GTC_CUDA_USE
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
 
     def generate(self) -> Type["StencilObject"]:
-        if GT4PY_GTC_CUDA_USE:
+        # We push for hard deprecation here by raising by default and warning if use has been forced.
+        if not self.deprecated:
             warnings.warn(
                 "cuda backend is deprecated, feature developed after February 2024 will not be available",
                 DeprecationWarning,
@@ -161,7 +163,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         else:
             raise NotImplementedError(
                 "cuda backend is no longer maintained (February 2024)."
-                "You can still force the use of the backend by defining GT4PY_GTC_CUDA_USE=1"
+                "You can still force the use of the backend by defining GT4PY_GTC_CUDA_USE=1."
             )
 
         self.check_options(self.builder.options)
