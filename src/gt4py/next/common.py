@@ -168,6 +168,11 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE
 
+    def is_empty(self) -> bool:
+        return (
+            self.start == 0 and self.stop == 0
+        )  # post_init ensures that empty is represented as UnitRange(0, 0)
+
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
 
@@ -434,6 +439,9 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
     def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+
+    def is_empty(self) -> bool:
+        return any(rng.is_empty() for rng in self.ranges)
 
     @overload
     def __getitem__(self, index: int) -> NamedRange: ...

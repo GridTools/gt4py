@@ -25,7 +25,6 @@ import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401 [unused-import]
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -59,6 +58,10 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
+    elif t is FieldOffset:
+        return ts.OffsetType
+    elif t is common.ConnectivityField:
+        return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
@@ -88,6 +91,7 @@ class BuiltInFunction(Generic[_R, _P]):
 
     def __post_init__(self):
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+        object.__setattr__(self, "__doc__", self.function.__doc__)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         impl = self.dispatch(*args)
@@ -147,7 +151,7 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(where(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(self(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 
@@ -295,7 +299,6 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
-    "as_offset",
     *MATH_BUILTIN_NAMES,
 ]
 

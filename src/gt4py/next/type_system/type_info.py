@@ -474,7 +474,7 @@ def return_type(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     raise NotImplementedError(
         f"Return type deduction of type " f"'{type(callable_type).__name__}' not implemented."
     )
@@ -486,7 +486,7 @@ def return_type_func(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     return func_type.returns
 
 
@@ -496,9 +496,14 @@ def return_type_field(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.FieldType:
     try:
-        accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
+        accepts_args(
+            field_type,
+            with_args=with_args,
+            with_kwargs=with_kwargs,
+            raise_exception=True,
+        )
     except ValueError as ex:
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
@@ -609,7 +614,8 @@ def structural_function_signature_incompatibilities(
 
     missing_positional_args = []
     for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
+        range(len(func_type.pos_only_args), num_pos_params),
+        func_type.pos_or_kw_args.keys(),
     ):
         if args[i] is UNDEFINED_ARG:
             missing_positional_args.append(f"'{arg_type}'")
@@ -667,7 +673,7 @@ def function_signature_incompatibilities_func(
             and not is_concretizable(a_arg, to_type=b_arg)
         ):
             if i < len(func_type.pos_only_args):
-                arg_repr = f"{_number_to_ordinal_number(i+1)} argument"
+                arg_repr = f"{_number_to_ordinal_number(i + 1)} argument"
             else:
                 arg_repr = f"argument '{list(func_type.pos_or_kw_args.keys())[i - len(func_type.pos_only_args)]}'"
             yield f"Expected {arg_repr} to be of type '{a_arg}', got '{b_arg}'."

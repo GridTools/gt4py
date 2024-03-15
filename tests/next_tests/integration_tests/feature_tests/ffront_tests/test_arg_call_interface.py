@@ -286,7 +286,7 @@ def test_call_bound_program_with_wrong_args(cartesian_case, bound_args_testee):
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(out, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.executor)(out, offset_provider={})
 
     assert (
         re.search(
@@ -302,7 +302,9 @@ def test_call_bound_program_with_already_bound_arg(cartesian_case, bound_args_te
     out = cases.allocate(cartesian_case, bound_args_testee, "out")()
 
     with pytest.raises(TypeError) as exc_info:
-        program_with_bound_arg(True, out, arg2=True, offset_provider={})
+        program_with_bound_arg.with_backend(cartesian_case.executor)(
+            True, out, arg2=True, offset_provider={}
+        )
 
     assert (
         re.search(
