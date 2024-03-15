@@ -273,7 +273,7 @@ Similarly to the previous example, the output is once again a field on edges. Th
 ```{code-cell} ipython3
 @gtx.field_operator
 def sum_adjacent_cells(cells : gtx.Field[Dims[CellDim], float64]) -> gtx.Field[Dims[EdgeDim], float64]:
-    # type of cells(E2C) is gtx.Field[Dims[CellDim, E2CDim], float64]
+    # type of cells(E2C) is gtx.Field[Dims[EdgeDim, E2CDim], float64]
     return neighbor_sum(cells(E2C), axis=E2CDim)
 
 @gtx.program
