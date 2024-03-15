@@ -143,13 +143,24 @@ def restrict_to_intersection(
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
     intersection_without_ignore_dims = domain_intersection(*[
-        common.Domain(*[(d, r) for d, r in domain if d not in ignore_dims_tuple])
+        common.Domain(*[
+            common.named_range((domain.dims[i], domain.ranges[i]))
+            for i in range(domain.ndim)
+            if domain.dims[i] not in ignore_dims_tuple
+        ])
         for domain in domains
     ])
     return tuple(
         common.Domain(*[
-            (d, r if d in ignore_dims_tuple else intersection_without_ignore_dims[d][1])
-            for d, r in domain
+            common.named_range((
+                domain.dims[i],
+                domain.ranges[i]
+                if domain.dims[i] in ignore_dims_tuple
+                else intersection_without_ignore_dims.ranges[
+                    intersection_without_ignore_dims.dims.index(domain.dims[i])
+                ],
+            ))
+            for i in range(domain.ndim)
         ])
         for domain in domains
     )
@@ -197,8 +208,8 @@ def _find_index_of_dim(
             if domain_slice.dims[i] == dim:
                 return i
     else:
-        for i, (d, _) in enumerate(domain_slice):
-            if dim == d:
+        for i, d_slice in enumerate(domain_slice):
+            if common.is_named_range(d_slice) and dim == d_slice.dim:
                 return i
     return None
 

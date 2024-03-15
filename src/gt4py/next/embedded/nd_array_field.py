@@ -135,10 +135,10 @@ class NdArrayField(
             return np.asarray(self._ndarray)
 
     def as_scalar(self) -> core_defs.ScalarT:
-        if self.domain.ndim != 0:
-            raise ValueError(
-                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
-            )
+        # if self.domain.ndim != 0:
+        #     raise ValueError(
+        #         "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+        #     )
         return self.ndarray.item()
 
     @property
@@ -229,6 +229,10 @@ class NdArrayField(
     __call__ = remap  # type: ignore[assignment]
 
     def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+        if isinstance(index, tuple):
+            index = tuple(
+                common.named_range(ind) if isinstance(ind, tuple) else ind for ind in index
+            )  # type: ignore[union-attr, assignment]
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
@@ -603,14 +607,15 @@ def _intersect_fields(
 def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
     if not domains:
         return common.Domain()
-    dim_start = domains[0][dim][1].start
+    dim_start = domains[0][domains[0].dims.index(dim)].urange.start
     dim_stop = dim_start
     for domain in domains:
-        if not domain[dim][1].start == dim_stop:
+        dim_idx = domain.dims.index(dim)
+        if not domain.ranges[dim_idx].start == dim_stop:
             return None
         else:
-            dim_stop = domain[dim][1].stop
-    return domains[0].replace(dim, (dim, common.UnitRange(dim_start, dim_stop)))
+            dim_stop = domain.ranges[dim_idx].stop
+    return domains[0].replace(dim, common.named_range((dim, common.UnitRange(dim_start, dim_stop))))
 
 
 def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
@@ -688,7 +693,7 @@ def _concat_where(
     if transformed:
         return _concat(*transformed, dim=mask_dim)
     else:
-        result_domain = common.Domain((mask_dim, common.UnitRange(0, 0)))
+        result_domain = common.Domain(common.named_range((mask_dim, common.UnitRange(0, 0))))
         result_array = xp.empty(result_domain.shape)
     return cls_.from_array(result_array, domain=result_domain)
 
@@ -877,7 +882,7 @@ def _get_slices_from_domain_slice(
             pos := embedded_common._find_index_of_dim(domain.dims[pos_old], domain_slice)
         ) is not None:
             index_or_range = (
-                domain_slice[pos][1]
+                domain_slice[pos].urange
                 if isinstance(domain_slice, tuple)
                 else domain_slice.ranges[pos]
             )

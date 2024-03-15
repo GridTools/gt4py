@@ -248,21 +248,20 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
 
 FiniteUnitRange: TypeAlias = UnitRange[int, int]
 
-
-RangeLike: TypeAlias = (
-    UnitRange
-    | range
-    | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
-    | core_defs.IntegralScalar
-    | None
-)
-
 _Rng = TypeVar(
     "_Rng",
     UnitRange[int, int],
     UnitRange[Infinity, int],
     UnitRange[int, Infinity],
     UnitRange[Infinity, Infinity],
+)
+
+RangeLike: TypeAlias = (
+    _Rng
+    | range
+    | tuple[core_defs.IntegralScalar, core_defs.IntegralScalar]
+    | core_defs.IntegralScalar
+    | None
 )
 
 
@@ -413,9 +412,10 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
             if not all(is_named_range(arg) for arg in args):
-                raise ValueError(
-                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
-                )
+                args = tuple(named_range(arg) for arg in args)
+                # raise ValueError(
+                #     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                # )
             dims_new = (arg.dim for arg in args) if args else ()
             ranges_new = (arg.urange for arg in args) if args else ()
             object.__setattr__(self, "dims", tuple(dims_new))
@@ -568,7 +568,7 @@ def domain(domain_like: DomainLike) -> Domain:
             return Domain(
                 dims=tuple(domain_like.keys()),
                 ranges=tuple(
-                    UnitRange(0, s)  # type: ignore[arg-type] # type of `s` is checked in condition
+                    UnitRange(0, s)
                     for s in domain_like.values()
                 ),
             )

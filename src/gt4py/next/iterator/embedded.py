@@ -914,10 +914,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
                 assert common.is_int_index(
                     v[0]
                 )  # derefing a concrete element in a sparse field, not a slice
-                domain_slice.append((d, v[0]))
+                domain_slice.append(common.named_range((d, v[0])))
             else:
                 assert common.is_int_index(v)
-                domain_slice.append((d, v))
+                domain_slice.append(common.named_range((d, common.UnitRange(v, v + 1))))
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
