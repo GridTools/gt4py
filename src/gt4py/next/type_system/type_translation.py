@@ -213,9 +213,9 @@ def from_value(value: Any) -> ts.TypeSpec:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)
 
-    if isinstance(
-        symbol_type, (ts.DataType, ts.CallableType, ts.OffsetType, ts.DimensionType)
-    ):  # TODO!!!
+    if isinstance(symbol_type, (ts.DataType, ts.OffsetType, ts.DimensionType)) or (
+        isinstance(symbol_type, ts.CallableType) and isinstance(symbol_type, ts.TypeSpec)
+    ):
         return symbol_type
     else:
         raise ValueError(f"Impossible to map '{value}' value to a 'Symbol'.")
