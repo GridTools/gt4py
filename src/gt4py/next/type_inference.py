@@ -142,11 +142,10 @@ def _free_variables(x: Type) -> set[TypeVar]:
 class _Dedup(eve.NodeTranslator):
     """Deduplicate type nodes that have the same value but a different `id`."""
 
-    def visit(self, node: T, *, memo: dict[T, T]) -> typing.Any:  # type: ignore[override]
+    def visit(self, node: Type | typing.Sequence[Type], *, memo: dict[Type, Type]) -> typing.Any:  # type: ignore[override]
         if isinstance(node, Type):
-            node = super().visit(node, memo=memo)
             return memo.setdefault(node, node)
-        return node
+        return self.generic_visit(node, memo=memo)
 
 
 def _assert_constituent_types(value: typing.Any, allowed_types: tuple[type, ...]) -> None:
