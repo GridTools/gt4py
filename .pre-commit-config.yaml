@@ -42,7 +42,13 @@ repos:
   - id: debug-statements
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
+  ##[[[cog
+  ## import re
+  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"rev: v{version}")
+  ##]]]
   rev: v0.2.0
+  ##[[[end]]]
   hooks:
     # Run the linter.
     # TODO: include tests here
