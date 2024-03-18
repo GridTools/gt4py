@@ -38,7 +38,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     """
     param = f"__toi_{eve_utils.content_hash(expr)}"
 
-    def fun(primitive_type: itir.Expr, path: tuple[int, ...]) -> itir.Expr:
+    def fun(primitive_type: ts.TypeSpec, path: tuple[int, ...]) -> itir.Expr:
         inner_expr = im.deref("it")
         for path_part in path:
             inner_expr = im.tuple_get(path_part, inner_expr)

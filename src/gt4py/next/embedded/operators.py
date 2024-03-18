@@ -65,13 +65,13 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         res = _construct_scan_array(out_domain, xp)(self.init)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
-            acc = self.init
+            acc: _R = self.init  # type: ignore[assignment] # `_R` not resolved?
             for k in scan_range[1] if self.forward else reversed(scan_range[1]):
                 pos = (*hpos, (scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
-                acc = self.fun(acc, *new_args, **new_kwargs)
-                _tuple_assign_value(pos, res, acc)
+                acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
+                _tuple_assign_value(pos, res, acc)  # type: ignore[arg-type] # requires more precise typing for `_R`
 
         if len(non_scan_domain) == 0:
             # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop

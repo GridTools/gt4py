@@ -86,7 +86,7 @@ class SparseTag(Tag): ...
 class NeighborTableOffsetProvider:
     def __init__(
         self,
-        table: npt.NDArray,
+        table: core_defs.NDArrayObject,
         origin_axis: common.Dimension,
         neighbor_axis: common.Dimension,
         max_neighbors: int,
@@ -103,7 +103,7 @@ class NeighborTableOffsetProvider:
     def mapped_index(
         self, primary: common.IntIndex, neighbor_idx: common.IntIndex
     ) -> common.IntIndex:
-        return self.table[(primary, neighbor_idx)]
+        return self.table[(primary, neighbor_idx)].item()
 
 
 class StridedNeighborOffsetProvider:
@@ -1088,7 +1088,7 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, item: common.AnyIndexSpec) -> xtyping.Self:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
@@ -1207,7 +1207,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, item: common.AnyIndexSpec) -> xtyping.Self:
         # TODO set a domain...
         return self
 

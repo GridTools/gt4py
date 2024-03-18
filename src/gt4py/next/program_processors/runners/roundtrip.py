@@ -100,7 +100,7 @@ def ${id}(${','.join(params)}):
             isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
             for r in node.domain.args
         )
-        domain_ranges = [self.visit(r.args) for r in node.domain.args]
+        domain_ranges = [self.visit(r.args) for r in node.domain.args]  # type: ignore[attr-defined] # `node.domain` is `FunCall` checked in previous assert
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"

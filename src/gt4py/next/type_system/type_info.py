@@ -15,7 +15,18 @@
 import functools
 import types
 import typing
-from typing import Any, Callable, Generator, Iterator, Protocol, Type, TypeGuard, TypeVar, cast
+from typing import (
+    Any,
+    Callable,
+    Generator,
+    Generic,
+    Iterator,
+    Protocol,
+    Type,
+    TypeGuard,
+    TypeVar,
+    cast,
+)
 
 import numpy as np
 
@@ -140,21 +151,23 @@ def primitive_constituents(
     return xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
-class TupleConstructorType(Protocol):
-    def __call__(self, *args: ts.TypeSpec) -> ts.TupleType: ...
-
-
+_R = TypeVar("_R", covariant=True)
 _T = TypeVar("_T")
 
 
+class TupleConstructorType(Protocol, Generic[_R]):
+    def __call__(self, *args: Any) -> _R: ...
+
+
+# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
-    fun: (Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
+    fun: (Callable[[ts.TypeSpec], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
     _path: tuple[int, ...] = (),
     *,
     with_path_arg: bool = False,
-    tuple_constructor: TupleConstructorType = lambda *elements: ts.TupleType(types=[*elements]),
-) -> _T:
+    tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
+) -> _T | _R:
     """
     Apply function to all primitive constituents of a type.
 
