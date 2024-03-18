@@ -103,7 +103,9 @@ class NeighborTableOffsetProvider:
     def mapped_index(
         self, primary: common.IntIndex, neighbor_idx: common.IntIndex
     ) -> common.IntIndex:
-        return self.table[(primary, neighbor_idx)].item()
+        res = self.table[(primary, neighbor_idx)]
+        assert common.is_int_index(res)
+        return res
 
 
 class StridedNeighborOffsetProvider:
