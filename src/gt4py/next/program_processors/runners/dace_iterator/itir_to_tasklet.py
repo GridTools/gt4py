@@ -404,7 +404,7 @@ def builtin_neighbors(
         origin_index_node,
         me,
         shift_tasklet,
-        memlet=dace.Memlet(data=origin_index_node.data, subset="0", debuginfo=di),
+        memlet=dace.Memlet(data=origin_index_node.data, subset="0"),
         dst_conn="__idx",
     )
     state.add_edge(
@@ -432,14 +432,14 @@ def builtin_neighbors(
         connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
         data_access_tasklet = state.add_tasklet(
             "data_access",
-            code=f"__data = __field[{data_access_index}] "
+            {"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
+            {"__data"},
+            f"__data = __field[{data_access_index}] "
             + (
                 f"if {connector_neighbor_dim} != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
                 if offset_provider.has_skip_values
                 else ""
             ),
-            inputs={"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
-            outputs={"__data"},
             debuginfo=di,
         )
         state.add_memlet_path(
@@ -472,7 +472,7 @@ def builtin_neighbors(
             data_access_tasklet,
             mx,
             neighbor_value_node,
-            memlet=dace.Memlet(data=neighbor_value_var, subset=neighbor_map_index, debuginfo=di),
+            memlet=dace.Memlet(data=neighbor_value_var, subset=neighbor_map_index),
             src_conn="__data",
         )
 
@@ -496,16 +496,24 @@ def builtin_neighbors(
 
         neighbor_valid_tasklet = state.add_tasklet(
             f"check_valid_neighbor_{offset_dim}",
-            {"__idx"},
+            {"__table", "__idx"},
             {"__valid"},
-            f"__valid = True if __idx != {neighbor_skip_value} else False",
+            f"__valid = __table[__idx, {neighbor_map_index}] != {neighbor_skip_value}",
+            debuginfo=di,
         )
-        state.add_edge(
-            neighbor_index_node,
-            None,
+        state.add_memlet_path(
+            state.add_access(table_name, debuginfo=di),
+            me,
             neighbor_valid_tasklet,
-            "__idx",
-            dace.Memlet(data=neighbor_index_var, subset="0"),
+            memlet=dace.Memlet.from_array(table_name, sdfg.arrays[table_name]),
+            dst_conn="__table",
+        )
+        state.add_memlet_path(
+            origin_index_node,
+            me,
+            neighbor_valid_tasklet,
+            memlet=dace.Memlet(data=origin_index_node.data, subset="0"),
+            dst_conn="__idx",
         )
         state.add_memlet_path(
             neighbor_valid_tasklet,
@@ -548,7 +556,7 @@ def builtin_can_deref(
             "_out",
             result_node,
             None,
-            dace.Memlet(data=result_name, subset="0", debuginfo=di),
+            dace.Memlet(data=result_name, subset="0"),
         )
         return [ValueExpr(result_node, dace.dtypes.bool)]
 
@@ -1588,7 +1596,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                 )
                 self.context.state.add_edge(arg.value, None, expr_tasklet, internal, memlet)
 
-        memlet = dace.Memlet(data=result_access.data, subset="0", debuginfo=di)
+        memlet = dace.Memlet(data=result_access.data, subset="0")
         self.context.state.add_edge(expr_tasklet, "__result", result_access, None, memlet)
 
         return [ValueExpr(result_access, result_type)]
