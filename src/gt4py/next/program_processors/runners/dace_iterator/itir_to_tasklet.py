@@ -572,7 +572,6 @@ def builtin_if(
     assert len(node_args) == 3
     sdfg = transformer.context.body
     current_state = transformer.context.state
-    is_start_state = sdfg.start_block == current_state
 
     # build an empty state to join true and false branches
     join_state = sdfg.add_state_before(current_state, "join")
@@ -589,7 +588,7 @@ def builtin_if(
         return node_taskgen.visit(arg)
 
     # represent the if-statement condition as a tasklet inside an `if_statement` state preceding `join` state
-    stmt_state = sdfg.add_state_before(join_state, "if_statement", is_start_state)
+    stmt_state = sdfg.add_state_before(join_state, "if_statement")
     stmt_node = build_if_state(node_args[0], stmt_state)[0]
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
@@ -813,7 +812,7 @@ _GENERAL_BUILTIN_MAPPING: dict[
 class GatherLambdaSymbolsPass(eve.NodeVisitor):
     _sdfg: dace.SDFG
     _state: dace.SDFGState
-    _symbol_map: dict[str, TaskletExpr]
+    _symbol_map: dict[str, TaskletExpr | tuple[ValueExpr]]
     _parent_symbol_map: dict[str, TaskletExpr]
 
     def __init__(
@@ -836,7 +835,7 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
         if isinstance(arg, ValueExpr):
             # create storage in lambda sdfg
             self._sdfg.add_scalar(param, dtype=arg.dtype)
-            # update table of lambda symbol
+            # update table of lambda symbols
             self._symbol_map[param] = ValueExpr(
                 self._state.add_access(param, debuginfo=self._sdfg.debuginfo), arg.dtype
             )
@@ -848,7 +847,7 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             index_names = {dim: f"__{param}_i_{dim}" for dim in arg.indices.keys()}
             for _, index_name in index_names.items():
                 self._sdfg.add_scalar(index_name, dtype=_INDEX_DTYPE)
-            # update table of lambda symbol
+            # update table of lambda symbols
             field = self._state.add_access(param, debuginfo=self._sdfg.debuginfo)
             indices = {
                 dim: self._state.add_access(index_arg, debuginfo=self._sdfg.debuginfo)
@@ -859,6 +858,17 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
             assert isinstance(arg, SymbolExpr)
             self._symbol_map[param] = arg
 
+    def _add_tuple(self, param, args):
+        nodes = []
+        # create storage in lambda sdfg for each tuple element
+        for arg in args:
+            var = unique_var_name()
+            self._sdfg.add_scalar(var, dtype=arg.dtype)
+            arg_node = self._state.add_access(var, debuginfo=self._sdfg.debuginfo)
+            nodes.append(ValueExpr(arg_node, arg.dtype))
+        # update table of lambda symbols
+        self._symbol_map[param] = tuple(nodes)
+
     def visit_SymRef(self, node: itir.SymRef):
         name = str(node.id)
         if name in self._parent_symbol_map and name not in self._symbol_map:
@@ -867,9 +877,13 @@ class GatherLambdaSymbolsPass(eve.NodeVisitor):
 
     def visit_Lambda(self, node: itir.Lambda, args: Optional[Sequence[TaskletExpr]] = None):
         if args is not None:
-            assert len(node.params) == len(args)
-            for param, arg in zip(node.params, args):
-                self._add_symbol(str(param.id), arg)
+            if len(node.params) == len(args):
+                for param, arg in zip(node.params, args):
+                    self._add_symbol(str(param.id), arg)
+            else:
+                # implicitly make tuple
+                assert len(node.params) == 1
+                self._add_tuple(str(node.params[0].id), args)
         self.visit(node.expr)
 
 
@@ -949,7 +963,8 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
         lambda_sdfg.debuginfo = dace_debuginfo(node, self.context.body.debuginfo)
-        lambda_state = lambda_sdfg.add_state(f"{func_name}_entry", True)
+        lambda_entry_state = lambda_sdfg.add_state(f"{func_name}_entry", is_start_block=True)
+        lambda_state = lambda_sdfg.add_state_after(lambda_entry_state, f"{func_name}_body")
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
             lambda_sdfg, lambda_state, self.context.symbol_map
@@ -959,9 +974,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         # Add for input nodes for lambda symbols
         inputs: list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]] = []
         for sym, input_node in lambda_symbols_pass.symbol_refs.items():
-            arg = next((arg for param, arg in zip(node.params, args) if param.id == sym), None)
-            if arg:
-                outer_node = arg
+            params = [str(p.id) for p in node.params]
+            try:
+                param_index = params.index(sym)
+            except ValueError:
+                param_index = -1
+            if param_index >= 0:
+                outer_node = args[param_index]
             else:
                 # the symbol is not found among lambda arguments, then it is inherited from parent scope
                 outer_node = self.context.symbol_map[sym]
@@ -974,6 +993,13 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             elif isinstance(input_node, ValueExpr):
                 assert isinstance(outer_node, ValueExpr)
                 inputs.append((sym, outer_node))
+            elif isinstance(input_node, tuple):
+                assert param_index >= 0
+                for i, input_node_i in enumerate(input_node):
+                    arg_i = args[param_index + i]
+                    assert isinstance(arg_i, ValueExpr)
+                    assert isinstance(input_node_i, ValueExpr)
+                    inputs.append((input_node_i.value.data, arg_i))
 
         # Add connectivities as arrays
         for name in connectivity_names:
