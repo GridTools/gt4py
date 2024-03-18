@@ -22,7 +22,8 @@ other errors.
 
 import sys
 import types
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Optional
 
 from gt4py.next import config
 

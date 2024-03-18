@@ -15,18 +15,8 @@
 import functools
 import types
 import typing
-from typing import (
-    Any,
-    Callable,
-    Generator,
-    Generic,
-    Iterator,
-    Protocol,
-    Type,
-    TypeGuard,
-    TypeVar,
-    cast,
-)
+from collections.abc import Callable, Iterator
+from typing import Any, Generic, Protocol, Type, TypeGuard, TypeVar, cast
 
 import numpy as np
 
@@ -135,10 +125,7 @@ def primitive_constituents(
 
     def constituents_yielder(
         symbol_type: ts.TypeSpec, path: tuple[int, ...]
-    ) -> (
-        Generator[ts.TypeSpec, None, None]
-        | Generator[tuple[ts.TypeSpec, tuple[int, ...]], None, None]
-    ):
+    ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int, ...]]]:
         if isinstance(symbol_type, ts.TupleType):
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))

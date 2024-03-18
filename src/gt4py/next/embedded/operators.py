@@ -118,7 +118,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
             res = ctx.run(op, *args, **kwargs)
             _tuple_assign_field(
                 out,
-                res,  # type: ignore[arg-type] # maybe can't inferred properly because decorator.py is not properly typed yet
+                res,  # type: ignore[arg-type] # maybe can't be inferred properly because decorator.py is not properly typed yet
                 domain=out_domain,
             )
         return None

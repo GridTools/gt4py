@@ -346,9 +346,7 @@ def unify(
     # Deduplicate type nodes, this can speed up later things a bit
     memo = dict[Type, Type]()
     dtypes = [_Dedup().visit(dtype, memo=memo) for dtype in dtypes]
-    constraints = {
-        _Dedup().visit(c, memo=memo) for c in constraints
-    }  # TODO this seems broken as _Dedup only works on `Type` not `Tuple[Type,Type]`. but also contraints is already a set?
+    constraints = {_Dedup().visit(c, memo=memo) for c in constraints}
     del memo
 
     unifier = _Unifier(dtypes, constraints)

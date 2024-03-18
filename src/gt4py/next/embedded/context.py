@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import contextlib
 import contextvars as cvars
-from typing import Any, Generator
+from collections.abc import Generator
+from typing import Any
 
 import gt4py.eve as eve
 import gt4py.next.common as common

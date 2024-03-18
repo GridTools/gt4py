@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Any, ClassVar, Iterable, Optional, Type, Union
+from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
 from gt4py.eve.concepts import SymbolName
@@ -191,7 +191,7 @@ def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
     return IntegralConstant(value=int(node.value))
 
 
-def _is_scan(node: itir.Node) -> bool:
+def _is_scan(node: itir.Node) -> TypeGuard[itir.FunCall]:
     return isinstance(node, itir.FunCall) and node.fun == itir.SymRef(id="scan")
 
 
@@ -454,7 +454,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
         if _is_scan(node.stencil):
             scan_id = self.uids.sequential_id(prefix="_scan")
-            assert isinstance(node.stencil, itir.FunCall)
             scan_lambda = self.visit(node.stencil.args[0], **kwargs)
             forward = _bool_from_literal(node.stencil.args[1])
             scan_def = ScanPassDefinition(
