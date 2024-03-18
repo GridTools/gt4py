@@ -570,23 +570,27 @@ def test_absolute_indexing_value_return():
         (
             (slice(None, 5), slice(None, 2)),
             (5, 2),
-            Domain((D0, UnitRange(5, 10)), (D1, UnitRange(2, 4))),
+            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 4))),
         ),
-        ((slice(None, 5),), (5, 10), Domain((D0, UnitRange(5, 10)), (D1, UnitRange(2, 12)))),
+        (
+            (slice(None, 5),),
+            (5, 10),
+            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 12))),
+        ),
         (
             (Ellipsis, 1),
             (10,),
-            Domain((D0, UnitRange(5, 15))),
+            Domain(NamedRange(D0, UnitRange(5, 15))),
         ),
         (
             (slice(2, 3), slice(5, 7)),
             (1, 2),
-            Domain((D0, UnitRange(7, 8)), (D1, UnitRange(7, 9))),
+            Domain(NamedRange(D0, UnitRange(7, 8)), NamedRange(D1, UnitRange(7, 9))),
         ),
         (
             (slice(1, 2), 0),
             (1,),
-            Domain((D0, UnitRange(6, 7))),
+            Domain(NamedRange(D0, UnitRange(6, 7))),
         ),
     ],
 )
@@ -695,7 +699,9 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common._field(np.ones((10,)) * 42.0, domain=common.Domain((D1, UnitRange(0, 10)))),
+            common._field(
+                np.ones((10,)) * 42.0, domain=common.Domain(NamedRange(D1, UnitRange(0, 10)))
+            ),
         ),
     ],
 )

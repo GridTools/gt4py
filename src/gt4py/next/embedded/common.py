@@ -46,27 +46,24 @@ def _relative_sub_domain(
             f"Can not access dimension with index {index} of 'Field' with {len(domain)} dimensions."
         )
     expanded += (slice(None),) * (len(domain) - len(expanded))
-    for dom, idx in zip(domain, expanded, strict=True):
-        assert isinstance(dom, common.NamedRange)
+    # TODO undo these changes
+    for nr, idx in zip(domain, expanded, strict=True):
         if isinstance(idx, slice):
             try:
-                sliced = _slice_range(dom.urange, idx)
-                named_ranges.append(common.named_range((dom.dim, sliced)))
+                sliced = _slice_range(nr.urange, idx)
+                named_ranges.append(common.NamedRange(nr.dim, sliced))
             except IndexError as ex:
                 raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain,
-                    indices=index,
-                    index=idx,
-                    dim=dom.dim,
+                    domain=domain, indices=index, index=idx, dim=dim
                 ) from ex
         else:
             # not in new domain
             assert common.is_int_index(idx)
-            assert common.is_finite_named_range(dom.urange)
-            new_index = (dom.urange.start if idx >= 0 else dom.urange.stop) + idx
-            if new_index < dom.urange.start or new_index >= dom.urange.stop:
+            assert common.UnitRange.is_finite(nr.urange)
+            new_index = (nr.urange.start if idx >= 0 else nr.urange.stop) + idx
+            if new_index < nr.urange.start or new_index >= nr.urange.stop:
                 raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain, indices=index, index=idx, dim=dom.dim
+                    domain=domain, indices=index, index=idx, dim=dim
                 )
 
     return common.Domain(*named_ranges)
@@ -76,30 +73,27 @@ def _absolute_sub_domain(
     domain: common.Domain, index: common.AbsoluteIndexSequence
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
-    for i in range(domain.ndim):
-        if (pos := _find_index_of_dim(domain.dims[i], index)) is not None:
+    for i, nr in enumerate(domain):
+        if (pos := _find_index_of_dim(nr.dim, index)) is not None:
             named_idx = index[pos]
-            if not isinstance(named_idx, common.NamedRange):
-                idx = named_idx[1]
-            else:
-                idx = named_idx.urange
+            idx = named_idx[1]
             if isinstance(idx, common.UnitRange):
-                if not idx <= domain.ranges[i]:
+                if not idx <= nr.urange:
                     raise embedded_exceptions.IndexOutOfBounds(
-                        domain=domain, indices=index, index=named_idx, dim=domain.dims[i]
+                        domain=domain, indices=index, index=named_idx, dim=dim
                     )
 
-                named_ranges.append(common.named_range((domain.dims[i], idx)))
+                named_ranges.append((nr.dim, idx))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
-                if idx < domain.ranges[i].start or idx >= domain.ranges[i].stop:
+                if idx < nr.urange.start or idx >= rng.stop:
                     raise embedded_exceptions.IndexOutOfBounds(
-                        domain=domain, indices=index, index=named_idx, dim=domain.dims[i]
+                        domain=domain, indices=index, index=named_idx, dim=dim
                     )
         else:
             # dimension not mentioned in slice
-            named_ranges.append(common.named_range((domain.dims[i], domain.ranges[i])))
+            named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
 
@@ -143,24 +137,13 @@ def restrict_to_intersection(
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
     intersection_without_ignore_dims = domain_intersection(*[
-        common.Domain(*[
-            common.named_range((domain.dims[i], domain.ranges[i]))
-            for i in range(domain.ndim)
-            if domain.dims[i] not in ignore_dims_tuple
-        ])
+        common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
         for domain in domains
     ])
     return tuple(
         common.Domain(*[
-            common.named_range((
-                domain.dims[i],
-                domain.ranges[i]
-                if domain.dims[i] in ignore_dims_tuple
-                else intersection_without_ignore_dims.ranges[
-                    intersection_without_ignore_dims.dims.index(domain.dims[i])
-                ],
-            ))
-            for i in range(domain.ndim)
+            (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim].urange)
+            for nr in domain
         ])
         for domain in domains
     )
@@ -201,16 +184,11 @@ def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.Unit
 
 def _find_index_of_dim(
     dim: common.Dimension,
-    domain_slice: common.Domain | Sequence[common.NamedIndex | Any],
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> Optional[int]:
-    if isinstance(domain_slice, common.Domain):
-        for i in range(domain_slice.ndim):
-            if domain_slice.dims[i] == dim:
-                return i
-    else:
-        for i, d_slice in enumerate(domain_slice):
-            if common.is_named_range(d_slice) and dim == d_slice.dim:
-                return i
+    for i, (d, _) in enumerate(domain_slice):
+        if dim == d:
+            return i
     return None
 
 
@@ -240,7 +218,7 @@ def _named_slice_to_named_range(
                 f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
             )
         assert isinstance(idx_start_1, int) and isinstance(idx_stop_1, int)
-        return common.named_range((idx_start_0, common.UnitRange(idx_start_1, idx_stop_1)))
+        return common.NamedRange(idx_start_0, common.UnitRange(idx_start_1, idx_stop_1))
     if common.is_named_index(idx.start) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
     if common.is_named_index(idx.stop) and idx.start is None:

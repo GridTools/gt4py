@@ -294,6 +294,9 @@ class NamedRange(Generic[_Rng]):
     dim: Dimension
     urange: _Rng
 
+    def __iter__(self):
+        return iter((self.dim, self.urange))
+
     def __str__(self) -> str:
         return f"{self.dim}={self.urange}"
 
@@ -319,12 +322,12 @@ def is_int_index(p: Any) -> TypeGuard[IntIndex]:
     return isinstance(p, (int, core_defs.INTEGRAL_TYPES))
 
 
-def is_named_range(v: AnyIndexSpec) -> TypeGuard[NamedRange]:
-    return (
-        isinstance(v, NamedRange)
-        and isinstance(v.dim, Dimension)
-        and isinstance(v.urange, UnitRange)
-    )
+# def isinstance(v: AnyIndexSpec, common.NamedRange) -> TypeGuard[NamedRange]:
+#     return (
+#         isinstance(v, NamedRange)
+#         and isinstance(v.dim, Dimension)
+#         and isinstance(v.urange, UnitRange)
+#     )
 
 
 def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
@@ -344,7 +347,7 @@ def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[NamedRange]:
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
     return (
         is_int_index(v)
-        or is_named_range(v)
+        or isinstance(v, NamedRange)
         or is_named_index(v)
         or isinstance(v, slice)
         or v is Ellipsis
@@ -352,7 +355,9 @@ def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(is_named_range(e) or is_named_index(e) for e in v)
+    return isinstance(v, Sequence) and all(
+        isinstance(e, NamedRange) or is_named_index(e) for e in v
+    )
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -374,7 +379,7 @@ def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
 
 
 @dataclasses.dataclass(frozen=True, init=False)
-class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
+class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     """Describes the `Domain` of a `Field` as a `Sequence` of `NamedRange` s."""
 
     dims: tuple[Dimension, ...]
@@ -411,12 +416,10 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             object.__setattr__(self, "dims", tuple(dims))
             object.__setattr__(self, "ranges", tuple(ranges))
         else:
-            if not all(is_named_range(arg) for arg in args):
-                # TODO: put error back
-                args = tuple(named_range(arg) for arg in args)
-                # raise ValueError(
-                #     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
-                # )
+            if not all(isinstance(arg, NamedRange) for arg in args):
+                raise ValueError(
+                    f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
+                )
             dims_new = (arg.dim for arg in args) if args else ()
             ranges_new = (arg.urange for arg in args) if args else ()
             object.__setattr__(self, "dims", tuple(dims_new))
@@ -511,7 +514,7 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
             return self.replace(index, *named_ranges)
 
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
-        assert all(is_named_range(nr) for nr in named_ranges)
+        assert all(isinstance(nr, NamedRange) for nr in named_ranges)
         if isinstance(index, Dimension):
             dim_index = self.dim_index(index)
             if dim_index is None:
