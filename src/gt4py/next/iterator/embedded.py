@@ -24,7 +24,13 @@ import itertools
 import math
 import sys
 import warnings
-from typing import (
+
+import numpy as np
+import numpy.typing as npt
+
+from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
+from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Generic,
@@ -34,6 +40,7 @@ from typing import (
     NoReturn,
     Optional,
     Protocol,
+    Self,
     Sequence,
     SupportsFloat,
     SupportsInt,
@@ -45,12 +52,6 @@ from typing import (
     overload,
     runtime_checkable,
 )
-
-import numpy as np
-import numpy.typing as npt
-
-from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
@@ -1090,7 +1091,7 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> xtyping.Self:
+    def restrict(self, item: common.AnyIndexSpec) -> Self:
         if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             d, r = item[0]
             assert d == self._dimension
@@ -1209,7 +1210,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> xtyping.Self:
+    def restrict(self, item: common.AnyIndexSpec) -> Self:
         # TODO set a domain...
         return self
 

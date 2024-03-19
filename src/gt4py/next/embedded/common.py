@@ -153,7 +153,7 @@ def iterate_domain(
     domain: common.Domain,
 ) -> Iterator[tuple[tuple[common.Dimension, int]]]:
     for i in itertools.product(*[list(r) for r in domain.ranges]):
-        yield tuple(zip(domain.dims, i))  # type: ignore[misc] # trust me, `i` is `tuple[int]`
+        yield tuple(zip(domain.dims, i))  # type: ignore[misc] # trust me, `i` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(

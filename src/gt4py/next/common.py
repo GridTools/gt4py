@@ -1067,7 +1067,7 @@ class FieldBuiltinFuncRegistry:
         collections.ChainMap()
     )
 
-    def __init_subclass__(cls, **kwargs: Any):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._builtin_func_map = collections.ChainMap(
             {},  # New empty `dict` for new registrations on this class
             *[

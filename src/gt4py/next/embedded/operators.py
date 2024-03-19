@@ -37,16 +37,19 @@ class EmbeddedOperator(Generic[_R, _P]):
 
 
 @dataclasses.dataclass(frozen=True)
-class ScanOperator(EmbeddedOperator[_R, _P]):
+class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...], _P]):
     forward: bool
-    init: core_defs.Scalar | tuple[core_defs.Scalar | tuple, ...]
+    init: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...]
     axis: common.Dimension
 
     def __call__(  # type: ignore[override]
         self,
         *args: common.Field | core_defs.Scalar,
         **kwargs: common.Field | core_defs.Scalar,  # type: ignore[override]
-    ) -> common.Field | tuple[common.Field | tuple, ...]:
+    ) -> (
+        common.Field[Any, core_defs.ScalarT]
+        | tuple[common.Field[Any, core_defs.ScalarT] | tuple, ...]
+    ):
         scan_range = embedded_context.closure_column_range.get()
         assert self.axis == scan_range[0]
         scan_axis = scan_range[0]
@@ -65,13 +68,13 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
         res = _construct_scan_array(out_domain, xp)(self.init)
 
         def scan_loop(hpos: Sequence[common.NamedIndex]) -> None:
-            acc: _R = self.init  # type: ignore[assignment] # `_R` not resolved?
+            acc: core_defs.ScalarT | tuple[core_defs.ScalarT | tuple, ...] = self.init
             for k in scan_range[1] if self.forward else reversed(scan_range[1]):
                 pos = (*hpos, (scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}
                 acc = self.fun(acc, *new_args, **new_kwargs)  # type: ignore[arg-type] # need to express that the first argument is the same type as the return
-                _tuple_assign_value(pos, res, acc)  # type: ignore[arg-type] # requires more precise typing for `_R`
+                _tuple_assign_value(pos, res, acc)
 
         if len(non_scan_domain) == 0:
             # if we don't have any dimension orthogonal to scan_axis, we need to do one scan_loop
