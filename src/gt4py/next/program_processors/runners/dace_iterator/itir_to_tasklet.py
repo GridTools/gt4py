@@ -429,14 +429,14 @@ def builtin_neighbors(
         connector_neighbor_dim = f"{offset_provider.neighbor_axis.value}_v"
         data_access_tasklet = state.add_tasklet(
             "data_access",
-            {"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
-            {"__data"},
-            f"__data = __field[{data_access_index}] "
+            code=f"__data = __field[{data_access_index}] "
             + (
                 f"if {connector_neighbor_dim} != {neighbor_skip_value} else {transformer.context.reduce_identity.value}"
                 if offset_provider.has_skip_values
                 else ""
             ),
+            inputs={"__field"} | {f"{dim}_v" for dim in iterator.dimensions},
+            outputs={"__data"},
             debuginfo=di,
         )
         state.add_memlet_path(
@@ -493,24 +493,17 @@ def builtin_neighbors(
 
         neighbor_valid_tasklet = state.add_tasklet(
             f"check_valid_neighbor_{offset_dim}",
-            {"__table", "__idx"},
+            {"__idx"},
             {"__valid"},
-            f"__valid = __table[__idx, {neighbor_map_index}] != {neighbor_skip_value}",
+            f"__valid = True if __idx != {neighbor_skip_value} else False",
             debuginfo=di,
         )
-        state.add_memlet_path(
-            state.add_access(table_name, debuginfo=di),
-            me,
+        state.add_edge(
+            neighbor_index_node,
+            None,
             neighbor_valid_tasklet,
-            memlet=dace.Memlet.from_array(table_name, sdfg.arrays[table_name]),
-            dst_conn="__table",
-        )
-        state.add_memlet_path(
-            origin_index_node,
-            me,
-            neighbor_valid_tasklet,
-            memlet=dace.Memlet(data=origin_index_node.data, subset="0"),
-            dst_conn="__idx",
+            "__idx",
+            dace.Memlet(data=neighbor_index_var, subset="0"),
         )
         state.add_memlet_path(
             neighbor_valid_tasklet,
