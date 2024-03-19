@@ -908,16 +908,16 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
-                domain_slice.append(common.named_range((d, common.UnitRange(v.start, v.stop))))
+                domain_slice.append(common.NamedRange(d, common.UnitRange(v.start, v.stop)))
             elif isinstance(v, list):
                 assert len(v) == 1  # only 1 sparse dimension is supported
                 assert common.is_int_index(
                     v[0]
                 )  # derefing a concrete element in a sparse field, not a slice
-                domain_slice.append(common.named_range((d, v[0])))
+                domain_slice.append(common.NamedRange(d, v[0]))
             else:
                 assert common.is_int_index(v)
-                domain_slice.append(common.named_range((d, common.UnitRange(v, v + 1))))
+                domain_slice.append(common.NamedRange(d, common.UnitRange(v, v + 1)))
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
@@ -1059,7 +1059,7 @@ class IndexField(common.Field):
     @property
     def domain(self) -> common.Domain:
         if self._cur_index is None:
-            return common.Domain(common.named_range((self._dimension, common.UnitRange.infinite())))
+            return common.Domain(common.NamedRange(self._dimension, common.UnitRange.infinite()))
         else:
             return common.Domain()
 
@@ -1550,10 +1550,10 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            column_range = common.named_range((
+            column_range = common.NamedRange(
                 column_axis,
                 common.UnitRange(column.col_range.start, column.col_range.stop),
-            ))
+            )
 
         out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
