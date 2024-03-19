@@ -197,7 +197,9 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    res = type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    assert isinstance(res, (ts.FieldType, ts.TupleType))
+    return res
 
 
 @type_info.function_signature_incompatibilities.register

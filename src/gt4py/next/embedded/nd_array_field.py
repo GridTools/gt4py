@@ -54,7 +54,7 @@ def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArra
 
 
 def _make_builtin(
-    builtin_name: str, array_builtin_name: str, reverse=False
+    builtin_name: str, array_builtin_name: str, reverse: bool = False
 ) -> Callable[..., NdArrayField]:
     def _builtin_op(*fields: common.Field | core_defs.Scalar) -> NdArrayField:
         cls_ = _get_nd_array_class(*fields)
@@ -228,7 +228,7 @@ class NdArrayField(
 
     __call__ = remap  # type: ignore[assignment]
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> NdArrayField:
         new_domain, buffer_slice = self._slice(index)
         new_buffer = self.ndarray[buffer_slice]
         new_buffer = self.__class__.array_ns.asarray(new_buffer)
@@ -435,7 +435,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         return new_dims
 
-    def restrict(self, index: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
 
         if (restricted_connectivity := self._cache.get(cache_key, None)) is None:

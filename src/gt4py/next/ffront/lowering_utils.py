@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront
@@ -38,7 +38,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     """
     param = f"__toi_{eve_utils.content_hash(expr)}"
 
-    def fun(primitive_type, path):
+    def fun(primitive_type: ts.TypeSpec, path: tuple[int, ...]) -> itir.Expr:
         inner_expr = im.deref("it")
         for path_part in path:
             inner_expr = im.tuple_get(path_part, inner_expr)
@@ -79,7 +79,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
         for type_ in type_constituents
     )
 
-    def fun(_, path):
+    def fun(_: Any, path: tuple[int, ...]) -> itir.FunCall:
         param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"

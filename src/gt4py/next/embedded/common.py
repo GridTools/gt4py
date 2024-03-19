@@ -17,8 +17,9 @@ from __future__ import annotations
 import functools
 import itertools
 import operator
+from collections.abc import Iterator, Sequence
 
-from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
+from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
@@ -148,9 +149,11 @@ def restrict_to_intersection(
     )
 
 
-def iterate_domain(domain: common.Domain):
+def iterate_domain(
+    domain: common.Domain,
+) -> Iterator[tuple[common.NamedIndex]]:
     for i in itertools.product(*[list(r) for r in domain.ranges]):
-        yield tuple(zip(domain.dims, i))
+        yield tuple(common.NamedIndex(*e) for e in zip(domain.dims, i))  # type: ignore[misc] # trust me, `i` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(

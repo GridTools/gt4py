@@ -24,7 +24,13 @@ import itertools
 import math
 import sys
 import warnings
-from typing import (
+
+import numpy as np
+import numpy.typing as npt
+
+from gt4py._core import definitions as core_defs
+from gt4py.eve import extended_typing as xtyping
+from gt4py.eve.extended_typing import (
     Any,
     Callable,
     Generic,
@@ -34,6 +40,7 @@ from typing import (
     NoReturn,
     Optional,
     Protocol,
+    Self,
     Sequence,
     SupportsFloat,
     SupportsInt,
@@ -45,12 +52,6 @@ from typing import (
     overload,
     runtime_checkable,
 )
-
-import numpy as np
-import numpy.typing as npt
-
-from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common, embedded as next_embedded
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
@@ -86,7 +87,7 @@ class SparseTag(Tag): ...
 class NeighborTableOffsetProvider:
     def __init__(
         self,
-        table: npt.NDArray,
+        table: core_defs.NDArrayObject,
         origin_axis: common.Dimension,
         neighbor_axis: common.Dimension,
         max_neighbors: int,
@@ -103,7 +104,9 @@ class NeighborTableOffsetProvider:
     def mapped_index(
         self, primary: common.IntIndex, neighbor_idx: common.IntIndex
     ) -> common.IntIndex:
-        return self.table[(primary, neighbor_idx)]
+        res = self.table[(primary, neighbor_idx)]
+        assert common.is_int_index(res)
+        return res
 
 
 class StridedNeighborOffsetProvider:
@@ -1090,7 +1093,7 @@ class IndexField(common.Field):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, item: common.AnyIndexSpec) -> Self:
         if (
             common.is_absolute_index_sequence(item)  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
             and all(isinstance(e, common.NamedIndex) for e in item)
@@ -1213,7 +1216,7 @@ class ConstantField(common.Field[Any, core_defs.ScalarT]):
         # TODO can be implemented by constructing and ndarray (but do we know of which kind?)
         raise NotImplementedError()
 
-    def restrict(self, item: common.AnyIndexSpec) -> common.Field:
+    def restrict(self, item: common.AnyIndexSpec) -> Self:
         # TODO set a domain...
         return self
 

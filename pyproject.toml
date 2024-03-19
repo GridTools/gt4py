@@ -150,14 +150,16 @@ warn_unused_ignores = true
 
 # GT4Py configs
 [[tool.mypy.overrides]]
+allow_incomplete_defs = false
+allow_untyped_defs = false
 ignore_missing_imports = false
 module = 'gt4py.*'
 
 [[tool.mypy.overrides]]
 # The following ignore_errors are only temporary.
 # TODO: Fix errors and enable these settings.
-disallow_incomplete_defs = false
-disallow_untyped_defs = false
+allow_incomplete_defs = true
+allow_untyped_defs = true
 follow_imports = 'silent'
 module = 'gt4py.cartesian.*'
 warn_unused_ignores = false
@@ -187,10 +189,6 @@ ignore_errors = true
 module = 'gt4py.cartesian.frontend.meta'
 
 [[tool.mypy.overrides]]
-disallow_untyped_defs = true
-module = 'gt4py.eve.*'
-
-[[tool.mypy.overrides]]
 module = 'gt4py.eve.extended_typing'
 warn_unused_ignores = false
 
@@ -202,22 +200,18 @@ module = 'gt4py.storage.*'
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-# # TODO: this should be changed to true after a transition period
-disallow_incomplete_defs = false
-module = 'gt4py.next.*'
+allow_incomplete_defs = true
+allow_untyped_defs = true
+module = 'gt4py.next.iterator.*'
 
 [[tool.mypy.overrides]]
-# TODO: temporarily to propagate it to all of next
-disallow_incomplete_defs = true
-module = 'gt4py.next.ffront.*'
+allow_incomplete_defs = true
+allow_untyped_defs = true
+module = 'gt4py.next.program_processors.runners.dace_iterator.*'
 
 [[tool.mypy.overrides]]
 ignore_errors = true
 module = 'gt4py.next.ffront.decorator'
-
-[[tool.mypy.overrides]]
-ignore_errors = true
-module = 'gt4py.next.type_system.type_translation'
 
 [[tool.mypy.overrides]]
 ignore_errors = true

@@ -140,7 +140,7 @@ class StorageType(eve.IntEnum):
 class AxisBound(common.AxisBound):
     axis: Axis
 
-    def __str__(self):
+    def __str__(self) -> str:
         return get_axis_bound_str(self, self.axis.domain_symbol())
 
     @classmethod

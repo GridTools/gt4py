@@ -168,7 +168,7 @@ class ProgramLowering(
     ) -> itir.FencilDefinition:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def __init__(self, grid_type):
+    def __init__(self, grid_type: common.GridType):
         self.grid_type = grid_type
 
     def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
