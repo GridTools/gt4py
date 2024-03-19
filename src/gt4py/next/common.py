@@ -71,7 +71,7 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -80,7 +80,7 @@ class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.value}[{self.kind}]"
 
     def __call__(self, val: int) -> NamedIndex:
@@ -641,7 +641,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field: ...
+    def restrict(self, item: AnyIndexSpec) -> Self: ...
 
     @abc.abstractmethod
     def as_scalar(self) -> core_defs.ScalarT: ...
@@ -651,7 +651,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field: ...
+    def __getitem__(self, item: AnyIndexSpec) -> Self: ...
 
     @abc.abstractmethod
     def __abs__(self) -> Field: ...
@@ -867,22 +867,6 @@ def _connectivity(
     raise NotImplementedError
 
 
-@dataclasses.dataclass(frozen=True)
-class GTInfo:
-    definition: Any
-    ir: Any
-
-
-@dataclasses.dataclass(frozen=True)
-class Backend:
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-
-    # TODO : proper definition and implementation
-    def generate_operator(self, ir):
-        return ir
-
-
 @runtime_checkable
 class Connectivity(Protocol):
     max_neighbors: int
@@ -1083,7 +1067,7 @@ class FieldBuiltinFuncRegistry:
         collections.ChainMap()
     )
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._builtin_func_map = collections.ChainMap(
             {},  # New empty `dict` for new registrations on this class
             *[
