@@ -914,10 +914,10 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
                 assert common.is_int_index(
                     v[0]
                 )  # derefing a concrete element in a sparse field, not a slice
-                domain_slice.append(common.NamedRange(d, v[0]))
+                domain_slice.append(common.NamedIndex(d, v[0]))
             else:
                 assert common.is_int_index(v)
-                domain_slice.append(common.NamedRange(d, common.UnitRange(v, v + 1)))
+                domain_slice.append(common.NamedIndex(d, v))
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
@@ -1495,9 +1495,7 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        columns = column_range_cvar.get()
-        assert isinstance(columns, common.NamedRange)
-        column_range = columns.unit_range
+        column_range = column_range_cvar.get().unit_range
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
