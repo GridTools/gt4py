@@ -26,6 +26,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
     func_to_past: workflow.SkippableStep[
         stages.ProgramDefinition | stages.ProgramPast, stages.ProgramPast
     ]
+    past_transform_args: workflow.Workflow[stages.PastClosure, stages.PastClosure]
     past_to_itir: workflow.Workflow[stages.PastClosure, stages.ProgramCall]
 
     args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
@@ -34,12 +35,14 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
     def __call__(self, inp: stages.ProgramDefinition | stages.ProgramPast) -> stages.ProgramCall:
         past_stage = self.func_to_past(inp)
         return self.past_to_itir(
-            stages.PastClosure(
-                past_node=past_stage.past_node,
-                closure_vars=past_stage.closure_vars,
-                grid_type=past_stage.grid_type,
-                args=self.args,
-                kwargs=self.kwargs,
+            self.past_transform_args(
+                stages.PastClosure(
+                    past_node=past_stage.past_node,
+                    closure_vars=past_stage.closure_vars,
+                    grid_type=past_stage.grid_type,
+                    args=self.args,
+                    kwargs=self.kwargs,
+                )
             )
         )
 

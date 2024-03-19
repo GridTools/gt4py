@@ -233,15 +233,16 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        return past_to_itir.PastToItirFactory()(
-            stages.PastClosure(
-                past_node=self.past_node,
-                closure_vars=self.closure_vars,
-                grid_type=self.grid_type,
-                args=[],
-                kwargs={},
-            )
-        ).program
+        no_args_past = stages.PastClosure(
+            past_node=self.past_node,
+            closure_vars=self.closure_vars,
+            grid_type=self.grid_type,
+            args=[],
+            kwargs={},
+        )
+        if self.backend is not None and self.backend.transformer is not None:
+            return self.backend.transformer.past_to_itir(no_args_past)
+        return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs) -> None:
         if self.backend is None:

@@ -26,7 +26,8 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
     func_to_past=func_to_past.OptionalFuncToPast(),
-    past_to_itir=past_process_args.past_process_args.chain(past_to_itir.PastToItirFactory()),
+    past_transform_args=past_process_args.past_process_args,
+    past_to_itir=past_to_itir.PastToItirFactory(),
 )
 
 
