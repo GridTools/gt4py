@@ -79,7 +79,7 @@ class ScanOperator(EmbeddedOperator[_R, _P]):
 
         def scan_loop(hpos):
             acc = self.init
-            for k in scan_range.urange if self.forward else reversed(scan_range.urange):
+            for k in scan_range.unit_range if self.forward else reversed(scan_range.unit_range):
                 pos = (*hpos, (scan_axis, k))
                 new_args = [_tuple_at(pos, arg) for arg in args]
                 new_kwargs = {k: _tuple_at(pos, v) for k, v in kwargs.items()}

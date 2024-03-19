@@ -38,7 +38,11 @@ KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
 @pytest.fixture
 def a_domain():
-    return Domain((IDim, UnitRange(0, 10)), (JDim, UnitRange(5, 15)), (KDim, UnitRange(20, 30)))
+    return Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
 
 
 @pytest.fixture(params=[Infinity.POSITIVE, Infinity.NEGATIVE])

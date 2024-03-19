@@ -17,7 +17,7 @@ from typing import Sequence
 import pytest
 
 from gt4py.next import common
-from gt4py.next.common import UnitRange
+from gt4py.next.common import UnitRange, NamedIndex, NamedRange
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import (
     _slice_range,
@@ -53,12 +53,12 @@ K = common.Dimension("K")
     [
         ([(I, (2, 5))], 1, []),
         ([(I, (2, 5))], slice(1, 2), [(I, (3, 4))]),
-        ([(I, (2, 5))], (I, 2), []),
-        ([(I, (2, 5))], (I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (2, 5))], NamedIndex(I, 2), []),
+        ([(I, (2, 5))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
         ([(I, (-2, 3))], 1, []),
         ([(I, (-2, 3))], slice(1, 2), [(I, (-1, 0))]),
-        ([(I, (-2, 3))], (I, 1), []),
-        ([(I, (-2, 3))], (I, UnitRange(2, 3)), [(I, (2, 3))]),
+        ([(I, (-2, 3))], NamedIndex(I, 1), []),
+        ([(I, (-2, 3))], NamedRange(I, UnitRange(2, 3)), [(I, (2, 3))]),
         ([(I, (-2, 3))], -5, []),
         ([(I, (-2, 3))], -6, IndexError),
         ([(I, (-2, 3))], slice(-7, -6), IndexError),
@@ -67,10 +67,10 @@ K = common.Dimension("K")
         ([(I, (-2, 3))], 5, IndexError),
         ([(I, (-2, 3))], slice(4, 5), [(I, (2, 3))]),
         ([(I, (-2, 3))], slice(5, 6), IndexError),
-        ([(I, (-2, 3))], (I, -3), IndexError),
-        ([(I, (-2, 3))], (I, UnitRange(-3, -2)), IndexError),
-        ([(I, (-2, 3))], (I, 3), IndexError),
-        ([(I, (-2, 3))], (I, UnitRange(3, 4)), IndexError),
+        ([(I, (-2, 3))], NamedIndex(I, -3), IndexError),
+        ([(I, (-2, 3))], NamedRange(I, UnitRange(-3, -2)), IndexError),
+        ([(I, (-2, 3))], NamedIndex(I, 3), IndexError),
+        ([(I, (-2, 3))], NamedRange(I, UnitRange(3, 4)), IndexError),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             2,
@@ -83,32 +83,32 @@ K = common.Dimension("K")
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (I, 2),
+            NamedIndex(I, 2),
             [(J, (3, 6)), (K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (I, UnitRange(2, 3)),
+            NamedRange(I, UnitRange(2, 3)),
             [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (J, 3),
+            NamedIndex(J, 3),
             [(I, (2, 5)), (K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            (J, UnitRange(4, 5)),
+            NamedRange(J, UnitRange(4, 5)),
             [(I, (2, 5)), (J, (4, 5)), (K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            ((J, 3), (I, 2)),
+            (NamedIndex(J, 3), NamedIndex(I, 2)),
             [(K, (4, 7))],
         ),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            ((J, UnitRange(4, 5)), (I, 2)),
+            (NamedRange(J, UnitRange(4, 5)), NamedIndex(I, 2)),
             [(J, (4, 5)), (K, (4, 7))],
         ),
         (
@@ -147,8 +147,8 @@ def test_sub_domain(domain, index, expected):
 def test_iterate_domain():
     domain = common.domain({I: 2, J: 3})
     ref = []
-    for i in domain[I][1]:
-        for j in domain[J][1]:
+    for i in domain[I].unit_range:
+        for j in domain[J].unit_range:
             ref.append(((I, i), (J, j)))
 
     testee = list(iterate_domain(domain))
@@ -159,10 +159,10 @@ def test_iterate_domain():
 @pytest.mark.parametrize(
     "slices, expected",
     [
-        [slice(I(3), I(4)), ((I, common.UnitRange(3, 4)),)],
+        [slice(I(3), I(4)), (NamedRange(I, common.UnitRange(3, 4)),)],
         [
             (slice(J(3), J(6)), slice(I(3), I(5))),
-            ((J, common.UnitRange(3, 6)), (I, common.UnitRange(3, 5))),
+            (NamedRange(J, common.UnitRange(3, 6)), NamedRange(I, common.UnitRange(3, 5))),
         ],
         [slice(I(1), J(7)), IndexError],
         [

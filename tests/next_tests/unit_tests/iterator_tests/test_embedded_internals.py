@@ -62,7 +62,9 @@ def test_column_ufunc():
     embedded.column_range_cvar.set(range(2, 999))
     _run_within_context(
         lambda: test_func(2, 3),
-        column_range=(common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)),
+        column_range=common.NamedRange(
+            common.Dimension("K", kind=common.DimensionKind.VERTICAL), range(0, 3)
+        ),
     )
 
 
