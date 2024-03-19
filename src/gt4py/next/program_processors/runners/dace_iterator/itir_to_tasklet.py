@@ -304,10 +304,7 @@ def _visit_lift_in_neighbors_reduction(
         skip_neighbor_state = lift_context.body.add_state("skip_neighbor")
         skip_neighbor_state.add_edge(
             skip_neighbor_state.add_tasklet(
-                "identity",
-                {},
-                {"val"},
-                f"val = {transformer.context.reduce_identity.value}",
+                "identity", {}, {"val"}, f"val = {transformer.context.reduce_identity.value}"
             ),
             "val",
             skip_neighbor_state.add_access(inner_outputs[0].value.data),
@@ -580,6 +577,7 @@ def builtin_if(
     assert len(node_args) == 3
     sdfg = transformer.context.body
     current_state = transformer.context.state
+    is_start_state = sdfg.start_block == current_state
 
     # build an empty state to join true and false branches
     join_state = sdfg.add_state_before(current_state, "join")
@@ -596,7 +594,7 @@ def builtin_if(
         return node_taskgen.visit(arg)
 
     # represent the if-statement condition as a tasklet inside an `if_statement` state preceding `join` state
-    stmt_state = sdfg.add_state_before(join_state, "if_statement")
+    stmt_state = sdfg.add_state_before(join_state, "if_statement", is_start_state)
     stmt_node = build_if_state(node_args[0], stmt_state)[0]
     assert isinstance(stmt_node, ValueExpr)
     assert stmt_node.dtype == dace.dtypes.bool
@@ -605,18 +603,14 @@ def builtin_if(
     # visit true and false branches (here called `tbr` and `fbr`) as separate states, following `if_statement` state
     tbr_state = sdfg.add_state("true_branch")
     sdfg.add_edge(
-        stmt_state,
-        tbr_state,
-        dace.InterstateEdge(condition=f"{stmt_node.value.data} == True"),
+        stmt_state, tbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == True")
     )
     sdfg.add_edge(tbr_state, join_state, dace.InterstateEdge())
     tbr_values = flatten_list(build_if_state(node_args[1], tbr_state))
     #
     fbr_state = sdfg.add_state("false_branch")
     sdfg.add_edge(
-        stmt_state,
-        fbr_state,
-        dace.InterstateEdge(condition=f"{stmt_node.value.data} == False"),
+        stmt_state, fbr_state, dace.InterstateEdge(condition=f"{stmt_node.value.data} == False")
     )
     sdfg.add_edge(fbr_state, join_state, dace.InterstateEdge())
     fbr_values = flatten_list(build_if_state(node_args[2], fbr_state))
@@ -662,9 +656,7 @@ def builtin_if(
                 val_node = state.add_access(var)
                 if isinstance(expr, ValueExpr):
                     state.add_nedge(
-                        expr.value,
-                        val_node,
-                        dace.Memlet.from_array(expr.value.data, desc),
+                        expr.value, val_node, dace.Memlet.from_array(expr.value.data, desc)
                     )
                 else:
                     assert desc.shape == (1,)
@@ -953,10 +945,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         raise NotImplementedError()
 
     def visit_Lambda(
-        self,
-        node: itir.Lambda,
-        args: Sequence[TaskletExpr],
-        use_neighbor_tables: bool = True,
+        self, node: itir.Lambda, args: Sequence[TaskletExpr], use_neighbor_tables: bool = True
     ) -> tuple[
         Context,
         list[tuple[str, ValueExpr] | tuple[tuple[str, dict], IteratorExpr]],
@@ -971,8 +960,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         # Create the SDFG for the lambda's body
         lambda_sdfg = dace.SDFG(func_name)
         lambda_sdfg.debuginfo = dace_debuginfo(node, self.context.body.debuginfo)
-        lambda_entry_state = lambda_sdfg.add_state(f"{func_name}_entry", is_start_block=True)
-        lambda_state = lambda_sdfg.add_state_after(lambda_entry_state, f"{func_name}_body")
+        lambda_state = lambda_sdfg.add_state(f"{func_name}_body", is_start_block=True)
 
         lambda_symbols_pass = GatherLambdaSymbolsPass(
             lambda_sdfg, lambda_state, self.context.symbol_map
@@ -1049,11 +1037,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             else:
                 # Forwarding result through a tasklet needed because empty SDFG states don't properly forward connectors
                 result = lambda_taskgen.add_expr_tasklet(
-                    [],
-                    expr.value,
-                    expr.dtype,
-                    "forward",
-                    dace_debuginfo=lambda_sdfg.debuginfo,
+                    [], expr.value, expr.dtype, "forward", dace_debuginfo=lambda_sdfg.debuginfo
                 )[0]
             lambda_sdfg.arrays[result.value.data].transient = False
             results.append(result)
@@ -1203,10 +1187,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
 
             result_name = unique_var_name()
             self.context.body.add_array(
-                result_name,
-                (offset_provider.max_neighbors,),
-                iterator.dtype,
-                transient=True,
+                result_name, (offset_provider.max_neighbors,), iterator.dtype, transient=True
             )
             result_array = self.context.body.arrays[result_name]
             result_node = self.context.state.add_access(result_name, debuginfo=di)
@@ -1252,10 +1233,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         pairs = [args[i : i + 2] for i in range(0, len(args), 2)]
         assert len(pairs) >= 1
         assert all(len(pair) == 2 for pair in pairs)
-        return (
-            pairs[-1],
-            list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None,
-        )
+        return pairs[-1], list(itertools.chain(*pairs[0:-1])) if len(pairs) > 1 else None
 
     def _make_shift_for_rest(self, rest, iterator):
         return itir.FunCall(
@@ -1325,11 +1303,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             expr = f"{internals[0]} + {internals[1]}"
 
         shifted_value = self.add_expr_tasklet(
-            list(zip(args, internals)),
-            expr,
-            offset_node.dtype,
-            "shift",
-            dace_debuginfo=di,
+            list(zip(args, internals)), expr, offset_node.dtype, "shift", dace_debuginfo=di
         )[0].value
 
         shifted_index = {dim: value for dim, value in iterator.indices.items()}
@@ -1349,11 +1323,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             "get_offset", {}, {"__out"}, f"__out = {offset}", debuginfo=di
         )
         self.context.state.add_edge(
-            tasklet_node,
-            "__out",
-            offset_node,
-            None,
-            dace.Memlet(data=offset_var, subset="0"),
+            tasklet_node, "__out", offset_node, None, dace.Memlet(data=offset_var, subset="0")
         )
         return [ValueExpr(offset_node, self.context.body.arrays[offset_var].dtype)]
 
@@ -1423,9 +1393,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             )
 
             lambda_node = itir.Lambda(
-                expr=fun_node.expr.args[1],
-                params=fun_node.params[1:],
-                location=node.location,
+                expr=fun_node.expr.args[1], params=fun_node.params[1:], location=node.location
             )
             lambda_context, inner_inputs, inner_outputs = self.visit(
                 lambda_node, args=input_args, use_neighbor_tables=False
@@ -1659,9 +1627,7 @@ def closure_to_tasklet_sdfg(
         stencil = cast(FunCall, node.stencil)
         assert isinstance(stencil.args[0], Lambda)
         lambda_node = itir.Lambda(
-            expr=stencil.args[0].expr,
-            params=stencil.args[0].params,
-            location=node.location,
+            expr=stencil.args[0].expr, params=stencil.args[0].params, location=node.location
         )
         fun_node = itir.FunCall(fun=lambda_node, args=args, location=node.location)
     else:
