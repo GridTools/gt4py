@@ -239,75 +239,39 @@ class NdArrayField(
         # if we assume the indexed array has at least one element, we wrap around without out of bounds
         assert connectivity.skip_value is None or connectivity.skip_value == -1
 
-        # Infer remap mode (advanced indexing vs reshuffle)
+        xp = self.array_ns
+
+        # Select interpretation of the connectivity argument (advanced indexing vs reshuffle)
         if new_dims := (set(connectivity.domain.dims) - set(self.domain.dims)):
-            # MODE -> advanced_indexing
+            # reindexing mode
             if repeated_dims := (new_dims - set(self.domain.dims)):
                 raise ValueError(
                     f"Remapped field will contain repeated dimensions '{repeated_dims}'."
                 )
-
-            # Compute the new domain
-            dim = connectivity.codomain
-            dim_idx = self.domain.dim_index(dim)
-            if dim_idx is None:
-                raise ValueError(
-                    f"Incompatible index field, expected a field with dimension '{dim}'."
-                )
-
-            current_range: common.UnitRange = self.domain[dim_idx][1]
-            new_ranges = connectivity.inverse_image(current_range)
-            new_domain = self.domain.replace(dim_idx, *new_ranges)
-
-            # perform contramap
-            if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
-                # shortcut for compact remap: don't change the array, only the domain
-                new_buffer = self._ndarray
-            else:
-                # general case: first restrict the connectivity to the new domain
-                restricted_connectivity_domain = common.Domain(*new_ranges)
-                restricted_connectivity = (
-                    connectivity.restrict(restricted_connectivity_domain)
-                    if restricted_connectivity_domain != connectivity.domain
-                    else connectivity
-                )
-                assert common.is_connectivity_field(restricted_connectivity)
-
-                # then compute the index array
-                xp = self.array_ns
-                new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-                # finally, take the new array
-                new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
-
-            return self.__class__.from_array(
-                new_buffer,
-                domain=new_domain,
-                dtype=self.dtype,
-            )
-
         else:
-            # MODE -> reshuffle
-            # 1- reorder connectivity to match the field domain
-            # 2- expand the connectivity to cover all dimensions
-            # 3- compute the restricted domain
-            # 4- restrict the domain of the connectivity
-            # 5- create identity connectivities for the missing domain dimensions
-            # 6- take the field with all the connectivities
-            #   a) flatten
-            #   b) take
-            #   c) unflatten
-            if missing_dims := (set(connectivity.domain.dims) < set(self.domain.dims)):
-                print(missing_dims)
+            # reshuffle mode: make connectivity shape match the field shape by broadcasting
+            # the connectivity after reordering the dimensions and adding singleton
+            # dimensions where needed
+            transposed_axes = []
+            expanded_axes = []
+            call_transpose = False
+            for new_dim_idx, dim in enumerate(self.domain.dims):
+                if (dim_idx := connectivity.domain.dim_index(dim)) is None:
+                    expanded_axes.append(connectivity.domain.ndim + len(expanded_axes))
+                    dim_idx = expanded_axes[-1]
+                transposed_axes.append(dim_idx)
+                call_transpose = call_transpose | (dim_idx != new_dim_idx)
 
-        # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
-        if not common.is_connectivity_field(connectivity):
-            assert isinstance(connectivity, fbuiltins.FieldOffset)
-            connectivity = connectivity.as_connectivity_field()
-        assert common.is_connectivity_field(connectivity)
-
-        # Current implementation relies on skip_value == -1:
-        # if we assume the indexed array has at least one element, we wrap around without out of bounds
-        assert connectivity.skip_value is None or connectivity.skip_value == -1
+            conn_ndarray = connectivity.ndarray
+            if expanded_axes:
+                conn_ndarray = xp.expand_dims(conn_ndarray, axis=expanded_axes)
+            if call_transpose:
+                conn_ndarray = xp.transpose(conn_ndarray, transposed_axes)
+            if conn_ndarray.shape != self.domain.shape:
+                conn_ndarray = xp.broadcast_to(conn_ndarray, self.domain.shape)
+            connectivity = connectivity.__class__.from_array(
+                conn_ndarray, domain=self.domain, codomain=connectivity.codomain
+            )
 
         # Compute the new domain
         dim = connectivity.codomain
@@ -319,7 +283,14 @@ class NdArrayField(
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = self.domain.replace(dim_idx, *new_ranges)
 
-        # perform contramap
+        # If reshuffle mode,
+        # 5- create identity connectivities for the missing domain dimensions
+        # 6- take the field with all the connectivities
+        #   a) flatten
+        #   b) take
+        #   c) unflatten
+
+        # Perform contramap
         if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
             # shortcut for compact remap: don't change the array, only the domain
             new_buffer = self._ndarray
@@ -334,7 +305,6 @@ class NdArrayField(
             assert common.is_connectivity_field(restricted_connectivity)
 
             # then compute the index array
-            xp = self.array_ns
             new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)

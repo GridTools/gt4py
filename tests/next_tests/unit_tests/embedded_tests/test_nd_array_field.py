@@ -333,7 +333,7 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-def test_remap_implementation():
+def test_remap_reindexing_unstructured_implementation():
     V = Dimension("V")
     E = Dimension("E")
 
@@ -364,7 +364,7 @@ def test_remap_implementation():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_cartesian_remap_implementation():
+def test_remap_reindexing_cartesian_implementation():
     V = Dimension("V")
     E = Dimension("E")
 
@@ -380,6 +380,33 @@ def test_cartesian_remap_implementation():
     expected = common._field(
         v_field.ndarray,
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remap_reshuffle_implementation():
+    I = Dimension("I")
+    J = Dimension("J")
+
+    ij_field = common._field(
+        np.asarray([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]]),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
+    )
+    max_ij_conn = common._connectivity(
+        np.fromfunction(lambda i, j: np.maximum(i, j), (3, 3), dtype=int),
+        domain=common.Domain(
+            dims=ij_field.domain.dims,
+            ranges=ij_field.domain.ranges,
+        ),
+        codomain=I,
+    )
+
+    result = ij_field.remap(max_ij_conn)
+    expected = common._field(
+        np.asarray([[0.0, 4.0, 8.0], [3.0, 4.0, 8.0], [6.0, 7.0, 8.0]]),
+        domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
     )
 
     assert result.domain == expected.domain
