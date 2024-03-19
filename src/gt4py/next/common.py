@@ -477,10 +477,12 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         >>> I = Dimension("I")
         >>> J = Dimension("J")
 
-        >>> Domain((I, UnitRange(-1, 3))) & Domain((I, UnitRange(1, 6)))
+        >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
         Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
 
-        >>> Domain((I, UnitRange(-1, 3)), (J, UnitRange(2, 4))) & Domain((I, UnitRange(1, 6)))
+        >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
+        ...     NamedRange(I, UnitRange(1, 6))
+        ... )
         Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
