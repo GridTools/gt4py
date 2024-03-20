@@ -98,7 +98,6 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     eligible_params=eligible_params,
                 )
                 # TODO(tehrengruber): propagate let outwards
-                # todo: inherit recorded shifts
                 result = im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
                 copy_recorded_shifts(from_=new_node, to=result, required=False)
                 return result
