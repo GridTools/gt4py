@@ -119,7 +119,12 @@ def _transform_and_extract_lift_args(
             trace_shifts.copy_recorded_shifts(from_=arg, to=new_arg, required=False)
             new_args.append(new_arg)
 
-        # todo: test this properly. not really sure about it...
+        # TODO(tehrengruber): This is not tested properly. There are too many combinations of this
+        #  that need to be tested, so we should write some infrastructure that automatically
+        #  generates various combinations and checks that the recorded shifts that are returned
+        #  as a result of this pass match what the TraceShifts pass gives. Note that it is in any
+        #  case required to do the update here since we need the updated recorded shifts in the
+        #  pass itself.
         if recorded_shifts_base is not None:
             if isinstance(inner_stencil, ir.Lambda):
                 recorded_shifts = inner_stencil.params[i].annex.recorded_shifts
@@ -337,14 +342,14 @@ class InlineLifts(
                 )
                 inlined_args[param] = transformed_arg
             else:
-                # the false-branch is completely sufficient, but this makes the resulting
-                # expression much more readable
-                # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
-                #  pass. Since the tests of this transformation rely on it we preserve the
-                #  behaviour here for now.
                 if isinstance(arg, ir.SymRef) and arg.id not in (
                     reserved_symbol_names + list(new_arg_exprs.keys())
                 ):
+                    # the false-branch is completely sufficient, but this makes the resulting
+                    # expression much more readable
+                    # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
+                    #  pass. Since the tests of this transformation rely on it we preserve the
+                    #  behaviour here for now.
                     new_param = im.sym(arg.id)
                     trace_shifts.copy_recorded_shifts(
                         from_=param,
@@ -401,6 +406,6 @@ class InlineLifts(
                 transformed_node = method(new_node, **kwargs)
                 # if the transformation returned `None` it did not apply and we continue.
                 if transformed_node is not None:
-                    return transformed_node
+                    new_node = transformed_node
 
         return new_node
