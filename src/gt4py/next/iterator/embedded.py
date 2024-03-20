@@ -1094,9 +1094,7 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
-        if (
-            isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item)
-        ):
+        if isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item):
             assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
             d, r = item[0]
             assert d == self._dimension

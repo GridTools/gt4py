@@ -303,10 +303,10 @@ IntIndex: TypeAlias = int | core_defs.IntegralScalar
 
 class NamedIndex(NamedTuple):
     dim: Dimension
-    index: IntIndex  # type: ignore[assignment] # overriding tuple.index
+    value: IntIndex
 
     def __str__(self) -> str:
-        return f"{self.dim}={self.index}"
+        return f"{self.dim}={self.value}"
 
 
 FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
@@ -339,17 +339,11 @@ def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
 
 
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
-    return (
-        is_int_index(v)
-        or isinstance(v, (NamedRange, NamedIndex, slice))
-        or v is Ellipsis
-    )
+    return is_int_index(v) or isinstance(v, (NamedRange, NamedIndex, slice)) or v is Ellipsis
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(
-        isinstance(e, (NamedRange, NamedIndex)) for e in v
-    )
+    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, NamedIndex)) for e in v)
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:
@@ -381,7 +375,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
 
     def __init__(
         self,
-        *args: NamedRange,
+        *args: NamedRange[_Rng],
         dims: Optional[Sequence[Dimension]] = None,
         ranges: Optional[Sequence[_Rng]] = None,
     ) -> None:
@@ -414,10 +408,9 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 raise ValueError(
                     f"Elements of 'Domain' need to be instances of 'NamedRange', got '{args}'."
                 )
-            dims_new = (arg.dim for arg in args) if args else ()
-            ranges_new = (arg.unit_range for arg in args) if args else ()
-            object.__setattr__(self, "dims", tuple(dims_new))
-            object.__setattr__(self, "ranges", tuple(ranges_new))
+            dims, ranges = zip(*args) if args else ((), ())
+            object.__setattr__(self, "dims", tuple(dims))
+            object.__setattr__(self, "ranges", tuple(ranges))
 
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")
