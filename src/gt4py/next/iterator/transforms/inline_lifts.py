@@ -404,8 +404,11 @@ class InlineLifts(
                 assert isinstance(transformation.name, str)
                 method = getattr(self, f"transform_{transformation.name.lower()}")
                 transformed_node = method(new_node, **kwargs)
-                # if the transformation returned `None` it did not apply and we continue.
+                # if the transformation returned `None` it did not apply.
                 if transformed_node is not None:
+                    # all transformations work on 'FunCall's, filter this there.
+                    if not isinstance(transformation, ir.FunCall):
+                        return transformed_node
                     new_node = transformed_node
 
         return new_node
