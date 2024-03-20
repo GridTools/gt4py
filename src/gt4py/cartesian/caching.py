@@ -312,6 +312,16 @@ class JITCachingStrategy(CachingStrategy):
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
             **self._externals,
         }
+        if self.builder.backend.name != "numpy":
+            fingerprint["opt_level"] = self.builder.options.backend_opts.get(
+                "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
+            )
+            fingerprint["extra_opt_flags"] = self.builder.options.backend_opts.get(
+                "extra_opt_flags", gt_config.GT4PY_EXTRA_COMPILE_OPT_FLAGS
+            )
+            fingerprint["extra_compile_args"] = self.builder.options.backend_opts.get(
+                "extra_compile_args", gt_config.GT4PY_EXTRA_COMPILE_ARGS
+            )
         if self.builder.backend.name == "dace:gpu":
             fingerprint["default_block_size"] = gt_config.DACE_DEFAULT_BLOCK_SIZE
 
