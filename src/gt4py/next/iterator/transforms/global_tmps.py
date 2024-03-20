@@ -194,6 +194,16 @@ class SimpleTemporaryExtractionHeuristics:
         return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
 
     def __call__(self, expr: ir.Expr) -> bool:
+        # do not extract if only a single argument to lift function, e.g.,
+        #  we don't want to extract this: (↑(λ(it) → cast_(·it, float64)))(outer_it)
+        #  but this: (↑(λ(it) → reduce(plus, 0)(·it)))(outer_it)
+        contains_reduction = False
+        for child_expr in expr.pre_walk_values():
+            if isinstance(child_expr, ir.SymRef) and child_expr.id == "reduce":
+                contains_reduction = True
+        if not contains_reduction and isinstance(expr, ir.FunCall) and len(expr.args) == 1:
+            return False
+        # extract if more than one shift
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:
             return True
