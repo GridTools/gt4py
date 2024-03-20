@@ -39,7 +39,7 @@ class ClosureVarTypeDeduction(NodeTranslator, traits.VisitorWithSymbolTableTrait
         return cls(closure_vars=closure_vars).visit(node)
 
     def visit_FunctionDefinition(
-        self, node: foast.FunctionDefinition, **kwargs
+        self, node: foast.FunctionDefinition, **kwargs: Any
     ) -> foast.FunctionDefinition:
         new_closure_vars: list[foast.Symbol] = []
         for sym in node.closure_vars:

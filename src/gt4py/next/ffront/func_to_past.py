@@ -81,7 +81,10 @@ class ProgramParser(DialectParser[past.Program]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
+        cls,
+        output_node: past.Program,
+        closure_vars: dict[str, Any],
+        annotations: dict[str, Any],
     ) -> past.Program:
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)
@@ -121,37 +124,37 @@ class ProgramParser(DialectParser[past.Program]):
     def visit_Expr(self, node: ast.Expr) -> past.LocatedNode:
         return self.visit(node.value)
 
-    def visit_Add(self, node: ast.Add, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Add(self, node: ast.Add, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.ADD
 
-    def visit_Sub(self, node: ast.Sub, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Sub(self, node: ast.Sub, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.SUB
 
-    def visit_Mult(self, node: ast.Mult, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Mult(self, node: ast.Mult, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.MULT
 
-    def visit_Div(self, node: ast.Div, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Div(self, node: ast.Div, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.DIV
 
-    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_FloorDiv(self, node: ast.FloorDiv, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.FLOOR_DIV
 
-    def visit_Pow(self, node: ast.Pow, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Pow(self, node: ast.Pow, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.POW
 
-    def visit_Mod(self, node: ast.Mod, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_Mod(self, node: ast.Mod, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.MOD
 
-    def visit_BitAnd(self, node: ast.BitAnd, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitAnd(self, node: ast.BitAnd, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_AND
 
-    def visit_BitOr(self, node: ast.BitOr, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitOr(self, node: ast.BitOr, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_OR
 
-    def visit_BitXor(self, node: ast.BitXor, **kwargs) -> dialect_ast_enums.BinaryOperator:
+    def visit_BitXor(self, node: ast.BitXor, **kwargs: Any) -> dialect_ast_enums.BinaryOperator:
         return dialect_ast_enums.BinaryOperator.BIT_XOR
 
-    def visit_BinOp(self, node: ast.BinOp, **kwargs) -> past.BinOp:
+    def visit_BinOp(self, node: ast.BinOp, **kwargs: Any) -> past.BinOp:
         return past.BinOp(
             op=self.visit(node.op),
             left=self.visit(node.left),

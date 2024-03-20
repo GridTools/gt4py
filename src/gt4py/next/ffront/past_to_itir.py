@@ -168,10 +168,10 @@ class ProgramLowering(
     ) -> itir.FencilDefinition:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def __init__(self, grid_type):
+    def __init__(self, grid_type: common.GridType):
         self.grid_type = grid_type
 
-    def _gen_size_params_from_program(self, node: past.Program):
+    def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
@@ -186,7 +186,11 @@ class ProgramLowering(
         return size_params
 
     def visit_Program(
-        self, node: past.Program, *, function_definitions, **kwargs
+        self,
+        node: past.Program,
+        *,
+        function_definitions: list[itir.FunctionDefinition],
+        **kwargs: Any,
     ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
@@ -209,7 +213,7 @@ class ProgramLowering(
             closures=closures,
         )
 
-    def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
+    def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
@@ -231,7 +235,7 @@ class ProgramLowering(
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
 
         stencil_params = []
-        stencil_args = []
+        stencil_args: list[itir.Expr] = []
         for i, arg in enumerate([*args, *node_kwargs]):
             stencil_params.append(f"__stencil_arg{i}")
             if isinstance(arg.type, ts.TupleType):
@@ -240,7 +244,7 @@ class ProgramLowering(
                     lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
                 )
             else:
-                stencil_args.append(f"__stencil_arg{i}")
+                stencil_args.append(im.ref(f"__stencil_arg{i}"))
 
         if isinstance(node.func.type, ts_ffront.ScanOperatorType):
             # scan operators return an iterator of tuples, just deref directly
@@ -248,7 +252,9 @@ class ProgramLowering(
         else:
             # field operators return a tuple of iterators, deref element-wise
             stencil_body = lowering_utils.process_elements(
-                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+                im.deref,
+                im.call(node.func.id)(*stencil_args),
+                node.func.type.definition.returns,
             )
 
         return itir.StencilClosure(
@@ -264,8 +270,8 @@ class ProgramLowering(
         slice_bound: Optional[past.Constant],
         default_value: itir.Expr,
         dim_size: itir.Expr,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> itir.Expr:
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
@@ -329,6 +335,8 @@ class ProgramLowering(
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
+            lower: itir.Expr
+            upper: itir.Expr
             if node_domain is not None:
                 assert isinstance(node_domain, past.Dict)
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
@@ -387,13 +395,13 @@ class ProgramLowering(
         return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
-    def _compute_field_slice(node: past.Subscript):
+    def _compute_field_slice(node: past.Subscript) -> list[past.Slice]:
         out_field_name: past.Name = node.value
-        out_field_slice_: list[past.Expr]
+        out_field_slice_: list[past.Slice]
         if isinstance(node.slice_, past.TupleExpr) and all(
             isinstance(el, past.Slice) for el in node.slice_.elts
         ):
-            out_field_slice_ = node.slice_.elts
+            out_field_slice_ = cast(list[past.Slice], node.slice_.elts)  # type ensured by if
         elif isinstance(node.slice_, past.Slice):
             out_field_slice_ = [node.slice_]
         else:
@@ -410,7 +418,7 @@ class ProgramLowering(
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, out_arg: past.Expr, domain_arg: Optional[past.Expr], **kwargs
+        self, out_arg: past.Expr, domain_arg: Optional[past.Expr], **kwargs: Any
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
@@ -460,7 +468,7 @@ class ProgramLowering(
                 "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
             )
 
-    def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
+    def visit_Constant(self, node: past.Constant, **kwargs: Any) -> itir.Literal:
         if isinstance(node.type, ts.ScalarType) and node.type.shape is None:
             match node.type.kind:
                 case ts.ScalarKind.STRING:
@@ -472,10 +480,10 @@ class ProgramLowering(
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
+    def visit_Name(self, node: past.Name, **kwargs: Any) -> itir.SymRef:
         return itir.SymRef(id=node.id)
 
-    def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
+    def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
         if isinstance(node.type, ts.FieldType):
             kind = "Iterator"
@@ -484,13 +492,13 @@ class ProgramLowering(
             return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return itir.Sym(id=node.id)
 
-    def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
+    def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
-    def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
+    def visit_Call(self, node: past.Call, **kwargs: Any) -> itir.FunCall:
         if node.func.id in ["maximum", "minimum"]:
             assert len(node.args) == 2
             return itir.FunCall(

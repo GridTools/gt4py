@@ -27,7 +27,7 @@ class ModularExecutor(ppi.ProgramExecutor):
     otf_workflow: workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]
     name: Optional[str] = None
 
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs: Any) -> None:
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
             *args, offset_provider=kwargs["offset_provider"]
         )

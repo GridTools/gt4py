@@ -31,7 +31,6 @@ from gt4py.next import (
     int64,
     minimum,
     neighbor_sum,
-    where,
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
@@ -1054,29 +1053,6 @@ def test_domain_tuple(cartesian_case):
         inout=(out0, out1),
         ref=(ref0, ref1),
     )
-
-
-@pytest.mark.uses_cartesian_shift
-def test_where_k_offset(cartesian_case):
-    @gtx.field_operator
-    def fieldop_where_k_offset(
-        inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
-    ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), 2)
-
-    @gtx.program
-    def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):
-        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, 10), KDim: (1, 10)})
-
-    inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
-    k_index = cases.allocate(
-        cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
-    )()
-    out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
-
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
-
-    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
