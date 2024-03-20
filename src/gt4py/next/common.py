@@ -251,7 +251,7 @@ FiniteUnitRange: TypeAlias = UnitRange[int, int]
 
 _Rng = TypeVar(
     "_Rng",
-    UnitRange[int, int],
+    FiniteUnitRange,
     UnitRange[Infinity, int],
     UnitRange[int, Infinity],
     UnitRange[Infinity, Infinity],
@@ -341,16 +341,14 @@ def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
 def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
     return (
         is_int_index(v)
-        or isinstance(v, NamedRange)
-        or isinstance(v, NamedIndex)
-        or isinstance(v, slice)
+        or isinstance(v, (NamedRange, NamedIndex, slice))
         or v is Ellipsis
     )
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
     return isinstance(v, Sequence) and all(
-        isinstance(e, NamedRange) or isinstance(e, NamedIndex) for e in v
+        isinstance(e, (NamedRange, NamedIndex)) for e in v
     )
 
 
@@ -493,7 +491,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
                 _broadcast_ranges(broadcast_dims, other.dims, other.ranges),
             )
         )
-        return Domain(dims=broadcast_dims, ranges=intersected_ranges)  # TODO
+        return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
     def __str__(self) -> str:
         return f"Domain({', '.join(f'{e}' for e in self)})"

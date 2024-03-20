@@ -152,8 +152,8 @@ def restrict_to_intersection(
 def iterate_domain(
     domain: common.Domain,
 ) -> Iterator[tuple[common.NamedIndex]]:
-    for i in itertools.product(*[list(r) for r in domain.ranges]):
-        yield tuple(common.NamedIndex(*e) for e in zip(domain.dims, i))  # type: ignore[misc] # trust me, `i` is `tuple[int, ...]`
+    for idx in itertools.product(*(list(r) for r in domain.ranges)):
+        yield tuple(common.NamedIndex(d, i) for d, i in zip(domain.dims, idx))  # type: ignore[misc] # trust me, `idx` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(

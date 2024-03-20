@@ -1095,8 +1095,7 @@ class IndexField(common.Field):
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
         if (
-            common.is_absolute_index_sequence(item)  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
-            and all(isinstance(e, common.NamedIndex) for e in item)
+            isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item)
         ):
             assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
             d, r = item[0]
