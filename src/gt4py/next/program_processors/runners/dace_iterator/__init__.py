@@ -174,7 +174,7 @@ def get_sdfg_args(
 ) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
-    This function can handle the same arguments that are passed to `run_dace_iterator()`.
+    This function can handle the same arguments that are passed to dace runner.
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
