@@ -119,7 +119,12 @@ def _transform_and_extract_lift_args(
             trace_shifts.copy_recorded_shifts(from_=arg, to=new_arg, required=False)
             new_args.append(new_arg)
 
-        # todo: test this properly. not really sure about it...
+        # TODO(tehrengruber): This is not tested properly. There are too many combinations of this
+        #  that need to be tested, so we should write some infrastructure that automatically
+        #  generates various combinations and checks that the recorded shifts that are returned
+        #  as a result of this pass match what the TraceShifts pass gives. Note that it is in any
+        #  case required to do the update here since we need the updated recorded shifts in the
+        #  pass itself.
         if recorded_shifts_base is not None:
             if isinstance(inner_stencil, ir.Lambda):
                 recorded_shifts = inner_stencil.params[i].annex.recorded_shifts
@@ -401,6 +406,6 @@ class InlineLifts(
                 transformed_node = method(new_node, **kwargs)
                 # if the transformation returned `None` it did not apply and we continue.
                 if transformed_node is not None:
-                    return transformed_node
+                    new_node = transformed_node
 
         return new_node
