@@ -87,6 +87,6 @@ os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.c
 
 DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")
 
-# Deerecate by default the gtc `cuda` backend. Use GT4PY_GTC_CUDA_USE=1 to turn it on
+# Deprecate by default the gtc `cuda` backend. Use GT4PY_GTC_CUDA_USE=1 to turn it on
 # at user own risks.
 GT4PY_GTC_CUDA_USE = bool(int(os.environ.get("GT4PY_GTC_CUDA_USE", "0")))
