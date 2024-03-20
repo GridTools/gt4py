@@ -17,6 +17,8 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
+from gt4py.next import common
+from gt4py.next.ffront import program_ast as past
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages
 from gt4py.next.otf.binding import interface
@@ -28,6 +30,15 @@ SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
 SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
 TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class PastClosure:
+    closure_vars: dict[str, Any]
+    past_node: past.Program
+    grid_type: common.GridType
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -56,7 +67,7 @@ class ProgramSource(Generic[SrcL, SettingT]):
     language: type[SrcL]
     language_settings: SettingT
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.language_settings, self.language.settings_class):
             raise TypeError(
                 f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
@@ -113,7 +124,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
 class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
-    def __call__(self, *args, **kwargs) -> None: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

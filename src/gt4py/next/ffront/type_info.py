@@ -41,7 +41,9 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
 
 
 def promote_zero_dims(
-    function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    function_type: ts.FunctionType,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
 ) -> tuple[list, dict]:
     """
     Promote arg types to zero dimensional fields if compatible and required by function signature.
@@ -73,7 +75,10 @@ def promote_zero_dims(
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+        zip(
+            function_type.pos_only_args + list(function_type.pos_or_kw_args.values()),
+            args,
+        )
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
@@ -89,7 +94,7 @@ def return_type_fieldop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     ret_type = type_info.return_type(
         fieldop_type.definition, with_args=with_args, with_kwargs=with_kwargs
     )
@@ -103,8 +108,8 @@ def canonicalize_program_or_fieldop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     return type_info.canonicalize_arguments(
         program_type.definition,
@@ -121,8 +126,8 @@ def canonicalize_scanop_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     (_, *cargs), ckwargs = type_info.canonicalize_arguments(
         scanop_type.definition,
@@ -192,12 +197,16 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    return type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    res = type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    assert isinstance(res, (ts.FieldType, ts.TupleType))
+    return res
 
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_scanop(
-    scanop_type: ts_ffront.ScanOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    scanop_type: ts_ffront.ScanOperatorType,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     if not all(
         type_info.is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args
@@ -267,7 +276,9 @@ def function_signature_incompatibilities_scanop(
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
+    program_type: ts_ffront.ProgramType,
+    args: list[ts.TypeSpec],
+    kwargs: dict[str, ts.TypeSpec],
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
         program_type.definition, args, kwargs, ignore_errors=True
@@ -294,7 +305,7 @@ def return_type_scanop(
     *,
     with_args: list[ts.TypeSpec],
     with_kwargs: dict[str, ts.TypeSpec],
-):
+) -> ts.TypeSpec:
     carry_dtype = callable_type.definition.returns
     promoted_dims = common.promote_dims(
         *(
@@ -307,5 +318,6 @@ def return_type_scanop(
         [callable_type.axis],
     )
     return type_info.apply_to_primitive_constituents(
-        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
+        carry_dtype,
+        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)),
     )

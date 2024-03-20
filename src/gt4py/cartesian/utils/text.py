@@ -53,7 +53,7 @@ class Joiner:
             self.joiner = joiner
             self.index = index
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.joiner.joiner_str if self.index < self.joiner.n_items - 1 else ""
 
     def __init__(self, joiner_str):
@@ -138,5 +138,5 @@ class TextBlock:
     def __len__(self):
         return len(self.lines)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.text

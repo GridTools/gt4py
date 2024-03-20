@@ -17,8 +17,9 @@ from __future__ import annotations
 import functools
 import itertools
 import operator
+from collections.abc import Iterator, Sequence
 
-from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
+from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
@@ -97,7 +98,19 @@ def _absolute_sub_domain(
     return common.Domain(*named_ranges)
 
 
-def intersect_domains(*domains: common.Domain) -> common.Domain:
+def domain_intersection(
+    *domains: common.Domain,
+) -> common.Domain:
+    """
+    Return the intersection of the given domains.
+
+    Example:
+        >>> I = common.Dimension("I")
+        >>> domain_intersection(
+        ...     common.domain({I: (0, 5)}), common.domain({I: (1, 3)})
+        ... )  # doctest: +ELLIPSIS
+        Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
+    """
     return functools.reduce(
         operator.and_,
         domains,
@@ -105,9 +118,42 @@ def intersect_domains(*domains: common.Domain) -> common.Domain:
     )
 
 
-def iterate_domain(domain: common.Domain):
+def restrict_to_intersection(
+    *domains: common.Domain,
+    ignore_dims: Optional[common.Dimension | tuple[common.Dimension, ...]] = None,
+) -> tuple[common.Domain, ...]:
+    """
+    Return the with each other intersected domains, ignoring 'ignore_dims' dimensions for the intersection.
+
+    Example:
+        >>> I = common.Dimension("I")
+        >>> J = common.Dimension("J")
+        >>> res = restrict_to_intersection(
+        ...     common.domain({I: (0, 5), J: (1, 2)}),
+        ...     common.domain({I: (1, 3), J: (0, 3)}),
+        ...     ignore_dims=J,
+        ... )
+        >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
+    """
+    ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
+    intersection_without_ignore_dims = domain_intersection(*[
+        common.Domain(*[(d, r) for d, r in domain if d not in ignore_dims_tuple])
+        for domain in domains
+    ])
+    return tuple(
+        common.Domain(*[
+            (d, r if d in ignore_dims_tuple else intersection_without_ignore_dims[d][1])
+            for d, r in domain
+        ])
+        for domain in domains
+    )
+
+
+def iterate_domain(
+    domain: common.Domain,
+) -> Iterator[tuple[tuple[common.Dimension, int]]]:
     for i in itertools.product(*[list(r) for r in domain.ranges]):
-        yield tuple(zip(domain.dims, i))
+        yield tuple(zip(domain.dims, i))  # type: ignore[misc] # trust me, `i` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(
