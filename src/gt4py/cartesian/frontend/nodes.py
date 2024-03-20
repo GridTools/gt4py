@@ -190,7 +190,7 @@ class LevelMarker(enum.Enum):
     START = 0
     END = -1
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -251,7 +251,7 @@ class Builtin(enum.Enum):
 
         return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -268,7 +268,7 @@ class DataType(enum.Enum):
     FLOAT32 = 104
     FLOAT64 = 108
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     @property
@@ -353,6 +353,10 @@ class FieldRef(Ref):
         return cls(
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
         )
+
+    @classmethod
+    def datadims_index(cls, name: str, loc=None):
+        return cls(name=name, offset={}, data_index=[], loc=loc)
 
 
 @attribclass
@@ -661,7 +665,7 @@ class IterationOrder(enum.Enum):
         elif self == self.FORWARD:
             return "->"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __lshift__(self, steps: int):

@@ -23,6 +23,7 @@ from gt4py.cartesian.gtscript import (
     FORWARD,
     PARALLEL,
     Field,
+    GlobalTable,
     I,
     J,
     computation,
@@ -586,3 +587,19 @@ def test_pruned_args_match(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
     )
     test(out, inp)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_direct_datadims_index(backend):
+    F64_VEC4 = (np.float64, (2, 2, 2, 2))
+
+    @gtscript.stencil(backend=backend)
+    def test(out: Field[np.float64], inp: GlobalTable[F64_VEC4]):
+        with computation(PARALLEL), interval(...):
+            out = inp.A[1, 0, 1, 0]
+
+    inp = gt_storage.ones(backend=backend, shape=(2, 2, 2, 2), dtype=np.float64)
+    inp[1, 0, 1, 0] = 42
+    out = gt_storage.zeros(backend=backend, shape=(2, 2, 2), dtype=np.float64)
+    test(out, inp)
+    assert (out[:] == 42).all()

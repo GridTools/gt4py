@@ -42,6 +42,8 @@ from gt4py.eve.extended_typing import (
     TypeAlias,
     TypeGuard,
     TypeVar,
+    TypeVarTuple,
+    Unpack,
     cast,
     extended_runtime_checkable,
     overload,
@@ -51,8 +53,14 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
-DimsT = TypeVar("DimsT", bound=Sequence["Dimension"], covariant=True)
+ShapeT = TypeVarTuple("ShapeT")
 
+
+class Dims(Generic[Unpack[ShapeT]]):
+    shape: tuple[Unpack[ShapeT]]
+
+
+DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
 
 Tag: TypeAlias = str
 
@@ -63,7 +71,7 @@ class DimensionKind(StrEnum):
     VERTICAL = "vertical"
     LOCAL = "local"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.value
 
 
@@ -72,7 +80,7 @@ class Dimension:
     value: str
     kind: DimensionKind = dataclasses.field(default=DimensionKind.HORIZONTAL)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.value}[{self.kind}]"
 
     def __call__(self, val: int) -> NamedIndex:
@@ -159,6 +167,11 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
     def is_left_finite(cls, obj: UnitRange) -> TypeGuard[UnitRange[int, _Right]]:
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return obj.start is not Infinity.NEGATIVE
+
+    def is_empty(self) -> bool:
+        return (
+            self.start == 0 and self.stop == 0
+        )  # post_init ensures that empty is represented as UnitRange(0, 0)
 
     def __repr__(self) -> str:
         return f"UnitRange({self.start}, {self.stop})"
@@ -420,6 +433,9 @@ class Domain(Sequence[tuple[Dimension, _Rng]], Generic[_Rng]):
         # classmethod since TypeGuards requires the guarded obj as separate argument
         return all(UnitRange.is_finite(rng) for rng in obj.ranges)
 
+    def is_empty(self) -> bool:
+        return any(rng.is_empty() for rng in self.ranges)
+
     @overload
     def __getitem__(self, index: int) -> tuple[Dimension, _Rng]: ...
 
@@ -625,7 +641,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def restrict(self, item: AnyIndexSpec) -> Field: ...
+    def restrict(self, item: AnyIndexSpec) -> Self: ...
 
     @abc.abstractmethod
     def as_scalar(self) -> core_defs.ScalarT: ...
@@ -635,7 +651,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
-    def __getitem__(self, item: AnyIndexSpec) -> Field: ...
+    def __getitem__(self, item: AnyIndexSpec) -> Self: ...
 
     @abc.abstractmethod
     def __abs__(self) -> Field: ...
@@ -851,22 +867,6 @@ def _connectivity(
     raise NotImplementedError
 
 
-@dataclasses.dataclass(frozen=True)
-class GTInfo:
-    definition: Any
-    ir: Any
-
-
-@dataclasses.dataclass(frozen=True)
-class Backend:
-    def __init__(self, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-
-    # TODO : proper definition and implementation
-    def generate_operator(self, ir):
-        return ir
-
-
 @runtime_checkable
 class Connectivity(Protocol):
     max_neighbors: int
@@ -1067,7 +1067,7 @@ class FieldBuiltinFuncRegistry:
         collections.ChainMap()
     )
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, **kwargs: Any) -> None:
         cls._builtin_func_map = collections.ChainMap(
             {},  # New empty `dict` for new registrations on this class
             *[
