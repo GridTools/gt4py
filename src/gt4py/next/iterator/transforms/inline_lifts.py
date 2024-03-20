@@ -342,14 +342,14 @@ class InlineLifts(
                 )
                 inlined_args[param] = transformed_arg
             else:
-                # the false-branch is completely sufficient, but this makes the resulting
-                # expression much more readable
-                # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
-                #  pass. Since the tests of this transformation rely on it we preserve the
-                #  behaviour here for now.
                 if isinstance(arg, ir.SymRef) and arg.id not in (
                     reserved_symbol_names + list(new_arg_exprs.keys())
                 ):
+                    # the false-branch is completely sufficient, but this makes the resulting
+                    # expression much more readable
+                    # TODO(tehrengruber): the true-branch could just be a standalone preprocessing
+                    #  pass. Since the tests of this transformation rely on it we preserve the
+                    #  behaviour here for now.
                     new_param = im.sym(arg.id)
                     trace_shifts.copy_recorded_shifts(
                         from_=param,
