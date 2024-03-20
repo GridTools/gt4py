@@ -15,7 +15,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
@@ -37,7 +37,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
     transformer: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
 
-    def __call__(self, program: stages.ProgramDefinition, *args, **kwargs) -> None:
+    def __call__(
+        self, program: stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
+    ) -> None:
         transformer = self.transformer.replace(args=args, kwargs=kwargs)
         program_call = transformer(program)
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
