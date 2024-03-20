@@ -162,7 +162,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
             )
         else:
             raise NotImplementedError(
-                "cuda backend is no longer maintained (February 2024)."
+                "The 'cuda' backend is no longer maintained (February 2024)."
                 "You can still force the use of the backend by defining GT4PY_GTC_CUDA_USE=1."
             )
 
