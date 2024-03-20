@@ -156,7 +156,7 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
         # We push for hard deprecation here by raising by default and warning if use has been forced.
         if not self.deprecated:
             warnings.warn(
-                "cuda backend is deprecated, feature developed after February 2024 will not be available",
+                "The 'cuda' backend is deprecated, features developed after February 2024 will not be available",
                 DeprecationWarning,
                 stacklevel=2,
             )
