@@ -1101,7 +1101,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                         store, self.context.body.arrays[store]
                     )
 
-        neighbor_tables = filter_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = filter_neighbor_tables(node.fun, self.offset_provider)
         for offset in neighbor_tables.keys():
             var = connectivity_identifier(offset)
             nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])
