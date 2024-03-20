@@ -203,6 +203,7 @@ class SimpleTemporaryExtractionHeuristics:
                 contains_reduction = True
         if not contains_reduction and isinstance(expr, ir.FunCall) and len(expr.args) == 1:
             return False
+
         # extract if more than one shift
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:

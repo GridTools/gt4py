@@ -96,17 +96,19 @@ def test_split_closures_simple_heuristics():
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
+        params=[im.sym("d"), im.sym("inp1"), im.sym("inp2"), im.sym("out")],
         closures=[
             ir.StencilClosure(
                 domain=im.call("cartesian_domain")(),
-                stencil=im.lambda_("foo")(
-                    im.let("lifted_it", im.lift(im.lambda_("bar")(im.deref("bar")))("foo"))(
-                        im.plus(im.deref("lifted_it"), im.deref(im.shift("I", 1)("lifted_it")))
-                    )
+                stencil=im.lambda_("foo", "bar")(
+                    # second argument to lifted stencil is just to avoid extraction
+                    im.let(
+                        "lifted_it",
+                        im.lift(im.lambda_("it1", "it2")(im.deref("it1")))("foo", "bar"),
+                    )(im.plus(im.deref("lifted_it"), im.deref(im.shift("I", 1)("lifted_it"))))
                 ),
                 output=im.ref("out"),
-                inputs=[im.ref("inp")],
+                inputs=[im.ref("inp1"), im.ref("inp2")],
             )
         ],
     )
@@ -116,7 +118,8 @@ def test_split_closures_simple_heuristics():
         function_definitions=[],
         params=[
             im.sym("d"),
-            im.sym("inp"),
+            im.sym("inp1"),
+            im.sym("inp2"),
             im.sym("out"),
             im.sym("_tmp_1"),
             im.sym("_gtmp_auto_domain"),
@@ -124,20 +127,112 @@ def test_split_closures_simple_heuristics():
         closures=[
             ir.StencilClosure(
                 domain=AUTO_DOMAIN,
-                stencil=im.lambda_("bar")(im.deref("bar")),
+                stencil=im.lambda_("it1", "it2")(im.deref("it1")),
                 output=im.ref("_tmp_1"),
-                inputs=[im.ref("inp")],
+                inputs=[im.ref("inp1"), im.ref("inp2")],
             ),
             ir.StencilClosure(
                 domain=im.call("cartesian_domain")(),
-                stencil=im.lambda_("foo", "_tmp_1")(
+                stencil=im.lambda_("foo", "bar", "_tmp_1")(
                     im.plus(im.deref("_tmp_1"), im.deref(im.shift("I", 1)("_tmp_1")))
                 ),
                 output=im.ref("out"),
-                inputs=[im.ref("inp"), im.ref("_tmp_1")],
+                inputs=[im.ref("inp1"), im.ref("inp2"), im.ref("_tmp_1")],
             ),
         ],
     )
+    actual = split_closures(
+        testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
+    )
+    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.fencil == expected
+
+
+def test_split_closures_simple_heuristics_trivial_stencil():
+    UIDs.reset_sequence()
+    testee = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("foo")(
+                    # only a single argument to the lift, such stencil are usually beneficial to
+                    # be inlined
+                    im.let("lifted_it", im.lift(im.lambda_("bar")(im.deref("bar")))("foo"))(
+                        im.plus(im.deref("lifted_it"), im.deref(im.shift("I", 1)("lifted_it")))
+                    )
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp")],
+            )
+        ],
+    )
+    expected = copy.deepcopy(testee)
+    expected.params.append(im.sym("_gtmp_auto_domain"))
+
+    actual = split_closures(
+        testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
+    )
+    assert actual.tmps == []
+    assert actual.fencil == expected
+
+
+def test_split_closures_simple_heuristics_stencil_with_reduction():
+    UIDs.reset_sequence()
+    testee = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("d"), im.sym("inp_sparse"), im.sym("out")],
+        closures=[
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("foo_sparse")(
+                    # only a single argument to the lift, such stencil are usually beneficial to
+                    # be inlined
+                    im.let(
+                        "lifted_it",
+                        im.lift(
+                            im.lambda_("bar")(
+                                im.call(im.call("reduce")("plus", 0))(im.deref("bar"))
+                            )
+                        )("foo_sparse"),
+                    )(im.plus(im.deref("lifted_it"), im.deref(im.shift("I", 1)("lifted_it"))))
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp_sparse")],
+            )
+        ],
+    )
+    expected = ir.FencilDefinition(
+        id="f",
+        function_definitions=[],
+        params=[
+            im.sym("d"),
+            im.sym("inp_sparse"),
+            im.sym("out"),
+            im.sym("_tmp_1"),
+            im.sym("_gtmp_auto_domain"),
+        ],
+        closures=[
+            ir.StencilClosure(
+                domain=AUTO_DOMAIN,
+                stencil=im.lambda_("bar")(im.call(im.call("reduce")("plus", 0))(im.deref("bar"))),
+                output=im.ref("_tmp_1"),
+                inputs=[im.ref("inp_sparse")],
+            ),
+            ir.StencilClosure(
+                domain=im.call("cartesian_domain")(),
+                stencil=im.lambda_("foo_sparse", "_tmp_1")(
+                    im.plus(im.deref("_tmp_1"), im.deref(im.shift("I", 1)("_tmp_1")))
+                ),
+                output=im.ref("out"),
+                inputs=[im.ref("inp_sparse"), im.ref("_tmp_1")],
+            ),
+        ],
+    )
+
     actual = split_closures(
         testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
     )
