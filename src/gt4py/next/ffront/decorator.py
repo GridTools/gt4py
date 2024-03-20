@@ -126,12 +126,24 @@ class Program:
             backend=backend,
         )
 
+    # TODO(ricoh): remove when ready
     @property
     def definition(self):
+        warnings.warn(
+            "The 'Program.definition' attribute is deprecated. Use 'Program.definition_stage.definition' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.definition_stage.definition
 
+    # TODO(ricoh): remove when ready
     @property
     def grid_type(self):
+        warnings.warn(
+            "The 'Program.grid_type' attribute is deprecated. Use 'Program.definition_stage.grid_type' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.definition_stage.grid_type
 
     @functools.cached_property
@@ -140,17 +152,29 @@ class Program:
             return self.backend.transformer.func_to_past(self.definition_stage)
         return next_backend.DEFAULT_TRANSFORMS.func_to_past(self.definition_stage)
 
+    # TODO(ricoh): remove when ready
     @property
     def past_node(self):
+        warnings.warn(
+            "The 'Program.past_node' attribute is deprecated. Use 'Program.past_stage.past_node' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.past_stage.past_node
 
+    # TODO(ricoh): remove when ready
     @property
     def closure_vars(self):
+        warnings.warn(
+            "The 'Program.closure_vars' attribute is deprecated. Use 'Program.past_stage.closure_vars' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self.past_stage.closure_vars
 
     def __post_init__(self):
         function_closure_vars = transform_utils._filter_closure_vars_by_type(
-            self.closure_vars, GTCallable
+            self.past_stage.closure_vars, GTCallable
         )
         misnamed_functions = [
             f"{name} vs. {func.id}"
@@ -164,8 +188,8 @@ class Program:
 
         undefined_symbols = [
             symbol.id
-            for symbol in self.past_node.closure_vars
-            if symbol.id not in self.closure_vars
+            for symbol in self.past_stage.past_node.closure_vars
+            if symbol.id not in self.past_stage.closure_vars
         ]
         if undefined_symbols:
             raise RuntimeError(
@@ -174,7 +198,7 @@ class Program:
 
     @property
     def __name__(self) -> str:
-        return self.definition.__name__
+        return self.definition_stage.definition.__name__
 
     @functools.cached_property
     def __gt_allocator__(
@@ -219,7 +243,7 @@ class Program:
         >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
         """
         for key in kwargs.keys():
-            if all(key != param.id for param in self.past_node.params):
+            if all(key != param.id for param in self.past_stage.past_node.params):
                 raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
 
         return ProgramWithBoundArgs(
@@ -229,14 +253,14 @@ class Program:
 
     @functools.cached_property
     def _all_closure_vars(self) -> dict[str, Any]:
-        return transform_utils._get_closure_vars_recursively(self.closure_vars)
+        return transform_utils._get_closure_vars_recursively(self.past_stage.closure_vars)
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
         no_args_past = stages.PastClosure(
-            past_node=self.past_node,
-            closure_vars=self.closure_vars,
-            grid_type=self.grid_type,
+            past_node=self.past_stage.past_node,
+            closure_vars=self.past_stage.closure_vars,
+            grid_type=self.definition_stage.grid_type,
             args=[],
             kwargs={},
         )
@@ -255,9 +279,9 @@ class Program:
             with next_embedded.context.new_context(offset_provider=offset_provider) as ctx:
                 # TODO(ricoh): check if rewriting still needed
                 rewritten_args, size_args, kwargs = past_process_args._process_args(
-                    self.past_node, args, kwargs
+                    self.past_stage.past_node, args, kwargs
                 )
-                ctx.run(self.definition, *rewritten_args, **kwargs)
+                ctx.run(self.definition_stage.definition, *rewritten_args, **kwargs)
             return
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
@@ -288,7 +312,7 @@ class ProgramWithBoundArgs(Program):
     bound_args: dict[str, typing.Union[float, int, bool]] = None
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
-        type_ = self.past_node.type
+        type_ = self.past_stage.past_node.type
         new_type = ts_ffront.ProgramType(
             definition=ts.FunctionType(
                 kw_only_args={
@@ -325,13 +349,13 @@ class ProgramWithBoundArgs(Program):
         except ValueError as err:
             bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
             raise TypeError(
-                f"Invalid argument types in call to program '{self.past_node.id}' with "
+                f"Invalid argument types in call to program '{self.past_stage.past_node.id}' with "
                 f"bound arguments '{bound_arg_names}'."
             ) from err
 
         full_args = [*args]
         full_kwargs = {**kwargs}
-        for index, param in enumerate(self.past_node.params):
+        for index, param in enumerate(self.past_stage.past_node.params):
             if param.id in self.bound_args.keys():
                 if index < len(full_args):
                     full_args.insert(index, self.bound_args[param.id])
