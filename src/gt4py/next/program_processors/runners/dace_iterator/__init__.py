@@ -32,7 +32,7 @@ from gt4py.next.otf.compilation import cache as compilation_cache
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
+from .utility import connectivity_identifier, get_sorted_dims
 
 
 try:
@@ -129,12 +129,13 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Mapping[str, common.NeighborTable],
+    offset_provider: dict[str, Any],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
     return {
-        connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
-        for offset, offset_provider in neighbor_tables.items()
+        connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
+        for offset, table in offset_provider.items()
+        if isinstance(table, common.NeighborTable)
     }
 
 
@@ -234,12 +235,13 @@ def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) ->
         "use_field_canonical_representation", _default_use_field_canonical_representation
     )
 
-    neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(neighbor_tables, device)
+    dace_conn_args = get_connectivity_args(offset_provider, device)
+    # keep only connectivity tables that are used in the sdfg
+    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
