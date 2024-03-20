@@ -199,6 +199,16 @@ class SimpleTemporaryExtractionHeuristics:
         return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
 
     def __call__(self, expr: ir.Expr) -> bool:
+        # do not extract if only a single argument to lift function, e.g.,
+        #  we don't want to extract this: (↑(λ(it) → cast_(·it, float64)))(outer_it)
+        #  but this: (↑(λ(it) → reduce(plus, 0)(·it)))(outer_it)
+        contains_reduction = False
+        for child_expr in expr.pre_walk_values():
+            if isinstance(child_expr, ir.SymRef) and child_expr.id == "reduce":
+                contains_reduction = True
+        if not contains_reduction and isinstance(expr, ir.FunCall) and len(expr.args) == 1:
+            return False
+        # extract if more than one shift
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:
             return True
@@ -424,7 +434,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),
+                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -666,6 +676,15 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
     )
 
 
+def validate_no_dynamic_offsets(node: ir.Node):
+    """Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`"""
+    for call_node in node.walk_values().if_isinstance(ir.FunCall):
+        assert isinstance(call_node, ir.FunCall)
+        if call_node.fun == im.ref("shift"):
+            if any(not isinstance(arg, ir.OffsetLiteral) for arg in call_node.args):
+                raise NotImplementedError("Dynamic offsets not supported in temporary pass.")
+
+
 # TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol). This can be
 #  tricky: For every lift statement that is dynamically shifted we can not compute bounds anymore
 #  and hence also not extract as a temporary.
@@ -685,6 +704,8 @@ class CreateGlobalTmps(PreserveLocationVisitor, NodeTranslator):
         ] = None,
         symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
+        # Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`
+        validate_no_dynamic_offsets(node)
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(
             node, offset_provider=offset_provider, extraction_heuristics=extraction_heuristics

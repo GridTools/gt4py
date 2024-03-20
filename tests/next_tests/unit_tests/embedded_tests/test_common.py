@@ -24,6 +24,8 @@ from gt4py.next.embedded.common import (
     canonicalize_any_index_sequence,
     iterate_domain,
     sub_domain,
+    restrict_to_intersection,
+    domain_intersection,
 )
 
 
@@ -180,3 +182,42 @@ def test_slicing(slices, expected):
     else:
         testee = canonicalize_any_index_sequence(slices)
         assert testee == expected
+
+
+def test_domain_intersection():
+    # see also tests in unit_tests/test_common.py for tests with 2 domains: `dom0 & dom1`
+    testee = (common.domain({I: (0, 5)}), common.domain({I: (1, 3)}), common.domain({I: (0, 3)}))
+
+    result = domain_intersection(*testee)
+
+    expected = testee[0] & testee[1] & testee[2]
+    assert result == expected
+
+
+def test_domain_intersection_empty():
+    result = domain_intersection()
+    assert result == common.Domain()
+
+
+def test_intersect_domains():
+    testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
+    result = restrict_to_intersection(*testee, ignore_dims=J)
+
+    expected = (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
+    assert result == expected
+
+
+def test_intersect_domains_ignore_dims_none():
+    testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
+    result = restrict_to_intersection(*testee)
+
+    expected = (domain_intersection(*testee),) * 2
+    assert result == expected
+
+
+def test_intersect_domains_ignore_all_dims():
+    testee = (common.domain({I: (0, 5), J: (1, 2)}), common.domain({I: (1, 3), J: (1, 3)}))
+    result = restrict_to_intersection(*testee, ignore_dims=(I, J))
+
+    expected = testee
+    assert result == expected

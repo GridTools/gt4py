@@ -124,7 +124,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
     CastExpr = as_fmt("static_cast<{new_dtype}>({obj_expr})")
 
-    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs):
+    def visit_TaggedValues(self, node: gtfn_ir.TaggedValues, **kwargs: Any) -> str:
         tags = self.visit(node.tags)
         values = self.visit(node.values)
         if self.is_cartesian:
@@ -144,7 +144,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
-    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs):
+    def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
             and node.fun.id in self.user_defined_function_ids
@@ -188,7 +188,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs):
+    def visit_FunctionDefinition(self, node: gtfn_ir.FunctionDefinition, **kwargs: Any) -> str:
         expr_ = "return " + self.visit(node.expr)
         return self.generic_visit(node, expr_=expr_)
 
@@ -219,11 +219,12 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         """
     )
 
-    def visit_TemporaryAllocation(self, node, **kwargs):
+    def visit_TemporaryAllocation(self, node: gtfn_ir.TemporaryAllocation, **kwargs: Any) -> str:
         # TODO(tehrengruber): Revisit. We are currently converting an itir.NamedRange with
         #  start and stop values into an gtfn_ir.(Cartesian|Unstructured)Domain with
         #  size and offset values, just to here convert back in order to obtain stop values again.
         # TODO(tehrengruber): Fix memory alignment.
+        assert isinstance(node.domain, (gtfn_ir.CartesianDomain, gtfn_ir.UnstructuredDomain))
         assert node.domain.tagged_offsets.tags == node.domain.tagged_sizes.tags
         tags = node.domain.tagged_offsets.tags
         new_sizes = []
@@ -339,14 +340,14 @@ class GTFNIMCodegen(GTFNCodegen):
 
     ReturnStmt = as_fmt("return {ret};")
 
-    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs):
+    def visit_Conditional(self, node: gtfn_im_ir.Conditional, **kwargs: Any) -> str:
         if_rhs_ = self.visit(node.if_stmt.rhs)
         else_rhs_ = self.visit(node.else_stmt.rhs)
         return self.generic_visit(node, if_rhs_=if_rhs_, else_rhs_=else_rhs_)
 
     def visit_ImperativeFunctionDefinition(
-        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs
-    ):
+        self, node: gtfn_im_ir.ImperativeFunctionDefinition, **kwargs: Any
+    ) -> str:
         expr_ = "".join(self.visit(stmt) for stmt in node.fun)
         return self.generic_visit(node, expr_=expr_)
 

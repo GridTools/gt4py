@@ -353,7 +353,9 @@ def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     return lift(lambda_()(expr))()
 
 
-def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[..., itir.Expr]:
+def promote_to_lifted_stencil(
+    op: str | itir.SymRef | Callable,
+) -> Callable[..., itir.FunCall]:
     """
     Promotes a function `op` from values to iterators.
 
@@ -370,7 +372,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
-    def _impl(*its: itir.Expr) -> itir.Expr:
+    def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`

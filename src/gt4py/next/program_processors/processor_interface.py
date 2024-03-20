@@ -41,7 +41,7 @@ ProcessorKindT = TypeVar("ProcessorKindT", bound="ProgramProcessor", covariant=T
 
 
 class ProgramProcessorCallable(Protocol[OutputT]):
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> OutputT: ...
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> OutputT: ...
 
 
 class ProgramProcessor(ProgramProcessorCallable[OutputT], Protocol[OutputT, ProcessorKindT]):
@@ -140,7 +140,7 @@ def make_program_processor(
     filtered_kwargs = _make_kwarg_filter(accept_kwargs)
 
     @functools.wraps(func)
-    def _wrapper(program: itir.FencilDefinition, *args, **kwargs) -> OutputT:
+    def _wrapper(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> OutputT:
         return func(program, *args_filter(args), **filtered_kwargs(kwargs))
 
     if name is not None:
@@ -237,8 +237,10 @@ class ProgramBackend(
 
 
 def is_program_backend(obj: Callable) -> TypeGuard[ProgramBackend]:
+    if not hasattr(obj, "executor"):
+        return False
     return is_processor_kind(
-        obj,
+        obj.executor,
         ProgramExecutor,  # type: ignore[type-abstract]  # ProgramExecutor is abstract
     ) and next_allocators.is_field_allocator_factory(obj)
 

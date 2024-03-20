@@ -85,7 +85,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
         """
     )
 
-    def visit_FindDependency(self, dep: FindDependency):
+    def visit_FindDependency(self, dep: FindDependency) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).
@@ -103,7 +103,7 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
             case _:
                 raise ValueError(f"Library '{dep.name}' is not supported")
 
-    def visit_LinkDependency(self, dep: LinkDependency):
+    def visit_LinkDependency(self, dep: LinkDependency) -> str:
         # TODO(ricoh): do not add more libraries here
         #   and do not use this design in a new build system.
         #   Instead, design this to be extensible (refer to ADR-0016).

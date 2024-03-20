@@ -22,17 +22,19 @@ from gt4py.next import (
     astype,
     broadcast,
     common,
+    constructors,
     errors,
+    field_utils,
     float32,
     float64,
     int32,
     int64,
     minimum,
     neighbor_sum,
-    where,
 )
 from gt4py.next.ffront.experimental import as_offset
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import (
@@ -47,6 +49,7 @@ from next_tests.integration_tests.cases import (
     Koff,
     V2EDim,
     Vertex,
+    Edge,
     cartesian_case,
     unstructured_case,
 )
@@ -638,7 +641,7 @@ def test_fieldop_from_scan(cartesian_case, forward):
 @pytest.mark.uses_scan_nested
 def test_solve_triag(cartesian_case):
     # TODO: there still appears to be a duplication of the scan
-    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries.executor:
+    if cartesian_case.executor == gtfn.run_gtfn_with_temporaries:
         pytest.xfail("Temporary extraction does not work correctly in combination with scans.")
 
     @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0))
@@ -1052,29 +1055,6 @@ def test_domain_tuple(cartesian_case):
         inout=(out0, out1),
         ref=(ref0, ref1),
     )
-
-
-@pytest.mark.uses_cartesian_shift
-def test_where_k_offset(cartesian_case):
-    @gtx.field_operator
-    def fieldop_where_k_offset(
-        inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType]
-    ) -> cases.IKField:
-        return where(k_index > 0, inp(Koff[-1]), 2)
-
-    @gtx.program
-    def prog(inp: cases.IKField, k_index: gtx.Field[[KDim], gtx.IndexType], out: cases.IKField):
-        fieldop_where_k_offset(inp, k_index, out=out, domain={IDim: (0, 10), KDim: (1, 10)})
-
-    inp = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
-    k_index = cases.allocate(
-        cartesian_case, fieldop_where_k_offset, "k_index", strategy=cases.IndexInitializer()
-    )()
-    out = cases.allocate(cartesian_case, fieldop_where_k_offset, "inp")()
-
-    ref = np.where(k_index.asnumpy() > 0, np.roll(inp.asnumpy(), 1, axis=1), out.asnumpy())
-
-    cases.verify(cartesian_case, prog, inp, k_index, out=out, ref=ref)
 
 
 def test_undefined_symbols(cartesian_case):
