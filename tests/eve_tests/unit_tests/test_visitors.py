@@ -28,3 +28,14 @@ def test_annex_preservation(compound_node: eve.Node):
 
     assert translated_node.annex.foo == 1
     assert not hasattr(translated_node.annex, "bar")
+
+
+def test_annex_preserve_none(compound_node: eve.Node):
+    compound_node.annex.foo = None
+
+    class SampleTranslator(eve.NodeTranslator):
+        PRESERVED_ANNEX_ATTRS = ("foo",)
+
+    translated_node = SampleTranslator().visit(compound_node)
+
+    assert translated_node.annex.foo == None
