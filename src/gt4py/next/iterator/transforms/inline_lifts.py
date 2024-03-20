@@ -406,7 +406,7 @@ class InlineLifts(
                 transformed_node = method(new_node, **kwargs)
                 # if the transformation returned `None` it did not apply.
                 if transformed_node is not None:
-                    # all transformations work on 'FunCall's, filter this there.
+                    # all transformations work on 'FunCall's, filter this here.
                     if not isinstance(transformation, ir.FunCall):
                         return transformed_node
                     new_node = transformed_node
