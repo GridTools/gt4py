@@ -24,7 +24,6 @@ from gt4py.next.otf import stages, step_types, workflow
 class ProgramTransformWorkflow(workflow.NamedStepSequence):
     """Modular workflow for transformations with access to intermediates."""
 
-    # TODO(ricoh): consider wrapping this in a CachedStep.
     func_to_past: workflow.SkippableStep[
         ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
         ffront_stages.PastProgramDefinition,
