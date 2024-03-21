@@ -277,7 +277,7 @@ class Program:
 
 @dataclasses.dataclass(frozen=True)
 class ProgramFromPast(Program):
-    past_stage: ffront_stages.ProgramPast
+    past_stage: ffront_stages.PastProgramDefinition
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
         if self.backend is None:
@@ -586,7 +586,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
         self._program_cache[hash_] = ProgramFromPast(
             definition_stage=None,
-            past_stage=ffront_stages.ProgramPast(
+            past_stage=ffront_stages.PastProgramDefinition(
                 past_node=past_node,
                 closure_vars=closure_vars,
                 grid_type=self.grid_type,

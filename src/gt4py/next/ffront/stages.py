@@ -29,7 +29,7 @@ class ProgramDefinition:
 
 
 @dataclasses.dataclass(frozen=True)
-class ProgramPast:
+class PastProgramDefinition:
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
