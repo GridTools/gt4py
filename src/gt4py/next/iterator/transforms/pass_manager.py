@@ -46,14 +46,17 @@ class LiftMode(enum.Enum):
 
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
-        return InlineLifts().visit(ir)
+        return InlineLifts.apply(ir)
     elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
+        return InlineLifts.apply(ir, predicate=simple_inline_heuristic.is_eligible_for_inlining)
     elif lift_mode == LiftMode.USE_TEMPORARIES:
-        return InlineLifts(
+        return InlineLifts.apply(
+            ir,
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
             | InlineLifts.Flag.INLINE_DEREF_LIFT  # some tuple exprs found in FVM don't work yet.
-        ).visit(ir)
+            | InlineLifts.Flag.INLINE_LIFTED_ARGS,
+            inline_single_pos_deref_lift_args_only=True,
+        )
     else:
         raise ValueError()
 
@@ -145,7 +148,7 @@ def apply_common_transforms(
         )
 
         for _ in range(10):
-            inlined = InlineLifts().visit(ir)
+            inlined = InlineLifts.apply(ir)
             inlined = InlineLambdas.apply(
                 inlined,
                 opcount_preserving=True,

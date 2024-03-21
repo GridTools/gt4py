@@ -49,7 +49,7 @@ def _should_inline(node: ir.FunCall) -> bool:
 
 def _lambda_and_lift_inliner(node: ir.FunCall) -> ir.FunCall:
     inlined = inline_lambda(node, opcount_preserving=False, force_inline_lift_args=True)
-    inlined = InlineLifts().visit(inlined)
+    inlined = InlineLifts.apply(inlined)
     return inlined
 
 

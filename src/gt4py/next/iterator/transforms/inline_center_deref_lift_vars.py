@@ -84,9 +84,11 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     new_args.append(capture_lift)
                     # since we deref an applied lift here we can (but don't need to) immediately
                     # inline
-                    bound_scalars[bound_arg_name] = InlineLifts(
-                        flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT
-                    ).visit(im.deref(arg), recurse=False)
+                    bound_scalars[bound_arg_name] = InlineLifts.apply(
+                        im.deref(arg),
+                        flags=InlineLifts.Flag.INLINE_DEREF_LIFT,
+                        recurse=False,
+                    )  # type: ignore[assignment]  # when we pass an itir.Expr we get an itir.Expr back.
                 else:
                     new_args.append(arg)
 
@@ -96,6 +98,8 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
                     eligible_params=eligible_params,
                 )
                 # TODO(tehrengruber): propagate let outwards
-                return im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
+                result = im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
+                copy_recorded_shifts(from_=new_node, to=result, required=False)
+                return result
 
         return node

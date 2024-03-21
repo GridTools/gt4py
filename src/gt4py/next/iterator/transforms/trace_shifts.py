@@ -41,13 +41,14 @@ class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
         self.generic_visit(node)
 
 
-def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+def copy_recorded_shifts(from_: ir.Node, to: ir.Node, *, required: bool = True) -> None:
     """
     Copy `recorded_shifts` annex attribute from one node to another.
 
     This function mainly exists for readability reasons.
     """
-    to.annex.recorded_shifts = from_.annex.recorded_shifts
+    if required or hasattr(from_.annex, "recorded_shifts"):
+        to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
 class Sentinel(enum.Enum):
