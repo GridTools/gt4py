@@ -109,8 +109,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case _:
                 result = node.value
         if node.type in ["bool", "int32", "int64", "float32", "float64"]:
-            # wrap into parenthesis such that minus(1, -1) does not get translated into 1--1,
-            # but (1)-(-1)
+            # wrap into parenthesis such that `minus(1, -1)` does not get translated into `1--1`,
+            # but `(1)-(-1)`
             result = f"({result})"
         elif node.type == "axis_literal":
             pass
