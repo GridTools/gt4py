@@ -30,7 +30,7 @@ class ConstantFolding(PreserveLocationVisitor, NodeTranslator):
             isinstance(new_node.fun, ir.SymRef)
             and new_node.fun.id in ["minimum", "maximum"]
             and new_node.args[0] == new_node.args[1]
-        ):
+        ):  # minimum(a, a) -> a
             return new_node.args[0]
 
         if (
