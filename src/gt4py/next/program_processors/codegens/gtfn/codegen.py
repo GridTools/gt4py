@@ -109,14 +109,14 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             case _:
                 result = node.value
         if node.type in ["bool", "int32", "int64", "float32", "float64"]:
-            # wrap into parenthesis such that `minus(1, -1)` does not get translated into `1--1`,
-            # but `(1)-(-1)`
-            result = f"({result})"
+            # add an extra space in the beginning such that `minus(1, -1)` does not get
+            # translated into `1--1`, but `1 - -1`
+            result = f" {result}"
         elif node.type == "axis_literal":
             pass
         else:
             raise NotImplementedError(
-                f"Literal type '{node.type}' is not supported in the code " f"generator"
+                f"Literal type '{node.type}' is not supported in the code generator"
             )
         return result
 
