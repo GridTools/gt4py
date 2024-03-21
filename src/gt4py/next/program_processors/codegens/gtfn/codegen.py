@@ -98,15 +98,27 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
+        # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
         match pytype_to_cpptype(node.type):
             case "float":
-                return self.asfloat(node.value) + "f"
+                result = self.asfloat(node.value) + "f"
             case "double":
-                return self.asfloat(node.value)
+                result = self.asfloat(node.value)
             case "bool":
-                return node.value.lower()
+                result = node.value.lower()
             case _:
-                return node.value
+                result = node.value
+        if node.type in ["bool", "int32", "int64", "float32", "float64"]:
+            # wrap into parenthesis such that `minus(1, -1)` does not get translated into `1--1`,
+            # but `(1)-(-1)`
+            result = f"({result})"
+        elif node.type == "axis_literal":
+            pass
+        else:
+            raise NotImplementedError(
+                f"Literal type '{node.type}' is not supported in the code " f"generator"
+            )
+        return result
 
     IntegralConstant = as_fmt("{value}_c")
 
