@@ -27,6 +27,7 @@ from gt4py.next.ffront import (
     gtcallable,
     lowering_utils,
     program_ast as past,
+    stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
 )
@@ -38,7 +39,7 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 @dataclasses.dataclass(frozen=True)
 class PastToItir(workflow.ChainableWorkflowMixin):
-    def __call__(self, inp: stages.PastClosure) -> stages.ProgramCall:
+    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
         all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
         offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
             all_closure_vars, fbuiltins.FieldOffset, common.Dimension

@@ -64,7 +64,6 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     ref,
     sym,
 )
-from gt4py.next.otf import stages
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
@@ -239,7 +238,7 @@ class Program:
 
     @functools.cached_property
     def itir(self) -> itir.FencilDefinition:
-        no_args_past = stages.PastClosure(
+        no_args_past = ffront_stages.PastClosure(
             past_node=self.past_stage.past_node,
             closure_vars=self.past_stage.closure_vars,
             grid_type=self.definition_stage.grid_type,

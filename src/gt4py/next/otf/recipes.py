@@ -29,8 +29,8 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
         ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
         ffront_stages.PastProgramDefinition,
     ]
-    past_transform_args: workflow.Workflow[stages.PastClosure, stages.PastClosure]
-    past_to_itir: workflow.Workflow[stages.PastClosure, stages.ProgramCall]
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
 
     args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
     kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -42,7 +42,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
         past_stage = self.func_to_past(inp)
         return self.past_to_itir(
             self.past_transform_args(
-                stages.PastClosure(
+                ffront_stages.PastClosure(
                     past_node=past_stage.past_node,
                     closure_vars=past_stage.closure_vars,
                     grid_type=past_stage.grid_type,

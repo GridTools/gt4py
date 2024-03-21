@@ -33,3 +33,12 @@ class PastProgramDefinition:
     past_node: past.Program
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class PastClosure:
+    closure_vars: dict[str, Any]
+    past_node: past.Program
+    grid_type: Optional[common.GridType]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
