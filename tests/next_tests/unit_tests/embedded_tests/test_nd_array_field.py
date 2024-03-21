@@ -21,7 +21,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
-from gt4py.next.common import Dimension, Domain, UnitRange
+from gt4py.next.common import Dimension, Domain, UnitRange, NamedRange, NamedIndex
 from gt4py.next.embedded import exceptions as embedded_exceptions, nd_array_field
 from gt4py.next.embedded.nd_array_field import _get_slices_from_domain_slice
 from gt4py.next.ffront import fbuiltins
@@ -430,7 +430,7 @@ def test_field_broadcast(new_dims, field, expected_domain):
 @pytest.mark.parametrize(
     "domain_slice",
     [
-        ((D0, UnitRange(0, 10)),),
+        (NamedRange(D0, UnitRange(0, 10)),),
         common.Domain(dims=(D0,), ranges=(UnitRange(0, 10),)),
     ],
 )
@@ -446,7 +446,7 @@ def test_get_slices_with_named_index():
     field_domain = common.Domain(
         dims=(D0, D1, D2), ranges=(UnitRange(0, 10), UnitRange(0, 10), UnitRange(0, 10))
     )
-    named_index = ((D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
+    named_index = (NamedRange(D0, UnitRange(0, 10)), (D1, 2), (D2, 3))
     slices = _get_slices_from_domain_slice(field_domain, named_index)
     assert slices == (slice(0, 10, None), 2, 3)
 
@@ -465,34 +465,34 @@ def test_get_slices_invalid_type():
     [
         (
             (
-                (D0, UnitRange(7, 9)),
-                (D1, UnitRange(8, 10)),
+                NamedRange(D0, UnitRange(7, 9)),
+                NamedRange(D1, UnitRange(8, 10)),
             ),
             (D0, D1, D2),
             (2, 2, 15),
         ),
         (
             (
-                (D0, UnitRange(7, 9)),
-                (D2, UnitRange(12, 20)),
+                NamedRange(D0, UnitRange(7, 9)),
+                NamedRange(D2, UnitRange(12, 20)),
             ),
             (D0, D1, D2),
             (2, 10, 8),
         ),
         (common.Domain(dims=(D0,), ranges=(UnitRange(7, 9),)), (D0, D1, D2), (2, 10, 15)),
-        (((D0, 8),), (D1, D2), (10, 15)),
-        (((D1, 9),), (D0, D2), (5, 15)),
-        (((D2, 11),), (D0, D1), (5, 10)),
+        ((NamedIndex(D0, 8),), (D1, D2), (10, 15)),
+        ((NamedIndex(D1, 9),), (D0, D2), (5, 15)),
+        ((NamedIndex(D2, 11),), (D0, D1), (5, 10)),
         (
             (
-                (D0, 8),
-                (D1, UnitRange(8, 10)),
+                NamedIndex(D0, 8),
+                NamedRange(D1, UnitRange(8, 10)),
             ),
             (D1, D2),
             (2, 15),
         ),
-        ((D0, 5), (D1, D2), (10, 15)),
-        ((D0, UnitRange(5, 7)), (D0, D1, D2), (2, 10, 15)),
+        (NamedIndex(D0, 5), (D1, D2), (10, 15)),
+        (NamedRange(D0, UnitRange(5, 7)), (D0, D1, D2), (2, 10, 15)),
     ],
 )
 def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
@@ -513,7 +513,10 @@ def test_absolute_indexing_dim_sliced():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
-    expected = field[(D0, UnitRange(5, 9)), (D1, UnitRange(8, 10))]
+    expected = field[
+        NamedRange(dim=D0, unit_range=UnitRange(5, 9)),
+        NamedRange(dim=D1, unit_range=UnitRange(8, 10)),
+    ]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == expected
@@ -525,7 +528,7 @@ def test_absolute_indexing_dim_sliced_single_slice():
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field_1 = field[D2(11)]
-    indexed_field_2 = field[(D2, 11)]
+    indexed_field_2 = field[NamedIndex(D2, 11)]
 
     assert common.is_field(indexed_field_1)
     assert indexed_field_1 == indexed_field_2
@@ -554,7 +557,7 @@ def test_absolute_indexing_value_return():
     domain = common.Domain(dims=(D0, D1), ranges=(UnitRange(10, 20), UnitRange(5, 15)))
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
-    named_index = ((D0, 12), (D1, 6))
+    named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
     assert common.is_field(field)
     value = field[named_index]
 
@@ -568,23 +571,27 @@ def test_absolute_indexing_value_return():
         (
             (slice(None, 5), slice(None, 2)),
             (5, 2),
-            Domain((D0, UnitRange(5, 10)), (D1, UnitRange(2, 4))),
+            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 4))),
         ),
-        ((slice(None, 5),), (5, 10), Domain((D0, UnitRange(5, 10)), (D1, UnitRange(2, 12)))),
+        (
+            (slice(None, 5),),
+            (5, 10),
+            Domain(NamedRange(D0, UnitRange(5, 10)), NamedRange(D1, UnitRange(2, 12))),
+        ),
         (
             (Ellipsis, 1),
             (10,),
-            Domain((D0, UnitRange(5, 15))),
+            Domain(NamedRange(D0, UnitRange(5, 15))),
         ),
         (
             (slice(2, 3), slice(5, 7)),
             (1, 2),
-            Domain((D0, UnitRange(7, 8)), (D1, UnitRange(7, 9))),
+            Domain(NamedRange(D0, UnitRange(7, 8)), NamedRange(D1, UnitRange(7, 9))),
         ),
         (
             (slice(1, 2), 0),
             (1,),
-            Domain((D0, UnitRange(6, 7))),
+            Domain(NamedRange(D0, UnitRange(6, 7))),
         ),
     ],
 )
@@ -693,7 +700,9 @@ def test_field_unsupported_index(index):
         ((1, slice(None)), np.ones((10,)) * 42.0),
         (
             (1, slice(None)),
-            common._field(np.ones((10,)) * 42.0, domain=common.Domain((D1, UnitRange(0, 10)))),
+            common._field(
+                np.ones((10,)) * 42.0, domain=common.Domain(NamedRange(D1, UnitRange(0, 10)))
+            ),
         ),
     ],
 )
@@ -718,7 +727,7 @@ def test_setitem_wrong_domain():
     )
 
     value_incompatible = common._field(
-        np.ones((10,)) * 42.0, domain=common.Domain((D1, UnitRange(-5, 5)))
+        np.ones((10,)) * 42.0, domain=common.Domain(NamedRange(D1, UnitRange(-5, 5)))
     )
 
     with pytest.raises(ValueError, match=r"Incompatible 'Domain'.*"):
@@ -751,7 +760,7 @@ def test_connectivity_field_inverse_image():
 
     # Test codomain
     with pytest.raises(ValueError, match="does not match the codomain dimension"):
-        e2v_conn.inverse_image((E, UnitRange(1, 2)))
+        e2v_conn.inverse_image(NamedRange(E, UnitRange(1, 2)))
 
 
 def test_connectivity_field_inverse_image_2d_domain():
