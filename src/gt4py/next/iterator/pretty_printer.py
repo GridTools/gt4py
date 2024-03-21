@@ -35,7 +35,9 @@ BINARY_OPS: Final = {
     "divides": "/",
     "eq": "==",
     "less": "<",
+    "less_equal": "<=",
     "greater": ">",
+    "greater_equal": ">=",
     "and_": "∧",
     "or_": "∨",  # noqa: RUF001 [ambiguous-unicode-character-string]
 }
@@ -55,7 +57,9 @@ PRECEDENCE: Final = {
     "and_": 3,
     "eq": 4,
     "less": 4,
+    "less_equal": 4,
     "greater": 4,
+    "greater_equal": 4,
     "plus": 5,
     "minus": 5,
     "multiplies": 6,

@@ -344,7 +344,7 @@ class FieldOffset(runtime.Offset):
         ) or common.is_connectivity_field(offset_definition):
             unrestricted_connectivity = self.as_connectivity_field()
             assert unrestricted_connectivity.domain.ndim > 1
-            named_index = (self.target[-1], offset)
+            named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = unrestricted_connectivity[named_index]
         else:
             raise NotImplementedError()
