@@ -107,6 +107,11 @@ class Program:
             backend=backend,
         )
 
+    # needed in testing
+    @property
+    def definition(self):
+        return self.definition_stage.definition
+
     @functools.cached_property
     def past_stage(self):
         if self.backend is not None and self.backend.transformer is not None:
