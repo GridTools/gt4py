@@ -107,51 +107,11 @@ class Program:
             backend=backend,
         )
 
-    # TODO(ricoh): remove when ready
-    @property
-    def definition(self):
-        warnings.warn(
-            "The 'Program.definition' attribute is deprecated. Use 'Program.definition_stage.definition' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.definition_stage.definition
-
-    # TODO(ricoh): remove when ready
-    @property
-    def grid_type(self):
-        warnings.warn(
-            "The 'Program.grid_type' attribute is deprecated. Use 'Program.definition_stage.grid_type' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.definition_stage.grid_type
-
     @functools.cached_property
     def past_stage(self):
         if self.backend is not None and self.backend.transformer is not None:
             return self.backend.transformer.func_to_past(self.definition_stage)
         return next_backend.DEFAULT_TRANSFORMS.func_to_past(self.definition_stage)
-
-    # TODO(ricoh): remove when ready
-    @property
-    def past_node(self):
-        warnings.warn(
-            "The 'Program.past_node' attribute is deprecated. Use 'Program.past_stage.past_node' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.past_stage.past_node
-
-    # TODO(ricoh): remove when ready
-    @property
-    def closure_vars(self):
-        warnings.warn(
-            "The 'Program.closure_vars' attribute is deprecated. Use 'Program.past_stage.closure_vars' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.past_stage.closure_vars
 
     def __post_init__(self):
         function_closure_vars = transform_utils._filter_closure_vars_by_type(
