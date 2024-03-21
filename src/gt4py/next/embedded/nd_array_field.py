@@ -24,7 +24,7 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Never, Optional, ParamSpec, TypeAlias, TypeVar
+from gt4py.eve.extended_typing import Never, Optional, ParamSpec, TypeAlias, TypeVar
 from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
@@ -122,7 +122,7 @@ class NdArrayField(
     @property
     def __gt_origin__(self) -> tuple[int, ...]:
         assert common.Domain.is_finite(self._domain)
-        return tuple(-r.start for _, r in self._domain)
+        return tuple(-r.start for r in self._domain.ranges)
 
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
@@ -137,7 +137,7 @@ class NdArrayField(
     def as_scalar(self) -> core_defs.ScalarT:
         if self.domain.ndim != 0:
             raise ValueError(
-                "'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
+                f"'as_scalar' is only valid on 0-dimensional 'Field's, got a {self.domain.ndim}-dimensional 'Field'."
             )
         return self.ndarray.item()
 
@@ -196,7 +196,7 @@ class NdArrayField(
         if dim_idx is None:
             raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
 
-        current_range: common.UnitRange = self.domain[dim_idx][1]
+        current_range: common.UnitRange = self.domain[dim_idx].unit_range
         new_ranges = connectivity.inverse_image(current_range)
         new_domain = self.domain.replace(dim_idx, *new_ranges)
 
@@ -413,12 +413,12 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
-                if image_range[0] != self.codomain:
+                if image_range.dim != self.codomain:
                     raise ValueError(
-                        f"Dimension '{image_range[0]}' does not match the codomain dimension '{self.codomain}'."
+                        f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
                     )
 
-                image_range = image_range[1]
+                image_range = image_range.unit_range
 
             assert isinstance(image_range, common.UnitRange)
 
@@ -603,14 +603,14 @@ def _intersect_fields(
 def _stack_domains(*domains: common.Domain, dim: common.Dimension) -> Optional[common.Domain]:
     if not domains:
         return common.Domain()
-    dim_start = domains[0][dim][1].start
+    dim_start = domains[0][dim].unit_range.start
     dim_stop = dim_start
     for domain in domains:
-        if not domain[dim][1].start == dim_stop:
+        if not domain[dim].unit_range.start == dim_stop:
             return None
         else:
-            dim_stop = domain[dim][1].stop
-    return domains[0].replace(dim, (dim, common.UnitRange(dim_start, dim_stop)))
+            dim_stop = domain[dim].unit_range.stop
+    return domains[0].replace(dim, common.NamedRange(dim, common.UnitRange(dim_start, dim_stop)))
 
 
 def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
@@ -688,7 +688,7 @@ def _concat_where(
     if transformed:
         return _concat(*transformed, dim=mask_dim)
     else:
-        result_domain = common.Domain((mask_dim, common.UnitRange(0, 0)))
+        result_domain = common.Domain(common.NamedRange(mask_dim, common.UnitRange(0, 0)))
         result_array = xp.empty(result_domain.shape)
     return cls_.from_array(result_array, domain=result_domain)
 
@@ -722,7 +722,7 @@ def _make_reduction(
             axis.value
         ]  # assumes offset and local dimension have same name
         assert isinstance(offset_definition, itir_embedded.NeighborTableOffsetProvider)
-        new_domain = common.Domain(*[nr for nr in field.domain if nr[0] != axis])
+        new_domain = common.Domain(*[nr for nr in field.domain if nr.dim != axis])
 
         broadcast_slice = tuple(
             slice(None) if d in [axis, offset_definition.origin_axis] else xp.newaxis
@@ -820,10 +820,10 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
     for dim in new_dimensions:
         if (pos := embedded_common._find_index_of_dim(dim, field.domain)) is not None:
             domain_slice.append(slice(None))
-            named_ranges.append((dim, field.domain[pos][1]))
+            named_ranges.append(common.NamedRange(dim, field.domain[pos].unit_range))
         else:
             domain_slice.append(None)  # np.newaxis
-            named_ranges.append((dim, common.UnitRange.infinite()))
+            named_ranges.append(common.NamedRange(dim, common.UnitRange.infinite()))
     return common._field(field.ndarray[tuple(domain_slice)], domain=common.Domain(*named_ranges))
 
 
@@ -849,7 +849,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
+    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex],
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -869,7 +869,7 @@ def _get_slices_from_domain_slice(
 
     for pos_old, (dim, _) in enumerate(domain):
         if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
-            index_or_range = domain_slice[pos][1]
+            _, index_or_range = domain_slice[pos]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))
