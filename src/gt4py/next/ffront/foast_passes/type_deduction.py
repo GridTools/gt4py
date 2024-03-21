@@ -12,10 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Iterable, Any, Optional, cast
+from typing import Any, Optional, cast
 
 import gt4py.next.ffront.field_operator_ast as foast
-from gt4py import eve
 from gt4py.eve import NodeTranslator, NodeVisitor, traits
 from gt4py.next import errors
 from gt4py.next.common import DimensionKind
@@ -58,16 +57,6 @@ def with_altered_scalar_kind(
         return ts.ScalarType(kind=new_scalar_kind, shape=type_spec.shape)
     else:
         raise ValueError(f"Expected field or scalar type, got '{type_spec}'.")
-
-
-def all_equal(iterable: Iterable):
-    last_el = eve.NOTHING
-    for el in iterable:
-        if el == last_el or last_el == eve.NOTHING:
-            last_el = el
-            continue
-        return False
-    return True
 
 
 def construct_tuple_type(
