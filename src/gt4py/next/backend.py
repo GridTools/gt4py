@@ -19,8 +19,8 @@ from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.ffront import func_to_past, past_process_args, past_to_itir
-from gt4py.next.otf import recipes, stages
+from gt4py.next.ffront import func_to_past, past_process_args, past_to_itir, stages as ffront_stages
+from gt4py.next.otf import recipes
 from gt4py.next.program_processors import processor_interface as ppi
 
 
@@ -38,7 +38,7 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     transformer: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
 
     def __call__(
-        self, program: stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
+        self, program: ffront_stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> None:
         transformer = self.transformer.replace(args=args, kwargs=kwargs)
         program_call = transformer(program)

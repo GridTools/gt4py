@@ -44,6 +44,7 @@ from gt4py.next.ffront import (
     past_process_args,
     past_to_itir,
     program_ast as past,
+    stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
 )
@@ -91,7 +92,7 @@ class Program:
             it will be deduced from actually occurring dimensions.
     """
 
-    definition_stage: stages.ProgramDefinition
+    definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
 
     @classmethod
@@ -101,7 +102,7 @@ class Program:
         backend: Optional[next_backend],
         grid_type: Optional[GridType] = None,
     ) -> Program:
-        program_def = stages.ProgramDefinition(definition=definition, grid_type=grid_type)
+        program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
         return cls(
             definition_stage=program_def,
             backend=backend,

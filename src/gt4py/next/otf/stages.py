@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 import dataclasses
-import types
 from typing import Any, Generic, Optional, Protocol, TypeVar
 
 from gt4py.next import common
@@ -31,12 +30,6 @@ SettingT = TypeVar("SettingT", bound=languages.LanguageSettings)
 SrcL_co = TypeVar("SrcL_co", bound=languages.LanguageTag, covariant=True)
 TgtL_co = TypeVar("TgtL_co", bound=languages.LanguageTag, covariant=True)
 SettingT_co = TypeVar("SettingT_co", bound=languages.LanguageSettings, covariant=True)
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgramDefinition:
-    definition: types.FunctionType
-    grid_type: Optional[common.GridType] = None
 
 
 @dataclasses.dataclass(frozen=True)

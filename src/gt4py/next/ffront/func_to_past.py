@@ -27,6 +27,7 @@ from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
     source_utils,
+    stages as ffront_stages,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
@@ -37,7 +38,7 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 @workflow.make_step
-def func_to_past(inp: stages.ProgramDefinition) -> stages.ProgramPast:
+def func_to_past(inp: ffront_stages.ProgramDefinition) -> stages.ProgramPast:
     source_def = source_utils.SourceDefinition.from_function(inp.definition)
     closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
     annotations = typing.get_type_hints(inp.definition)
@@ -50,11 +51,11 @@ def func_to_past(inp: stages.ProgramDefinition) -> stages.ProgramPast:
 
 @dataclasses.dataclass(frozen=True)
 class OptionalFuncToPast(workflow.SkippableStep):
-    step: workflow.Workflow[stages.ProgramDefinition, stages.ProgramPast] = func_to_past
+    step: workflow.Workflow[ffront_stages.ProgramDefinition, stages.ProgramPast] = func_to_past
 
-    def skip_condition(self, inp: stages.ProgramPast | stages.ProgramDefinition) -> bool:
+    def skip_condition(self, inp: stages.ProgramPast | ffront_stages.ProgramDefinition) -> bool:
         match inp:
-            case stages.ProgramDefinition():
+            case ffront_stages.ProgramDefinition():
                 return False
             case stages.ProgramPast():
                 return True
