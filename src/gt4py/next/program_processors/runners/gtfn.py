@@ -24,7 +24,6 @@ import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
@@ -170,7 +169,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         use_temporaries = factory.Trait(
             otf_workflow__translation__lift_mode=transforms.LiftMode.USE_TEMPORARIES,
-            otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
+            # otf_workflow__translation__temporary_extraction_heuristics=global_tmps.SimpleTemporaryExtractionHeuristics,
             name_temps="_with_temporaries",
         )
         device_type = core_defs.DeviceType.CPU
@@ -202,3 +201,5 @@ run_gtfn_with_temporaries = GTFNBackendFactory(use_temporaries=True)
 run_gtfn_gpu = GTFNBackendFactory(gpu=True)
 
 run_gtfn_gpu_cached = GTFNBackendFactory(gpu=True, cached=True)
+
+run_gtfn_with_temporaries_cached_executor = GTFNBackendFactory(use_temporaries=True, cached=True)

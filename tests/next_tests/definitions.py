@@ -87,6 +87,18 @@ class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
 
 
+class ProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
+    GTFN_CPU_EXECUTOR = f"{ProgramBackendId.GTFN_CPU}.executor"
+    GTFN_CPU_IMPERATIVE_EXECUTOR = f"{ProgramBackendId.GTFN_CPU_IMPERATIVE}.executor"
+    GTFN_CPU_WITH_TEMPORARIES = f"{ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES}.executor"
+    ROUNDTRIP = f"{ProgramBackendId.ROUNDTRIP}.executor"
+    DOUBLE_ROUNDTRIP = f"{ProgramBackendId.DOUBLE_ROUNDTRIP}.executor"
+
+
+class OptionalProgramExecutorId(_PythonObjectIdMixin, str, enum.Enum):
+    DACE_CPU_EXECUTOR = f"{OptionalProgramBackendId.DACE_CPU}.executor"
+
+
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPP_FORMATTER = "gt4py.next.program_processors.formatters.gtfn.format_cpp"
     ITIR_PRETTY_PRINTER = (
@@ -118,6 +130,7 @@ USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
 USES_STRIDED_NEIGHBOR_OFFSET = "uses_strided_neighbor_offset"
 USES_TUPLE_ARGS = "uses_tuple_args"
+USES_SCALAR_TUPLE_ARGS = "uses_scalar_tuple_args"
 USES_TUPLE_RETURNS = "uses_tuple_returns"
 USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
@@ -139,7 +152,6 @@ COMMON_SKIP_TEST_LIST = [
     (USES_IF_STMTS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_NEGATIVE_MODULO, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
-    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
@@ -147,8 +159,10 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCALAR_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 EMBEDDED_SKIP_LIST = [
     (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -159,6 +173,7 @@ EMBEDDED_SKIP_LIST = [
         UNSUPPORTED_MESSAGE,
     ),  # we can't extract the field type from scan args
 ]
+
 GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # floordiv not yet supported, see https://github.com/GridTools/gt4py/issues/1136
     (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
@@ -166,6 +181,10 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
     (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_SCAN_REQUIRING_PROJECTOR, XFAIL, UNSUPPORTED_MESSAGE),
+    #    (USES_SCALAR_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
+]
+GTFN_NO_TEMPORARIES_SKIP_LIST = GTFN_SKIP_TEST_LIST + [
+    (USES_SCAN_IN_FIELD_OPERATOR, XFAIL, UNSUPPORTED_MESSAGE),
 ]
 
 #: Skip matrix, contains for each backend processor a list of tuples with following fields:
@@ -179,11 +198,13 @@ BACKEND_SKIP_TEST_MATRIX = {
         # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
         (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     ],
-    ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
+    ProgramBackendId.GTFN_CPU: GTFN_NO_TEMPORARIES_SKIP_LIST
+    + [
+        (USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)
+    ],  # TODO: reevaluate if USES_SCAN_NESTED should be skipped.
+    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_NO_TEMPORARIES_SKIP_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
-    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
+    ProgramBackendId.GTFN_GPU: GTFN_NO_TEMPORARIES_SKIP_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
     + [

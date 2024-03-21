@@ -297,6 +297,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_to_if_on_tuples(self, node: ir.FunCall) -> Optional[ir.Node]:
+        return None
         if not node.fun == im.ref("if_"):
             # TODO(tehrengruber): This significantly increases the size of the tree. Revisit.
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
@@ -328,6 +329,17 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 else:
                     inner_vars[arg_sym] = arg
             if outer_vars:
+                # inner transform is needed for as trivial let make tuple can occur. how about outer?
+                # (λ(__wtf28) → ...)(
+                #   (λ(_tuple_el_31, _tuple_el_32, _tuple_el_33) → {_tuple_el_31, _tuple_el_32, _tuple_el_33})(
+                #     cast_(·vn, float64), ·vtᐞ0, cast_(0.5 × (·vn × ·vn + cast_(·vtᐞ0 × ·vtᐞ0, float64)), float64)
+                #   )
+                # )
+                #
+                # (λ(_tuple_el_31, _tuple_el_32, _tuple_el_33) →
+                #    (λ(__wtf28) → ...)({_tuple_el_31, _tuple_el_32, _tuple_el_33}))(
+                #   cast_(·vn, float64), ·vtᐞ0, cast_(0.5 × (·vn × ·vn + cast_(·vtᐞ0 × ·vtᐞ0, float64)), float64)
+                # )
                 return self.fp_transform(
                     im.let(*outer_vars.items())(  # type: ignore[arg-type]  # mypy not smart enough
                         self.fp_transform(im.let(*inner_vars.items())(original_inner_expr))

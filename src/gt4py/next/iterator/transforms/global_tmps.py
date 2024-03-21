@@ -171,6 +171,11 @@ class TemporaryExtractionPredicate:
         if self.heuristics and not self.heuristics(expr):
             return False
         stencil = expr.fun.args[0]  # type: ignore[attr-defined] # ensured by `is_applied_lift`
+        # TODO(tehrengruber): document and write testcase
+        # do not capture trivial lifts, they might create captures inside of stencils preventing other lifts from being extraced
+        # we can not just count because of this case λ() → (λ(__arg0____, __arg1___) → {·__arg0____, ·__arg1___})((↑(λ() → 0.0))(), (↑(λ() → 0.0))())
+        if not collect_symbol_refs(expr.args):
+            return False
         # do not extract when the stencil is capturing
         used_symbols = collect_symbol_refs(stencil)
         if used_symbols:
@@ -194,6 +199,17 @@ class SimpleTemporaryExtractionHeuristics:
         return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
 
     def __call__(self, expr: ir.Expr) -> bool:
+        # do not extract if only a single argument to lift function, e.g.,
+        #  we don't want to extract this: (↑(λ(it) → cast_(·it, float64)))(outer_it)
+        #  but this: (↑(λ(it) → reduce(plus, 0)(·it)))(outer_it)
+        contains_reduction = False
+        for child_expr in expr.pre_walk_values():
+            if isinstance(child_expr, ir.SymRef) and child_expr.id == "reduce":
+                contains_reduction = True
+        if not contains_reduction and isinstance(expr, ir.FunCall) and len(expr.args) == 1:
+            return False
+
+        # extract if more than one shift
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:
             return True
@@ -301,6 +317,10 @@ def split_closures(
                     # (otherwise we would need to canonicalize using `canonicalize_applied_lift`
                     # this doesn't seem to be necessary right now as we extract the lifts
                     # in post-order of the tree)
+                    if not all(isinstance(arg, ir.SymRef) for arg in lift_expr.args):
+                        lift_expr = canonicalize_applied_lift(
+                            [str(param.id) for param in current_closure_stencil.params], lift_expr
+                        )
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
                     # create a mapping from the closures parameters to the closure arguments
@@ -544,6 +564,7 @@ def update_domains(
                         old_axis = nbt_provider.origin_axis.value
                         new_axis = nbt_provider.neighbor_axis.value
 
+                        assert old_axis in consumed_domain.ranges.keys()
                         assert new_axis not in consumed_domain.ranges or old_axis == new_axis
 
                         if symbolic_sizes is None:
@@ -558,6 +579,7 @@ def update_domains(
                                 im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.ref(symbolic_sizes[new_axis]),
                             )
+                        # TODO(tehrengruber): Revisit. Somehow the order matters so preserve it.
                         consumed_domain.ranges = dict(
                             (axis, range_) if axis != old_axis else (new_axis, new_range)
                             for axis, range_ in consumed_domain.ranges.items()
@@ -617,12 +639,25 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
         if isinstance(dtype, type_inference.Primitive):
             return dtype.name
         elif isinstance(dtype, type_inference.Tuple):
-            return tuple(convert_type(el) for el in dtype)
+            # this special handling is currently needed for test_tuple_scalar_scan where
+            #  a temporary occurs which is only a deref of an input. after inlining into the
+            #  scan this shouldn't be needed anymore. This is likely wrong if not every
+            #  element of the input is used.
+            # scan(λ(state, qc_in, tuple_scalar_) →
+            #     (·qc_in + state + (·tuple_scalar_)[1][0] + (·tuple_scalar_)[1][1]) / (·tuple_scalar_)[0], True, 0.0
+            # )(__sarg0, (↑(λ(__sarg1) → ·__sarg1))(__sarg1))
+            element_types = []
+            while not isinstance(dtype, (type_inference.TypeVar, type_inference.EmptyTuple)):
+                element_types.append(dtype.front)
+                dtype = dtype.others
+            return tuple(convert_type(el) for el in element_types)
         elif isinstance(dtype, type_inference.List):
             raise NotImplementedError("Temporaries with dtype list not supported.")
         raise AssertionError()
 
-    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider)
+    all_types = type_inference.infer_all(
+        node.fencil, offset_provider=offset_provider, save_to_annex=True
+    )
     fencil_type = all_types[id(node.fencil)]
     assert isinstance(fencil_type, type_inference.FencilDefinitionType)
     assert isinstance(fencil_type.params, type_inference.Tuple)

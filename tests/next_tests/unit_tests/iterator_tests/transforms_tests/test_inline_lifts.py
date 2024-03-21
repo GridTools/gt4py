@@ -108,6 +108,9 @@ def inline_lift_test_data():
     ]
 
 
+# TODO(tehrengruber): test_composed_unstructured_shift failed with new on centre inliner. maybe add test case?
+
+
 @pytest.mark.parametrize("testee, expected", inline_lift_test_data())
 def test_inline_lifts(testee, expected):
     result = InlineLifts.apply(testee)
