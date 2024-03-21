@@ -26,7 +26,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
 
     # TODO(ricoh): consider wrapping this in a CachedStep.
     func_to_past: workflow.SkippableStep[
-        ffront_stages.ProgramDefinition | stages.ProgramPast, stages.ProgramPast
+        ffront_stages.ProgramDefinition | ffront_stages.ProgramPast, ffront_stages.ProgramPast
     ]
     past_transform_args: workflow.Workflow[stages.PastClosure, stages.PastClosure]
     past_to_itir: workflow.Workflow[stages.PastClosure, stages.ProgramCall]
@@ -35,7 +35,8 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
     kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __call__(
-        self, inp: ffront_stages.ProgramDefinition | stages.ProgramPast
+        self,
+        inp: ffront_stages.ProgramDefinition | ffront_stages.ProgramPast,
     ) -> stages.ProgramCall:
         past_stage = self.func_to_past(inp)
         return self.past_to_itir(

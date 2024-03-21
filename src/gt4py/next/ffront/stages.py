@@ -16,12 +16,20 @@ from __future__ import annotations
 
 import dataclasses
 import types
-from typing import Optional
+from typing import Any, Optional
 
 from gt4py.next import common
+from gt4py.next.ffront import program_ast as past
 
 
 @dataclasses.dataclass(frozen=True)
 class ProgramDefinition:
     definition: types.FunctionType
+    grid_type: Optional[common.GridType] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramPast:
+    past_node: past.Program
+    closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
