@@ -297,35 +297,20 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                     left=foast.Name(id=dimension),
                     right=foast.Constant(value=offset_index),
                 ):
-                    if node.args[i].op == dialect_ast_enums.BinaryOperator.SUB:
+                    if node.args[i].op == dialect_ast_enums.BinaryOperator.SUB:  # type: ignore[attr-defined] # ensured by pattern
                         offset_index *= -1
                     shift_offsets.append(im.shift(f"{dimension}off", offset_index))
-                case foast.BinOp(
-                    op=dialect_ast_enums.BinaryOperator.ADD
-                    | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.BinOp(
-                        op=dialect_ast_enums.BinaryOperator.ADD
-                        | dialect_ast_enums.BinaryOperator.SUB,
-                        left=foast.Name(id=dimension),
-                        right=foast.Constant(value=offset_index_left),
-                    ),
-                    right=foast.Constant(value=offset_index),
-                ):
-                    if node.args[i].op == dialect_ast_enums.BinaryOperator.SUB:
-                        offset_index *= -1
-                    shift_offsets.append(
-                        im.shift(f"{dimension}off", offset_index_left + offset_index)
-                    )  # shift_offset = im.shift(node.args[i].left.type.dim.value, node.args[i].right.value)
                 case foast.Name(id=offset_name):
+                    assert len(node.args) == 1
                     return im.lifted_neighbors(
                         str(offset_name), self.visit(node.func, **kwargs)
                     )  # Todo: fix return statement to take care of several args
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = node.args[i]
-                    offset_dim = func_args.args[0]
+                    offset_dim = func_args.args[0]  # type: ignore[attr-defined] # ensured by pattern
                     assert isinstance(offset_dim, foast.Name)
                     shift_offsets.append(
-                        im.shift(offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs)))
+                        im.shift(offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs)))  # type: ignore[attr-defined]  # ensured by pattern
                     )
                 case _:
                     raise FieldOperatorLoweringError("Unexpected shift arguments!")

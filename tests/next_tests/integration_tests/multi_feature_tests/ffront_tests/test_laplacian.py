@@ -30,10 +30,10 @@ pytestmark = pytest.mark.uses_cartesian_shift
 def lap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim], "float"]:
     return (
         -4.0 * in_field
-        + in_field(IDim + 1 + 0)
-        + 2.0 * in_field(JDim + 0 + 1)
-        + 3.0 * in_field(IDim - 1)
-        + 4.0 * in_field(JDim - 1)
+        + in_field(IDim + 1)
+        + in_field(JDim + 1)
+        + in_field(IDim - 1)
+        + in_field(JDim - 1)
     )
 
 
@@ -42,9 +42,9 @@ def skewedlap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JD
     return (
         -4.0 * in_field
         + in_field(IDim + 1, JDim + 1)
-        + 2.0 * in_field(IDim + 1, JDim - 1)
-        + 3.0 * in_field(IDim - 1, JDim + 1)
-        + 4.0 * in_field(IDim - 1, JDim - 1)
+        + in_field(IDim + 1, JDim - 1)
+        + in_field(IDim - 1, JDim + 1)
+        + in_field(IDim - 1, JDim - 1)
     )
 
 
@@ -77,30 +77,24 @@ def laplap_program(
     laplap(in_field, out=out_field[2:-2, 2:-2])
 
 
+def square(inp):
+    """Compute the square of the field entries"""
+    return inp[:, :] * inp[:, :]
+
+
 def lap_ref(inp):
     """Compute the laplacian using numpy"""
-    return (
-        -4.0 * inp[1:-1, 1:-1]
-        + inp[2:, 1:-1]
-        + 2.0 * inp[1:-1, 2:]
-        + 3.0 * inp[:-2, 1:-1]
-        + 4.0 * inp[1:-1, :-2]
-    )
+    return -4.0 * inp[1:-1, 1:-1] + inp[2:, 1:-1] + inp[1:-1, 2:] + inp[:-2, 1:-1] + inp[1:-1, :-2]
 
 
 def skewedlap_ref(inp):
     """Compute the laplacian using numpy"""
-    return (
-        -4.0 * inp[1:-1, 1:-1]
-        + inp[2:, 2:]
-        + 2.0 * inp[2:, :-2]
-        + 3.0 * inp[:-2, 2:]
-        + 4.0 * inp[:-2, :-2]
-    )
+    return -4.0 * inp[1:-1, 1:-1] + inp[2:, 2:] + inp[2:, :-2] + inp[:-2, 2:] + inp[:-2, :-2]
 
 
 def test_ffront_lap(cartesian_case):
     in_field = cases.allocate(cartesian_case, lap_program, "in_field")()
+    in_field = square(in_field)
     out_field = cases.allocate(cartesian_case, lap_program, "out_field")()
 
     cases.verify(
@@ -115,6 +109,7 @@ def test_ffront_lap(cartesian_case):
 
 def test_ffront_skewedlap(cartesian_case):
     in_field = cases.allocate(cartesian_case, skewedlap_program, "in_field")()
+    in_field = square(in_field)
     out_field = cases.allocate(cartesian_case, skewedlap_program, "out_field")()
 
     cases.verify(
@@ -129,6 +124,7 @@ def test_ffront_skewedlap(cartesian_case):
 
 def test_ffront_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
+    in_field = square(in_field)
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
     cases.verify(
