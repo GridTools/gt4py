@@ -19,6 +19,7 @@ import collections
 import dataclasses
 import enum
 import functools
+import math
 import numbers
 import types
 from collections.abc import Mapping, Sequence
@@ -27,6 +28,7 @@ import numpy as np
 import numpy.typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils
 from gt4py.eve.extended_typing import (
     TYPE_CHECKING,
     Any,
@@ -381,10 +383,10 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
-                raise ValueError("Either both none of 'dims' and 'ranges' must be specified.")
+                raise ValueError("Either one of 'dims' and 'ranges' must be specified.")
             if len(args) > 0:
                 raise ValueError(
-                    "No extra 'args' allowed when constructing fomr 'dims' and 'ranges'."
+                    "No extra 'args' allowed when constructing from 'dims' and 'ranges'."
                 )
 
             assert dims is not None and ranges is not None  # for mypy
@@ -415,9 +417,6 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         if len(set(self.dims)) != len(self.dims):
             raise NotImplementedError(f"Domain dimensions must be unique, not '{self.dims}'.")
 
-    def __len__(self) -> int:
-        return len(self.ranges)
-
     @property
     def ndim(self) -> int:
         return len(self.dims)
@@ -426,13 +425,15 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def shape(self) -> tuple[int, ...]:
         return tuple(len(r) for r in self.ranges)
 
-    @classmethod
-    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
-        # classmethod since TypeGuards requires the guarded obj as separate argument
-        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+    @property
+    def size(self) -> Optional[int]:
+        return math.prod(self.shape) if all(UnitRange.is_finite(r) for r in self.ranges) else None
 
-    def is_empty(self) -> bool:
-        return any(rng.is_empty() for rng in self.ranges)
+    def __len__(self) -> int:
+        return len(self.ranges)
+
+    def __str__(self) -> str:
+        return f"Domain({', '.join(f'{e}' for e in self)})"
 
     @overload
     def __getitem__(self, index: int) -> NamedRange: ...
@@ -486,8 +487,26 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         )
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
-    def __str__(self) -> str:
-        return f"Domain({', '.join(f'{e}' for e in self)})"
+    @functools.cached_property
+    def loc(self) -> utils.CustomIndexer[slice | tuple[slice, ...], Domain]:
+        def _f_getitem(*args: slice) -> Domain:
+            slices = (args,) if isinstance(args, slice) else args
+            assert all(isinstance(arg, slice) for arg in slices)
+            if len(slices) != len(self):
+                raise ValueError(
+                    f"Number of provided slices ({len(args)}) does not match number of dimensions ({len(self)})."
+                )
+            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, slices)])
+
+        return utils.CustomIndexer(_f_getitem)
+
+    @classmethod
+    def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
+        # classmethod since TypeGuards requires the guarded obj as separate argument
+        return all(UnitRange.is_finite(rng) for rng in obj.ranges)
+
+    def is_empty(self) -> bool:
+        return any(rng.is_empty() for rng in self.ranges)
 
     def dim_index(self, dim: Dimension) -> Optional[int]:
         return self.dims.index(dim) if dim in self.dims else None

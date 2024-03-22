@@ -942,7 +942,7 @@ def test_hyperslice(index_array, expected):
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
-    expected = [slice(e) for e in expected] if expected is not None else None
+    expected = tuple(slice(*e) for e in expected) if expected is not None else None
 
     result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
 

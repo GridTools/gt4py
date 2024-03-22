@@ -236,7 +236,25 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
 
 
 _P = ParamSpec("_P")
+_S = TypeVar("_S")
 _T = TypeVar("_T")
+
+
+@dataclasses.dataclass(frozen=True)
+class CustomIndexer(Generic[_S, _T]):
+    """
+    A custom indexer class that applies a function to retrieve values based on a given key.
+
+    Example:
+        >>> indexer = CustomIndexer(lambda x: x**2)
+        >>> indexer[3]
+        9
+    """
+
+    func: Callable[[_S], _T]
+
+    def __getitem__(self, key: _S) -> _T:
+        return self.func(key)
 
 
 class fluid_partial(functools.partial):
