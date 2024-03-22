@@ -238,8 +238,8 @@ class NdArrayField(
             result: Field[Dims[A, B, C], DT] = take(self, expanded_connectivities)
         """  # noqa: RUF002
 
-        conn_fields = []
-        codomains = collections.Counter()
+        conn_fields: list[common.ConnectivityField] = []
+        codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
         for connectivity in connectivities:
             # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
             if not common.is_connectivity_field(connectivity):
@@ -258,26 +258,25 @@ class NdArrayField(
                 )
 
             conn_fields.append(connectivity)
-            codomains[connectivity.codomain] += 1
+            codomains_counter[connectivity.codomain] += 1
 
-        if unknown_dims := [dim for dim, _ in codomains.items() if dim not in self.domain.dims]:
+        if unknown_dims := [
+            dim for dim, _ in codomains_counter.items() if dim not in self.domain.dims
+        ]:
             raise ValueError(
                 f"Incompatible dimensions in the connectivity codomain(s) {unknown_dims}"
                 f"while remapping a field with domain {self.domain}."
             )
 
-        if repeated_codomain_dims := [dim for dim, count in codomains.items() if count > 1]:
+        if repeated_codomain_dims := [dim for dim, count in codomains_counter.items() if count > 1]:
             raise ValueError(
                 "All connectivities must have different codomains but some are repeated:"
                 f" {repeated_codomain_dims}."
             )
 
-        assert all(isinstance(c, common.ConnectivityField) for c in connectivities)
-
         # Select interpretation of the connectivity argument: advanced indexing or reshuffle
-        if set(connectivity.domain.dims) - set(self.domain.dims):
-            assert len(connectivities) == 1
-            return _remap_as_advanced_indexing(self, connectivity[0])
+        if len(conn_fields) == 1 and set(conn_fields[0].domain.dims) - set(self.domain.dims):
+            return _remap_as_advanced_indexing(self, conn_fields[0])
         else:
             return _remap_as_data_reshuffling(self, *connectivities)
 
@@ -634,7 +633,7 @@ def _identity_connectivities(
             cls.from_array(
                 np.broadcast_to(
                     indices.__getitem__(
-                        *(slice() if i == d_idx else None for i, dim in enumerate(domain.dims))
+                        *(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
                     ),
                     shape,
                 ),
