@@ -24,19 +24,17 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils
 from gt4py.eve.extended_typing import (
-    Any,
     ClassVar,
     Iterable,
     Never,
     Optional,
     ParamSpec,
-    Self,
     TypeAlias,
     TypeVar,
 )
-from gt4py.eve import utils
-from gt4py.next import common, constructors
+from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
     context as embedded_context,
@@ -580,7 +578,7 @@ def _remap_as_data_reshuffling(
     # Broadcast connectivity arrays to match the full domain
     conn_map = {}
     ranges = data.domain.ranges
-    for i, conn in enumerate(connectivities):
+    for conn in connectivities:
         conn_ndarray = conn.ndarray
         if expanded_axes:
             conn_ndarray = xp.expand_dims(conn_ndarray, axis=expanded_axes)
@@ -607,7 +605,7 @@ def _remap_as_data_reshuffling(
             conn_map[dim] = utils.first(_identity_connectivities(new_domain, [dim]))
 
     # Remap
-    new_buffer = data._ndarray[*(conn_map[dim] for dim in data.domain.dims)]
+    new_buffer = data._ndarray.__getitem__(*(conn_map[dim] for dim in data.domain.dims))
 
     return data.__class__.from_array(
         new_buffer,
@@ -635,9 +633,9 @@ def _identity_connectivities(
         identities.append(
             cls.from_array(
                 np.broadcast_to(
-                    indices[
+                    indices.__getitem__(
                         *(slice() if i == d_idx else None for i, dim in enumerate(domain.dims))
-                    ],
+                    ),
                     shape,
                 ),
                 codomain=d,
