@@ -1666,7 +1666,7 @@ class GTScriptParser(ast.NodeVisitor):
         self.block = None
         self.dtypes = dtypes
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = "<GT4Py.GTScriptParser> {\n"
         result += "\n".join("\t{}: {}".format(name, getattr(self, name)) for name in vars(self))
         result += "\n}"
