@@ -461,9 +461,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     ) -> Sequence[common.NamedRange]:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
-        if (new_dims := self._cache.get(cache_key, None)) is None:
-            xp = self.array_ns
-
+        if (new_ranges := self._cache.get(cache_key, None)) is None:
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
@@ -475,19 +473,17 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 image_range = image_range.unit_range
 
             assert isinstance(image_range, common.UnitRange)
-
             assert common.UnitRange.is_finite(image_range)
 
-            relative_ranges = _hypercube(self._ndarray, image_range, xp, self.skip_value)
-
-            if relative_ranges is None:
+            xp = self.array_ns
+            slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
+            if slices is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_dims = _relative_ranges_to_domain(relative_ranges, self.domain)
+            new_ranges = self.domain[slices].ranges
+            self._cache[cache_key] = new_ranges
 
-            self._cache[cache_key] = new_dims
-
-        return new_dims
+        return new_ranges
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
@@ -646,31 +642,25 @@ def _identity_connectivities(
     return tuple(identities)
 
 
-def _relative_ranges_to_domain(
-    relative_ranges: Sequence[common.UnitRange], domain: common.Domain
-) -> common.Domain:
-    return common.Domain(
-        dims=domain.dims, ranges=[rr + ar.start for ar, rr in zip(domain.ranges, relative_ranges)]
-    )
-
-
-def _hypercube(
+def _hyperslice(
     index_array: core_defs.NDArrayObject,
     image_range: common.UnitRange,
     xp: ModuleType,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[list[common.UnitRange]]:
+) -> Optional[list[slice]]:
     """
-    Return the hypercube that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+    Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
 
     If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
     A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+
     Example:
-    index_array =  0  1 -1
-                   3  4 -1
-                  -1 -1 -1
-    skip_value = -1
-    would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+        index_array =  0  1 -1
+                       3  4 -1
+                      -1 -1 -1
+        skip_value = -1
+
+        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
 
@@ -686,7 +676,7 @@ def _hypercube(
     if not xp.all(hcube):
         return None
 
-    return [common.UnitRange(s.start, s.stop) for s in slices]
+    return slices
 
 
 # -- Specialized implementations for builtin operations on array fields --
@@ -725,10 +715,10 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _compute_mask_ranges(
+def _compute_mask_slices(
     mask: core_defs.NDArrayObject,
-) -> list[tuple[bool, common.UnitRange]]:
-    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to ranges."""
+) -> list[tuple[bool, slice]]:
+    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to slices."""
     # TODO: does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
     cur = bool(mask[0].item())
@@ -741,7 +731,7 @@ def _compute_mask_ranges(
             res.append((cur, common.UnitRange(ind, i)))
             cur = mask_i
             ind = i
-    res.append((cur, common.UnitRange(ind, mask.shape[0])))
+    res.append((cur, slice(ind, mask.shape[0])))
     return res
 
 
@@ -846,12 +836,12 @@ def _concat_where(
 
     # TODO(havogt): for clarity, most of it could be implemented on named_range in the masked dimension, but we currently lack the utils
     # compute the consecutive ranges (first relative, then domain) of true and false values
-    mask_values_to_relative_range_mapping: Iterable[tuple[bool, common.UnitRange]] = (
-        _compute_mask_ranges(mask_field.ndarray)
+    mask_values_to_slices_mapping: Iterable[tuple[bool, slice]] = _compute_mask_slices(
+        mask_field.ndarray
     )
     mask_values_to_domain_mapping: Iterable[tuple[bool, common.Domain]] = (
-        (mask, _relative_ranges_to_domain((relative_range,), mask_field.domain))
-        for mask, relative_range in mask_values_to_relative_range_mapping
+        (mask, mask_field.domain[domain_slice])
+        for mask, domain_slice in mask_values_to_slices_mapping
     )
     # mask domains intersected with the respective fields
     mask_values_to_intersected_domains_mapping: Iterable[tuple[bool, common.Domain]] = (

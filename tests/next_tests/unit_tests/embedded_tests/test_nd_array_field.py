@@ -937,14 +937,14 @@ def test_connectivity_field_inverse_image_2d_domain_skip_values():
         ),
     ],
 )
-def test_hypercube(index_array, expected):
+def test_hyperslice(index_array, expected):
     index_array = np.asarray(index_array)
     image_range = common.UnitRange(0, 1)
     skip_value = -1
 
-    expected = [common.unit_range(e) for e in expected] if expected is not None else None
+    expected = [slice(e) for e in expected] if expected is not None else None
 
-    result = nd_array_field._hypercube(index_array, image_range, np, skip_value)
+    result = nd_array_field._hyperslice(index_array, image_range, np, skip_value)
 
     assert result == expected
 
