@@ -249,3 +249,19 @@ class CachedStep(
         except KeyError:
             result = self._cache[hash_] = self.step(inp)
         return result
+
+
+@dataclasses.dataclass(frozen=True)
+class SkippableStep(
+    ChainableWorkflowMixin[StartT, EndT],
+    ReplaceEnabledWorkflowMixin[StartT, EndT],
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: StartT) -> EndT:
+        if not self.skip_condition(inp):
+            return self.step(inp)
+        return inp  # type: ignore[return-value]  # up to the implementer to make sure StartT == EndT
+
+    def skip_condition(self, inp: StartT) -> bool:
+        raise NotImplementedError()
