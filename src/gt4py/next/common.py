@@ -87,13 +87,13 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
 
-    def __add__(self, offset: int):
+    def __add__(self, offset: int) -> ConnectivityField:
         from gt4py.next.ffront import fbuiltins
 
         assert isinstance(self.value, str)
         return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
 
-    def __sub__(self, offset: int):
+    def __sub__(self, offset: int) -> ConnectivityField:
         from gt4py.next.ffront import fbuiltins
 
         assert isinstance(self.value, str)
