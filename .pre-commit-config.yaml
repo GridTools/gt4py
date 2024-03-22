@@ -118,15 +118,5 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
-      tests/conftest.py |
-      tests/cartesian_tests/.* |
-      tests/next_tests/unit_tests/.* |
-      tests/next_tests/integration_tests/multi_feature_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
-      tests/next_tests/past_common_fixtures.py |
-      tests/next_tests/toy_connectivity.py |
       tests/.*
       )$

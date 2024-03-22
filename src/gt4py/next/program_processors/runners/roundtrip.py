@@ -33,7 +33,7 @@ from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
 
-def _create_tmp(axes, origin, shape, dtype):
+def _create_tmp(axes: str, origin: str, shape: str, dtype: Any) -> str:
     if isinstance(dtype, tuple):
         return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
     else:
@@ -69,7 +69,9 @@ def ${id}(${','.join(params)}):
     )
 
     # extension required by global_tmps
-    def visit_FencilWithTemporaries(self, node, **kwargs):
+    def visit_FencilWithTemporaries(
+        self, node: gtmps_transform.FencilWithTemporaries, **kwargs: Any
+    ) -> str:
         params = self.visit(node.params)
 
         tmps = "\n    ".join(self.visit(node.tmps))
@@ -84,16 +86,21 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node, **kwargs):
-        assert isinstance(node.domain, itir.FunCall) and node.domain.fun.id in (
-            "cartesian_domain",
-            "unstructured_domain",
+    def visit_Temporary(self, node: gtmps_transform.Temporary, **kwargs: Any) -> str:
+        assert (
+            isinstance(node.domain, itir.FunCall)
+            and isinstance(node.domain.fun, itir.SymRef)
+            and node.domain.fun.id
+            in (
+                "cartesian_domain",
+                "unstructured_domain",
+            )
         )
         assert all(
             isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
             for r in node.domain.args
         )
-        domain_ranges = [self.visit(r.args) for r in node.domain.args]
+        domain_ranges = [self.visit(r.args) for r in node.domain.args]  # type: ignore[attr-defined] # `node.domain` is `FunCall` checked in previous assert
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
@@ -203,7 +210,7 @@ def fencil_generator(
 @ppi.program_executor  # type: ignore[arg-type]
 def execute_roundtrip(
     ir: itir.Node,
-    *args,
+    *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
     debug: bool = False,
@@ -253,7 +260,7 @@ class RoundtripFactory(factory.Factory):
 class RoundtripExecutor(modular_executor.ModularExecutor):
     dispatch_backend: Optional[ppi.ProgramExecutor] = None
 
-    def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
+    def __call__(self, program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
         kwargs["backend"] = self.dispatch_backend
         self.otf_workflow(stages.ProgramCall(program=program, args=args, kwargs=kwargs))(
             *args, **kwargs

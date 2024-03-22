@@ -871,7 +871,6 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         return self._visit_reduction(node, **kwargs)
 
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> foast.Call:
-        return_type: ts.TupleType | ts.ScalarType | ts.FieldType
         value, new_type = node.args
         assert isinstance(
             value.type, (ts.FieldType, ts.ScalarType, ts.TupleType)
@@ -891,6 +890,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
                 primitive_type, getattr(ts.ScalarKind, new_type.id.upper())
             ),
         )
+        assert isinstance(return_type, (ts.TupleType, ts.ScalarType, ts.FieldType))
 
         return foast.Call(
             func=node.func,

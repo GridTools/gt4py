@@ -45,7 +45,7 @@ def no_exec(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> None:
 
 
 class NoBackend(next_backend.Backend):
-    def __call__(self, program) -> None:
+    def __call__(self, program, *args, **kwargs) -> None:
         raise ValueError("No backend selected! Backend selection is mandatory in tests.")
 
 

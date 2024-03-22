@@ -444,7 +444,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
         return self._make_literal(node.value, node.type)
 
-    def _map(self, op, *args, **kwargs):
+    def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
         if any(type_info.contains_local_field(arg.type) for arg in args):
             lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
