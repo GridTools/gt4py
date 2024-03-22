@@ -234,8 +234,8 @@ def itemgetter_(key: Any, default: Any = NOTHING) -> Callable[[Any], Any]:
     return lambda obj: getitem_(obj, key, default=default)
 
 
-_P = ParamSpec("_P")
-T = TypeVar("_T")
+P = ParamSpec("P")
+T = TypeVar("T")
 
 
 class fluid_partial(functools.partial):
@@ -248,13 +248,13 @@ class fluid_partial(functools.partial):
 @overload
 def with_fluid_partial(
     func: Literal[None] = None, *args: Any, **kwargs: Any
-) -> Callable[[Callable[_P, T]], Callable[_P, T]]: ...
+) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
 
 
 @overload
 def with_fluid_partial(  # redefinition of unused function
-    func: Callable[_P, T], *args: Any, **kwargs: Any
-) -> Callable[_P, T]: ...
+    func: Callable[P, T], *args: Any, **kwargs: Any
+) -> Callable[P, T]: ...
 
 
 def with_fluid_partial(  # redefinition of unused function
@@ -290,18 +290,18 @@ def with_fluid_partial(  # redefinition of unused function
 @overload
 def optional_lru_cache(
     func: Literal[None] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[[Callable[_P, T]], Callable[_P, T]]: ...
+) -> Callable[[Callable[P, T]], Callable[P, T]]: ...
 
 
 @overload
 def optional_lru_cache(  # redefinition of unused function
-    func: Callable[_P, T], *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Callable[_P, T]: ...
+    func: Callable[P, T], *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Callable[P, T]: ...
 
 
 def optional_lru_cache(  # redefinition of unused function
-    func: Optional[Callable[_P, T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
-) -> Union[Callable[_P, T], Callable[[Callable[_P, T]], Callable[_P, T]]]:
+    func: Optional[Callable[P, T]] = None, *, maxsize: Optional[int] = 128, typed: bool = False
+) -> Union[Callable[P, T], Callable[[Callable[P, T]], Callable[P, T]]]:
     """Wrap :func:`functools.lru_cache` to fall back to the original function if arguments are not hashable.
 
     Examples:
@@ -325,7 +325,7 @@ def optional_lru_cache(  # redefinition of unused function
         Based on :func:`typing._tp_cache`.
     """
 
-    def _decorator(func: Callable[_P, T]) -> Callable[_P, T]:
+    def _decorator(func: Callable[P, T]) -> Callable[P, T]:
         cached = functools.lru_cache(maxsize=maxsize, typed=typed)(func)
 
         @functools.wraps(func)
@@ -712,13 +712,13 @@ class UIDGenerator:
 UIDs = UIDGenerator()
 
 # -- Iterators --
-_S = TypeVar("_S")
-_K = TypeVar("_K")
+S = TypeVar("S")
+K = TypeVar("K")
 
-_P = ParamSpec("_P")
+P = ParamSpec("_P")
 
 
-def as_xiter(iterator_func: Callable[_P, Iterable[T]]) -> Callable[_P, XIterable[T]]:
+def as_xiter(iterator_func: Callable[P, Iterable[T]]) -> Callable[P, XIterable[T]]:
     """Wrap the provided callable to convert its output in a :class:`XIterable`."""
 
     @functools.wraps(iterator_func)
@@ -1015,7 +1015,7 @@ class XIterable(Iterable[T]):
         else:
             return XIterable(toolz.itertoolz.pluck(ind, self.iterator, default))
 
-    def chain(self, *others: Iterable) -> XIterable[Union[T, _S]]:
+    def chain(self, *others: Iterable) -> XIterable[Union[T, S]]:
         """Chain iterators.
 
         Equivalent to ``itertools.chain(self, *others)``.
@@ -1040,7 +1040,7 @@ class XIterable(Iterable[T]):
         *others: Iterable,
         default: Any = NOTHING,
         key: Union[NOTHING, Callable] = NOTHING,
-    ) -> XIterable[Tuple[T, _S]]:
+    ) -> XIterable[Tuple[T, S]]:
         """Diff iterators.
 
         Equivalent to ``toolz.itertoolz.diff(self, *others)``.
@@ -1083,8 +1083,8 @@ class XIterable(Iterable[T]):
         return XIterable(toolz.itertoolz.diff(self.iterator, *iterators, **kwargs))
 
     def product(
-        self, other: Union[Iterable[_S], int]
-    ) -> Union[XIterable[Tuple[T, _S]], XIterable[Tuple[T, T]]]:
+        self, other: Union[Iterable[S], int]
+    ) -> Union[XIterable[Tuple[T, S]], XIterable[Tuple[T, T]]]:
         """Product of iterators.
 
         Equivalent to ``itertools.product(it_a, it_b)``.
@@ -1177,7 +1177,7 @@ class XIterable(Iterable[T]):
 
     def zip(  # A003: shadowing a python builtin
         self, *others: Iterable, fill: Any = NOTHING
-    ) -> XIterable[Tuple[T, _S]]:
+    ) -> XIterable[Tuple[T, S]]:
         """Zip iterators.
 
         Equivalent to ``zip(self, *others)`` or ``itertools.zip_longest(self, *others, fillvalue=fill)``.
@@ -1446,99 +1446,99 @@ class XIterable(Iterable[T]):
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
+        bin_op_func: Callable[[S, T], S],
         key: str,
         *,
         as_dict: Literal[False],
-        init: Union[_S, NothingType],
-    ) -> XIterable[Tuple[str, _S]]: ...
+        init: Union[S, NothingType],
+    ) -> XIterable[Tuple[str, S]]: ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: str,
-        __attr_keys1: str,
-        *attr_keys: str,
-        as_dict: Literal[False],
-        init: Union[_S, NothingType],
-    ) -> XIterable[Tuple[Tuple[str, ...], _S]]: ...
-
-    @typing.overload
-    def reduceby(
-        self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: str,
-        *,
-        as_dict: Literal[True],
-        init: Union[_S, NothingType],
-    ) -> Dict[str, _S]: ...
-
-    @typing.overload
-    def reduceby(
-        self,
-        bin_op_func: Callable[[_S, T], _S],
+        bin_op_func: Callable[[S, T], S],
         key: str,
         __attr_keys1: str,
         *attr_keys: str,
-        as_dict: Literal[True],
-        init: Union[_S, NothingType],
-    ) -> Dict[Tuple[str, ...], _S]: ...
+        as_dict: Literal[False],
+        init: Union[S, NothingType],
+    ) -> XIterable[Tuple[Tuple[str, ...], S]]: ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: List[_K],
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        *,
+        as_dict: Literal[True],
+        init: Union[S, NothingType],
+    ) -> Dict[str, S]: ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: str,
+        __attr_keys1: str,
+        *attr_keys: str,
+        as_dict: Literal[True],
+        init: Union[S, NothingType],
+    ) -> Dict[Tuple[str, ...], S]: ...
+
+    @typing.overload
+    def reduceby(
+        self,
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
         *,
         as_dict: Literal[False],
-        init: Union[_S, NothingType],
-    ) -> XIterable[Tuple[_K, _S]]: ...
+        init: Union[S, NothingType],
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: List[_K],
+        bin_op_func: Callable[[S, T], S],
+        key: List[K],
         *,
         as_dict: Literal[True],
-        init: Union[_S, NothingType],
-    ) -> Dict[_K, _S]: ...
+        init: Union[S, NothingType],
+    ) -> Dict[K, S]: ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: Callable[[T], _K],
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
         *,
         as_dict: Literal[False],
-        init: Union[_S, NothingType],
-    ) -> XIterable[Tuple[_K, _S]]: ...
+        init: Union[S, NothingType],
+    ) -> XIterable[Tuple[K, S]]: ...
 
     @typing.overload
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: Callable[[T], _K],
+        bin_op_func: Callable[[S, T], S],
+        key: Callable[[T], K],
         *,
         as_dict: Literal[True],
-        init: Union[_S, NothingType],
-    ) -> Dict[_K, _S]: ...
+        init: Union[S, NothingType],
+    ) -> Dict[K, S]: ...
 
     def reduceby(
         self,
-        bin_op_func: Callable[[_S, T], _S],
-        key: Union[str, List[_K], Callable[[T], _K]],
+        bin_op_func: Callable[[S, T], S],
+        key: Union[str, List[K], Callable[[T], K]],
         *attr_keys: str,
         as_dict: bool = False,
-        init: Union[_S, NothingType] = NOTHING,
+        init: Union[S, NothingType] = NOTHING,
     ) -> Union[
-        XIterable[Tuple[str, _S]],
-        Dict[str, _S],
-        XIterable[Tuple[Tuple[str, ...], _S]],
-        Dict[Tuple[str, ...], _S],
-        XIterable[Tuple[_K, _S]],
-        Dict[_K, _S],
+        XIterable[Tuple[str, S]],
+        Dict[str, S],
+        XIterable[Tuple[Tuple[str, ...], S]],
+        Dict[Tuple[str, ...], S],
+        XIterable[Tuple[K, S]],
+        Dict[K, S],
     ]:
         """Group a sequence by a given key and simultaneously perform a reduction inside the groups.
 
@@ -1600,10 +1600,10 @@ class XIterable(Iterable[T]):
         if callable(key):
             groupby_key = key
         elif isinstance(key, list):
-            groupby_key = typing.cast(Callable[[T], _K], operator.itemgetter(*key))
+            groupby_key = typing.cast(Callable[[T], K], operator.itemgetter(*key))
         else:
             assert isinstance(key, str)
-            groupby_key = typing.cast(Callable[[T], _K], operator.attrgetter(key, *attr_keys))
+            groupby_key = typing.cast(Callable[[T], K], operator.attrgetter(key, *attr_keys))
 
         if init is not NOTHING:
             groups = toolz.itertoolz.reduceby(groupby_key, bin_op_func, self.iterator, init=init)
