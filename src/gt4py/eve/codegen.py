@@ -676,6 +676,23 @@ class TemplatedGenerator(NodeVisitor):
         """
         return str(node)
 
+    @overload
+    def generic_visit(self, node: Node, **kwargs: Any) -> str: ...
+
+    @overload
+    def generic_visit(
+        self,
+        node: Union[
+            list,
+            tuple,
+            collections.abc.Set,
+            collections.abc.Sequence,
+            dict,
+            collections.abc.Mapping,
+        ],
+        **kwargs: Any,
+    ) -> Collection[str]: ...
+
     def generic_visit(self, node: RootNode, **kwargs: Any) -> Union[str, Collection[str]]:
         if isinstance(node, Node):
             template, key = self.get_template(node)

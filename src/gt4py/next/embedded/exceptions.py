@@ -36,3 +36,13 @@ class IndexOutOfBounds(gt4py_exceptions.GT4PyError):
         self.indices = indices
         self.index = index
         self.dim = dim
+
+
+class NonContiguousDomain(gt4py_exceptions.GT4PyError):
+    """Describes an error where a domain would become non-contiguous after an operation."""
+
+    detail: str
+
+    def __init__(self, detail: str):
+        super().__init__(f"Operation would result in a non-contiguous domain: `{detail}`.")
+        self.detail = detail

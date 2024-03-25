@@ -75,9 +75,9 @@ def hdiff(inp, coeff, out, x, y):
 def test_hdiff(hdiff_reference, program_processor, lift_mode):
     program_processor, validate = program_processor
     if program_processor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
+        gtfn.run_gtfn.executor,
+        gtfn.run_gtfn_imperative.executor,
+        gtfn.run_gtfn_with_temporaries.executor,
     ]:
         # TODO(tehrengruber): check if still true
         from gt4py.next.iterator import transforms

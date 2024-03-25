@@ -14,14 +14,94 @@
 
 from __future__ import annotations
 
-from typing import Optional, cast
+import dataclasses
+from typing import Any, Optional, cast
+
+import devtools
+import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
-from gt4py.next.common import Dimension, DimensionKind, GridType
-from gt4py.next.ffront import lowering_utils, program_ast as past, type_specifications as ts_ffront
+from gt4py.next import common, config
+from gt4py.next.ffront import (
+    fbuiltins,
+    gtcallable,
+    lowering_utils,
+    program_ast as past,
+    stages as ffront_stages,
+    transform_utils,
+    type_specifications as ts_ffront,
+)
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+@dataclasses.dataclass(frozen=True)
+class PastToItir(workflow.ChainableWorkflowMixin):
+    def __call__(self, inp: ffront_stages.PastClosure) -> stages.ProgramCall:
+        all_closure_vars = transform_utils._get_closure_vars_recursively(inp.closure_vars)
+        offsets_and_dimensions = transform_utils._filter_closure_vars_by_type(
+            all_closure_vars, fbuiltins.FieldOffset, common.Dimension
+        )
+        grid_type = transform_utils._deduce_grid_type(
+            inp.grid_type, offsets_and_dimensions.values()
+        )
+
+        gt_callables = transform_utils._filter_closure_vars_by_type(
+            all_closure_vars, gtcallable.GTCallable
+        ).values()
+        lowered_funcs = [gt_callable.__gt_itir__() for gt_callable in gt_callables]
+
+        itir_program = ProgramLowering.apply(
+            inp.past_node, function_definitions=lowered_funcs, grid_type=grid_type
+        )
+
+        if config.DEBUG or "debug" in inp.kwargs:
+            devtools.debug(itir_program)
+
+        return stages.ProgramCall(
+            itir_program,
+            inp.args,
+            inp.kwargs | {"column_axis": _column_axis(all_closure_vars)},
+        )
+
+
+class PastToItirFactory(factory.Factory):
+    class Meta:
+        model = PastToItir
+
+
+def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]:
+    # construct mapping from column axis to scan operators defined on
+    #  that dimension. only one column axis is allowed, but we can use
+    #  this mapping to provide good error messages.
+    scanops_per_axis: dict[common.Dimension, list[str]] = {}
+    for name, gt_callable in transform_utils._filter_closure_vars_by_type(
+        all_closure_vars, gtcallable.GTCallable
+    ).items():
+        if isinstance(
+            (type_ := gt_callable.__gt_type__()),
+            ts_ffront.ScanOperatorType,
+        ):
+            scanops_per_axis.setdefault(type_.axis, []).append(name)
+
+    if len(scanops_per_axis.values()) == 0:
+        return None
+
+    if len(scanops_per_axis.values()) != 1:
+        scanops_per_axis_strs = [
+            f"- {dim.value}: {', '.join(scanops)}" for dim, scanops in scanops_per_axis.items()
+        ]
+
+        raise TypeError(
+            "Only 'ScanOperator's defined on the same axis "
+            + "can be used in a 'Program', found:\n"
+            + "\n".join(scanops_per_axis_strs)
+            + "."
+        )
+
+    return iter(scanops_per_axis.keys()).__next__()
 
 
 def _size_arg_from_field(field_name: str, dim: int) -> str:
@@ -67,7 +147,7 @@ class ProgramLowering(
     ...     expr=ir.FunCall(fun=ir.SymRef(id="deref"), pos_only_args=[ir.SymRef(id="inp")]),
     ... )  # doctest: +SKIP
     >>> lowered = ProgramLowering.apply(
-    ...     parsed, [fieldop_def], grid_type=GridType.CARTESIAN
+    ...     parsed, [fieldop_def], grid_type=common.GridType.CARTESIAN
     ... )  # doctest: +SKIP
     >>> type(lowered)  # doctest: +SKIP
     <class 'gt4py.next.iterator.ir.FencilDefinition'>
@@ -85,19 +165,19 @@ class ProgramLowering(
         cls,
         node: past.Program,
         function_definitions: list[itir.FunctionDefinition],
-        grid_type: GridType,
+        grid_type: common.GridType,
     ) -> itir.FencilDefinition:
         return cls(grid_type=grid_type).visit(node, function_definitions=function_definitions)
 
-    def __init__(self, grid_type):
+    def __init__(self, grid_type: common.GridType):
         self.grid_type = grid_type
 
-    def _gen_size_params_from_program(self, node: past.Program):
+    def _gen_size_params_from_program(self, node: past.Program) -> list[itir.Sym]:
         """Generate symbols for each field param and dimension."""
         size_params = []
         for param in node.params:
             if type_info.is_type_or_tuple_of_type(param.type, ts.FieldType):
-                fields_dims: list[list[Dimension]] = (
+                fields_dims: list[list[common.Dimension]] = (
                     type_info.primitive_constituents(param.type).getattr("dims").to_list()
                 )
                 assert all(field_dims == fields_dims[0] for field_dims in fields_dims)
@@ -107,7 +187,11 @@ class ProgramLowering(
         return size_params
 
     def visit_Program(
-        self, node: past.Program, *, function_definitions, **kwargs
+        self,
+        node: past.Program,
+        *,
+        function_definitions: list[itir.FunctionDefinition],
+        **kwargs: Any,
     ) -> itir.FencilDefinition:
         # The ITIR does not support dynamically getting the size of a field. As
         #  a workaround we add additional arguments to the fencil definition
@@ -130,7 +214,7 @@ class ProgramLowering(
             closures=closures,
         )
 
-    def _visit_stencil_call(self, node: past.Call, **kwargs) -> itir.StencilClosure:
+    def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
@@ -152,7 +236,7 @@ class ProgramLowering(
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
 
         stencil_params = []
-        stencil_args = []
+        stencil_args: list[itir.Expr] = []
         for i, arg in enumerate([*args, *node_kwargs]):
             stencil_params.append(f"__stencil_arg{i}")
             if isinstance(arg.type, ts.TupleType):
@@ -161,7 +245,7 @@ class ProgramLowering(
                     lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
                 )
             else:
-                stencil_args.append(f"__stencil_arg{i}")
+                stencil_args.append(im.ref(f"__stencil_arg{i}"))
 
         if isinstance(node.func.type, ts_ffront.ScanOperatorType):
             # scan operators return an iterator of tuples, just deref directly
@@ -169,7 +253,9 @@ class ProgramLowering(
         else:
             # field operators return a tuple of iterators, deref element-wise
             stencil_body = lowering_utils.process_elements(
-                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
+                im.deref,
+                im.call(node.func.id)(*stencil_args),
+                node.func.type.definition.returns,
             )
 
         return itir.StencilClosure(
@@ -185,8 +271,8 @@ class ProgramLowering(
         slice_bound: Optional[past.Constant],
         default_value: itir.Expr,
         dim_size: itir.Expr,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> itir.Expr:
         if slice_bound is None:
             lowered_bound = default_value
         elif isinstance(slice_bound, past.Constant):
@@ -250,6 +336,8 @@ class ProgramLowering(
             # an expression for the size of a dimension
             dim_size = itir.SymRef(id=_size_arg_from_field(out_field.id, dim_i))
             # bounds
+            lower: itir.Expr
+            upper: itir.Expr
             if node_domain is not None:
                 assert isinstance(node_domain, past.Dict)
                 lower, upper = self._construct_itir_initialized_domain_arg(dim_i, dim, node_domain)
@@ -263,8 +351,8 @@ class ProgramLowering(
                     slices[dim_i].upper if slices else None, dim_size, dim_size
                 )
 
-            if dim.kind == DimensionKind.LOCAL:
-                raise ValueError(f"Dimension '{dim.value}' must not be local.")
+            if dim.kind == common.DimensionKind.LOCAL:
+                raise ValueError(f"common.Dimension '{dim.value}' must not be local.")
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
@@ -273,14 +361,14 @@ class ProgramLowering(
             )
             domain_args_kind.append(dim.kind)
 
-        if self.grid_type == GridType.CARTESIAN:
+        if self.grid_type == common.GridType.CARTESIAN:
             domain_builtin = "cartesian_domain"
-        elif self.grid_type == GridType.UNSTRUCTURED:
+        elif self.grid_type == common.GridType.UNSTRUCTURED:
             domain_builtin = "unstructured_domain"
             # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
-            if domain_args_kind[0] == DimensionKind.VERTICAL:
+            if domain_args_kind[0] == common.DimensionKind.VERTICAL:
                 assert len(domain_args) == 2
-                assert domain_args_kind[1] == DimensionKind.HORIZONTAL
+                assert domain_args_kind[1] == common.DimensionKind.HORIZONTAL
                 domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
         else:
             raise AssertionError()
@@ -294,27 +382,27 @@ class ProgramLowering(
     def _construct_itir_initialized_domain_arg(
         self,
         dim_i: int,
-        dim: Dimension,
+        dim: common.Dimension,
         node_domain: past.Dict,
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim
         if keys_dims_types != dim:
             raise ValueError(
-                "Dimensions in out field and field domain are not equivalent:"
+                "common.Dimensions in out field and field domain are not equivalent:"
                 f"expected '{dim}', got '{keys_dims_types}'."
             )
 
         return [self.visit(bound) for bound in node_domain.values_[dim_i].elts]
 
     @staticmethod
-    def _compute_field_slice(node: past.Subscript):
+    def _compute_field_slice(node: past.Subscript) -> list[past.Slice]:
         out_field_name: past.Name = node.value
-        out_field_slice_: list[past.Expr]
+        out_field_slice_: list[past.Slice]
         if isinstance(node.slice_, past.TupleExpr) and all(
             isinstance(el, past.Slice) for el in node.slice_.elts
         ):
-            out_field_slice_ = node.slice_.elts
+            out_field_slice_ = cast(list[past.Slice], node.slice_.elts)  # type ensured by if
         elif isinstance(node.slice_, past.Slice):
             out_field_slice_ = [node.slice_]
         else:
@@ -331,7 +419,7 @@ class ProgramLowering(
         return out_field_slice_
 
     def _visit_stencil_call_out_arg(
-        self, out_arg: past.Expr, domain_arg: Optional[past.Expr], **kwargs
+        self, out_arg: past.Expr, domain_arg: Optional[past.Expr], **kwargs: Any
     ) -> tuple[itir.Expr, itir.FunCall]:
         if isinstance(out_arg, past.Subscript):
             # as the ITIR does not support slicing a field we have to do a deeper
@@ -381,7 +469,7 @@ class ProgramLowering(
                 "Unexpected 'out' argument. Must be a 'past.Subscript', 'past.Name' or 'past.TupleExpr' node."
             )
 
-    def visit_Constant(self, node: past.Constant, **kwargs) -> itir.Literal:
+    def visit_Constant(self, node: past.Constant, **kwargs: Any) -> itir.Literal:
         if isinstance(node.type, ts.ScalarType) and node.type.shape is None:
             match node.type.kind:
                 case ts.ScalarKind.STRING:
@@ -393,10 +481,10 @@ class ProgramLowering(
 
         raise NotImplementedError("Only scalar literals supported currently.")
 
-    def visit_Name(self, node: past.Name, **kwargs) -> itir.SymRef:
+    def visit_Name(self, node: past.Name, **kwargs: Any) -> itir.SymRef:
         return itir.SymRef(id=node.id)
 
-    def visit_Symbol(self, node: past.Symbol, **kwargs) -> itir.Sym:
+    def visit_Symbol(self, node: past.Symbol, **kwargs: Any) -> itir.Sym:
         # TODO(tehrengruber): extend to more types
         if isinstance(node.type, ts.FieldType):
             kind = "Iterator"
@@ -405,13 +493,13 @@ class ProgramLowering(
             return itir.Sym(id=node.id, kind=kind, dtype=(dtype, is_list))
         return itir.Sym(id=node.id)
 
-    def visit_BinOp(self, node: past.BinOp, **kwargs) -> itir.FunCall:
+    def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),
             args=[self.visit(node.left, **kwargs), self.visit(node.right, **kwargs)],
         )
 
-    def visit_Call(self, node: past.Call, **kwargs) -> itir.FunCall:
+    def visit_Call(self, node: past.Call, **kwargs: Any) -> itir.FunCall:
         if node.func.id in ["maximum", "minimum"]:
             assert len(node.args) == 2
             return itir.FunCall(

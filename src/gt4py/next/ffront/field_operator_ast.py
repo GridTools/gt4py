@@ -27,7 +27,7 @@ from gt4py.next.utils import RecursionGuard
 class LocatedNode(Node):
     location: SourceLocation
 
-    def __str__(self):
+    def __str__(self) -> str:
         from gt4py.next.ffront.foast_pretty_printer import pretty_format
 
         try:

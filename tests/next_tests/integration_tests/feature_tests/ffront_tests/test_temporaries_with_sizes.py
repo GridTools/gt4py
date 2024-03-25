@@ -77,7 +77,7 @@ def testee():
 
 def test_verification(testee, run_gtfn_with_temporaries_and_symbolic_sizes, mesh_descriptor):
     unstructured_case = Case(
-        run_gtfn_with_temporaries_and_symbolic_sizes.executor,
+        run_gtfn_with_temporaries_and_symbolic_sizes,
         offset_provider=mesh_descriptor.offset_provider,
         default_sizes={
             Vertex: mesh_descriptor.num_vertices,
