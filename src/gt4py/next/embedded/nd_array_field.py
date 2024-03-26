@@ -14,17 +14,26 @@
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar, Iterable
 
 import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Never, Optional, ParamSpec, TypeAlias, TypeVar
+from gt4py.eve import utils
+from gt4py.eve.extended_typing import (
+    ClassVar,
+    Iterable,
+    Never,
+    Optional,
+    ParamSpec,
+    TypeAlias,
+    TypeVar,
+)
 from gt4py.next import common
 from gt4py.next.embedded import (
     common as embedded_common,
@@ -178,53 +187,98 @@ class NdArrayField(
         return cls(domain, array)
 
     def remap(
-        self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
+        self: NdArrayField,
+        *connectivities: common.ConnectivityField | fbuiltins.FieldOffset,
     ) -> NdArrayField:
-        # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
-        if not common.is_connectivity_field(connectivity):
-            assert isinstance(connectivity, fbuiltins.FieldOffset)
-            connectivity = connectivity.as_connectivity_field()
-        assert common.is_connectivity_field(connectivity)
+        # TODO: clean up and move this docstring to the proper place
+        """Remap the field using the provided connectivity field.
 
-        # Current implementation relies on skip_value == -1:
-        # if we assume the indexed array has at least one element, we wrap around without out of bounds
-        assert connectivity.skip_value is None or connectivity.skip_value == -1
+        This operation is conceptually equivalent to a regular composition of mappings
+        `f∘c`, being `c` the `connectivity` argument and `f` the `self` data field.
+        Note that the connectivity field appears at the right of the composition
+        operator and the `self` data field at the left.
 
-        # Compute the new domain
-        dim = connectivity.codomain
-        dim_idx = self.domain.dim_index(dim)
-        if dim_idx is None:
-            raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
+        The composition operation is only well-defined when the codomain of `c: A → B`
+        matches the domain of `f: B → ℝ` and it would then result in a new mapping
+        `f∘c: A → ℝ` defined as `(f∘c)(x) = g(f(x))`. When remaping a field whose
+        domain has multiple dimensions `f: A × B → ℝ`, the connectivity argument
+        used in the right hand side of the operator should therefore have the
+        same product of dimensions `c: S × T → A × B`. Since such a mapping
+        can also be expressed as a pair of mappings `c1: S × T → A` and `c2: S × T → B`,
+        `ConnectivityField` only support connectivities with a single dimension in its
+        codomain, to make connectivities reusable for any combination of dimensions in
+        a field domain.
 
-        current_range: common.UnitRange = self.domain[dim_idx].unit_range
-        new_ranges = connectivity.inverse_image(current_range)
-        new_domain = self.domain.replace(dim_idx, *new_ranges)
+        In general, this function is able to remap data fields with multiple dimensions
+        even if only one connectivity is passed, because connectivities are expanded to
+        fully defined connectivities for each dimension in the domain of the field
+        according to some rules covering the most common use cases.
 
-        # perform contramap
-        if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
-            # shortcut for compact remap: don't change the array, only the domain
-            new_buffer = self._ndarray
-        else:
-            # general case: first restrict the connectivity to the new domain
-            restricted_connectivity_domain = common.Domain(*new_ranges)
-            restricted_connectivity = (
-                connectivity.restrict(restricted_connectivity_domain)
-                if restricted_connectivity_domain != connectivity.domain
-                else connectivity
+        Assuming a `self: Field[Dims[A, B], DT]` the following cases are supported:
+
+        - If the connectivity domain contains new dimensions which are not part of the field
+          domain, then use the same rules of advanced-indexing and replace the codomain dimension:
+
+            self: Field[Dims[A, B], DT]
+            connectivity: ConnectivityField[Dims[D0, D1], A]
+            _tmp: Field[Dims[D0, D1], Field[Dims[B], DT]] = take(self, connectivity)
+            result: Field[Dims[D0, D1, B], DT] = _flatten(tmp)
+
+        - If the connectivity domain only contains dimensions which are part of the field domain,
+          interpret the connectivity as a reshuffle and preserve the same domain adding identity
+          connectivities for the missing dimensions:
+
+            self: Field[Dims[A, B, C], DT]
+            connectivity: ConnectivityField[Dims[A, B], A]
+            expanded_connectivities = (
+                lambda a,b,c: connectivity(a,b)    # ConnectivityField[Dims[A, B, C], A],
+                lambda a,b,c: b)                   # ConnectivityField[Dims[A, B, C], B],
+                lambda a,b,c: c)                   # ConnectivityField[Dims[A, B, C], C]
             )
-            assert common.is_connectivity_field(restricted_connectivity)
+            result: Field[Dims[A, B, C], DT] = take(self, expanded_connectivities)
+        """  # noqa: RUF002
 
-            # then compute the index array
-            xp = self.array_ns
-            new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
-            # finally, take the new array
-            new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
+        conn_fields: list[common.ConnectivityField] = []
+        codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
+        for connectivity in connectivities:
+            # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
+            if not common.is_connectivity_field(connectivity):
+                assert isinstance(connectivity, fbuiltins.FieldOffset)
+                connectivity = connectivity.as_connectivity_field()
+            assert common.is_connectivity_field(connectivity)
 
-        return self.__class__.from_array(
-            new_buffer,
-            domain=new_domain,
-            dtype=self.dtype,
-        )
+            # Current implementation relies on skip_value == -1:
+            # if we assume the indexed array has at least one element, we wrap around without out of bounds
+            assert connectivity.skip_value is None or connectivity.skip_value == -1
+
+            if conn_fields and conn_fields[0].domain != connectivity.domain:
+                raise ValueError(
+                    "All connectivities must have the same domain, got: "
+                    f"{[c.domain for c in conn_fields]}."
+                )
+
+            conn_fields.append(connectivity)
+            codomains_counter[connectivity.codomain] += 1
+
+        if unknown_dims := [
+            dim for dim, _ in codomains_counter.items() if dim not in self.domain.dims
+        ]:
+            raise ValueError(
+                f"Incompatible dimensions in the connectivity codomain(s) {unknown_dims}"
+                f"while remapping a field with domain {self.domain}."
+            )
+
+        if repeated_codomain_dims := [dim for dim, count in codomains_counter.items() if count > 1]:
+            raise ValueError(
+                "All connectivities must have different codomains but some are repeated:"
+                f" {repeated_codomain_dims}."
+            )
+
+        # Select interpretation of the connectivity argument: advanced indexing or reshuffle
+        if len(conn_fields) == 1 and set(conn_fields[0].domain.dims) - set(self.domain.dims):
+            return _remap_as_advanced_indexing(self, conn_fields[0])
+        else:
+            return _remap_as_data_reshuffling(self, *connectivities)
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -402,14 +456,10 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             _skip_value=skip_value,
         )
 
-    def inverse_image(
-        self, image_range: common.UnitRange | common.NamedRange
-    ) -> Sequence[common.NamedRange]:
+    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
-        if (new_dims := self._cache.get(cache_key, None)) is None:
-            xp = self.array_ns
-
+        if (new_ranges := self._cache.get(cache_key, None)) is None:
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
@@ -421,19 +471,17 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                 image_range = image_range.unit_range
 
             assert isinstance(image_range, common.UnitRange)
-
             assert common.UnitRange.is_finite(image_range)
 
-            relative_ranges = _hypercube(self._ndarray, image_range, xp, self.skip_value)
-
-            if relative_ranges is None:
+            xp = self.array_ns
+            slices = _hyperslice(self._ndarray, image_range, xp, self.skip_value)
+            if slices is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_dims = _relative_ranges_to_domain(relative_ranges, self.domain)
+            new_ranges = self.domain.loc[slices]
+            self._cache[cache_key] = new_ranges
 
-            self._cache[cache_key] = new_dims
-
-        return new_dims
+        return new_ranges
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
@@ -451,31 +499,166 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
-def _relative_ranges_to_domain(
-    relative_ranges: Sequence[common.UnitRange], domain: common.Domain
-) -> common.Domain:
-    return common.Domain(
-        dims=domain.dims, ranges=[rr + ar.start for ar, rr in zip(domain.ranges, relative_ranges)]
+def _remap_as_advanced_indexing(
+    data: NdArrayField, connectivity: common.ConnectivityField
+) -> NdArrayField:
+    new_dims = set(connectivity.domain.dims) - set(data.domain.dims)
+    if repeated_dims := (new_dims - set(data.domain.dims)):
+        raise ValueError(f"Remapped field will contain repeated dimensions '{repeated_dims}'.")
+
+    dim = connectivity.codomain
+    dim_idx = data.domain.dim_index(dim)
+    assert dim_idx is None
+
+    current_range: common.UnitRange = data.domain[dim_idx][1]
+    new_ranges = connectivity.inverse_image(current_range)
+    new_domain = data.domain.replace(dim_idx, *new_ranges)
+
+    # Compute the new domain
+    dim = connectivity.codomain
+    dim_idx = data.domain.dim_index(dim)
+    if dim_idx is None:
+        raise ValueError(f"Incompatible index field, expected a field with dimension '{dim}'.")
+
+    current_range: common.UnitRange = data.domain[dim_idx][1]
+    new_ranges = connectivity.inverse_image(current_range)
+    new_domain = data.domain.replace(dim_idx, *new_ranges)
+
+    # Perform contramap
+    xp = data.array_ns
+    if not (connectivity.kind & common.ConnectivityKind.MODIFY_STRUCTURE):
+        # shortcut for compact remap: don't change the array, only the domain
+        new_buffer = data._ndarray
+    else:
+        # general case: first restrict the connectivity to the new domain
+        restricted_connectivity_domain = common.Domain(*new_ranges)
+        restricted_connectivity = (
+            connectivity.restrict(restricted_connectivity_domain)
+            if restricted_connectivity_domain != connectivity.domain
+            else connectivity
+        )
+        assert common.is_connectivity_field(restricted_connectivity)
+
+        # then compute the index array
+        new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
+        # finally, take the new array
+        new_buffer = xp.take(data._ndarray, new_idx_array, axis=dim_idx)
+
+    return data.__class__.from_array(
+        new_buffer,
+        domain=new_domain,
+        dtype=data.dtype,
     )
 
 
-def _hypercube(
+def _remap_as_data_reshuffling(
+    data: NdArrayField, *connectivities: common.ConnectivityField | fbuiltins.FieldOffset
+) -> NdArrayField:
+    connectivity = connectivities[0]
+    xp = data.array_ns
+
+    # Reorder existing dimensions and add singleton dimensions to match the field domain
+    transposed_axes = []
+    expanded_axes = []
+    call_transpose = False
+    for new_dim_idx, dim in enumerate(data.domain.dims):
+        if (dim_idx := connectivity.domain.dim_index(dim)) is None:
+            expanded_axes.append(connectivity.domain.ndim + len(expanded_axes))
+            dim_idx = expanded_axes[-1]
+        transposed_axes.append(dim_idx)
+        call_transpose = call_transpose | (dim_idx != new_dim_idx)
+
+    # Broadcast connectivity arrays to match the full domain
+    conn_map = {}
+    ranges = data.domain.ranges
+    for conn in connectivities:
+        conn_ndarray = conn.ndarray
+        if expanded_axes:
+            conn_ndarray = xp.expand_dims(conn_ndarray, axis=expanded_axes)
+        if call_transpose:
+            conn_ndarray = xp.transpose(conn_ndarray, transposed_axes)
+        if conn_ndarray.shape != data.domain.shape:
+            conn_ndarray = xp.broadcast_to(conn_ndarray, data.domain.shape)
+        if conn_ndarray is not conn.ndarray:
+            conn = conn.__class__.from_array(
+                conn_ndarray, domain=data.domain, codomain=conn.codomain
+            )
+            conn_map[conn.codomain] = conn
+
+        dim_idx = data.domain.dim_index(conn.codomain)
+        current_range: common.UnitRange = data.domain.ranges[dim_idx]
+        new_ranges = connectivity.inverse_image(current_range)
+        ranges = tuple(r & s for r, s in zip(ranges, new_ranges))
+
+    new_domain = common.Domain(dims=data.domain.dims, ranges=ranges)
+
+    # Create identity connectivities for the missing domain dimensions
+    for dim in data.domain.dims:
+        if dim not in conn_map:
+            conn_map[dim] = utils.first(_identity_connectivities(new_domain, [dim]))
+
+    # Remap
+    new_buffer = data._ndarray.__getitem__(*(conn_map[dim] for dim in data.domain.dims))
+
+    return data.__class__.from_array(
+        new_buffer,
+        domain=new_domain,
+        dtype=data.dtype,
+    )
+
+
+_ConnT = TypeVar("_ConnT", bound=common.ConnectivityField)
+
+
+def _identity_connectivities(
+    domain: common.Domain,
+    codomains: Sequence[common.DimT],
+    *,
+    cls: type[_ConnT] = NdArrayConnectivityField,
+) -> tuple[_ConnT, ...]:
+    shape = domain.shape
+    identities = []
+    for d in codomains:
+        assert d in domain.dims
+        d_idx = domain.dim_index(d)
+        indices = np.arange(domain[d].start, domain[d].stop)
+
+        identities.append(
+            cls.from_array(
+                np.broadcast_to(
+                    indices.__getitem__(
+                        *(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
+                    ),
+                    shape,
+                ),
+                codomain=d,
+                domain=domain,
+                dtype=int,
+            )
+        )
+
+    return tuple(identities)
+
+
+def _hyperslice(
     index_array: core_defs.NDArrayObject,
     image_range: common.UnitRange,
     xp: ModuleType,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[list[common.UnitRange]]:
+) -> Optional[list[slice]]:
     """
-    Return the hypercube that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
+    Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
 
     If `skip_value` is given, the selected values are ignored. It returns the smallest hypercube.
     A bigger hypercube could be constructed by adding lines that contain only `skip_value`s.
+
     Example:
-    index_array =  0  1 -1
-                   3  4 -1
-                  -1 -1 -1
-    skip_value = -1
-    would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
+        index_array =  0  1 -1
+                       3  4 -1
+                      -1 -1 -1
+        skip_value = -1
+
+        would currently select the 2x2 range [0,2], [0,2], but could also select the 3x3 range [0,3], [0,3].
     """
     select_mask = (index_array >= image_range.start) & (index_array < image_range.stop)
 
@@ -491,7 +674,7 @@ def _hypercube(
     if not xp.all(hcube):
         return None
 
-    return [common.UnitRange(s.start, s.stop) for s in slices]
+    return slices
 
 
 # -- Specialized implementations for builtin operations on array fields --
@@ -530,23 +713,22 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _compute_mask_ranges(
+def _compute_mask_slices(
     mask: core_defs.NDArrayObject,
-) -> list[tuple[bool, common.UnitRange]]:
-    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to ranges."""
+) -> list[tuple[bool, slice]]:
+    """Take a 1-dimensional mask and return a sequence of mappings from boolean values to slices."""
     # TODO: does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
     cur = bool(mask[0].item())
     ind = 0
     res = []
     for i in range(1, mask.shape[0]):
-        if (
-            mask_i := bool(mask[i].item())
-        ) != cur:  # `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
-            res.append((cur, common.UnitRange(ind, i)))
+        # Use `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
+        if (mask_i := bool(mask[i].item())) != cur:
+            res.append((cur, slice(ind, i)))
             cur = mask_i
             ind = i
-    res.append((cur, common.UnitRange(ind, mask.shape[0])))
+    res.append((cur, slice(ind, mask.shape[0])))
     return res
 
 
@@ -651,12 +833,12 @@ def _concat_where(
 
     # TODO(havogt): for clarity, most of it could be implemented on named_range in the masked dimension, but we currently lack the utils
     # compute the consecutive ranges (first relative, then domain) of true and false values
-    mask_values_to_relative_range_mapping: Iterable[tuple[bool, common.UnitRange]] = (
-        _compute_mask_ranges(mask_field.ndarray)
+    mask_values_to_slices_mapping: Iterable[tuple[bool, slice]] = _compute_mask_slices(
+        mask_field.ndarray
     )
     mask_values_to_domain_mapping: Iterable[tuple[bool, common.Domain]] = (
-        (mask, _relative_ranges_to_domain((relative_range,), mask_field.domain))
-        for mask, relative_range in mask_values_to_relative_range_mapping
+        (mask, mask_field.domain.loc[domain_slice])
+        for mask, domain_slice in mask_values_to_slices_mapping
     )
     # mask domains intersected with the respective fields
     mask_values_to_intersected_domains_mapping: Iterable[tuple[bool, common.Domain]] = (

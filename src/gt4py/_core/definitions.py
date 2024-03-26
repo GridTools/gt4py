@@ -20,7 +20,6 @@ import enum
 import functools
 import math
 import numbers
-from typing import overload
 
 import numpy as np
 import numpy.typing as npt
@@ -42,6 +41,7 @@ from gt4py.eve.extended_typing import (
     TypeVar,
     Union,
     cast,
+    overload,
 )
 
 
