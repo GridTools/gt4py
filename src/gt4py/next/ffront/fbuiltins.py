@@ -15,7 +15,7 @@
 import dataclasses
 import functools
 import inspect
-from builtins import bool, float, int, tuple  # noqa: A004
+from builtins import bool, float, int, tuple
 from typing import Any, Callable, Generic, ParamSpec, Tuple, TypeAlias, TypeVar, Union, cast
 
 import numpy as np
@@ -24,8 +24,7 @@ from numpy import float32, float64, int32, int64
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, embedded
-from gt4py.next.common import Dimension, Field  # noqa: F401  # direct import for TYPE_BUILTINS
-from gt4py.next.ffront.experimental import as_offset  # noqa: F401
+from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -40,7 +39,8 @@ TYPE_BUILTINS = [
     int64,
     float32,
     float64,
-] + PYTHON_TYPE_BUILTINS
+    *PYTHON_TYPE_BUILTINS,
+]
 TYPE_BUILTIN_NAMES = [t.__name__ for t in TYPE_BUILTINS]
 
 # Be aware: Type aliases are not fully supported in the frontend yet, e.g. `IndexType(1)` will not
@@ -58,6 +58,10 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return ts.FieldType
     elif t is common.Dimension:
         return ts.DimensionType
+    elif t is FieldOffset:
+        return ts.OffsetType
+    elif t is common.ConnectivityField:
+        return ts.OffsetType
     elif t is core_defs.ScalarT:
         return ts.ScalarType
     elif t is type:
@@ -85,8 +89,9 @@ class BuiltInFunction(Generic[_R, _P]):
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
     function: Callable[_P, _R]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
+        object.__setattr__(self, "__doc__", self.function.__doc__)
 
     def __call__(self, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         impl = self.dispatch(*args)
@@ -146,9 +151,7 @@ class WhereBuiltinFunction(
                 raise ValueError(
                     "Tuple of different size not allowed."
                 )  # TODO(havogt) find a strategy to unify parsing and embedded error messages
-            return tuple(
-                where(mask, t, f) for t, f in zip(true_field, false_field)
-            )  # type: ignore[return-value] # `tuple` is not `_R`
+            return tuple(self(mask, t, f) for t, f in zip(true_field, false_field))  # type: ignore[return-value] # `tuple` is not `_R`
         return super().__call__(mask, true_field, false_field)
 
 
@@ -243,11 +246,11 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
-def _make_unary_math_builtin(name):
+def _make_unary_math_builtin(name: str) -> None:
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
-        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: E800 # commented code
-        # return getattr(math, name)(value)# noqa: E800 # commented code
+        # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: ERA001 [commented-out-code]
+        # return getattr(math, name)(value)# noqa: ERA001 [commented-out-code]
         raise NotImplementedError()
 
     impl.__name__ = name
@@ -264,7 +267,7 @@ for f in (
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
-def _make_binary_math_builtin(name):
+def _make_binary_math_builtin(name: str) -> None:
     def impl(
         lhs: common.Field | core_defs.ScalarT,
         rhs: common.Field | core_defs.ScalarT,
@@ -296,8 +299,8 @@ FUN_BUILTIN_NAMES = [
     "broadcast",
     "where",
     "astype",
-    "as_offset",
-] + MATH_BUILTIN_NAMES
+    *MATH_BUILTIN_NAMES,
+]
 
 BUILTIN_NAMES = TYPE_BUILTIN_NAMES + FUN_BUILTIN_NAMES
 
@@ -319,11 +322,11 @@ class FieldOffset(runtime.Offset):
     def _cache(self) -> dict:
         return {}
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
-    def __gt_type__(self):
+    def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target)
 
     def __getitem__(self, offset: int) -> common.ConnectivityField:
@@ -341,14 +344,14 @@ class FieldOffset(runtime.Offset):
         ) or common.is_connectivity_field(offset_definition):
             unrestricted_connectivity = self.as_connectivity_field()
             assert unrestricted_connectivity.domain.ndim > 1
-            named_index = (self.target[-1], offset)
+            named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = unrestricted_connectivity[named_index]
         else:
             raise NotImplementedError()
 
         return connectivity
 
-    def as_connectivity_field(self):
+    def as_connectivity_field(self) -> common.ConnectivityField:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)

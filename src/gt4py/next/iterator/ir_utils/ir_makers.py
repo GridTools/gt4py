@@ -243,9 +243,7 @@ class let:
     --------
     >>> str(let("a", "b")("a"))  # doctest: +ELLIPSIS
     '(λ(a) → a)(b)'
-    >>> str(let(("a", 1),
-    ...         ("b", 2)
-    ... )(plus("a", "b")))
+    >>> str(let(("a", 1), ("b", 2))(plus("a", "b")))
     '(λ(a, b) → a + b)(1, 2)'
     """
 
@@ -301,7 +299,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     """
     Make a literal node from a value.
 
-    >>> literal_from_value(1.)
+    >>> literal_from_value(1.0)
     Literal(value='1.0', type='float64')
     >>> literal_from_value(1)
     Literal(value='1', type='int32')
@@ -355,7 +353,9 @@ def promote_to_const_iterator(expr: str | itir.Expr) -> itir.Expr:
     return lift(lambda_()(expr))()
 
 
-def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[..., itir.Expr]:
+def promote_to_lifted_stencil(
+    op: str | itir.SymRef | Callable,
+) -> Callable[..., itir.FunCall]:
     """
     Promotes a function `op` from values to iterators.
 
@@ -372,7 +372,7 @@ def promote_to_lifted_stencil(op: str | itir.SymRef | Callable) -> Callable[...,
     if isinstance(op, (str, itir.SymRef, itir.Lambda)):
         op = call(op)
 
-    def _impl(*its: itir.Expr) -> itir.Expr:
+    def _impl(*its: itir.Expr) -> itir.FunCall:
         args = [
             f"__arg{i}" for i in range(len(its))
         ]  # TODO: `op` must not contain `SymRef(id="__argX")`

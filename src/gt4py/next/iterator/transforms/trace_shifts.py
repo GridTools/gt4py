@@ -13,11 +13,41 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 import dataclasses
 import enum
+import sys
 from collections.abc import Callable
 from typing import Any, Final, Iterable, Literal
 
+from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+
+
+class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
+    """Ensure every applied lift and its arguments have the `recorded_shifts` annex populated."""
+
+    def visit_FunCall(self, node: ir.FunCall):
+        if is_applied_lift(node):
+            assert hasattr(node.annex, "recorded_shifts")
+
+            if len(node.annex.recorded_shifts) == 0:
+                return
+
+            if isinstance(node.fun.args[0], ir.Lambda):  # type: ignore[attr-defined]  # ensured by is_applied_lift
+                stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied_lift
+                for param in stencil.params:
+                    assert hasattr(param.annex, "recorded_shifts")
+
+        self.generic_visit(node)
+
+
+def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
+    """
+    Copy `recorded_shifts` annex attribute from one node to another.
+
+    This function mainly exists for readability reasons.
+    """
+    to.annex.recorded_shifts = from_.annex.recorded_shifts
 
 
 class Sentinel(enum.Enum):
@@ -234,6 +264,8 @@ _START_CTX: Final = {
 }
 
 
+# TODO(tehrengruber): This pass is unnecessarily very inefficient and easily exceeds the default
+#  recursion limit.
 @dataclasses.dataclass(frozen=True)
 class TraceShifts(PreserveLocationVisitor, NodeTranslator):
     shift_recorder: ShiftRecorder = dataclasses.field(default_factory=ShiftRecorder)
@@ -246,7 +278,9 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
             return ctx[node.id]
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
-        return _combine
+        elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
+            return _combine
+        raise ValueError(f"Undefined symbol {node.id}")
 
     def visit_FunCall(self, node: ir.FunCall, *, ctx: dict[str, Any]) -> Any:
         if node.fun == ir.SymRef(id="tuple_get"):
@@ -298,22 +332,44 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
+        return node
 
     @classmethod
     def apply(
-        cls, node: ir.StencilClosure, *, inputs_only=True
+        cls, node: ir.StencilClosure | ir.FencilDefinition, *, inputs_only=True, save_to_annex=False
     ) -> (
         dict[int, set[tuple[ir.OffsetLiteral, ...]]] | dict[str, set[tuple[ir.OffsetLiteral, ...]]]
     ):
+        old_recursionlimit = sys.getrecursionlimit()
+        sys.setrecursionlimit(100000000)
+
         instance = cls()
         instance.visit(node)
 
+        sys.setrecursionlimit(old_recursionlimit)
+
         recorded_shifts = instance.shift_recorder.recorded_shifts
 
+        if save_to_annex:
+            _save_to_annex(node, recorded_shifts)
+
+            if __debug__:
+                ValidateRecordedShiftsAnnex().visit(node)
+
         if inputs_only:
+            assert isinstance(node, ir.StencilClosure)
             inputs_shifts = {}
             for inp in node.inputs:
                 inputs_shifts[str(inp.id)] = recorded_shifts[id(inp)]
             return inputs_shifts
 
         return recorded_shifts
+
+
+def _save_to_annex(
+    node: ir.Node,
+    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]],
+) -> None:
+    for child_node in node.pre_walk_values():
+        if id(child_node) in recorded_shifts:
+            child_node.annex.recorded_shifts = recorded_shifts[id(child_node)]

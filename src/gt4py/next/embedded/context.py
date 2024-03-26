@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars as cvars
+from collections.abc import Generator
 from typing import Any
 
 import gt4py.eve as eve
@@ -39,7 +40,7 @@ def new_context(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
-):
+) -> Generator[cvars.Context, None, None]:
     import gt4py.next.embedded.context as this_module
 
     updates: list[tuple[cvars.ContextVar[Any], Any]] = []
@@ -51,7 +52,7 @@ def new_context(
     # Create new context with provided values
     ctx = cvars.copy_context()
 
-    def ctx_updater(*args):
+    def ctx_updater(*args: tuple[cvars.ContextVar[Any], Any]) -> None:
         for cvar, value in args:
             cvar.set(value)
 

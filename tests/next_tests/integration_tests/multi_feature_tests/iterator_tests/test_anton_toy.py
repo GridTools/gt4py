@@ -83,9 +83,9 @@ def test_anton_toy(program_processor, lift_mode):
     program_processor, validate = program_processor
 
     if program_processor in [
-        gtfn.run_gtfn,
-        gtfn.run_gtfn_imperative,
-        gtfn.run_gtfn_with_temporaries,
+        gtfn.run_gtfn.executor,
+        gtfn.run_gtfn_imperative.executor,
+        gtfn.run_gtfn_with_temporaries.executor,
     ]:
         from gt4py.next.iterator import transforms
 

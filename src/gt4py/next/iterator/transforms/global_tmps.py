@@ -57,7 +57,7 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 class Temporary(ir.Node):
     """Iterator IR extension: declaration of a temporary buffer."""
 
-    id: Coerced[eve.SymbolName]  # noqa: A003
+    id: Coerced[eve.SymbolName]
     domain: Optional[ir.Expr] = None
     dtype: Optional[Any] = None
 
@@ -318,7 +318,10 @@ def split_closures(
                             domain=AUTO_DOMAIN,
                             stencil=stencil,
                             output=im.ref(tmp_sym.id),
-                            inputs=[closure_param_arg_mapping[param.id] for param in lift_expr.args],  # type: ignore[attr-defined]
+                            inputs=[
+                                closure_param_arg_mapping[param.id]  # type: ignore[attr-defined]
+                                for param in lift_expr.args
+                            ],
                             location=current_closure.location,
                         )
                     )
@@ -412,7 +415,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
-                provider.table.max(),
+                provider.table.max(),  # type: ignore[attr-defined] # TODO(havogt): improve typing for NDArrayObject
             )
     return sizes
 
@@ -452,12 +455,10 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
-        return im.call(self.grid_type)(
-            *[
-                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
-                for d, r in self.ranges.items()
-            ]
-        )
+        return im.call(self.grid_type)(*[
+            im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+            for d, r in self.ranges.items()
+        ])
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
@@ -645,6 +646,15 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
     )
 
 
+def validate_no_dynamic_offsets(node: ir.Node):
+    """Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`"""
+    for call_node in node.walk_values().if_isinstance(ir.FunCall):
+        assert isinstance(call_node, ir.FunCall)
+        if call_node.fun == im.ref("shift"):
+            if any(not isinstance(arg, ir.OffsetLiteral) for arg in call_node.args):
+                raise NotImplementedError("Dynamic offsets not supported in temporary pass.")
+
+
 # TODO(tehrengruber): Add support for dynamic shifts (e.g. the distance is a symbol). This can be
 #  tricky: For every lift statement that is dynamically shifted we can not compute bounds anymore
 #  and hence also not extract as a temporary.
@@ -664,6 +674,8 @@ class CreateGlobalTmps(PreserveLocationVisitor, NodeTranslator):
         ] = None,
         symbolic_sizes: Optional[dict[str, str]],
     ) -> FencilWithTemporaries:
+        # Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`
+        validate_no_dynamic_offsets(node)
         # Split closures on lifted function calls and introduce temporaries
         res = split_closures(
             node, offset_provider=offset_provider, extraction_heuristics=extraction_heuristics

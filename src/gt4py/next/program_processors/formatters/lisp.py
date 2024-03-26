@@ -56,7 +56,7 @@ class ToLispLike(TemplatedGenerator):
     )
 
     @classmethod
-    def apply(cls, root, **kwargs: Any) -> str:
+    def apply(cls, root: itir.Node, **kwargs: Any) -> str:  # type: ignore[override]
         transformed = apply_common_transforms(
             root, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
         )

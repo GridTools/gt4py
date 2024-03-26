@@ -14,7 +14,6 @@
 
 """Visitor classes to work with IR trees."""
 
-
 from __future__ import annotations
 
 import collections.abc
@@ -169,7 +168,7 @@ class NodeTranslator(NodeVisitor):
                 # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter
                 new_annex_dict = new_node.annex.__dict__
                 for key in self.PRESERVED_ANNEX_ATTRS:
-                    if value := getattr(old_annex, key, None):
+                    if (value := getattr(old_annex, key, NOTHING)) is not NOTHING:
                         assert key not in new_annex_dict
                         new_annex_dict[key] = value
 

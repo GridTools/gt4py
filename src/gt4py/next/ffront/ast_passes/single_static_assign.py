@@ -107,11 +107,7 @@ class SingleStaticAssignPass(ast.NodeTransformer):
     ...     a = 3 + a
     ...     return a
 
-    >>> print(ast.unparse(
-    ...     SingleStaticAssignPass.apply(
-    ...         ast.parse(inspect.getsource(foo))
-    ...     )
-    ... ))
+    >>> print(ast.unparse(SingleStaticAssignPass.apply(ast.parse(inspect.getsource(foo)))))
     def foo():
         aᐞ0 = 1
         aᐞ1 = 2 + aᐞ0

@@ -142,22 +142,18 @@ storing a reference to the piece of source code which originated the node.
 import enum
 import operator
 import sys
-from typing import Generator, List, Optional, Sequence, Type
+from typing import List, Optional, Sequence
 
 import numpy as np
 
-from gt4py.cartesian.definitions import AccessKind, CartesianSpace
-from gt4py.cartesian.gtc.definitions import Extent, Index
+from gt4py.cartesian.definitions import CartesianSpace
 from gt4py.cartesian.utils.attrib import (
     Any as Any,
     Dict as DictOf,
     List as ListOf,
-    Optional as OptionalOf,
-    Tuple as TupleOf,
     Union as UnionOf,
     attribkwclass as attribclass,
     attribute,
-    attributes_of,
 )
 
 
@@ -194,7 +190,7 @@ class LevelMarker(enum.Enum):
     START = 0
     END = -1
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -255,7 +251,7 @@ class Builtin(enum.Enum):
 
         return result
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -272,7 +268,7 @@ class DataType(enum.Enum):
     FLOAT32 = 104
     FLOAT64 = 108
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     @property
@@ -326,15 +322,6 @@ class ScalarLiteral(Literal):
     loc = attribute(of=Location, optional=True)
 
 
-# @attribclass
-# class TupleLiteral(Node):
-#     items = attribute(of=TupleOf[Expr])
-#
-#     @property
-#     def length(self):
-#         return len(self.items)
-
-
 @attribclass
 class BuiltinLiteral(Literal):
     value = attribute(of=Builtin)
@@ -366,6 +353,10 @@ class FieldRef(Ref):
         return cls(
             name=name, offset={axis: 0 for axis in axes}, data_index=data_index or [], loc=loc
         )
+
+    @classmethod
+    def datadims_index(cls, name: str, loc=None):
+        return cls(name=name, offset={}, data_index=[], loc=loc)
 
 
 @attribclass
@@ -597,12 +588,6 @@ class Statement(Node):
     pass
 
 
-# @attribclass
-# class ExprStmt(Statement):
-#     expr = attribute(of=Expr)
-#     loc = attribute(of=Location, optional=True)
-
-
 class Decl(Statement):
     pass
 
@@ -680,7 +665,7 @@ class IterationOrder(enum.Enum):
         elif self == self.FORWARD:
             return "->"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __lshift__(self, steps: int):
@@ -726,9 +711,6 @@ class AxisInterval(Node):
         return self.start.level == self.end.level and self.start.offset == self.end.offset - 1
 
     def disjoint_from(self, other: "AxisInterval") -> bool:
-        # This made-up constant must be larger than any LevelMarker.offset used
-        DOMAIN_SIZE: int = 1000
-
         def get_offset(bound: AxisBound) -> int:
             return (
                 0 + bound.offset if bound.level == LevelMarker.START else sys.maxsize + bound.offset

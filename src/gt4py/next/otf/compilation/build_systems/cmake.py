@@ -98,12 +98,12 @@ class CMakeProject(
     build_type: config.CMakeBuildType = config.CMakeBuildType.DEBUG
     extra_cmake_flags: list[str] = dataclasses.field(default_factory=list)
 
-    def build(self):
+    def build(self) -> None:
         self._write_files()
         self._run_config()
         self._run_build()
 
-    def _write_files(self):
+    def _write_files(self) -> None:
         for name, content in self.source_files.items():
             (self.root_path / name).write_text(content, encoding="utf-8")
 
@@ -118,7 +118,7 @@ class CMakeProject(
             self.root_path,
         )
 
-    def _run_config(self):
+    def _run_config(self) -> None:
         logfile = self.root_path / "log_config.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(
@@ -139,7 +139,7 @@ class CMakeProject(
 
         build_data.update_status(new_status=build_data.BuildStatus.CONFIGURED, path=self.root_path)
 
-    def _run_build(self):
+    def _run_build(self) -> None:
         logfile = self.root_path / "log_build.txt"
         with logfile.open(mode="w") as log_file_pointer:
             subprocess.check_call(

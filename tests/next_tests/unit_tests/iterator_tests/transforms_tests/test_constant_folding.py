@@ -45,3 +45,10 @@ def test_constant_folding_if():
     )
     actual = ConstantFolding.apply(testee)
     assert actual == expected
+
+
+def test_constant_folding_minimum():
+    testee = im.call("minimum")("a", "a")
+    expected = im.ref("a")
+    actual = ConstantFolding.apply(testee)
+    assert actual == expected

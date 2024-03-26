@@ -22,14 +22,14 @@ import numpy.typing as npt
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import common, config
+from gt4py.next import backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
 from gt4py.next.otf.binding import nanobind
 from gt4py.next.otf.compilation import compiler
 from gt4py.next.otf.compilation.build_systems import compiledb
-from gt4py.next.program_processors import otf_compile_executor
+from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
@@ -50,8 +50,8 @@ def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
-    ):
+        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+    ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
         return inp(
@@ -70,7 +70,8 @@ def _ensure_is_on_device(
 
         if not isinstance(connectivity_arg, cp.ndarray):
             warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device."
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
             )
             return cp.asarray(connectivity_arg)
     return connectivity_arg
@@ -103,16 +104,16 @@ def extract_connectivity_args(
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
-    return hash(
-        (
-            otf_closure.program,
-            # As the frontend types contain lists they are not hashable. As a workaround we just
-            # use content_hash here.
-            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-            id(offset_provider) if offset_provider else None,
-            otf_closure.kwargs.get("column_axis", None),
-        )
-    )
+    return hash((
+        otf_closure.program,
+        # As the frontend types contain lists they are not hashable. As a workaround we just
+        # use content_hash here.
+        content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+        id(offset_provider) if offset_provider else None,
+        otf_closure.kwargs.get("column_axis", None),
+        # TODO(tehrengruber): Remove `lift_mode` from call interface.
+        otf_closure.kwargs.get("lift_mode", None),
+    ))
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
@@ -146,7 +147,7 @@ class GTFNCompileWorkflowFactory(factory.Factory):
 
 class GTFNBackendFactory(factory.Factory):
     class Meta:
-        model = otf_compile_executor.OTFBackend
+        model = backend.Backend
 
     class Params:
         name_device = "cpu"
@@ -160,7 +161,7 @@ class GTFNBackendFactory(factory.Factory):
         )
         cached = factory.Trait(
             executor=factory.LazyAttribute(
-                lambda o: otf_compile_executor.CachedOTFCompileExecutor(
+                lambda o: modular_executor.ModularExecutor(
                     otf_workflow=workflow.CachedStep(o.otf_workflow, hash_function=o.hash_function),
                     name=o.name,
                 )
@@ -182,7 +183,7 @@ class GTFNBackendFactory(factory.Factory):
         )
 
     executor = factory.LazyAttribute(
-        lambda o: otf_compile_executor.OTFCompileExecutor(otf_workflow=o.otf_workflow, name=o.name)
+        lambda o: modular_executor.ModularExecutor(otf_workflow=o.otf_workflow, name=o.name)
     )
     allocator = next_allocators.StandardCPUFieldBufferAllocator()
 
