@@ -237,7 +237,7 @@ E2C = gtx.FieldOffset("E2C", source=CellDim, target=(EdgeDim,E2CDim))
 Note that the field offset does not contain the actual connectivity table, that's provided through an _offset provider_:
 
 ```{code-cell} ipython3
-E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2, has_skip_values=False)
+E2C_offset_provider = gtx.NeighborTableOffsetProvider(edge_to_cell_table, EdgeDim, CellDim, 2)
 ```
 
 The field operator `nearest_cell_to_edge` below shows an example of applying this transform. There is a little twist though: the subscript in `E2C[0]` means that only the value of the first connected cell is taken, the second (if exists) is ignored.
@@ -385,7 +385,7 @@ As explained in the section outline, the pseudo-laplacian needs the cell-to-edge
 C2EDim = gtx.Dimension("C2E", kind=gtx.DimensionKind.LOCAL)
 C2E = gtx.FieldOffset("C2E", source=EdgeDim, target=(CellDim, C2EDim))
 
-C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3, False)
+C2E_offset_provider = gtx.NeighborTableOffsetProvider(cell_to_edge_table, CellDim, EdgeDim, 3)
 ```
 
 **Weights of edge differences:**
@@ -426,8 +426,8 @@ The second lines first creates a temporary field using `edge_differences(C2E)`, 
 @gtx.field_operator
 def pseudo_lap(cells : gtx.Field[Dims[CellDim], float64],
                edge_weights : gtx.Field[Dims[CellDim, C2EDim], float64]) -> gtx.Field[Dims[CellDim], float64]:
-    edge_differences = cells(E2C[0]) - cells(E2C[1]) # type: gtx.Field[Dims[EdgeDim], float64]
-    return neighbor_sum(edge_differences(C2E) * edge_weights, axis=C2EDim)
+    edges = cells(E2C[0]) # type: gtx.Field[Dims[EdgeDim], float64]
+    return neighbor_sum(edges(C2E) * edge_weights, axis=C2EDim)
 ```
 
 The program itself is just a shallow wrapper over the `pseudo_lap` field operator. The significant part is how offset providers for both the edge-to-cell and cell-to-edge connectivities are supplied when the program is called:
