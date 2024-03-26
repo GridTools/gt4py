@@ -52,6 +52,7 @@ from boltons.strutils import (
 from . import extended_typing as xtyping
 from .extended_typing import (
     Any,
+    ArgsOnlyCallable,
     Callable,
     Collection,
     Dict,
@@ -241,9 +242,9 @@ _T = TypeVar("_T")
 
 
 @dataclasses.dataclass(frozen=True)
-class CustomIndexer(Generic[_S, _T]):
+class IndexerCallable(Generic[_S, _T]):
     """
-    A custom indexer class that applies a function to retrieve values based on a given key.
+    An indexer class applying the wrapped function to the index arguments.
 
     Example:
         >>> indexer = CustomIndexer(lambda x: x**2)
@@ -251,10 +252,10 @@ class CustomIndexer(Generic[_S, _T]):
         9
     """
 
-    func: Callable[[_S], _T]
+    func: ArgsOnlyCallable[_S, _T]  # Variadic
 
-    def __getitem__(self, key: _S) -> _T:
-        return self.func(key)
+    def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
+        return self.func(*key) if isinstance(key, tuple) else self.func(key)
 
 
 class fluid_partial(functools.partial):

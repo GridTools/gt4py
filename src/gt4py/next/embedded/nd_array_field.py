@@ -456,9 +456,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             _skip_value=skip_value,
         )
 
-    def inverse_image(
-        self, image_range: common.UnitRange | common.NamedRange
-    ) -> Sequence[common.NamedRange]:
+    def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
         if (new_ranges := self._cache.get(cache_key, None)) is None:
@@ -480,7 +478,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_ranges = self.domain.loc[slices].ranges
+            new_ranges = self.domain.loc[slices]
             self._cache[cache_key] = new_ranges
 
         return new_ranges
@@ -725,10 +723,9 @@ def _compute_mask_slices(
     ind = 0
     res = []
     for i in range(1, mask.shape[0]):
-        if (
-            mask_i := bool(mask[i].item())
-        ) != cur:  # `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
-            res.append((cur, common.UnitRange(ind, i)))
+        # Use `.item()` to extract the scalar from a 0-d array in case of e.g. cupy
+        if (mask_i := bool(mask[i].item())) != cur:
+            res.append((cur, slice(ind, i)))
             cur = mask_i
             ind = i
     res.append((cur, slice(ind, mask.shape[0])))

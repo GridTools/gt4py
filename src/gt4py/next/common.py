@@ -312,7 +312,8 @@ class NamedIndex(NamedTuple):
 
 
 FiniteNamedRange: TypeAlias = NamedRange[FiniteUnitRange]
-RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
+RelativeIndexItem: TypeAlias = IntIndex | slice
+RelativeIndexElement: TypeAlias = RelativeIndexItem | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
@@ -488,17 +489,16 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
     @functools.cached_property
-    def loc(self) -> utils.CustomIndexer[slice | tuple[slice, ...], Domain]:
-        def _f_getitem(*args: slice) -> Domain:
-            slices = (args,) if isinstance(args, slice) else args
-            assert all(isinstance(arg, slice) for arg in slices)
-            if len(slices) != len(self):
+    def loc(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
+        def _domain_slicer(*args: RelativeIndexItem) -> Domain:
+            assert all(isinstance(arg, RelativeIndexItem) for arg in args)
+            if len(args) != len(self):
                 raise ValueError(
                     f"Number of provided slices ({len(args)}) does not match number of dimensions ({len(self)})."
                 )
-            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, slices)])
+            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, args)])
 
-        return utils.CustomIndexer(_f_getitem)
+        return utils.IndexerCallable(_domain_slicer)
 
     @classmethod
     def is_finite(cls, obj: Domain) -> TypeGuard[FiniteDomain]:
