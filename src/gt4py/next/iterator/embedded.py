@@ -208,7 +208,9 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.kstart = kstart
         assert isinstance(data, (np.ndarray, Scalar))  # type: ignore # mypy bug #11673
         column_range: common.NamedRange = column_range_cvar.get()
-        self.data = data if isinstance(data, np.ndarray) else np.full(len(column_range[1]), data)
+        self.data = (
+            data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
+        )
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -749,7 +751,7 @@ def _make_tuple(
             except embedded_exceptions.IndexOutOfBounds:
                 return _UNDEFINED
     else:
-        column_range = column_range_cvar.get()[1]
+        column_range = column_range_cvar.get().unit_range
         assert column_range is not None
 
         col: list[
@@ -826,7 +828,7 @@ class MDIterator:
             assert isinstance(k_pos, int)
             # the following range describes a range in the field
             # (negative values are relative to the origin, not relative to the size)
-            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range[1]))
+            slice_column[self.column_axis] = range(k_pos, k_pos + len(column_range.unit_range))
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
@@ -867,7 +869,7 @@ def make_in_iterator(
         init = [None] * sparse_dimensions.count(sparse_dim)
         new_pos[sparse_dim] = init  # type: ignore[assignment] # looks like mypy is confused
     if column_axis is not None:
-        column_range = column_range_cvar.get()[1]
+        column_range = column_range_cvar.get().unit_range
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_axis] = column_range.start
@@ -909,16 +911,16 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         domain_slice: list[common.NamedRange | common.NamedIndex] = []
         for d, v in named_indices.items():
             if isinstance(v, range):
-                domain_slice.append((d, common.UnitRange(v.start, v.stop)))
+                domain_slice.append(common.NamedRange(d, common.UnitRange(v.start, v.stop)))
             elif isinstance(v, list):
                 assert len(v) == 1  # only 1 sparse dimension is supported
                 assert common.is_int_index(
                     v[0]
                 )  # derefing a concrete element in a sparse field, not a slice
-                domain_slice.append((d, v[0]))
+                domain_slice.append(common.NamedIndex(d, v[0]))
             else:
                 assert common.is_int_index(v)
-                domain_slice.append((d, v))
+                domain_slice.append(common.NamedIndex(d, v))
         return tuple(domain_slice)
 
     def field_getitem(self, named_indices: NamedFieldIndices) -> Any:
@@ -1060,7 +1062,7 @@ class IndexField(common.Field):
     @property
     def domain(self) -> common.Domain:
         if self._cur_index is None:
-            return common.Domain((self._dimension, common.UnitRange.infinite()))
+            return common.Domain(common.NamedRange(self._dimension, common.UnitRange.infinite()))
         else:
             return common.Domain()
 
@@ -1092,11 +1094,12 @@ class IndexField(common.Field):
         raise NotImplementedError()
 
     def restrict(self, item: common.AnyIndexSpec) -> Self:
-        if common.is_absolute_index_sequence(item) and all(common.is_named_index(e) for e in item):  # type: ignore[arg-type] # we don't want to pollute the typing of `is_absolute_index_sequence` for this temporary code # fmt: off
+        if isinstance(item, Sequence) and all(isinstance(e, common.NamedIndex) for e in item):
+            assert isinstance(item[0], common.NamedIndex)  # for mypy errors on multiple lines below
             d, r = item[0]
             assert d == self._dimension
             assert isinstance(r, core_defs.INTEGRAL_TYPES)
-            return self.__class__(self._dimension, r)  # type: ignore[arg-type] # not sure why the assert above does not work
+            return self.__class__(self._dimension, r)
         # TODO set a domain...
         raise NotImplementedError()
 
@@ -1492,7 +1495,7 @@ def _column_dtype(elem: Any) -> np.dtype:
 @builtins.scan.register(EMBEDDED)
 def scan(scan_pass, is_forward: bool, init):
     def impl(*iters: ItIterator):
-        column_range = column_range_cvar.get()[1]
+        column_range = column_range_cvar.get().unit_range
         if column_range is None:
             raise RuntimeError("Column range is not defined, cannot scan.")
 
@@ -1545,7 +1548,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
-            column_range = (
+            column_range = common.NamedRange(
                 column_axis,
                 common.UnitRange(column.col_range.start, column.col_range.stop),
             )

@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import hashlib
 import warnings
 from inspect import currentframe, getframeinfo
 from pathlib import Path
@@ -19,17 +18,13 @@ from typing import Any, Mapping, Optional, Sequence
 
 import dace
 import numpy as np
-from dace.codegen.compiled_sdfg import CompiledSDFG
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
-import gt4py.next.allocators as next_allocators
 import gt4py.next.iterator.ir as itir
-import gt4py.next.program_processors.processor_interface as ppi
-from gt4py.next import backend as next_backend, common
+from gt4py.next import common
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.otf.compilation import cache as compilation_cache
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_translation
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, get_sorted_dims
@@ -39,12 +34,6 @@ try:
     import cupy as cp
 except ImportError:
     cp = None
-
-
-""" Default build configuration in DaCe backend """
-_build_type = "Release"
-_default_on_gpu = False
-_default_use_field_canonical_representation = False
 
 
 def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
@@ -176,64 +165,22 @@ def get_stride_args(
     return stride_args
 
 
-_build_cache: dict[str, CompiledSDFG] = {}
-
-
-def get_cache_id(
-    build_type: str,
-    build_for_gpu: bool,
-    lift_mode: itir_transforms.LiftMode,
-    program: itir.FencilDefinition,
-    arg_types: Sequence[ts.TypeSpec],
-    column_axis: Optional[common.Dimension],
-    offset_provider: Mapping[str, Any],
-) -> str:
-    def offset_invariants(offset):
-        if isinstance(offset, common.Connectivity):
-            return (
-                offset.origin_axis,
-                offset.neighbor_axis,
-                offset.has_skip_values,
-                offset.max_neighbors,
-            )
-        if isinstance(offset, common.Dimension):
-            return (offset,)
-        return tuple()
-
-    offset_cache_keys = [
-        (name, *offset_invariants(offset)) for name, offset in offset_provider.items()
-    ]
-    cache_id_args = [
-        str(arg)
-        for arg in (
-            build_type,
-            build_for_gpu,
-            lift_mode,
-            program,
-            *arg_types,
-            column_axis,
-            *offset_cache_keys,
-        )
-    ]
-    m = hashlib.sha256()
-    for s in cache_id_args:
-        m.update(s.encode())
-    return m.hexdigest()
-
-
-def get_sdfg_args(sdfg: dace.SDFG, *args, check_args: bool = False, **kwargs) -> dict[str, Any]:
+def get_sdfg_args(
+    sdfg: dace.SDFG,
+    *args,
+    check_args: bool = False,
+    on_gpu: bool = False,
+    use_field_canonical_representation: bool = True,
+    **kwargs,
+) -> dict[str, Any]:
     """Extracts the arguments needed to call the SDFG.
 
-    This function can handle the same arguments that are passed to `run_dace_iterator()`.
+    This function can handle the same arguments that are passed to dace runner.
 
     Args:
         sdfg:               The SDFG for which we want to get the arguments.
     """
     offset_provider = kwargs["offset_provider"]
-    on_gpu = kwargs.get("on_gpu", _default_on_gpu)
-    use_field_canonical_representation = kwargs.get(
-        "use_field_canonical_representation", _default_use_field_canonical_representation
-    )
 
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
@@ -272,7 +219,6 @@ def build_sdfg_from_itir(
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     load_sdfg_from_file: bool = False,
-    cache_id: Optional[str] = None,
     save_sdfg: bool = True,
     use_field_canonical_representation: bool = True,
 ) -> dace.SDFG:
@@ -287,17 +233,14 @@ def build_sdfg_from_itir(
         column_axis:         The column axis to be used, defaults to `None`.
         lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
-        cache_id:            The id of the cache entry, used to disambiguate stored sdfgs.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
         use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
 
     Notes:
         Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
     """
-    # Test if we can go through the cache?
-    sdfg_filename = (
-        f"_dacegraphs/gt4py/{cache_id if cache_id is not None else '.'}/{program.id}.sdfg"
-    )
+
+    sdfg_filename = f"_dacegraphs/gt4py/{program.id}.sdfg"
     if load_sdfg_from_file and Path(sdfg_filename).exists():
         sdfg: dace.SDFG = dace.SDFG.from_file(sdfg_filename)
         sdfg.validate()
@@ -353,116 +296,3 @@ def build_sdfg_from_itir(
         sdfg.save(sdfg_filename)
 
     return sdfg
-
-
-def run_dace_iterator(program: itir.FencilDefinition, *args, **kwargs):
-    # build parameters
-    build_cache = kwargs.get("build_cache", None)
-    # `None` will take default.
-    compiler_args = kwargs.get("compiler_args", None)
-    build_type = kwargs.get("build_type", "RelWithDebInfo")
-    on_gpu = kwargs.get("on_gpu", _default_on_gpu)
-    auto_optimize = kwargs.get("auto_optimize", True)
-    lift_mode = kwargs.get("lift_mode", itir_transforms.LiftMode.FORCE_INLINE)
-    use_field_canonical_representation = kwargs.get(
-        "use_field_canonical_representation", _default_use_field_canonical_representation
-    )
-    # ITIR parameters
-    column_axis = kwargs.get("column_axis", None)
-    offset_provider = kwargs["offset_provider"]
-    # debug option to store SDFGs on filesystem and skip lowering ITIR to SDFG at each run
-    load_sdfg_from_file = kwargs.get("load_sdfg_from_file", False)
-    save_sdfg = kwargs.get("save_sdfg", True)
-
-    arg_types = [type_translation.from_value(arg) for arg in args]
-
-    cache_id = get_cache_id(
-        build_type, on_gpu, lift_mode, program, arg_types, column_axis, offset_provider
-    )
-    if build_cache is not None and cache_id in build_cache:
-        # retrieve SDFG program from build cache
-        sdfg_program = build_cache[cache_id]
-        sdfg = sdfg_program.sdfg
-    else:
-        sdfg = build_sdfg_from_itir(
-            program,
-            *args,
-            offset_provider=offset_provider,
-            auto_optimize=auto_optimize,
-            on_gpu=on_gpu,
-            column_axis=column_axis,
-            lift_mode=lift_mode,
-            load_sdfg_from_file=load_sdfg_from_file,
-            cache_id=cache_id,
-            save_sdfg=save_sdfg,
-            use_field_canonical_representation=use_field_canonical_representation,
-        )
-
-        sdfg.build_folder = compilation_cache._session_cache_dir_path / ".dacecache"
-        with dace.config.temporary_config():
-            dace.config.Config.set("compiler", "build_type", value=build_type)
-            if compiler_args is not None:
-                dace.config.Config.set(
-                    "compiler", "cuda" if on_gpu else "cpu", "args", value=compiler_args
-                )
-            sdfg_program = sdfg.compile(validate=False)
-
-        # store SDFG program in build cache
-        if build_cache is not None:
-            build_cache[cache_id] = sdfg_program
-
-    sdfg_args = get_sdfg_args(sdfg, *args, **kwargs)
-
-    with dace.config.temporary_config():
-        dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-        dace.config.Config.set("frontend", "check_args", value=True)
-        sdfg_program(**sdfg_args)
-
-
-def _run_dace_cpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-    compiler_args = dace.config.Config.get("compiler", "cpu", "args")
-
-    # disable finite-math-only in order to support isfinite/isinf/isnan builtins
-    if "-ffast-math" in compiler_args:
-        compiler_args += " -fno-finite-math-only"
-    if "-ffinite-math-only" in compiler_args:
-        compiler_args.replace("-ffinite-math-only", "")
-
-    run_dace_iterator(
-        program,
-        *args,
-        **kwargs,
-        build_cache=_build_cache,
-        build_type=_build_type,
-        compiler_args=compiler_args,
-        on_gpu=False,
-    )
-
-
-run_dace_cpu = next_backend.Backend(
-    executor=ppi.program_executor(_run_dace_cpu, name="run_dace_cpu"),
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
-)
-
-if cp:
-
-    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-        run_dace_iterator(
-            program,
-            *args,
-            **kwargs,
-            build_cache=_build_cache,
-            build_type=_build_type,
-            on_gpu=True,
-        )
-
-else:
-
-    def _run_dace_gpu(program: itir.FencilDefinition, *args, **kwargs) -> None:
-        raise RuntimeError("Missing 'cupy' dependency for GPU execution.")
-
-
-run_dace_gpu = next_backend.Backend(
-    executor=ppi.program_executor(_run_dace_gpu, name="run_dace_gpu"),
-    allocator=next_allocators.StandardGPUFieldBufferAllocator(),
-)

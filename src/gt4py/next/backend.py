@@ -15,17 +15,19 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.ffront import past_process_args, past_to_itir
-from gt4py.next.otf import stages, workflow
+from gt4py.next.ffront import func_to_past, past_process_args, past_to_itir, stages as ffront_stages
+from gt4py.next.otf import recipes
 from gt4py.next.program_processors import processor_interface as ppi
 
 
-DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = (
-    past_process_args.past_process_args.chain(past_to_itir.PastToItirFactory())
+DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
+    func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
+    past_transform_args=past_process_args.past_process_args,
+    past_to_itir=past_to_itir.PastToItirFactory(),
 )
 
 
@@ -33,10 +35,13 @@ DEFAULT_TRANSFORMS: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = 
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transformer: workflow.Workflow[stages.PastClosure, stages.ProgramCall] = DEFAULT_TRANSFORMS
+    transformer: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
 
-    def __call__(self, program: stages.PastClosure) -> None:
-        program_call = self.transformer(program)
+    def __call__(
+        self, program: ffront_stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
+    ) -> None:
+        transformer = self.transformer.replace(args=args, kwargs=kwargs)
+        program_call = transformer(program)
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 
     @property

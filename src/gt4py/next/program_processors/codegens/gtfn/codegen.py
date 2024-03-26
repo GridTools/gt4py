@@ -98,6 +98,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         return value
 
     def visit_Literal(self, node: gtfn_ir.Literal, **kwargs: Any) -> str:
+        # TODO(tehrengruber): isn't this wrong and int32 should be casted to an actual int32?
         match pytype_to_cpptype(node.type):
             case "float":
                 return self.asfloat(node.value) + "f"
@@ -111,7 +112,9 @@ class GTFNCodegen(codegen.TemplatedGenerator):
     IntegralConstant = as_fmt("{value}_c")
 
     UnaryExpr = as_fmt("{op}({expr})")
-    BinaryExpr = as_fmt("({lhs}{op}{rhs})")
+    # add an extra space between the operators is needed such that `minus(1, -1)` does not get
+    # translated into `1--1`, but `1 - -1`
+    BinaryExpr = as_fmt("({lhs} {op} {rhs})")
     TernaryExpr = as_fmt("({cond}?{true_expr}:{false_expr})")
     CastExpr = as_fmt("static_cast<{new_dtype}>({obj_expr})")
 
