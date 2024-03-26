@@ -88,6 +88,8 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
 
     processor = processor_id.load()
     assert is_backend == ppi.is_program_backend(processor)
+    if is_backend:
+        processor = processor.executor
 
     for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []

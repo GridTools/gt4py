@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
+
 import pytest
 
 import gt4py.next.allocators as next_allocators
@@ -95,8 +97,13 @@ def test_is_program_backend():
 
     assert not is_program_backend(DummyAllocatorFactory())
 
-    class DummyBackend(DummyProgramExecutor, DummyAllocatorFactory):
-        def __call__(self, program: itir.FencilDefinition, *args, **kwargs) -> None:
-            return None
+    @dataclasses.dataclass
+    class DummyBackend:
+        executor: DummyProgramExecutor = dataclasses.field(default_factory=DummyProgramExecutor)
+        allocator: DummyAllocatorFactory = dataclasses.field(default_factory=DummyAllocatorFactory)
+
+        @property
+        def __gt_allocator__(self):
+            return self.allocator.__gt_allocator__
 
     assert is_program_backend(DummyBackend())

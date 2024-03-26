@@ -91,7 +91,11 @@ class FendefDispatcher:
 
         if backend is not None:
             ensure_processor_kind(backend, ProgramExecutor)
-            backend(self.itir(*args, **kwargs), *args, **kwargs)
+            backend(
+                self.itir(*args, **kwargs),
+                *args,
+                **kwargs,
+            )
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered.")

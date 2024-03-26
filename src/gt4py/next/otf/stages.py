@@ -56,7 +56,7 @@ class ProgramSource(Generic[SrcL, SettingT]):
     language: type[SrcL]
     language_settings: SettingT
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not isinstance(self.language_settings, self.language.settings_class):
             raise TypeError(
                 f"Wrong language settings type for '{self.language}', must be subclass of '{self.language.settings_class}'."
@@ -113,7 +113,7 @@ class BuildSystemProject(Protocol[SrcL_co, SettingT_co, TgtL_co]):
 class CompiledProgram(Protocol):
     """Executable python representation of a program."""
 
-    def __call__(self, *args, **kwargs) -> None: ...
+    def __call__(self, *args: Any, **kwargs: Any) -> None: ...
 
 
 def _unique_libs(*args: interface.LibraryDependency) -> tuple[interface.LibraryDependency, ...]:

@@ -14,12 +14,8 @@ tasks:
     pip install -i https://test.pypi.org/simple/ atlas4py
     pre-commit install --install-hooks
     sed 's%# start templated%# start templated\nsource /workspace/gt4py/.venv/bin/activate%' /workspace/gt4py/.git/hooks/pre-commit -i
-    pip install jupyterlab
     deactivate
-  command: |
-    source .venv/bin/activate
-    wget https://raw.githubusercontent.com/mwouts/jupytext/main/binder/labconfig/default_setting_overrides.json -P  ~/.jupyter/labconfig/
-    jupyter lab --notebook-dir=/workspace/gt4py/docs/user/next --LabApp.token='' --ServerApp.allow_remote_access=True --NotebookApp.allow_origin=* --LabApp.default_url='lab/tree/slides/slides_1.md'
+  command: source .venv/bin/activate
   env:
     PIP_SRC: _external_src
     PRE_COMMIT_HOME: /workspace/.caches/pre-commit
@@ -30,9 +26,7 @@ vscode:
   - ms-toolsai.jupyter-keymap
   - ms-toolsai.jupyter-renderers
   - genuitecllc.codetogether
-ports:
-- port: 8888
-  onOpen: open-browser
+
 github:
   prebuilds:
     # enable for the master/default branch (defaults to true)

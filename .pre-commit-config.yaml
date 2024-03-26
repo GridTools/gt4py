@@ -1,5 +1,7 @@
+# -----------------------------------------------------------------------
 # This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
 # to keep version numbers in sync with 'constraints.txt'
+# -----------------------------------------------------------------------
 
 default_language_version:
   python: python3.10
@@ -42,7 +44,13 @@ repos:
   - id: debug-statements
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
+  ##[[[cog
+  ## import re
+  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"rev: v{version}")
+  ##]]]
   rev: v0.2.0
+  ##[[[end]]]
   hooks:
     # Run the linter.
     # TODO: include tests here
@@ -112,15 +120,5 @@ repos:
       build/.* |
       ci/.* |
       docs/.* |
-      tests/conftest.py |
-      tests/cartesian_tests/.* |
-      tests/next_tests/unit_tests/.* |
-      tests/next_tests/integration_tests/multi_feature_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/ffront_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/iterator_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/otf_tests/.* |
-      tests/next_tests/integration_tests/feature_tests/math_builtin_test_data.py |
-      tests/next_tests/past_common_fixtures.py |
-      tests/next_tests/toy_connectivity.py |
       tests/.*
       )$

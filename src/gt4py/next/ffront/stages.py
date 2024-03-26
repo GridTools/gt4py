@@ -15,29 +15,30 @@
 from __future__ import annotations
 
 import dataclasses
+import types
+from typing import Any, Optional
 
-import gt4py.next.type_system.type_specifications as ts
-from gt4py.eve import codegen
-from gt4py.next.otf import languages
-
-
-def format_source(settings: languages.LanguageSettings, source: str) -> str:
-    return codegen.format_source(settings.formatter_key, source, style=settings.formatter_style)
+from gt4py.next import common
+from gt4py.next.ffront import program_ast as past
 
 
 @dataclasses.dataclass(frozen=True)
-class Parameter:
-    name: str
-    type_: ts.TypeSpec
+class ProgramDefinition:
+    definition: types.FunctionType
+    grid_type: Optional[common.GridType] = None
 
 
 @dataclasses.dataclass(frozen=True)
-class Function:
-    name: str
-    parameters: tuple[Parameter, ...]
+class PastProgramDefinition:
+    past_node: past.Program
+    closure_vars: dict[str, Any]
+    grid_type: Optional[common.GridType] = None
 
 
 @dataclasses.dataclass(frozen=True)
-class LibraryDependency:
-    name: str
-    version: str
+class PastClosure:
+    closure_vars: dict[str, Any]
+    past_node: past.Program
+    grid_type: Optional[common.GridType]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
