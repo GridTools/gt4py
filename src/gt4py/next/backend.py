@@ -20,12 +20,30 @@ from typing import Any, Generic
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
 from gt4py.next.ffront import func_to_past, past_process_args, past_to_itir, stages as ffront_stages
-from gt4py.next.otf import recipes
+from gt4py.next.ffront.past_passes import linters as past_linters
+from gt4py.next.otf import recipes, workflow
 from gt4py.next.program_processors import processor_interface as ppi
+
+
+@dataclasses.dataclass(frozen=True)
+class ArgsInjector(workflow.Workflow):
+    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
+    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+
+    def __call__(self, inp: ffront_stages.PastProgramDefinition) -> ffront_stages.PastClosure:
+        return ffront_stages.PastClosure(
+            past_node=inp.past_node,
+            closure_vars=inp.closure_vars,
+            grid_type=inp.grid_type,
+            args=self.args,
+            kwargs=self.kwargs,
+        )
 
 
 DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
     func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
+    past_lint=past_linters.LinterFactory(),
+    past_inject_args=ArgsInjector(),
     past_transform_args=past_process_args.past_process_args,
     past_to_itir=past_to_itir.PastToItirFactory(),
 )
@@ -40,7 +58,9 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     def __call__(
         self, program: ffront_stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> None:
-        transformer = self.transformer.replace(args=args, kwargs=kwargs)
+        transformer = self.transformer.replace(
+            past_inject_args=ArgsInjector(args=args, kwargs=kwargs)
+        )
         program_call = transformer(program)
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 

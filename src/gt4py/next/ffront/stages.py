@@ -18,6 +18,7 @@ import dataclasses
 import types
 from typing import Any, Optional
 
+from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.ffront import program_ast as past
 
@@ -42,3 +43,7 @@ class PastClosure:
     grid_type: Optional[common.GridType]
     args: tuple[Any, ...]
     kwargs: dict[str, Any]
+
+
+def hash_past_program_definition(past_definition: PastProgramDefinition) -> str:
+    return eve_utils.content_hash(past_definition.past_node, past_definition.grid_type)
