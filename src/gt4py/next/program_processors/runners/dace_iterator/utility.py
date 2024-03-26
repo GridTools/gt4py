@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 
@@ -60,15 +60,20 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
-def filter_neighbor_tables(
-    node: itir.Node, offset_provider: dict[str, Any]
-) -> dict[str, NeighborTable]:
-    offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
+def filter_neighbor_tables(offset_provider: Mapping[str, Any]) -> dict[str, NeighborTable]:
     return {
         offset: table
         for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTable) and offset in offset_dims
+        if isinstance(table, NeighborTable)
     }
+
+
+def get_used_neighbor_tables(
+    node: itir.Node, offset_provider: Mapping[str, Any]
+) -> dict[str, NeighborTable]:
+    neighbor_tables = filter_neighbor_tables(offset_provider)
+    offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
+    return {offset: neighbor_tables[offset] for offset in offset_dims if offset in neighbor_tables}
 
 
 def connectivity_identifier(name: str) -> str:

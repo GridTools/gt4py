@@ -35,8 +35,8 @@ from .utility import (
     as_dace_type,
     connectivity_identifier,
     dace_debuginfo,
-    filter_neighbor_tables,
     flatten_list,
+    get_used_neighbor_tables,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -234,7 +234,7 @@ def _visit_lift_in_neighbors_reduction(
             assert isinstance(y, ValueExpr)
             input_nodes[x] = y.value
 
-    neighbor_tables = filter_neighbor_tables(node.args[0], transformer.offset_provider)
+    neighbor_tables = get_used_neighbor_tables(node.args[0], transformer.offset_provider)
     connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
     parent_sdfg = transformer.context.body
@@ -946,7 +946,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = (
-            filter_neighbor_tables(node, self.offset_provider) if use_neighbor_tables else {}
+            get_used_neighbor_tables(node, self.offset_provider) if use_neighbor_tables else {}
         )
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -1101,7 +1101,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                         store, self.context.body.arrays[store]
                     )
 
-        neighbor_tables = filter_neighbor_tables(node.fun, self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node.fun, self.offset_provider)
         for offset in neighbor_tables.keys():
             var = connectivity_identifier(offset)
             nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])

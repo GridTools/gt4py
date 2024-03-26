@@ -47,6 +47,7 @@ from .utility import (
     filter_neighbor_tables,
     flatten_list,
     get_sorted_dims,
+    get_used_neighbor_tables,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -125,7 +126,7 @@ def _make_array_shape_and_strides(
     """
     dtype = dace.int32
     sorted_dims = get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
-    neighbor_tables = {n: v for n, v in offset_provider.items() if isinstance(v, NeighborTable)}
+    neighbor_tables = filter_neighbor_tables(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
@@ -316,7 +317,7 @@ class ItirToSDFG(eve.NodeVisitor):
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
-        neighbor_tables = filter_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
@@ -416,7 +417,7 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
-        neighbor_tables = filter_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
@@ -608,7 +609,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         assert isinstance(node.output, SymRef)
-        neighbor_tables = filter_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -771,7 +772,7 @@ class ItirToSDFG(eve.NodeVisitor):
             tuple[str, tuple[ValueExpr | SymbolExpr, ValueExpr | SymbolExpr]], ...
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
-        neighbor_tables = filter_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
