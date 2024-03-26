@@ -61,7 +61,7 @@ num_cells = 5
 num_layers = 6
 grid_shape = (num_cells, num_layers)
 
-a_value = 2.0
+
 b_value = 3.0
 a = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=a_value, dtype=np.float64))
 b = gtx.as_field([CellDim, KDim], np.full(shape=grid_shape, fill_value=b_value, dtype=np.float64))
