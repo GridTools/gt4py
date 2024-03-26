@@ -94,6 +94,27 @@ Homepage = 'https://gridtools.github.io/'
 Source = 'https://github.com/GridTools/gt4py'
 
 # ---- Other tools ----
+# -- bump-my-version --
+[tool.bumpversion]
+allow_dirty = false
+commit = false
+commit_args = ''
+current_version = '1.0.3'
+ignore_missing_version = false
+message = 'Bump version: {current_version} → {new_version}'
+parse = '(?P<major>\d+)\.(?P<minor>\d+)(\.(?P<patch>\d+))?'
+regex = false
+replace = '{new_version}'
+search = '{current_version}'
+serialize = ['{major}.{minor}.{patch}']
+sign_tags = false
+tag = false
+tag_message = 'Bump version: {current_version} → {new_version}'
+tag_name = 'v{new_version}'
+
+[[tool.bumpversion.files]]
+filename = "src/gt4py/__about__.py"
+
 # -- coverage --
 [tool.coverage]
 
