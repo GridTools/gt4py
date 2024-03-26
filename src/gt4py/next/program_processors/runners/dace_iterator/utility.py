@@ -37,7 +37,7 @@ def dace_debuginfo(
     return debuginfo
 
 
-def as_dace_type(type_: ts.ScalarType):
+def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     if type_.kind == ts.ScalarKind.BOOL:
         return dace.bool_
     elif type_.kind == ts.ScalarKind.INT32:
@@ -59,7 +59,7 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
-def filter_neighbor_tables(offset_provider: dict[str, Any]):
+def filter_neighbor_tables(offset_provider: dict[str, Any]) -> dict[str, NeighborTable]:
     return {
         offset: table
         for offset, table in offset_provider.items()
@@ -67,7 +67,7 @@ def filter_neighbor_tables(offset_provider: dict[str, Any]):
     }
 
 
-def connectivity_identifier(name: str):
+def connectivity_identifier(name: str) -> str:
     return f"__connectivity_{name}"
 
 
