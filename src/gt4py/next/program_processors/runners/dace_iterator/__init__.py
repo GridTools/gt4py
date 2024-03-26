@@ -27,7 +27,7 @@ from gt4py.next.iterator import transforms as itir_transforms
 from gt4py.next.type_system import type_translation
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, get_sorted_dims
+from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
 
 
 try:
@@ -118,13 +118,12 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    offset_provider: dict[str, Any],
+    neighbor_tables: Mapping[str, common.NeighborTable],
     device: dace.dtypes.DeviceType,
 ) -> dict[str, Any]:
     return {
-        connectivity_identifier(offset): _ensure_is_on_device(table.table, device)
-        for offset, table in offset_provider.items()
-        if isinstance(table, common.NeighborTable)
+        connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
+        for offset, offset_provider in neighbor_tables.items()
     }
 
 
@@ -182,11 +181,12 @@ def get_sdfg_args(
     """
     offset_provider = kwargs["offset_provider"]
 
+    neighbor_tables = filter_neighbor_tables(offset_provider)
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
-    dace_conn_args = get_connectivity_args(offset_provider, device)
+    dace_conn_args = get_connectivity_args(neighbor_tables, device)
     # keep only connectivity tables that are used in the sdfg
     dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
