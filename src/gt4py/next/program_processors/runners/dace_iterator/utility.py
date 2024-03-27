@@ -19,7 +19,7 @@ import dace
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
 from gt4py.next import Dimension
-from gt4py.next.common import NeighborTable
+from gt4py.next.common import Connectivity, NeighborTable
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -68,12 +68,20 @@ def filter_neighbor_tables(offset_provider: Mapping[str, Any]) -> dict[str, Neig
     }
 
 
-def get_used_neighbor_tables(
+def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
+    return {
+        offset: table
+        for offset, table in offset_provider.items()
+        if isinstance(table, Connectivity)
+    }
+
+
+def get_used_connectivities(
     node: itir.Node, offset_provider: Mapping[str, Any]
-) -> dict[str, NeighborTable]:
-    neighbor_tables = filter_neighbor_tables(offset_provider)
+) -> dict[str, Connectivity]:
+    connectivities = filter_connectivities(offset_provider)
     offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
-    return {offset: neighbor_tables[offset] for offset in offset_dims if offset in neighbor_tables}
+    return {offset: connectivities[offset] for offset in offset_dims if offset in connectivities}
 
 
 def connectivity_identifier(name: str) -> str:

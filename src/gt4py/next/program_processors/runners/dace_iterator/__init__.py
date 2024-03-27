@@ -24,7 +24,7 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
@@ -67,6 +67,7 @@ def preprocess_program(
     program: itir.FencilDefinition,
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
     unroll_reduce: bool = False,
 ):
     node = itir_transforms.apply_common_transforms(
@@ -74,6 +75,7 @@ def preprocess_program(
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
         lift_mode=lift_mode,
+        symbolic_domain_sizes=symbolic_domain_sizes,
         offset_provider=offset_provider,
         unroll_reduce=unroll_reduce,
     )
@@ -212,12 +214,13 @@ def get_sdfg_args(
 
 def build_sdfg_from_itir(
     program: itir.FencilDefinition,
-    *args,
+    arg_types: list[ts.TypeSpec],
     offset_provider: dict[str, Any],
     auto_optimize: bool = False,
     on_gpu: bool = False,
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
+    symbolic_domain_sizes: Optional[dict[str, str]] = None,
     load_sdfg_from_file: bool = False,
     save_sdfg: bool = True,
     use_field_canonical_representation: bool = True,
@@ -226,12 +229,13 @@ def build_sdfg_from_itir(
 
     Args:
         program:             The Fencil that should be translated.
-        *args:               Arguments for which the fencil should be called.
+        arg_types:           Types of the arguments that should be passed to the fencil.
         offset_provider:     The set of offset providers that should be used.
         auto_optimize:       Apply DaCe's `auto_optimize` heuristic.
         on_gpu:              Performs the translation for GPU, defaults to `False`.
         column_axis:         The column axis to be used, defaults to `None`.
         lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
+        symbolic_domain_sizes Used for generation of liskov bindings when temporaries are enabled.
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
         use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
@@ -246,10 +250,8 @@ def build_sdfg_from_itir(
         sdfg.validate()
         return sdfg
 
-    arg_types = [type_translation.from_value(arg) for arg in args]
-
     # visit ITIR and generate SDFG
-    program, tmps = preprocess_program(program, offset_provider, lift_mode)
+    program, tmps = preprocess_program(program, offset_provider, lift_mode, symbolic_domain_sizes)
     sdfg_genenerator = ItirToSDFG(
         arg_types, offset_provider, tmps, use_field_canonical_representation, column_axis
     )
