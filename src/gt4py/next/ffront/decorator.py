@@ -215,6 +215,10 @@ class Program:
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+        params = self.past_stage.past_node.params
+        for param in params:
+            for j in range(len(param.type.dims)):
+                offset_provider = offset_provider | {f"{param.type.dims[j].value}off": param.type.dims[j]}
         if self.backend is None:
             warnings.warn(
                 UserWarning(
