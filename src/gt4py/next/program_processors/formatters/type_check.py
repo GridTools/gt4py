@@ -12,13 +12,15 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Any
+
 from gt4py.next.iterator import ir as itir, type_inference
 from gt4py.next.iterator.transforms import apply_common_transforms, global_tmps
 from gt4py.next.program_processors.processor_interface import program_formatter
 
 
 @program_formatter
-def check_type_inference(program: itir.FencilDefinition, *args, **kwargs) -> str:
+def check_type_inference(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
     type_inference.pprint(type_inference.infer(program, offset_provider=kwargs["offset_provider"]))
     transformed = apply_common_transforms(
         program, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]

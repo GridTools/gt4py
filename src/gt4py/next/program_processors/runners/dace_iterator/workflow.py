@@ -24,14 +24,13 @@ from dace.codegen.compiled_sdfg import CompiledSDFG
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
-from gt4py.next.type_system import type_translation as tt
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from . import build_sdfg_from_itir, get_sdfg_args
 
@@ -47,6 +46,7 @@ class DaCeTranslator(
     auto_optimize: bool = False
     lift_mode: LiftMode = LiftMode.FORCE_INLINE
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    symbolic_domain_sizes: Optional[dict[str, str]] = None
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None
@@ -59,20 +59,15 @@ class DaCeTranslator(
             file_extension="sdfg",
         )
 
-    def __call__(
+    def generate_sdfg(
         self,
-        inp: stages.ProgramCall,
-    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
-        """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program: itir.FencilDefinition,
+        arg_types: list[ts.TypeSpec],
+        offset_provider: dict[str, common.Dimension | common.Connectivity],
+        column_axis: Optional[common.Dimension] = None,
+        runtime_lift_mode: Optional[LiftMode] = None,
+    ) -> dace.SDFG:
         on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
-
-        # ITIR parameters
-        column_axis: Optional[Dimension] = inp.kwargs.get("column_axis", None)
-        offset_provider: dict[str, common.Dimension | common.Connectivity] = inp.kwargs[
-            "offset_provider"
-        ]
-        runtime_lift_mode: Optional[LiftMode] = inp.kwargs.get("lift_mode", None)
 
         # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
         #  to the interface of all (or at least all of concern) backends, but instead should be
@@ -86,27 +81,44 @@ class DaCeTranslator(
                 stacklevel=2,
             )
 
-        sdfg = build_sdfg_from_itir(
+        return build_sdfg_from_itir(
             program,
-            *inp.args,
+            arg_types,
             offset_provider=offset_provider,
             auto_optimize=self.auto_optimize,
             on_gpu=on_gpu,
             column_axis=column_axis,
             lift_mode=lift_mode,
+            symbolic_domain_sizes=self.symbolic_domain_sizes,
             load_sdfg_from_file=False,
             save_sdfg=False,
             use_field_canonical_representation=self.use_field_canonical_representation,
         )
 
-        arg_types = tuple(
+    def __call__(
+        self,
+        inp: stages.ProgramCall,
+    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+        """Generate DaCe SDFG file from the ITIR definition."""
+        program: itir.FencilDefinition = inp.program
+        arg_types = [tt.from_value(arg) for arg in inp.args]
+
+        sdfg = self.generate_sdfg(
+            program,
+            arg_types,
+            inp.kwargs["offset_provider"],
+            inp.kwargs.get("column_axis", None),
+            inp.kwargs.get("lift_mode", None),
+        )
+
+        param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
             for param, arg in zip(sdfg.arg_names, inp.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
-                entry_point=interface.Function(program.id, arg_types),
+                entry_point=interface.Function(program.id, param_types),
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,
