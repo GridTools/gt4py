@@ -620,17 +620,20 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
         right: foast.Expr,
         **kwargs: Any,
     ) -> Optional[ts.TypeSpec]:
+        # e.g. `IDim+1`
         if (
             isinstance(left.type, ts.DimensionType)
             and isinstance(right.type, ts.ScalarType)
             and type_info.is_integral(right.type)
         ):
+            # this relies on the convention that for each dimension we have an offset provider
+            # with the same name as the dimension
             return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
         if (
             isinstance(left.type, ts.OffsetType)
             and isinstance(right.type, ts.ScalarType)
             and type_info.is_integral(right.type)
-        ):
+        ): #TODO: add comment
             return ts.OffsetType(source=left.type.source, target=(left.type.source,))
 
         logical_ops = {

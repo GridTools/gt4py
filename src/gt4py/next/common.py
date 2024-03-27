@@ -88,16 +88,19 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> ConnectivityField:
+        # avoid circular import
+        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
         from gt4py.next.ffront import fbuiltins
 
         assert isinstance(self.value, str)
         return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
 
     def __sub__(self, offset: int) -> ConnectivityField:
+        # avoid circular import
+        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
         from gt4py.next.ffront import fbuiltins
 
-        assert isinstance(self.value, str)
-        return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[-offset]
+        return self+(-offset)
 
 
 class Infinity(enum.Enum):
@@ -916,16 +919,12 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         raise NotImplementedError()
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        if isinstance(other, int):
-            return CartesianConnectivity(dimension=self.codomain, offset=self.offset + other)
-        else:
-            raise TypeError("'ConnectivityField' does not support this operation.")
+        assert isinstance(other, int)
+        return dataclasses.replace(self, offset=self.offset + other)
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        if isinstance(other, int):
-            return CartesianConnectivity(dimension=self.codomain, offset=self.offset - other)
-        else:
-            raise TypeError("'ConnectivityField' does not support this operation.")
+        assert isinstance(other, int)
+        return dataclasses.replace(self, offset=self.offset - other)
 
     def asnumpy(self) -> Never:
         raise NotImplementedError()
