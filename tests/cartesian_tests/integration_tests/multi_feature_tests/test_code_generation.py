@@ -33,7 +33,7 @@ from gt4py.cartesian.gtscript import (
 )
 from gt4py.storage.cartesian import utils as storage_utils
 
-from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS
+from cartesian_tests.definitions import ALL_BACKENDS, CPU_BACKENDS, _get_array_library
 from cartesian_tests.integration_tests.multi_feature_tests.stencil_definitions import (
     EXTERNALS_REGISTRY as externals_registry,
     REGISTRY as stencil_definitions,
@@ -196,12 +196,20 @@ def test_lower_dimensional_inputs(backend):
     assert field_3d.shape == full_shape[:]
 
     field_2d = gt_storage.zeros(
-        full_shape[:-1], dtype, backend=backend, aligned_index=aligned_index[:-1], dimensions="IJ"
+        full_shape[:-1],
+        dtype,
+        backend=backend,
+        aligned_index=aligned_index[:-1],
+        dimensions="IJ",
     )
     assert field_2d.shape == full_shape[:-1]
 
     field_1d = gt_storage.ones(
-        full_shape[-1:], dtype, backend=backend, aligned_index=(aligned_index[-1],), dimensions="K"
+        full_shape[-1:],
+        dtype,
+        backend=backend,
+        aligned_index=(aligned_index[-1],),
+        dimensions="K",
     )
     assert list(field_1d.shape) == [full_shape[-1]]
 
@@ -279,7 +287,8 @@ def test_lower_dimensional_masked_2dcond(backend):
 def test_lower_dimensional_inputs_2d_to_3d_forward(backend):
     @gtscript.stencil(backend=backend)
     def copy_2to3(
-        inp: gtscript.Field[gtscript.IJ, np.float_], outp: gtscript.Field[gtscript.IJK, np.float_]
+        inp: gtscript.Field[gtscript.IJ, np.float_],
+        outp: gtscript.Field[gtscript.IJK, np.float_],
     ):
         with computation(FORWARD), interval(...):
             outp[0, 0, 0] = inp
@@ -587,6 +596,115 @@ def test_pruned_args_match(backend):
         backend=backend, aligned_index=(0, 0, 0), shape=(2, 2, 2), dtype=np.float64
     )
     test(out, inp)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write(backend):
+    # Cuda generates bad code for the K offset
+    if backend == "cuda":
+        pytest.skip("cuda K-offset write generates bad code")
+
+    arraylib = _get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
+
+    # Simple case of writing ot an offset.
+    # A is untouched
+    # B is written in K+1 and should have K_values, except for the first element (FORWARD)
+    @gtscript.stencil(backend=backend)
+    def simple(A: Field[np.float64], B: Field[np.float64]):
+        with computation(FORWARD), interval(...):
+            B[0, 0, 1] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    simple(A, B)
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:3] == K_values[0:2]).all()
+
+    # Order of operations: FORWARD with negative offset
+    # means while A is update B will have non-updated values of A
+    # Because of the interval, value of B[0] is 0
+    @gtscript.stencil(backend=backend)
+    def forward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(FORWARD), interval(1, None):
+            A[0, 0, -1] = scalar
+            B[0, 0, 0] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    forward(A, B, 2.0)
+    assert (A[:, :, :3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, 0] == 0).all()
+    assert (B[:, :, 1:] == K_values[1:]).all()
+
+    # Order of operations: BACKWARD with negative offset
+    # means A is update B will get the updated values of A
+    @gtscript.stencil(backend=backend)
+    def backward(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, None):
+            A[0, 0, -1] = scalar
+            B[0, 0, 0] = A
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.empty(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    backward(A, B, 2.0)
+    assert (A[:, :, :3] == 2.0).all()
+    assert (A[:, :, 3] == K_values[3]).all()
+    assert (B[:, :, :] == A[:, :, :]).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_K_offset_write_conditional(backend):
+    # While loop have a bug in `dace:X` backends where
+    # the read-connector is used which means you can never
+    # update the field in a while.
+    # Logged in: https://github.com/GridTools/gt4py/issues/1496
+    if backend.startswith("dace") or backend == "cuda":
+        pytest.skip("DaCe backends have a bug when handling while loop.")
+
+    arraylib = _get_array_library(backend)
+    array_shape = (1, 1, 4)
+    K_values = arraylib.arange(start=40, stop=44)
+
+    @gtscript.stencil(backend=backend)
+    def column_physics_conditional(A: Field[np.float64], B: Field[np.float64], scalar: np.float64):
+        with computation(BACKWARD), interval(1, None):
+            if A > 0 and B > 0:
+                A[0, 0, -1] = scalar
+                B[0, 0, 1] = A
+            lev = 1
+            while A >= 0 and B >= 0:
+                A[0, 0, lev] = -1
+                B = -1
+                lev = lev + 1
+
+    A = gt_storage.zeros(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    A[:, :, :] = K_values
+    B = gt_storage.ones(
+        backend=backend, aligned_index=(0, 0, 0), shape=array_shape, dtype=np.float64
+    )
+    column_physics_conditional(A, B, 2.0)
+    assert (A[0, 0, :] == arraylib.array([2, 2, -1, -1])).all()
+    assert (B[0, 0, :] == arraylib.array([1, -1, 2, 42])).all()
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)

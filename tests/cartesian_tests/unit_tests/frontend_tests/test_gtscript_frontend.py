@@ -25,6 +25,7 @@ from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend, nodes
 from gt4py.cartesian.gtscript import (
     __INLINED,
+    FORWARD,
     IJ,
     IJK,
     PARALLEL,
@@ -118,7 +119,9 @@ class TestInlinedExternals:
 
         with pytest.raises(gt_frontend.GTScriptSymbolError, match=r".*MISSING_CONSTANT.*"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
         def definition_func(inout_field: gtscript.Field[float]):
@@ -126,10 +129,13 @@ class TestInlinedExternals:
                 inout_field = inout_field[0, 0, 0] + GLOBAL_NESTED_CONSTANTS.missing
 
         with pytest.raises(
-            gt_frontend.GTScriptDefinitionError, match=r".*GLOBAL_NESTED_CONSTANTS.missing.*"
+            gt_frontend.GTScriptDefinitionError,
+            match=r".*GLOBAL_NESTED_CONSTANTS.missing.*",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_recursive_function_imports(self):
@@ -210,7 +216,9 @@ class TestInlinedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*WRONG_VALUE_CONSTANT.*"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
 
@@ -225,7 +233,9 @@ class TestFunction:
 
         with pytest.raises(TypeError, match=r"func is not a gtscript function"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_use_in_expr(self):
@@ -300,7 +310,9 @@ class TestFunction:
             "Please assign the function results to symbols first.",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_use_in_call_arg_multiple_return(self):
@@ -326,7 +338,9 @@ class TestFunction:
             "Please assign the function results to symbols first.",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_recursive_function_call_two_externals(self):
@@ -422,7 +436,9 @@ class TestAxisSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_bad_dup_add(self):
@@ -432,7 +448,9 @@ class TestAxisSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_bad_dup_axis(self):
@@ -442,7 +460,9 @@ class TestAxisSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_bad_out_of_order(self):
@@ -452,7 +472,9 @@ class TestAxisSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
 
@@ -505,7 +527,9 @@ class TestImportedExternals:
 
         with pytest.raises(gt_frontend.GTScriptDefinitionError, match=r".*MISSING_CONSTANT.*"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
         def definition_func(inout_field: gtscript.Field[float]):
@@ -623,10 +647,13 @@ class TestIntervalSyntax:
                 field = 0
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_error_do_not_mix(self):
@@ -636,7 +663,9 @@ class TestIntervalSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Two-argument syntax"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_reversed_interval(self):
@@ -645,10 +674,13 @@ class TestIntervalSyntax:
                 field = 0
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="Invalid interval range specification"
+            gt_frontend.GTScriptSyntaxError,
+            match="Invalid interval range specification",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_overlapping_intervals_none(self):
@@ -661,7 +693,9 @@ class TestIntervalSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_overlapping_intervals(self):
@@ -674,7 +708,9 @@ class TestIntervalSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError, match="Overlapping intervals"):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_nonoverlapping_intervals(self):
@@ -816,7 +852,10 @@ class TestExternalsWithSubroutines:
 
         @gtscript.function
         def _stage_laplacian(dx, dy, phi):
-            from gt4py.cartesian.__externals__ import stage_laplacian_x, stage_laplacian_y
+            from gt4py.cartesian.__externals__ import (
+                stage_laplacian_x,
+                stage_laplacian_y,
+            )
 
             lap_x = stage_laplacian_x(dx=dx, phi=phi)
             lap_y = stage_laplacian_y(dy=dy, phi=phi)
@@ -886,10 +925,13 @@ class TestFunctionReturn:
                 phi = test_no_return(phi)
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+            gt_frontend.GTScriptSyntaxError,
+            match="should have a single return statement",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_number_return_args(self):
@@ -906,7 +948,9 @@ class TestFunctionReturn:
             match="Number of returns values does not match arguments on left side",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_multiple_return(self):
@@ -920,10 +964,13 @@ class TestFunctionReturn:
                 phi = test_multiple_return(phi)
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError, match="should have a single return statement"
+            gt_frontend.GTScriptSyntaxError,
+            match="should have a single return statement",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_conditional_return(self):
@@ -1230,7 +1277,9 @@ class TestImports:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
 
@@ -1282,7 +1331,8 @@ class TestDTypes:
         )
 
     @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
+        "id_case,test_dtype",
+        list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
     )
     def test_invalid_inlined_dtypes(self, id_case, test_dtype):
         with pytest.raises(ValueError, match=r".*data type descriptor.*"):
@@ -1296,11 +1346,14 @@ class TestDTypes:
                     out_field = in_field + param
 
     @pytest.mark.parametrize(
-        "id_case,test_dtype", list(enumerate([str, np.uint32, np.uint64, dict, map, bytes]))
+        "id_case,test_dtype",
+        list(enumerate([str, np.uint32, np.uint64, dict, map, bytes])),
     )
     def test_invalid_external_dtypes(self, id_case, test_dtype):
         def definition_func(
-            in_field: gtscript.Field["dtype"], out_field: gtscript.Field["dtype"], param: "dtype"
+            in_field: gtscript.Field["dtype"],
+            out_field: gtscript.Field["dtype"],
+            param: "dtype",
         ):
             with computation(PARALLEL), interval(...):
                 out_field = in_field + param
@@ -1357,7 +1410,10 @@ class TestAssignmentSyntax:
 
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            def func(
+                in_field: gtscript.Field[np.float_],
+                out_field: gtscript.Field[np.float_],
+            ):
                 with computation(PARALLEL), interval(...):
                     out_field[0, 0, 1] = in_field
 
@@ -1378,7 +1434,7 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Assignment to non-zero offsets is not supported.",
+            match="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
         ):
             parse_definition(
                 func,
@@ -1417,16 +1473,21 @@ class TestAssignmentSyntax:
 
         with pytest.raises(
             gt_frontend.GTScriptSyntaxError,
-            match="Assignment to non-zero offsets is not supported.",
+            match="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
         ):
             parse_definition(
-                definition_func, name=inspect.stack()[0][3], module=self.__class__.__name__
+                definition_func,
+                name=inspect.stack()[0][3],
+                module=self.__class__.__name__,
             )
 
     def test_slice(self):
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            def func(
+                in_field: gtscript.Field[np.float_],
+                out_field: gtscript.Field[np.float_],
+            ):
                 with computation(PARALLEL), interval(...):
                     out_field[:, :, :] = in_field
 
@@ -1435,7 +1496,10 @@ class TestAssignmentSyntax:
     def test_string(self):
         with pytest.raises(gt_frontend.GTScriptSyntaxError):
 
-            def func(in_field: gtscript.Field[np.float_], out_field: gtscript.Field[np.float_]):
+            def func(
+                in_field: gtscript.Field[np.float_],
+                out_field: gtscript.Field[np.float_],
+            ):
                 with computation(PARALLEL), interval(...):
                     out_field["a_key"] = in_field
 
@@ -1450,6 +1514,24 @@ class TestAssignmentSyntax:
                 in_field *= 4.0
 
         parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_K_offset_write(self):
+        def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
+            with computation(FORWARD), interval(...):
+                out[0, 0, 1] = inp
+
+        parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+        with pytest.raises(
+            gt_frontend.GTScriptSyntaxError,
+            match=r"(.*?)Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.(.*)",
+        ):
+
+            def func(out: gtscript.Field[np.float64], inp: gtscript.Field[np.float64]):
+                with computation(PARALLEL), interval(...):
+                    out[0, 0, 1] = inp
+
+            parse_definition(func, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_datadims_direct_access(self):
         # Check classic data dimensions are working
@@ -1513,7 +1595,9 @@ class TestAssignmentSyntax:
                 out_field = global_field.A[1, 0, 2]
 
         parse_definition(
-            data_dims_with_at, name=inspect.stack()[0][3], module=self.__class__.__name__
+            data_dims_with_at,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
         )
 
 
@@ -1555,7 +1639,9 @@ class TestNestedWithSyntax:
                 match=r"(.*?)Intervals must be specified in order of execution(.*)",
             ):
                 parse_definition(
-                    definition, name=inspect.stack()[0][3], module=self.__class__.__name__
+                    definition,
+                    name=inspect.stack()[0][3],
+                    module=self.__class__.__name__,
                 )
 
 
@@ -1667,7 +1753,11 @@ class TestAnnotations:
     @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
     def test_set_arg_dtypes(self, dtype_in, dtype_out, dtype_scalar):
         definition = self.sumdiff_defs
-        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+        dtypes = {
+            "dtype_in": dtype_in,
+            "dtype_out": dtype_out,
+            "dtype_scalar": dtype_scalar,
+        }
 
         original_annotations = gtscript._set_arg_dtypes(definition, dtypes)
 
@@ -1715,10 +1805,17 @@ class TestAnnotations:
     @pytest.mark.parametrize("dtype_scalar", [int, np.float32, np.float64])
     def test_parsing(self, dtype_in, dtype_out, dtype_scalar):
         definition = self.sumdiff_defs
-        dtypes = {"dtype_in": dtype_in, "dtype_out": dtype_out, "dtype_scalar": dtype_scalar}
+        dtypes = {
+            "dtype_in": dtype_in,
+            "dtype_out": dtype_out,
+            "dtype_scalar": dtype_scalar,
+        }
 
         parse_definition(
-            definition, dtypes=dtypes, name=inspect.stack()[0][3], module=self.__class__.__name__
+            definition,
+            dtypes=dtypes,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
         )
 
         annotations = getattr(definition, "__annotations__", {})
