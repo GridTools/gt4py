@@ -318,17 +318,6 @@ class DevToolsPrettyPrintable(Protocol):
 
 
 # -- Added functionality --
-class NonProtocolABCMeta(_typing._ProtocolMeta):
-    """Subclass of :cls:`typing.Protocol`'s metaclass doing instance and subclass checks as ABCMeta."""
-
-    __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
-    __subclasshook__ = None  # type: ignore[assignment]
-
-
-class NonProtocolABC(metaclass=NonProtocolABCMeta):
-    pass
-
-
 _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
 
 
@@ -369,15 +358,23 @@ def extended_runtime_checkable(
 
     def _decorator(cls: _ProtoT) -> _ProtoT:
         cls = _typing.runtime_checkable(cls)
+
         if not (instance_check_shortcut or subclass_check_with_data_members):
             return cls
+
+        assert isinstance(cls, type)
+        assert cls.__class__ in (_typing._ProtocolMeta, _typing_extensions._ProtocolMeta)  # type: ignore[attr-defined]  # private member
+
+        class _CustomProtocolABCMeta(cls.__class__):  # type: ignore
+            __instancecheck__ = _abc.ABCMeta.__instancecheck__  # type: ignore[assignment]
+            __subclasshook__ = None  # type: ignore[assignment]
 
         if instance_check_shortcut:
             # Monkey patch the decorated protocol class using our custom
             # metaclass, which assumes that no data members have been
             # added at runtime and therefore the expensive instance members
             # checks can be replaced by (cached) tests with class members
-            cls.__class__ = NonProtocolABCMeta  # type: ignore[assignment]
+            cls.__class__ = _CustomProtocolABCMeta  # type: ignore[assignment]
 
         if subclass_check_with_data_members:
             assert "__subclasshook__" in cls.__dict__
@@ -806,7 +803,10 @@ def infer_type(
                     arg_types.append(annotations.get(p.name, None) or Any)
                 elif p.kind == _inspect.Parameter.KEYWORD_ONLY:
                     kwonly_arg_types[p.name] = annotations.get(p.name, None) or Any
-                elif p.kind in (_inspect.Parameter.VAR_POSITIONAL, _inspect.Parameter.VAR_KEYWORD):
+                elif p.kind in (
+                    _inspect.Parameter.VAR_POSITIONAL,
+                    _inspect.Parameter.VAR_KEYWORD,
+                ):
                     raise TypeError("Variadic callables are not supported")
 
             result: Any = Callable[arg_types, return_type]
