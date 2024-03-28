@@ -924,7 +924,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
         assert isinstance(other, int)
-        return dataclasses.replace(self, offset=self.offset - other)
+        return self+(-other)
 
     def asnumpy(self) -> Never:
         raise NotImplementedError()
