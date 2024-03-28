@@ -248,24 +248,19 @@ class Program(SDFGConvertible):
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
         offset_provider = {str(k):v for k,v in kwargs.pop('offset_provider').items()}
         self.sdfgConvertible_dict["offset_provider"] = offset_provider
-
-        on_gpu = False
-        translation = dace_workflow.DaCeTranslator(
-                auto_optimize=True,
-                device_type=dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU,
-            )
         
-        param_names = [str(p.id) for p in self.itir.program.params]
-        fields = {str(p.id):p.type for p in self.past_stage.past_node.params}
+        params = {str(p.id) : p.dtype for p in self.itir.program.params}
+        fields = {str(p.id) : p.type  for p in self.past_stage.past_node.params}
         arg_types = [
             fields[pname]
             if pname in fields
-            else ts.ScalarType(kind=tt.get_scalar_kind(p.dtype))
-            if p.dtype is not None
+            else ts.ScalarType(kind=tt.get_scalar_kind(dtype))
+            if dtype is not None
             else ts.ScalarType(kind=ts.ScalarKind.INT32)
-            for p, pname in zip(self.itir.program.params, param_names, strict=False)
+            for pname, dtype in params.items()
         ]
 
+        translation = dace_workflow.DaCeTranslator(auto_optimize=False)
         sdfg = translation.generate_sdfg(
             self.itir.program,
             arg_types,
