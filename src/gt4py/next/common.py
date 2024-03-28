@@ -96,11 +96,7 @@ class Dimension:
         return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
 
     def __sub__(self, offset: int) -> ConnectivityField:
-        # avoid circular import
-        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
-        from gt4py.next.ffront import fbuiltins
-
-        return self+(-offset)
+        return self + (-offset)
 
 
 class Infinity(enum.Enum):
@@ -924,7 +920,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
         assert isinstance(other, int)
-        return self+(-other)
+        return self + (-other)
 
     def asnumpy(self) -> Never:
         raise NotImplementedError()

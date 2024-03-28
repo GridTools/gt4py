@@ -218,7 +218,9 @@ class Program:
         params = self.past_stage.past_node.params
         for param in params:
             for j in range(len(param.type.dims)):
-                offset_provider = offset_provider | {f"{param.type.dims[j].value}off": param.type.dims[j]}
+                offset_provider = offset_provider | {
+                    f"{param.type.dims[j].value}off": param.type.dims[j]
+                }
         if self.backend is None:
             warnings.warn(
                 UserWarning(
