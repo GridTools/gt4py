@@ -26,8 +26,6 @@ from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.type_system import type_info, type_specifications as ts
 
-import dace
-
 
 def get_scalar_kind(dtype: npt.DTypeLike) -> ts.ScalarKind:
     # make int & float precision platform independent.
@@ -211,10 +209,6 @@ def from_value(value: Any) -> ts.TypeSpec:
         elems = [from_value(el) for el in value]
         assert all(isinstance(elem, ts.DataType) for elem in elems)
         return ts.TupleType(types=elems)  # type: ignore[arg-type] # checked in assert
-    elif isinstance(value, ts.TypeSpec):
-        return value
-    elif isinstance(value, dace.symbolic.symbol):
-        return ts.ScalarType(kind=ts.ScalarKind.INT32)
     else:
         type_ = xtyping.infer_type(value, annotate_callable_kwargs=True)
         symbol_type = from_type_hint(type_)

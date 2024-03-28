@@ -69,9 +69,8 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 
 import dace
 from dace.frontend.python.common import SDFGConvertible
-from gt4py.next.program_processors.runners.dace_iterator import (
-    workflow as dace_workflow,
-)
+from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 DEFAULT_BACKEND: Callable = None
@@ -255,14 +254,22 @@ class Program(SDFGConvertible):
                 auto_optimize=True,
                 device_type=dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU,
             )
-
-        arg_types = [arg.type for arg in self.past_stage.past_node.params]
+        
+        param_names = [str(p.id) for p in self.itir.program.params]
+        fields = {str(p.id):p.type for p in self.past_stage.past_node.params}
+        arg_types = [
+            fields[pname]
+            if pname in fields
+            else ts.ScalarType(kind=tt.get_scalar_kind(p.dtype))
+            if p.dtype is not None
+            else ts.ScalarType(kind=ts.ScalarKind.INT32)
+            for p, pname in zip(self.itir.program.params, param_names, strict=False)
+        ]
 
         sdfg = translation.generate_sdfg(
             self.itir.program,
             arg_types,
-            offset_provider=offset_provider,
-            **kwargs)
+            offset_provider=offset_provider)
 
         for k in offset_provider:
             sdfg.arg_names.append(f"__connectivity_{k}")
