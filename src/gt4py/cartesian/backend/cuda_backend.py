@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import warnings
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
@@ -21,6 +22,7 @@ from gt4py.cartesian.backend.gtc_common import (
     bindings_main_template,
     pybuffer_to_sid,
 )
+from gt4py.cartesian.config import GT4PY_GTC_CUDA_USE
 from gt4py.cartesian.gtc import gtir
 from gt4py.cartesian.gtc.common import DataType
 from gt4py.cartesian.gtc.cuir import cuir, cuir_codegen, extent_analysis, kernel_fusion
@@ -136,17 +138,34 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
     name = "cuda"
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    options = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = gt_storage.layout.CUDALayout
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
     MODULE_GENERATOR_CLASS = CUDAPyExtModuleGenerator
     GT_BACKEND_T = "gpu"
+    deprecated = not GT4PY_GTC_CUDA_USE
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)
 
     def generate(self) -> Type["StencilObject"]:
+        # We push for hard deprecation here by raising by default and warning if use has been forced.
+        if not self.deprecated:
+            warnings.warn(
+                "The 'cuda' backend is deprecated, features developed after February 2024 will not be available",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        else:
+            raise NotImplementedError(
+                "The 'cuda' backend is no longer maintained (February 2024)."
+                "You can still force the use of the backend by defining GT4PY_GTC_CUDA_USE=1."
+            )
+
         self.check_options(self.builder.options)
 
         pyext_module_name: Optional[str]

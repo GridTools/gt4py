@@ -44,7 +44,7 @@ def _get_backends_with_storage_info(storage_info_kind: str):
     for name in _ALL_BACKEND_NAMES:
         backend = gt4pyc.backend.from_name(name)
         if backend is not None:
-            if backend.storage_info["device"] == storage_info_kind:
+            if backend.storage_info["device"] == storage_info_kind and not backend.deprecated:
                 res.append(_backend_name_as_param(name))
     return res
 
