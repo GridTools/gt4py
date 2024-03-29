@@ -229,6 +229,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
     GT_BACKEND_OPTS: Dict[str, Dict[str, Any]] = {
         "add_profile_info": {"versioning": True, "type": bool},
         "clean": {"versioning": False, "type": bool},
+        "debug_mode": {"versioning": True, "type": bool},
         "opt_level": {"versioning": True, "type": str},
         "extra_opt_flags": {"versioning": True, "type": str},
         "verbose": {"versioning": False, "type": bool},
