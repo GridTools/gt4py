@@ -116,10 +116,9 @@ def get_gt_pyext_build_opts(
         ]
     extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
-    if debug_mode:
-        mode_flags = ["-O0", "-ggdb"]
-    else:
-        mode_flags = [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+    mode_flags = (
+        ["-O0", "-ggdb"] if debug_mode else [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+    )
 
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
