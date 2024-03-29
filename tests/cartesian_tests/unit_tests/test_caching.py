@@ -162,7 +162,7 @@ def test_nocaching_generate(builder, tmp_path):
     assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(tmp_path / "foo_g", "foo")
 
 
-def test_default_compiler_optimization(builder):
+def test_compiler_optimizations(builder):
     builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst")
     builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
         backend_opts={
@@ -174,7 +174,7 @@ def test_default_compiler_optimization(builder):
     builder_1.backend.generate()
     builder_2.backend.generate()
 
-    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
 
 
 def test_different_opt_levels(builder):
@@ -188,7 +188,7 @@ def test_different_opt_levels(builder):
     builder_1.backend.generate()
     builder_2.backend.generate()
 
-    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
 
 
 def test_different_extra_opt_flags(builder):
@@ -202,4 +202,18 @@ def test_different_extra_opt_flags(builder):
     builder_1.backend.generate()
     builder_2.backend.generate()
 
-    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)
+
+
+def test_debug_mode(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"debug_mode": True, "opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"debug_mode": False, "opt_level": "0"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert not stencil_fingerprints_are_equal(builder_1, builder_2)

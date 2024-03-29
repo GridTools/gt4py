@@ -312,7 +312,9 @@ class JITCachingStrategy(CachingStrategy):
             "api_annotations": f"[{', '.join(self._extract_api_annotations())}]",
             **self._externals,
         }
-        if self.builder.backend.name != "numpy":
+        debug_mode = self.builder.options.backend_opts.get("debug_mode", False)
+        fingerprint["debug_mode"] = debug_mode
+        if not debug_mode and self.builder.backend.name != "numpy":
             fingerprint["opt_level"] = self.builder.options.backend_opts.get(
                 "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
             )

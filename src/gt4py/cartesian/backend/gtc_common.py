@@ -287,7 +287,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_sources: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
+            gt_pyext_sources = {
+                **gt_pyext_files["computation"],
+                **gt_pyext_files["bindings"],
+            }
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}
@@ -305,6 +308,7 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
             verbose=self.builder.options.backend_opts.get("verbose", False),
             clean=self.builder.options.backend_opts.get("clean", False),
             **gt_backend.pyext_builder.get_gt_pyext_build_opts(
+                debug_mode=self.builder.options.backend_opts.get("debug_mode", False),
                 opt_level=self.builder.options.backend_opts.get(
                     "opt_level", gt_config.GT4PY_COMPILE_OPT_LEVEL
                 ),

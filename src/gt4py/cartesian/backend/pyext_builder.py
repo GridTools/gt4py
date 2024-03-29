@@ -47,6 +47,7 @@ def get_cuda_compute_capability():
 
 def get_gt_pyext_build_opts(
     *,
+    debug_mode: bool = False,
     opt_level: Literal["0", "1", "2", "3", "s"] = "3",
     extra_opt_flags: str = "",
     add_profile_info: bool = False,
@@ -115,7 +116,11 @@ def get_gt_pyext_build_opts(
         ]
     extra_link_args = copy.deepcopy(gt_config.build_settings["extra_link_args"])
 
-    mode_flags = [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+    if debug_mode:
+        mode_flags = ["-O0", "-ggdb"]
+    else:
+        mode_flags = [f"-O{opt_level}", "-DNDEBUG", *extra_opt_flags.split()]
+
     extra_compile_args["cxx"].extend(mode_flags)
     extra_compile_args["cuda"].extend(mode_flags)
     extra_link_args.extend(mode_flags)
@@ -230,7 +235,11 @@ def build_pybind_ext(
     py_extension = setuptools.Extension(
         name,
         sources,
-        include_dirs=[pybind11.get_include(), pybind11.get_include(user=True), *include_dirs],
+        include_dirs=[
+            pybind11.get_include(),
+            pybind11.get_include(user=True),
+            *include_dirs,
+        ],
         library_dirs=[*library_dirs],
         libraries=[*libraries],
         language="c++",
