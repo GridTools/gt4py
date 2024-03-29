@@ -160,3 +160,46 @@ def test_nocaching_generate(builder, tmp_path):
     builder_g.backend.generate()
 
     assert_nocaching_gtcpp_source_file_tree_conforms_to_expectations(tmp_path / "foo_g", "foo")
+
+
+def test_default_compiler_optimization(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst")
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={
+            "opt_level": gt4pyc.config.GT4PY_COMPILE_OPT_LEVEL,
+            "extra_opt_flags": gt4pyc.config.GT4PY_EXTRA_COMPILE_OPT_FLAGS,
+        }
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
+
+
+def test_different_opt_levels(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "1"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
+
+
+def test_different_extra_opt_flags(builder):
+    builder_1 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0"}
+    )
+    builder_2 = builder(simple_stencil, backend_name="gt:cpu_kfirst").with_changed_options(
+        backend_opts={"opt_level": "0", "extra_opt_flags": "-ftree-vectorize"}
+    )
+
+    builder_1.backend.generate()
+    builder_2.backend.generate()
+
+    assert builder_1.caching.stencil_id != builder_2.caching.stencil_id
