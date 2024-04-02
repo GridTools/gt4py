@@ -100,13 +100,7 @@ class AccessInfoCollector(eve.NodeVisitor):
         return ctx.access_infos
 
     def visit_VerticalLoopSection(
-        self,
-        node: oir.VerticalLoopSection,
-        *,
-        block_extents,
-        ctx,
-        grid_subset=None,
-        **kwargs: Any,
+        self, node: oir.VerticalLoopSection, *, block_extents, ctx, grid_subset=None, **kwargs: Any
     ) -> Dict[str, "dcir.FieldAccessInfo"]:
         inner_ctx = self.Context(axes=ctx.axes)
 

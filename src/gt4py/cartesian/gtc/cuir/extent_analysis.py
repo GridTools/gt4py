@@ -22,11 +22,7 @@ from . import cuir
 
 class CacheExtents(NodeTranslator):
     def visit_IJCacheDecl(
-        self,
-        node: cuir.IJCacheDecl,
-        *,
-        ij_extents: Dict[str, cuir.KExtent],
-        **kwargs: Any,
+        self, node: cuir.IJCacheDecl, *, ij_extents: Dict[str, cuir.KExtent], **kwargs: Any
     ) -> cuir.IJCacheDecl:
         return cuir.IJCacheDecl(name=node.name, dtype=node.dtype, extent=ij_extents[node.name])
 

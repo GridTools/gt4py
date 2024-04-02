@@ -85,10 +85,7 @@ def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]
 @get_differences.register
 def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, a.cls):
-        yield (
-            path,
-            f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}",
-        )
+        yield (path, f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}")
     else:
         for k in a.fields.keys():
             if not hasattr(b, k):

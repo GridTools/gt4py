@@ -322,10 +322,7 @@ class OnTheFlyMerging(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             for offset in read_offsets:
                 merged.body = (
                     self.visit(
-                        first.body,
-                        shift=offset,
-                        offset_symbol_map=offset_symbol_map,
-                        scalar_map={},
+                        first.body, shift=offset, offset_symbol_map=offset_symbol_map, scalar_map={}
                     )
                     + merged.body
                 )

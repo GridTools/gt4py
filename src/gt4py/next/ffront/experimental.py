@@ -20,11 +20,7 @@ from gt4py.next.ffront.fbuiltins import BuiltInFunction, FieldOffset, WhereBuilt
 
 
 @BuiltInFunction
-def as_offset(
-    offset_: FieldOffset,
-    field: common.Field,
-    /,
-) -> common.ConnectivityField:
+def as_offset(offset_: FieldOffset, field: common.Field, /) -> common.ConnectivityField:
     raise NotImplementedError()
 
 

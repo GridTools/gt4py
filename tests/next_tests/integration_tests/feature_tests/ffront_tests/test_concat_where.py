@@ -15,10 +15,7 @@
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import (
-    KDim,
-    cartesian_case,
-)
+from next_tests.integration_tests.cases import KDim, cartesian_case
 from gt4py import next as gtx
 from gt4py.next.ffront.experimental import concat_where
 from next_tests.integration_tests import cases

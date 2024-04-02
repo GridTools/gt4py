@@ -20,9 +20,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 
 
-def _is_power_call(
-    node: ir.FunCall,
-) -> bool:
+def _is_power_call(node: ir.FunCall) -> bool:
     """Match expressions of the form `power(base, integral_literal)`."""
     return (
         isinstance(node.fun, ir.SymRef)
@@ -71,8 +69,7 @@ class PowerUnrolling(NodeTranslator):
                 # Nest target expression to avoid multiple redundant evaluations
                 for i in range(pow_max, 0, -1):
                     ret = im.let(
-                        f"power_{2 ** i}",
-                        im.multiplies_(f"power_{2**(i-1)}", f"power_{2**(i-1)}"),
+                        f"power_{2 ** i}", im.multiplies_(f"power_{2**(i-1)}", f"power_{2**(i-1)}")
                     )(ret)
                 ret = im.let("power_1", base)(ret)
 

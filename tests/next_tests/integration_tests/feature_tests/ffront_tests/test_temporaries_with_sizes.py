@@ -47,8 +47,8 @@ def run_gtfn_with_temporaries_and_symbolic_sizes():
                         "Cell": "num_cells",
                         "Edge": "num_edges",
                         "Vertex": "num_vertices",
-                    },
-                ),
+                    }
+                )
             ),
         ),
         allocator=run_gtfn_with_temporaries.allocator,
@@ -64,11 +64,7 @@ def testee():
 
     @gtx.program
     def prog(
-        a: cases.VField,
-        out: cases.EField,
-        num_vertices: int32,
-        num_edges: int32,
-        num_cells: int32,
+        a: cases.VField, out: cases.EField, num_vertices: int32, num_edges: int32, num_cells: int32
     ):
         testee_op(a, out=out)
 

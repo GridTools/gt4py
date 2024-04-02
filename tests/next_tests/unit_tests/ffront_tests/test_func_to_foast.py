@@ -87,10 +87,7 @@ def test_mistyped_arg():
     def mistyped(inp: gtx.Field):
         return inp
 
-    with pytest.raises(
-        ValueError,
-        match="Field type requires two arguments, got 0.",
-    ):
+    with pytest.raises(ValueError, match="Field type requires two arguments, got 0."):
         _ = FieldOperatorParser.apply_to_function(mistyped)
 
 
@@ -103,8 +100,7 @@ def test_return_type():
     parsed = FieldOperatorParser.apply_to_function(rettype)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
 
 
@@ -114,10 +110,7 @@ def test_invalid_syntax_no_return():
     def no_return(inp: gtx.Field[[TDim], "float64"]):
         tmp = inp  # noqa
 
-    with pytest.raises(
-        errors.DSLError,
-        match=".*return.*",
-    ):
+    with pytest.raises(errors.DSLError, match=".*return.*"):
         _ = FieldOperatorParser.apply_to_function(no_return)
 
 
@@ -145,8 +138,7 @@ def test_temp_assignment():
     parsed = FieldOperatorParser.apply_to_function(copy_field)
 
     assert parsed.body.annex.symtable[ssa.unique_name("tmp", 0)].type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
 
 
@@ -168,8 +160,7 @@ def test_binary_pow():
     parsed = FieldOperatorParser.apply_to_function(power)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
 
 
@@ -180,8 +171,7 @@ def test_binary_mod():
     parsed = FieldOperatorParser.apply_to_function(modulo)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.INT32, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32, shape=None)
     )
 
 
@@ -189,10 +179,7 @@ def test_boolean_and_op_unsupported():
     def bool_and(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a and b
 
-    with pytest.raises(
-        errors.UnsupportedPythonFeatureError,
-        match=r".*and.*or.*",
-    ):
+    with pytest.raises(errors.UnsupportedPythonFeatureError, match=r".*and.*or.*"):
         _ = FieldOperatorParser.apply_to_function(bool_and)
 
 
@@ -200,10 +187,7 @@ def test_boolean_or_op_unsupported():
     def bool_or(a: gtx.Field[[TDim], "bool"], b: gtx.Field[[TDim], "bool"]):
         return a or b
 
-    with pytest.raises(
-        errors.UnsupportedPythonFeatureError,
-        match=r".*and.*or.*",
-    ):
+    with pytest.raises(errors.UnsupportedPythonFeatureError, match=r".*and.*or.*"):
         _ = FieldOperatorParser.apply_to_function(bool_or)
 
 
@@ -214,8 +198,7 @@ def test_bool_xor():
     parsed = FieldOperatorParser.apply_to_function(bool_xor)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None)
     )
 
 
@@ -226,8 +209,7 @@ def test_unary_tilde():
     parsed = FieldOperatorParser.apply_to_function(unary_tilde)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.BOOL, shape=None)
     )
 
 
@@ -241,9 +223,7 @@ def test_scalar_cast_disallow_non_literals():
 
 
 def test_conditional_wrong_mask_type():
-    def conditional_wrong_mask_type(
-        a: gtx.Field[[TDim], float64],
-    ) -> gtx.Field[[TDim], float64]:
+    def conditional_wrong_mask_type(a: gtx.Field[[TDim], float64]) -> gtx.Field[[TDim], float64]:
         return where(a, a, a)
 
     msg = r"expected a field with dtype 'bool'"
@@ -253,9 +233,7 @@ def test_conditional_wrong_mask_type():
 
 def test_conditional_wrong_arg_type():
     def conditional_wrong_arg_type(
-        mask: gtx.Field[[TDim], bool],
-        a: gtx.Field[[TDim], float32],
-        b: gtx.Field[[TDim], float64],
+        mask: gtx.Field[[TDim], bool], a: gtx.Field[[TDim], float32], b: gtx.Field[[TDim], float64]
     ) -> gtx.Field[[TDim], float64]:
         return where(mask, a, b)
 
@@ -321,8 +299,7 @@ def test_astype():
     parsed = FieldOperatorParser.apply_to_function(astype_fieldop)
 
     assert parsed.body.stmts[-1].value.type == ts.FieldType(
-        dims=[TDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[TDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
 
 
@@ -371,8 +348,7 @@ def test_wrong_return_type_annotation():
         return a
 
     with pytest.raises(
-        errors.DSLError,
-        match=r"Annotated return type does not match deduced return type",
+        errors.DSLError, match=r"Annotated return type does not match deduced return type"
     ):
         _ = FieldOperatorParser.apply_to_function(wrong_return_type_annotation)
 
@@ -382,8 +358,7 @@ def test_empty_dims_type():
         return 1.0
 
     with pytest.raises(
-        errors.DSLError,
-        match=r"Annotated return type does not match deduced return type",
+        errors.DSLError, match=r"Annotated return type does not match deduced return type"
     ):
         _ = FieldOperatorParser.apply_to_function(empty_dims)
 

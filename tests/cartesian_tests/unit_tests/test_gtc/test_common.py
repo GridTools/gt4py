@@ -140,10 +140,7 @@ class AssignStmt(Stmt, common.AssignStmt[DummyExpr, Expr]):
             DataType.BOOL,
         ),
         (
-            UnaryOp(
-                expr=DummyExpr(dtype=ARITHMETIC_TYPE),
-                op=A_ARITHMETIC_UNARY_OPERATOR,
-            ),
+            UnaryOp(expr=DummyExpr(dtype=ARITHMETIC_TYPE), op=A_ARITHMETIC_UNARY_OPERATOR),
             ARITHMETIC_TYPE,
         ),
     ],
@@ -157,9 +154,7 @@ def test_dtype_propagation(node, expected):
     [
         (
             lambda: TernaryOp(
-                cond=DummyExpr(dtype=ARITHMETIC_TYPE),
-                true_expr=DummyExpr(),
-                false_expr=DummyExpr(),
+                cond=DummyExpr(dtype=ARITHMETIC_TYPE), true_expr=DummyExpr(), false_expr=DummyExpr()
             ),
             r"Condition.*must be bool.*",
             ValueError,
@@ -293,7 +288,7 @@ class SymbolTableRootNode(eve.Node, eve.ValidatedSymbolTableTrait):
                 SymbolChildNode(name="foo"),
                 SymbolRefChildNode(name="foo"),
                 SymbolRefChildNode(name="foo2"),
-            ],
+            ]
         ),
         lambda: SymbolTableRootNode(
             nodes=[
@@ -309,16 +304,14 @@ def test_symbolref_validation_for_invalid_tree(tree_with_missing_symbol):
 
 
 def test_symbolref_validation_for_valid_tree():
-    SymbolTableRootNode(
-        nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")],
-    )
+    SymbolTableRootNode(nodes=[SymbolChildNode(name="foo"), SymbolRefChildNode(name="foo")])
     (
         SymbolTableRootNode(  # noqa: B018
             nodes=[
                 SymbolChildNode(name="foo"),
                 SymbolRefChildNode(name="foo"),
                 SymbolRefChildNode(name="foo"),
-            ],
+            ]
         ),
     )
     SymbolTableRootNode(
@@ -368,9 +361,9 @@ def construct_dims_assignment(dimensions: Tuple[bool, bool, bool], direction: co
             MultiDimLoop(
                 loop_order=direction,
                 assigns=[
-                    AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name)),
+                    AssignStmt(left=MultiDimRef(name=out_name), right=MultiDimRef(name=in_name))
                 ],
-            ),
+            )
         ],
     )
 

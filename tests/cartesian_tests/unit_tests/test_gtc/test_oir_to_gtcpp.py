@@ -37,29 +37,25 @@ def test_horizontal_mask():
             AssignStmtFactory(left__name=out_name, right__name=in_name),
             HorizontalRestrictionFactory(
                 mask=HorizontalMask(
-                    i=HorizontalInterval.at_endpt(LevelMarker.START, 0),
-                    j=HorizontalInterval.full(),
+                    i=HorizontalInterval.at_endpt(LevelMarker.START, 0), j=HorizontalInterval.full()
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
             HorizontalRestrictionFactory(
                 mask=HorizontalMask(
-                    i=HorizontalInterval.at_endpt(LevelMarker.END, 0),
-                    j=HorizontalInterval.full(),
+                    i=HorizontalInterval.at_endpt(LevelMarker.END, 0), j=HorizontalInterval.full()
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
             HorizontalRestrictionFactory(
                 mask=HorizontalMask(
-                    i=HorizontalInterval.full(),
-                    j=HorizontalInterval.at_endpt(LevelMarker.START, 0),
+                    i=HorizontalInterval.full(), j=HorizontalInterval.at_endpt(LevelMarker.START, 0)
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
             HorizontalRestrictionFactory(
                 mask=HorizontalMask(
-                    i=HorizontalInterval.full(),
-                    j=HorizontalInterval.at_endpt(LevelMarker.END, 0),
+                    i=HorizontalInterval.full(), j=HorizontalInterval.at_endpt(LevelMarker.END, 0)
                 ),
                 body=[AssignStmtFactory(left__name=out_name, right=LiteralFactory())],
             ),
@@ -91,7 +87,7 @@ def test_variable_offset_accessor():
                     right__offset=VariableKOffsetFactory(k__name=index_name),
                 )
             ],
-        ),
+        )
     )
 
     gtcpp_program = OIRToGTCpp().visit(oir_stencil)

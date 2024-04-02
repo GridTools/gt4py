@@ -246,23 +246,17 @@ def create_bindings(
             doc="",
             functions=[
                 BindingFunction(
-                    exported_name=program_source.entry_point.name,
-                    wrapper_name=wrapper_name,
-                    doc="",
+                    exported_name=program_source.entry_point.name, wrapper_name=wrapper_name, doc=""
                 )
             ],
         ),
     )
 
     src = interface.format_source(
-        program_source.language_settings,
-        BindingCodeGenerator.apply(file_binding),
+        program_source.language_settings, BindingCodeGenerator.apply(file_binding)
     )
 
-    return stages.BindingSource(
-        src,
-        (interface.LibraryDependency("nanobind", "1.4.0"),),
-    )
+    return stages.BindingSource(src, (interface.LibraryDependency("nanobind", "1.4.0"),))
 
 
 @workflow.make_step

@@ -54,10 +54,7 @@ def convert_args(
     ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(
-            *converted_args,
-            *conn_args,
-        )
+        return inp(*converted_args, *conn_args)
 
     return decorated_program
 
@@ -193,8 +190,7 @@ class GTFNBackendFactory(factory.Factory):
 run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative",
-    otf_workflow__translation__use_imperative_backend=True,
+    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
 run_gtfn_cached = GTFNBackendFactory(cached=True)

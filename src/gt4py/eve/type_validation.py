@@ -78,11 +78,7 @@ class TypeValidator(Protocol):
 
 class FixedTypeValidator(Protocol):
     @abc.abstractmethod
-    def __call__(
-        self,
-        value: Any,
-        **kwargs: Any,
-    ) -> None:
+    def __call__(self, value: Any, **kwargs: Any) -> None:
         """Protocol for callables checking that ``value`` matches a fixed type_annotation.
 
         Arguments:
@@ -485,8 +481,7 @@ class SimpleTypeValidatorFactory(TypeValidatorFactory):
 
 
 simple_type_validator_factory: Final = cast(
-    TypeValidatorFactory,
-    utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True),
+    TypeValidatorFactory, utils.optional_lru_cache(SimpleTypeValidatorFactory(), typed=True)
 )
 """Public (with optional cache) entry point for :class:`SimpleTypeValidatorFactory`."""
 

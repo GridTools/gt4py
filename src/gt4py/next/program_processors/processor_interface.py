@@ -207,11 +207,7 @@ def program_executor(
     return cast(
         ProgramExecutor,
         make_program_processor(
-            func,
-            ProgramExecutor,
-            name=name,
-            accept_args=accept_args,
-            accept_kwargs=accept_kwargs,
+            func, ProgramExecutor, name=name, accept_args=accept_args, accept_kwargs=accept_kwargs
         ),
     )
 

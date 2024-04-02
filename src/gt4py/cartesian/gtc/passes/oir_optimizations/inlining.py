@@ -23,10 +23,7 @@ class MaskCollector(eve.NodeVisitor):
     """Collects the boolean expressions defining mask statements that are boolean fields."""
 
     def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
+        self, node: oir.AssignStmt, *, masks_to_inline: Dict[str, oir.Expr]
     ) -> None:
         if node.left.name in masks_to_inline:
             assert masks_to_inline[node.left.name] is None
@@ -72,22 +69,14 @@ class MaskInlining(eve.NodeTranslator):
     """
 
     def visit_FieldAccess(
-        self,
-        node: oir.FieldAccess,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
-        **kwargs: Any,
+        self, node: oir.FieldAccess, *, masks_to_inline: Dict[str, oir.Expr], **kwargs: Any
     ) -> oir.Expr:
         if node.name in masks_to_inline:
             return cp.copy(masks_to_inline[node.name])
         return self.generic_visit(node, masks_to_inline=masks_to_inline, **kwargs)
 
     def visit_AssignStmt(
-        self,
-        node: oir.AssignStmt,
-        *,
-        masks_to_inline: Dict[str, oir.Expr],
-        **kwargs: Any,
+        self, node: oir.AssignStmt, *, masks_to_inline: Dict[str, oir.Expr], **kwargs: Any
     ) -> Union[oir.AssignStmt, eve.NothingType]:
         if node.left.name in masks_to_inline:
             return eve.NOTHING

@@ -36,10 +36,7 @@ def test_list_get_neighbors():
             ir.FunCall(
                 fun=ir.FunCall(
                     fun=ir.SymRef(id="shift"),
-                    args=[
-                        ir.OffsetLiteral(value="foo"),
-                        ir.OffsetLiteral(value=42),
-                    ],
+                    args=[ir.OffsetLiteral(value="foo"), ir.OffsetLiteral(value=42)],
                 ),
                 args=[ir.SymRef(id="bar")],
             )
