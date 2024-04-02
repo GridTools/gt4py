@@ -90,6 +90,7 @@ class DaCeTranslator(
             column_axis=column_axis,
             lift_mode=lift_mode,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
             load_sdfg_from_file=False,
             save_sdfg=False,
             use_field_canonical_representation=self.use_field_canonical_representation,

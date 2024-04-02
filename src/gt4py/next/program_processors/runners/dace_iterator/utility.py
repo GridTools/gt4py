@@ -19,7 +19,7 @@ import dace
 import gt4py.next.iterator.ir as itir
 from gt4py import eve
 from gt4py.next import Dimension
-from gt4py.next.common import Connectivity, NeighborTable
+from gt4py.next.common import Connectivity
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -58,14 +58,6 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     except AttributeError as ex:
         raise ValueError(f"Data type {typestr} not supported.") from ex
     return ts.ScalarType(kind)
-
-
-def filter_neighbor_tables(offset_provider: Mapping[str, Any]) -> dict[str, NeighborTable]:
-    return {
-        offset: table
-        for offset, table in offset_provider.items()
-        if isinstance(table, NeighborTable)
-    }
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
