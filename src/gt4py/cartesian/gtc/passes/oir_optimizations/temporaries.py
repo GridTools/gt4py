@@ -106,9 +106,9 @@ class LocalTemporariesToScalars(TemporariesToScalarsBase):
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
         horizontal_executions = node.walk_values().if_isinstance(oir.HorizontalExecution)
-        temps_without_data_dims = set([
-            decl.name for decl in node.declarations if not decl.data_dims
-        ])
+        temps_without_data_dims = set(
+            [decl.name for decl in node.declarations if not decl.data_dims]
+        )
         counts: collections.Counter = sum(
             (
                 collections.Counter(

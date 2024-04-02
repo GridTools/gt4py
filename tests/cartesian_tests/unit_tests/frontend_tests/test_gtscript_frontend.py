@@ -1202,14 +1202,16 @@ class TestImports:
     @pytest.mark.parametrize(
         "id_case,import_line",
         list(
-            enumerate([
-                "import gt4py",
-                "from externals import EXTERNAL",
-                "from gt4py.cartesian import __gtscript__",
-                "from gt4py.cartesian import __externals__",
-                "from gt4py.cartesian.gtscript import computation",
-                "from gt4py.cartesian.externals import EXTERNAL",
-            ])
+            enumerate(
+                [
+                    "import gt4py",
+                    "from externals import EXTERNAL",
+                    "from gt4py.cartesian import __gtscript__",
+                    "from gt4py.cartesian import __externals__",
+                    "from gt4py.cartesian.gtscript import computation",
+                    "from gt4py.cartesian.externals import EXTERNAL",
+                ]
+            )
         ),
     )
     def test_wrong_imports(self, id_case, import_line):
@@ -1238,17 +1240,19 @@ class TestDTypes:
     @pytest.mark.parametrize(
         "id_case,test_dtype",
         list(
-            enumerate([
-                bool,
-                np.bool_,
-                int,
-                np.int32,
-                np.int64,
-                float,
-                np.float32,
-                np.float64,
-                np.dtype((np.float32, (3,))),
-            ])
+            enumerate(
+                [
+                    bool,
+                    np.bool_,
+                    int,
+                    np.int32,
+                    np.int64,
+                    float,
+                    np.float32,
+                    np.float64,
+                    np.dtype((np.float32, (3,))),
+                ]
+            )
         ),
     )
     def test_all_legal_dtypes_instance(self, id_case, test_dtype):

@@ -129,9 +129,12 @@ class AccessInfoCollector(eve.NodeVisitor):
         k_grid = dcir.GridSubset.from_interval(grid_subset.intervals[dcir.Axis.K], dcir.Axis.K)
         inner_infos = {name: info.apply_iteration(k_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update({
-            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
-        })
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
 
         return ctx.access_infos
 
@@ -167,9 +170,12 @@ class AccessInfoCollector(eve.NodeVisitor):
 
         inner_infos = {name: info.apply_iteration(ij_grid) for name, info in inner_infos.items()}
 
-        ctx.access_infos.update({
-            name: info.union(ctx.access_infos.get(name, info)) for name, info in inner_infos.items()
-        })
+        ctx.access_infos.update(
+            {
+                name: info.union(ctx.access_infos.get(name, info))
+                for name, info in inner_infos.items()
+            }
+        )
 
         return ctx.access_infos
 

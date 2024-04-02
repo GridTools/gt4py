@@ -57,9 +57,9 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
         domain_intersection = _intersect_scan_args(*all_args)
         non_scan_domain = common.Domain(*[nr for nr in domain_intersection if nr.dim != scan_axis])
 
-        out_domain = common.Domain(*[
-            scan_range if nr.dim == scan_axis else nr for nr in domain_intersection
-        ])
+        out_domain = common.Domain(
+            *[scan_range if nr.dim == scan_axis else nr for nr in domain_intersection]
+        )
         if scan_axis not in out_domain.dims:
             # even if the scan dimension is not in the input, we can scan over it
             out_domain = common.Domain(*out_domain, (scan_range))
@@ -89,9 +89,9 @@ class ScanOperator(EmbeddedOperator[core_defs.ScalarT | tuple[core_defs.ScalarT 
 def _get_out_domain(
     out: common.MutableField | tuple[common.MutableField | tuple, ...],
 ) -> common.Domain:
-    return embedded_common.domain_intersection(*[
-        f.domain for f in utils.flatten_nested_tuple((out,))
-    ])
+    return embedded_common.domain_intersection(
+        *[f.domain for f in utils.flatten_nested_tuple((out,))]
+    )
 
 
 def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) -> Optional[_R]:
@@ -158,9 +158,9 @@ def _tuple_assign_field(
 def _intersect_scan_args(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> common.Domain:
-    return embedded_common.domain_intersection(*[
-        arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)
-    ])
+    return embedded_common.domain_intersection(
+        *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
+    )
 
 
 def _get_array_ns(

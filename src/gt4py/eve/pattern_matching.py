@@ -52,9 +52,9 @@ class ObjectPattern:
         if raise_exception:
             diffs = [*get_differences(self, other)]
             if len(diffs) > 0:
-                diffs_str = "\n  ".join([
-                    f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs
-                ])
+                diffs_str = "\n  ".join(
+                    [f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs]
+                )
                 raise ValueError(f"Object and pattern don't match:\n  {diffs_str}")
             return True
 
