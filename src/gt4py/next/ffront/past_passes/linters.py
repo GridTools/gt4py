@@ -26,7 +26,7 @@ def lint_misnamed_functions(
         inp.closure_vars, gtcallable.GTCallable
     )
     misnamed_functions = [
-        f"{name} vs. {func.id}"
+        f"{name} vs. {func.__gt_itir__().id}"
         for name, func in function_closure_vars.items()
         if name != func.__gt_itir__().id
     ]

@@ -48,15 +48,11 @@ from gt4py.next.ffront import (
     transform_utils,
     type_specifications as ts_ffront,
 )
-from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
-from gt4py.next.ffront.foast_to_itir import FieldOperatorLowering
-from gt4py.next.ffront.func_to_foast import FieldOperatorParser
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
     ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
 )
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
-from gt4py.next.ffront.source_utils import SourceDefinition, get_closure_vars_from_function
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.ir_makers import (
     literal_from_value,
@@ -114,13 +110,13 @@ class Program:
 
     @functools.cached_property
     def past_stage(self):
-        if self.backend is not None and self.backend.transformer is not None:
-            return self.backend.transformer.func_to_past(self.definition_stage)
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            return self.backend.transforms_prog.func_to_past(self.definition_stage)
         return next_backend.DEFAULT_TRANSFORMS.func_to_past(self.definition_stage)
 
     def __post_init__(self):
-        if self.backend is not None and self.backend.transformer is not None:
-            self.backend.transformer.past_lint(self.past_stage)
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            self.backend.transforms_prog.past_lint(self.past_stage)
         return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
     @property
@@ -191,8 +187,8 @@ class Program:
             args=[],
             kwargs={},
         )
-        if self.backend is not None and self.backend.transformer is not None:
-            return self.backend.transformer.past_to_itir(no_args_past)
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            return self.backend.transforms_prog.past_to_itir(no_args_past)
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
@@ -232,6 +228,11 @@ class ProgramFromPast(Program):
 
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
         self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
+
+    def __post_init__(self):
+        if self.backend is not None and self.backend.transforms_prog is not None:
+            self.backend.transforms_prog.past_lint(self.past_stage)
+        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -385,12 +386,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             it will be deduced from actually occurring dimensions.
     """
 
-    foast_node: OperatorNodeT
-    closure_vars: dict[str, Any]
-    definition: Optional[types.FunctionType]
+    definition_stage: ffront_stages.FieldOperatorDefinition
     backend: Optional[ppi.ProgramExecutor]
-    grid_type: Optional[GridType]
-    operator_attributes: Optional[dict[str, Any]] = None
     _program_cache: dict = dataclasses.field(
         init=False, default_factory=dict
     )  # init=False ensure the cache is not copied in calls to replace
@@ -405,39 +402,33 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         operator_node_cls: type[OperatorNodeT] = foast.FieldOperator,
         operator_attributes: Optional[dict[str, Any]] = None,
     ) -> FieldOperator[OperatorNodeT]:
-        operator_attributes = operator_attributes or {}
-
-        source_def = SourceDefinition.from_function(definition)
-        closure_vars = get_closure_vars_from_function(definition)
-        annotations = typing.get_type_hints(definition)
-        foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
-        loc = foast_definition_node.location
-        operator_attribute_nodes = {
-            key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
-            for key, value in operator_attributes.items()
-        }
-        untyped_foast_node = operator_node_cls(
-            id=foast_definition_node.id,
-            definition=foast_definition_node,
-            location=loc,
-            **operator_attribute_nodes,
-        )
-        foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
         return cls(
-            foast_node=foast_node,
-            closure_vars=closure_vars,
-            definition=definition,
+            definition_stage=ffront_stages.FieldOperatorDefinition(
+                definition=definition,
+                grid_type=grid_type,
+                node_class=operator_node_cls,
+                attributes=operator_attributes or {},
+            ),
             backend=backend,
-            grid_type=grid_type,
-            operator_attributes=operator_attributes,
         )
+
+    def __post_init__(self):
+        _ = self.foast_stage
+
+    @functools.cached_property
+    def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
 
     @property
     def __name__(self) -> str:
-        return self.definition.__name__
+        return self.definition_stage.definition.__name__
+
+    @property
+    def definition(self) -> str:
+        return self.definition_stage.definition
 
     def __gt_type__(self) -> ts.CallableType:
-        type_ = self.foast_node.type
+        type_ = self.foast_stage.foast_node.type
         assert isinstance(type_, ts.CallableType)
         return type_
 
@@ -445,20 +436,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> FieldOperator:
-        return dataclasses.replace(self, grid_type=grid_type)
+        return dataclasses.replace(
+            self, definition_stage=dataclasses.replace(self.definition_stage, grid_type=grid_type)
+        )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
-        if hasattr(self, "__cached_itir"):
-            return getattr(self, "__cached_itir")
-
-        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
-
-        object.__setattr__(self, "__cached_itir", itir_node)
-
-        return itir_node
+        return next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(self.foast_stage)
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
-        return self.closure_vars
+        return self.foast_stage.closure_vars
 
     def as_program(
         self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
@@ -476,7 +462,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         except KeyError:
             pass
 
-        loc = self.foast_node.location
+        loc = self.foast_stage.foast_node.location
         # use a new UID generator to allow caching
         param_sym_uids = eve_utils.UIDGenerator()
 
@@ -499,12 +485,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         out_ref = past.Name(id="out", location=loc)
 
-        if self.foast_node.id in self.closure_vars:
+        if self.foast_stage.foast_node.id in self.foast_stage.closure_vars:
             raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_node.id: self}
+        closure_vars = {self.foast_stage.foast_node.id: self}
         closure_symbols = [
             past.Symbol(
-                id=self.foast_node.id,
+                id=self.foast_stage.foast_node.id,
                 type=ts.DeferredType(constraint=None),
                 namespace=dialect_ast_enums.Namespace.CLOSURE,
                 location=loc,
@@ -512,12 +498,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         ]
 
         untyped_past_node = past.Program(
-            id=f"__field_operator_{self.foast_node.id}",
+            id=f"__field_operator_{self.foast_stage.foast_node.id}",
             type=ts.DeferredType(constraint=ts_ffront.ProgramType),
             params=[*params_decl, out_sym],
             body=[
                 past.Call(
-                    func=past.Name(id=self.foast_node.id, location=loc),
+                    func=past.Name(id=self.foast_stage.foast_node.id, location=loc),
                     args=params_ref,
                     kwargs={"out": out_ref},
                     location=loc,
@@ -534,7 +520,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             past_stage=ffront_stages.PastProgramDefinition(
                 past_node=past_node,
                 closure_vars=closure_vars,
-                grid_type=self.grid_type,
+                grid_type=self.foast_stage.grid_type,
             ),
             backend=self.backend,
         )
@@ -555,7 +541,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             if "out" not in kwargs:
                 raise errors.MissingArgumentError(None, "out", True)
             out = kwargs.pop("out")
-            args, kwargs = type_info.canonicalize_arguments(self.foast_node.type, args, kwargs)
+            args, kwargs = type_info.canonicalize_arguments(
+                self.foast_stage.foast_node.type, args, kwargs
+            )
             # TODO(tehrengruber): check all offset providers are given
             # deduce argument types
             arg_types = []
@@ -569,20 +557,31 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 *args, out, offset_provider=offset_provider, **kwargs
             )
         else:
-            if self.operator_attributes is not None and any(
+            attributes = (
+                self.definition_stage.attributes
+                if self.definition_stage
+                else self.foast_stage.attributes
+            )
+            if attributes and any(
                 has_scan_op_attribute := [
-                    attribute in self.operator_attributes
-                    for attribute in ["init", "axis", "forward"]
+                    attribute in attributes for attribute in ["init", "axis", "forward"]
                 ]
             ):
                 assert all(has_scan_op_attribute)
-                forward = self.operator_attributes["forward"]
-                init = self.operator_attributes["init"]
-                axis = self.operator_attributes["axis"]
-                op = embedded_operators.ScanOperator(self.definition, forward, init, axis)
+                forward = attributes["forward"]
+                init = attributes["init"]
+                axis = attributes["axis"]
+                op = embedded_operators.ScanOperator(
+                    self.definition_stage.definition, forward, init, axis
+                )
             else:
-                op = embedded_operators.EmbeddedOperator(self.definition)
+                op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
             return embedded_operators.field_operator_call(op, args, kwargs)
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldOperatorFromFoast(FieldOperator):
+    foast_stage: ffront_stages.FoastOperatorDefinition
 
 
 @typing.overload

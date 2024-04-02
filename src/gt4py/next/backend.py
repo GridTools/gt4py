@@ -19,7 +19,14 @@ from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import allocators as next_allocators
-from gt4py.next.ffront import func_to_past, past_process_args, past_to_itir, stages as ffront_stages
+from gt4py.next.ffront import (
+    foast_to_itir,
+    func_to_foast,
+    func_to_past,
+    past_process_args,
+    past_to_itir,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.otf import recipes, workflow
 from gt4py.next.program_processors import processor_interface as ppi
@@ -40,6 +47,14 @@ class ArgsInjector(workflow.Workflow):
         )
 
 
+DEFAULT_FIELDOP_TRANSFORMS = recipes.FieldopTransformWorkflow(
+    func_to_foast=func_to_foast.OptionalFuncToFoastFactory(cached=True),
+    foast_to_itir=workflow.CachedStep(
+        step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.hash_foast_operator_definition
+    ),
+)
+
+
 DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
     func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
     past_lint=past_linters.LinterFactory(),
@@ -53,12 +68,12 @@ DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transformer: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
+    transforms_prog: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
 
     def __call__(
         self, program: ffront_stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
     ) -> None:
-        transformer = self.transformer.replace(
+        transformer = self.transforms_prog.replace(
             past_inject_args=ArgsInjector(args=args, kwargs=kwargs)
         )
         program_call = transformer(program)

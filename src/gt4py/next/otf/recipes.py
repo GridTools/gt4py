@@ -16,7 +16,19 @@ from __future__ import annotations
 import dataclasses
 
 from gt4py.next.ffront import stages as ffront_stages
+from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import stages, step_types, workflow
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldopTransformWorkflow(workflow.NamedStepSequence):
+    """Modular workflow for transformations with access to intermediates."""
+
+    func_to_foast: workflow.SkippableStep[
+        ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
+        ffront_stages.FoastOperatorDefinition,
+    ]
+    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
 
 
 @dataclasses.dataclass(frozen=True)
