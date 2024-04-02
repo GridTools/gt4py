@@ -22,6 +22,7 @@ from typing import Any, Generic, Optional, TypeVar
 from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past
+from gt4py.next.type_system import type_specifications as ts
 
 
 OperatorNodeT = TypeVar("OperatorNodeT", bound=foast.LocatedNode)
@@ -58,6 +59,22 @@ def hash_foast_operator_definition(foast_definition: FoastOperatorDefinition) ->
     return eve_utils.content_hash(
         foast_definition.foast_node, foast_definition.grid_type, foast_definition.attributes
     )
+
+
+@dataclasses.dataclass(frozen=True)
+class FoastWithTypes(Generic[OperatorNodeT]):
+    foast_op_def: FoastOperatorDefinition[OperatorNodeT]
+    arg_types: tuple[ts.TypeSpec]
+    kwarg_types: dict[str, ts.TypeSpec]
+    closure_vars: dict[str, Any]
+
+
+def hash_foast_with_types(foast_with_types: FoastWithTypes) -> str:
+    return eve_utils.content_hash((
+        foast_with_types.foast_op_def,
+        foast_with_types.arg_types,
+        tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
+    ))
 
 
 @dataclasses.dataclass(frozen=True)

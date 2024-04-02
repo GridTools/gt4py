@@ -28,7 +28,6 @@ from typing import Generic, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
 from gt4py.eve.extended_typing import Any, Optional
 from gt4py.next import (
     allocators as next_allocators,
@@ -39,20 +38,15 @@ from gt4py.next import (
 from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
-    dialect_ast_enums,
     field_operator_ast as foast,
+    foast_to_past,
     past_process_args,
     past_to_itir,
-    program_ast as past,
     stages as ffront_stages,
     transform_utils,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.gtcallable import GTCallable
-from gt4py.next.ffront.past_passes.closure_var_type_deduction import (
-    ClosureVarTypeDeduction as ProgramClosureVarTypeDeduction,
-)
-from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.ir_makers import (
     literal_from_value,
@@ -449,83 +443,15 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def as_program(
         self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
-        # TODO(tehrengruber): implement mechanism to deduce default values
-        #  of arg and kwarg types
-        # TODO(tehrengruber): check foast operator has no out argument that clashes
-        #  with the out argument of the program we generate here.
-        hash_ = eve_utils.content_hash((
-            tuple(arg_types),
-            tuple((name, arg) for name, arg in kwarg_types.items()),
-        ))
-        try:
-            return self._program_cache[hash_]
-        except KeyError:
-            pass
-
-        loc = self.foast_stage.foast_node.location
-        # use a new UID generator to allow caching
-        param_sym_uids = eve_utils.UIDGenerator()
-
-        type_ = self.__gt_type__()
-        params_decl: list[past.Symbol] = [
-            past.DataSymbol(
-                id=param_sym_uids.sequential_id(prefix="__sym"),
-                type=arg_type,
-                namespace=dialect_ast_enums.Namespace.LOCAL,
-                location=loc,
-            )
-            for arg_type in arg_types
-        ]
-        params_ref = [past.Name(id=pdecl.id, location=loc) for pdecl in params_decl]
-        out_sym: past.Symbol = past.DataSymbol(
-            id="out",
-            type=type_info.return_type(type_, with_args=arg_types, with_kwargs=kwarg_types),
-            namespace=dialect_ast_enums.Namespace.LOCAL,
-            location=loc,
-        )
-        out_ref = past.Name(id="out", location=loc)
-
-        if self.foast_stage.foast_node.id in self.foast_stage.closure_vars:
-            raise RuntimeError("A closure variable has the same name as the field operator itself.")
-        closure_vars = {self.foast_stage.foast_node.id: self}
-        closure_symbols = [
-            past.Symbol(
-                id=self.foast_stage.foast_node.id,
-                type=ts.DeferredType(constraint=None),
-                namespace=dialect_ast_enums.Namespace.CLOSURE,
-                location=loc,
+        past_stage = foast_to_past.foast_to_past(
+            ffront_stages.FoastWithTypes(
+                foast_op_def=self.foast_stage,
+                arg_types=tuple(arg_types),
+                kwarg_types=kwarg_types,
+                closure_vars={self.foast_stage.foast_node.id: self},
             ),
-        ]
-
-        untyped_past_node = past.Program(
-            id=f"__field_operator_{self.foast_stage.foast_node.id}",
-            type=ts.DeferredType(constraint=ts_ffront.ProgramType),
-            params=[*params_decl, out_sym],
-            body=[
-                past.Call(
-                    func=past.Name(id=self.foast_stage.foast_node.id, location=loc),
-                    args=params_ref,
-                    kwargs={"out": out_ref},
-                    location=loc,
-                )
-            ],
-            closure_vars=closure_symbols,
-            location=loc,
         )
-        untyped_past_node = ProgramClosureVarTypeDeduction.apply(untyped_past_node, closure_vars)
-        past_node = ProgramTypeDeduction.apply(untyped_past_node)
-
-        self._program_cache[hash_] = ProgramFromPast(
-            definition_stage=None,
-            past_stage=ffront_stages.PastProgramDefinition(
-                past_node=past_node,
-                closure_vars=closure_vars,
-                grid_type=self.foast_stage.grid_type,
-            ),
-            backend=self.backend,
-        )
-
-        return self._program_cache[hash_]
+        return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(
         self,
