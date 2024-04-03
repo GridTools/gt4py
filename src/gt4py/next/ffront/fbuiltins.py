@@ -321,9 +321,7 @@ class FieldOffset(runtime.Offset):
         connectivity: common.ConnectivityField
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
-        elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider) or isinstance(
-            offset_definition, common.ConnectivityField
-        ):
+        elif isinstance(offset_definition, (gtx.NeighborTableOffsetProvider, common.ConnectivityField)):
             unrestricted_connectivity = self.as_connectivity_field()
             assert unrestricted_connectivity.domain.ndim > 1
             named_index = common.NamedIndex(self.target[-1], offset)
