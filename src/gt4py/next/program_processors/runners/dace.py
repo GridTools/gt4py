@@ -84,5 +84,11 @@ class DaCeBackendFactory(GTFNBackendFactory):
 
 
 run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_with_temporaries = DaCeBackendFactory(
+    cached=True, auto_optimize=True, use_temporaries=True
+)
 
 run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_with_temporaries = DaCeBackendFactory(
+    gpu=True, cached=True, auto_optimize=True, use_temporaries=True
+)
