@@ -16,7 +16,7 @@ black==24.3.0             # via -c constraints.txt, gt4py (pyproject.toml)
 blinker==1.7.0            # via -c constraints.txt, flask
 boltons==24.0.0           # via -c constraints.txt, gt4py (pyproject.toml)
 build==1.2.1              # via -c constraints.txt, pip-tools
-bump-my-version==0.12.0   # via -c constraints.txt, -r requirements-dev.in
+bump-my-version==0.20.0   # via -c constraints.txt, -r requirements-dev.in
 cached-property==1.5.2    # via -c constraints.txt, gt4py (pyproject.toml)
 cachetools==5.3.3         # via -c constraints.txt, tox
 certifi==2024.2.2         # via -c constraints.txt, requests
@@ -125,16 +125,16 @@ platformdirs==4.2.0       # via -c constraints.txt, black, jupyter-core, tox, vi
 pluggy==1.4.0             # via -c constraints.txt, pytest, tox
 ply==3.11                 # via -c constraints.txt, dace
 pre-commit==3.5.0         # via -c constraints.txt, -r requirements-dev.in
-prompt-toolkit==3.0.43    # via -c constraints.txt, ipython
+prompt-toolkit==3.0.36    # via -c constraints.txt, ipython, questionary
 psutil==5.9.8             # via -c constraints.txt, -r requirements-dev.in, ipykernel, pytest-xdist
 ptyprocess==0.7.0         # via -c constraints.txt, pexpect
 pure-eval==0.2.2          # via -c constraints.txt, stack-data
 pybind11==2.12.0          # via -c constraints.txt, gt4py (pyproject.toml)
 pycodestyle==2.11.1       # via -c constraints.txt, flake8, flake8-debugger
 pycparser==2.22           # via -c constraints.txt, cffi
-pydantic==2.0a3           # via -c constraints.txt, bump-my-version, pydantic-settings
-pydantic-core==0.25.0     # via -c constraints.txt, pydantic
-pydantic-settings==1.99   # via -c constraints.txt, bump-my-version
+pydantic==2.6.4           # via -c constraints.txt, bump-my-version, pydantic-settings
+pydantic-core==2.16.3     # via -c constraints.txt, pydantic
+pydantic-settings==2.2.1  # via -c constraints.txt, bump-my-version
 pydocstyle==6.3.0         # via -c constraints.txt, flake8-docstrings
 pyflakes==3.2.0           # via -c constraints.txt, flake8
 pygments==2.17.2          # via -c constraints.txt, -r requirements-dev.in, devtools, flake8-rst-docstrings, ipython, nbmake, rich, sphinx
@@ -151,6 +151,7 @@ python-dotenv==1.0.1      # via -c constraints.txt, pydantic-settings
 pytz==2024.1              # via -c constraints.txt, babel
 pyyaml==6.0.1             # via -c constraints.txt, dace, jupytext, pre-commit
 pyzmq==25.1.2             # via -c constraints.txt, ipykernel, jupyter-client
+questionary==2.0.1        # via -c constraints.txt, bump-my-version
 referencing==0.34.0       # via -c constraints.txt, jsonschema, jsonschema-specifications
 requests==2.31.0          # via -c constraints.txt, dace, sphinx
 restructuredtext-lint==1.4.0  # via -c constraints.txt, flake8-rst-docstrings
@@ -182,7 +183,7 @@ toolz==0.12.1             # via -c constraints.txt, cytoolz
 tornado==6.4              # via -c constraints.txt, ipykernel, jupyter-client
 tox==4.14.2               # via -c constraints.txt, -r requirements-dev.in
 traitlets==5.14.2         # via -c constraints.txt, comm, ipykernel, ipython, jupyter-client, jupyter-core, matplotlib-inline, nbclient, nbformat
-types-aiofiles==23.2.0.20240331  # via -c constraints.txt, types-all
+types-aiofiles==23.2.0.20240403  # via -c constraints.txt, types-all
 types-all==1.0.0          # via -c constraints.txt, -r requirements-dev.in
 types-annoy==1.17.8.4     # via -c constraints.txt, types-all
 types-atomicwrites==1.4.5.1  # via -c constraints.txt, types-all
@@ -254,7 +255,7 @@ types-pytz==2024.1.0.20240203  # via -c constraints.txt, types-all, types-tzloca
 types-pyvmomi==8.0.0.6    # via -c constraints.txt, types-all
 types-pyyaml==6.0.12.20240311  # via -c constraints.txt, types-all
 types-redis==4.6.0.20240311  # via -c constraints.txt, types-all
-types-requests==2.31.0.20240402  # via -c constraints.txt, types-all
+types-requests==2.31.0.20240403  # via -c constraints.txt, types-all
 types-retry==0.9.9.4      # via -c constraints.txt, types-all
 types-routes==2.5.0       # via -c constraints.txt, types-all
 types-scribe==2.0.0       # via -c constraints.txt, types-all
@@ -272,7 +273,7 @@ types-ujson==5.9.0.0      # via -c constraints.txt, types-all
 types-waitress==2.1.4.20240106  # via -c constraints.txt, types-all
 types-werkzeug==1.0.9     # via -c constraints.txt, types-all, types-flask
 types-xxhash==3.0.5.2     # via -c constraints.txt, types-all
-typing-extensions==4.5.0  # via -c constraints.txt, annotated-types, black, faker, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
+typing-extensions==4.10.0  # via -c constraints.txt, annotated-types, black, faker, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
 urllib3==2.2.1            # via -c constraints.txt, requests, types-requests
 virtualenv==20.25.1       # via -c constraints.txt, pre-commit, tox
 wcwidth==0.2.13           # via -c constraints.txt, prompt-toolkit
