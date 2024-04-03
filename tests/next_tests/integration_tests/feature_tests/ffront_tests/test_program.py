@@ -130,9 +130,7 @@ def test_calling_fo_from_fo_execution(cartesian_case):
         pow_three(in_field, out=out)
 
     cases.verify_with_default_data(
-        cartesian_case,
-        fo_from_fo_program,
-        ref=lambda in_field: in_field**3,
+        cartesian_case, fo_from_fo_program, ref=lambda in_field: in_field**3
     )
 
 
@@ -236,7 +234,7 @@ def test_wrong_argument_type(cartesian_case, copy_program_def):
 
     msgs = [
         r"- Expected argument 'in_field' to be of type 'Field\[\[IDim], float64\]',"
-        r" got 'Field\[\[JDim\], float64\]'.",
+        r" got 'Field\[\[JDim\], float64\]'."
     ]
     for msg in msgs:
         assert re.search(msg, exc_info.value.__cause__.args[0]) is not None
@@ -256,7 +254,6 @@ def test_dimensions_domain(cartesian_case):
     out_field = cases.allocate(cartesian_case, empty_domain_program, "out_field")()
 
     with pytest.raises(
-        ValueError,
-        match=(r"Dimensions in out field and field domain are not equivalent"),
+        ValueError, match=(r"Dimensions in out field and field domain are not equivalent")
     ):
         cases.run(cartesian_case, empty_domain_program, a, out_field, offset_provider={})

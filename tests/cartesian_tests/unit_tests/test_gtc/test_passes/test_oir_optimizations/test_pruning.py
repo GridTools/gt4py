@@ -56,7 +56,7 @@ def test_no_field_access_pruning():
                             )
                         ],
                         declarations=[LocalScalarFactory(name="bar")],
-                    ),
+                    )
                 ]
             ),
         ]
@@ -76,8 +76,8 @@ def test_no_field_write_access_pruning():
                             AssignStmtFactory(
                                 left=FieldAccessFactory(name="foo"), right=LiteralFactory()
                             )
-                        ],
-                    ),
+                        ]
+                    )
                 ]
             ),
             VerticalLoopFactory(
@@ -90,10 +90,10 @@ def test_no_field_write_access_pruning():
                             )
                         ],
                         declarations=[LocalScalarFactory(name="bar")],
-                    ),
+                    )
                 ]
             ),
-        ],
+        ]
     )
     transformed = NoFieldAccessPruning().visit(testee)
     assert len(transformed.vertical_loops) == 1
@@ -106,9 +106,7 @@ def test_unreachable_stmt_pruning():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
-                body=[
-                    AssignStmtFactory(left__name=out_name, right__name=in_name),
-                ]
+                body=[AssignStmtFactory(left__name=out_name, right__name=in_name)]
             ),
             HorizontalExecutionFactory(
                 body=[

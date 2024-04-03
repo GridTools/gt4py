@@ -98,8 +98,7 @@ def test_bool_arithmetic():
 def test_shift():
     testee = "⟪Iₒ, 1ₒ⟫"
     expected = ir.FunCall(
-        fun=ir.SymRef(id="shift"),
-        args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)]
     )
     actual = pparse(testee)
     assert actual == expected
@@ -137,8 +136,7 @@ def test_named_range():
 def test_cartesian_domain():
     testee = "c⟨ x, y ⟩"
     expected = ir.FunCall(
-        fun=ir.SymRef(id="cartesian_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="cartesian_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     actual = pparse(testee)
     assert actual == expected
@@ -147,8 +145,7 @@ def test_cartesian_domain():
 def test_unstructured_domain():
     testee = "u⟨ x, y ⟩"
     expected = ir.FunCall(
-        fun=ir.SymRef(id="unstructured_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="unstructured_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     actual = pparse(testee)
     assert actual == expected
@@ -157,8 +154,7 @@ def test_unstructured_domain():
 def test_if():
     testee = "if x then y else z"
     expected = ir.FunCall(
-        fun=ir.SymRef(id="if_"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
+        fun=ir.SymRef(id="if_"), args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")]
     )
     actual = pparse(testee)
     assert actual == expected
@@ -166,10 +162,7 @@ def test_if():
 
 def test_fun_call():
     testee = "f(x)"
-    expected = ir.FunCall(
-        fun=ir.SymRef(id="f"),
-        args=[ir.SymRef(id="x")],
-    )
+    expected = ir.FunCall(fun=ir.SymRef(id="f"), args=[ir.SymRef(id="x")])
     actual = pparse(testee)
     assert actual == expected
 
@@ -177,8 +170,7 @@ def test_fun_call():
 def test_lambda_call():
     testee = "(λ(x) → x)(x)"
     expected = ir.FunCall(
-        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")),
-        args=[ir.SymRef(id="x")],
+        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")), args=[ir.SymRef(id="x")]
     )
     actual = pparse(testee)
     assert actual == expected

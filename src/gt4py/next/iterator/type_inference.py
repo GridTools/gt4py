@@ -406,13 +406,7 @@ BUILTIN_CATEGORY_MAPPING = (
             ret=Val(kind=Value(), dtype=FLOAT_DTYPE, size=T0),
         ),
     ),
-    (
-        ir.UNARY_MATH_NUMBER_BUILTINS,
-        FunctionType(
-            args=Tuple.from_elems(Val_T0_T1),
-            ret=Val_T0_T1,
-        ),
-    ),
+    (ir.UNARY_MATH_NUMBER_BUILTINS, FunctionType(args=Tuple.from_elems(Val_T0_T1), ret=Val_T0_T1)),
     (
         {"power"},
         FunctionType(
@@ -438,15 +432,7 @@ BUILTIN_CATEGORY_MAPPING = (
         ir.BINARY_LOGICAL_BUILTINS,
         FunctionType(args=Tuple.from_elems(Val_BOOL_T1, Val_BOOL_T1), ret=Val_BOOL_T1),
     ),
-    (
-        ir.UNARY_LOGICAL_BUILTINS,
-        FunctionType(
-            args=Tuple.from_elems(
-                Val_BOOL_T1,
-            ),
-            ret=Val_BOOL_T1,
-        ),
-    ),
+    (ir.UNARY_LOGICAL_BUILTINS, FunctionType(args=Tuple.from_elems(Val_BOOL_T1), ret=Val_BOOL_T1)),
 )
 
 BUILTIN_TYPES: dict[str, Type] = {
@@ -463,10 +449,7 @@ BUILTIN_TYPES: dict[str, Type] = {
         ),
         ret=Val_BOOL_T1,
     ),
-    "if_": FunctionType(
-        args=Tuple.from_elems(Val_BOOL_T1, T2, T2),
-        ret=T2,
-    ),
+    "if_": FunctionType(args=Tuple.from_elems(Val_BOOL_T1, T2, T2), ret=T2),
     "lift": FunctionType(
         args=Tuple.from_elems(
             FunctionType(
@@ -481,10 +464,7 @@ BUILTIN_TYPES: dict[str, Type] = {
     ),
     "map_": FunctionType(
         args=Tuple.from_elems(
-            FunctionType(
-                args=ValTuple(kind=Value(), dtypes=T2, size=T1),
-                ret=Val_T0_T1,
-            ),
+            FunctionType(args=ValTuple(kind=Value(), dtypes=T2, size=T1), ret=Val_T0_T1)
         ),
         ret=FunctionType(
             args=ValListTuple(kind=Value(), list_dtypes=T2, size=T1),
@@ -619,10 +599,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         if node.kind:
             kind = {"Iterator": Iterator(), "Value": Value()}[node.kind]
             self.constraints.add(
-                (
-                    Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()),
-                    result,
-                )
+                (Val(kind=kind, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
             )
         if node.dtype:
             assert node.dtype is not None
@@ -630,14 +607,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
             if node.dtype[1]:
                 dtype = List(dtype=dtype)
             self.constraints.add(
-                (
-                    Val(
-                        dtype=dtype,
-                        current_loc=TypeVar.fresh(),
-                        defined_loc=TypeVar.fresh(),
-                    ),
-                    result,
-                )
+                (Val(dtype=dtype, current_loc=TypeVar.fresh(), defined_loc=TypeVar.fresh()), result)
             )
         return result
 
@@ -681,11 +651,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     def visit_OffsetLiteral(self, node: ir.OffsetLiteral, **kwargs) -> TypeVar:
         return TypeVar.fresh()
 
-    def visit_Lambda(
-        self,
-        node: ir.Lambda,
-        **kwargs,
-    ) -> FunctionType:
+    def visit_Lambda(self, node: ir.Lambda, **kwargs) -> FunctionType:
         ptypes = {p.id: self.visit(p, **kwargs) for p in node.params}
         ret = self.visit(node.expr, **kwargs)
         return FunctionType(args=Tuple.from_elems(*(ptypes[p.id] for p in node.params)), ret=ret)
@@ -724,11 +690,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         for _ in range(idx):
             dtype = Tuple(front=TypeVar.fresh(), others=dtype)
 
-        val = Val(
-            kind=kind,
-            dtype=dtype,
-            size=size,
-        )
+        val = Val(kind=kind, dtype=dtype, size=size)
         self.constraints.add((tup, val))
         return Val(kind=kind, dtype=elem, size=size)
 
@@ -766,11 +728,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 ),
             )
         )
-        lst = List(
-            dtype=dtype_,
-            max_length=max_length,
-            has_skip_values=has_skip_values,
-        )
+        lst = List(dtype=dtype_, max_length=max_length, has_skip_values=has_skip_values)
         return Val(kind=Value(), dtype=lst, size=size)
 
     def _visit_cast_(self, node: ir.FunCall, **kwargs) -> Type:
@@ -783,22 +741,9 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
         size = TypeVar.fresh()
 
-        self.constraints.add(
-            (
-                val_arg_type,
-                Val(
-                    kind=Value(),
-                    dtype=TypeVar.fresh(),
-                    size=size,
-                ),
-            )
-        )
+        self.constraints.add((val_arg_type, Val(kind=Value(), dtype=TypeVar.fresh(), size=size)))
 
-        return Val(
-            kind=Value(),
-            dtype=Primitive(name=type_arg.id),
-            size=size,
-        )
+        return Val(kind=Value(), dtype=Primitive(name=type_arg.id), size=size)
 
     def _visit_shift(self, node: ir.FunCall, **kwargs) -> Type:
         # Calls to shift are handled as being part of the grammar, not
@@ -822,7 +767,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                     size=size,
                     current_loc=current_loc_in,
                     defined_loc=defined_loc,
-                ),
+                )
             ),
             ret=Val(
                 kind=Iterator(),
@@ -849,11 +794,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     def _visit_unstructured_domain(self, node: ir.FunCall, **kwargs) -> Type:
         return self._visit_domain(node, **kwargs)
 
-    def visit_FunCall(
-        self,
-        node: ir.FunCall,
-        **kwargs,
-    ) -> Type:
+    def visit_FunCall(self, node: ir.FunCall, **kwargs) -> Type:
         if isinstance(node.fun, ir.SymRef) and node.fun.id in ir.GRAMMAR_BUILTINS:
             # builtins that are treated as part of the grammar are handled in `_visit_<builtin_name>`
             return getattr(self, f"_visit_{node.fun.id}")(node, **kwargs)
@@ -866,11 +807,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         self.constraints.add((fun, FunctionType(args=args, ret=ret)))
         return ret
 
-    def visit_FunctionDefinition(
-        self,
-        node: ir.FunctionDefinition,
-        **kwargs,
-    ) -> LetPolymorphic:
+    def visit_FunctionDefinition(self, node: ir.FunctionDefinition, **kwargs) -> LetPolymorphic:
         fun = ir.Lambda(params=node.params, expr=node.expr)
 
         # Since functions defined in a function definition are let-polymorphic we don't want
@@ -884,31 +821,19 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
 
         return fun_type
 
-    def visit_StencilClosure(
-        self,
-        node: ir.StencilClosure,
-        **kwargs,
-    ) -> Closure:
+    def visit_StencilClosure(self, node: ir.StencilClosure, **kwargs) -> Closure:
         domain = self.visit(node.domain, **kwargs)
         stencil = self.visit(node.stencil, **kwargs)
         output = self.visit(node.output, **kwargs)
         output_dtype = TypeVar.fresh()
         output_loc = TypeVar.fresh()
         self.constraints.add(
-            (
-                domain,
-                Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()),
-            )
+            (domain, Val(kind=Value(), dtype=Primitive(name="domain"), size=Scalar()))
         )
         self.constraints.add(
             (
                 output,
-                Val(
-                    kind=Iterator(),
-                    dtype=output_dtype,
-                    size=Column(),
-                    defined_loc=output_loc,
-                ),
+                Val(kind=Iterator(), dtype=output_dtype, size=Column(), defined_loc=output_loc),
             )
         )
 
@@ -946,11 +871,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
     def visit_FencilWithTemporaries(self, node: FencilWithTemporaries, **kwargs):
         return self.visit(node.fencil, **kwargs)
 
-    def visit_FencilDefinition(
-        self,
-        node: ir.FencilDefinition,
-        **kwargs,
-    ) -> FencilDefinitionType:
+    def visit_FencilDefinition(self, node: ir.FencilDefinition, **kwargs) -> FencilDefinitionType:
         ftypes = []
         # Note: functions have to be ordered according to Lisp/Scheme `let*`
         # statements; that is, functions can only reference other functions
@@ -963,9 +884,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         params = [self.visit(p, **kwargs) for p in node.params]
         self.visit(node.closures, **kwargs)
         return FencilDefinitionType(
-            name=str(node.id),
-            fundefs=Tuple.from_elems(*ftypes),
-            params=Tuple.from_elems(*params),
+            name=str(node.id), fundefs=Tuple.from_elems(*ftypes), params=Tuple.from_elems(*params)
         )
 
 
@@ -1012,10 +931,7 @@ def infer_all(
 
     if reindex:
         unified_types, unsatisfiable_constraints = reindex_vars(
-            (
-                unified_types,
-                unsatisfiable_constraints,
-            )
+            (unified_types, unsatisfiable_constraints)
         )
 
     result = {

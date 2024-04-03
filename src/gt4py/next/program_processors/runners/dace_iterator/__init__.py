@@ -118,8 +118,7 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Mapping[str, common.NeighborTable],
-    device: dace.dtypes.DeviceType,
+    neighbor_tables: Mapping[str, common.NeighborTable], device: dace.dtypes.DeviceType
 ) -> dict[str, Any]:
     return {
         connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
@@ -267,9 +266,7 @@ def build_sdfg_from_itir(
                 getframeinfo(currentframe()),  # type: ignore[arg-type]
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
-                start_line=frameinfo.lineno,
-                end_line=frameinfo.lineno,
-                filename=frameinfo.filename,
+                start_line=frameinfo.lineno, end_line=frameinfo.lineno, filename=frameinfo.filename
             )
 
     # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct

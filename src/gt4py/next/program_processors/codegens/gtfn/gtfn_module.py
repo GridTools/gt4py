@@ -133,8 +133,7 @@ class GTFNTranslationStep(
         return parameters, arg_exprs
 
     def _process_connectivity_args(
-        self,
-        offset_provider: dict[str, Connectivity | Dimension],
+        self, offset_provider: dict[str, Connectivity | Dimension]
     ) -> tuple[list[interface.Parameter], list[str]]:
         parameters: list[interface.Parameter] = []
         arg_exprs: list[str] = []
@@ -233,9 +232,7 @@ class GTFNTranslationStep(
     ) -> str:
         new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
         gtfn_ir = GTFN_lowering.apply(
-            new_program,
-            offset_provider=offset_provider,
-            column_axis=column_axis,
+            new_program, offset_provider=offset_provider, column_axis=column_axis
         )
 
         if self.use_imperative_backend:
@@ -246,8 +243,7 @@ class GTFNTranslationStep(
         return codegen.format_source("cpp", generated_code, style="LLVM")
 
     def __call__(
-        self,
-        inp: stages.ProgramCall,
+        self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.NanobindSrcL, languages.LanguageWithHeaderFilesSettings]:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.FencilDefinition = inp.program

@@ -113,7 +113,7 @@ def test_deref():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.TypeVar(idx=2),
                 defined_loc=ti.TypeVar(idx=2),
-            ),
+            )
         ),
         ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=0), size=ti.TypeVar(idx=1)),
     )
@@ -132,12 +132,7 @@ def test_deref_call():
 
 def test_lambda():
     testee = ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
-    expected = ti.FunctionType(
-        args=ti.Tuple.from_elems(
-            ti.TypeVar(idx=0),
-        ),
-        ret=ti.TypeVar(idx=0),
-    )
+    expected = ti.FunctionType(args=ti.Tuple.from_elems(ti.TypeVar(idx=0)), ret=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(T₀) → T₀"
@@ -154,10 +149,7 @@ def test_typed_lambda():
         current_loc=ti.TypeVar(idx=1),
         defined_loc=ti.TypeVar(idx=2),
     )
-    expected = ti.FunctionType(
-        args=ti.Tuple.from_elems(expected_val),
-        ret=expected_val,
-    )
+    expected = ti.FunctionType(args=ti.Tuple.from_elems(expected_val), ret=expected_val)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(It[T₁, T₂, float64⁰]) → It[T₁, T₂, float64⁰]"
@@ -213,12 +205,7 @@ def test_if_call():
 def test_not():
     testee = ir.SymRef(id="not_")
     t = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
-    expected = ti.FunctionType(
-        args=ti.Tuple.from_elems(
-            t,
-        ),
-        ret=t,
-    )
+    expected = ti.FunctionType(args=ti.Tuple.from_elems(t), ret=t)
     inferred = ti.infer(testee)
     assert inferred == expected
     assert ti.pformat(inferred) == "(bool⁰) → bool⁰"
@@ -257,7 +244,7 @@ def test_lift():
                     defined_locs=ti.TypeVar(idx=3),
                 ),
                 ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=4), size=ti.TypeVar(idx=1)),
-            ),
+            )
         ),
         ret=ti.FunctionType(
             args=ti.ValTuple(
@@ -319,7 +306,7 @@ def test_lift_application():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.TypeVar(idx=2),
                 defined_loc=ti.TypeVar(idx=3),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -409,7 +396,7 @@ def test_tuple_get_in_lambda():
                     others=ti.Tuple(front=ti.TypeVar(idx=2), others=ti.TypeVar(idx=3)),
                 ),
                 size=ti.TypeVar(idx=4),
-            ),
+            )
         ),
         ret=ti.Val(kind=ti.TypeVar(idx=0), dtype=ti.TypeVar(idx=2), size=ti.TypeVar(idx=4)),
     )
@@ -537,7 +524,7 @@ def test_shift():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.TypeVar(idx=2),
                 defined_loc=ti.TypeVar(idx=3),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -564,7 +551,7 @@ def test_shift_with_cartesian_offset_provider():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.TypeVar(idx=2),
                 defined_loc=ti.TypeVar(idx=3),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -590,7 +577,7 @@ def test_partial_shift_with_cartesian_offset_provider():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.TypeVar(idx=2),
                 defined_loc=ti.TypeVar(idx=3),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -618,7 +605,7 @@ def test_shift_with_unstructured_offset_provider():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.Location(name="Vertex"),
                 defined_loc=ti.TypeVar(idx=2),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -655,7 +642,7 @@ def test_partial_shift_with_unstructured_offset_provider():
                 size=ti.TypeVar(idx=1),
                 current_loc=ti.Location(name="Vertex"),
                 defined_loc=ti.TypeVar(idx=2),
-            ),
+            )
         ),
         ret=ti.Val(
             kind=ti.Iterator(),
@@ -681,12 +668,7 @@ def test_partial_shift_with_unstructured_offset_provider():
 def test_function_definition():
     testee = ir.FunctionDefinition(id="f", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
     expected = ti.LetPolymorphic(
-        dtype=ti.FunctionType(
-            args=ti.Tuple.from_elems(
-                ti.TypeVar(idx=0),
-            ),
-            ret=ti.TypeVar(idx=0),
-        ),
+        dtype=ti.FunctionType(args=ti.Tuple.from_elems(ti.TypeVar(idx=0)), ret=ti.TypeVar(idx=0))
     )
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -761,7 +743,7 @@ def test_stencil_closure():
                 size=ti.Column(),
                 current_loc=ti.ANYWHERE,
                 defined_loc=ti.TypeVar(idx=1),
-            ),
+            )
         ),
     )
     inferred = ti.infer(testee)
@@ -963,10 +945,7 @@ def test_fencil_definition_with_function_definitions():
             ti.FunctionDefinitionType(
                 name="f",
                 fun=ti.FunctionType(
-                    args=ti.Tuple.from_elems(
-                        ti.TypeVar(idx=0),
-                    ),
-                    ret=ti.TypeVar(idx=0),
+                    args=ti.Tuple.from_elems(ti.TypeVar(idx=0)), ret=ti.TypeVar(idx=0)
                 ),
             ),
             ti.FunctionDefinitionType(
@@ -979,7 +958,7 @@ def test_fencil_definition_with_function_definitions():
                             size=ti.TypeVar(idx=2),
                             current_loc=ti.TypeVar(idx=3),
                             defined_loc=ti.TypeVar(idx=3),
-                        ),
+                        )
                     ),
                     ret=ti.Val(kind=ti.Value(), dtype=ti.TypeVar(idx=1), size=ti.TypeVar(idx=2)),
                 ),

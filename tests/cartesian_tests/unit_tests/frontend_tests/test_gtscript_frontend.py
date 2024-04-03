@@ -60,11 +60,7 @@ def parse_definition(
     original_annotations = gtscript._set_arg_dtypes(definition_func, dtypes=dtypes or {})
 
     build_options = gt_definitions.BuildOptions(
-        name=name,
-        module=module,
-        rebuild=rebuild,
-        backend_opts=kwargs,
-        build_info=None,
+        name=name, module=module, rebuild=rebuild, backend_opts=kwargs, build_info=None
     )
 
     gt_frontend.GTScriptFrontend.prepare_stencil_definition(
@@ -1009,8 +1005,7 @@ class TestCompileTimeAssertions:
                 compile_assert(inout_field[0, 0, 0] < 0)
 
         with pytest.raises(
-            gt_frontend.GTScriptSyntaxError,
-            match="Evaluation of compile_assert condition failed",
+            gt_frontend.GTScriptSyntaxError, match="Evaluation of compile_assert condition failed"
         ):
             parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
@@ -1085,11 +1080,7 @@ class TestReducedDimensions:
                 tmp[0, 0, 0][0] = field_in
                 field_out = tmp[0, 0, 0][0]
 
-        parse_definition(
-            definition,
-            name=inspect.stack()[0][3],
-            module=self.__class__.__name__,
-        )
+        parse_definition(definition, name=inspect.stack()[0][3], module=self.__class__.__name__)
 
     def test_typed_temp_missing(self):
         def definition(
@@ -1320,10 +1311,7 @@ class TestDTypes:
 
 class TestBuiltinDTypes:
     @staticmethod
-    def literal_add_func(
-        in_field: gtscript.Field[float],
-        out_field: gtscript.Field["my_float"],
-    ):
+    def literal_add_func(in_field: gtscript.Field[float], out_field: gtscript.Field["my_float"]):
         with computation(PARALLEL), interval(...):
             out_field = in_field + 42.0
 

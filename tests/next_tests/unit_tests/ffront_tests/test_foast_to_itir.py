@@ -480,11 +480,9 @@ def test_reduction_lowering_simple():
             im.call("reduce")(
                 "plus",
                 im.deref(im.promote_to_const_iterator(im.literal(value="0", typename="float64"))),
-            ),
+            )
         )
-    )(
-        im.lifted_neighbors("V2E", "edge_f"),
-    )
+    )(im.lifted_neighbors("V2E", "edge_f"))
 
     assert lowered.expr == reference
 
@@ -515,26 +513,16 @@ def test_reduction_lowering_expr():
                     im.deref(
                         im.promote_to_const_iterator(im.literal(value="0", typename="float64"))
                     ),
-                ),
+                )
             )
-        )(
-            mapped,
-        )
+        )(mapped)
     )
 
     assert lowered.expr == reference
 
 
 def test_builtin_int_constructors():
-    def int_constrs() -> (
-        tuple[
-            int32,
-            int32,
-            int64,
-            int32,
-            int64,
-        ]
-    ):
+    def int_constrs() -> tuple[int32, int32, int64, int32, int64]:
         return 1, int32(1), int64(1), int32("1"), int64("1")
 
     parsed = FieldOperatorParser.apply_to_function(int_constrs)
@@ -552,17 +540,7 @@ def test_builtin_int_constructors():
 
 
 def test_builtin_float_constructors():
-    def float_constrs() -> (
-        tuple[
-            float,
-            float,
-            float32,
-            float64,
-            float,
-            float32,
-            float64,
-        ]
-    ):
+    def float_constrs() -> tuple[float, float, float32, float64, float, float32, float64]:
         return (
             0.1,
             float(0.1),

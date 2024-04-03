@@ -143,9 +143,7 @@ if _sys.version_info >= (3, 9):
     ]
 else:
     SolvedTypeAnnotation = Union[  # type: ignore[misc]  # mypy consider this assignment a redefinition
-        Type,
-        _typing._SpecialForm,
-        _typing._GenericAlias,  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
+        Type, _typing._SpecialForm, _typing._GenericAlias  # type: ignore[attr-defined]  # _GenericAlias is not exported in stub
     ]
 
 TypeAnnotation = Union[ForwardRef, SolvedTypeAnnotation]
@@ -334,9 +332,7 @@ _ProtoT = TypeVar("_ProtoT", bound=_abc.ABCMeta)
 
 @overload
 def extended_runtime_checkable(
-    *,
-    instance_check_shortcut: bool = True,
-    subclass_check_with_data_members: bool = False,
+    *, instance_check_shortcut: bool = True, subclass_check_with_data_members: bool = False
 ) -> Callable[[_ProtoT], _ProtoT]: ...
 
 
@@ -696,10 +692,7 @@ class CallableKwargsInfo:
 
 
 def infer_type(
-    value: Any,
-    *,
-    annotate_callable_kwargs: bool = False,
-    none_as_type: bool = True,
+    value: Any, *, annotate_callable_kwargs: bool = False, none_as_type: bool = True
 ) -> TypeAnnotation:
     """Generate a typing definition from a value.
 

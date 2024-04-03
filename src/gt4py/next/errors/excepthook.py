@@ -33,11 +33,7 @@ from . import exceptions, formatting
 def _format_uncaught_error(err: exceptions.DSLError, verbose_exceptions: bool) -> list[str]:
     if verbose_exceptions:
         return formatting.format_compilation_error(
-            type(err),
-            err.message,
-            err.location,
-            err.__traceback__,
-            err.__cause__,
+            type(err), err.message, err.location, err.__traceback__, err.__cause__
         )
     else:
         return formatting.format_compilation_error(type(err), err.message, err.location)

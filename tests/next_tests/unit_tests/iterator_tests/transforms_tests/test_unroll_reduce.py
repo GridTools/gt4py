@@ -142,13 +142,7 @@ def _expected(red, dim, max_neighbors, has_skip_values, shifted_arg=0):
 
     red_fun, red_init = red.fun.args
 
-    elements = [
-        ir.FunCall(
-            fun=ir.SymRef(id="list_get"),
-            args=[offset, arg],
-        )
-        for arg in red.args
-    ]
+    elements = [ir.FunCall(fun=ir.SymRef(id="list_get"), args=[offset, arg]) for arg in red.args]
 
     step_expr = ir.FunCall(fun=red_fun, args=[acc] + elements)
     if has_skip_values:

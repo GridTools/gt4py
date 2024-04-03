@@ -61,9 +61,7 @@ class PastToItir(workflow.ChainableWorkflowMixin):
             devtools.debug(itir_program)
 
         return stages.ProgramCall(
-            itir_program,
-            inp.args,
-            inp.kwargs | {"column_axis": _column_axis(all_closure_vars)},
+            itir_program, inp.args, inp.kwargs | {"column_axis": _column_axis(all_closure_vars)}
         )
 
 
@@ -80,10 +78,7 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
     for name, gt_callable in transform_utils._filter_closure_vars_by_type(
         all_closure_vars, gtcallable.GTCallable
     ).items():
-        if isinstance(
-            (type_ := gt_callable.__gt_type__()),
-            ts_ffront.ScanOperatorType,
-        ):
+        if isinstance((type_ := gt_callable.__gt_type__()), ts_ffront.ScanOperatorType):
             scanops_per_axis.setdefault(type_.axis, []).append(name)
 
     if len(scanops_per_axis.values()) == 0:
@@ -108,9 +103,7 @@ def _size_arg_from_field(field_name: str, dim: int) -> str:
     return f"__{field_name}_size_{dim}"
 
 
-def _flatten_tuple_expr(
-    node: past.Expr,
-) -> list[past.Name | past.Subscript]:
+def _flatten_tuple_expr(node: past.Expr) -> list[past.Name | past.Subscript]:
     if isinstance(node, (past.Name, past.Subscript)):
         return [node]
     elif isinstance(node, past.TupleExpr):
@@ -208,10 +201,7 @@ class ProgramLowering(
             closures.append(self._visit_stencil_call(stmt, **kwargs))
 
         return itir.FencilDefinition(
-            id=node.id,
-            function_definitions=function_definitions,
-            params=params,
-            closures=closures,
+            id=node.id, function_definitions=function_definitions, params=params, closures=closures
         )
 
     def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
@@ -227,10 +217,7 @@ class ProgramLowering(
         assert isinstance(node.func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType))
 
         args, node_kwargs = type_info.canonicalize_arguments(
-            node.func.type,
-            node.args,
-            node_kwargs,
-            use_signature_ordering=True,
+            node.func.type, node.args, node_kwargs, use_signature_ordering=True
         )
 
         lowered_args, lowered_kwargs = self.visit(args, **kwargs), self.visit(node_kwargs, **kwargs)
@@ -253,9 +240,7 @@ class ProgramLowering(
         else:
             # field operators return a tuple of iterators, deref element-wise
             stencil_body = lowering_utils.process_elements(
-                im.deref,
-                im.call(node.func.id)(*stencil_args),
-                node.func.type.definition.returns,
+                im.deref, im.call(node.func.id)(*stencil_args), node.func.type.definition.returns
             )
 
         return itir.StencilClosure(
@@ -281,8 +266,7 @@ class ProgramLowering(
             )
             if slice_bound.value < 0:
                 lowered_bound = itir.FunCall(
-                    fun=itir.SymRef(id="plus"),
-                    args=[dim_size, self.visit(slice_bound, **kwargs)],
+                    fun=itir.SymRef(id="plus"), args=[dim_size, self.visit(slice_bound, **kwargs)]
                 )
             else:
                 lowered_bound = self.visit(slice_bound, **kwargs)
@@ -380,10 +364,7 @@ class ProgramLowering(
         )
 
     def _construct_itir_initialized_domain_arg(
-        self,
-        dim_i: int,
-        dim: common.Dimension,
-        node_domain: past.Dict,
+        self, dim_i: int, dim: common.Dimension, node_domain: past.Dict
     ) -> list[itir.FunCall]:
         assert len(node_domain.values_[dim_i].elts) == 2
         keys_dims_types = cast(ts.DimensionType, node_domain.keys_[dim_i].type).dim

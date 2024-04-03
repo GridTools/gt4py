@@ -41,9 +41,7 @@ class NoFieldAccessPruning(eve.NodeTranslator):
         if not horizontal_executions:
             return eve.NOTHING
         return oir.VerticalLoopSection(
-            interval=node.interval,
-            horizontal_executions=horizontal_executions,
-            loc=node.loc,
+            interval=node.interval, horizontal_executions=horizontal_executions, loc=node.loc
         )
 
     def visit_VerticalLoop(self, node: oir.VerticalLoop) -> Any:
@@ -51,10 +49,7 @@ class NoFieldAccessPruning(eve.NodeTranslator):
         if not sections:
             return eve.NOTHING
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=sections,
-            caches=node.caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=sections, caches=node.caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):

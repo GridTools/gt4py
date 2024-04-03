@@ -88,9 +88,7 @@ def tridiag_reference():
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     closure(
         cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-            named_range(KDim, 0, k_size),
+            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
         ),
         solve_tridiag,
         x,
@@ -102,9 +100,7 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
 def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
     closure(
         cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-            named_range(KDim, 0, k_size),
+            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
         ),
         solve_tridiag2,
         x,

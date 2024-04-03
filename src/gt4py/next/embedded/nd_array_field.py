@@ -220,11 +220,7 @@ class NdArrayField(
             # finally, take the new array
             new_buffer = xp.take(self._ndarray, new_idx_array, axis=dim_idx)
 
-        return self.__class__.from_array(
-            new_buffer,
-            domain=new_domain,
-            dtype=self.dtype,
-        )
+        return self.__class__.from_array(new_buffer, domain=new_domain, dtype=self.dtype)
 
     __call__ = remap  # type: ignore[assignment]
 
@@ -395,12 +391,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(
-            domain,
-            array,
-            codomain,
-            _skip_value=skip_value,
-        )
+        return cls(domain, array, codomain, _skip_value=skip_value)
 
     def inverse_image(
         self, image_range: common.UnitRange | common.NamedRange
@@ -530,9 +521,7 @@ NdArrayField.register_builtin_func(
 NdArrayField.register_builtin_func(fbuiltins.where, _make_builtin("where", "where"))
 
 
-def _compute_mask_ranges(
-    mask: core_defs.NDArrayObject,
-) -> list[tuple[bool, common.UnitRange]]:
+def _compute_mask_ranges(mask: core_defs.NDArrayObject) -> list[tuple[bool, common.UnitRange]]:
     """Take a 1-dimensional mask and return a sequence of mappings from boolean values to ranges."""
     # TODO: does it make sense to upgrade this naive algorithm to numpy?
     assert mask.ndim == 1
@@ -698,10 +687,7 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
-) -> Callable[
-    ...,
-    NdArrayField[common.DimsT, core_defs.ScalarT],
-]:
+) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT]]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
@@ -735,11 +721,7 @@ def _make_reduction(
         )
 
         return field.__class__.from_array(
-            getattr(xp, array_builtin_name)(
-                masked_array,
-                axis=reduce_dim_index,
-            ),
-            domain=new_domain,
+            getattr(xp, array_builtin_name)(masked_array, axis=reduce_dim_index), domain=new_domain
         )
 
     _builtin_op.__name__ = builtin_name

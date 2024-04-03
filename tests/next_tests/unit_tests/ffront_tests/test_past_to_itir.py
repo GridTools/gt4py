@@ -175,8 +175,7 @@ def test_inout_prohibited(identity_def):
         identity(inout_field, out=inout_field)
 
     with pytest.raises(
-        ValueError,
-        match=(r"Call to function with field as input and output not allowed."),
+        ValueError, match=(r"Call to function with field as input and output not allowed.")
     ):
         ProgramLowering.apply(
             ProgramParser.apply_to_function(inout_field_program),
@@ -186,9 +185,7 @@ def test_inout_prohibited(identity_def):
 
 
 def test_invalid_call_sig_program(invalid_call_sig_program_def):
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramLowering.apply(
             ProgramParser.apply_to_function(invalid_call_sig_program_def),
             function_definitions=[],

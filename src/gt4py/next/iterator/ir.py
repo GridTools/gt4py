@@ -156,19 +156,8 @@ BINARY_MATH_NUMBER_BUILTINS = {
     "mod",
     "floordiv",  # TODO see https://github.com/GridTools/gt4py/issues/1136
 }
-BINARY_MATH_COMPARISON_BUILTINS = {
-    "eq",
-    "less",
-    "greater",
-    "greater_equal",
-    "less_equal",
-    "not_eq",
-}
-BINARY_LOGICAL_BUILTINS = {
-    "and_",
-    "or_",
-    "xor_",
-}
+BINARY_MATH_COMPARISON_BUILTINS = {"eq", "less", "greater", "greater_equal", "less_equal", "not_eq"}
+BINARY_LOGICAL_BUILTINS = {"and_", "or_", "xor_"}
 
 ARITHMETIC_BUILTINS = {
     *UNARY_MATH_NUMBER_BUILTINS,

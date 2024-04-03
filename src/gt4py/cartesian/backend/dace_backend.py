@@ -67,8 +67,7 @@ def _serialize_sdfg(sdfg: dace.SDFG):
 
 def _specialize_transient_strides(sdfg: dace.SDFG, layout_map):
     repldict = replace_strides(
-        [array for array in sdfg.arrays.values() if array.transient],
-        layout_map,
+        [array for array in sdfg.arrays.values() if array.transient], layout_map
     )
     sdfg.replace_dict(repldict)
     for state in sdfg.nodes():
@@ -221,9 +220,7 @@ def _sdfg_add_arrays_and_edges(
             ranges = [
                 (o - max(0, e), o - max(0, e) + s - 1, 1)
                 for o, e, s in zip(
-                    origin,
-                    field_info[name].boundary.lower_indices,
-                    inner_sdfg.arrays[name].shape,
+                    origin, field_info[name].boundary.lower_indices, inner_sdfg.arrays[name].shape
                 )
             ]
             ranges += [(0, d, 1) for d in field_info[name].data_dims]
@@ -786,8 +783,7 @@ class BaseDaceBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )
 
 
@@ -826,10 +822,7 @@ class DaceGPUBackend(BaseDaceBackend):
         ),
     }
     MODULE_GENERATOR_CLASS = DaCeCUDAPyExtModuleGenerator
-    options = {
-        **BaseGTBackend.GT_BACKEND_OPTS,
-        "device_sync": {"versioning": True, "type": bool},
-    }
+    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
 
     def generate_extension(self, **kwargs: Any) -> Tuple[str, str]:
         return self.make_extension(stencil_ir=self.builder.gtir, uses_cuda=True)

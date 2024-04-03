@@ -71,31 +71,19 @@ K = common.Dimension("K")
         ([(I, (-2, 3))], NamedRange(I, UnitRange(-3, -2)), IndexError),
         ([(I, (-2, 3))], NamedIndex(I, 3), IndexError),
         ([(I, (-2, 3))], NamedRange(I, UnitRange(3, 4)), IndexError),
-        (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            2,
-            [(J, (3, 6)), (K, (4, 7))],
-        ),
+        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], 2, [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             slice(2, 3),
             [(I, (4, 5)), (J, (3, 6)), (K, (4, 7))],
         ),
-        (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedIndex(I, 2),
-            [(J, (3, 6)), (K, (4, 7))],
-        ),
+        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], NamedIndex(I, 2), [(J, (3, 6)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             NamedRange(I, UnitRange(2, 3)),
             [(I, (2, 3)), (J, (3, 6)), (K, (4, 7))],
         ),
-        (
-            [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
-            NamedIndex(J, 3),
-            [(I, (2, 5)), (K, (4, 7))],
-        ),
+        ([(I, (2, 5)), (J, (3, 6)), (K, (4, 7))], NamedIndex(J, 3), [(I, (2, 5)), (K, (4, 7))]),
         (
             [(I, (2, 5)), (J, (3, 6)), (K, (4, 7))],
             NamedRange(J, UnitRange(4, 5)),
@@ -165,14 +153,8 @@ def test_iterate_domain():
             (NamedRange(J, common.UnitRange(3, 6)), NamedRange(I, common.UnitRange(3, 5))),
         ],
         [slice(I(1), J(7)), IndexError],
-        [
-            slice(I(1), None),
-            IndexError,
-        ],
-        [
-            slice(None, K(8)),
-            IndexError,
-        ],
+        [slice(I(1), None), IndexError],
+        [slice(None, K(8)), IndexError],
     ],
 )
 def test_slicing(slices, expected):
