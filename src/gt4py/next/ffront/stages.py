@@ -39,11 +39,10 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
 def hash_field_operator_definition(fieldop_definition: FieldOperatorDefinition) -> str:
     return eve_utils.content_hash(
         fieldop_definition.definition.__name__,
-        hash(fieldop_definition.definition),
         inspect.getsourcelines(fieldop_definition.definition),
         fieldop_definition.grid_type,
         fieldop_definition.node_class,
-        fieldop_definition.attributes,
+        tuple(fieldop_definition.attributes.items()),
     )
 
 
@@ -57,7 +56,9 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
 
 def hash_foast_operator_definition(foast_definition: FoastOperatorDefinition) -> str:
     return eve_utils.content_hash(
-        foast_definition.foast_node, foast_definition.grid_type, foast_definition.attributes
+        foast_definition.foast_node,
+        foast_definition.grid_type,
+        tuple(foast_definition.attributes.items()),
     )
 
 
