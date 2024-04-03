@@ -573,7 +573,9 @@ def _intersect_fields(
     # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
     # currently blocked, because requiring the `_to_field` function, see comment there.
     nd_array_class = _get_nd_array_class(*fields)
-    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if isinstance(f, common.Field)))
+    promoted_dims = common.promote_dims(
+        *(f.domain.dims for f in fields if isinstance(f, common.Field))
+    )
     broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
 
     intersected_domains = embedded_common.restrict_to_intersection(
