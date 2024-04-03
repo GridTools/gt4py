@@ -62,12 +62,12 @@ def _make_builtin(
         op = getattr(xp, array_builtin_name)
 
         domain_intersection = embedded_common.domain_intersection(
-            *[f.domain for f in fields if common.is_field(f)]
+            *[f.domain for f in fields if isinstance(f, common.Field)]
         )
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
-            if common.is_field(f):
+            if isinstance(f, common.Field):
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
@@ -181,10 +181,10 @@ class NdArrayField(
         self: NdArrayField, connectivity: common.ConnectivityField | fbuiltins.FieldOffset
     ) -> NdArrayField:
         # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
-        if not common.is_connectivity_field(connectivity):
+        if not isinstance(connectivity, common.ConnectivityField):
             assert isinstance(connectivity, fbuiltins.FieldOffset)
             connectivity = connectivity.as_connectivity_field()
-        assert common.is_connectivity_field(connectivity)
+        assert isinstance(connectivity, common.ConnectivityField)
 
         # Current implementation relies on skip_value == -1:
         # if we assume the indexed array has at least one element, we wrap around without out of bounds
@@ -212,7 +212,7 @@ class NdArrayField(
                 if restricted_connectivity_domain != connectivity.domain
                 else connectivity
             )
-            assert common.is_connectivity_field(restricted_connectivity)
+            assert isinstance(restricted_connectivity, common.ConnectivityField)
 
             # then compute the index array
             xp = self.array_ns
@@ -239,7 +239,7 @@ class NdArrayField(
     ) -> None:
         target_domain, target_slice = self._slice(index)
 
-        if common.is_field(value):
+        if isinstance(value, common.Field):
             if not value.domain == target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
@@ -559,7 +559,7 @@ def _to_field(
     # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
     return (
         value
-        if common.is_field(value)
+        if isinstance(value, common.Field)
         else nd_array_field_type.from_array(
             nd_array_field_type.array_ns.asarray(value), domain=common.Domain()
         )
@@ -573,7 +573,7 @@ def _intersect_fields(
     # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
     # currently blocked, because requiring the `_to_field` function, see comment there.
     nd_array_class = _get_nd_array_class(*fields)
-    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if common.is_field(f)))
+    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if isinstance(f, common.Field)))
     broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
 
     intersected_domains = embedded_common.restrict_to_intersection(
@@ -812,7 +812,7 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
 def _builtins_broadcast(
     field: common.Field | core_defs.Scalar, new_dimensions: tuple[common.Dimension, ...]
 ) -> common.Field:  # separated for typing reasons
-    if common.is_field(field):
+    if isinstance(field, common.Field):
         return _broadcast(field, new_dimensions)
     raise AssertionError("Scalar case not reachable from 'fbuiltins.broadcast'.")
 

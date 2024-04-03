@@ -456,7 +456,7 @@ def verify_with_default_data(
             ``comparison(ref, <out | inout>)`` and should return a boolean.
     """
     inps, kwfields = get_default_data(case, fieldop)
-    ref_args = tuple(i.asnumpy() if common.is_field(i) else i for i in inps)
+    ref_args = tuple(i.asnumpy() if isinstance(i, common.Field) else i for i in inps)
     verify(
         case,
         fieldop,
