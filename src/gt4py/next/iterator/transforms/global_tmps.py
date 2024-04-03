@@ -455,10 +455,12 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
-        return im.call(self.grid_type)(*[
-            im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
-            for d, r in self.ranges.items()
-        ])
+        return im.call(self.grid_type)(
+            *[
+                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+                for d, r in self.ranges.items()
+            ]
+        )
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:

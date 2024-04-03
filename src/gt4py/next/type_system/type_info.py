@@ -168,16 +168,18 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(*[
-            apply_to_primitive_constituents(
-                el,
-                fun,
-                _path=(*_path, i),
-                with_path_arg=with_path_arg,
-                tuple_constructor=tuple_constructor,
-            )
-            for i, el in enumerate(symbol_type.types)
-        ])
+        return tuple_constructor(
+            *[
+                apply_to_primitive_constituents(
+                    el,
+                    fun,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
+                )
+                for i, el in enumerate(symbol_type.types)
+            ]
+        )
     if with_path_arg:
         return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:

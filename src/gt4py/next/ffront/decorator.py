@@ -486,10 +486,12 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         #  of arg and kwarg types
         # TODO(tehrengruber): check foast operator has no out argument that clashes
         #  with the out argument of the program we generate here.
-        hash_ = eve_utils.content_hash((
-            tuple(arg_types),
-            tuple((name, arg) for name, arg in kwarg_types.items()),
-        ))
+        hash_ = eve_utils.content_hash(
+            (
+                tuple(arg_types),
+                tuple((name, arg) for name, arg in kwarg_types.items()),
+            )
+        )
         try:
             return self._program_cache[hash_]
         except KeyError:

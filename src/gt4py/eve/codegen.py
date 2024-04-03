@@ -632,11 +632,13 @@ class TemplatedGenerator(NodeVisitor):
                 ):
                     templates.update(templated_gen_class.__templates__)
 
-        templates.update({
-            key: value
-            for key, value in cls.__dict__.items()
-            if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
-        })
+        templates.update(
+            {
+                key: value
+                for key, value in cls.__dict__.items()
+                if isinstance(value, Template) and not key.startswith("_") and not key.endswith("_")
+            }
+        )
 
         cls.__templates__ = types.MappingProxyType(templates)
 

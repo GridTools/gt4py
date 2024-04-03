@@ -144,10 +144,12 @@ class StencilComputation(library.LibraryNode):
                 for decl in declarations.values()
                 if isinstance(decl, oir.ScalarDecl)
             }
-            self.symbol_mapping.update({
-                axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
-                for axis in dcir.Axis.dims_horizontal()
-            })
+            self.symbol_mapping.update(
+                {
+                    axis.domain_symbol(): dace.symbol(axis.domain_symbol(), dtype=dace.int32)
+                    for axis in dcir.Axis.dims_horizontal()
+                }
+            )
             self.access_infos = compute_dcir_access_infos(
                 oir_node,
                 oir_decls=declarations,

@@ -136,15 +136,19 @@ def restrict_to_intersection(
         >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
-    intersection_without_ignore_dims = domain_intersection(*[
-        common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
-        for domain in domains
-    ])
+    intersection_without_ignore_dims = domain_intersection(
+        *[
+            common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
+            for domain in domains
+        ]
+    )
     return tuple(
-        common.Domain(*[
-            (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim])
-            for nr in domain
-        ])
+        common.Domain(
+            *[
+                (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim])
+                for nr in domain
+            ]
+        )
         for domain in domains
     )
 
