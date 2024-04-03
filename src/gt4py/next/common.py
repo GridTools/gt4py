@@ -709,26 +709,10 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
         """Only defined for `Field` of value type `bool`."""
 
 
-# def is_field(v: Any) -> TypeGuard[Field]:
-#     # This function is introduced to localize the `type: ignore` because
-#     # extended_runtime_checkable does not make the protocol runtime_checkable
-#     # for mypy.
-#     # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-#     return isinstance(v, Field)  # type: ignore[misc] # we use extended_runtime_checkable
-
-
 @runtime_checkable
 class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.ScalarT]):
     @abc.abstractmethod
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
-
-
-# def is_mutable_field(v: Field) -> TypeGuard[MutableField]:
-#     # This function is introduced to localize the `type: ignore` because
-#     # extended_runtime_checkable does not make the protocol runtime_checkable
-#     # for mypy.
-#     # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-#     return isinstance(v, MutableField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 class ConnectivityKind(enum.Flag):
@@ -816,14 +800,6 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     def __xor__(self, other: Field | core_defs.IntegralScalar) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
-
-
-# def is_connectivity_field(v: Any) -> TypeGuard[ConnectivityField]:
-#     # This function is introduced to localize the `type: ignore` because
-#     # extended_runtime_checkable does not make the protocol runtime_checkable
-#     # for mypy.
-#     # TODO(egparedes): remove it when extended_runtime_checkable is fixed
-#     return isinstance(v, ConnectivityField)  # type: ignore[misc] # we use extended_runtime_checkable
 
 
 # Utility function to construct a `Field` from different buffer representations.
