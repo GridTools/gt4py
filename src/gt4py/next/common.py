@@ -332,7 +332,7 @@ def is_finite_named_range(v: NamedRange) -> TypeGuard[FiniteNamedRange]:
 
 def is_named_slice(obj: AnyIndexSpec) -> TypeGuard[slice]:
     return isinstance(obj, slice) and (
-        isinstance(obj.start, (NamedRange, NamedIndex)) and isinstance(obj.stop, NamedIndex)
+        isinstance(obj.start, NamedIndex) and isinstance(obj.stop, NamedIndex)
     )
 
 

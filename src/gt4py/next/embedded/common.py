@@ -22,13 +22,13 @@ from collections.abc import Iterator, Sequence
 from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
-from gt4py.next.utils import extract_tuple_from_slice
 
 
 def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
     index_sequence = common.as_any_index_sequence(index)
 
     if common.is_absolute_index_sequence(index_sequence):
+        assert isinstance(index_sequence, (common.NamedSlice, common.NamedIndex))
         return _absolute_sub_domain(domain, index_sequence)
 
     if common.is_relative_index_sequence(index_sequence):
@@ -71,21 +71,26 @@ def _relative_sub_domain(
 
 
 def _absolute_sub_domain(
-    domain: common.Domain, index: common.AbsoluteIndexSequence
+    domain: common.Domain, index: Sequence[common.NamedIndex | common.NamedSlice]
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
-        index_new = extract_tuple_from_slice(index, i)
-        if i < len(index) and isinstance(index[i], slice):
-            if index[i].start is None:  # type: ignore[union-attr]
-                index_or_range = index[i].stop.value  # type: ignore[union-attr]
-            elif index[i].stop is None:  # type: ignore[union-attr]
-                index_or_range = index[i].start.value  # type: ignore[union-attr]
+        if i < len(index) and isinstance(index[i], common.NamedSlice):
+            index_i_start = index[i].start  # type: ignore[union-attr] # slice has this attr
+            index_i_stop = index[i].stop  # type: ignore[union-attr] # slice has this attr
+            if not common.unit_range((index_i_start.value, index_i_stop.value)) <= rng:
+                raise embedded_exceptions.IndexOutOfBounds(
+                    domain=domain, indices=index, index=i, dim=dim
+                )
+            if index_i_start is None:
+                index_or_range = index_i_stop.value
+            elif index_i_stop is None:
+                index_or_range = index_i_start.value
             else:
-                index_or_range = common.unit_range((index_new[0].value, index_new[1].value))  # type: ignore[union-attr]
+                index_or_range = common.unit_range((index_i_start.value, index_i_stop.value))
             named_ranges.append(common.NamedRange(dim, index_or_range))
-        elif i < len(index) and (pos := _find_index_of_dim(dim, index_new)) is not None:
-            named_idx = index_new[pos]
+        elif i < len(index) and (pos := _find_index_of_dim(dim, index)) is not None:
+            named_idx = index[pos]
             _, idx = named_idx  # type: ignore[misc] # named_idx is not a slice
             if isinstance(idx, common.UnitRange):
                 if not idx <= rng:
@@ -205,7 +210,16 @@ def canonicalize_any_index_sequence(
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
         new_index = tuple([_create_slice(i, bounds[idx]) for idx, i in enumerate(new_index)])
+    elif isinstance(new_index, common.Domain):
+        new_index = tuple([_from_named_range_to_slice(idx) for idx in new_index])
     return new_index
+
+
+def _from_named_range_to_slice(idx: common.NamedRange) -> common.NamedSlice:
+    return common.NamedSlice(
+        common.NamedIndex(dim=idx.dim, value=idx.unit_range.start),
+        common.NamedIndex(dim=idx.dim, value=idx.unit_range.stop),
+    )
 
 
 def _create_slice(idx: common.NamedSlice, bounds: common.UnitRange) -> common.NamedSlice:
