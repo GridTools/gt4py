@@ -476,7 +476,7 @@ def test_absolute_indexing(domain_slice, expected_dimensions, expected_shape):
     field = common._field(np.ones((5, 10, 15)), domain=domain)
     indexed_field = field[domain_slice]
 
-    assert common.is_field(indexed_field)
+    assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain.dims == expected_dimensions
 
@@ -492,7 +492,7 @@ def test_absolute_indexing_dim_sliced():
         NamedRange(dim=D1, unit_range=UnitRange(8, 10)),
     ]
 
-    assert common.is_field(indexed_field_1)
+    assert isinstance(indexed_field_1, common.Field)
     assert indexed_field_1 == expected
 
 
@@ -504,7 +504,7 @@ def test_absolute_indexing_dim_sliced_single_slice():
     indexed_field_1 = field[D2(11)]
     indexed_field_2 = field[NamedIndex(D2, 11)]
 
-    assert common.is_field(indexed_field_1)
+    assert isinstance(indexed_field_1, common.Field)
     assert indexed_field_1 == indexed_field_2
 
 
@@ -532,10 +532,10 @@ def test_absolute_indexing_value_return():
     field = common._field(np.reshape(np.arange(100, dtype=np.int32), (10, 10)), domain=domain)
 
     named_index = (NamedIndex(D0, 12), NamedIndex(D1, 6))
-    assert common.is_field(field)
+    assert isinstance(field, common.Field)
     value = field[named_index]
 
-    assert common.is_field(value)
+    assert isinstance(value, common.Field)
     assert value.as_scalar() == 21
 
 
@@ -566,7 +566,7 @@ def test_relative_indexing_slice_2D(index, expected_shape, expected_domain):
     field = common._field(np.ones((10, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert common.is_field(indexed_field)
+    assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 
@@ -618,7 +618,7 @@ def test_relative_indexing_slice_3D(index, expected_shape, expected_domain):
     field = common._field(np.ones((10, 15, 10)), domain=domain)
     indexed_field = field[index]
 
-    assert common.is_field(indexed_field)
+    assert isinstance(indexed_field, common.Field)
     assert indexed_field.ndarray.shape == expected_shape
     assert indexed_field.domain == expected_domain
 
@@ -669,7 +669,7 @@ def test_setitem(index, value):
     )
 
     expected = np.copy(field.asnumpy())
-    expected[index] = value.asnumpy() if common.is_field(value) else value
+    expected[index] = value.asnumpy() if isinstance(value, common.Field) else value
 
     field[index] = value
 

@@ -108,7 +108,7 @@ repos:
     - pybind11==2.12.0
     - setuptools==69.2.0
     - tabulate==0.9.0
-    - typing-extensions==4.5.0
+    - typing-extensions==4.10.0
     - xxhash==3.0.0
     ##[[[end]]]
     # Add all type stubs from typeshed

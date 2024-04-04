@@ -477,7 +477,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif common.is_field(val):
+    elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -847,7 +847,7 @@ def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tup
     if isinstance(field, tuple):
         return tuple(_wrap_field(f) for f in field)
     else:
-        assert common.is_field(field)
+        assert isinstance(field, common.Field)
         return NDArrayLocatedFieldWrapper(field)
 
 
@@ -916,7 +916,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-        if common.is_mutable_field(self._ndarrayfield):
+        if isinstance(self._ndarrayfield, common.MutableField):
             self._ndarrayfield[self._translate_named_indices(named_indices)] = value
         else:
             raise RuntimeError("Assigment into a non-mutable Field is not allowed.")
@@ -1416,7 +1416,7 @@ def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
 
 def is_tuple_of_field(field) -> bool:
     return isinstance(field, tuple) and all(
-        common.is_field(f) or is_tuple_of_field(f) for f in field
+        isinstance(f, common.Field) or is_tuple_of_field(f) for f in field
     )
 
 
@@ -1523,7 +1523,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (common.is_field(out) or is_tuple_of_field(out)):
+        if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
             raise TypeError("'Out' needs to be a located field.")
 
         column_range = None

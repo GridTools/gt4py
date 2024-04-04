@@ -37,7 +37,7 @@ except ImportError:
 
 
 def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
-    if not common.is_field(arg):
+    if not isinstance(arg, common.Field):
         return arg
     # field domain offsets are not supported
     non_zero_offsets = [

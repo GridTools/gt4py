@@ -38,7 +38,7 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if common.is_field(arg):
+    if isinstance(arg, common.Field):
         arr = arg.ndarray
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
