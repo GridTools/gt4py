@@ -22,6 +22,7 @@ from collections.abc import Iterator, Sequence
 from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
+from gt4py.next.utils import extract_tuple_from_slice
 
 
 def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Domain:
@@ -74,23 +75,16 @@ def _absolute_sub_domain(
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
-        if (pos := _find_index_of_dim(dim, index)) is not None:
-            named_idx = index[pos]
-            _, idx = named_idx
-            if isinstance(idx, common.UnitRange):
-                if not idx <= rng:
-                    raise embedded_exceptions.IndexOutOfBounds(
-                        domain=domain, indices=index, index=named_idx, dim=dim
-                    )
+        index_new = extract_tuple_from_slice(index, i)
 
-                named_ranges.append(common.NamedRange(dim, idx))
-            else:
-                # not in new domain
-                assert common.is_int_index(idx)
-                if idx < rng.start or idx >= rng.stop:
-                    raise embedded_exceptions.IndexOutOfBounds(
-                        domain=domain, indices=index, index=named_idx, dim=dim
-                    )
+        if (pos := _find_index_of_dim(dim, index_new)) is not None:
+            named_idx = index_new[pos]
+            _, idx = named_idx  # type: ignore[misc] # named_idx is not a slice
+            assert common.is_int_index(idx)
+            if idx < rng.start or idx >= rng.stop:
+                raise embedded_exceptions.IndexOutOfBounds(
+                    domain=domain, indices=index, index=named_idx, dim=dim
+                )
         else:
             # dimension not mentioned in slice
             named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
@@ -195,18 +189,15 @@ def _find_index_of_dim(
 
 
 def canonicalize_any_index_sequence(
-    index: common.AnyIndexSpec,
+    index: common.AnyIndexSpec, bounds: tuple[common.UnitRange]
 ) -> common.AnyIndexSpec:
-    # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
-        new_index = tuple([_named_slice_to_named_range(i) for i in new_index])  # type: ignore[arg-type, assignment] # all i's are slices as per if statement
+        new_index = tuple([_create_slice(i, bounds[idx]) for idx, i in enumerate(new_index)])
     return new_index
 
 
-def _named_slice_to_named_range(
-    idx: common.NamedSlice,
-) -> common.NamedRange | common.NamedSlice:
+def _create_slice(idx: common.NamedSlice, bounds: common.UnitRange) -> common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
         start_dim, start_value = idx.start
@@ -216,9 +207,11 @@ def _named_slice_to_named_range(
                 f"Dimensions slicing mismatch between '{start_dim.value}' and '{stop_dim.value}'."
             )
         assert isinstance(start_value, int) and isinstance(stop_value, int)
-        return common.NamedRange(start_dim, common.UnitRange(start_value, stop_value))
+        return idx
     if isinstance(idx.start, common.NamedIndex) and idx.stop is None:
-        raise IndexError(f"Upper bound needs to be specified for {idx}.")
+        idx_stop = common.NamedIndex(dim=idx.start.dim, value=bounds.stop)
+        return slice(idx.start, idx_stop, idx.step)
     if isinstance(idx.stop, common.NamedIndex) and idx.start is None:
-        raise IndexError(f"Lower bound needs to be specified for {idx}.")
+        idx_start = common.NamedIndex(dim=idx.stop.dim, value=bounds.start)
+        return slice(idx_start, idx.stop, idx.step)
     return idx

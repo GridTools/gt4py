@@ -17,7 +17,7 @@ from typing import Sequence
 import pytest
 
 from gt4py.next import common
-from gt4py.next.common import UnitRange, NamedIndex, NamedRange
+from gt4py.next.common import UnitRange, NamedIndex, NamedRange, NamedSlice
 from gt4py.next.embedded import exceptions as embedded_exceptions
 from gt4py.next.embedded.common import (
     _slice_range,
@@ -157,30 +157,41 @@ def test_iterate_domain():
 
 
 @pytest.mark.parametrize(
-    "slices, expected",
+    "slices, expected, bounds",
     [
-        [slice(I(3), I(4)), (NamedRange(I, common.UnitRange(3, 4)),)],
+        [
+            slice(I(3), I(4)),
+            tuple([NamedSlice(I(3), I(4))]),
+            tuple([common.UnitRange(start=0, stop=10)]),
+        ],
         [
             (slice(J(3), J(6)), slice(I(3), I(5))),
-            (NamedRange(J, common.UnitRange(3, 6)), NamedRange(I, common.UnitRange(3, 5))),
+            (NamedSlice(J(3), J(6)), NamedSlice(I(3), I(5))),
+            tuple([common.UnitRange(start=0, stop=10), common.UnitRange(start=0, stop=10)]),
         ],
-        [slice(I(1), J(7)), IndexError],
+        [
+            slice(I(1), J(7)),
+            IndexError,
+            tuple([common.UnitRange(start=0, stop=10), common.UnitRange(start=0, stop=10)]),
+        ],
         [
             slice(I(1), None),
-            IndexError,
+            tuple([NamedSlice(I(1), I(10))]),
+            tuple([common.UnitRange(start=0, stop=10)]),
         ],
         [
             slice(None, K(8)),
-            IndexError,
+            tuple([NamedSlice(K(0), K(8))]),
+            tuple([common.UnitRange(start=0, stop=10)]),
         ],
     ],
 )
-def test_slicing(slices, expected):
+def test_slicing(slices, expected, bounds):
     if expected is IndexError:
         with pytest.raises(IndexError):
-            canonicalize_any_index_sequence(slices)
+            canonicalize_any_index_sequence(slices, bounds)
     else:
-        testee = canonicalize_any_index_sequence(slices)
+        testee = canonicalize_any_index_sequence(slices, bounds)
         assert testee == expected
 
 

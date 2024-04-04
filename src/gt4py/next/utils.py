@@ -15,6 +15,8 @@
 import functools
 from typing import Any, Callable, ClassVar, ParamSpec, TypeGuard, TypeVar, cast
 
+from gt4py.next import common
+
 
 class RecursionGuard:
     """
@@ -67,6 +69,17 @@ def flatten_nested_tuple(value: tuple[_T | tuple, ...]) -> tuple[_T, ...]:
         return sum((flatten_nested_tuple(v) for v in value), start=())  # type: ignore[arg-type] # cannot properly express nesting
     else:
         return (value,)
+
+
+def extract_tuple_from_slice(
+    chunk: common.AbsoluteIndexSequence, idx: int
+) -> common.AbsoluteIndexSequence:
+    new_chunk = (
+        (chunk[idx].start, chunk[idx].stop)  # type: ignore[union-attr] # named_slice type verified in if statement above
+        if idx < len(chunk) and common.is_named_slice(chunk[idx])
+        else chunk
+    )
+    return new_chunk
 
 
 def tree_map(fun: Callable[_P, _R]) -> Callable[..., _R | tuple[_R | tuple, ...]]:

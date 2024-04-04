@@ -314,7 +314,7 @@ RelativeIndexElement: TypeAlias = IntIndex | slice | types.EllipsisType
 NamedSlice: TypeAlias = slice  # once slice is generic we should do: slice[NamedIndex, NamedIndex, Literal[1]], see https://peps.python.org/pep-0696/
 AbsoluteIndexElement: TypeAlias = NamedIndex | NamedRange | NamedSlice
 AnyIndexElement: TypeAlias = RelativeIndexElement | AbsoluteIndexElement
-AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedIndex]
+AbsoluteIndexSequence: TypeAlias = Sequence[NamedRange | NamedSlice | NamedIndex]
 RelativeIndexSequence: TypeAlias = tuple[
     slice | IntIndex | types.EllipsisType, ...
 ]  # is a tuple but called Sequence for symmetry
@@ -343,7 +343,9 @@ def is_any_index_element(v: AnyIndexSpec) -> TypeGuard[AnyIndexElement]:
 
 
 def is_absolute_index_sequence(v: AnyIndexSequence) -> TypeGuard[AbsoluteIndexSequence]:
-    return isinstance(v, Sequence) and all(isinstance(e, (NamedRange, NamedIndex)) for e in v)
+    return isinstance(v, Sequence) and all(
+        isinstance(e, NamedIndex) or is_named_slice(e) for e in v
+    )
 
 
 def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSequence]:

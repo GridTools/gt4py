@@ -33,6 +33,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
+from gt4py.next.utils import extract_tuple_from_slice
 
 
 try:
@@ -318,7 +319,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
-        index = embedded_common.canonicalize_any_index_sequence(index)
+        index = embedded_common.canonicalize_any_index_sequence(index, self.domain.ranges)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -849,7 +850,7 @@ NdArrayField.register_builtin_func(fbuiltins.astype, _astype)
 
 def _get_slices_from_domain_slice(
     domain: common.Domain,
-    domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex],
+    domain_slice: common.AbsoluteIndexSequence,
 ) -> common.RelativeIndexSequence:
     """Generate slices for sub-array extraction based on named ranges or named indices within a Domain.
 
@@ -868,8 +869,9 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None:
-            _, index_or_range = domain_slice[pos]
+        domain_slice_new = extract_tuple_from_slice(domain_slice, pos_old)
+        if (pos := embedded_common._find_index_of_dim(dim, domain_slice_new)) is not None:
+            _, index_or_range = domain_slice_new[pos]  # type: ignore[misc] # domain_slice_new is not a slice
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))

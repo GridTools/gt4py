@@ -512,10 +512,12 @@ def test_absolute_indexing_dim_sliced():
         dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    indexed_field_1 = field[D1(8) : D1(10), D0(5) : D0(9)]
+    indexed_field_1 = field[D1(8) : D1(10), D0(5) :]
     expected = field[
-        NamedRange(dim=D0, unit_range=UnitRange(5, 9)),
-        NamedRange(dim=D1, unit_range=UnitRange(8, 10)),
+        NamedIndex(dim=D0, value=5),
+        NamedIndex(dim=D0, value=10),
+        NamedIndex(dim=D1, value=8),
+        NamedIndex(dim=D0, value=10),
     ]
 
     assert common.is_field(indexed_field_1)
