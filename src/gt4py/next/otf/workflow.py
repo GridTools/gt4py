@@ -91,8 +91,7 @@ class ChainableWorkflowMixin(Workflow[StartT, EndT]):
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     """
     Workflow with linear succession of named steps.
@@ -253,8 +252,7 @@ class CachedStep(
 
 @dataclasses.dataclass(frozen=True)
 class SkippableStep(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     step: Workflow[StartT, EndT]
 

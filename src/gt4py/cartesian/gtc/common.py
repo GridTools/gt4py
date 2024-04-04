@@ -406,10 +406,7 @@ def _make_root_validator(impl: datamodels.RootValidator) -> datamodels.RootValid
 
 
 def assign_stmt_dtype_validation(*, strict: bool) -> datamodels.RootValidator:
-    def _impl(
-        cls: Type[datamodels.DataModel],
-        instance: datamodels.DataModel,
-    ) -> None:
+    def _impl(cls: Type[datamodels.DataModel], instance: datamodels.DataModel) -> None:
         assert isinstance(instance, AssignStmt)
         verify_and_get_common_dtype(cls, [instance.left, instance.right], strict=strict)
 
@@ -865,10 +862,7 @@ OP_TO_UFUNC_NAME: Final[
         ComparisonOperator.EQ: "equal",
         ComparisonOperator.NE: "not_equal",
     },
-    LogicalOperator: {
-        LogicalOperator.AND: "logical_and",
-        LogicalOperator.OR: "logical_or",
-    },
+    LogicalOperator: {LogicalOperator.AND: "logical_and", LogicalOperator.OR: "logical_or"},
     NativeFunction: {
         NativeFunction.ABS: "abs",
         NativeFunction.MIN: "minimum",

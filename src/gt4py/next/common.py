@@ -144,9 +144,7 @@ class UnitRange(Sequence[int], Generic[_Left, _Right]):
             object.__setattr__(self, "stop", 0)
 
     @classmethod
-    def infinite(
-        cls,
-    ) -> UnitRange:
+    def infinite(cls) -> UnitRange:
         return cls(Infinity.NEGATIVE, Infinity.POSITIVE)
 
     def __len__(self) -> int:
@@ -356,10 +354,7 @@ def is_relative_index_sequence(v: AnyIndexSequence) -> TypeGuard[RelativeIndexSe
 
 def as_any_index_sequence(index: AnyIndexSpec) -> AnyIndexSequence:
     # `cast` because mypy/typing doesn't special case 1-element tuples, i.e. `tuple[A|B] != tuple[A]|tuple[B]`
-    return cast(
-        AnyIndexSequence,
-        (index,) if is_any_index_element(index) else index,
-    )
+    return cast(AnyIndexSequence, (index,) if is_any_index_element(index) else index)
 
 
 def named_range(v: tuple[Dimension, RangeLike]) -> NamedRange:
@@ -717,9 +712,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
         """Only defined for `Field` of value type `bool`."""
 
 
-def is_field(
-    v: Any,
-) -> TypeGuard[Field]:
+def is_field(v: Any) -> TypeGuard[Field]:
     # This function is introduced to localize the `type: ignore` because
     # extended_runtime_checkable does not make the protocol runtime_checkable
     # for mypy.
@@ -733,9 +726,7 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-def is_mutable_field(
-    v: Field,
-) -> TypeGuard[MutableField]:
+def is_mutable_field(v: Field) -> TypeGuard[MutableField]:
     # This function is introduced to localize the `type: ignore` because
     # extended_runtime_checkable does not make the protocol runtime_checkable
     # for mypy.
@@ -830,9 +821,7 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
         raise TypeError("'ConnectivityField' does not support this operation.")
 
 
-def is_connectivity_field(
-    v: Any,
-) -> TypeGuard[ConnectivityField]:
+def is_connectivity_field(v: Any) -> TypeGuard[ConnectivityField]:
     # This function is introduced to localize the `type: ignore` because
     # extended_runtime_checkable does not make the protocol runtime_checkable
     # for mypy.

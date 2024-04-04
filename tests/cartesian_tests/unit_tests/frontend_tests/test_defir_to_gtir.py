@@ -52,7 +52,7 @@ def test_stencil_definition(
         TDefinition(name="definition", domain=ijk_domain, fields=["a", "b"])
         .add_blocks(
             TComputationBlock(order=IterationOrder.PARALLEL).add_statements(
-                TAssign("a", "b", (0, 0, 0)),
+                TAssign("a", "b", (0, 0, 0))
             )
         )
         .build()

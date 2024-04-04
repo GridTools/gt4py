@@ -410,8 +410,7 @@ def _max_domain_sizes_by_location_type(offset_provider: Mapping[str, Any]) -> di
             assert provider.origin_axis.kind == gtx.DimensionKind.HORIZONTAL
             assert provider.neighbor_axis.kind == gtx.DimensionKind.HORIZONTAL
             sizes[provider.origin_axis.value] = max(
-                sizes.get(provider.origin_axis.value, 0),
-                provider.table.shape[0],
+                sizes.get(provider.origin_axis.value, 0), provider.table.shape[0]
             )
             sizes[provider.neighbor_axis.value] = max(
                 sizes.get(provider.neighbor_axis.value, 0),
@@ -455,10 +454,12 @@ class SymbolicDomain:
         return cls(node.fun.id, ranges)  # type: ignore[attr-defined]  # ensure by assert above
 
     def as_expr(self):
-        return im.call(self.grid_type)(*[
-            im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
-            for d, r in self.ranges.items()
-        ])
+        return im.call(self.grid_type)(
+            *[
+                im.call("named_range")(ir.AxisLiteral(value=d), r.start, r.stop)
+                for d, r in self.ranges.items()
+            ]
+        )
 
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:

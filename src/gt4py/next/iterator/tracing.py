@@ -237,12 +237,7 @@ def closure(domain, stencil, output, inputs):
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
         stencil = make_node(stencil)
     TracerContext.add_closure(
-        StencilClosure(
-            domain=domain,
-            stencil=stencil,
-            output=output,
-            inputs=inputs,
-        )
+        StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
     )
 
 

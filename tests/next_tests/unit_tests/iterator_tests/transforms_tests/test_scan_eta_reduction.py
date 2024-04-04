@@ -34,8 +34,7 @@ def test_scan_eta_reduction():
     testee = ir.Lambda(
         params=[ir.Sym(id="x"), ir.Sym(id="y")],
         expr=ir.FunCall(
-            fun=_make_scan("param_y", "param_x"),
-            args=[ir.SymRef(id="y"), ir.SymRef(id="x")],
+            fun=_make_scan("param_y", "param_x"), args=[ir.SymRef(id="y"), ir.SymRef(id="x")]
         ),
     )
     expected = _make_scan("param_x", "param_y")

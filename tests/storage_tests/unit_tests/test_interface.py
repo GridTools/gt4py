@@ -108,12 +108,7 @@ def dimensions_strategy(draw):
     if dimension < 3:
         mask_values += [False] * (3 - dimension)
 
-    mask = draw(
-        hyp_st.one_of(
-            hyp_st.just(None),
-            hyp_st.permutations(mask_values),
-        )
-    )
+    mask = draw(hyp_st.one_of(hyp_st.just(None), hyp_st.permutations(mask_values)))
     if mask is not None:
         select_dimensions = ["I", "J", "K"] + [str(d) for d in range(max(0, dimension - 3))]
         assert len(select_dimensions) == len(mask)
@@ -389,10 +384,7 @@ def test_cpu_constructor_0d(alloc_fun, backend):
     assert isinstance(stor, np.ndarray)
 
 
-@pytest.mark.parametrize(
-    "backend",
-    GPU_LAYOUTS,
-)
+@pytest.mark.parametrize("backend", GPU_LAYOUTS)
 def test_gpu_constructor(alloc_fun, backend):
     stor = alloc_fun(dtype=np.float64, aligned_index=(1, 2, 3), shape=(2, 4, 6), backend=backend)
     assert stor.shape == (2, 4, 6)

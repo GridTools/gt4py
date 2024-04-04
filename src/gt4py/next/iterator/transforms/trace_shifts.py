@@ -98,9 +98,7 @@ class IteratorArgTracer(IteratorTracer):
 
     def shift(self, offsets: tuple[ir.OffsetLiteral, ...]):
         return IteratorArgTracer(
-            arg=self.arg,
-            shift_recorder=self.shift_recorder,
-            offsets=self.offsets + tuple(offsets),
+            arg=self.arg, shift_recorder=self.shift_recorder, offsets=self.offsets + tuple(offsets)
         )
 
     def deref(self):
@@ -367,8 +365,7 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
 
 def _save_to_annex(
-    node: ir.Node,
-    recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]],
+    node: ir.Node, recorded_shifts: dict[int, set[tuple[ir.OffsetLiteral, ...]]]
 ) -> None:
     for child_node in node.pre_walk_values():
         if id(child_node) in recorded_shifts:

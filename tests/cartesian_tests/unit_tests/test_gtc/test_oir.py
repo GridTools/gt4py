@@ -69,10 +69,7 @@ class TestAxisBoundsComparison:
         assert isinstance(res2, bool)
         assert res2
 
-    @pytest.mark.parametrize(
-        ["lhs", "rhs"],
-        LESS_AXISBOUNDS + GREATER_AXISBOUNDS,
-    )
+    @pytest.mark.parametrize(["lhs", "rhs"], LESS_AXISBOUNDS + GREATER_AXISBOUNDS)
     def test_eq_false(self, lhs, rhs):
         res1 = lhs == rhs
         assert isinstance(res1, bool)
@@ -88,10 +85,7 @@ class TestAxisBoundsComparison:
         assert isinstance(res, bool)
         assert res
 
-    @pytest.mark.parametrize(
-        ["lhs", "rhs"],
-        GREATER_AXISBOUNDS + EQUAL_AXISBOUNDS,
-    )
+    @pytest.mark.parametrize(["lhs", "rhs"], GREATER_AXISBOUNDS + EQUAL_AXISBOUNDS)
     def test_lt_false(self, lhs, rhs):
         res = lhs < rhs
         assert isinstance(res, bool)

@@ -141,10 +141,7 @@ class BaseModuleGenerator(abc.ABC):
         )
 
     def __call__(
-        self,
-        args_data: ModuleData,
-        builder: Optional["StencilBuilder"] = None,
-        **kwargs: Any,
+        self, args_data: ModuleData, builder: Optional["StencilBuilder"] = None, **kwargs: Any
     ) -> str:
         """
         Generate source code for a Python module containing a StencilObject.

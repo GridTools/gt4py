@@ -125,30 +125,20 @@ class OirSDFGBuilder(eve.NodeVisitor):
             library_node.add_in_connector("__in_" + field)
             subset = ctx.make_input_dace_subset(node, field)
             state.add_edge(
-                access_node,
-                None,
-                library_node,
-                "__in_" + field,
-                dace.Memlet(field, subset=subset),
+                access_node, None, library_node, "__in_" + field, dace.Memlet(field, subset=subset)
             )
         for field in access_collection.write_fields():
             access_node = state.add_access(field, debuginfo=dace.DebugInfo(0))
             library_node.add_out_connector("__out_" + field)
             subset = ctx.make_output_dace_subset(node, field)
             state.add_edge(
-                library_node,
-                "__out_" + field,
-                access_node,
-                None,
-                dace.Memlet(field, subset=subset),
+                library_node, "__out_" + field, access_node, None, dace.Memlet(field, subset=subset)
             )
 
         return
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs):
-        ctx = OirSDFGBuilder.SDFGContext(
-            stencil=node,
-        )
+        ctx = OirSDFGBuilder.SDFGContext(stencil=node)
         for param in node.params:
             if isinstance(param, oir.FieldDecl):
                 dim_strs = [d for i, d in enumerate("IJK") if param.dimensions[i]] + [

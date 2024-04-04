@@ -279,15 +279,7 @@ def skip_value_mesh() -> MeshDescriptor:
     )
 
     c2v_arr = np.array(
-        [
-            [0, 6, 5],
-            [0, 2, 6],
-            [0, 1, 2],
-            [2, 3, 6],
-            [3, 4, 6],
-            [4, 5, 6],
-        ],
-        dtype=gtx.IndexType,
+        [[0, 6, 5], [0, 2, 6], [0, 1, 2], [2, 3, 6], [3, 4, 6], [4, 5, 6]], dtype=gtx.IndexType
     )
 
     c2e_arr = np.array(

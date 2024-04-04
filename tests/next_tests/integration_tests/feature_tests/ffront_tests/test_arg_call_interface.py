@@ -124,13 +124,7 @@ def test_call_field_operator_from_program(cartesian_case):
 
     @program
     def testee(
-        a: IField,
-        b: IField,
-        c: IField,
-        out1: IField,
-        out2: IField,
-        out3: IField,
-        out4: IField,
+        a: IField, b: IField, c: IField, out1: IField, out2: IField, out3: IField, out4: IField
     ):
         foo(a, b, c, out=out1)
         foo(a, y=b, z=c, out=out2)
@@ -230,9 +224,7 @@ def test_scan_wrong_return_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: int32,
-        ) -> float:
+        def testee_scan(state: int32) -> float:
             return 1.0
 
         @program
@@ -250,9 +242,7 @@ def test_scan_wrong_state_type(cartesian_case):
     ):
 
         @scan_operator(axis=KDim, forward=True, init=0)
-        def testee_scan(
-            state: float,
-        ) -> int32:
+        def testee_scan(state: float) -> int32:
             return 1
 
         @program

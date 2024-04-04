@@ -86,10 +86,7 @@ class ProgramParser(DialectParser[past.Program]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls,
-        output_node: past.Program,
-        closure_vars: dict[str, Any],
-        annotations: dict[str, Any],
+        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)

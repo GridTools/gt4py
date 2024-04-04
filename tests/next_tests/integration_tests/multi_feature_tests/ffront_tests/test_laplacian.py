@@ -45,16 +45,14 @@ def laplap(in_field: gtx.Field[[IDim, JDim], "float"]) -> gtx.Field[[IDim, JDim]
 
 @gtx.program
 def lap_program(
-    in_field: gtx.Field[[IDim, JDim], "float"],
-    out_field: gtx.Field[[IDim, JDim], "float"],
+    in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
 ):
     lap(in_field, out=out_field[1:-1, 1:-1])
 
 
 @gtx.program
 def laplap_program(
-    in_field: gtx.Field[[IDim, JDim], "float"],
-    out_field: gtx.Field[[IDim, JDim], "float"],
+    in_field: gtx.Field[[IDim, JDim], "float"], out_field: gtx.Field[[IDim, JDim], "float"]
 ):
     laplap(in_field, out=out_field[2:-2, 2:-2])
 

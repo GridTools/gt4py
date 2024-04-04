@@ -41,9 +41,7 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
 
 
 def promote_zero_dims(
-    function_type: ts.FunctionType,
-    args: list[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
+    function_type: ts.FunctionType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> tuple[list, dict]:
     """
     Promote arg types to zero dimensional fields if compatible and required by function signature.
@@ -75,10 +73,7 @@ def promote_zero_dims(
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(
-            function_type.pos_only_args + list(function_type.pos_or_kw_args.values()),
-            args,
-        )
+        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
@@ -204,9 +199,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_scanop(
-    scanop_type: ts_ffront.ScanOperatorType,
-    args: list[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
+    scanop_type: ts_ffront.ScanOperatorType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     if not all(
         type_info.is_type_or_tuple_of_type(arg, (ts.ScalarType, ts.FieldType)) for arg in args
@@ -276,9 +269,7 @@ def function_signature_incompatibilities_scanop(
 
 @type_info.function_signature_incompatibilities.register
 def function_signature_incompatibilities_program(
-    program_type: ts_ffront.ProgramType,
-    args: list[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
+    program_type: ts_ffront.ProgramType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     args, kwargs = type_info.canonicalize_arguments(
         program_type.definition, args, kwargs, ignore_errors=True
@@ -318,6 +309,5 @@ def return_type_scanop(
         [callable_type.axis],
     )
     return type_info.apply_to_primitive_constituents(
-        carry_dtype,
-        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)),
+        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
     )

@@ -57,10 +57,7 @@ class CMakeFactory(
         if source.program_source.language is languages.Cuda:
             cmake_languages = [*cmake_languages, cmake_lists.Language(name="CUDA")]
         cmake_lists_src = cmake_lists.generate_cmakelists_source(
-            name,
-            source.library_deps,
-            [header_name, bindings_name],
-            languages=cmake_languages,
+            name, source.library_deps, [header_name, bindings_name], languages=cmake_languages
         )
         return CMakeProject(
             root_path=cache.get_cache_folder(source, cache_lifetime),

@@ -53,12 +53,7 @@ def compute_pnabla(pp, S_M, sign, vol):
 
 
 def zavgS_fencil(edge_domain, out, pp, S_M):
-    closure(
-        edge_domain,
-        compute_zavgS,
-        out,
-        [pp, S_M],
-    )
+    closure(edge_domain, compute_zavgS, out, [pp, S_M])
 
 
 Vertex = gtx.Dimension("Vertex")

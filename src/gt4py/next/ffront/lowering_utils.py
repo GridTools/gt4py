@@ -134,19 +134,19 @@ T = TypeVar("T", bound=itir.Expr, covariant=True)
 
 
 def _process_elements_impl(
-    process_func: Callable[..., itir.Expr],
-    _current_el_exprs: list[T],
-    current_el_type: ts.TypeSpec,
+    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(*[
-            _process_elements_impl(
-                process_func,
-                [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                current_el_type.types[i],
-            )
-            for i in range(len(current_el_type.types))
-        ])
+        result = im.make_tuple(
+            *[
+                _process_elements_impl(
+                    process_func,
+                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
+                    current_el_type.types[i],
+                )
+                for i in range(len(current_el_type.types))
+            ]
+        )
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")
     else:

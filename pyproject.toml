@@ -278,9 +278,6 @@ target-version = 'py38'
 
 [tool.ruff.format]
 docstring-code-format = true
-# Reevaluate once ruff adds support for single-line ellipsis in the stable style.
-# Track: https://github.com/astral-sh/ruff/issues/8678)
-preview = true
 
 [tool.ruff.lint]
 # # Rules sets:

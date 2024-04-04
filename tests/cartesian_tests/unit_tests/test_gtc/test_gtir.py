@@ -94,11 +94,7 @@ def test_symbolref_without_decl():
         lambda: VerticalLoopFactory(
             body=[
                 ParAssignStmtFactory(
-                    right=BinaryOpFactory(
-                        left__name="foo",
-                        right__name="foo",
-                        right__offset__i=1,
-                    )
+                    right=BinaryOpFactory(left__name="foo", right__name="foo", right__offset__i=1)
                 ),
                 ParAssignStmtFactory(left__name="foo"),
             ]
@@ -106,10 +102,7 @@ def test_symbolref_without_decl():
         # offset access in condition
         lambda: VerticalLoopFactory(
             body=[
-                FieldIfStmtFactory(
-                    cond__name="foo",
-                    cond__offset__i=1,
-                ),
+                FieldIfStmtFactory(cond__name="foo", cond__offset__i=1),
                 ParAssignStmtFactory(left__name="foo"),
             ]
         ),
@@ -157,10 +150,7 @@ def test_while_with_accumulated_extents():
     ):
         WhileFactory(
             cond=BinaryOpFactory(
-                left__name="a",
-                right__name="b",
-                op=ComparisonOperator.LT,
-                dtype=DataType.BOOL,
+                left__name="a", right__name="b", op=ComparisonOperator.LT, dtype=DataType.BOOL
             ),
             body=[
                 ParAssignStmtFactory(left__name="a", right__name="b", right__offset__i=1),

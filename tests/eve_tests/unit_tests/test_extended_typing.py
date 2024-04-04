@@ -326,10 +326,12 @@ ACTUAL_TYPE_SAMPLES = [
     (List[int], type(List[int])),
 ]
 if sys.version_info >= (3, 9):
-    ACTUAL_TYPE_SAMPLES.extend([
-        (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
-        (list[int], types.GenericAlias),
-    ])
+    ACTUAL_TYPE_SAMPLES.extend(
+        [
+            (tuple[int, float], types.GenericAlias),  # type: ignore[misc]   # ignore false positive bug: https://github.com/python/mypy/issues/11098
+            (list[int], types.GenericAlias),
+        ]
+    )
 
 
 @pytest.mark.parametrize(["instance", "expected"], ACTUAL_TYPE_SAMPLES)
