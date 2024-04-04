@@ -15,9 +15,4 @@
 from . import common, context, exceptions, nd_array_field
 
 
-__all__ = [
-    "common",
-    "context",
-    "exceptions",
-    "nd_array_field",
-]
+__all__ = ["common", "context", "exceptions", "nd_array_field"]

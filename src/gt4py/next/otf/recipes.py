@@ -54,12 +54,6 @@ class OTFCompileWorkflow(workflow.NamedStepSequence):
     """The typical compiled backend steps composed into a workflow."""
 
     translation: step_types.TranslationStep
-    bindings: workflow.Workflow[
-        stages.ProgramSource,
-        stages.CompilableSource,
-    ]
-    compilation: workflow.Workflow[
-        stages.CompilableSource,
-        stages.CompiledProgram,
-    ]
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource]
+    compilation: workflow.Workflow[stages.CompilableSource, stages.CompiledProgram]
     decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]

@@ -115,11 +115,7 @@ def zeros(
         array([0., 0., 0., 0., 0., 0., 0.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(0)
     return field
@@ -147,11 +143,7 @@ def ones(
         array([1., 1., 1., 1., 1., 1., 1.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(1)
     return field

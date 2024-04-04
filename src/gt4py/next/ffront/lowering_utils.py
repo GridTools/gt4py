@@ -134,9 +134,7 @@ T = TypeVar("T", bound=itir.Expr, covariant=True)
 
 
 def _process_elements_impl(
-    process_func: Callable[..., itir.Expr],
-    _current_el_exprs: list[T],
-    current_el_type: ts.TypeSpec,
+    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
         result = im.make_tuple(

@@ -166,10 +166,7 @@ class nabla_setup:
         zlonc = 3.0 * rpi / 2.0
 
         m_rlonlatcr = self.fs_nodes.create_field(
-            name="m_rlonlatcr",
-            levels=1,
-            dtype=np.float64,
-            variables=self.edges_per_node,
+            name="m_rlonlatcr", levels=1, dtype=np.float64, variables=self.edges_per_node
         )
         rlonlatcr = np.array(m_rlonlatcr, copy=False)
 

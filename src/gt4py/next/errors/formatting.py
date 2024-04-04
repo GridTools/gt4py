@@ -78,10 +78,7 @@ def _format_cause(cause: BaseException) -> list[str]:
 def _format_traceback(tb: types.TracebackType) -> list[str]:
     """Format the traceback of an exception."""
     intro_message = "Traceback (most recent call last):"
-    traceback_strs = [
-        f"{intro_message}\n",
-        *traceback.format_tb(tb),
-    ]
+    traceback_strs = [f"{intro_message}\n", *traceback.format_tb(tb)]
     return traceback_strs
 
 

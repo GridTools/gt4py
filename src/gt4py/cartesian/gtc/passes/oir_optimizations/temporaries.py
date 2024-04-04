@@ -63,10 +63,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
         )
 
     def visit_VerticalLoop(
-        self,
-        node: oir.VerticalLoop,
-        tmps_to_replace: Set[str],
-        **kwargs: Any,
+        self, node: oir.VerticalLoop, tmps_to_replace: Set[str], **kwargs: Any
     ) -> oir.VerticalLoop:
         return oir.VerticalLoop(
             loop_order=node.loop_order,
@@ -82,9 +79,7 @@ class TemporariesToScalarsBase(eve.NodeTranslator, eve.VisitorWithSymbolTableTra
             name=node.name,
             params=node.params,
             vertical_loops=self.visit(
-                node.vertical_loops,
-                new_symbol_name=symbol_name_creator(all_names),
-                **kwargs,
+                node.vertical_loops, new_symbol_name=symbol_name_creator(all_names), **kwargs
             ),
             declarations=[d for d in node.declarations if d.name not in tmps_to_replace],
             loc=node.loc,

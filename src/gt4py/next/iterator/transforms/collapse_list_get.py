@@ -43,8 +43,7 @@ class CollapseListGet(eve.PreserveLocationVisitor, eve.NodeTranslator):
                         args=[
                             ir.FunCall(
                                 fun=ir.FunCall(
-                                    fun=ir.SymRef(id="shift"),
-                                    args=[offset_tag, offset_index],
+                                    fun=ir.SymRef(id="shift"), args=[offset_tag, offset_index]
                                 ),
                                 args=[it],
                             )

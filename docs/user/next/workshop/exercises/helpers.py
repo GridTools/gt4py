@@ -25,11 +25,7 @@ from gt4py.next.program_processors.runners.gtfn import (
 )
 
 
-def random_mask(
-    sizes,
-    *dims,
-    dtype=None,
-) -> MutableLocatedField:
+def random_mask(sizes, *dims, dtype=None) -> MutableLocatedField:
     arr = np.full(shape=sizes, fill_value=False).flatten()
     arr[: int(arr.size * 0.5)] = True
     np.random.shuffle(arr)

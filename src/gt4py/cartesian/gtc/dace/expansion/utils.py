@@ -31,11 +31,7 @@ if TYPE_CHECKING:
 def get_dace_debuginfo(node: common.LocNode):
     if node.loc is not None:
         return dace.dtypes.DebugInfo(
-            node.loc.line,
-            node.loc.column,
-            node.loc.line,
-            node.loc.column,
-            node.loc.filename,
+            node.loc.line, node.loc.column, node.loc.line, node.loc.column, node.loc.filename
         )
     else:
         return dace.dtypes.DebugInfo(0)

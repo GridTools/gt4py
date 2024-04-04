@@ -199,10 +199,7 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
 
 @pytest.mark.parametrize(
     "kstart, reference",
-    [
-        (0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])),
-        (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]])),
-    ],
+    [(0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])), (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]]))],
 )
 def test_ksum_scan(program_processor, lift_mode, kstart, reference):
     program_processor, validate = program_processor
@@ -339,12 +336,7 @@ def sum_shifted(inp0, inp1):
 
 @fendef(column_axis=KDim)
 def sum_shifted_fencil(out, inp0, inp1, k_size):
-    closure(
-        cartesian_domain(named_range(KDim, 1, k_size)),
-        sum_shifted,
-        out,
-        [inp0, inp1],
-    )
+    closure(cartesian_domain(named_range(KDim, 1, k_size)), sum_shifted, out, [inp0, inp1])
 
 
 def test_different_vertical_sizes(program_processor):
@@ -357,13 +349,7 @@ def test_different_vertical_sizes(program_processor):
     ref = inp0.ndarray + inp1.ndarray[1:]
 
     run_processor(
-        sum_shifted_fencil,
-        program_processor,
-        out,
-        inp0,
-        inp1,
-        k_size,
-        offset_provider={"K": KDim},
+        sum_shifted_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={"K": KDim}
     )
 
     if validate:
@@ -377,12 +363,7 @@ def sum(inp0, inp1):
 
 @fendef(column_axis=KDim)
 def sum_fencil(out, inp0, inp1, k_size):
-    closure(
-        cartesian_domain(named_range(KDim, 0, k_size)),
-        sum,
-        out,
-        [inp0, inp1],
-    )
+    closure(cartesian_domain(named_range(KDim, 0, k_size)), sum, out, [inp0, inp1])
 
 
 @pytest.mark.uses_origin
@@ -396,13 +377,7 @@ def test_different_vertical_sizes_with_origin(program_processor):
     ref = inp0.asnumpy() + inp1.asnumpy()[:-1]
 
     run_processor(
-        sum_fencil,
-        program_processor,
-        out,
-        inp0,
-        inp1,
-        k_size,
-        offset_provider={"K": KDim},
+        sum_fencil, program_processor, out, inp0, inp1, k_size, offset_provider={"K": KDim}
     )
 
     if validate:

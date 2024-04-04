@@ -110,11 +110,7 @@ def test_indirect_read_with_offset_and_write():
                     ParAssignStmtFactory(right__name="tmp"),
                 ],
             ),
-            VerticalLoopFactory(
-                body=[
-                    ParAssignStmtFactory(left__name="foo"),
-                ],
-            ),
+            VerticalLoopFactory(body=[ParAssignStmtFactory(left__name="foo")]),
         ]
     )
 

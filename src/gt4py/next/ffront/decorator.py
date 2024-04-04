@@ -92,10 +92,7 @@ class Program:
         grid_type: Optional[GridType] = None,
     ) -> Program:
         program_def = ffront_stages.ProgramDefinition(definition=definition, grid_type=grid_type)
-        return cls(
-            definition_stage=program_def,
-            backend=backend,
-        )
+        return cls(definition_stage=program_def, backend=backend)
 
     # needed in testing
     @property
@@ -204,9 +201,7 @@ class Program:
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
 
         self.backend(
-            self.definition_stage,
-            *args,
-            **(kwargs | {"offset_provider": offset_provider}),
+            self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
 
 
@@ -263,10 +258,7 @@ class ProgramWithBoundArgs(Program):
                     raise ValueError(f"Parameter '{name}' already set as a bound argument.")
 
             type_info.accepts_args(
-                new_type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                new_type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
         except ValueError as err:
             bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
@@ -302,10 +294,7 @@ class ProgramWithBoundArgs(Program):
                 )
                 new_clos.inputs.pop(index)
             params = [sym(inp.id) for inp in new_clos.inputs]
-            expr = itir.FunCall(
-                fun=new_clos.stencil,
-                args=new_args,
-            )
+            expr = itir.FunCall(fun=new_clos.stencil, args=new_args)
             new_clos.stencil = itir.Lambda(params=params, expr=expr)
         return new_itir
 
@@ -347,9 +336,7 @@ def program(
 
     def program_inner(definition: types.FunctionType) -> Program:
         return Program.from_function(
-            definition,
-            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
-            grid_type,
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
         )
 
     return program_inner if definition is None else program_inner(definition)
@@ -454,11 +441,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
-    def __call__(
-        self,
-        *args,
-        **kwargs,
-    ) -> None:
+    def __call__(self, *args, **kwargs) -> None:
         if not next_embedded.context.within_context() and self.backend is not None:
             # non embedded execution
             if "offset_provider" not in kwargs:
@@ -489,7 +472,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 if self.definition_stage
                 else self.foast_stage.attributes
             )
-            if attributes and any(
+            if attributes is not None and any(
                 has_scan_op_attribute := [
                     attribute in attributes for attribute in ["init", "axis", "forward"]
                 ]
@@ -540,13 +523,9 @@ def field_operator(definition=None, *, backend=eve.NOTHING, grid_type=None):
         ...     ...
     """
 
-    def field_operator_inner(
-        definition: types.FunctionType,
-    ) -> FieldOperator[foast.FieldOperator]:
+    def field_operator_inner(definition: types.FunctionType) -> FieldOperator[foast.FieldOperator]:
         return FieldOperator.from_function(
-            definition,
-            DEFAULT_BACKEND if backend is eve.NOTHING else backend,
-            grid_type,
+            definition, DEFAULT_BACKEND if backend is eve.NOTHING else backend, grid_type
         )
 
     return field_operator_inner if definition is None else field_operator_inner(definition)

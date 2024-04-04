@@ -658,8 +658,7 @@ def _make_init_computations(
         else:
             stmts.append(
                 nodes.Assign(
-                    target=nodes.FieldRef.at_center(name, axes=decl.axes),
-                    value=init_values[name],
+                    target=nodes.FieldRef.at_center(name, axes=decl.axes), value=init_values[name]
                 )
             )
 
@@ -982,8 +981,7 @@ class IRMaker(ast.NodeVisitor):
         if intervals_dicts:
             stmts = [
                 nodes.HorizontalIf(
-                    intervals=intervals_dict,
-                    body=nodes.BlockStmt(stmts=stmts, loc=loc),
+                    intervals=intervals_dict, body=nodes.BlockStmt(stmts=stmts, loc=loc)
                 )
                 for intervals_dict in intervals_dicts
             ]
@@ -1010,9 +1008,7 @@ class IRMaker(ast.NodeVisitor):
         elif isinstance(value, bool):
             return nodes.Cast(
                 data_type=nodes.DataType.BOOL,
-                expr=nodes.BuiltinLiteral(
-                    value=nodes.Builtin.from_value(value),
-                ),
+                expr=nodes.BuiltinLiteral(value=nodes.Builtin.from_value(value)),
                 loc=nodes.Location.from_ast_node(node),
             )
         elif isinstance(value, numbers.Number):

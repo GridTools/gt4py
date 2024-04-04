@@ -15,13 +15,7 @@
 import numpy as np
 from typing import Tuple
 import pytest
-from next_tests.integration_tests.cases import (
-    IDim,
-    JDim,
-    KDim,
-    Koff,
-    cartesian_case,
-)
+from next_tests.integration_tests.cases import IDim, JDim, KDim, Koff, cartesian_case
 from gt4py import next as gtx
 from gt4py.next.ffront.fbuiltins import where, broadcast
 from next_tests.integration_tests import cases

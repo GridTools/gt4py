@@ -27,12 +27,7 @@ from gt4py.eve.utils import XIterable
 def test_getitem_():
     from gt4py.eve.utils import getitem_
 
-    mapping = {
-        "true": True,
-        1: True,
-        "false": False,
-        0: False,
-    }
+    mapping = {"true": True, 1: True, "false": False, 0: False}
 
     sequence = [False, True, True]
 
