@@ -554,6 +554,7 @@ Attributes and Properties
     :code:`SoftwareManagedGPUStorage` storage.
 
 Methods
+=======
 
 :code:`__array__(self: Storage) -> Union[np.ndarray, cp.ndarray]`
     A view of :code:`self` as a NumPy ndarray (if this instance contains a host buffer), or as a
