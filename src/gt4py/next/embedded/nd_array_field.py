@@ -497,13 +497,13 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 def _remap_as_advanced_indexing(
     data: NdArrayField, connectivity: common.ConnectivityField
 ) -> NdArrayField:
-    new_dims = set(connectivity.domain.dims) - set(data.domain.dims)
-    if repeated_dims := (new_dims - set(data.domain.dims)):
+    new_dims = {*connectivity.domain.dims} - {connectivity.codomain}
+    if repeated_dims := (new_dims & {*data.domain.dims}):
         raise ValueError(f"Remapped field will contain repeated dimensions '{repeated_dims}'.")
 
     dim = connectivity.codomain
     dim_idx = data.domain.dim_index(dim)
-    assert dim_idx is None
+    assert dim_idx is not None
 
     current_range: common.UnitRange = data.domain[dim_idx][1]
     new_ranges = connectivity.inverse_image(current_range)
@@ -532,7 +532,7 @@ def _remap_as_advanced_indexing(
             if restricted_connectivity_domain != connectivity.domain
             else connectivity
         )
-        assert common.is_connectivity_field(restricted_connectivity)
+        assert isinstance(restricted_connectivity, common.ConnectivityField)
 
         # then compute the index array
         new_idx_array = xp.asarray(restricted_connectivity.ndarray) - current_range.start
@@ -620,7 +620,11 @@ def _identity_connectivities(
         identities.append(
             cls.from_array(
                 np.broadcast_to(
-                    indices[tuple(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))],
+                    indices[
+                        tuple(
+                            slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims)
+                        )
+                    ],
                     shape,
                 ),
                 codomain=d,

@@ -451,7 +451,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
             return Domain(dims=dims_slice, ranges=ranges_slice)
-        
+
         raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: Domain) -> Domain:
