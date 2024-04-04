@@ -35,15 +35,18 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
     node_class: type[OperatorNodeT] = dataclasses.field(default=foast.FieldOperator)  # type: ignore[assignment] # TODO(ricoh): understand why mypy complains
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        state = self.__dict__.copy()
+        state["name"] = self.definition.__name__
+        state["source"] = inspect.getsource(self.definition)
+        state |= self.attributes
+        del state["definition"]
+        return state
+
 
 def hash_field_operator_definition(fieldop_definition: FieldOperatorDefinition) -> str:
-    return eve_utils.content_hash(
-        fieldop_definition.definition.__name__,
-        inspect.getsourcelines(fieldop_definition.definition),
-        fieldop_definition.grid_type,
-        fieldop_definition.node_class,
-        tuple(fieldop_definition.attributes.items()),
-    )
+    return eve_utils.content_hash(fieldop_definition)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -85,6 +88,14 @@ class ProgramDefinition:
     definition: types.FunctionType
     grid_type: Optional[common.GridType] = None
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        state = self.__dict__.copy()
+        state["name"] = self.definition.__name__
+        state["source"] = inspect.getsource(self.definition)
+        del state["definition"]
+        return state
+
 
 @dataclasses.dataclass(frozen=True)
 class PastProgramDefinition:
@@ -92,9 +103,20 @@ class PastProgramDefinition:
     closure_vars: dict[str, Any]
     grid_type: Optional[common.GridType] = None
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        hashable_closure_vars = self.closure_vars.copy()
+        for k, v in self.closure_vars.items():
+            if hasattr(v, "definition_stage"):
+                hashable_closure_vars[k] = v.definition_stage
+                hashable_closure_vars[f"{k}_backend"] = v.backend.__name__ if v.backend else "None"
+        state = self.__dict__.copy()
+        state["closure_vars"] = hashable_closure_vars
+        return state
+
 
 def hash_past_program_definition(past_definition: PastProgramDefinition) -> str:
-    return eve_utils.content_hash(past_definition.past_node, past_definition.grid_type)
+    return eve_utils.content_hash(past_definition)
 
 
 @dataclasses.dataclass(frozen=True)
