@@ -446,9 +446,7 @@ else:
             cls,
             /,
             *,
-            repr: (  # noqa: A002 [builtin-argument-shadowing]
-                bool | None | Literal["inherited"]
-            ) = "inherited",
+            repr: (bool | None | Literal["inherited"]) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
             eq: bool | None | Literal["inherited"] = "inherited",
             order: bool | None | Literal["inherited"] = "inherited",
             unsafe_hash: bool | None | Literal["inherited"] = "inherited",

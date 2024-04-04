@@ -61,9 +61,9 @@ def _make_builtin(
         xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.domain_intersection(*[
-            f.domain for f in fields if common.is_field(f)
-        ])
+        domain_intersection = embedded_common.domain_intersection(
+            *[f.domain for f in fields if common.is_field(f)]
+        )
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:

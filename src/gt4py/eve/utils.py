@@ -987,12 +987,14 @@ class XIterable(Iterable[T]):
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter([
-            ...     dict(name="AA", age=20, country="US"),
-            ...     dict(name="BB", age=30, country="UK"),
-            ...     dict(name="CC", age=40, country="EU"),
-            ...     dict(country="CH"),
-            ... ])
+            >>> it = xiter(
+            ...     [
+            ...         dict(name="AA", age=20, country="US"),
+            ...         dict(name="BB", age=30, country="UK"),
+            ...         dict(name="CC", age=40, country="EU"),
+            ...         dict(country="CH"),
+            ...     ]
+            ... )
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 

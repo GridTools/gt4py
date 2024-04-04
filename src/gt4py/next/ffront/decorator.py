@@ -407,6 +407,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __post_init__(self):
+        """This ensures that DSL linting occurs at decoration time."""
         _ = self.foast_stage
 
     @functools.cached_property

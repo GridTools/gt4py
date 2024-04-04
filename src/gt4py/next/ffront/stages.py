@@ -71,11 +71,13 @@ class FoastWithTypes(Generic[OperatorNodeT]):
 
 
 def hash_foast_with_types(foast_with_types: FoastWithTypes) -> str:
-    return eve_utils.content_hash((
-        foast_with_types.foast_op_def,
-        foast_with_types.arg_types,
-        tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
-    ))
+    return eve_utils.content_hash(
+        (
+            foast_with_types.foast_op_def,
+            foast_with_types.arg_types,
+            tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
+        )
+    )
 
 
 @dataclasses.dataclass(frozen=True)
