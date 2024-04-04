@@ -225,9 +225,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                     )
 
             return foast.TupleTargetAssign(
-                targets=new_targets,
-                value=self.visit(node.value),
-                location=self.get_location(node),
+                targets=new_targets, value=self.visit(node.value), location=self.get_location(node)
             )
 
         if not isinstance(target, ast.Name):
@@ -267,9 +265,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
 
         return foast.Assign(
             target=foast.Symbol[ts.FieldType](
-                id=node.target.id,
-                location=self.get_location(node.target),
-                type=target_type,
+                id=node.target.id, location=self.get_location(node.target), type=target_type
             ),
             value=self.visit(node.value) if node.value else None,
             location=self.get_location(node),
@@ -299,22 +295,17 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
             ) from None
 
         return foast.Subscript(
-            value=self.visit(node.value),
-            index=index,
-            location=self.get_location(node),
+            value=self.visit(node.value), index=index, location=self.get_location(node)
         )
 
     def visit_Attribute(self, node: ast.Attribute) -> Any:
         return foast.Attribute(
-            value=self.visit(node.value),
-            attr=node.attr,
-            location=self.get_location(node),
+            value=self.visit(node.value), attr=node.attr, location=self.get_location(node)
         )
 
     def visit_Tuple(self, node: ast.Tuple, **kwargs: Any) -> foast.TupleExpr:
         return foast.TupleExpr(
-            elts=[self.visit(item) for item in node.elts],
-            location=self.get_location(node),
+            elts=[self.visit(item) for item in node.elts], location=self.get_location(node)
         )
 
     def visit_Return(self, node: ast.Return, **kwargs: Any) -> foast.Return:
@@ -481,8 +472,4 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                 loc, f"Constants of type {type(node.value)} are not permitted."
             ) from None
 
-        return foast.Constant(
-            value=node.value,
-            location=loc,
-            type=type_,
-        )
+        return foast.Constant(value=node.value, location=loc, type=type_)

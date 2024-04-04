@@ -61,18 +61,8 @@ def compute_zavgS(pp, S_M):
 
 
 @fendef
-def compute_zavgS_fencil(
-    n_edges,
-    out,
-    pp,
-    S_M,
-):
-    closure(
-        unstructured_domain(named_range(Edge, 0, n_edges)),
-        compute_zavgS,
-        out,
-        [pp, S_M],
-    )
+def compute_zavgS_fencil(n_edges, out, pp, S_M):
+    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS, out, [pp, S_M])
 
 
 @fundef
@@ -116,15 +106,7 @@ def compute_pnabla2(pp, S_M, sign, vol):
 
 
 @fendef
-def nabla(
-    n_nodes,
-    out,
-    pp,
-    S_MXX,
-    S_MYY,
-    sign,
-    vol,
-):
+def nabla(n_nodes, out, pp, S_MXX, S_MYY, sign, vol):
     closure(
         unstructured_domain(named_range(Vertex, 0, n_nodes)),
         pnabla,
@@ -178,18 +160,8 @@ def test_compute_zavgS(program_processor, lift_mode):
 
 
 @fendef
-def compute_zavgS2_fencil(
-    n_edges,
-    out,
-    pp,
-    S_M,
-):
-    closure(
-        unstructured_domain(named_range(Edge, 0, n_edges)),
-        compute_zavgS2,
-        out,
-        [pp, S_M],
-    )
+def compute_zavgS2_fencil(n_edges, out, pp, S_M):
+    closure(unstructured_domain(named_range(Edge, 0, n_edges)), compute_zavgS2, out, [pp, S_M])
 
 
 @pytest.mark.requires_atlas
@@ -273,14 +245,7 @@ def test_nabla(program_processor, lift_mode):
 
 
 @fendef
-def nabla2(
-    n_nodes,
-    out,
-    pp,
-    S,
-    sign,
-    vol,
-):
+def nabla2(n_nodes, out, pp, S, sign, vol):
     closure(
         unstructured_domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla2,

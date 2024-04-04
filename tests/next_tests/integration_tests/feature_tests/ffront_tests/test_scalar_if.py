@@ -67,10 +67,7 @@ def test_simple_if(condition, cartesian_case):
 def test_simple_if_conditional(condition1, condition2, cartesian_case):
     @field_operator
     def simple_if(
-        a: cases.IField,
-        b: cases.IField,
-        condition1: bool,
-        condition2: bool,
+        a: cases.IField, b: cases.IField, condition1: bool, condition2: bool
     ) -> cases.IField:
         if condition1:
             result1 = a
@@ -361,8 +358,7 @@ def test_if_non_boolean_condition():
 
 def test_if_inconsistent_types():
     with pytest.raises(
-        errors.DSLError,
-        match="Inconsistent types between two branches for variable",
+        errors.DSLError, match="Inconsistent types between two branches for variable"
     ):
 
         @field_operator

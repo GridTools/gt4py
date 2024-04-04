@@ -99,11 +99,7 @@ def test_upcast_ParAssignStmt():
 
 
 def test_upcast_TernaryOp():
-    testee = TernaryOp(
-        cond=A_BOOL_LITERAL,
-        true_expr=A_INT64_LITERAL,
-        false_expr=A_FLOAT64_LITERAL,
-    )
+    testee = TernaryOp(cond=A_BOOL_LITERAL, true_expr=A_INT64_LITERAL, false_expr=A_FLOAT64_LITERAL)
     upcast_and_validate(testee, [Cast(dtype=DataType.FLOAT64, expr=A_INT64_LITERAL)])
 
 

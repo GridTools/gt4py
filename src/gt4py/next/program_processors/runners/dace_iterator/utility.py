@@ -12,18 +12,19 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 import itertools
-from typing import Any, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 import dace
 
+import gt4py.next.iterator.ir as itir
+from gt4py import eve
 from gt4py.next import Dimension
 from gt4py.next.common import NeighborTable
-from gt4py.next.iterator.ir import Node
 from gt4py.next.type_system import type_specifications as ts
 
 
 def dace_debuginfo(
-    node: Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
+    node: itir.Node, debuginfo: Optional[dace.dtypes.DebugInfo] = None
 ) -> Optional[dace.dtypes.DebugInfo]:
     location = node.location
     if location:
@@ -59,12 +60,20 @@ def as_scalar_type(typestr: str) -> ts.ScalarType:
     return ts.ScalarType(kind)
 
 
-def filter_neighbor_tables(offset_provider: dict[str, Any]) -> dict[str, NeighborTable]:
+def filter_neighbor_tables(offset_provider: Mapping[str, Any]) -> dict[str, NeighborTable]:
     return {
         offset: table
         for offset, table in offset_provider.items()
         if isinstance(table, NeighborTable)
     }
+
+
+def get_used_neighbor_tables(
+    node: itir.Node, offset_provider: Mapping[str, Any]
+) -> dict[str, NeighborTable]:
+    neighbor_tables = filter_neighbor_tables(offset_provider)
+    offset_dims = set(eve.walk_values(node).if_isinstance(itir.OffsetLiteral).getattr("value"))
+    return {offset: neighbor_tables[offset] for offset in offset_dims if offset in neighbor_tables}
 
 
 def connectivity_identifier(name: str) -> str:
@@ -190,7 +199,7 @@ def new_array_symbols(name: str, ndim: int) -> tuple[list[dace.symbol], list[dac
 
 def flatten_list(node_list: list[Any]) -> list[Any]:
     return list(
-        itertools.chain.from_iterable([
-            flatten_list(e) if e.__class__ == list else [e] for e in node_list
-        ])
+        itertools.chain.from_iterable(
+            [flatten_list(e) if e.__class__ == list else [e] for e in node_list]
+        )
     )

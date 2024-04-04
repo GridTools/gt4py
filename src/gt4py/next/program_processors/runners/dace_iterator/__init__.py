@@ -37,7 +37,7 @@ except ImportError:
 
 
 def convert_arg(arg: Any, sdfg_param: str, use_field_canonical_representation: bool):
-    if not common.is_field(arg):
+    if not isinstance(arg, common.Field):
         return arg
     # field domain offsets are not supported
     non_zero_offsets = [
@@ -118,8 +118,7 @@ def _ensure_is_on_device(
 
 
 def get_connectivity_args(
-    neighbor_tables: Mapping[str, common.NeighborTable],
-    device: dace.dtypes.DeviceType,
+    neighbor_tables: Mapping[str, common.NeighborTable], device: dace.dtypes.DeviceType
 ) -> dict[str, Any]:
     return {
         connectivity_identifier(offset): _ensure_is_on_device(offset_provider.table, device)
@@ -187,6 +186,8 @@ def get_sdfg_args(
     dace_args = get_args(sdfg, args, use_field_canonical_representation)
     dace_field_args = {n: v for n, v in dace_args.items() if not np.isscalar(v)}
     dace_conn_args = get_connectivity_args(neighbor_tables, device)
+    # keep only connectivity tables that are used in the sdfg
+    dace_conn_args = {n: v for n, v in dace_conn_args.items() if n in sdfg.arrays}
     dace_shapes = get_shape_args(sdfg.arrays, dace_field_args)
     dace_conn_shapes = get_shape_args(sdfg.arrays, dace_conn_args)
     dace_strides = get_stride_args(sdfg.arrays, dace_field_args)
@@ -265,9 +266,7 @@ def build_sdfg_from_itir(
                 getframeinfo(currentframe()),  # type: ignore[arg-type]
             )
             nested_sdfg.debuginfo = dace.dtypes.DebugInfo(
-                start_line=frameinfo.lineno,
-                end_line=frameinfo.lineno,
-                filename=frameinfo.filename,
+                start_line=frameinfo.lineno, end_line=frameinfo.lineno, filename=frameinfo.filename
             )
 
     # TODO(edopao): remove `inline_loop_blocks` when DaCe transformations support LoopRegion construct

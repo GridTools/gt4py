@@ -220,10 +220,7 @@ def test_reduction_with_common_expression(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda flux: np.sum(
-            flux[v2e_table] * 2,
-            axis=1,
-            initial=0,
-            where=v2e_table != common._DEFAULT_SKIP_VALUE,
+            flux[v2e_table] * 2, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE
         ),
     )
 
@@ -234,8 +231,7 @@ def test_conditional_nested_tuple(cartesian_case):
     def conditional_nested_tuple(
         mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField
     ) -> tuple[
-        tuple[cases.IFloatField, cases.IFloatField],
-        tuple[cases.IFloatField, cases.IFloatField],
+        tuple[cases.IFloatField, cases.IFloatField], tuple[cases.IFloatField, cases.IFloatField]
     ]:
         return where(mask, ((a, b), (b, a)), ((5.0, 7.0), (7.0, 5.0)))
 
@@ -362,10 +358,7 @@ def test_conditional_shifted(cartesian_case):
 
     @gtx.program
     def conditional_program(
-        mask: cases.IBoolField,
-        a: cases.IFloatField,
-        b: cases.IFloatField,
-        out: cases.IFloatField,
+        mask: cases.IBoolField, a: cases.IFloatField, b: cases.IFloatField, out: cases.IFloatField
     ):
         conditional_shifted(mask, a, b, out=out)
 

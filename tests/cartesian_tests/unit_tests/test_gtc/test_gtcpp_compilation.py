@@ -55,22 +55,13 @@ def build_gridtools_test(tmp_path: Path, code: str):
         "--build-lib=" + str(tmp_src.parent),
         "--force",
     ]
-    setuptools.setup(
-        name="test",
-        ext_modules=[
-            ext_module,
-        ],
-        script_args=args,
-    )
+    setuptools.setup(name="test", ext_modules=[ext_module], script_args=args)
 
 
 def make_compilation_input_and_expected():
     return [
         (ProgramFactory(name="test"), r"auto test"),
-        (
-            ProgramFactory(functors__0__name="fun"),
-            r"struct fun",
-        ),
+        (ProgramFactory(functors__0__name="fun"), r"struct fun"),
         (
             ProgramFactory(
                 functors__0__applies=[],
@@ -88,10 +79,7 @@ def make_compilation_input_and_expected():
             ),
             r"inout_accessor<0, extent<1,\s*2,\s*-3,\s*-4,\s*10,\s*-10>",
         ),
-        (
-            ProgramFactory(),
-            r"void\s*apply\(",
-        ),
+        (ProgramFactory(), r"void\s*apply\("),
         (ProgramFactory(parameters=[FieldDeclFactory(name="my_param")]), r"my_param"),
         (
             ProgramFactory(
@@ -141,10 +129,7 @@ def _embed_apply_method_in_program(apply_method: GTApplyMethod):
             GTApplyMethodFactory(body__0__left__name="foo", body__0__right__name="bar"),
             r"foo.*=.*bar",
         ),
-        (
-            GTApplyMethodFactory(body__0=IfStmtFactory()),
-            r"if",
-        ),
+        (GTApplyMethodFactory(body__0=IfStmtFactory()), r"if"),
     ],
 )
 def test_apply_method_compilation_succeeds(tmp_path, apply_method, expected_regex):

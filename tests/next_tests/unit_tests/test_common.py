@@ -247,12 +247,7 @@ def test_range_comparison(op, rng1, rng2, expected):
 
 
 @pytest.mark.parametrize(
-    "named_rng_like",
-    [
-        (IDim, (2, 4)),
-        (IDim, range(2, 4)),
-        (IDim, UnitRange(2, 4)),
-    ],
+    "named_rng_like", [(IDim, (2, 4)), (IDim, range(2, 4)), (IDim, UnitRange(2, 4))]
 )
 def test_named_range_like(named_rng_like):
     assert named_range(named_rng_like) == (IDim, UnitRange(2, 4))
@@ -373,11 +368,7 @@ def test_domain_slice_indexing(a_domain, slice_obj, expected):
 
 
 @pytest.mark.parametrize(
-    "index, expected_result",
-    [
-        (JDim, (JDim, UnitRange(5, 15))),
-        (KDim, (KDim, UnitRange(20, 30))),
-    ],
+    "index, expected_result", [(JDim, (JDim, UnitRange(5, 15))), (KDim, (KDim, UnitRange(20, 30)))]
 )
 def test_domain_dimension_indexing(a_domain, index, expected_result):
     result = a_domain[index]

@@ -53,7 +53,7 @@ def test_access_collector():
                         body=[
                             AssignStmtFactory(
                                 left__name="baz", right__name="tmp", right__offset__j=1
-                            ),
+                            )
                         ],
                         mask=FieldAccessFactory(
                             name="mask",
@@ -63,7 +63,7 @@ def test_access_collector():
                             offset__k=1,
                         ),
                     )
-                ],
+                ]
             ),
         ],
         declarations=[TemporaryFactory(name="tmp")],
@@ -188,8 +188,7 @@ def test_access_overlap_along_axis():
         ),
         (
             common.HorizontalMask(
-                i=common.HorizontalInterval.full(),
-                j=common.HorizontalInterval.full(),
+                i=common.HorizontalInterval.full(), j=common.HorizontalInterval.full()
             ),
             -1,
             ((-1, 0), (0, 0)),
@@ -211,7 +210,7 @@ def test_stencil_extents_region(mask, offset, access_extent):
                                 left__name="tmp", right__name="input", right__offset__i=offset
                             )
                         ],
-                    ),
+                    )
                 ]
             ),
             HorizontalExecutionFactory(

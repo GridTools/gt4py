@@ -19,13 +19,10 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, itir_to_gtfn_ir
 
 def test_funcall_to_op():
     testee = itir.FunCall(
-        fun=itir.SymRef(id="plus"),
-        args=[itir.SymRef(id="foo"), itir.SymRef(id="bar")],
+        fun=itir.SymRef(id="plus"), args=[itir.SymRef(id="foo"), itir.SymRef(id="bar")]
     )
     expected = gtfn_ir.BinaryExpr(
-        op="+",
-        lhs=gtfn_ir.SymRef(id="foo"),
-        rhs=gtfn_ir.SymRef(id="bar"),
+        op="+", lhs=gtfn_ir.SymRef(id="foo"), rhs=gtfn_ir.SymRef(id="bar")
     )
 
     actual = it2gtfn.GTFN_lowering(

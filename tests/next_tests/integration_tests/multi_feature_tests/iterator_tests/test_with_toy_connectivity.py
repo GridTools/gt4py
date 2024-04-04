@@ -247,9 +247,7 @@ def test_slice_sparse(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={
-            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 
@@ -274,9 +272,7 @@ def test_slice_twice_sparse(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={
-            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 
@@ -302,9 +298,7 @@ def test_shift_sliced_sparse(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={
-            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 
@@ -330,9 +324,7 @@ def test_slice_shifted_sparse(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        offset_provider={
-            "V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4),
-        },
+        offset_provider={"V2V": gtx.NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)},
         lift_mode=lift_mode,
     )
 

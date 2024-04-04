@@ -501,9 +501,9 @@ class StencilTestSuite(metaclass=SuiteMeta):
         referenced_inputs = {
             name: info for name, info in implementation.field_info.items() if info is not None
         }
-        referenced_inputs.update({
-            name: info for name, info in implementation.parameter_info.items() if info is not None
-        })
+        referenced_inputs.update(
+            {name: info for name, info in implementation.parameter_info.items() if info is not None}
+        )
 
         # set externals for validation method
         for k, v in implementation.constants.items():

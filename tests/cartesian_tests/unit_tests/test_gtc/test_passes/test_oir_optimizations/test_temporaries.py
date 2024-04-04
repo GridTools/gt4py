@@ -46,10 +46,7 @@ def test_local_temporaries_to_scalars_multiexec():
     testee = StencilFactory(
         vertical_loops__0__sections__0__horizontal_executions=[
             HorizontalExecutionFactory(
-                body=[
-                    AssignStmtFactory(left__name="tmp"),
-                    AssignStmtFactory(right__name="tmp"),
-                ]
+                body=[AssignStmtFactory(left__name="tmp"), AssignStmtFactory(right__name="tmp")]
             ),
             HorizontalExecutionFactory(body=[AssignStmtFactory(right__name="tmp")]),
         ],

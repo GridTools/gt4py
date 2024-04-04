@@ -70,13 +70,13 @@ def _make_builtin(
         xp = cls_.array_ns
         op = getattr(xp, array_builtin_name)
 
-        domain_intersection = embedded_common.domain_intersection(*[
-            f.domain for f in fields if common.is_field(f)
-        ])
+        domain_intersection = embedded_common.domain_intersection(
+            *[f.domain for f in fields if isinstance(f, common.Field)]
+        )
 
         transformed: list[core_defs.NDArrayObject | core_defs.Scalar] = []
         for f in fields:
-            if common.is_field(f):
+            if isinstance(f, common.Field):
                 if f.domain == domain_intersection:
                     transformed.append(xp.asarray(f.ndarray))
                 else:
@@ -242,10 +242,10 @@ class NdArrayField(
         codomains_counter: collections.Counter[common.Dimension] = collections.Counter()
         for connectivity in connectivities:
             # For neighbor reductions, a FieldOffset is passed instead of an actual ConnectivityField
-            if not common.is_connectivity_field(connectivity):
+            if not isinstance(connectivity, common.ConnectivityField):
                 assert isinstance(connectivity, fbuiltins.FieldOffset)
                 connectivity = connectivity.as_connectivity_field()
-            assert common.is_connectivity_field(connectivity)
+            assert isinstance(connectivity, common.ConnectivityField)
 
             # Current implementation relies on skip_value == -1:
             # if we assume the indexed array has at least one element, we wrap around without out of bounds
@@ -297,7 +297,7 @@ class NdArrayField(
     ) -> None:
         target_domain, target_slice = self._slice(index)
 
-        if common.is_field(value):
+        if isinstance(value, common.Field):
             if not value.domain == target_domain:
                 raise ValueError(
                     f"Incompatible 'Domain' in assignment. Source domain = '{value.domain}', target domain = '{target_domain}'."
@@ -449,12 +449,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
 
         assert isinstance(codomain, common.Dimension)
 
-        return cls(
-            domain,
-            array,
-            codomain,
-            _skip_value=skip_value,
-        )
+        return cls(domain, array, codomain, _skip_value=skip_value)
 
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
@@ -749,7 +744,7 @@ def _to_field(
     # TODO(havogt): this function is only to workaround broadcasting of scalars, once we have a ConstantField, we can broadcast to that directly
     return (
         value
-        if common.is_field(value)
+        if isinstance(value, common.Field)
         else nd_array_field_type.from_array(
             nd_array_field_type.array_ns.asarray(value), domain=common.Domain()
         )
@@ -763,7 +758,9 @@ def _intersect_fields(
     # TODO(havogt): this function could be moved to common, but then requires a broadcast implementation for all field implementations;
     # currently blocked, because requiring the `_to_field` function, see comment there.
     nd_array_class = _get_nd_array_class(*fields)
-    promoted_dims = common.promote_dims(*(f.domain.dims for f in fields if common.is_field(f)))
+    promoted_dims = common.promote_dims(
+        *(f.domain.dims for f in fields if isinstance(f, common.Field))
+    )
     broadcasted_fields = [_broadcast(_to_field(f, nd_array_class), promoted_dims) for f in fields]
 
     intersected_domains = embedded_common.restrict_to_intersection(
@@ -877,10 +874,7 @@ NdArrayField.register_builtin_func(experimental.concat_where, _concat_where)  # 
 
 def _make_reduction(
     builtin_name: str, array_builtin_name: str, initial_value_op: Callable
-) -> Callable[
-    ...,
-    NdArrayField[common.DimsT, core_defs.ScalarT],
-]:
+) -> Callable[..., NdArrayField[common.DimsT, core_defs.ScalarT]]:
     def _builtin_op(
         field: NdArrayField[common.DimsT, core_defs.ScalarT], axis: common.Dimension
     ) -> NdArrayField[common.DimsT, core_defs.ScalarT]:
@@ -914,11 +908,7 @@ def _make_reduction(
         )
 
         return field.__class__.from_array(
-            getattr(xp, array_builtin_name)(
-                masked_array,
-                axis=reduce_dim_index,
-            ),
-            domain=new_domain,
+            getattr(xp, array_builtin_name)(masked_array, axis=reduce_dim_index), domain=new_domain
         )
 
     _builtin_op.__name__ = builtin_name
@@ -1009,7 +999,7 @@ def _broadcast(field: common.Field, new_dimensions: Sequence[common.Dimension]) 
 def _builtins_broadcast(
     field: common.Field | core_defs.Scalar, new_dimensions: tuple[common.Dimension, ...]
 ) -> common.Field:  # separated for typing reasons
-    if common.is_field(field):
+    if isinstance(field, common.Field):
         return _broadcast(field, new_dimensions)
     raise AssertionError("Scalar case not reachable from 'fbuiltins.broadcast'.")
 

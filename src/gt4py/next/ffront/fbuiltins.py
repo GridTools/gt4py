@@ -156,37 +156,23 @@ class WhereBuiltinFunction(
 
 
 @BuiltInFunction
-def neighbor_sum(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def neighbor_sum(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def max_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def min_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
 def broadcast(
-    field: common.Field | core_defs.ScalarT,
-    dims: tuple[common.Dimension, ...],
-    /,
+    field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
     assert core_defs.is_scalar_type(
         field
@@ -207,9 +193,7 @@ def where(
 
 @BuiltInFunction
 def astype(
-    value: common.Field | core_defs.ScalarT | Tuple,
-    type_: type,
-    /,
+    value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
 ) -> common.Field | core_defs.ScalarT | Tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
@@ -269,9 +253,7 @@ BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 def _make_binary_math_builtin(name: str) -> None:
     def impl(
-        lhs: common.Field | core_defs.ScalarT,
-        rhs: common.Field | core_defs.ScalarT,
-        /,
+        lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
         assert core_defs.is_scalar_type(lhs)
@@ -340,8 +322,8 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(
-            offset_definition, gtx.NeighborTableOffsetProvider
-        ) or common.is_connectivity_field(offset_definition):
+            offset_definition, (gtx.NeighborTableOffsetProvider, common.ConnectivityField)
+        ):
             unrestricted_connectivity = self.as_connectivity_field()
             assert unrestricted_connectivity.domain.ndim > 1
             named_index = common.NamedIndex(self.target[-1], offset)
@@ -360,7 +342,7 @@ class FieldOffset(runtime.Offset):
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if common.is_connectivity_field(offset_definition):
+            if isinstance(offset_definition, common.ConnectivityField):
                 connectivity = offset_definition
             elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
                 connectivity = gtx.as_connectivity(

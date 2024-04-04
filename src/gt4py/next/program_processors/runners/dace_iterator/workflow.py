@@ -39,8 +39,7 @@ from . import build_sdfg_from_itir, get_sdfg_args
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
+        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
@@ -54,14 +53,11 @@ class DaCeTranslator(
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
-            formatter_key="",
-            formatter_style="",
-            file_extension="sdfg",
+            formatter_key="", formatter_style="", file_extension="sdfg"
         )
 
     def __call__(
-        self,
-        inp: stages.ProgramCall,
+        self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition = inp.program

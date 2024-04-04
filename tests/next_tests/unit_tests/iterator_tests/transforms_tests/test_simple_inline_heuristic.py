@@ -45,10 +45,7 @@ def test_trivial(is_scan_context):
     # `↑(scan(λ(acc, it) → acc + ·↑(deref)(it)))(...)` where the inner lift should not be inlined.
     expected = not is_scan_context
     testee = ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="lift"),
-            args=[ir.SymRef(id="deref")],
-        ),
+        fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
         args=[ir.SymRef(id="it")],
     )
     assert expected == is_eligible_for_inlining(testee, is_scan_context)
@@ -66,10 +63,7 @@ def test_scan_with_lifted_arg(scan):
         fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[scan]),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(
-                    fun=ir.SymRef(id="lift"),
-                    args=[ir.SymRef(id="deref")],
-                ),
+                fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
                 args=[ir.SymRef(id="x")],
             )
         ],

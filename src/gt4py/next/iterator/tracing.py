@@ -237,12 +237,7 @@ def closure(domain, stencil, output, inputs):
         stencil(*(_s(param) for param in inspect.signature(stencil).parameters))
         stencil = make_node(stencil)
     TracerContext.add_closure(
-        StencilClosure(
-            domain=domain,
-            stencil=stencil,
-            output=output,
-            inputs=inputs,
-        )
+        StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
     )
 
 
@@ -254,7 +249,7 @@ def _contains_tuple_dtype_field(arg):
     #  other `np.int32`). We just ignore the error here and postpone fixing this to when
     #  the new storages land (The implementation here works for LocatedFieldImpl).
 
-    return common.is_field(arg) and any(dim is None for dim in arg.domain.dims)
+    return isinstance(arg, common.Field) and any(dim is None for dim in arg.domain.dims)
 
 
 def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:

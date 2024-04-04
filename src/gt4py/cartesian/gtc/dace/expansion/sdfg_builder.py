@@ -55,11 +55,7 @@ class StencilComputationSDFGBuilder(eve.VisitorWithSymbolTableTrait):
             after_state = self.sdfg.add_state()
             for edge in self.sdfg.out_edges(self.state):
                 self.sdfg.remove_edge(edge)
-                self.sdfg.add_edge(
-                    after_state,
-                    edge.dst,
-                    edge.data,
-                )
+                self.sdfg.add_edge(after_state, edge.dst, edge.data)
 
             assert isinstance(index_range.interval, dcir.DomainInterval)
             if index_range.stride < 0:

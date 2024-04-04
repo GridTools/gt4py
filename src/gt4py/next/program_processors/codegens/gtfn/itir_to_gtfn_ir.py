@@ -170,10 +170,7 @@ def _collect_offset_definitions(
             offset_definitions[offset_name] = TagDefinition(name=Sym(id=offset_name))
 
             connectivity: common.Connectivity = dim_or_connectivity
-            for dim in [
-                connectivity.origin_axis,
-                connectivity.neighbor_axis,
-            ]:
+            for dim in [connectivity.origin_axis, connectivity.neighbor_axis]:
                 if dim.kind != common.DimensionKind.HORIZONTAL:
                     raise NotImplementedError()
                 offset_definitions[dim.value] = TagDefinition(
@@ -359,10 +356,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         assert isinstance(node.args[0], itir.Literal)
         return FunCall(
             fun=SymRef(id="tuple_get"),
-            args=[
-                _literal_as_integral_constant(node.args[0]),
-                self.visit(node.args[1]),
-            ],
+            args=[_literal_as_integral_constant(node.args[0]), self.visit(node.args[1])],
         )
 
     def _visit_list_get(self, node: itir.FunCall, **kwargs: Any) -> Node:
@@ -374,13 +368,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 node.args[0]
             )  # from unroll_reduce we get a `SymRef` which is refering to an `OffsetLiteral` which is lowered to integral_constant
         )
-        return FunCall(
-            fun=SymRef(id="tuple_get"),
-            args=[
-                tuple_idx,
-                self.visit(node.args[1]),
-            ],
-        )
+        return FunCall(fun=SymRef(id="tuple_get"), args=[tuple_idx, self.visit(node.args[1])])
 
     def _visit_cartesian_domain(self, node: itir.FunCall, **kwargs: Any) -> Node:
         sizes, domain_offsets = self._make_domain(node)
@@ -397,9 +385,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 ):
                     connectivities.append(SymRef(id=o))
         return UnstructuredDomain(
-            tagged_sizes=sizes,
-            tagged_offsets=domain_offsets,
-            connectivities=connectivities,
+            tagged_sizes=sizes, tagged_offsets=domain_offsets, connectivities=connectivities
         )
 
     def visit_FunCall(self, node: itir.FunCall, **kwargs: Any) -> Node:
@@ -535,10 +521,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         self, node: itir.FencilDefinition, **kwargs: Any
     ) -> FencilDefinition:
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
-        executions = self.visit(
-            node.closures,
-            extracted_functions=extracted_functions,
-        )
+        executions = self.visit(node.closures, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {

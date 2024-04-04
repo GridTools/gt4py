@@ -174,11 +174,7 @@ def get_gt_pyext_build_opts(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    **kwargs: str,
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
 ) -> Tuple[str, str]: ...
 
 
@@ -283,11 +279,7 @@ def build_pybind_ext(
 # The following tells mypy to accept unpacking kwargs
 @overload
 def build_pybind_cuda_ext(
-    name: str,
-    sources: list,
-    build_path: str,
-    target_path: str,
-    **kwargs: str,
+    name: str, sources: list, build_path: str, target_path: str, **kwargs: str
 ) -> Tuple[str, str]:
     pass
 

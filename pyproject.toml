@@ -48,7 +48,7 @@ dependencies = [
   'pybind11>=2.10.1',
   'setuptools>=65.5.0',
   'tabulate>=0.8.10',
-  'typing-extensions>=4.3.0,<4.6.0',
+  'typing-extensions>=4.6.0',
   'xxhash>=1.4.4,<3.1.0'
 ]
 description = 'Python library for generating high-performance implementations of stencil kernels for weather and climate modeling from a domain-specific language (DSL)'
@@ -278,9 +278,6 @@ target-version = 'py38'
 
 [tool.ruff.format]
 docstring-code-format = true
-# Reevaluate once ruff adds support for single-line ellipsis in the stable style.
-# Track: https://github.com/astral-sh/ruff/issues/8678)
-preview = true
 
 [tool.ruff.lint]
 # # Rules sets:

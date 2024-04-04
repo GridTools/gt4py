@@ -47,6 +47,7 @@ from .utility import (
     filter_neighbor_tables,
     flatten_list,
     get_sorted_dims,
+    get_used_neighbor_tables,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -99,18 +100,11 @@ def _get_scan_dim(
             else enumerate(output_type.dims)
         )
     ]
-    return (
-        column_axis.value,
-        sorted_dims.index(column_axis),
-        output_type.dtype,
-    )
+    return (column_axis.value, sorted_dims.index(column_axis), output_type.dtype)
 
 
 def _make_array_shape_and_strides(
-    name: str,
-    dims: Sequence[Dimension],
-    neighbor_tables: Mapping[str, NeighborTable],
-    sort_dims: bool,
+    name: str, dims: Sequence[Dimension], offset_provider: Mapping[str, Any], sort_dims: bool
 ) -> tuple[list[dace.symbol], list[dace.symbol]]:
     """
     Parse field dimensions and allocate symbols for array shape and strides.
@@ -125,6 +119,7 @@ def _make_array_shape_and_strides(
     """
     dtype = dace.int32
     sorted_dims = get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
+    neighbor_tables = filter_neighbor_tables(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
@@ -180,25 +175,13 @@ class ItirToSDFG(eve.NodeVisitor):
         self.tmps = tmps
         self.use_field_canonical_representation = use_field_canonical_representation
 
-    def add_storage(
-        self,
-        sdfg: dace.SDFG,
-        name: str,
-        type_: ts.TypeSpec,
-        neighbor_tables: Mapping[str, NeighborTable],
-        sort_dimensions: bool,
-    ):
+    def add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec, sort_dimensions: bool):
         if isinstance(type_, ts.FieldType):
             shape, strides = _make_array_shape_and_strides(
-                name, type_.dims, neighbor_tables, sort_dimensions
+                name, type_.dims, self.offset_provider, sort_dimensions
             )
             dtype = as_dace_type(type_.dtype)
-            sdfg.add_array(
-                name,
-                shape=shape,
-                strides=strides,
-                dtype=dtype,
-            )
+            sdfg.add_array(name, shape=shape, strides=strides, dtype=dtype)
 
         elif isinstance(type_, ts.ScalarType):
             dtype = as_dace_type(type_)
@@ -262,10 +245,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
             # These expressions are later mapped to interstate symbols.
-            for (_, (begin, end)), shape_sym in zip(
-                tmp_domain,
-                tmp_array.shape,
-            ):
+            for (_, (begin, end)), shape_sym in zip(tmp_domain, tmp_array.shape):
                 """
                 The temporary field has a dimension range defined by `begin` and `end` values.
                 Therefore, the actual size is given by the difference `end.value - begin.value`.
@@ -282,11 +262,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         return tmp_symbols
 
-    def create_memlet_at(
-        self,
-        field_name: str,
-        index: dict[str, str],
-    ):
+    def create_memlet_at(self, field_name: str, index: dict[str, str]):
         field_type = cast(ts.FieldType, self.storage_types[field_name])
         if self.use_field_canonical_representation:
             field_index = [index[dim.value] for _, dim in get_sorted_dims(field_type.dims)]
@@ -316,16 +292,12 @@ class ItirToSDFG(eve.NodeVisitor):
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
             self.add_storage(
-                program_sdfg,
-                str(param.id),
-                type_,
-                neighbor_tables,
-                self.use_field_canonical_representation,
+                program_sdfg, str(param.id), type_, self.use_field_canonical_representation
             )
 
         if self.tmps:
@@ -333,11 +305,7 @@ class ItirToSDFG(eve.NodeVisitor):
             # on the first interstate edge define symbols for shape and offsets of temporary arrays
             last_state = program_sdfg.add_state("init_symbols_for_temporaries")
             program_sdfg.add_edge(
-                entry_state,
-                last_state,
-                dace.InterstateEdge(
-                    assignments=tmp_symbols,
-                ),
+                entry_state, last_state, dace.InterstateEdge(assignments=tmp_symbols)
             )
         else:
             last_state = entry_state
@@ -350,11 +318,7 @@ class ItirToSDFG(eve.NodeVisitor):
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
             )
             self.add_storage(
-                program_sdfg,
-                connectivity_identifier(offset),
-                type_,
-                neighbor_tables,
-                sort_dimensions=False,
+                program_sdfg, connectivity_identifier(offset), type_, sort_dimensions=False
             )
 
         # Create a nested SDFG for all stencil closures.
@@ -418,7 +382,7 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
@@ -610,7 +574,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         assert isinstance(node.output, SymRef)
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -773,7 +737,7 @@ class ItirToSDFG(eve.NodeVisitor):
             tuple[str, tuple[ValueExpr | SymbolExpr, ValueExpr | SymbolExpr]], ...
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
-        neighbor_tables = filter_neighbor_tables(self.offset_provider)
+        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 

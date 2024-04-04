@@ -91,11 +91,7 @@ class FendefDispatcher:
 
         if backend is not None:
             ensure_processor_kind(backend, ProgramExecutor)
-            backend(
-                self.itir(*args, **kwargs),
-                *args,
-                **kwargs,
-            )
+            backend(self.itir(*args, **kwargs), *args, **kwargs)
         else:
             if fendef_embedded is None:
                 raise RuntimeError("Embedded execution is not registered.")
@@ -143,12 +139,7 @@ def _deduce_domain(domain: dict[common.Dimension, range], offset_provider: dict[
         )
 
     return domain_builtin(
-        *tuple(
-            map(
-                lambda x: builtins.named_range(x[0], x[1].start, x[1].stop),
-                domain.items(),
-            )
-        )
+        *tuple(map(lambda x: builtins.named_range(x[0], x[1].start, x[1].stop), domain.items()))
     )
 
 
