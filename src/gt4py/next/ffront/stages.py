@@ -56,6 +56,17 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
     grid_type: Optional[common.GridType] = None
     attributes: dict[str, Any] = dataclasses.field(default_factory=dict)
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        hashable_closure_vars = {}
+        for k, v in self.closure_vars.items():
+            if hasattr(v, "definition_stage"):
+                hashable_closure_vars[k] = v.definition_stage
+                hashable_closure_vars[f"{k}_backend"] = v.backend.__name__ if v.backend else "None"
+        state = self.__dict__.copy()
+        state["closure_vars"] = hashable_closure_vars
+        return state
+
 
 def hash_foast_operator_definition(foast_definition: FoastOperatorDefinition) -> str:
     return eve_utils.content_hash(
@@ -72,15 +83,46 @@ class FoastWithTypes(Generic[OperatorNodeT]):
     kwarg_types: dict[str, ts.TypeSpec]
     closure_vars: dict[str, Any]
 
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        hashable_closure_vars = {}
+        for k, v in self.closure_vars.items():
+            if hasattr(v, "definition_stage"):
+                hashable_closure_vars[k] = v.definition_stage
+                hashable_closure_vars[f"{k}_backend"] = v.backend.__name__ if v.backend else "None"
+        state = self.__dict__.copy()
+        state["closure_vars"] = hashable_closure_vars
+        return state
+
+
+@dataclasses.dataclass(frozen=True)
+class FoastClosure(Generic[OperatorNodeT]):
+    foast_op_def: FoastOperatorDefinition[OperatorNodeT]
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]
+    closure_vars: dict[str, Any]
+
+    def __getstate__(self) -> dict[str, Any]:
+        """Make the stage pickleable (but not unpickleable) for use with content_hash."""
+        hashable_closure_vars = {}
+        for k, v in self.closure_vars.items():
+            if hasattr(v, "definition_stage"):
+                hashable_closure_vars[k] = v.definition_stage
+                hashable_closure_vars[f"{k}_backend"] = v.backend.__name__ if v.backend else "None"
+        state = self.__dict__.copy()
+        state["closure_vars"] = hashable_closure_vars
+        return state
+
 
 def hash_foast_with_types(foast_with_types: FoastWithTypes) -> str:
-    return eve_utils.content_hash(
-        (
-            foast_with_types.foast_op_def,
-            foast_with_types.arg_types,
-            tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
-        )
-    )
+    return eve_utils.content_hash(foast_with_types)
+    # return eve_utils.content_hash(
+    #     (
+    #         foast_with_types.foast_op_def,
+    #         foast_with_types.arg_types,
+    #         tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
+    #     )
+    # )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -105,7 +147,7 @@ class PastProgramDefinition:
 
     def __getstate__(self) -> dict[str, Any]:
         """Make the stage pickleable (but not unpickleable) for use with content_hash."""
-        hashable_closure_vars = self.closure_vars.copy()
+        hashable_closure_vars = {}
         for k, v in self.closure_vars.items():
             if hasattr(v, "definition_stage"):
                 hashable_closure_vars[k] = v.definition_stage

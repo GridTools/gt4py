@@ -18,9 +18,11 @@ import dataclasses
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import utils as eve_utils
 from gt4py.next import allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_itir,
+    foast_to_past,
     func_to_foast,
     func_to_past,
     past_process_args,
@@ -33,7 +35,7 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 
 @dataclasses.dataclass(frozen=True)
-class ArgsInjector(workflow.Workflow):
+class ProgArgsInjector(workflow.Workflow):
     args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
     kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
@@ -47,18 +49,42 @@ class ArgsInjector(workflow.Workflow):
         )
 
 
+@dataclasses.dataclass(frozen=True)
+class FopArgsInjector(workflow.Workflow):
+    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
+    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+    from_fieldop: Any = None
+
+    def __call__(self, inp: ffront_stages.FoastOperatorDefinition) -> ffront_stages.FoastClosure:
+        return ffront_stages.FoastClosure(
+            foast_op_def=inp,
+            args=self.args,
+            kwargs=self.kwargs,
+            closure_vars={inp.foast_node.id: self.from_fieldop},
+        )
+
+
 DEFAULT_FIELDOP_TRANSFORMS = recipes.FieldopTransformWorkflow(
     func_to_foast=func_to_foast.OptionalFuncToFoastFactory(cached=True),
+    foast_inject_args=FopArgsInjector(),
+    foast_to_past_closure=foast_to_past.FoastToPastClosure(
+        foast_to_past=workflow.CachedStep(
+            foast_to_past.foast_to_past,
+            hash_function=eve_utils.content_hash,
+        )
+    ),
+    past_transform_args=past_process_args.past_process_args,
+    past_to_itir=past_to_itir.PastToItirFactory(),
     foast_to_itir=workflow.CachedStep(
         step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.hash_foast_operator_definition
     ),
 )
 
 
-DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
+DEFAULT_PROG_TRANSFORMS = recipes.ProgramTransformWorkflow(
     func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
     past_lint=past_linters.LinterFactory(),
-    past_inject_args=ArgsInjector(),
+    past_inject_args=ProgArgsInjector(),
     past_transform_args=past_process_args.past_process_args,
     past_to_itir=past_to_itir.PastToItirFactory(),
 )
@@ -68,15 +94,34 @@ DEFAULT_TRANSFORMS = recipes.ProgramTransformWorkflow(
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_prog: recipes.ProgramTransformWorkflow = DEFAULT_TRANSFORMS
+    transforms_fop: recipes.FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
+    transforms_prog: recipes.ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
 
     def __call__(
-        self, program: ffront_stages.ProgramDefinition, *args: tuple[Any], **kwargs: dict[str, Any]
+        self,
+        program: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition,
+        *args: tuple[Any],
+        **kwargs: dict[str, Any],
     ) -> None:
-        transformer = self.transforms_prog.replace(
-            past_inject_args=ArgsInjector(args=args, kwargs=kwargs)
-        )
-        program_call = transformer(program)
+        if isinstance(
+            program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
+        ):
+            offset_provider = kwargs.pop("offset_provider")
+            from_fieldop = kwargs.pop("from_fieldop")
+            transforms_fop = self.transforms_fop.replace(
+                foast_inject_args=FopArgsInjector(
+                    args=args, kwargs=kwargs, from_fieldop=from_fieldop
+                )
+            )
+            program_call = transforms_fop(program)
+            program_call = dataclasses.replace(
+                program_call, kwargs=program_call.kwargs | {"offset_provider": offset_provider}
+            )
+        else:
+            transforms_prog = self.transforms_prog.replace(
+                past_inject_args=ProgArgsInjector(args=args, kwargs=kwargs)
+            )
+            program_call = transforms_prog(program)
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 
     @property

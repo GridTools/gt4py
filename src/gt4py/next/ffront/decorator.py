@@ -103,12 +103,12 @@ class Program:
     def past_stage(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.func_to_past(self.definition_stage)
-        return next_backend.DEFAULT_TRANSFORMS.func_to_past(self.definition_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
 
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
 
     @property
     def __name__(self) -> str:
@@ -221,7 +221,7 @@ class ProgramFromPast(Program):
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
-        return next_backend.DEFAULT_TRANSFORMS.past_lint(self.past_stage)
+        return next_backend.DEFAULT_PROG_TRANSFORMS.past_lint(self.past_stage)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -399,6 +399,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FoastOperatorDefinition:
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            return self.backend.transforms_fop.func_to_foast(self.definition_stage)
         return next_backend.DEFAULT_FIELDOP_TRANSFORMS.func_to_foast(self.definition_stage)
 
     @property
@@ -423,6 +425,8 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         )
 
     def __gt_itir__(self) -> itir.FunctionDefinition:
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            return self.backend.transforms_fop.foast_to_itir(self.foast_stage)
         return next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_itir(self.foast_stage)
 
     def __gt_closure_vars__(self) -> dict[str, Any]:
@@ -431,7 +435,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
     def as_program(
         self, arg_types: list[ts.TypeSpec], kwarg_types: dict[str, ts.TypeSpec]
     ) -> Program:
-        past_stage = foast_to_past.foast_to_past(
+        foast_with_types = (
             ffront_stages.FoastWithTypes(
                 foast_op_def=self.foast_stage,
                 arg_types=tuple(arg_types),
@@ -439,6 +443,22 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 closure_vars={self.foast_stage.foast_node.id: self},
             ),
         )
+        past_stage = None
+        if self.backend is not None and self.backend.transforms_fop is not None:
+            past_stage = self.backend.transforms_fop.foast_to_past_closure.foast_to_past(
+                foast_with_types
+            )
+        else:
+            past_stage = (
+                next_backend.DEFAULT_FIELDOP_TRANSFORMS.foast_to_past_closure.foast_to_past(
+                    ffront_stages.FoastWithTypes(
+                        foast_op_def=self.foast_stage,
+                        arg_types=tuple(arg_types),
+                        kwarg_types=kwarg_types,
+                        closure_vars={self.foast_stage.foast_node.id: self},
+                    ),
+                )
+            )
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:
@@ -456,15 +476,23 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             )
             # TODO(tehrengruber): check all offset providers are given
             # deduce argument types
-            arg_types = []
-            for arg in args:
-                arg_types.append(type_translation.from_value(arg))
-            kwarg_types = {}
-            for name, arg in kwargs.items():
-                kwarg_types[name] = type_translation.from_value(arg)
+            # arg_types = []
+            # for arg in args:
+            #     arg_types.append(type_translation.from_value(arg))
+            # kwarg_types = {}
+            # for name, arg in kwargs.items():
+            #     kwarg_types[name] = type_translation.from_value(arg)
 
-            return self.as_program(arg_types, kwarg_types)(
-                *args, out, offset_provider=offset_provider, **kwargs
+            # return self.as_program(arg_types, kwarg_types)(
+            #     *args, out, offset_provider=offset_provider, **kwargs
+            # )
+            return self.backend(
+                self.definition_stage,
+                *args,
+                out=out,
+                offset_provider=offset_provider,
+                from_fieldop=self,
+                **kwargs,
             )
         else:
             attributes = (
@@ -492,6 +520,9 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 @dataclasses.dataclass(frozen=True)
 class FieldOperatorFromFoast(FieldOperator):
     foast_stage: ffront_stages.FoastOperatorDefinition
+
+    def __call__(self, *args, **kwargs) -> None:
+        return self.backend(self.foast_stage, *args, from_fieldop=self, **kwargs)
 
 
 @typing.overload

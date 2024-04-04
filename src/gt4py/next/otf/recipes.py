@@ -28,7 +28,23 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
         ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
         ffront_stages.FoastOperatorDefinition,
     ]
+    foast_inject_args: workflow.Workflow[
+        ffront_stages.FoastOperatorDefinition, ffront_stages.FoastClosure
+    ]
+    foast_to_past_closure: workflow.Workflow[ffront_stages.FoastClosure, ffront_stages.PastClosure]
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
+
+    @property
+    def step_order(self):
+        return [
+            "func_to_foast",
+            "foast_inject_args",
+            "foast_to_past_closure",
+            "past_transform_args",
+            "past_to_itir",
+        ]
 
 
 @dataclasses.dataclass(frozen=True)

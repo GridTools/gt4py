@@ -12,6 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import dataclasses
+
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -20,7 +22,8 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.otf import workflow
 
 
 def foast_to_past(inp: ffront_stages.FoastWithTypes) -> ffront_stages.PastProgramDefinition:
@@ -90,3 +93,37 @@ def foast_to_past(inp: ffront_stages.FoastWithTypes) -> ffront_stages.PastProgra
         closure_vars=inp.closure_vars,
         grid_type=inp.foast_op_def.grid_type,
     )
+
+
+@dataclasses.dataclass(frozen=True)
+class FoastToPastClosure(workflow.NamedStepSequence):
+    foast_to_past: workflow.Workflow[
+        ffront_stages.FoastWithTypes, ffront_stages.PastProgramDefinition
+    ]
+
+    def __call__(self, inp: ffront_stages.FoastClosure) -> ffront_stages.PastClosure:
+        # TODO(tehrengruber): check all offset providers are given
+        # deduce argument types
+        arg_types = []
+        for arg in inp.args:
+            arg_types.append(type_translation.from_value(arg))
+        kwarg_types = {}
+        for name, arg in inp.kwargs.items():
+            kwarg_types[name] = type_translation.from_value(arg)
+
+        past_def = super().__call__(
+            ffront_stages.FoastWithTypes(
+                foast_op_def=inp.foast_op_def,
+                arg_types=arg_types,
+                kwarg_types=kwarg_types,
+                closure_vars=inp.closure_vars,
+            )
+        )
+
+        return ffront_stages.PastClosure(
+            past_node=past_def.past_node,
+            closure_vars=past_def.closure_vars,
+            grid_type=past_def.grid_type,
+            args=inp.args,
+            kwargs=inp.kwargs,
+        )
