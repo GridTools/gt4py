@@ -33,7 +33,6 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
-from gt4py.next.utils import extract_tuple_from_slice
 
 
 try:
@@ -851,9 +850,21 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        domain_slice_new = extract_tuple_from_slice(domain_slice, pos_old)
-        if (pos := embedded_common._find_index_of_dim(dim, domain_slice_new)) is not None:
-            _, index_or_range = domain_slice_new[pos]  # type: ignore[misc] # domain_slice_new is not a slice
+        if pos_old < len(domain_slice) and isinstance(domain_slice[pos_old], slice):
+            if domain_slice[pos_old].start is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos_old].stop.value  # type: ignore[union-attr]
+            elif domain_slice[pos_old].stop is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos_old].start.value  # type: ignore[union-attr]
+            else:
+                index_or_range = common.unit_range(
+                    (domain_slice[pos_old].start.value, domain_slice[pos_old].stop.value)  # type: ignore[union-attr]
+                )
+            slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
+        elif (
+            pos_old < len(domain_slice)
+            and (pos := embedded_common._find_index_of_dim(dim, domain_slice)) is not None
+        ):
+            _, index_or_range = domain_slice[pos]  # type: ignore[misc]
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         else:
             slice_indices.append(slice(None))

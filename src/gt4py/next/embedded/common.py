@@ -76,15 +76,30 @@ def _absolute_sub_domain(
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
         index_new = extract_tuple_from_slice(index, i)
-
-        if (pos := _find_index_of_dim(dim, index_new)) is not None:
+        if i < len(index) and isinstance(index[i], slice):
+            if index[i].start is None:  # type: ignore[union-attr]
+                index_or_range = index[i].stop.value  # type: ignore[union-attr]
+            elif index[i].stop is None:  # type: ignore[union-attr]
+                index_or_range = index[i].start.value  # type: ignore[union-attr]
+            else:
+                index_or_range = common.unit_range((index_new[0].value, index_new[1].value))  # type: ignore[union-attr]
+            named_ranges.append(common.NamedRange(dim, index_or_range))
+        elif i < len(index) and (pos := _find_index_of_dim(dim, index_new)) is not None:
             named_idx = index_new[pos]
             _, idx = named_idx  # type: ignore[misc] # named_idx is not a slice
-            assert common.is_int_index(idx)
-            if idx < rng.start or idx >= rng.stop:
-                raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain, indices=index, index=named_idx, dim=dim
-                )
+            if isinstance(idx, common.UnitRange):
+                if not idx <= rng:
+                    raise embedded_exceptions.IndexOutOfBounds(
+                        domain=domain, indices=index, index=named_idx, dim=dim
+                    )
+                named_ranges.append(common.NamedRange(dim, idx))
+            else:
+                # not in new domain
+                assert common.is_int_index(idx)
+                if idx < rng.start or idx >= rng.stop:
+                    raise embedded_exceptions.IndexOutOfBounds(
+                        domain=domain, indices=index, index=named_idx, dim=dim
+                    )
         else:
             # dimension not mentioned in slice
             named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
@@ -206,8 +221,8 @@ def _create_slice(idx: common.NamedSlice, bounds: common.UnitRange) -> common.Na
         return idx
     if isinstance(idx.start, common.NamedIndex) and idx.stop is None:
         idx_stop = common.NamedIndex(dim=idx.start.dim, value=bounds.stop)
-        return slice(idx.start, idx_stop, idx.step)
+        return common.NamedSlice(idx.start, idx_stop, idx.step)
     if isinstance(idx.stop, common.NamedIndex) and idx.start is None:
         idx_start = common.NamedIndex(dim=idx.stop.dim, value=bounds.start)
-        return slice(idx_start, idx.stop, idx.step)
+        return common.NamedSlice(idx_start, idx.stop, idx.step)
     return idx
