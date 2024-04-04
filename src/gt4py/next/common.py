@@ -446,20 +446,19 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def __getitem__(self, index: Dimension) -> NamedRange: ...
 
     def __getitem__(self, index: int | slice | Dimension) -> NamedRange | Domain:
+        if isinstance(index, Dimension):
+            try:
+                index = self.dims.index(index)
+            except ValueError as ex:
+                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
         if isinstance(index, int):
             return NamedRange(dim=self.dims[index], unit_range=self.ranges[index])
-        elif isinstance(index, slice):
+        if isinstance(index, slice):
             dims_slice = self.dims[index]
             ranges_slice = self.ranges[index]
             return Domain(dims=dims_slice, ranges=ranges_slice)
-        elif isinstance(index, Dimension):
-            try:
-                index_pos = self.dims.index(index)
-                return NamedRange(dim=self.dims[index_pos], unit_range=self.ranges[index_pos])
-            except ValueError as ex:
-                raise KeyError(f"No Dimension of type '{index}' is present in the Domain.") from ex
-        else:
-            raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
+        
+        raise KeyError("Invalid index type, must be either int, slice, or Dimension.")
 
     def __and__(self, other: Domain) -> Domain:
         """

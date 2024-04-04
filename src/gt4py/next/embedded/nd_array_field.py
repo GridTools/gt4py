@@ -583,11 +583,11 @@ def _remap_as_data_reshuffling(
             conn = conn.__class__.from_array(
                 conn_ndarray, domain=data.domain, codomain=conn.codomain
             )
-            conn_map[conn.codomain] = conn
+        conn_map[conn.codomain] = conn
 
         dim_idx = data.domain.dim_index(conn.codomain)
         current_range: common.UnitRange = data.domain.ranges[dim_idx]
-        new_ranges = connectivity.inverse_image(current_range)
+        new_ranges = connectivity.inverse_image(current_range).ranges
         ranges = tuple(r & s for r, s in zip(ranges, new_ranges))
 
     new_domain = common.Domain(dims=data.domain.dims, ranges=ranges)
@@ -621,14 +621,11 @@ def _identity_connectivities(
     for d in codomains:
         assert d in domain.dims
         d_idx = domain.dim_index(d)
-        indices = np.arange(domain[d].start, domain[d].stop)
-
+        indices = np.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
         identities.append(
             cls.from_array(
                 np.broadcast_to(
-                    indices.__getitem__(
-                        *(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
-                    ),
+                    indices[tuple(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))],
                     shape,
                 ),
                 codomain=d,
