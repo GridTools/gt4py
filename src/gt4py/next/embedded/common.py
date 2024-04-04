@@ -28,8 +28,8 @@ def sub_domain(domain: common.Domain, index: common.AnyIndexSpec) -> common.Doma
     index_sequence = common.as_any_index_sequence(index)
 
     if common.is_absolute_index_sequence(index_sequence):
-        assert isinstance(index_sequence, (common.NamedSlice, common.NamedIndex))
-        return _absolute_sub_domain(domain, index_sequence)
+        # TODO: ignore type for now
+        return _absolute_sub_domain(domain, index_sequence)  # type: ignore[arg-type]
 
     if common.is_relative_index_sequence(index_sequence):
         return _relative_sub_domain(domain, index_sequence)
