@@ -103,7 +103,7 @@ mypy==1.9.0               # via -c constraints.txt, -r requirements-dev.in
 mypy-extensions==1.0.0    # via -c constraints.txt, black, mypy
 nanobind==1.9.2           # via -c constraints.txt, gt4py (pyproject.toml)
 nbclient==0.6.8           # via -c constraints.txt, nbmake
-nbformat==5.10.3          # via -c constraints.txt, jupytext, nbclient, nbmake
+nbformat==5.10.4          # via -c constraints.txt, jupytext, nbclient, nbmake
 nbmake==1.5.3             # via -c constraints.txt, -r requirements-dev.in
 nest-asyncio==1.6.0       # via -c constraints.txt, ipykernel, nbclient
 networkx==3.1             # via -c constraints.txt, dace

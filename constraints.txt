@@ -103,7 +103,7 @@ mypy==1.9.0               # via -r requirements-dev.in
 mypy-extensions==1.0.0    # via black, mypy
 nanobind==1.9.2           # via gt4py (pyproject.toml)
 nbclient==0.6.8           # via nbmake
-nbformat==5.10.3          # via jupytext, nbclient, nbmake
+nbformat==5.10.4          # via jupytext, nbclient, nbmake
 nbmake==1.5.3             # via -r requirements-dev.in
 nest-asyncio==1.6.0       # via ipykernel, nbclient
 networkx==3.1             # via dace
