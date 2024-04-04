@@ -62,4 +62,6 @@ def new_context(
 
 
 def within_context() -> bool:
-    return offset_provider.get() is not _undefined_offset_provider
+    return (
+        offset_provider.get() is not _undefined_offset_provider
+    )  # TODO: this is broken: if there are no shifts, the offset_provider can be empty even within context

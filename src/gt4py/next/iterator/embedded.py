@@ -53,7 +53,7 @@ from gt4py.eve.extended_typing import (
     runtime_checkable,
 )
 from gt4py.next import common, embedded as next_embedded
-from gt4py.next.embedded import exceptions as embedded_exceptions
+from gt4py.next.embedded import context as embedded_context, exceptions as embedded_exceptions
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 
@@ -1508,28 +1508,29 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
             )
 
 
-def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
-    if "offset_provider" not in kwargs:
-        raise RuntimeError("'offset_provider' not provided.")
+@runtime.closure.register(EMBEDDED)
+def closure(
+    domain_: Domain,
+    sten: Callable[..., Any],
+    out,  #: MutableLocatedField,
+    ins: list[common.Field],
+) -> None:
+    offset_provider = embedded_context.offset_provider.get()
+    _validate_domain(domain_, offset_provider)
+    domain: dict[Tag, range] = _dimension_to_tag(domain_)
+    if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
+        raise TypeError("'Out' needs to be a located field.")
 
-    offset_provider = kwargs["offset_provider"]
+    new_context: dict[str, Any] = {"offset_provider": offset_provider}
 
-    @runtime.closure.register(EMBEDDED)
-    def closure(
-        domain_: Domain,
-        sten: Callable[..., Any],
-        out,  #: MutableLocatedField,
-        ins: list[common.Field],
-    ) -> None:
-        _validate_domain(domain_, kwargs["offset_provider"])
-        domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
-            raise TypeError("'Out' needs to be a located field.")
-
-        column_range = None
-        column: Optional[ColumnDescriptor] = None
-        if kwargs.get("column_axis") and kwargs["column_axis"].value in domain:
-            column_axis = kwargs["column_axis"]
+    column: Optional[ColumnDescriptor] = None
+    column_range: Optional[common.NamedRange] = None
+    if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
+        assert (
+            col_range_placeholder.unit_range.is_empty()
+        )  # check it's just the placeholder with empty range
+        column_axis = col_range_placeholder.dim
+        if column_axis is not None and column_axis.value in domain:
             column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
             del domain[column_axis.value]
 
@@ -1537,13 +1538,13 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                 column_axis, common.UnitRange(column.col_range.start, column.col_range.stop)
             )
 
-        out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
+    new_context["closure_column_range"] = column_range
 
-        def _closure_runner():
-            # Set context variables before executing the closure
-            column_range_cvar.set(column_range)
-            offset_provider_cvar.set(offset_provider)
+    out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
+    with embedded_context.new_context(**new_context) as ctx:
+
+        def _iterate():
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
                 ins_iters = list(
@@ -1562,10 +1563,22 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
                         assert _is_concrete_position(col_pos)
                         out.field_setitem(col_pos, res[k])
 
-        ctx = cvars.copy_context()
-        ctx.run(_closure_runner)
+        ctx.run(_iterate)
 
-    fun(*args)
+
+def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
+    if "offset_provider" not in kwargs:
+        raise RuntimeError("'offset_provider' not provided.")
+
+    context_vars = {"offset_provider": kwargs["offset_provider"]}
+    if "column_axis" in kwargs:
+        context_vars["closure_column_range"] = common.NamedRange(
+            kwargs["column_axis"],
+            common.UnitRange(0, 0),  # empty: indicates column operation, will update later
+        )
+
+    with embedded_context.new_context(**context_vars) as ctx:
+        ctx.run(fun, *args)
 
 
 runtime.fendef_embedded = fendef_embedded
