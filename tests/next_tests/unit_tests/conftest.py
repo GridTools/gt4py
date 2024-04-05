@@ -32,7 +32,7 @@ except ModuleNotFoundError as e:
         raise e
 
 
-import tests.next_tests
+import next_tests
 
 
 @pytest.fixture(
@@ -49,12 +49,7 @@ def lift_mode(request):
 
 OPTIONAL_PROCESSORS = []
 if dace_iterator:
-    OPTIONAL_PROCESSORS.append(
-        (
-            tests.next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
-            True,
-        )
-    )
+    OPTIONAL_PROCESSORS.append((next_tests.definitions.OptionalProgramBackendId.DACE_CPU, True))
     # TODO(havogt): update tests to use proper allocation
     # OPTIONAL_PROCESSORS.append(
     #     pytest.param(
@@ -66,16 +61,16 @@ if dace_iterator:
 @pytest.fixture(
     params=[
         (None, True),
-        (tests.next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
-        (tests.next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
-        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
-        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
-        (tests.next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
+        (next_tests.definitions.ProgramBackendId.ROUNDTRIP, True),
+        (next_tests.definitions.ProgramBackendId.DOUBLE_ROUNDTRIP, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE, True),
+        (next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES, True),
         # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
-        (tests.next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
-        (tests.next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (tests.next_tests.definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
-        (tests.next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
+        (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
+        (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
+        (next_tests.definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
+        (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
     ]
     + OPTIONAL_PROCESSORS,
     ids=lambda p: p[0].short_id() if p[0] is not None else "None",
@@ -96,7 +91,7 @@ def program_processor(request) -> tuple[ppi.ProgramProcessor, bool]:
     if is_backend:
         processor = processor.executor
 
-    for marker, skip_mark, msg in tests.next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
+    for marker, skip_mark, msg in next_tests.definitions.BACKEND_SKIP_TEST_MATRIX.get(
         processor_id, []
     ):
         if request.node.get_closest_marker(marker):
