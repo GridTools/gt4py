@@ -69,27 +69,44 @@ def _relative_sub_domain(
 
     return common.Domain(*named_ranges)
 
+def _find_index_of_slice(dim, index):
+    for i_ind, ind in enumerate(index):
+        if isinstance(ind, slice):
+            if (ind.start is not None and ind.start.dim == dim) or (ind.stop is not None and ind.stop.dim == dim):
+                return i_ind
+        else:
+            return None
+    return None
 
 def _absolute_sub_domain(
     domain: common.Domain, index: Sequence[common.NamedIndex | common.NamedSlice]
 ) -> common.Domain:
     named_ranges: list[common.NamedRange] = []
     for i, (dim, rng) in enumerate(domain):
-        if i < len(index) and isinstance(index[i], common.NamedSlice):
-            index_i_start = index[i].start  # type: ignore[union-attr] # slice has this attr
-            index_i_stop = index[i].stop  # type: ignore[union-attr] # slice has this attr
-            if not common.unit_range((index_i_start.value, index_i_stop.value)) <= rng:
-                raise embedded_exceptions.IndexOutOfBounds(
-                    domain=domain, indices=index, index=i, dim=dim
-                )
+        if (pos :=_find_index_of_slice(dim, index)) is not None:
+        # if i < len(index) and isinstance(index[i], common.NamedSlice):
+            index_i_start = index[pos].start  # type: ignore[union-attr] # slice has this attr
+            index_i_stop = index[pos].stop  # type: ignore[union-attr] # slice has this attr
             if index_i_start is None:
                 index_or_range = index_i_stop.value
+                index_dim = index_i_stop.dim
             elif index_i_stop is None:
                 index_or_range = index_i_start.value
+                index_dim = index_i_start.dim
             else:
+                if not common.unit_range((index_i_start.value, index_i_stop.value)) <= rng:
+                    raise embedded_exceptions.IndexOutOfBounds(
+                        domain=domain, indices=index, index=pos, dim=dim
+                    )
+                index_dim = index_i_start.dim
                 index_or_range = common.unit_range((index_i_start.value, index_i_stop.value))
-            named_ranges.append(common.NamedRange(dim, index_or_range))
-        elif i < len(index) and (pos := _find_index_of_dim(dim, index)) is not None:
+            if index_dim == dim:
+                named_ranges.append(common.NamedRange(dim, index_or_range))
+            else:
+                # dimension not mentioned in slice
+                named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
+        elif (pos := _find_index_of_dim(dim, index)) is not None:
+        # elif (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
             _, idx = named_idx  # type: ignore[misc] # named_idx is not a slice
             if isinstance(idx, common.UnitRange):
@@ -198,18 +215,30 @@ def _find_index_of_dim(
     dim: common.Dimension,
     domain_slice: common.Domain | Sequence[common.NamedRange | common.NamedIndex | Any],
 ) -> Optional[int]:
-    for i, (d, _) in enumerate(domain_slice):
-        if dim == d:
-            return i
+    if not isinstance(domain_slice, tuple):
+        for i, (d, _) in enumerate(domain_slice):
+            if dim == d:
+                return i
+        return None
     return None
 
 
 def canonicalize_any_index_sequence(
-    index: common.AnyIndexSpec, bounds: tuple[common.UnitRange]
+    index: common.AnyIndexSpec, domain: common.Domain
 ) -> common.AnyIndexSpec:
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
-        new_index = tuple([_create_slice(i, bounds[idx]) for idx, i in enumerate(new_index)])
+        dims_ls = []
+        dims = True
+        for i_ind, ind in enumerate(new_index):
+            if ind.start is not None and isinstance(ind.start, common.NamedIndex):
+                dims_ls.append(ind.start.dim)
+            elif ind.stop is not None and isinstance(ind.stop, common.NamedIndex):
+                dims_ls.append(ind.stop.dim)
+            else:
+                dims = False
+                dims_ls.append(i_ind)
+        new_index = tuple([_create_slice(i, domain.ranges[domain.dims.index(dims_ls[idx]) if dims else dims_ls[idx]]) for idx, i in enumerate(new_index)])
     elif isinstance(new_index, common.Domain):
         new_index = tuple([_from_named_range_to_slice(idx) for idx in new_index])
     return new_index

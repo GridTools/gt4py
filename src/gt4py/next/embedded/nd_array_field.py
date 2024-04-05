@@ -314,7 +314,7 @@ class NdArrayField(
     def _slice(
         self, index: common.AnyIndexSpec
     ) -> tuple[common.Domain, common.RelativeIndexSequence]:
-        index = embedded_common.canonicalize_any_index_sequence(index, self.domain.ranges)
+        index = embedded_common.canonicalize_any_index_sequence(index, self.domain)
         new_domain = embedded_common.sub_domain(self.domain, index)
 
         index_sequence = common.as_any_index_sequence(index)
@@ -850,14 +850,15 @@ def _get_slices_from_domain_slice(
     slice_indices: list[slice | common.IntIndex] = []
 
     for pos_old, (dim, _) in enumerate(domain):
-        if pos_old < len(domain_slice) and isinstance(domain_slice[pos_old], slice):
-            if domain_slice[pos_old].start is None:  # type: ignore[union-attr]
-                index_or_range = domain_slice[pos_old].stop.value  # type: ignore[union-attr]
-            elif domain_slice[pos_old].stop is None:  # type: ignore[union-attr]
-                index_or_range = domain_slice[pos_old].start.value  # type: ignore[union-attr]
+        #if pos_old < len(domain_slice) and isinstance(domain_slice[pos_old], slice):
+        if (pos := embedded_common._find_index_of_slice(dim, domain_slice)) is not None:
+            if domain_slice[pos].start is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos].stop.value  # type: ignore[union-attr]
+            elif domain_slice[pos].stop is None:  # type: ignore[union-attr]
+                index_or_range = domain_slice[pos].start.value  # type: ignore[union-attr]
             else:
                 index_or_range = common.unit_range(
-                    (domain_slice[pos_old].start.value, domain_slice[pos_old].stop.value)  # type: ignore[union-attr]
+                    (domain_slice[pos].start.value, domain_slice[pos].stop.value)  # type: ignore[union-attr]
                 )
             slice_indices.append(_compute_slice(index_or_range, domain, pos_old))
         elif (

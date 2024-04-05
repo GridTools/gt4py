@@ -521,9 +521,14 @@ def test_absolute_indexing_empty_dim_sliced():
         dims=(D0, D1, D2), ranges=(UnitRange(5, 10), UnitRange(5, 15), UnitRange(10, 25))
     )
     field = common._field(np.ones((5, 10, 15)), domain=domain)
-    # with pytest.raises(IndexError, match="Lower bound needs to be specified"):
-    # TODO
-    field[: D0(10)]
+    field_1 = field[: D0(10)]
+    expected = field[
+        NamedIndex(dim=D0, value=5),
+        NamedIndex(dim=D0, value=10),
+    ]
+
+    assert common.is_field(field_1)
+    assert field_1 == expected
 
 
 def test_absolute_indexing_value_return():
