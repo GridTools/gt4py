@@ -39,7 +39,6 @@ from gt4py.next.common import Dimension, GridType
 from gt4py.next.embedded import operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
-    foast_to_past,
     past_process_args,
     past_to_itir,
     stages as ffront_stages,
@@ -474,18 +473,6 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             args, kwargs = type_info.canonicalize_arguments(
                 self.foast_stage.foast_node.type, args, kwargs
             )
-            # TODO(tehrengruber): check all offset providers are given
-            # deduce argument types
-            # arg_types = []
-            # for arg in args:
-            #     arg_types.append(type_translation.from_value(arg))
-            # kwarg_types = {}
-            # for name, arg in kwargs.items():
-            #     kwarg_types[name] = type_translation.from_value(arg)
-
-            # return self.as_program(arg_types, kwarg_types)(
-            #     *args, out, offset_provider=offset_provider, **kwargs
-            # )
             return self.backend(
                 self.definition_stage,
                 *args,

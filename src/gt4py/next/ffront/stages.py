@@ -19,7 +19,6 @@ import inspect
 import types
 from typing import Any, Generic, Optional, TypeVar
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past
 from gt4py.next.type_system import type_specifications as ts
@@ -45,10 +44,6 @@ class FieldOperatorDefinition(Generic[OperatorNodeT]):
         return state
 
 
-def hash_field_operator_definition(fieldop_definition: FieldOperatorDefinition) -> str:
-    return eve_utils.content_hash(fieldop_definition)
-
-
 @dataclasses.dataclass(frozen=True)
 class FoastOperatorDefinition(Generic[OperatorNodeT]):
     foast_node: OperatorNodeT
@@ -68,18 +63,10 @@ class FoastOperatorDefinition(Generic[OperatorNodeT]):
         return state
 
 
-def hash_foast_operator_definition(foast_definition: FoastOperatorDefinition) -> str:
-    return eve_utils.content_hash(
-        foast_definition.foast_node,
-        foast_definition.grid_type,
-        tuple(foast_definition.attributes.items()),
-    )
-
-
 @dataclasses.dataclass(frozen=True)
 class FoastWithTypes(Generic[OperatorNodeT]):
     foast_op_def: FoastOperatorDefinition[OperatorNodeT]
-    arg_types: tuple[ts.TypeSpec]
+    arg_types: tuple[ts.TypeSpec, ...]
     kwarg_types: dict[str, ts.TypeSpec]
     closure_vars: dict[str, Any]
 
@@ -114,17 +101,6 @@ class FoastClosure(Generic[OperatorNodeT]):
         return state
 
 
-def hash_foast_with_types(foast_with_types: FoastWithTypes) -> str:
-    return eve_utils.content_hash(foast_with_types)
-    # return eve_utils.content_hash(
-    #     (
-    #         foast_with_types.foast_op_def,
-    #         foast_with_types.arg_types,
-    #         tuple((name, arg) for name, arg in foast_with_types.kwarg_types.items()),
-    #     )
-    # )
-
-
 @dataclasses.dataclass(frozen=True)
 class ProgramDefinition:
     definition: types.FunctionType
@@ -155,10 +131,6 @@ class PastProgramDefinition:
         state = self.__dict__.copy()
         state["closure_vars"] = hashable_closure_vars
         return state
-
-
-def hash_past_program_definition(past_definition: PastProgramDefinition) -> str:
-    return eve_utils.content_hash(past_definition)
 
 
 @dataclasses.dataclass(frozen=True)

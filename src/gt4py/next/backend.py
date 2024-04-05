@@ -76,7 +76,7 @@ DEFAULT_FIELDOP_TRANSFORMS = recipes.FieldopTransformWorkflow(
     past_transform_args=past_process_args.past_process_args,
     past_to_itir=past_to_itir.PastToItirFactory(),
     foast_to_itir=workflow.CachedStep(
-        step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.hash_foast_operator_definition
+        step=foast_to_itir.foast_to_itir, hash_function=eve_utils.content_hash
     ),
 )
 

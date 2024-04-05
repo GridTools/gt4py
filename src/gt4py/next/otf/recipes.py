@@ -37,7 +37,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
 
     @property
-    def step_order(self):
+    def step_order(self) -> list[str]:
         return [
             "func_to_foast",
             "foast_inject_args",

@@ -22,8 +22,8 @@ from gt4py.next.ffront import (
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.past_passes import closure_var_type_deduction, type_deduction
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 from gt4py.next.otf import workflow
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 def foast_to_past(inp: ffront_stages.FoastWithTypes) -> ffront_stages.PastProgramDefinition:
@@ -114,7 +114,7 @@ class FoastToPastClosure(workflow.NamedStepSequence):
         past_def = super().__call__(
             ffront_stages.FoastWithTypes(
                 foast_op_def=inp.foast_op_def,
-                arg_types=arg_types,
+                arg_types=tuple(arg_types),
                 kwarg_types=kwarg_types,
                 closure_vars=inp.closure_vars,
             )

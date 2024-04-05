@@ -14,6 +14,7 @@
 
 import factory
 
+from gt4py import eve
 from gt4py.next.ffront import gtcallable, stages as ffront_stages, transform_utils
 from gt4py.next.otf import workflow
 
@@ -56,4 +57,4 @@ class LinterFactory(factory.Factory):
         model = workflow.CachedStep
 
     step = lint_misnamed_functions.chain(lint_undefined_symbols)
-    hash_function = ffront_stages.hash_past_program_definition
+    hash_function = eve.utils.content_hash
