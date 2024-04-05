@@ -234,7 +234,7 @@ def pretty_format(node: foast.LocatedNode) -> str:
     >>> @field_operator
     ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
     ...     return a + 1.0
-    >>> print(pretty_format(field_op.foast_node))
+    >>> print(pretty_format(field_op.foast_stage.foast_node))
     @field_operator
     def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
       return a + 1.0
