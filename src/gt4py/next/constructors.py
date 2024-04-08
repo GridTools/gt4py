@@ -88,7 +88,7 @@ def empty(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     res = common._field(buffer.ndarray, domain=domain)
-    assert common.is_mutable_field(res)
+    assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
 

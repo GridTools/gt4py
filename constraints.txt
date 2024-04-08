@@ -16,7 +16,7 @@ black==24.3.0             # via gt4py (pyproject.toml)
 blinker==1.7.0            # via flask
 boltons==24.0.0           # via gt4py (pyproject.toml)
 build==1.2.1              # via pip-tools
-bump-my-version==0.12.0   # via -r requirements-dev.in
+bump-my-version==0.20.0   # via -r requirements-dev.in
 cached-property==1.5.2    # via gt4py (pyproject.toml)
 cachetools==5.3.3         # via tox
 certifi==2024.2.2         # via requests
@@ -103,7 +103,7 @@ mypy==1.9.0               # via -r requirements-dev.in
 mypy-extensions==1.0.0    # via black, mypy
 nanobind==1.9.2           # via gt4py (pyproject.toml)
 nbclient==0.6.8           # via nbmake
-nbformat==5.10.3          # via jupytext, nbclient, nbmake
+nbformat==5.10.4          # via jupytext, nbclient, nbmake
 nbmake==1.5.3             # via -r requirements-dev.in
 nest-asyncio==1.6.0       # via ipykernel, nbclient
 networkx==3.1             # via dace
@@ -125,16 +125,16 @@ platformdirs==4.2.0       # via black, jupyter-core, tox, virtualenv
 pluggy==1.4.0             # via pytest, tox
 ply==3.11                 # via dace
 pre-commit==3.5.0         # via -r requirements-dev.in
-prompt-toolkit==3.0.43    # via ipython
+prompt-toolkit==3.0.36    # via ipython, questionary
 psutil==5.9.8             # via -r requirements-dev.in, ipykernel, pytest-xdist
 ptyprocess==0.7.0         # via pexpect
 pure-eval==0.2.2          # via stack-data
 pybind11==2.12.0          # via gt4py (pyproject.toml)
 pycodestyle==2.11.1       # via flake8, flake8-debugger
 pycparser==2.22           # via cffi
-pydantic==2.0a3           # via bump-my-version, pydantic-settings
-pydantic-core==0.25.0     # via pydantic
-pydantic-settings==1.99   # via bump-my-version
+pydantic==2.6.4           # via bump-my-version, pydantic-settings
+pydantic-core==2.16.3     # via pydantic
+pydantic-settings==2.2.1  # via bump-my-version
 pydocstyle==6.3.0         # via flake8-docstrings
 pyflakes==3.2.0           # via flake8
 pygments==2.17.2          # via -r requirements-dev.in, devtools, flake8-rst-docstrings, ipython, nbmake, rich, sphinx
@@ -151,6 +151,7 @@ python-dotenv==1.0.1      # via pydantic-settings
 pytz==2024.1              # via babel
 pyyaml==6.0.1             # via dace, jupytext, pre-commit
 pyzmq==25.1.2             # via ipykernel, jupyter-client
+questionary==2.0.1        # via bump-my-version
 referencing==0.34.0       # via jsonschema, jsonschema-specifications
 requests==2.31.0          # via dace, sphinx
 restructuredtext-lint==1.4.0  # via flake8-rst-docstrings
@@ -182,7 +183,7 @@ toolz==0.12.1             # via cytoolz
 tornado==6.4              # via ipykernel, jupyter-client
 tox==4.14.2               # via -r requirements-dev.in
 traitlets==5.14.2         # via comm, ipykernel, ipython, jupyter-client, jupyter-core, matplotlib-inline, nbclient, nbformat
-types-aiofiles==23.2.0.20240331  # via types-all
+types-aiofiles==23.2.0.20240403  # via types-all
 types-all==1.0.0          # via -r requirements-dev.in
 types-annoy==1.17.8.4     # via types-all
 types-atomicwrites==1.4.5.1  # via types-all
@@ -254,7 +255,7 @@ types-pytz==2024.1.0.20240203  # via types-all, types-tzlocal
 types-pyvmomi==8.0.0.6    # via types-all
 types-pyyaml==6.0.12.20240311  # via types-all
 types-redis==4.6.0.20240311  # via types-all
-types-requests==2.31.0.20240402  # via types-all
+types-requests==2.31.0.20240403  # via types-all
 types-retry==0.9.9.4      # via types-all
 types-routes==2.5.0       # via types-all
 types-scribe==2.0.0       # via types-all
@@ -272,7 +273,7 @@ types-ujson==5.9.0.0      # via types-all
 types-waitress==2.1.4.20240106  # via types-all
 types-werkzeug==1.0.9     # via types-all, types-flask
 types-xxhash==3.0.5.2     # via types-all
-typing-extensions==4.5.0  # via annotated-types, black, faker, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
+typing-extensions==4.10.0  # via annotated-types, black, faker, gt4py (pyproject.toml), ipython, mypy, pydantic, pydantic-core, pytest-factoryboy, rich, rich-click, setuptools-scm
 urllib3==2.2.1            # via requests, types-requests
 virtualenv==20.25.1       # via pre-commit, tox
 wcwidth==0.2.13           # via prompt-toolkit

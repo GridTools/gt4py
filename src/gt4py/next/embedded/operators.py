@@ -146,7 +146,7 @@ def _tuple_assign_field(
 ) -> None:
     @utils.tree_map
     def impl(target: common.MutableField, source: common.Field) -> None:
-        if common.is_field(source):
+        if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
             assert core_defs.is_scalar_type(source)
@@ -159,7 +159,7 @@ def _intersect_scan_args(
     *args: core_defs.Scalar | common.Field | tuple[core_defs.Scalar | common.Field | tuple, ...],
 ) -> common.Domain:
     return embedded_common.domain_intersection(
-        *[arg.domain for arg in utils.flatten_nested_tuple(args) if common.is_field(arg)]
+        *[arg.domain for arg in utils.flatten_nested_tuple(args) if isinstance(arg, common.Field)]
     )
 
 
@@ -182,7 +182,7 @@ def _construct_scan_array(
     @utils.tree_map
     def impl(init: core_defs.Scalar) -> common.MutableField:
         res = common._field(xp.empty(domain.shape, dtype=type(init)), domain=domain)
-        assert common.is_mutable_field(res)
+        assert isinstance(res, common.MutableField)
         return res
 
     return impl
@@ -206,7 +206,7 @@ def _tuple_at(
 ) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
     @utils.tree_map
     def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
-        res = field[pos].as_scalar() if common.is_field(field) else field
+        res = field[pos].as_scalar() if isinstance(field, common.Field) else field
         assert core_defs.is_scalar_type(res)
         return res
 
