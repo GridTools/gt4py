@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import dataclasses
+from dataclasses import field
 import functools
 import types
 import typing
@@ -98,7 +99,7 @@ class Program(SDFGConvertible):
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    sdfgConvertible_dict: Optional[dict[str, Any]] = None
+    sdfgConvertible_dict: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -159,7 +160,7 @@ class Program(SDFGConvertible):
             raise RuntimeError(f"Program '{self}' does not have a backend set.")
 
     def with_backend(self, backend: ppi.ProgramExecutor) -> Program:
-        return dataclasses.replace(self, backend=backend, sdfgConvertible_dict={})
+        return dataclasses.replace(self, backend=backend)
 
     def with_grid_type(self, grid_type: GridType) -> Program:
         return dataclasses.replace(
@@ -261,8 +262,8 @@ class Program(SDFGConvertible):
             arg_types,
             offset_provider=offset_provider)
 
-        for k in offset_provider:
-            sdfg.arg_names.append(f"__connectivity_{k}")
+        sdfg.arg_names.extend(self.__sdfg_signature__()[0])
+        sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
         return sdfg
 
