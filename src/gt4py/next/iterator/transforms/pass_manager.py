@@ -204,7 +204,6 @@ def apply_common_transforms(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
-    assert isinstance(ir, itir.FencilDefinition)
-    prog = FencilToProgram.apply(ir)
+    prog = FencilToProgram.apply(ir)  # type: ignore[arg-type]  # TODO: remove after refactoring
 
     return prog

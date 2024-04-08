@@ -34,3 +34,12 @@ class FencilToProgram(eve.NodeTranslator):
             declarations=[],
             body=self.visit(node.closures),
         )
+
+    def visit_FencilWithTemporaries(self, node) -> itir.Program:
+        return itir.Program(
+            id=node.fencil.id,
+            function_definitions=node.fencil.function_definitions,
+            params=node.params,
+            declarations=node.tmps,
+            body=self.visit(node.fencil.closures),
+        )

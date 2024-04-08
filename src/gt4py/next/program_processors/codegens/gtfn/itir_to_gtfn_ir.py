@@ -575,11 +575,11 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             grid_type=self.grid_type,
             offset_definitions=list(offset_definitions.values()),
             function_definitions=function_definitions,
-            temporaries=[],
+            temporaries=self.visit(node.declarations, params=[p.id for p in node.params]),
         )
 
     def visit_Temporary(
-        self, node: global_tmps.Temporary, *, params: list, **kwargs: Any
+        self, node: itir.Temporary, *, params: list, **kwargs: Any
     ) -> TemporaryAllocation:
         def dtype_to_cpp(x: int | tuple | str) -> str:
             if isinstance(x, int):
@@ -601,13 +601,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_FencilWithTemporaries(
         self, node: global_tmps.FencilWithTemporaries, **kwargs: Any
     ) -> FencilDefinition:
-        fencil = self.visit(node.fencil, **kwargs)
-        return FencilDefinition(
-            id=fencil.id,
-            params=self.visit(node.params),
-            executions=fencil.executions,
-            grid_type=fencil.grid_type,
-            offset_definitions=fencil.offset_definitions,
-            function_definitions=fencil.function_definitions,
-            temporaries=self.visit(node.tmps, params=[p.id for p in node.params]),
-        )
+        raise AssertionError(
+            "Internal error: Fencils are no longer supported."
+        )  # TODO remove after refactoring is complete

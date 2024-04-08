@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import typing
-from typing import ClassVar, List, Optional, Union
+from typing import Any, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -217,15 +217,21 @@ class Stmt(Node): ...
 
 
 class Assign(Stmt):
-    target: SymRef
-    expr: Expr  # TODO Program expression
+    target: Expr  # `make_tuple` or SymRef
+    expr: Expr  # only `apply_stencil`
+
+
+class Temporary(Node):
+    id: Coerced[eve.SymbolName]
+    domain: Optional[Expr] = None
+    dtype: Optional[Any] = None  # TODO
 
 
 class Program(Node, ValidatedSymbolTableTrait):
     id: Coerced[SymbolName]
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
-    declarations: List[Sym]
+    declarations: List[Temporary]
     body: List[Stmt]
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
