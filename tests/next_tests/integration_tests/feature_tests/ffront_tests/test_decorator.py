@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+# TODO(dropd): Remove as soon as `gt4py.next.ffront.decorator` is type checked.
 from gt4py import next as gtx
 from gt4py.next.iterator import ir as itir
 
