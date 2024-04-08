@@ -14,6 +14,7 @@
 
 import gt4py.next as gtx
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.codegens.gtfn import gtfn_ir, itir_to_gtfn_ir as it2gtfn
 
 
@@ -41,3 +42,22 @@ def test_unapplied_funcall_to_function_object():
     ).visit(testee)
 
     assert expected == actual
+
+
+def test_get_domains():
+    domain = im.call("cartesian_domain")(im.call("named_range")(itir.AxisLiteral(value="D"), 1, 2))
+    testee = itir.Program(
+        id="foo",
+        function_definitions=[],
+        params=[itir.Sym(id="bar")],
+        declarations=[],
+        body=[
+            itir.Assign(
+                target=itir.SymRef(id="bar"),
+                expr=im.call(im.call("apply_stencil")("deref", domain))(),
+            )
+        ],
+    )
+
+    result = list(it2gtfn._get_domains(testee.body))
+    assert result == [domain]

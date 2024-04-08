@@ -28,7 +28,7 @@ from gt4py.next import common
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import LiftMode, pass_manager
+from gt4py.next.iterator.transforms import LiftMode, fencil_to_program, pass_manager
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
 from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTFNIMCodegen
@@ -183,7 +183,7 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
         runtime_lift_mode: Optional[LiftMode],
-    ) -> itir.FencilDefinition:
+    ) -> itir.Program:
         # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
         #  to the interface of all (or at least all of concern) backends, but instead should be
         #  configured in the backend itself (like it is here), until then we respect the argument
@@ -197,7 +197,7 @@ class GTFNTranslationStep(
             )
 
         if not self.enable_itir_transforms:
-            return program
+            return fencil_to_program.FencilToProgram.apply(program)
 
         apply_common_transforms = functools.partial(
             pass_manager.apply_common_transforms,

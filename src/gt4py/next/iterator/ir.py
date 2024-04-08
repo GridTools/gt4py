@@ -198,6 +198,7 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
+    "apply_stencil",
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
@@ -208,6 +209,24 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     params: List[Sym]
     closures: List[StencilClosure]
+
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+
+
+class Stmt(Node): ...
+
+
+class Assign(Stmt):
+    target: SymRef
+    expr: Expr  # TODO Program expression
+
+
+class Program(Node, ValidatedSymbolTableTrait):
+    id: Coerced[SymbolName]
+    function_definitions: List[FunctionDefinition]
+    params: List[Sym]
+    declarations: List[Sym]
+    body: List[Stmt]
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
 
