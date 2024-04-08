@@ -43,11 +43,7 @@ BINARY_OPS: Final = {
 }
 
 # replacements for builtin unary operations
-UNARY_OPS: Final = {
-    "deref": "·",
-    "lift": "↑",
-    "not_": "¬",
-}
+UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬"}
 
 # operator precedence
 PRECEDENCE: Final = {

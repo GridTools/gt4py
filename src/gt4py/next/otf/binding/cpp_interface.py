@@ -20,10 +20,7 @@ from gt4py.next.type_system import type_info as ti, type_specifications as ts
 
 
 CPP_DEFAULT: Final = languages.LanguageWithHeaderFilesSettings(
-    formatter_key="cpp",
-    formatter_style="LLVM",
-    file_extension="cpp",
-    header_extension="cpp.inc",
+    formatter_key="cpp", formatter_style="LLVM", file_extension="cpp", header_extension="cpp.inc"
 )
 
 

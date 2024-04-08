@@ -38,7 +38,7 @@ from gt4py.next.type_system.type_translation import from_value
 def convert_arg(arg: Any) -> Any:
     if isinstance(arg, tuple):
         return tuple(convert_arg(a) for a in arg)
-    if common.is_field(arg):
+    if isinstance(arg, common.Field):
         arr = arg.ndarray
         origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
         return arr, origin
@@ -54,10 +54,7 @@ def convert_args(
     ) -> None:
         converted_args = [convert_arg(arg) for arg in args]
         conn_args = extract_connectivity_args(offset_provider, device)
-        return inp(
-            *converted_args,
-            *conn_args,
-        )
+        return inp(*converted_args, *conn_args)
 
     return decorated_program
 
@@ -104,16 +101,18 @@ def extract_connectivity_args(
 def compilation_hash(otf_closure: stages.ProgramCall) -> int:
     """Given closure compute a hash uniquely determining if we need to recompile."""
     offset_provider = otf_closure.kwargs["offset_provider"]
-    return hash((
-        otf_closure.program,
-        # As the frontend types contain lists they are not hashable. As a workaround we just
-        # use content_hash here.
-        content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-        id(offset_provider) if offset_provider else None,
-        otf_closure.kwargs.get("column_axis", None),
-        # TODO(tehrengruber): Remove `lift_mode` from call interface.
-        otf_closure.kwargs.get("lift_mode", None),
-    ))
+    return hash(
+        (
+            otf_closure.program,
+            # As the frontend types contain lists they are not hashable. As a workaround we just
+            # use content_hash here.
+            content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
+            id(offset_provider) if offset_provider else None,
+            otf_closure.kwargs.get("column_axis", None),
+            # TODO(tehrengruber): Remove `lift_mode` from call interface.
+            otf_closure.kwargs.get("lift_mode", None),
+        )
+    )
 
 
 class GTFNCompileWorkflowFactory(factory.Factory):
@@ -191,8 +190,7 @@ class GTFNBackendFactory(factory.Factory):
 run_gtfn = GTFNBackendFactory()
 
 run_gtfn_imperative = GTFNBackendFactory(
-    name_postfix="_imperative",
-    otf_workflow__translation__use_imperative_backend=True,
+    name_postfix="_imperative", otf_workflow__translation__use_imperative_backend=True
 )
 
 run_gtfn_cached = GTFNBackendFactory(cached=True)

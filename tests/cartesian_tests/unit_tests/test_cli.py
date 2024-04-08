@@ -35,10 +35,8 @@ def clirunner():
 @pytest.fixture(
     params=[
         *ALL_BACKENDS,  # gtc backends require definition ir as input, for now we skip the tests
-        pytest.param(
-            "nocli",
-        ),
-    ],
+        pytest.param("nocli"),
+    ]
 )
 def backend_name(request, nocli_backend):
     """Parametrize by backend name."""

@@ -147,9 +147,7 @@ def apply_common_transforms(
         for _ in range(10):
             inlined = InlineLifts().visit(ir)
             inlined = InlineLambdas.apply(
-                inlined,
-                opcount_preserving=True,
-                force_inline_lift_args=True,
+                inlined, opcount_preserving=True, force_inline_lift_args=True
             )
             if inlined == ir:
                 break
@@ -202,9 +200,7 @@ def apply_common_transforms(
         ir = MergeLet().visit(ir)
 
     ir = InlineLambdas.apply(
-        ir,
-        opcount_preserving=True,
-        force_inline_lambda_args=force_inline_lambda_args,
+        ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
     return ir

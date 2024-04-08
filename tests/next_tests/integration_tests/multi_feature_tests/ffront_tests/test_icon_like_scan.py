@@ -38,12 +38,7 @@ Koff = gtx.FieldOffset("Koff", KDim, (KDim,))
 
 @gtx.scan_operator(axis=KDim, forward=True, init=(0.0, 0.0, True))
 def _scan(
-    state: tuple[float, float, bool],
-    w: float,
-    z_q: float,
-    z_a: float,
-    z_b: float,
-    z_c: float,
+    state: tuple[float, float, bool], w: float, z_q: float, z_a: float, z_b: float, z_c: float
 ) -> tuple[float, float, bool]:
     z_q_m1, w_m1, first = state
     z_g = z_b + z_a * z_q_m1
@@ -78,11 +73,7 @@ def solve_nonhydro_stencil_52_like(
     dummy: gtx.Field[[Cell, KDim], bool],
 ):
     _solve_nonhydro_stencil_52_like(
-        z_alpha,
-        z_beta,
-        z_q,
-        w,
-        out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:]),
+        z_alpha, z_beta, z_q, w, out=(z_q[:, 1:], w[:, 1:], dummy[:, 1:])
     )
 
 
@@ -109,11 +100,7 @@ def solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
     w: gtx.Field[[Cell, KDim], float],
 ):
     _solve_nonhydro_stencil_52_like_with_gtfn_tuple_merge(
-        z_alpha,
-        z_beta,
-        z_q,
-        w,
-        out=(z_q[:, 1:], w[:, 1:]),
+        z_alpha, z_beta, z_q, w, out=(z_q[:, 1:], w[:, 1:])
     )
 
 
@@ -168,10 +155,7 @@ def solve_nonhydro_stencil_52_like_z_q_tup(
 
 
 def reference(
-    z_alpha: np.array,
-    z_beta: np.array,
-    z_q_ref: np.array,
-    w_ref: np.array,
+    z_alpha: np.array, z_beta: np.array, z_q_ref: np.array, w_ref: np.array
 ) -> tuple[np.ndarray, np.ndarray]:
     z_q = np.copy(z_q_ref)
     w = np.copy(w_ref)

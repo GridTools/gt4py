@@ -73,8 +73,7 @@ def function_buffer_example():
             interface.Parameter(
                 name="b_buf",
                 type_=ts.FieldType(
-                    dims=[gtx.Dimension("foo")],
-                    dtype=ts.ScalarType(ts.ScalarKind.INT64),
+                    dims=[gtx.Dimension("foo")], dtype=ts.ScalarType(ts.ScalarKind.INT64)
                 ),
             ),
         ],
@@ -151,9 +150,7 @@ def test_render_function_declaration_tuple(function_tuple_example):
 
 def test_render_function_call_tuple(function_tuple_example):
     rendered = format_source(
-        "cpp",
-        cpp.render_function_call(function_tuple_example, args=["get_arg_1()"]),
-        style="LLVM",
+        "cpp", cpp.render_function_call(function_tuple_example, args=["get_arg_1()"]), style="LLVM"
     )
     expected = format_source("cpp", """example(get_arg_1())""", style="LLVM")
     assert rendered == expected

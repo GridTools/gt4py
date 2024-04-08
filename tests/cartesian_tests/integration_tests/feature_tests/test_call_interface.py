@@ -352,9 +352,7 @@ class TestAxesMismatch:
     @pytest.fixture
     def sample_stencil(self):
         @gtscript.stencil(backend="numpy")
-        def _stencil(
-            field_out: gtscript.Field[gtscript.IJ, np.float64],
-        ):
+        def _stencil(field_out: gtscript.Field[gtscript.IJ, np.float64]):
             with computation(FORWARD), interval(...):
                 field_out = 1.0
 
@@ -391,9 +389,7 @@ class TestDataDimensions:
     @pytest.fixture
     def sample_stencil(self):
         @gtscript.stencil(backend=self.backend)
-        def _stencil(
-            field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))],
-        ):
+        def _stencil(field_out: gtscript.Field[gtscript.IJK, (np.float64, (2,))]):
             with computation(FORWARD), interval(...):
                 field_out[0, 0, 0][0] = 0.0
                 field_out[0, 0, 0][1] = 1.0
@@ -423,18 +419,10 @@ def test_origin_unchanged(backend):
             outp = inp
 
     outp = gt_storage.ones(
-        backend=backend,
-        aligned_index=(1, 1, 1),
-        shape=(4, 4, 4),
-        dtype=float,
-        dimensions="IJK",
+        backend=backend, aligned_index=(1, 1, 1), shape=(4, 4, 4), dtype=float, dimensions="IJK"
     )
     inp = gt_storage.ones(
-        backend=backend,
-        aligned_index=(1,),
-        shape=(4,),
-        dtype=float,
-        dimensions="K",
+        backend=backend, aligned_index=(1,), shape=(4,), dtype=float, dimensions="K"
     )
 
     origin = {"_all_": (1, 1, 1), "inp": (1,)}
@@ -454,20 +442,12 @@ def test_permute_axes():
             outp = inp
 
     outp = gt_storage.ones(
-        backend="numpy",
-        aligned_index=(1, 1, 1),
-        shape=(4, 4, 4),
-        dtype=float,
-        dimensions="KJI",
+        backend="numpy", aligned_index=(1, 1, 1), shape=(4, 4, 4), dtype=float, dimensions="KJI"
     )
     outp_wrap = DimensionsWrapper(array=outp, dimensions="KJI")
 
     inp = gt_storage.from_array(
-        data=np.arange(4),
-        backend="numpy",
-        aligned_index=(1,),
-        dtype=float,
-        dimensions="K",
+        data=np.arange(4), backend="numpy", aligned_index=(1,), dtype=float, dimensions="K"
     )
 
     calc_damp(outp_wrap, inp)

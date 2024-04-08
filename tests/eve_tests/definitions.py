@@ -370,8 +370,7 @@ def make_simple_node_with_collections(*, fixed: bool = False) -> SimpleNodeWithC
 
 
 def make_simple_node_with_abstract_collections(
-    *,
-    fixed: bool = False,
+    *, fixed: bool = False
 ) -> SimpleNodeWithAbstractCollections:
     int_value = make_int_value(fixed=fixed)
     int_sequence = make_collection_value(int, collection_type=tuple, length=3)
@@ -386,10 +385,7 @@ def make_simple_node_with_abstract_collections(
     )
 
 
-def make_simple_node_with_symbol_name(
-    *,
-    fixed: bool = False,
-) -> SimpleNodeWithSymbolName:
+def make_simple_node_with_symbol_name(*, fixed: bool = False) -> SimpleNodeWithSymbolName:
     int_value = make_int_value(fixed=fixed)
     name = make_str_value(fixed=fixed)
 
@@ -397,8 +393,7 @@ def make_simple_node_with_symbol_name(
 
 
 def make_simple_node_with_default_symbol_name(
-    *,
-    fixed: bool = False,
+    *, fixed: bool = False
 ) -> SimpleNodeWithDefaultSymbolName:
     int_value = make_int_value(fixed=fixed)
 

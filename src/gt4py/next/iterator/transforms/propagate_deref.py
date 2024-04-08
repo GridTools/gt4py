@@ -52,8 +52,7 @@ class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
             lambda_args: list[ir.Expr] = node.args[0].args  # type: ignore[attr-defined] # invariant ensured by pattern match above
             node = ir.FunCall(
                 fun=ir.Lambda(
-                    params=lambda_fun.params,
-                    expr=ir.FunCall(fun=builtin, args=[lambda_fun.expr]),
+                    params=lambda_fun.params, expr=ir.FunCall(fun=builtin, args=[lambda_fun.expr])
                 ),
                 args=lambda_args,
             )

@@ -39,16 +39,8 @@ def test_conditional_w_tuple(program_processor):
     inp = gtx.as_field([IDim], np.random.randint(0, 2, shape, dtype=np.int32))
     out = gtx.as_field([IDim], np.zeros(shape))
 
-    dom = {
-        IDim: range(0, shape[0]),
-    }
-    run_processor(
-        stencil_conditional[dom],
-        program_processor,
-        inp,
-        out=out,
-        offset_provider={},
-    )
+    dom = {IDim: range(0, shape[0])}
+    run_processor(stencil_conditional[dom], program_processor, inp, out=out, offset_provider={})
     if validate:
         assert np.all(out.asnumpy()[inp.asnumpy() == 0] == 3.0)
         assert np.all(out.asnumpy()[inp.asnumpy() == 1] == 7.0)

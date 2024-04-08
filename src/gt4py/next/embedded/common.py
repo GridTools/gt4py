@@ -98,9 +98,7 @@ def _absolute_sub_domain(
     return common.Domain(*named_ranges)
 
 
-def domain_intersection(
-    *domains: common.Domain,
-) -> common.Domain:
+def domain_intersection(*domains: common.Domain) -> common.Domain:
     """
     Return the intersection of the given domains.
 
@@ -111,11 +109,7 @@ def domain_intersection(
         ... )  # doctest: +ELLIPSIS
         Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
-    return functools.reduce(
-        operator.and_,
-        domains,
-        common.Domain(dims=tuple(), ranges=tuple()),
-    )
+    return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
 
 
 def restrict_to_intersection(
@@ -136,22 +130,24 @@ def restrict_to_intersection(
         >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
-    intersection_without_ignore_dims = domain_intersection(*[
-        common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
-        for domain in domains
-    ])
+    intersection_without_ignore_dims = domain_intersection(
+        *[
+            common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
+            for domain in domains
+        ]
+    )
     return tuple(
-        common.Domain(*[
-            (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim])
-            for nr in domain
-        ])
+        common.Domain(
+            *[
+                (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim])
+                for nr in domain
+            ]
+        )
         for domain in domains
     )
 
 
-def iterate_domain(
-    domain: common.Domain,
-) -> Iterator[tuple[common.NamedIndex]]:
+def iterate_domain(domain: common.Domain) -> Iterator[tuple[common.NamedIndex]]:
     for idx in itertools.product(*(list(r) for r in domain.ranges)):
         yield tuple(common.NamedIndex(d, i) for d, i in zip(domain.dims, idx))  # type: ignore[misc] # trust me, `idx` is `tuple[int, ...]`
 
@@ -194,9 +190,7 @@ def _find_index_of_dim(
     return None
 
 
-def canonicalize_any_index_sequence(
-    index: common.AnyIndexSpec,
-) -> common.AnyIndexSpec:
+def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyIndexSpec:
     # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
@@ -204,9 +198,7 @@ def canonicalize_any_index_sequence(
     return new_index
 
 
-def _named_slice_to_named_range(
-    idx: common.NamedSlice,
-) -> common.NamedRange | common.NamedSlice:
+def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
         start_dim, start_value = idx.start

@@ -41,14 +41,8 @@ def test_stencil_to_computation() -> None:
     stencil = StencilFactory(
         name="stencil",
         params=[
-            FieldDeclFactory(
-                name="a",
-                dtype=common.DataType.FLOAT64,
-            ),
-            oir.ScalarDecl(
-                name="b",
-                dtype=common.DataType.INT32,
-            ),
+            FieldDeclFactory(name="a", dtype=common.DataType.FLOAT64),
+            oir.ScalarDecl(name="b", dtype=common.DataType.INT32),
         ],
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(
@@ -58,9 +52,7 @@ def test_stencil_to_computation() -> None:
     )
     computation = OirToNpir().visit(stencil)
 
-    assert set(d.name for d in computation.api_field_decls) == {
-        "a",
-    }
+    assert set(d.name for d in computation.api_field_decls) == {"a"}
     assert set(computation.arguments) == {"a", "b"}
     assert len(computation.vertical_passes) == 1
 

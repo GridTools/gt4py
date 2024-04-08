@@ -52,9 +52,7 @@ class CompiledbFactory(
     def __call__(
         self,
         source: stages.CompilableSource[
-            SrcL,
-            languages.LanguageWithHeaderFilesSettings,
-            languages.Python,
+            SrcL, languages.LanguageWithHeaderFilesSettings, languages.Python
         ],
         cache_lifetime: config.BuildCacheLifetime,
     ) -> CompiledbProject:
@@ -286,9 +284,7 @@ def _cc_create_compiledb(
 
     with log_file.open("w") as log_file_pointer:
         commands_json_str = subprocess.check_output(
-            ["ninja", "-t", "compdb"],
-            cwd=cache_path / "build",
-            stderr=log_file_pointer,
+            ["ninja", "-t", "compdb"], cwd=cache_path / "build", stderr=log_file_pointer
         ).decode("utf-8")
         commands = json.loads(commands_json_str)
 

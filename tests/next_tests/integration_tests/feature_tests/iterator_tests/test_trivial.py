@@ -106,10 +106,7 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
 @fendef
 def fen_direct_deref(i_size, j_size, out, inp):
     closure(
-        cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-        ),
+        cartesian_domain(named_range(IDim, 0, i_size), named_range(JDim, 0, j_size)),
         deref,
         out,
         [inp],

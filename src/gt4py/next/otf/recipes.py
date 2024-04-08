@@ -35,8 +35,7 @@ class ProgramTransformWorkflow(workflow.NamedStepSequence):
     kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def __call__(
-        self,
-        inp: ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
+        self, inp: ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition
     ) -> stages.ProgramCall:
         past_stage = self.func_to_past(inp)
         return self.past_to_itir(
@@ -57,12 +56,6 @@ class OTFCompileWorkflow(workflow.NamedStepSequence):
     """The typical compiled backend steps composed into a workflow."""
 
     translation: step_types.TranslationStep
-    bindings: workflow.Workflow[
-        stages.ProgramSource,
-        stages.CompilableSource,
-    ]
-    compilation: workflow.Workflow[
-        stages.CompilableSource,
-        stages.CompiledProgram,
-    ]
+    bindings: workflow.Workflow[stages.ProgramSource, stages.CompilableSource]
+    compilation: workflow.Workflow[stages.CompilableSource, stages.CompiledProgram]
     decoration: workflow.Workflow[stages.CompiledProgram, stages.CompiledProgram]

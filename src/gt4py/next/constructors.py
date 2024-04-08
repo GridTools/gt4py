@@ -88,7 +88,7 @@ def empty(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     res = common._field(buffer.ndarray, domain=domain)
-    assert common.is_mutable_field(res)
+    assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
 
@@ -115,11 +115,7 @@ def zeros(
         array([0., 0., 0., 0., 0., 0., 0.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(0)
     return field
@@ -147,11 +143,7 @@ def ones(
         array([1., 1., 1., 1., 1., 1., 1.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(1)
     return field
@@ -262,10 +254,12 @@ def as_field(
                 raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
         else:
             origin = {}
-        actual_domain = common.domain([
-            (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
-            for d, s in zip(domain, data.shape)
-        ])
+        actual_domain = common.domain(
+            [
+                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+                for d, s in zip(domain, data.shape)
+            ]
+        )
     else:
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")

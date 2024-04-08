@@ -92,8 +92,7 @@ class InlineCenterDerefLiftVars(eve.NodeTranslator):
 
             if any(eligible_params):
                 new_node = inline_lambda(
-                    im.call(node.fun)(*new_args),
-                    eligible_params=eligible_params,
+                    im.call(node.fun)(*new_args), eligible_params=eligible_params
                 )
                 # TODO(tehrengruber): propagate let outwards
                 return im.let(*bound_scalars.items())(new_node)  # type: ignore[arg-type] # mypy not smart enough
