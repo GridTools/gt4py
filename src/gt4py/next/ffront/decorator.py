@@ -245,7 +245,7 @@ class Program(SDFGConvertible):
         offset_provider = {str(k):v for k,v in kwargs.pop('offset_provider').items()}
         self.sdfgConvertible_dict["offset_provider"] = offset_provider
         
-        params = {str(p.id) : p.dtype for p in self.itir.program.params}
+        params = {str(p.id) : p.dtype for p in self.itir.params}
         fields = {str(p.id) : p.type  for p in self.past_stage.past_node.params}
         arg_types = [
             fields[pname]
@@ -258,7 +258,7 @@ class Program(SDFGConvertible):
 
         translation = dace_workflow.DaCeTranslator(auto_optimize=False)
         sdfg = translation.generate_sdfg(
-            self.itir.program,
+            self.itir,
             arg_types,
             offset_provider=offset_provider)
 
