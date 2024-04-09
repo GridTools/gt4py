@@ -27,6 +27,7 @@ import warnings
 import numpy as np
 import numpy.typing as npt
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
@@ -1508,16 +1509,14 @@ def closure(
     out,  #: MutableLocatedField,
     ins: list[common.Field],
 ) -> None:
+    assert embedded_context.within_context()
     offset_provider = embedded_context.offset_provider.get()
     _validate_domain(domain_, offset_provider)
     domain: dict[Tag, range] = _dimension_to_tag(domain_)
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")
 
-    new_context: dict[str, Any] = {"offset_provider": offset_provider}
-
-    column: Optional[ColumnDescriptor] = None
-    column_range: Optional[common.NamedRange] = None
+    column_range: common.NamedRange | eve.NothingType = eve.NOTHING
     if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
         assert (
             col_range_placeholder.unit_range.is_empty()
@@ -1531,11 +1530,9 @@ def closure(
                 column_axis, common.UnitRange(column.col_range.start, column.col_range.stop)
             )
 
-    new_context["closure_column_range"] = column_range
-
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
-    with embedded_context.new_context(**new_context) as ctx:
+    with embedded_context.new_context(closure_column_range=column_range) as ctx:
 
         def _iterate():
             for pos in _domain_iterator(domain):
