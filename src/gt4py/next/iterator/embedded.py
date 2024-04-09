@@ -1371,12 +1371,6 @@ class SparseListIterator:
 
 
 @dataclasses.dataclass(frozen=True)
-class ColumnDescriptor:
-    axis: str
-    col_range: range  # TODO(havogt) introduce range type that doesn't have step
-
-
-@dataclasses.dataclass(frozen=True)
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
@@ -1523,12 +1517,11 @@ def closure(
         )  # check it's just the placeholder with empty range
         column_axis = col_range_placeholder.dim
         if column_axis is not None and column_axis.value in domain:
-            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
-            del domain[column_axis.value]
-
             column_range = common.NamedRange(
-                column_axis, common.UnitRange(column.col_range.start, column.col_range.stop)
+                column_axis,
+                common.UnitRange(domain[column_axis.value].start, domain[column_axis.value].stop),
             )
+            del domain[column_axis.value]
 
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
@@ -1538,18 +1531,24 @@ def closure(
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
                 ins_iters = list(
-                    make_in_iterator(inp, pos, column_axis=column.axis if column else None)
+                    make_in_iterator(
+                        inp,
+                        pos,
+                        column_axis=column_range.dim.value
+                        if column_range is not eve.NOTHING
+                        else None,
+                    )
                     for inp in promoted_ins
                 )
                 res = sten(*ins_iters)
 
-                if column is None:
+                if column_range is eve.NOTHING:
                     assert _is_concrete_position(pos)
                     out.field_setitem(pos, res)
                 else:
                     col_pos = pos.copy()
-                    for k in column.col_range:
-                        col_pos[column.axis] = k
+                    for k in column_range.unit_range:
+                        col_pos[column_range.dim.value] = k
                         assert _is_concrete_position(col_pos)
                         out.field_setitem(col_pos, res[k])
 
