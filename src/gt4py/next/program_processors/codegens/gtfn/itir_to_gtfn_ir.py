@@ -455,13 +455,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
         raise ValueError("Expected 'SymRef' or 'make_tuple' in output argument.")
 
-    def visit_StencilClosure(
-        self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
-    ) -> Union[ScanExecution, StencilExecution]:
-        raise AssertionError(
-            "Internal error: StencilClosures are no longer supported."
-        )  # TODO remove after refactoring is complete
-
     @staticmethod
     def _merge_scans(
         executions: list[Union[StencilExecution, ScanExecution]],
@@ -552,13 +545,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             backend=backend,
         )
 
-    def visit_FencilDefinition(
-        self, node: itir.FencilDefinition, **kwargs: Any
-    ) -> FencilDefinition:
-        raise AssertionError(
-            "Internal error: Fencils are no longer supported."
-        )  # TODO remove after refactoring is complete
-
     def visit_Program(self, node: itir.Program, **kwargs: Any) -> FencilDefinition:
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
         executions = self.visit(node.body, extracted_functions=extracted_functions)
@@ -597,10 +583,3 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return TemporaryAllocation(
             id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
         )
-
-    def visit_FencilWithTemporaries(
-        self, node: global_tmps.FencilWithTemporaries, **kwargs: Any
-    ) -> FencilDefinition:
-        raise AssertionError(
-            "Internal error: Fencils are no longer supported."
-        )  # TODO remove after refactoring is complete
