@@ -49,12 +49,7 @@ def test_external_local_field(unstructured_case):
         inp,
         ones,
         out=cases.allocate(unstructured_case, testee, cases.RETURN)(),
-        ref=np.sum(
-            v2e_table,
-            axis=1,
-            initial=0,
-            where=v2e_table != common._DEFAULT_SKIP_VALUE,
-        ),
+        ref=np.sum(v2e_table, axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE),
     )
 
 

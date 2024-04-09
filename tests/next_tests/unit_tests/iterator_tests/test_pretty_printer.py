@@ -34,14 +34,7 @@ def test_vmerge():
     a = ["This is", "block ‘a’."]
     b = ["This is", "block ‘b’."]
     c = ["This is", "block ‘c’."]
-    expected = [
-        "This is",
-        "block ‘a’.",
-        "This is",
-        "block ‘b’.",
-        "This is",
-        "block ‘c’.",
-    ]
+    expected = ["This is", "block ‘a’.", "This is", "block ‘b’.", "This is", "block ‘c’."]
     actual = PrettyPrinter()._vmerge(a, b, c)
     assert actual == expected
 
@@ -54,21 +47,18 @@ def test_indent():
 
 
 def test_cost():
-    assert PrettyPrinter()._cost(["This is a single line."]) < PrettyPrinter()._cost([
-        "These are",
-        "multiple",
-        "short",
-        "lines.",
-    ])
-    assert PrettyPrinter()._cost(["This is a short line."]) < PrettyPrinter()._cost([
-        "This is a very long line; longer than the maximum allowed line length. "
-        "So it should get a penalty for its length."
-    ])
-    assert PrettyPrinter()._cost([
-        "Equal length!",
-        "Equal length!",
-        "Equal length!",
-    ]) < PrettyPrinter()._cost(["Unequal length.", "Short…", "Looooooooooooooooooong…"])
+    assert PrettyPrinter()._cost(["This is a single line."]) < PrettyPrinter()._cost(
+        ["These are", "multiple", "short", "lines."]
+    )
+    assert PrettyPrinter()._cost(["This is a short line."]) < PrettyPrinter()._cost(
+        [
+            "This is a very long line; longer than the maximum allowed line length. "
+            "So it should get a penalty for its length."
+        ]
+    )
+    assert PrettyPrinter()._cost(
+        ["Equal length!", "Equal length!", "Equal length!"]
+    ) < PrettyPrinter()._cost(["Unequal length.", "Short…", "Looooooooooooooooooong…"])
 
 
 def test_optimum():
@@ -142,17 +132,11 @@ def test_associativity():
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[
-                    ir.Literal(value="1", type="int64"),
-                    ir.Literal(value="2", type="int64"),
-                ],
+                args=[ir.Literal(value="1", type="int64"), ir.Literal(value="2", type="int64")],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[
-                    ir.Literal(value="3", type="int64"),
-                    ir.Literal(value="4", type="int64"),
-                ],
+                args=[ir.Literal(value="3", type="int64"), ir.Literal(value="4", type="int64")],
             ),
         ],
     )
@@ -203,8 +187,7 @@ def test_bool_arithmetic():
 
 def test_shift():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="shift"),
-        args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)],
+        fun=ir.SymRef(id="shift"), args=[ir.OffsetLiteral(value="I"), ir.OffsetLiteral(value=1)]
     )
     expected = "⟪Iₒ, 1ₒ⟫"
     actual = pformat(testee)
@@ -240,8 +223,7 @@ def test_named_range():
 
 def test_cartesian_domain():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="cartesian_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="cartesian_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     expected = "c⟨ x, y ⟩"
     actual = pformat(testee)
@@ -250,8 +232,7 @@ def test_cartesian_domain():
 
 def test_unstructured_domain():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="unstructured_domain"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y")],
+        fun=ir.SymRef(id="unstructured_domain"), args=[ir.SymRef(id="x"), ir.SymRef(id="y")]
     )
     expected = "u⟨ x, y ⟩"
     actual = pformat(testee)
@@ -260,8 +241,7 @@ def test_unstructured_domain():
 
 def test_if_short():
     testee = ir.FunCall(
-        fun=ir.SymRef(id="if_"),
-        args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")],
+        fun=ir.SymRef(id="if_"), args=[ir.SymRef(id="x"), ir.SymRef(id="y"), ir.SymRef(id="z")]
     )
     expected = "if x then y else z"
     actual = pformat(testee)
@@ -285,10 +265,7 @@ def test_if_long():
 
 
 def test_fun_call():
-    testee = ir.FunCall(
-        fun=ir.SymRef(id="f"),
-        args=[ir.SymRef(id="x")],
-    )
+    testee = ir.FunCall(fun=ir.SymRef(id="f"), args=[ir.SymRef(id="x")])
     expected = "f(x)"
     actual = pformat(testee)
     assert actual == expected
@@ -296,8 +273,7 @@ def test_fun_call():
 
 def test_lambda_call():
     testee = ir.FunCall(
-        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")),
-        args=[ir.SymRef(id="x")],
+        fun=ir.Lambda(params=[ir.Sym(id="x")], expr=ir.SymRef(id="x")), args=[ir.SymRef(id="x")]
     )
     expected = "(λ(x) → x)(x)"
     actual = pformat(testee)

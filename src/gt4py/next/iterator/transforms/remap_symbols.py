@@ -28,10 +28,7 @@ class RemapSymbolRefs(PreserveLocationVisitor, NodeTranslator):
     def visit_Lambda(self, node: ir.Lambda, *, symbol_map: Dict[str, ir.Node]):
         params = {str(p.id) for p in node.params}
         new_symbol_map = {k: v for k, v in symbol_map.items() if k not in params}
-        return ir.Lambda(
-            params=node.params,
-            expr=self.visit(node.expr, symbol_map=new_symbol_map),
-        )
+        return ir.Lambda(params=node.params, expr=self.visit(node.expr, symbol_map=new_symbol_map))
 
     def generic_visit(self, node: ir.Node, **kwargs: Any):  # type: ignore[override]
         assert isinstance(node, SymbolTableTrait) == isinstance(

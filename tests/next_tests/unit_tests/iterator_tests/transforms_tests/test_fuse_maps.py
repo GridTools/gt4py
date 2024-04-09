@@ -182,11 +182,7 @@ def test_nested():
                         fun=ir.SymRef(id="multiplies"),
                         args=[
                             _p_symref,
-                            P(
-                                ir.FunCall,
-                                fun=ir.SymRef(id="divides"),
-                                args=[_p_symref, _p_symref],
-                            ),
+                            P(ir.FunCall, fun=ir.SymRef(id="divides"), args=[_p_symref, _p_symref]),
                         ],
                     ),
                 ],
@@ -225,16 +221,8 @@ def test_multiple_maps_with_colliding_symbol_names():
                 ir.FunCall,
                 fun=ir.SymRef(id="plus"),
                 args=[
-                    P(
-                        ir.FunCall,
-                        fun=ir.SymRef(id="multiplies"),
-                        args=[_p_symref, _p_symref],
-                    ),
-                    P(
-                        ir.FunCall,
-                        fun=ir.SymRef(id="multiplies"),
-                        args=[_p_symref, _p_symref],
-                    ),
+                    P(ir.FunCall, fun=ir.SymRef(id="multiplies"), args=[_p_symref, _p_symref]),
+                    P(ir.FunCall, fun=ir.SymRef(id="multiplies"), args=[_p_symref, _p_symref]),
                 ],
             ),
         ),

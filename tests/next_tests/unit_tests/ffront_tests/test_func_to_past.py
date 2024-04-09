@@ -49,8 +49,7 @@ def test_copy_parsing(copy_program_def):
     past_node = ProgramParser.apply_to_function(copy_program_def)
 
     field_type = ts.FieldType(
-        dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
     pattern_node = P(
         past.Program,
@@ -76,8 +75,7 @@ def test_double_copy_parsing(double_copy_program_def):
     past_node = ProgramParser.apply_to_function(double_copy_program_def)
 
     field_type = ts.FieldType(
-        dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
     pattern_node = P(
         past.Program,
@@ -111,10 +109,7 @@ def test_undefined_field_program(identity_def):
     def undefined_field_program(in_field: gtx.Field[[IDim], "float64"]):
         identity(in_field, out=out_field)  # noqa: F821 [undefined-name]
 
-    with pytest.raises(
-        errors.DSLError,
-        match=(r"Undeclared or untyped symbol 'out_field'."),
-    ):
+    with pytest.raises(errors.DSLError, match=(r"Undeclared or untyped symbol 'out_field'.")):
         ProgramParser.apply_to_function(undefined_field_program)
 
 
@@ -122,8 +117,7 @@ def test_copy_restrict_parsing(copy_restrict_program_def):
     past_node = ProgramParser.apply_to_function(copy_restrict_program_def)
 
     field_type = ts.FieldType(
-        dims=[IDim],
-        dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None),
+        dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64, shape=None)
     )
     slice_pattern_node = P(
         past.Slice, lower=P(past.Constant, value=1), upper=P(past.Constant, value=2)
@@ -160,9 +154,7 @@ def test_domain_exception_1(identity_def):
     def domain_format_1_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_1(in_field, out=in_field, domain=(0, 2))
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_1_program)
 
     assert exc_info.match("Invalid call to 'domain_format_1'")
@@ -179,9 +171,7 @@ def test_domain_exception_2(identity_def):
     def domain_format_2_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_2(in_field, out=in_field, domain={IDim: (0, 1, 2)})
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_2_program)
 
     assert exc_info.match("Invalid call to 'domain_format_2'")
@@ -198,9 +188,7 @@ def test_domain_exception_3(identity_def):
     def domain_format_3_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_3(in_field, domain={IDim: (0, 2)})
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_3_program)
 
     assert exc_info.match("Invalid call to 'domain_format_3'")
@@ -219,9 +207,7 @@ def test_domain_exception_4(identity_def):
             in_field, out=(in_field[0:1], (in_field[0:1], in_field[0:1])), domain={IDim: (0, 1)}
         )
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_4_program)
 
     assert exc_info.match("Invalid call to 'domain_format_4'")
@@ -238,9 +224,7 @@ def test_domain_exception_5(identity_def):
     def domain_format_5_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_5(in_field, out=in_field, domain={IDim: ("1.0", 9.0)})
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_5_program)
 
     assert exc_info.match("Invalid call to 'domain_format_5'")
@@ -257,9 +241,7 @@ def test_domain_exception_6(identity_def):
     def domain_format_6_program(in_field: gtx.Field[[IDim], float64]):
         domain_format_6(in_field, out=in_field, domain={})
 
-    with pytest.raises(
-        errors.DSLError,
-    ) as exc_info:
+    with pytest.raises(errors.DSLError) as exc_info:
         ProgramParser.apply_to_function(domain_format_6_program)
 
     assert exc_info.match("Invalid call to 'domain_format_6'")

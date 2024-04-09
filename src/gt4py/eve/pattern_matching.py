@@ -52,9 +52,9 @@ class ObjectPattern:
         if raise_exception:
             diffs = [*get_differences(self, other)]
             if len(diffs) > 0:
-                diffs_str = "\n  ".join([
-                    f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs
-                ])
+                diffs_str = "\n  ".join(
+                    [f"  {self.cls.__name__}{path}: {msg}" for path, msg in diffs]
+                )
                 raise ValueError(f"Object and pattern don't match:\n  {diffs_str}")
             return True
 
@@ -85,10 +85,7 @@ def get_differences(a: Any, b: Any, path: str = "") -> Iterator[Tuple[str, str]]
 @get_differences.register
 def _(a: ObjectPattern, b: Any, path: str = "") -> Iterator[Tuple[str, str]]:
     if not isinstance(b, a.cls):
-        yield (
-            path,
-            f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}",
-        )
+        yield (path, f"Expected an instance of class {a.cls.__name__}, but got {type(b).__name__}")
     else:
         for k in a.fields.keys():
             if not hasattr(b, k):

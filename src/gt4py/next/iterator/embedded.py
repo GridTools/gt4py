@@ -477,7 +477,7 @@ def promote_scalars(val: CompositeOfScalarOrField):
     """Given a scalar, field or composite thereof promote all (contained) scalars to fields."""
     if isinstance(val, tuple):
         return tuple(promote_scalars(el) for el in val)
-    elif common.is_field(val):
+    elif isinstance(val, common.Field):
         return val
     val_type = infer_dtype_like_type(val)
     if isinstance(val, Scalar):  # type: ignore # mypy bug
@@ -832,11 +832,7 @@ class MDIterator:
 
         assert _is_concrete_position(shifted_pos)
         position = {**shifted_pos, **slice_column}
-        return _make_tuple(
-            self.field,
-            position,
-            column_axis=self.column_axis,
-        )
+        return _make_tuple(self.field, position, column_axis=self.column_axis)
 
 
 def _get_sparse_dimensions(axes: Sequence[common.Dimension]) -> list[Tag]:
@@ -851,15 +847,12 @@ def _wrap_field(field: common.Field | tuple) -> NDArrayLocatedFieldWrapper | tup
     if isinstance(field, tuple):
         return tuple(_wrap_field(f) for f in field)
     else:
-        assert common.is_field(field)
+        assert isinstance(field, common.Field)
         return NDArrayLocatedFieldWrapper(field)
 
 
 def make_in_iterator(
-    inp_: common.Field,
-    pos: Position,
-    *,
-    column_axis: Optional[Tag],
+    inp_: common.Field, pos: Position, *, column_axis: Optional[Tag]
 ) -> ItIterator:
     inp = _wrap_field(inp_)
     axes = _get_axes(inp)
@@ -873,11 +866,7 @@ def make_in_iterator(
         # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
         assert column_range is not None
         new_pos[column_axis] = column_range.start
-    it = MDIterator(
-        inp,
-        new_pos,
-        column_axis=column_axis,
-    )
+    it = MDIterator(inp, new_pos, column_axis=column_axis)
     if len(sparse_dimensions) >= 1:
         if len(sparse_dimensions) == 1:
             return SparseListIterator(it, sparse_dimensions[0])
@@ -927,7 +916,7 @@ class NDArrayLocatedFieldWrapper(MutableLocatedField):
         return self._ndarrayfield[self._translate_named_indices(named_indices)].as_scalar()
 
     def field_setitem(self, named_indices: NamedFieldIndices, value: Any):
-        if common.is_mutable_field(self._ndarrayfield):
+        if isinstance(self._ndarrayfield, common.MutableField):
             self._ndarrayfield[self._translate_named_indices(named_indices)] = value
         else:
             raise RuntimeError("Assigment into a non-mutable Field is not allowed.")
@@ -1006,8 +995,7 @@ def _range2slice(r: range | common.IntIndex) -> slice | common.IntIndex:
 
 
 def _shift_field_indices(
-    ranges_or_indices: tuple[range | common.IntIndex, ...],
-    offsets: tuple[int, ...],
+    ranges_or_indices: tuple[range | common.IntIndex, ...], offsets: tuple[int, ...]
 ) -> tuple[ArrayIndex, ...]:
     return tuple(
         _range2slice(r) if o == 0 else _shift_range(r, o)
@@ -1358,10 +1346,7 @@ def reduce(fun, init):
         n = len(lst)
         res = init
         for i in range(n):
-            res = fun(
-                res,
-                *(lst[i] for lst in lists),
-            )
+            res = fun(res, *(lst[i] for lst in lists))
         return res
 
     return sten
@@ -1431,7 +1416,7 @@ def is_mutable_located_field(field: Any) -> TypeGuard[MutableLocatedField]:
 
 def is_tuple_of_field(field) -> bool:
     return isinstance(field, tuple) and all(
-        common.is_field(f) or is_tuple_of_field(f) for f in field
+        isinstance(f, common.Field) or is_tuple_of_field(f) for f in field
     )
 
 
@@ -1538,7 +1523,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
     ) -> None:
         _validate_domain(domain_, kwargs["offset_provider"])
         domain: dict[Tag, range] = _dimension_to_tag(domain_)
-        if not (common.is_field(out) or is_tuple_of_field(out)):
+        if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
             raise TypeError("'Out' needs to be a located field.")
 
         column_range = None
@@ -1549,8 +1534,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             del domain[column_axis.value]
 
             column_range = common.NamedRange(
-                column_axis,
-                common.UnitRange(column.col_range.start, column.col_range.stop),
+                column_axis, common.UnitRange(column.col_range.start, column.col_range.stop)
             )
 
         out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
@@ -1563,11 +1547,7 @@ def fendef_embedded(fun: Callable[..., None], *args: Any, **kwargs: Any):
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
                 ins_iters = list(
-                    make_in_iterator(
-                        inp,
-                        pos,
-                        column_axis=column.axis if column else None,
-                    )
+                    make_in_iterator(inp, pos, column_axis=column.axis if column else None)
                     for inp in promoted_ins
                 )
                 res = sten(*ins_iters)

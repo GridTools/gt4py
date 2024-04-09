@@ -254,17 +254,8 @@ def test_update_cartesian_domains():
                 ),
             ],
         ),
-        params=[
-            im.sym("i"),
-            im.sym("j"),
-            im.sym("k"),
-            im.sym("inp"),
-            im.sym("out"),
-        ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
+        params=[im.sym("i"), im.sym("j"), im.sym("k"), im.sym("inp"), im.sym("out")],
+        tmps=[Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")],
     )
     expected = copy.deepcopy(testee)
     assert expected.fencil.params.pop() == im.sym("_gtmp_auto_domain")
@@ -306,10 +297,7 @@ def test_update_cartesian_domains():
                         im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                         im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    im.plus(
-                        im.ref("i"),
-                        ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                    ),
+                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
                 ],
             )
         ]
@@ -340,10 +328,7 @@ def test_collect_tmps_info():
                     ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
                     ir.FunCall(
                         fun=im.ref("plus"),
-                        args=[
-                            im.ref("i"),
-                            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
-                        ],
+                        args=[im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)],
                     ),
                 ],
             )
@@ -378,10 +363,7 @@ def test_collect_tmps_info():
                     domain=tmp_domain,
                     stencil=ir.Lambda(
                         params=[ir.Sym(id="foo_inp")],
-                        expr=ir.FunCall(
-                            fun=im.ref("deref"),
-                            args=[im.ref("foo_inp")],
-                        ),
+                        expr=ir.FunCall(fun=im.ref("deref"), args=[im.ref("foo_inp")]),
                     ),
                     output=im.ref("_gtmp_1"),
                     inputs=[im.ref("inp")],
@@ -430,17 +412,8 @@ def test_collect_tmps_info():
                 ),
             ],
         ),
-        params=[
-            ir.Sym(id="i"),
-            ir.Sym(id="j"),
-            ir.Sym(id="k"),
-            ir.Sym(id="inp"),
-            ir.Sym(id="out"),
-        ],
-        tmps=[
-            Temporary(id="_gtmp_0"),
-            Temporary(id="_gtmp_1"),
-        ],
+        params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
+        tmps=[Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")],
     )
     expected = FencilWithTemporaries(
         fencil=testee.fencil,

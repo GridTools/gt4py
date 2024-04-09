@@ -90,11 +90,7 @@ def ${id}(${','.join(params)}):
         assert (
             isinstance(node.domain, itir.FunCall)
             and isinstance(node.domain.fun, itir.SymRef)
-            and node.domain.fun.id
-            in (
-                "cartesian_domain",
-                "unstructured_domain",
-            )
+            and node.domain.fun.id in ("cartesian_domain", "unstructured_domain")
         )
         assert all(
             isinstance(r, itir.FunCall) and r.fun == itir.SymRef(id="named_range")
@@ -225,10 +221,7 @@ def execute_roundtrip(
         use_embedded=dispatch_backend is None,
     )
 
-    new_kwargs: dict[str, Any] = {
-        "offset_provider": offset_provider,
-        "column_axis": column_axis,
-    }
+    new_kwargs: dict[str, Any] = {"offset_provider": offset_provider, "column_axis": column_axis}
     if dispatch_backend:
         new_kwargs["backend"] = dispatch_backend
 
@@ -284,6 +277,5 @@ class RoundtripExecutorFactory(factory.Factory):
 executor = RoundtripExecutorFactory(name="roundtrip")
 
 backend = next_backend.Backend(
-    executor=executor,
-    allocator=next_allocators.StandardCPUFieldBufferAllocator(),
+    executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
 )

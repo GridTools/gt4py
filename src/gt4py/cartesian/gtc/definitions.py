@@ -436,9 +436,9 @@ class FrameTuple(tuple):
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_func = right_func or left_func
-        return type(self)([
-            tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)
-        ])
+        return type(self)(
+            [tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)]
+        )
 
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])

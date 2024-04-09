@@ -104,10 +104,12 @@ class GTCppCodegen(codegen.TemplatedGenerator, eve.VisitorWithSymbolTableTrait):
         if accessor_ref.name in temp_decls and accessor_ref.data_index:
             # Cannot use symtable. See https://github.com/GridTools/gt4py/issues/808
             temp = temp_decls[accessor_ref.name]
-            data_index = "+".join([
-                f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
-                for i, index in enumerate(accessor_ref.data_index)
-            ])
+            data_index = "+".join(
+                [
+                    f"{self.visit(index, in_data_index=True, **kwargs)}*{int(np.prod(temp.data_dims[i+1:], initial=1))}"
+                    for i, index in enumerate(accessor_ref.data_index)
+                ]
+            )
             return f"eval({accessor_ref.name}({i_offset}, {j_offset}, {k_offset}))[{data_index}]"
         else:
             data_index = "".join(

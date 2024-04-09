@@ -77,8 +77,7 @@ class DaCeBackendFactory(GTFNBackendFactory):
             lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
         auto_optimize = factory.Trait(
-            otf_workflow__translation__auto_optimize=True,
-            name_temps="_opt",
+            otf_workflow__translation__auto_optimize=True, name_temps="_opt"
         )
         use_field_canonical_representation: bool = False
 

@@ -109,14 +109,8 @@ def test_invalid_scalar_kind():
             ),
         ),
         (typing.ForwardRef("float"), ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
-        (
-            typing.Annotated[float, "foo"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
-        (
-            typing.Annotated["float", "foo", "bar"],
-            ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
-        ),
+        (typing.Annotated[float, "foo"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
+        (typing.Annotated["float", "foo", "bar"], ts.ScalarType(kind=ts.ScalarKind.FLOAT64)),
         (
             typing.Annotated[typing.ForwardRef("float"), "foo"],
             ts.ScalarType(kind=ts.ScalarKind.FLOAT64),

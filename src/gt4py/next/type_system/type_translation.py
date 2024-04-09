@@ -196,7 +196,7 @@ def from_value(value: Any) -> ts.TypeSpec:
         return candidate_type
     elif isinstance(value, common.Dimension):
         symbol_type = ts.DimensionType(dim=value)
-    elif common.is_field(value):
+    elif isinstance(value, common.Field):
         dims = list(value.domain.dims)
         dtype = from_type_hint(value.dtype.scalar_type)
         assert isinstance(dtype, ts.ScalarType)

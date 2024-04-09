@@ -208,15 +208,9 @@ def field_type_validator_factory(
 ) -> FieldTypeValidatorFactory:
     """Create a factory of field type validators from a factory of regular type validators."""
     if use_cache:
-        factory = cast(
-            type_val.TypeValidatorFactory,
-            utils.optional_lru_cache(func=factory),
-        )
+        factory = cast(type_val.TypeValidatorFactory, utils.optional_lru_cache(func=factory))
 
-    def _field_type_validator_factory(
-        type_annotation: TypeAnnotation,
-        name: str,
-    ) -> FieldValidator:
+    def _field_type_validator_factory(type_annotation: TypeAnnotation, name: str) -> FieldValidator:
         """Field type validator for datamodels, supporting forward references."""
         if isinstance(type_annotation, ForwardRef):
             return ForwardRefValidator(factory)
@@ -446,9 +440,7 @@ else:
             cls,
             /,
             *,
-            repr: (  # noqa: A002 [builtin-argument-shadowing]
-                bool | None | Literal["inherited"]
-            ) = "inherited",
+            repr: (bool | None | Literal["inherited"]) = "inherited",  # noqa: A002 [builtin-argument-shadowing]
             eq: bool | None | Literal["inherited"] = "inherited",
             order: bool | None | Literal["inherited"] = "inherited",
             unsafe_hash: bool | None | Literal["inherited"] = "inherited",
@@ -494,11 +486,7 @@ else:
                 raise TypeError("Subclasses of a frozen DataModel cannot be unfrozen.")
 
             _make_datamodel(
-                cls,
-                slots=False,
-                generic=generic,
-                **datamodel_kwargs,
-                _stacklevel_offset=1,
+                cls, slots=False, generic=generic, **datamodel_kwargs, _stacklevel_offset=1
             )
 
 
@@ -731,8 +719,7 @@ _DataModelT = TypeVar("_DataModelT", bound=DataModel)
 
 
 def update_forward_refs(
-    model_cls: Type[_DataModelT],
-    localns: Optional[Dict[str, Any]] = None,
+    model_cls: Type[_DataModelT], localns: Optional[Dict[str, Any]] = None
 ) -> Type[_DataModelT]:
     """Update Data Model class meta-information replacing forwarded type annotations with actual types.
 
@@ -1111,11 +1098,7 @@ def _make_datamodel(
             )
             if attr_value_in_cls is NOTHING:
                 # The field has no definition in the class dict, it's only an annotation
-                setattr(
-                    cls,
-                    key,
-                    attrs.field(converter=converter, validator=type_validator),
-                )
+                setattr(cls, key, attrs.field(converter=converter, validator=type_validator))
 
             else:
                 # The field contains the default value in the class dict
@@ -1159,9 +1142,7 @@ def _make_datamodel(
             if base_field_attr:
                 # Create a new field in the current class cloning the existing
                 # definition and add the new validator (attrs recommendation)
-                field_c_attr = _make_counting_attr_from_attribute(
-                    base_field_attr,
-                )
+                field_c_attr = _make_counting_attr_from_attribute(base_field_attr)
                 setattr(cls, qualified_field_name, field_c_attr)
             else:
                 raise TypeError(

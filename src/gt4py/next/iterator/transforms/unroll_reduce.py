@@ -43,10 +43,7 @@ def _is_neighbors_or_lifted_and_neighbors(arg: itir.Expr) -> TypeGuard[itir.FunC
 
 
 def _get_neighbors_args(reduce_args: Iterable[itir.Expr]) -> Iterator[itir.FunCall]:
-    return filter(
-        _is_neighbors_or_lifted_and_neighbors,
-        reduce_args,
-    )
+    return filter(_is_neighbors_or_lifted_and_neighbors, reduce_args)
 
 
 def _is_list_of_funcalls(lst: list) -> TypeGuard[list[itir.FunCall]]:
@@ -118,9 +115,7 @@ def _make_can_deref(iterator: itir.Expr) -> itir.FunCall:
 
 def _make_if(cond: itir.Expr, true_expr: itir.Expr, false_expr: itir.Expr) -> itir.FunCall:
     return itir.FunCall(
-        fun=itir.SymRef(id="if_"),
-        args=[cond, true_expr, false_expr],
-        location=cond.location,
+        fun=itir.SymRef(id="if_"), args=[cond, true_expr, false_expr], location=cond.location
     )
 
 

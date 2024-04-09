@@ -70,9 +70,7 @@ def _is_scan(node: ir.FunCall):
 
 
 def _transform_and_extract_lift_args(
-    node: ir.FunCall,
-    symtable: dict[eve.SymbolName, ir.Sym],
-    extracted_args: dict[ir.Sym, ir.Expr],
+    node: ir.FunCall, symtable: dict[eve.SymbolName, ir.Sym], extracted_args: dict[ir.Sym, ir.Expr]
 ):
     """
     Transform and extract non-symbol arguments of a lifted stencil call.

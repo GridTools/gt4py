@@ -90,21 +90,18 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
 @typing.overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[False] = False,
+    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[False] = False
 ) -> XIterable[ts.TypeSpec]: ...
 
 
 @typing.overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[True],
+    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[True]
 ) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: bool = False,
+    symbol_type: ts.TypeSpec, with_path_arg: bool = False
 ) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
@@ -168,16 +165,18 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(*[
-            apply_to_primitive_constituents(
-                el,
-                fun,
-                _path=(*_path, i),
-                with_path_arg=with_path_arg,
-                tuple_constructor=tuple_constructor,
-            )
-            for i, el in enumerate(symbol_type.types)
-        ])
+        return tuple_constructor(
+            *[
+                apply_to_primitive_constituents(
+                    el,
+                    fun,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
+                )
+                for i, el in enumerate(symbol_type.types)
+            ]
+        )
     if with_path_arg:
         return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:
@@ -221,10 +220,7 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.FLOAT32,
-        ts.ScalarKind.FLOAT64,
-    ]
+    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
@@ -240,10 +236,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.INT32,
-        ts.ScalarKind.INT64,
-    ]
+    return extract_dtype(symbol_type).kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
 
 
 def is_number(symbol_type: ts.TypeSpec) -> bool:
@@ -492,28 +485,17 @@ def return_type(
 
 @return_type.register
 def return_type_func(
-    func_type: ts.FunctionType,
-    *,
-    with_args: list[ts.TypeSpec],
-    with_kwargs: dict[str, ts.TypeSpec],
+    func_type: ts.FunctionType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
 ) -> ts.TypeSpec:
     return func_type.returns
 
 
 @return_type.register
 def return_type_field(
-    field_type: ts.FieldType,
-    *,
-    with_args: list[ts.TypeSpec],
-    with_kwargs: dict[str, ts.TypeSpec],
+    field_type: ts.FieldType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
 ) -> ts.FieldType:
     try:
-        accepts_args(
-            field_type,
-            with_args=with_args,
-            with_kwargs=with_kwargs,
-            raise_exception=True,
-        )
+        accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
     except ValueError as ex:
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
@@ -624,8 +606,7 @@ def structural_function_signature_incompatibilities(
 
     missing_positional_args = []
     for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params),
-        func_type.pos_or_kw_args.keys(),
+        range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
     ):
         if args[i] is UNDEFINED_ARG:
             missing_positional_args.append(f"'{arg_type}'")
@@ -697,9 +678,7 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ts.FieldType,
-    args: list[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
+    field_type: ts.FieldType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument, but {len(args)} were given."

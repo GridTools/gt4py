@@ -276,10 +276,7 @@ class BaseBackend(Backend):
                 stacklevel=2,
             )
 
-    def make_module(
-        self,
-        **kwargs: Any,
-    ) -> Type["StencilObject"]:
+    def make_module(self, **kwargs: Any) -> Type["StencilObject"]:
         build_info = self.builder.options.build_info
         if build_info is not None:
             start_time = time.perf_counter()
@@ -411,9 +408,8 @@ class BasePyExtBackend(BaseBackend):
 
         assert module_name == qualified_pyext_name
 
-        self.builder.with_backend_data({
-            "pyext_module_name": module_name,
-            "pyext_file_path": file_path,
-        })
+        self.builder.with_backend_data(
+            {"pyext_module_name": module_name, "pyext_file_path": file_path}
+        )
 
         return module_name, file_path
