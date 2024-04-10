@@ -148,8 +148,8 @@ class TupleConstructorType(Protocol, Generic[_R]):
 
 # TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    fun: (Callable[[ts.TypeSpec], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
+    symbol_types: ts.TypeSpec | typing.Iterable[ts.TypeSpec],
+    fun: (Callable[[...], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
     _path: tuple[int, ...] = (),
     *,
     with_path_arg: bool = False,
@@ -167,21 +167,25 @@ def apply_to_primitive_constituents(
     ... )
     tuple[Field[[], int64], Field[[], int64]]
     """
-    if isinstance(symbol_type, ts.TupleType):
+    if isinstance(symbol_types, ts.TypeSpec):
+        symbol_types = [symbol_types]
+
+    if isinstance(symbol_types[0], ts.TupleType):
+        assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
         return tuple_constructor(*[
             apply_to_primitive_constituents(
-                el,
+                el_types,
                 fun,
                 _path=(*_path, i),
                 with_path_arg=with_path_arg,
                 tuple_constructor=tuple_constructor,
             )
-            for i, el in enumerate(symbol_type.types)
+            for i, el_types in enumerate(zip(*(symbol_type.types for symbol_type in symbol_types)))
         ])
     if with_path_arg:
-        return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types, path=_path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:
-        return fun(symbol_type)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
+        return fun(*symbol_types)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
 
 
 def extract_dtype(symbol_type: ts.TypeSpec) -> ts.ScalarType:
@@ -441,7 +445,7 @@ def is_concretizable(symbol_type: ts.TypeSpec, to_type: ts.TypeSpec) -> bool:
     return False
 
 
-def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarType:
+def promote(*types: ts.FieldType | ts.ScalarType, always_field=False) -> ts.FieldType | ts.ScalarType:
     """
     Promote a set of field or scalar types to a common type.
 
@@ -464,7 +468,7 @@ def promote(*types: ts.FieldType | ts.ScalarType) -> ts.FieldType | ts.ScalarTyp
      ...
     ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
     """
-    if all(isinstance(type_, ts.ScalarType) for type_ in types):
+    if not always_field and all(isinstance(type_, ts.ScalarType) for type_ in types):
         if not all(type_ == types[0] for type_ in types):
             raise ValueError("Could not promote scalars of different dtype (not implemented).")
         if not all(type_.shape is None for type_ in types):  # type: ignore[union-attr]

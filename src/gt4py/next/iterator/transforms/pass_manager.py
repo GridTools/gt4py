@@ -26,12 +26,13 @@ from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
+from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.inline_lifts import InlineLifts
+from gt4py.next.iterator.transforms.itir_program_to_fencil import program_to_fencil
 from gt4py.next.iterator.transforms.merge_let import MergeLet
 from gt4py.next.iterator.transforms.normalize_shifts import NormalizeShifts
 from gt4py.next.iterator.transforms.propagate_deref import PropagateDeref
@@ -152,6 +153,12 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ):
+    ir = program_to_fencil(ir, offset_provider)
+
+    original_ir = ir
+    if isinstance(original_ir, FencilWithTemporaries):
+        ir = original_ir.fencil
+
     icdlv_uids = eve_utils.UIDGenerator()
     # lift_mode = LiftMode.FORCE_TEMPORARIES
 
@@ -171,7 +178,7 @@ def apply_common_transforms(
 
     ir = main_transforms(ir, lift_mode=lift_mode, icdlv_uids=icdlv_uids)
 
-    if lift_mode != LiftMode.FORCE_INLINE:
+    if False and lift_mode != LiftMode.FORCE_INLINE:
         assert offset_provider is not None
         ir = CreateGlobalTmps().visit(
             ir,
@@ -243,5 +250,9 @@ def apply_common_transforms(
         opcount_preserving=True,
         force_inline_lambda_args=force_inline_lambda_args,
     )
+
+    if isinstance(original_ir, FencilWithTemporaries):
+        original_ir.fencil = ir
+        return original_ir
 
     return ir

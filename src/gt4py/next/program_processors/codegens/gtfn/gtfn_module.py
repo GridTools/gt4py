@@ -35,6 +35,7 @@ from gt4py.next.program_processors.codegens.gtfn.codegen import GTFNCodegen, GTF
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_to_gtfn_im_ir import GTFN_IM_lowering
 from gt4py.next.program_processors.codegens.gtfn.itir_to_gtfn_ir import GTFN_lowering
 from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
 
 
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
@@ -87,18 +88,20 @@ class GTFNTranslationStep(
         arg_exprs: list[str] = []
 
         # TODO(tehrengruber): The backend expects all arguments to a stencil closure to be a SID
-        #  so transform all scalar arguments that are used in a closure into one before we pass
-        #  them to the generated source. This is not a very clean solution and will fail when
-        #  the respective parameter is used elsewhere, e.g. in a domain construction, as it is
-        #  expected to be scalar there (instead of a SID). We could solve this by:
+        #  so transform all scalar arguments that are not used in a domain compuation into one
+        #  before we pass them to the generated source. This is not a very clean solution and will
+        #  fail when the respective parameter is used elsewhere, e.g. in a domain construction, as
+        #  it is expected to be scalar there (instead of a SID). We could solve this by:
         #   1.) Extending the backend to support scalar arguments in a closure (as in embedded
         #       backend).
         #   2.) Use SIDs for all arguments and deref when a scalar is required.
-        closure_scalar_parameters = (
-            trees.pre_walk_values(utils.XIterable(program.closures).getattr("inputs").to_list())
-            .if_isinstance(itir.SymRef)
+        domain_params = (
+            trees.pre_walk_values(
+                trees.pre_walk_values(program.stmts).filter(functools.partial(is_call_to, fun="apply_stencil")).getattr("args").getitem(2).to_list()
+            ).if_isinstance(itir.SymRef)
             .getattr("id")
             .map(str)
+            .filter(lambda id: id not in itir.BUILTINS)
             .to_list()
         )
         for obj, program_param in zip(args, program.params):
@@ -111,7 +114,7 @@ class GTFNTranslationStep(
             # argument conversion expression
             if (
                 isinstance(parameter.type_, ts.ScalarType)
-                and parameter.name in closure_scalar_parameters
+                and parameter.name not in domain_params
             ):
                 # convert into sid
                 arg = f"gridtools::stencil::global_parameter({arg})"

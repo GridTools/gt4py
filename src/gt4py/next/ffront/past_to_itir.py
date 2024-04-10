@@ -21,6 +21,7 @@ import devtools
 import factory
 
 from gt4py.eve import NodeTranslator, concepts, traits
+from gt4py.eve.type_definitions import frozendict
 from gt4py.next import common, config
 from gt4py.next.ffront import (
     fbuiltins,
@@ -32,6 +33,7 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms.itir_program_to_fencil import program_to_fencil
 from gt4py.next.otf import stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -199,21 +201,35 @@ class ProgramLowering(
 
         params = self.visit(node.params)
 
-        if any("domain" not in body_entry.kwargs for body_entry in node.body):
-            params = params + self._gen_size_params_from_program(node)
+        # TODO: what to do in blue line?
+        #if any("domain" not in body_entry.kwargs for body_entry in node.body):
+        params = params + self._gen_size_params_from_program(node)
 
-        closures: list[itir.StencilClosure] = []
+        stmts: list[itir.StencilClosure] = []
         for stmt in node.body:
-            closures.append(self._visit_stencil_call(stmt, **kwargs))
+            stmts.append(self._visit_stencil_call(stmt, **kwargs))
 
-        return itir.FencilDefinition(
+        domains = {}
+        for param in node.params:
+            domain_args = []
+            # TODO: all params needed to have the same size before, but this feels flaky
+            for dim_idx, dim in enumerate(type_info.promote(*type_info.primitive_constituents(param.type).to_list(), always_field=True).dims):
+                domain_args.append(im.call("named_range")(
+                    itir.AxisLiteral(value=dim.value), 0, _size_arg_from_field(param.id, dim_idx)
+                ))
+            # TODO: maybe the ordering matters here for unstructured see _construct_itir_domain_arg
+            domains[str(param.id)] = im.call(lowering_utils.get_domain_builtin_for_grid_type(self.grid_type))(*domain_args)
+
+        return itir.Program(
             id=node.id,
-            function_definitions=function_definitions,
             params=params,
-            closures=closures,
+            tmps=[],
+            function_definitions=function_definitions,
+            stmts=stmts,
+            domains=frozendict(domains)
         )
 
-    def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.StencilClosure:
+    def _visit_stencil_call(self, node: past.Call, **kwargs: Any) -> itir.Assign:
         assert isinstance(node.kwargs["out"].type, ts.TypeSpec)
         assert type_info.is_type_or_tuple_of_type(node.kwargs["out"].type, ts.FieldType)
 
@@ -239,6 +255,7 @@ class ProgramLowering(
         for i, arg in enumerate([*args, *node_kwargs]):
             stencil_params.append(f"__stencil_arg{i}")
             if isinstance(arg.type, ts.TupleType):
+                # TODO: doesn't this also need to happen for the kwargs then
                 # convert into tuple of iterators
                 stencil_args.append(
                     lowering_utils.to_tuples_of_iterator(f"__stencil_arg{i}", arg.type)
@@ -246,23 +263,33 @@ class ProgramLowering(
             else:
                 stencil_args.append(im.ref(f"__stencil_arg{i}"))
 
-        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-            # scan operators return an iterator of tuples, just deref directly
-            stencil_body = im.deref(im.call(node.func.id)(*stencil_args))
-        else:
-            # field operators return a tuple of iterators, deref element-wise
-            stencil_body = lowering_utils.process_elements(
-                im.deref,
-                im.call(node.func.id)(*stencil_args),
-                node.func.type.definition.returns,
-            )
+        return_type = type_info.return_type(node.func.type,
+                                            with_args=[arg.type for arg in args],
+                                            with_kwargs={arg_name: arg.type for arg_name, arg in
+                                                         node_kwargs.items()})
 
-        return itir.StencilClosure(
-            domain=lowered_domain,
-            stencil=im.lambda_(*stencil_params)(stencil_body),
-            inputs=[*lowered_args, *lowered_kwargs.values()],
-            output=output,
-            location=node.location,
+        # todo: this way of restricting the domain means we need to propagate the domain backwards
+        def restrict_domain(field_expr, type_, domain):
+            deref_stencil = im.lambda_("it")(
+                lowering_utils.process_elements(lambda it: im.deref(it), im.ref("it"), type_))
+            return im.apply_stencil(deref_stencil, im.make_tuple(field_expr), domain)
+
+        if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            # TODO: here it would be nice to have a broadcast
+            assert isinstance(return_type, ts.FieldType)
+            broadcasted_dims = im.make_tuple(*(itir.AxisLiteral(value=dim.value) for dim in return_type.dims))
+            lowered_args = [restrict_domain(lowered_arg, arg.type, im.call("broadcast_domain")(im.call("get_domain")(lowered_arg), broadcasted_dims)) for lowered_arg, arg in zip(lowered_args, args)]
+            lowered_kwargs = {arg_name: restrict_domain(lowered_arg, arg.type, im.call("broadcast_domain")(im.call("get_domain")(lowered_arg), broadcasted_dims)) for arg_name, (lowered_arg, arg) in zip(lowered_kwargs.items(), node_kwargs.values())}
+
+        field_expr = im.call(node.func.id)(*lowered_args, *lowered_kwargs.values())
+
+        # restrict domain to output domain
+        field_expr = restrict_domain(field_expr, return_type, lowered_domain)
+
+        return itir.Assign(
+            target=output,
+            expr=field_expr,
+            location=node.location
         )
 
     def _visit_slice_bound(
@@ -360,20 +387,16 @@ class ProgramLowering(
             )
             domain_args_kind.append(dim.kind)
 
-        if self.grid_type == common.GridType.CARTESIAN:
-            domain_builtin = "cartesian_domain"
-        elif self.grid_type == common.GridType.UNSTRUCTURED:
-            domain_builtin = "unstructured_domain"
+
+        if self.grid_type == common.GridType.UNSTRUCTURED:
             # for no good reason, the domain arguments for unstructured need to be in order (horizontal, vertical)
             if domain_args_kind[0] == common.DimensionKind.VERTICAL:
                 assert len(domain_args) == 2
                 assert domain_args_kind[1] == common.DimensionKind.HORIZONTAL
                 domain_args[0], domain_args[1] = domain_args[1], domain_args[0]
-        else:
-            raise AssertionError()
 
         return itir.FunCall(
-            fun=itir.SymRef(id=domain_builtin),
+            fun=itir.SymRef(id=lowering_utils.get_domain_builtin_for_grid_type(self.grid_type)),
             args=domain_args,
             location=(node_domain or out_field).location,
         )

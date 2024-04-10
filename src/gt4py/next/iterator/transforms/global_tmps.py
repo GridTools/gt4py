@@ -70,6 +70,9 @@ class FencilWithTemporaries(ir.Node, SymbolTableTrait):
     tmps: list[Temporary]
 
 
+Temporary.__hash__ = ir.Node.__hash__  # type: ignore[method-assign]
+FencilWithTemporaries.__hash__ = ir.Node.__hash__  # type: ignore[method-assign]
+
 # Extensions for `PrettyPrinter` for easier debugging
 
 
@@ -480,6 +483,15 @@ class SymbolicDomain:
             for d, r in self.ranges.items()
         ])
 
+    def translate(self, axis, distance):
+        new_ranges = {}
+        for range_axis, range in self.ranges.items():
+            if range_axis == axis:
+                new_ranges[range_axis] = range.translate(distance)
+            else:
+                new_ranges[range_axis] = range
+        return SymbolicDomain(self.grid_type, new_ranges)
+
 
 def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
     """Return the (set) union of a list of domains."""
@@ -498,6 +510,23 @@ def domain_union(domains: list[SymbolicDomain]) -> SymbolicDomain:
         new_domain_ranges[dim] = SymbolicRange(start, stop)
     return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
+
+def domain_intersection(domains: list[SymbolicDomain]) -> SymbolicDomain:
+    """Return the (set) intersection of a list of domains."""
+    new_domain_ranges = {}
+    assert all(domain.grid_type == domains[0].grid_type for domain in domains)
+    assert all(domain.ranges.keys() == domains[0].ranges.keys() for domain in domains)
+    for dim in domains[0].ranges.keys():
+        start = functools.reduce(
+            lambda current_expr, el_expr: im.call("maximum")(current_expr, el_expr),
+            [domain.ranges[dim].start for domain in domains],
+        )
+        stop = functools.reduce(
+            lambda current_expr, el_expr: im.call("minimum")(current_expr, el_expr),
+            [domain.ranges[dim].stop for domain in domains],
+        )
+        new_domain_ranges[dim] = SymbolicRange(start, stop)
+    return SymbolicDomain(domains[0].grid_type, new_domain_ranges)
 
 def _group_offsets(
     offset_literals: Sequence[ir.OffsetLiteral],
@@ -621,6 +650,25 @@ def _tuple_constituents(node: ir.Expr) -> Iterable[ir.Expr]:
     else:
         yield node
 
+def convert_type(dtype):
+    if isinstance(dtype, type_inference.Primitive):
+        return dtype.name
+    elif isinstance(dtype, type_inference.Tuple):
+        # this special handling is currently needed for test_tuple_scalar_scan where
+        #  a temporary occurs which is only a deref of an input. after inlining into the
+        #  scan this shouldn't be needed anymore. This is likely wrong if not every
+        #  element of the input is used.
+        # scan(λ(state, qc_in, tuple_scalar_) →
+        #     (·qc_in + state + (·tuple_scalar_)[1][0] + (·tuple_scalar_)[1][1]) / (·tuple_scalar_)[0], True, 0.0
+        # )(__sarg0, (↑(λ(__sarg1) → ·__sarg1))(__sarg1))
+        element_types = []
+        while not isinstance(dtype, (type_inference.TypeVar, type_inference.EmptyTuple)):
+            element_types.append(dtype.front)
+            dtype = dtype.others
+        return tuple(convert_type(el) for el in element_types)
+    elif isinstance(dtype, type_inference.List):
+        raise NotImplementedError("Temporaries with dtype list not supported.")
+    raise AssertionError()
 
 def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> FencilWithTemporaries:
     """Perform type inference for finding the types of temporaries and sets the temporary size."""
@@ -634,26 +682,6 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
 
             assert output_field.id not in domains or domains[output_field.id] == closure.domain
             domains[output_field.id] = closure.domain
-
-    def convert_type(dtype):
-        if isinstance(dtype, type_inference.Primitive):
-            return dtype.name
-        elif isinstance(dtype, type_inference.Tuple):
-            # this special handling is currently needed for test_tuple_scalar_scan where
-            #  a temporary occurs which is only a deref of an input. after inlining into the
-            #  scan this shouldn't be needed anymore. This is likely wrong if not every
-            #  element of the input is used.
-            # scan(λ(state, qc_in, tuple_scalar_) →
-            #     (·qc_in + state + (·tuple_scalar_)[1][0] + (·tuple_scalar_)[1][1]) / (·tuple_scalar_)[0], True, 0.0
-            # )(__sarg0, (↑(λ(__sarg1) → ·__sarg1))(__sarg1))
-            element_types = []
-            while not isinstance(dtype, (type_inference.TypeVar, type_inference.EmptyTuple)):
-                element_types.append(dtype.front)
-                dtype = dtype.others
-            return tuple(convert_type(el) for el in element_types)
-        elif isinstance(dtype, type_inference.List):
-            raise NotImplementedError("Temporaries with dtype list not supported.")
-        raise AssertionError()
 
     all_types = type_inference.infer_all(
         node.fencil, offset_provider=offset_provider, save_to_annex=True
