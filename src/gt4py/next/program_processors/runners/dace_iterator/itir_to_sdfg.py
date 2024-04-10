@@ -19,14 +19,14 @@ from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
-from gt4py.next.common import NeighborTable
+from gt4py.next.common import Connectivity
 from gt4py.next.iterator import (
     ir as itir,
     transforms as itir_transforms,
     type_inference as itir_typing,
 )
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.type_system import type_specifications as ts, type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
     Context,
@@ -44,10 +44,10 @@ from .utility import (
     as_scalar_type,
     connectivity_identifier,
     dace_debuginfo,
-    filter_neighbor_tables,
+    filter_connectivities,
     flatten_list,
     get_sorted_dims,
-    get_used_neighbor_tables,
+    get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -119,7 +119,7 @@ def _make_array_shape_and_strides(
     """
     dtype = dace.int32
     sorted_dims = get_sorted_dims(dims) if sort_dims else list(enumerate(dims))
-    neighbor_tables = filter_neighbor_tables(offset_provider)
+    neighbor_tables = filter_connectivities(offset_provider)
     shape = [
         (
             neighbor_tables[dim.value].max_neighbors
@@ -163,7 +163,7 @@ class ItirToSDFG(eve.NodeVisitor):
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
-        offset_provider: dict[str, NeighborTable],
+        offset_provider: dict[str, Connectivity | Dimension],
         tmps: list[itir_transforms.global_tmps.Temporary],
         use_field_canonical_representation: bool,
         column_axis: Optional[Dimension] = None,
@@ -292,7 +292,7 @@ class ItirToSDFG(eve.NodeVisitor):
         self.node_types = itir_typing.infer_all(node)
 
         # Filter neighbor tables from offset providers.
-        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
 
         # Add program parameters as SDFG storages.
         for param, type_ in zip(node.params, self.param_types):
@@ -312,7 +312,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # Add connectivities as SDFG storages.
         for offset, offset_provider in neighbor_tables.items():
-            scalar_kind = type_translation.get_scalar_kind(offset_provider.table.dtype)
+            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
             local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
             type_ = ts.FieldType(
                 [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
@@ -382,7 +382,7 @@ class ItirToSDFG(eve.NodeVisitor):
         closure_init_state = closure_sdfg.add_state_before(closure_state, "closure_init", True)
 
         input_names = [str(inp.id) for inp in node.inputs]
-        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
         output_nodes = self.get_output_nodes(node, closure_sdfg, closure_state)
@@ -574,7 +574,7 @@ class ItirToSDFG(eve.NodeVisitor):
         )
 
         assert isinstance(node.output, SymRef)
-        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -737,7 +737,7 @@ class ItirToSDFG(eve.NodeVisitor):
             tuple[str, tuple[ValueExpr | SymbolExpr, ValueExpr | SymbolExpr]], ...
         ],
     ) -> tuple[dace.SDFG, dict[str, str | dace.subsets.Subset], list[str]]:
-        neighbor_tables = get_used_neighbor_tables(node, self.offset_provider)
+        neighbor_tables = get_used_connectivities(node, self.offset_provider)
         input_names = [str(inp.id) for inp in node.inputs]
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 

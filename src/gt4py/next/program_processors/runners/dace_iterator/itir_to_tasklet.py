@@ -22,10 +22,9 @@ import numpy as np
 
 import gt4py.eve.codegen
 from gt4py import eve
-from gt4py.next import Dimension, StridedNeighborOffsetProvider, type_inference as next_typing
-from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value
+from gt4py.next import Dimension, type_inference as next_typing
+from gt4py.next.common import _DEFAULT_SKIP_VALUE as neighbor_skip_value, Connectivity
 from gt4py.next.iterator import ir as itir, type_inference as itir_typing
-from gt4py.next.iterator.embedded import NeighborTableOffsetProvider
 from gt4py.next.iterator.ir import FunCall, Lambda
 from gt4py.next.iterator.type_inference import Val
 from gt4py.next.type_system import type_specifications as ts
@@ -36,7 +35,7 @@ from .utility import (
     connectivity_identifier,
     dace_debuginfo,
     flatten_list,
-    get_used_neighbor_tables,
+    get_used_connectivities,
     map_nested_sdfg_symbols,
     new_array_symbols,
     unique_name,
@@ -184,7 +183,7 @@ def _visit_lift_in_neighbors_reduction(
     transformer: "PythonTaskletCodegen",
     node: itir.FunCall,
     node_args: Sequence[IteratorExpr | list[ValueExpr]],
-    offset_provider: NeighborTableOffsetProvider,
+    offset_provider: Connectivity,
     map_entry: dace.nodes.MapEntry,
     map_exit: dace.nodes.MapExit,
     neighbor_index_node: dace.nodes.AccessNode,
@@ -229,7 +228,7 @@ def _visit_lift_in_neighbors_reduction(
             assert isinstance(y, ValueExpr)
             input_nodes[x] = y.value
 
-    neighbor_tables = get_used_neighbor_tables(node.args[0], transformer.offset_provider)
+    neighbor_tables = get_used_connectivities(node.args[0], transformer.offset_provider)
     connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
     parent_sdfg = transformer.context.body
@@ -328,7 +327,7 @@ def builtin_neighbors(
     offset_dim = offset_literal.value
     assert isinstance(offset_dim, str)
     offset_provider = transformer.offset_provider[offset_dim]
-    if not isinstance(offset_provider, NeighborTableOffsetProvider):
+    if not isinstance(offset_provider, Connectivity):
         raise NotImplementedError(
             "Neighbor reduction only implemented for connectivity based on neighbor tables."
         )
@@ -917,7 +916,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
     ]:
         func_name = f"lambda_{abs(hash(node)):x}"
         neighbor_tables = (
-            get_used_neighbor_tables(node, self.offset_provider) if use_neighbor_tables else {}
+            get_used_connectivities(node, self.offset_provider) if use_neighbor_tables else {}
         )
         connectivity_names = [connectivity_identifier(offset) for offset in neighbor_tables.keys()]
 
@@ -1070,7 +1069,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
                         store, self.context.body.arrays[store]
                     )
 
-        neighbor_tables = get_used_neighbor_tables(node.fun, self.offset_provider)
+        neighbor_tables = get_used_connectivities(node.fun, self.offset_provider)
         for offset in neighbor_tables.keys():
             var = connectivity_identifier(offset)
             nsdfg_inputs[var] = dace.Memlet.from_array(var, self.context.body.arrays[var])
@@ -1216,7 +1215,7 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
         offset_node = self.visit(tail[1])[0]
         assert offset_node.dtype in dace.dtypes.INTEGER_TYPES
 
-        if isinstance(self.offset_provider[offset_dim], NeighborTableOffsetProvider):
+        if isinstance(self.offset_provider[offset_dim], Connectivity):
             offset_provider = self.offset_provider[offset_dim]
             connectivity = self.context.state.add_access(
                 connectivity_identifier(offset_dim), debuginfo=di
@@ -1225,20 +1224,12 @@ class PythonTaskletCodegen(gt4py.eve.codegen.TemplatedGenerator):
             shifted_dim = offset_provider.origin_axis.value
             target_dim = offset_provider.neighbor_axis.value
             args = [
-                ValueExpr(connectivity, offset_provider.table.dtype),
+                ValueExpr(connectivity, _INDEX_DTYPE),
                 ValueExpr(iterator.indices[shifted_dim], offset_node.dtype),
                 offset_node,
             ]
             internals = [f"{arg.value.data}_v" for arg in args]
             expr = f"{internals[0]}[{internals[1]}, {internals[2]}]"
-        elif isinstance(self.offset_provider[offset_dim], StridedNeighborOffsetProvider):
-            offset_provider = self.offset_provider[offset_dim]
-
-            shifted_dim = offset_provider.origin_axis.value
-            target_dim = offset_provider.neighbor_axis.value
-            args = [ValueExpr(iterator.indices[shifted_dim], offset_node.dtype), offset_node]
-            internals = [f"{arg.value.data}_v" for arg in args]
-            expr = f"{internals[0]} * {offset_provider.max_neighbors} + {internals[1]}"
         else:
             assert isinstance(self.offset_provider[offset_dim], Dimension)
 
