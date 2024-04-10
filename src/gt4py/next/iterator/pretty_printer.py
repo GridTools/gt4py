@@ -295,6 +295,41 @@ class PrettyPrinter(NodeTranslator):
             params, self._indent(function_definitions), self._indent(closures), ["}"]
         )
 
+    def visit_Assign(self, node: ir.Assign, *, prec: int) -> list[str]:
+        assert prec == 0
+        target = self.visit(node.target, prec=0)
+        expr = self.visit(node.expr, prec=0)
+
+        head = self._hmerge(target, [" ← "])
+
+        h = self._hmerge(head, expr)
+        v = self._vmerge(
+            self._hmerge(head, ["("]),
+            self._indent(self._indent(expr)),
+            self._indent([")"]),
+        )
+        return self._optimum(h, v)
+
+    def visit_Program(self, node: ir.Program, *, prec: int) -> list[str]:
+        assert prec == 0
+        function_definitions = self.visit(node.function_definitions, prec=0)
+        closures = self.visit(node.stmts, prec=0)
+        params = self.visit(node.params, prec=0)
+
+        hparams = self._hmerge([node.id + "("], *self._hinterleave(params, ", "), [") {"])
+        vparams = self._vmerge(
+            [node.id + "("], *self._hinterleave(params, ",", indent=True), [") {"]
+        )
+        params = self._optimum(hparams, vparams)
+
+        function_definitions = self._vmerge(*function_definitions)
+        closures = self._vmerge(*closures)
+
+        return self._vmerge(
+            params, self._indent(function_definitions), self._indent(closures), ["}"]
+        )
+
+
     @classmethod
     def apply(cls, node: ir.Node, indent: int, width: int) -> str:
         return "\n".join(cls(indent=indent, width=width).visit(node, prec=0))

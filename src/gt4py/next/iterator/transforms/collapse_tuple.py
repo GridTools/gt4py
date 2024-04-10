@@ -203,7 +203,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_collapse_make_tuple_tuple_get(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if node.fun == ir.SymRef(id="make_tuple") and all(
+        if node.fun == ir.SymRef(id="make_tuple") and len(node.args) > 0 and all(
             isinstance(arg, ir.FunCall) and arg.fun == ir.SymRef(id="tuple_get")
             for arg in node.args
         ):

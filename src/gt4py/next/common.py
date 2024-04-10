@@ -976,7 +976,6 @@ class GridType(StrEnum):
     CARTESIAN = "cartesian"
     UNSTRUCTURED = "unstructured"
 
-
 def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     """
     Find a unique ordering of multiple (individually ordered) lists of dimensions.

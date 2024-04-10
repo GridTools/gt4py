@@ -11,12 +11,15 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Any, Callable, TypeVar
+import functools
+from typing import Any, Callable, TypeVar, Optional
 
 from gt4py.eve import utils as eve_utils
+from gt4py.next import common
 from gt4py.next.ffront import type_info as ti_ffront
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -38,7 +41,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     """
     param = f"__toi_{eve_utils.content_hash(expr)}"
 
-    def fun(primitive_type: ts.TypeSpec, path: tuple[int, ...]) -> itir.Expr:
+    def fun(primitive_type: ts.TypeSpec, *, path: tuple[int, ...]) -> itir.Expr:
         inner_expr = im.deref("it")
         for path_part in path:
             inner_expr = im.tuple_get(path_part, inner_expr)
@@ -79,7 +82,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
         for type_ in type_constituents
     )
 
-    def fun(_: Any, path: tuple[int, ...]) -> itir.FunCall:
+    def fun(_: Any, *, path: tuple[int, ...]) -> itir.FunCall:
         param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"
@@ -101,11 +104,43 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     return im.let(param, expr)(im.lift(im.lambda_(*lift_params)(stencil_expr))(*lift_args))
 
 
+def get_domain_builtin_for_grid_type(grid_type: common.GridType):
+    if grid_type == common.GridType.CARTESIAN:
+        return "cartesian_domain"
+    elif grid_type == common.GridType.UNSTRUCTURED:
+        return "unstructured_domain"
+    raise AssertionError()
+
+
+def primitive_constituents(expr: itir.Expr):
+    if is_call_to(expr, "make_tuple"):
+        for arg in expr.args:
+            if is_call_to(arg, "make_tuple"):
+                yield from primitive_constituents(arg)
+            else:
+                yield arg
+    else:
+        yield expr
+
+def apply_to_structual_primitive_constituents(
+    process_func: Callable[..., itir.Expr],
+    obj: itir.Expr,
+):
+    if is_call_to(obj, "make_tuple"):
+        processed_els = []
+        for el in obj.args:
+            processed_els.append(apply_to_structual_primitive_constituents(process_func, el))
+        return im.make_tuple(*processed_els)
+    return process_func(obj)
+
+
 # TODO(tehrengruber): The code quality of this function is poor. We should rewrite it.
 def process_elements(
     process_func: Callable[..., itir.Expr],
     objs: itir.Expr | list[itir.Expr],
-    current_el_type: ts.TypeSpec,
+    obj_types: ts.TypeSpec | list[ts.TypeSpec],
+    *,
+    with_path_arg: bool = False
 ) -> itir.FunCall:
     """
     Recursively applies a processing function to all primitive constituents of a tuple.
@@ -119,37 +154,25 @@ def process_elements(
     """
     if isinstance(objs, itir.Expr):
         objs = [objs]
+    if isinstance(obj_types, ts.TypeSpec):
+        obj_types = [obj_types]
 
-    _current_el_exprs = [
-        im.ref(f"__val_{eve_utils.content_hash(obj)}") for i, obj in enumerate(objs)
-    ]
-    body = _process_elements_impl(process_func, _current_el_exprs, current_el_type)
+    obj_aliases = [f"__val_{eve_utils.content_hash(obj)}" for i, obj in enumerate(objs)]
 
-    return im.let(*((f"__val_{eve_utils.content_hash(obj)}", obj) for i, obj in enumerate(objs)))(  # type: ignore[arg-type]  # mypy not smart enough
-        body
+    def impl(*el_types: ts.TypeSpec, path):
+        els = [functools.reduce(lambda el, idx: im.tuple_get(idx, el), path, obj) for obj in obj_aliases]
+        if with_path_arg:
+            return process_func(*els, path=path)
+        else:
+            return process_func(*els)
+
+    body = type_info.apply_to_primitive_constituents(
+        obj_types,
+        impl,
+        with_path_arg=True,
+        tuple_constructor=im.make_tuple
     )
 
-
-T = TypeVar("T", bound=itir.Expr, covariant=True)
-
-
-def _process_elements_impl(
-    process_func: Callable[..., itir.Expr],
-    _current_el_exprs: list[T],
-    current_el_type: ts.TypeSpec,
-) -> itir.Expr:
-    if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(*[
-            _process_elements_impl(
-                process_func,
-                [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                current_el_type.types[i],
-            )
-            for i in range(len(current_el_type.types))
-        ])
-    elif type_info.contains_local_field(current_el_type):
-        raise NotImplementedError("Processing fields with local dimension is not implemented.")
-    else:
-        result = process_func(*_current_el_exprs)
-
-    return result
+    return im.let(*zip(obj_aliases, objs))(  # type: ignore[arg-type]  # mypy not smart enough
+        body
+    )

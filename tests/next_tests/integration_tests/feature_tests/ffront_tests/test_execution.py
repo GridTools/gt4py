@@ -70,6 +70,17 @@ def test_copy(cartesian_case):
     cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
 
 
+def test_copy_concat_where(cartesian_case):
+    @gtx.field_operator
+    def testee(a: cases.IJKField, b: cases.IJKField) -> cases.IJKField:
+        return concat_where(
+            EdgeDim < 10 & KDim < 1,
+            a,
+            b
+        )
+
+    cases.verify_with_default_data(cartesian_case, testee, ref=lambda a: a)
+
 @pytest.mark.uses_tuple_returns
 def test_multicopy(cartesian_case):
     @gtx.field_operator
@@ -726,17 +737,17 @@ def test_ternary_operator_tuple(cartesian_case, left, right):
 @pytest.mark.uses_reduction_over_lift_expressions
 def test_ternary_builtin_neighbor_sum(unstructured_case):
     @gtx.field_operator
-    def testee(a: cases.EField, b: cases.EField) -> cases.VField:
-        tmp = neighbor_sum(b(V2E) if 2 < 3 else a(V2E), axis=V2EDim)
+    def testee(a: cases.EField, b: cases.EField, c: bool) -> cases.VField:
+        tmp = neighbor_sum(b(V2E) if c else a(V2E), axis=V2EDim)
         return tmp
 
     v2e_table = unstructured_case.offset_provider["V2E"].table
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a, b: (
+        ref=lambda a, b, c: (
             np.sum(
-                b[v2e_table],
+                b[v2e_table] if c else a[v2e_table],
                 axis=1,
                 initial=0,
                 where=v2e_table != common._DEFAULT_SKIP_VALUE,

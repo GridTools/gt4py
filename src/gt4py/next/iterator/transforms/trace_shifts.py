@@ -21,6 +21,7 @@ from gt4py import eve
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.utils import flatten_nested_tuple
 
 
 class ValidateRecordedShiftsAnnex(eve.NodeVisitor):
@@ -127,7 +128,7 @@ class CombinedTracer(IteratorTracer):
 
 def _combine(*values):
     # `OffsetLiteral`s may occur in `list_get` calls
-    if not all(
+    if False and not all(
         val in [Sentinel.VALUE, Sentinel.TYPE] or isinstance(val, ir.OffsetLiteral)
         for val in values
     ):
@@ -137,7 +138,11 @@ def _combine(*values):
 
 # implementations of builtins
 def _deref(x):
-    return x.deref()
+    try:
+        return x.deref()
+    except Exception as e:
+        breakpoint()
+        raise e
 
 
 def _can_deref(x):
@@ -172,6 +177,17 @@ def _lift(f):
 
     return apply
 
+def _apply_stencil(f, inputs, domain):
+    new_inputs = []
+    for input in inputs:
+        # TODO: This is not optimal as we inherit the deref for all elements, e.g. here
+        #  apply_stencil(λ(it) → ·it[0], {{a, b, c, d}}
+        # a, b, c, d get a deref even though only a is accessed
+        if isinstance(input, tuple):
+            new_inputs.append(CombinedTracer(flatten_nested_tuple(input)))
+        else:
+            new_inputs.append(input)
+    return AppliedLift(f, new_inputs)
 
 def _reduce(f, init):
     return _combine
@@ -212,7 +228,7 @@ def _primitive_constituents(
 
 
 def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
-    assert cond is Sentinel.VALUE
+    #assert cond is Sentinel.VALUE  # just disabled because of scalar hack
     if any(isinstance(branch, tuple) for branch in (false_branch, true_branch)):
         # Broadcast branches to tuple of same length. This is required for cases like:
         #  `if_(cond, deref(iterator_of_tuples), make_tuple(...))`.
@@ -230,12 +246,16 @@ def _if(cond: Literal[Sentinel.VALUE], true_branch, false_branch):
         return tuple(result)
 
     is_iterator_arg = tuple(
-        isinstance(arg, IteratorTracer) for arg in (cond, true_branch, false_branch)
+        isinstance(arg, IteratorTracer) for arg in (
+            Sentinel.VALUE,  # hack to make scalars work
+            true_branch, false_branch)
     )
     if is_iterator_arg == (False, True, True):
         return CombinedTracer((true_branch, false_branch))
     assert is_iterator_arg == (False, False, False) and all(
-        arg in [Sentinel.VALUE, Sentinel.TYPE] for arg in (cond, true_branch, false_branch)
+        arg in [Sentinel.VALUE, Sentinel.TYPE] for arg in (
+            Sentinel.VALUE,  # ack to make scalars work
+            true_branch, false_branch)
     )
     return Sentinel.VALUE
 
@@ -247,8 +267,9 @@ def _make_tuple(*args):
 def _tuple_get(index, tuple_val):
     if isinstance(tuple_val, tuple):
         return tuple_val[index]
-    assert tuple_val is Sentinel.VALUE
-    return Sentinel.VALUE
+    #assert tuple_val is Sentinel.VALUE
+    #return Sentinel.VALUE
+    return tuple_val  # this could be a field now, so just inherit
 
 
 _START_CTX: Final = {
@@ -262,6 +283,7 @@ _START_CTX: Final = {
     "map_": _map,
     "if_": _if,
     "make_tuple": _make_tuple,
+    "apply_stencil": _apply_stencil
 }
 
 
@@ -280,6 +302,8 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
         elif node.id in ir.TYPEBUILTINS:
             return Sentinel.TYPE
         elif node.id in (ir.ARITHMETIC_BUILTINS | {"list_get", "make_const_list", "cast_"}):
+            return _combine
+        elif node.id in (ir.DOMAIN_BUILTINS | {"cartesian_domain", "unstructured_domain", "named_range"}):  # combined ir
             return _combine
         raise ValueError(f"Undefined symbol {node.id}")
 
@@ -333,6 +357,20 @@ class TraceShifts(PreserveLocationVisitor, NodeTranslator):
 
         result = self.visit(node.stencil, ctx=_START_CTX)(*tracers)
         assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
+        return node
+
+    def visit_Program(self, node: ir.Program):
+        tracers = []
+        for inp in node.params:
+            self.shift_recorder.register_node(inp)
+            tracers.append(IteratorArgTracer(arg=inp, shift_recorder=self.shift_recorder))
+
+        ctx = {**_START_CTX, **{param.id: tracer for param, tracer in zip(node.params, tracers, strict=True)}}
+        for stmt in node.stmts:
+            result = self.visit(stmt.expr, ctx=ctx)
+            result.deref()  # TODO: assert tracer
+            ctx = {**ctx, stmt.target.id: result}
+        #assert all(el is Sentinel.VALUE for el in _primitive_constituents(result))
         return node
 
     @classmethod

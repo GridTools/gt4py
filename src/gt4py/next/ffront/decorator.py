@@ -456,7 +456,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         if hasattr(self, "__cached_itir"):
             return getattr(self, "__cached_itir")
 
-        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)
+        itir_node: itir.FunctionDefinition = FieldOperatorLowering.apply(self.foast_node)  # TODO: check gridtype of all programs and fos matches
 
         object.__setattr__(self, "__cached_itir", itir_node)
 

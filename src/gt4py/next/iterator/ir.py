@@ -19,6 +19,7 @@ import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
+from gt4py.eve.type_definitions import frozendict
 from gt4py.eve.utils import noninstantiable
 
 
@@ -48,6 +49,7 @@ class Sym(Node):  # helper
     dtype: Optional[tuple[str, bool]] = (
         None  # format: name of primitive type, boolean indicating if it is a list
     )
+    raw_dtype: typing.Any = None # can be used directly be the type inferenc
 
     @datamodels.validator("kind")
     def _kind_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value: str):
@@ -214,6 +216,13 @@ BUILTINS = {
 }
 
 
+class StencilClosure(Node):
+    domain: FunCall
+    stencil: Expr
+    output: Union[SymRef, FunCall]
+    inputs: List[SymRef]
+
+
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: Coerced[SymbolName]
     function_definitions: List[FunctionDefinition]
@@ -221,6 +230,44 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+
+#
+# Combined IR
+#
+# get_domain(field)
+# apply_stencil
+DOMAIN_BUILTINS = {
+    "auto_domain",
+    "get_domain",
+    "intersect",
+    "broadcast_domain",
+    "strip_domain_axis",  # strip_domain_axis(domain, axis) return a new domain without axis, used for reductions
+    # TODO: functions to get rid of:
+    "domain", # just because we often don't know if cartesian or unstructured
+    "inverse_translate_domain",  # inverse_translate_domain(u⟨ Vertex: [0, ____sym_1_size_0) ⟩, E2Vₒ, 0)
+    "broadcast_to_common_domain",
+}
+CIR_BUILTINS = ["apply_stencil", *DOMAIN_BUILTINS, *BUILTINS]
+
+class Stmt(Node):
+    pass
+
+class Program(Node, ValidatedSymbolTableTrait):
+    id: Coerced[SymbolName]
+    params: List[Sym]
+    tmps: List[Sym]
+    function_definitions: List[FunctionDefinition]
+    stmts: list[Stmt]
+
+    # TODO: since we don't actually have support for get_domain on an output field
+    #  we just store expressions for them here for now.
+    domains: Optional[frozendict[str, Expr]] = None
+
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in CIR_BUILTINS]
+
+class Assign(Stmt):
+    target: SymRef
+    expr: FunCall
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)
@@ -236,3 +283,7 @@ FunCall.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FunctionDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
 StencilClosure.__hash__ = Node.__hash__  # type: ignore[method-assign]
 FencilDefinition.__hash__ = Node.__hash__  # type: ignore[method-assign]
+
+Program.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Stmt.__hash__ = Node.__hash__  # type: ignore[method-assign]
+Assign.__hash__ = Node.__hash__  # type: ignore[method-assign]

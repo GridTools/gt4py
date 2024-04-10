@@ -644,6 +644,15 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
                 ),
                 result,
             ))
+        if node.raw_dtype:
+            self.constraints.add((
+                Val(
+                    dtype=node.raw_dtype,
+                    current_loc=TypeVar.fresh(),
+                    defined_loc=TypeVar.fresh(),
+                ),
+                result,
+            ))
         return result
 
     def visit_SymRef(self, node: ir.SymRef, *, symtable, **kwargs) -> Type:

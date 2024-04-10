@@ -52,7 +52,7 @@ def promote_zero_dims(
     """
 
     def promote_arg(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.TypeSpec:
-        def _as_field(arg_el: ts.TypeSpec, path: tuple[int, ...]) -> ts.TypeSpec:
+        def _as_field(arg_el: ts.TypeSpec, *, path: tuple[int, ...]) -> ts.TypeSpec:
             param_el = param
             for idx in path:
                 if not isinstance(param_el, ts.TupleType):
@@ -181,7 +181,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
     FieldType(dims=[Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)], dtype=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     """
 
-    def _as_field(dtype: ts.TypeSpec, path: tuple[int, ...]) -> ts.FieldType:
+    def _as_field(dtype: ts.TypeSpec, *, path: tuple[int, ...]) -> ts.FieldType:
         assert isinstance(dtype, ts.ScalarType)
         try:
             el_type = reduce(

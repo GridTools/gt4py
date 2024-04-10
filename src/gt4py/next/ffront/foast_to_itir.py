@@ -13,11 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import functools
 from typing import Any, Callable, Optional
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.extended_typing import Never
 from gt4py.eve.utils import UIDGenerator
+from gt4py.next import DimensionKind, common
 from gt4py.next.ffront import (
     dialect_ast_enums,
     fbuiltins,
@@ -35,10 +37,16 @@ from gt4py.next.type_system import type_info, type_specifications as ts
 
 def promote_to_list(
     node: foast.Symbol | foast.Expr,
-) -> Callable[[itir.Expr], itir.Expr]:
+    lowered_arg: itir.Expr,
+    domain: itir.Expr  # TODO: just compute the domain here
+) -> itir.Expr:
     if not type_info.contains_local_field(node.type):
-        return lambda x: im.promote_to_lifted_stencil("make_const_list")(x)
-    return lambda x: x
+        return im.apply_stencil(
+            im.lambda_("it")(im.call("make_const_list")(im.deref("it"))),
+            im.make_tuple(lowered_arg),
+            domain
+        )
+    return lowered_arg
 
 
 @dataclasses.dataclass
@@ -107,27 +115,12 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         # We are lowering node.forward and node.init to iterators, but here we expect values -> `deref`.
         # In iterator IR we didn't properly specify if this is legal,
         # however after lift-inlining the expressions are transformed back to literals.
-        forward = im.deref(self.visit(node.forward, **kwargs))
-        init = lowering_utils.process_elements(
-            im.deref, self.visit(node.init, **kwargs), node.init.type
-        )
+        forward = self.visit(node.forward, **kwargs)
+        init = self.visit(node.init, **kwargs)
 
         # lower definition function
         func_definition: itir.FunctionDefinition = self.visit(node.definition, **kwargs)
-        new_body = im.let(
-            func_definition.params[0].id,
-            # promote carry to iterator of tuples
-            # (this is the only place in the lowering were a variable is captured in a lifted lambda)
-            lowering_utils.to_tuples_of_iterator(
-                im.promote_to_const_iterator(func_definition.params[0].id),
-                [*node.type.definition.pos_or_kw_args.values()][0],  # noqa: RUF015 [unnecessary-iterable-allocation-for-first-element]
-            ),
-        )(
-            # the function itself returns a tuple of iterators, deref element-wise
-            lowering_utils.process_elements(
-                im.deref, func_definition.expr, node.type.definition.returns
-            )
-        )
+        new_body = func_definition.expr
 
         stencil_args: list[itir.Expr] = []
         assert not node.type.definition.pos_only_args and not node.type.definition.kw_only_args
@@ -136,20 +129,23 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             [*node.type.definition.pos_or_kw_args.values()][1:],
             strict=True,
         ):
-            if isinstance(arg_type, ts.TupleType):
-                # convert into iterator of tuples
-                stencil_args.append(lowering_utils.to_iterator_of_tuples(param.id, arg_type))
+            # convert iterator to value
+            new_body = im.let(
+                param.id,
+                im.deref(param.id),
+            )(new_body)
+            stencil_args.append(im.ref(param.id))
 
-                new_body = im.let(
-                    param.id,
-                    lowering_utils.to_tuples_of_iterator(param.id, arg_type),
-                )(new_body)
-            else:
-                stencil_args.append(im.ref(param.id))
+        stencil_args = [param.id for param in func_definition.params[1:]]
 
         definition = itir.Lambda(params=func_definition.params, expr=new_body)
 
-        body = im.lift(im.call("scan")(definition, forward, init))(*stencil_args)
+        body = im.apply_stencil(
+            im.call("scan")(definition, forward, init),
+            im.make_tuple(*stencil_args),
+            im.call("broadcast_to_common_domain")(*stencil_args)
+            #im.call("intersect")(*[im.call("get_domain")(arg) for arg in stencil_args]) # doesn't work as for program we are to late with broadcasting in the call see test_tuple_scalar_scan
+        )
 
         return itir.FunctionDefinition(
             id=node.id,
@@ -277,19 +273,22 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         return self._map(node.op.value, node.left, node.right)
 
     def visit_TernaryExpr(self, node: foast.TernaryExpr, **kwargs: Any) -> itir.FunCall:
-        op = "if_"
-        args = (node.condition, node.true_expr, node.false_expr)
-        lowered_args: list[itir.Expr] = [
-            lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
-            for arg in args
-        ]
-        if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
-            op = im.call("map_")(op)
-
-        return lowering_utils.to_tuples_of_iterator(
-            im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
-        )
+        # TODO: if we would support if statements outside of apply_stencil calls in ITIR this
+        #  would go away and we could do
+        return im.if_(*self.visit([node.condition, node.true_expr, node.false_expr]))
+        # op = "if_"
+        # args = node.args
+        # lowered_args: list[itir.Expr] = [
+        #     lowering_utils.to_iterator_of_tuples(self.visit(arg, **kwargs), arg.type)
+        #     for arg in args
+        # ]
+        # if any(type_info.contains_local_field(arg.type) for arg in args):
+        #     lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+        #     op = im.call("map_")(op)
+        #
+        # return lowering_utils.to_tuples_of_iterator(
+        #     im.promote_to_lifted_stencil(im.call(op))(*lowered_args), node.type
+        # )
 
     def visit_Compare(self, node: foast.Compare, **kwargs: Any) -> itir.FunCall:
         return self._map(node.op.value, node.left, node.right)
@@ -297,20 +296,36 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def _visit_shift(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         match node.args[0]:
             case foast.Subscript(value=foast.Name(id=offset_name), index=int(offset_index)):
-                shift_offset = im.shift(offset_name, offset_index)
+                shift_args = (itir.OffsetLiteral(value=offset_name), offset_index)
             case foast.Name(id=offset_name):
-                return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
+                lowered_field_expr = self.visit(node.func, **kwargs)
+                return im.apply_stencil(
+                    im.lambda_("it")(im.neighbors(offset_name, "it")),
+                    im.make_tuple(lowered_field_expr),
+                    im.call("broadcast_domain")(
+                        im.call("domain")(),  # inverse translate domain would make more sense, but we need to inline this anyway
+                        im.make_tuple(*(itir.AxisLiteral(value=dim.value) for dim in node.type.dims))
+                    )
+                )
             case foast.Call(func=foast.Name(id="as_offset")):
                 func_args = node.args[0]
                 offset_dim = func_args.args[0]
                 assert isinstance(offset_dim, foast.Name)
-                shift_offset = im.shift(
-                    offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs))
+                shift_args = (
+                    itir.OffsetLiteral(value=offset_dim.id), im.deref(self.visit(func_args.args[1], **kwargs))
                 )
             case _:
                 raise FieldOperatorLoweringError("Unexpected shift arguments!")
-        return im.lift(im.lambda_("it")(im.deref(shift_offset("it"))))(
-            self.visit(node.func, **kwargs)
+
+        lowered_field_expr = self.visit(node.func, **kwargs)
+
+        domain = im.call("inverse_translate_domain")(im.call("get_domain")(lowered_field_expr), *shift_args)
+
+        return im.apply_stencil(
+            im.lambda_("it")(im.deref(im.shift(*shift_args)("it"))),
+            im.make_tuple(lowered_field_expr),
+            domain
+            # TODO: condition
         )
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
@@ -341,15 +356,16 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 self.visit(node.kwargs, **kwargs),
                 use_signature_ordering=True,
             )
+
             result = im.call(self.visit(node.func, **kwargs))(
                 *lowered_args, *lowered_kwargs.values()
             )
 
             # scan operators return an iterator of tuples, transform into tuples of iterator again
-            if isinstance(node.func.type, ts_ffront.ScanOperatorType):
-                result = lowering_utils.to_tuples_of_iterator(
-                    result, node.func.type.definition.returns
-                )
+            #if isinstance(node.func.type, ts_ffront.ScanOperatorType):
+            #    result = lowering_utils.to_tuples_of_iterator(
+            #        result, node.func.type.definition.returns
+            #    )
 
             return result
 
@@ -360,28 +376,57 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     def _visit_astype(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         assert len(node.args) == 2 and isinstance(node.args[1], foast.Name)
         obj, new_type = node.args[0], node.args[1].id
+        lowered_obj = self.visit(obj, **kwargs)
         return lowering_utils.process_elements(
-            lambda x: im.promote_to_lifted_stencil(
-                im.lambda_("it")(im.call("cast_")("it", str(new_type)))
-            )(x),
-            self.visit(obj, **kwargs),
+            lambda x: im.apply_stencil(im.lambda_("it")(im.call("cast_")(im.deref("it"), str(new_type))), im.make_tuple(x), im.call("get_domain")(x)),
+            lowered_obj,
             obj.type,
         )
 
     def _visit_where(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         condition, true_value, false_value = node.args
-
         lowered_condition = self.visit(condition, **kwargs)
+
+        #dims = type_info.promote(condition.type, true_value.type, false_value.type).dims
+
+        def handle_element(tv, fv, *, path):
+            tv_type = functools.reduce(lambda type_, idx: type_.types[idx], path, true_value.type)
+            fv_type = functools.reduce(lambda type_, idx: type_.types[idx], path, false_value.type)
+            dims = common.promote_dims(*(type_info.extract_dims(type_) for type_ in [condition.type, tv_type, fv_type]))
+            broadcast_axes = [itir.AxisLiteral(value=dim.value) for dim in dims]
+            broadcasted_domains = [im.call("broadcast_domain")(im.call("get_domain")(arg), im.make_tuple(*broadcast_axes)) for arg in (lowered_condition, tv, fv)]
+            domain = im.call("intersect")(*broadcasted_domains)
+
+            return im.apply_stencil(
+                im.lambda_("cit", "tit", "fit")(im.if_(
+                    im.deref("cit"),
+                    im.deref("tit"),
+                    im.deref("fit")
+                )),
+                im.make_tuple(lowered_condition, tv, fv),  # todo: use let for condition
+                domain
+            )
+
         return lowering_utils.process_elements(
-            lambda tv, fv: im.promote_to_lifted_stencil("if_")(lowered_condition, tv, fv),
+            handle_element,
             [self.visit(true_value, **kwargs), self.visit(false_value, **kwargs)],
-            node.type,
+            [true_value.type, false_value.type],
+            with_path_arg=True
         )
 
     _visit_concat_where = _visit_where
 
     def _visit_broadcast(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
-        return self.visit(node.args[0], **kwargs)
+        lowered_arg = self.visit(node.args[0], **kwargs)
+        domain = im.call("broadcast_domain")(
+            im.call("get_domain")(lowered_arg),  # todo: use let
+            im.make_tuple(*(itir.AxisLiteral(value=dim.value) for dim in node.type.dims))
+        )
+        return im.apply_stencil(
+            im.ref("deref"),
+            im.make_tuple(lowered_arg),
+            domain
+        )
 
     def _visit_math_built_in(self, node: foast.Call, **kwargs: Any) -> itir.FunCall:
         return self._map(self.visit(node.func, **kwargs), *node.args)
@@ -394,10 +439,28 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
         **kwargs: Any,
     ) -> itir.Expr:
         # TODO(havogt): deal with nested reductions of the form neighbor_sum(neighbor_sum(field(off1)(off2)))
-        it = self.visit(node.args[0], **kwargs)
+        lowered_field_expr = self.visit(node.args[0], **kwargs)
+
+        local_dim = None
+        assert isinstance(node.type, ts.FieldType)
+        for dim in node.args[0].type.dims:
+            if dim.kind == DimensionKind.LOCAL:
+                local_dim = dim
+        assert local_dim is not None
+
+        domain = im.call("strip_domain_axis")(
+            im.call("get_domain")(lowered_field_expr),
+            itir.AxisLiteral(value=local_dim.value)
+        )
+
         assert isinstance(node.kwargs["axis"].type, ts.DimensionType)
-        val = im.call(im.call("reduce")(op, im.deref(init_expr)))
-        return im.promote_to_lifted_stencil(val)(it)
+        stencil_body = im.call(im.call("reduce")(op, im.deref("init")))(im.deref("it"))
+
+        return im.apply_stencil(
+            im.lambda_("it", "init")(stencil_body),
+            im.make_tuple(lowered_field_expr, init_expr),
+            domain
+        )
 
     def _visit_neighbor_sum(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         dtype = type_info.extract_dtype(node.type)
@@ -421,10 +484,16 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             target_type = fbuiltins.BUILTINS[node_kind]
             source_type = {**fbuiltins.BUILTINS, "string": str}[node.args[0].type.__str__().lower()]
             if target_type is bool and source_type is not bool:
-                return im.promote_to_const_iterator(
-                    im.literal(str(bool(source_type(node.args[0].value))), "bool")
+                return im.apply_stencil(
+                    im.lambda_()(im.literal(str(bool(source_type(node.args[0].value))), "bool")),
+                    im.make_tuple(),
+                    im.call("domain")()
                 )
-            return im.promote_to_const_iterator(im.literal(str(node.args[0].value), node_kind))
+            return im.apply_stencil(
+                im.lambda_()(im.literal(str(node.args[0].value), node_kind)),
+                im.make_tuple(),
+                im.call("domain")()
+            )
         raise FieldOperatorLoweringError(
             f"Encountered a type cast, which is not supported: {node}."
         )
@@ -438,7 +507,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
             )
         elif isinstance(type_, ts.ScalarType):
             typename = type_.kind.name.lower()
-            return im.promote_to_const_iterator(im.literal(str(val), typename))
+            return im.literal(str(val), typename)
         raise ValueError(f"Unsupported literal type '{type_}'.")
 
     def visit_Constant(self, node: foast.Constant, **kwargs: Any) -> itir.Expr:
@@ -446,11 +515,32 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
 
     def _map(self, op: itir.Expr | str, *args: Any, **kwargs: Any) -> itir.FunCall:
         lowered_args = [self.visit(arg, **kwargs) for arg in args]
+
+        if all(isinstance(arg.type, ts.ScalarType) for arg in args):
+            return im.call(op)(*lowered_args)
+
+        # TODO: only broadcast scalars
+        domain_args = []
+        dims = type_info.promote(*(arg.type for arg in args), always_field=True).dims
+        for arg, lowered_arg in zip(args, lowered_args, strict=True):
+            if isinstance(arg.type, ts.ScalarType):
+                continue
+            domain_args.append(im.call("broadcast_domain")(
+                im.call("get_domain")(lowered_arg),  # todo: use let
+                im.make_tuple(*(itir.AxisLiteral(value=dim.value) for dim in dims))
+            ))
+        domain = im.call("intersect")(*domain_args) if len(domain_args) > 1 else domain_args[0]
+
         if any(type_info.contains_local_field(arg.type) for arg in args):
-            lowered_args = [promote_to_list(arg)(larg) for arg, larg in zip(args, lowered_args)]
+            lowered_args = [promote_to_list(arg, larg, domain) for arg, larg in zip(args, lowered_args)]
             op = im.call("map_")(op)
 
-        return im.promote_to_lifted_stencil(im.call(op))(*lowered_args)
+        arg_names = [f"__arg{i}" for i in range(len(lowered_args))]
+        return im.apply_stencil(
+            im.lambda_(*arg_names)(im.call(op)(*(im.deref(arg) for arg in arg_names))),
+            im.make_tuple(*lowered_args),
+            domain
+        )
 
 
 class FieldOperatorLoweringError(Exception): ...

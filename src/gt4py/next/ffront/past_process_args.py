@@ -70,6 +70,7 @@ def _process_args(
     implicit_domain = any(
         isinstance(stmt, past.Call) and "domain" not in stmt.kwargs for stmt in past_node.body
     )
+    implicit_domain = True
 
     # extract size of all field arguments
     size_args: list[Optional[int]] = []

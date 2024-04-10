@@ -127,6 +127,9 @@ class call:
     def __call__(self, *exprs):
         return itir.FunCall(fun=self.fun, args=[ensure_expr(expr) for expr in exprs])
 
+def apply_stencil(stencil, inputs, domain):
+    """Create a deref FunCall, shorthand for ``call("deref")(expr)``."""
+    return call("apply_stencil")(stencil, inputs, domain)
 
 def deref(expr):
     """Create a deref FunCall, shorthand for ``call("deref")(expr)``."""

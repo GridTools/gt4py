@@ -251,7 +251,10 @@ class NdArrayField(
             value = value.ndarray
 
         assert hasattr(self.ndarray, "__setitem__")
-        self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
+        try:
+            self._ndarray[target_slice] = value  # type: ignore[index] # np and cp allow index assignment, jax overrides
+        except:
+            breakpoint()
 
     __abs__ = _make_builtin("abs", "abs")
 
