@@ -52,9 +52,10 @@ def test_get_domains():
         params=[itir.Sym(id="bar")],
         declarations=[],
         body=[
-            itir.Assign(
+            itir.SetAt(
+                expr=im.call(im.call("apply_stencil")("deref"))(),
+                domain=domain,
                 target=itir.SymRef(id="bar"),
-                expr=im.call(im.call("apply_stencil")("deref", domain))(),
             )
         ],
     )

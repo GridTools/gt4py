@@ -186,6 +186,10 @@ GRAMMAR_BUILTINS = {
     "cast_",
 }
 
+GTIR_BUILTINS = {
+    "apply_stencil",  # `apply_stencil(stencil)` creates field_operator from stencil
+}
+
 BUILTINS = {
     *GRAMMAR_BUILTINS,
     "named_range",
@@ -216,9 +220,10 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
 class Stmt(Node): ...
 
 
-class Assign(Stmt):
+class SetAt(Stmt):  # from JAX array.at[...].set()
+    expr: Expr  # only `apply_stencil(stencil)(inp0, ...)` in first refactoring
+    domain: Expr
     target: Expr  # `make_tuple` or SymRef
-    expr: Expr  # only `apply_stencil`
 
 
 class Temporary(Node):

@@ -67,17 +67,7 @@ _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
 def _get_domains(node: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
-    apply_stencils = (
-        eve_utils.xiter(node)
-        .if_isinstance(itir.Assign)
-        .getattr("expr")
-        .if_isinstance(itir.FunCall)
-        .filter(
-            lambda x: isinstance(x.fun, itir.FunCall)
-            and x.fun.fun == itir.SymRef(id="apply_stencil")
-        )
-    )
-    return (a.fun.args[1] for a in apply_stencils)
+    return eve_utils.xiter(node).if_isinstance(itir.SetAt).getattr("domain").to_set()
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -503,12 +493,12 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
         raise AssertionError("Internal error: all Stmts need to be handled explicitly.")
 
-    def visit_Assign(
-        self, node: itir.Assign, *, extracted_functions: list, **kwargs: Any
+    def visit_SetAt(
+        self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
         assert _is_applied_apply_stencil(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
-        domain = node.expr.fun.args[1]  # type: ignore[attr-defined] # checked in assert
+        domain = node.domain
         inputs = node.expr.args
         backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))
         if _is_scan(stencil):
