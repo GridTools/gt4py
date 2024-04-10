@@ -319,33 +319,7 @@ def test_non_dispatched_function():
     assert np.allclose(result.ndarray, expected)
 
 
-def test_remap_reindexing_unstructured_implementation():
-    V = Dimension("V")
-    E = Dimension("E")
-
-    V_START, V_STOP = 2, 7
-    E_START, E_STOP = 0, 10
-    v_field = common._field(
-        -0.1 * np.arange(V_START, V_STOP),
-        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
-    )
-    e2v_conn = common._connectivity(
-        np.arange(E_START, E_STOP),
-        domain=common.Domain(dims=(E,), ranges=[UnitRange(E_START, E_STOP)]),
-        codomain=V,
-    )
-
-    result = v_field.remap(e2v_conn)
-    expected = common._field(
-        -0.1 * np.arange(V_START, V_STOP),
-        domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
-    )
-
-    assert result.domain == expected.domain
-    assert np.all(result.ndarray == expected.ndarray)
-
-
-def test_remap_reindexing_cartesian_implementation():
+def test_domain_premap():
     V = Dimension("V")
     E = Dimension("E")
 
@@ -357,7 +331,7 @@ def test_remap_reindexing_cartesian_implementation():
     )
     v2_conn = common._connectivity(OFFSET, V)
 
-    result = v_field.remap(v2_conn)
+    result = v_field.premap(v2_conn)
     expected = common._field(
         v_field.ndarray,
         domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
@@ -367,7 +341,7 @@ def test_remap_reindexing_cartesian_implementation():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_remap_reshuffle_implementation():
+def test_reshuffling_premap():
     I = Dimension("I")
     J = Dimension("J")
 
@@ -384,7 +358,7 @@ def test_remap_reshuffle_implementation():
         codomain=I,
     )
 
-    result = ij_field.remap(max_ij_conn)
+    result = ij_field.premap(max_ij_conn)
     expected = common._field(
         np.asarray([[0.0, 4.0, 8.0], [3.0, 4.0, 8.0], [6.0, 7.0, 8.0]]),
         domain=common.Domain(dims=(I, J), ranges=(UnitRange(0, 3), UnitRange(0, 3))),
@@ -392,6 +366,36 @@ def test_remap_reshuffle_implementation():
 
     assert result.domain == expected.domain
     assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_remapping_premap():
+    V = Dimension("V")
+    E = Dimension("E")
+
+    V_START, V_STOP = 2, 7
+    E_START, E_STOP = 0, 10
+    v_field = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+    e2v_conn = common._connectivity(
+        np.arange(E_START, E_STOP),
+        domain=common.Domain(dims=(E,), ranges=[UnitRange(E_START, E_STOP)]),
+        codomain=V,
+    )
+
+    result = v_field.premap(e2v_conn)
+    expected = common._field(
+        -0.1 * np.arange(V_START, V_STOP),
+        domain=common.Domain(dims=(E,), ranges=(UnitRange(V_START, V_STOP),)),
+    )
+
+    assert result.domain == expected.domain
+    assert np.all(result.ndarray == expected.ndarray)
+
+
+def test_premap_dispatch():
+    pass
 
 
 @pytest.mark.parametrize(

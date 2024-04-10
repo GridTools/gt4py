@@ -648,7 +648,7 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
     def asnumpy(self) -> np.ndarray: ...
 
     @abc.abstractmethod
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
+    def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
 
     @abc.abstractmethod
     def restrict(self, item: AnyIndexSpec) -> Self: ...
@@ -733,10 +733,38 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-class ConnectivityKind(enum.Flag):
-    MODIFY_DIMS = enum.auto()
-    MODIFY_RANK = enum.auto()
-    MODIFY_STRUCTURE = enum.auto()
+class ConnectivityKind(enum.IntFlag):
+    """
+    Describes the kind of connectivity field.
+
+    - `TRANSFORM_DIMS`: change the dimensions of the data field domain.
+    - `TRANSFORM_DATA`: rearranges and moves around data in the field.
+
+    | Dims \ Data |     No      |     Yes     |
+    | ----------- | ----------- | ----------- |
+    |        No   | Translation | Reshuffling |
+    |        Yes  | Relocation  | Remapping   |
+
+    """
+
+    TRANSFORM_DIMS = enum.auto()
+    TRANSFORM_DATA = enum.auto()
+
+    @classmethod
+    def translation(cls) -> ConnectivityKind:
+        return cls(0)
+
+    @classmethod
+    def relocation(cls) -> ConnectivityKind:
+        return cls.TRANSFORM_DIMS
+
+    @classmethod
+    def reshuffling(cls) -> ConnectivityKind:
+        return cls.TRANSFORM_DATA
+
+    @classmethod
+    def remapping(cls) -> ConnectivityKind:
+        return cls.TRANSFORM_DIMS | cls.TRANSFORM_DATA
 
 
 @runtime_checkable
@@ -748,11 +776,7 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     @property
     def kind(self) -> ConnectivityKind:
-        return (
-            ConnectivityKind.MODIFY_DIMS
-            | ConnectivityKind.MODIFY_RANK
-            | ConnectivityKind.MODIFY_STRUCTURE
-        )
+        return ~ConnectivityKind(0)
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
@@ -911,7 +935,11 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def kind(self) -> ConnectivityKind:
-        return ConnectivityKind(0)
+        return (
+            ConnectivityKind.translation()
+            if self.dimension == self.codomain
+            else ConnectivityKind.relocation()
+        )
 
     @classmethod
     def from_offset(
@@ -939,10 +967,10 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         assert isinstance(image_range, UnitRange)
         return (named_range((self.codomain, image_range - self.offset)),)
 
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
+    def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
         raise NotImplementedError()
 
-    __call__ = remap
+    __call__ = premap
 
     def restrict(self, index: AnyIndexSpec) -> Never:
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
