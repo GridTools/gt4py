@@ -815,8 +815,8 @@ class MDIterator:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
-        column_range = embedded_context.closure_column_range.get()
         if self.column_axis is not None:
+            column_range = embedded_context.closure_column_range.get()
             assert column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
