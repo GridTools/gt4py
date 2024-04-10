@@ -24,6 +24,11 @@ class BackendNotSelectedError(RuntimeError):
 
 
 @builtin_dispatch
+def apply_stencil(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
