@@ -208,7 +208,7 @@ class Program:
             kwargs={},
         )
         if self.backend is not None and self.backend.transformer is not None:
-            return self.backend.transformer.past_to_itir(no_args_past)
+            return self.backend.transformer.past_to_itir(no_args_past).program
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
