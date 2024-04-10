@@ -61,7 +61,7 @@ class DaCeTranslator(
         program: itir.FencilDefinition,
         arg_types: list[ts.TypeSpec],
         offset_provider: dict[str, common.Dimension | common.Connectivity],
-        column_axis: Optional[common.Dimension] = None,
+        column_axis: Optional[common.Dimension],
         runtime_lift_mode: Optional[LiftMode] = None,
     ) -> dace.SDFG:
         on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
@@ -87,14 +87,14 @@ class DaCeTranslator(
             column_axis=column_axis,
             lift_mode=lift_mode,
             symbolic_domain_sizes=self.symbolic_domain_sizes,
+            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
             load_sdfg_from_file=False,
             save_sdfg=False,
             use_field_canonical_representation=self.use_field_canonical_representation,
         )
 
     def __call__(
-        self,
-        inp: stages.ProgramCall,
+        self, inp: stages.ProgramCall
     ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
         """Generate DaCe SDFG file from the ITIR definition."""
         program: itir.FencilDefinition = inp.program

@@ -14,7 +14,7 @@
 import warnings
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Callable, Mapping, Optional, Sequence
 
 import dace
 import numpy as np
@@ -24,11 +24,10 @@ from dace.transformation.auto import auto_optimize as autoopt
 import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.type_system import type_translation
 from gt4py.next.type_system import type_specifications as ts
 
 from .itir_to_sdfg import ItirToSDFG
-from .utility import connectivity_identifier, filter_neighbor_tables, get_sorted_dims
+from .utility import connectivity_identifier, filter_connectivities, get_sorted_dims
 
 
 try:
@@ -69,6 +68,9 @@ def preprocess_program(
     offset_provider: Mapping[str, Any],
     lift_mode: itir_transforms.LiftMode,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None,
     unroll_reduce: bool = False,
 ):
     node = itir_transforms.apply_common_transforms(
@@ -76,8 +78,9 @@ def preprocess_program(
         common_subexpression_elimination=False,
         force_inline_lambda_args=True,
         lift_mode=lift_mode,
-        symbolic_domain_sizes=symbolic_domain_sizes,
         offset_provider=offset_provider,
+        symbolic_domain_sizes=symbolic_domain_sizes,
+        temporary_extraction_heuristics=temporary_extraction_heuristics,
         unroll_reduce=unroll_reduce,
     )
 
@@ -183,7 +186,10 @@ def get_sdfg_args(
     """
     offset_provider = kwargs["offset_provider"]
 
-    neighbor_tables = filter_neighbor_tables(offset_provider)
+    neighbor_tables: dict[str, common.NeighborTable] = {}
+    for offset, connectivity in filter_connectivities(offset_provider).items():
+        assert isinstance(connectivity, common.NeighborTable)
+        neighbor_tables[offset] = connectivity
     device = dace.DeviceType.GPU if on_gpu else dace.DeviceType.CPU
 
     dace_args = get_args(sdfg, args, use_field_canonical_representation)
@@ -221,6 +227,9 @@ def build_sdfg_from_itir(
     column_axis: Optional[common.Dimension] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
+    temporary_extraction_heuristics: Optional[
+        Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
+    ] = None,
     load_sdfg_from_file: bool = False,
     save_sdfg: bool = True,
     use_field_canonical_representation: bool = True,
@@ -229,13 +238,13 @@ def build_sdfg_from_itir(
 
     Args:
         program:             The Fencil that should be translated.
-        arg_types:           Types of the arguments that should be passed to the fencil.
+        arg_types:           Types of the arguments passed to the fencil.
         offset_provider:     The set of offset providers that should be used.
         auto_optimize:       Apply DaCe's `auto_optimize` heuristic.
         on_gpu:              Performs the translation for GPU, defaults to `False`.
         column_axis:         The column axis to be used, defaults to `None`.
         lift_mode:           Which lift mode should be used, defaults `FORCE_INLINE`.
-        symbolic_domain_sizes Used for generation of liskov bindings when temporaries are enabled.
+        symbolic_domain_sizes: Used for generation of liskov bindings when temporaries are enabled.
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
         use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
@@ -251,7 +260,9 @@ def build_sdfg_from_itir(
         return sdfg
 
     # visit ITIR and generate SDFG
-    program, tmps = preprocess_program(program, offset_provider, lift_mode, symbolic_domain_sizes)
+    program, tmps = preprocess_program(
+        program, offset_provider, lift_mode, symbolic_domain_sizes, temporary_extraction_heuristics
+    )
     sdfg_genenerator = ItirToSDFG(
         arg_types, offset_provider, tmps, use_field_canonical_representation, column_axis
     )

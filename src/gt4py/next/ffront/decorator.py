@@ -260,7 +260,9 @@ class Program(SDFGConvertible):
         sdfg = translation.generate_sdfg(
             self.itir,
             arg_types,
-            offset_provider=offset_provider)
+            offset_provider=offset_provider,
+            column_axis=kwargs.get("column_axis", None),
+            runtime_lift_mode=kwargs.get("lift_mode", None))
 
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
