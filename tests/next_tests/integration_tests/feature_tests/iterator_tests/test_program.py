@@ -55,6 +55,18 @@ def copy_program(inp, out, size):
     )
 
 
+# @fundef
+# def plus_stencil(inp0,inp1):
+#     return plus(deref(inp0),deref(inp1))
+
+# set_at(
+#         # apply_stencil(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
+#         apply_stencil(plus_stencil)(inp0, apply_stencil(plus_stencil)(inp1,inp2)),
+#         cartesian_domain(named_range(I, 0, size)),
+#         out,
+#     )
+
+
 def test_prog():
     validate = True
 
