@@ -740,10 +740,10 @@ class ConnectivityKind(enum.IntFlag):
     - `TRANSFORM_DIMS`: change the dimensions of the data field domain.
     - `TRANSFORM_DATA`: rearranges and moves around data in the field.
 
-    | Dims \ Data |     No      |     Yes     |
-    | ----------- | ----------- | ----------- |
-    |        No   | Translation | Reshuffling |
-    |        Yes  | Relocation  | Remapping   |
+    | Dims \ Data |     No                   |     Yes                  |
+    | ----------- | ------------------------ | ------------------------ |
+    |        No   | Translation (I -> I)     | Reshuffling (I x K -> K) |
+    |        Yes  | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
     """
 

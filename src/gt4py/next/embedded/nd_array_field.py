@@ -414,6 +414,11 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     _skip_value: Optional[core_defs.IntegralScalar]
     _kind: Optional[common.ConnectivityKind] = None
 
+    def __post_init__(self) -> None:
+        assert self._kind is None or bool(self._kind & common.ConnectivityKind.TRANSFORM_DIMS) == (
+            self.domain.dim_index(self.codomain) is not None
+        )
+
     @functools.cached_property
     def _cache(self) -> dict:
         return {}
@@ -434,9 +439,9 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     @property
     def kind(self) -> common.ConnectivityKind:
         if self._kind is None:
-            self._kind = (
-                common.ConnectivityKind.reshuffling()
-                if self.domain.ndim == 1 and self.domain.dim_index(self.codomain) is not None
+            self._kind = common.ConnectivityKind.TRANSFORM_DATA & (
+                common.ConnectivityKind.TRANSFORM_DIMS
+                if self.domain.dim_index(self.codomain) is not None
                 else common.ConnectivityKind.remapping()
             )
 

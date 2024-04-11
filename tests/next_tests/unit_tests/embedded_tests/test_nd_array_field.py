@@ -320,21 +320,18 @@ def test_non_dispatched_function():
 
 
 def test_domain_premap():
-    V = Dimension("V")
-    E = Dimension("E")
+    I = Dimension("I")
 
-    V_START, V_STOP = 2, 7
-    OFFSET = 2
-    v_field = common._field(
-        -0.1 * np.arange(V_START, V_STOP),
-        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START, V_STOP),)),
+    N = 10
+    data_field = common._field(
+        -0.1 * np.arange(N), domain=common.Domain(common.NamedRange(I, common.unit_range(N)))
     )
-    v2_conn = common._connectivity(OFFSET, V)
+    conn = common.CartesianConnectivity(I, +1)
 
-    result = v_field.premap(v2_conn)
+    result = data_field.premap(conn)
     expected = common._field(
-        v_field.ndarray,
-        domain=common.Domain(dims=(V,), ranges=(UnitRange(V_START - OFFSET, V_STOP - OFFSET),)),
+        data_field.ndarray,
+        domain=common.Domain(common.NamedRange(I, common.unit_range((-1, N - 1)))),
     )
 
     assert result.domain == expected.domain
