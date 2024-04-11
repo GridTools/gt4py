@@ -23,9 +23,8 @@ from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
-from gt4py.next.iterator.transforms.fencil_to_program import FencilToProgram
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
-from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps
+from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
 from gt4py.next.iterator.transforms.inline_fundefs import InlineFundefs, PruneUnreferencedFundefs
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
@@ -89,7 +88,7 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.Program:
+) -> itir.FencilDefinition | FencilWithTemporaries:
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
@@ -204,6 +203,5 @@ def apply_common_transforms(
         ir, opcount_preserving=True, force_inline_lambda_args=force_inline_lambda_args
     )
 
-    prog = FencilToProgram.apply(ir)  # type: ignore[arg-type]  # TODO: remove after refactoring
-
-    return prog
+    assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
+    return ir
