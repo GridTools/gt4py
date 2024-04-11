@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar, Iterable
+from typing import ClassVar, Iterable, Any
 
 import numpy as np
 from numpy import typing as npt
@@ -34,9 +34,6 @@ from gt4py.next.embedded import (
 from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
 
-import dace
-
-
 try:
     import cupy as cp
 except ImportError:
@@ -46,6 +43,11 @@ try:
     from jax import numpy as jnp
 except ImportError:
     jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
+
+try:
+    import dace
+except ImportError:
+    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
 def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
@@ -136,7 +138,9 @@ class NdArrayField(
         else:
             return self.ndarray.__cuda_array_interface__["data"][0]
 
-    def __descriptor__(self) -> dace.data.Data:
+    def __descriptor__(self) -> Optional[Any]:
+        if not dace:
+            return None
         return dace.data.create_datadescriptor(self.ndarray)
 
     def asnumpy(self) -> np.ndarray:

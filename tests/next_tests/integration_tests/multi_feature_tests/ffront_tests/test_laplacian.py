@@ -16,12 +16,18 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next.program_processors.runners.dace import run_dace_cpu
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
 from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
     exec_alloc_descriptor,
 )
+
+try:
+    import dace
+except ImportError:
+    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
 
 
 pytestmark = pytest.mark.uses_cartesian_shift
@@ -86,3 +92,26 @@ def test_ffront_lap(cartesian_case):
         inout=out_field[2:-2, 2:-2],
         ref=lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
     )
+
+
+def test_sdfgConvertible_laplap(cartesian_case):
+    in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
+    out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
+
+    def jit(executor):
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                if executor == run_dace_cpu:
+                    return dace.program()(func)(*args, **kwargs)
+                else:
+                    func(*args, **kwargs)
+            return wrapper
+        return decorator
+
+    @jit(cartesian_case.executor)
+    def sdfg():
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(in_field, out_field, offset_provider=cartesian_case.offset_provider)
+
+    sdfg()
+
+    assert np.allclose(gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2], lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))))

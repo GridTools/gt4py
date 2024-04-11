@@ -68,10 +68,14 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
-import dace
-from dace.frontend.python.common import SDFGConvertible
 from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+try:
+    import dace
+    from dace.frontend.python.common import SDFGConvertible
+except ImportError:
+    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
+    class SDFGConvertible:
+        ...
 
 
 DEFAULT_BACKEND: Callable = None
@@ -240,9 +244,12 @@ class Program(SDFGConvertible):
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
 
-    def __sdfg__(self, *args, **kwargs) -> dace.SDFG:
+    def __sdfg__(self, *args, **kwargs) -> Optional[Any]:
+        if not dace:
+            return None
+        
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-        offset_provider = {str(k):v for k,v in kwargs.pop('offset_provider').items()}
+        offset_provider = {str(k):v for k,v in kwargs.get('offset_provider', {}).items()}
         self.sdfgConvertible_dict["offset_provider"] = offset_provider
         
         params = {str(p.id) : p.dtype for p in self.itir.params}
@@ -250,7 +257,7 @@ class Program(SDFGConvertible):
         arg_types = [
             fields[pname]
             if pname in fields
-            else ts.ScalarType(kind=tt.get_scalar_kind(dtype))
+            else ts.ScalarType(kind=type_translation.get_scalar_kind(dtype))
             if dtype is not None
             else ts.ScalarType(kind=ts.ScalarKind.INT32)
             for pname, dtype in params.items()
@@ -270,7 +277,10 @@ class Program(SDFGConvertible):
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items() if hasattr(v, "table")}
+        if self.sdfgConvertible_dict.get("offset_provider", None):
+            return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items() if hasattr(v, "table")}
+        else:
+            return {}
 
     def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
         args = []
