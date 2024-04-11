@@ -86,6 +86,17 @@ class Dimension:
     def __call__(self, val: int) -> NamedIndex:
         return NamedIndex(self, val)
 
+    def __add__(self, offset: int) -> ConnectivityField:
+        # avoid circular import
+        # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
+        from gt4py.next.ffront import fbuiltins
+
+        assert isinstance(self.value, str)
+        return fbuiltins.FieldOffset(f"{self.value}off", source=self, target=(self,))[offset]
+
+    def __sub__(self, offset: int) -> ConnectivityField:
+        return self + (-offset)
+
 
 class Infinity(enum.Enum):
     """Describes an unbounded `UnitRange`."""
@@ -640,7 +651,11 @@ class Field(GTFieldInterface, Protocol[DimsT, core_defs.ScalarT]):
 
     # Operators
     @abc.abstractmethod
-    def __call__(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> Field: ...
+    def __call__(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> Field: ...
 
     @abc.abstractmethod
     def __getitem__(self, item: AnyIndexSpec) -> Self: ...
@@ -759,14 +774,12 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
     def __ne__(self, other: Any) -> Never:
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    def __add__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __add__(self, other: Field | core_defs.IntegralScalar) -> Field: ...
 
     def __radd__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
 
-    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Never:
-        raise TypeError("'ConnectivityField' does not support this operation.")
+    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field: ...
 
     def __rsub__(self, other: Field | core_defs.IntegralScalar) -> Never:  # type: ignore[misc] # Forward operator not callalbe
         raise TypeError("'ConnectivityField' does not support this operation.")
@@ -865,6 +878,14 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def ndarray(self) -> Never:
         raise NotImplementedError()
 
+    def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
+        assert isinstance(other, int)
+        return dataclasses.replace(self, offset=self.offset + other)
+
+    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
+        assert isinstance(other, int)
+        return self + (-other)
+
     def asnumpy(self) -> Never:
         raise NotImplementedError()
 
@@ -921,7 +942,11 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         assert isinstance(image_range, UnitRange)
         return (named_range((self.codomain, image_range - self.offset)),)
 
-    def remap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
+    def remap(
+        self,
+        index_field: ConnectivityField | fbuiltins.FieldOffset,
+        *args: ConnectivityField | fbuiltins.FieldOffset,
+    ) -> ConnectivityField:
         raise NotImplementedError()
 
     __call__ = remap
