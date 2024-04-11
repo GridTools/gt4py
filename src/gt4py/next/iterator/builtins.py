@@ -435,6 +435,7 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
+    "apply_stencil",
     *MATH_BUILTINS,
 }
 

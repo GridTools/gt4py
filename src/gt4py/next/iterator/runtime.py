@@ -31,7 +31,7 @@ from gt4py.next.program_processors.processor_interface import (
 )
 
 
-__all__ = ["offset", "fundef", "fendef", "closure"]
+__all__ = ["offset", "fundef", "fendef", "closure", "set_at"]
 
 
 @dataclass(frozen=True)

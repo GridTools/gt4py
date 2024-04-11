@@ -67,6 +67,15 @@ def ${id}(${','.join(params)}):
     return ${expr}
     """
     )
+    Program = as_mako(
+        """
+${''.join(function_definitions)}
+@fendef
+def ${id}(${','.join(params)}):
+    ${'\\n    '.join(body)}
+    """
+    )
+    SetAt = as_mako("set_at(${expr}, ${domain}, ${target})")
 
     # extension required by global_tmps
     def visit_FencilWithTemporaries(
@@ -190,7 +199,9 @@ def fencil_generator(
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries))
+    assert isinstance(
+        ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries, itir.Program)
+    )
     fencil_name = (
         ir.fencil.id + "_wrapper"
         if isinstance(ir, gtmps_transform.FencilWithTemporaries)

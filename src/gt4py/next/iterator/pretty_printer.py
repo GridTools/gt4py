@@ -272,6 +272,21 @@ class PrettyPrinter(NodeTranslator):
         )
         return self._optimum(h, v)
 
+    def visit_SetAt(self, node: ir.SetAt, *, prec: int) -> list[str]:
+        expr = self.visit(node.expr, prec=0)
+        domain = self.visit(node.domain, prec=0)
+        target = self.visit(node.target, prec=0)
+
+        head = self._hmerge(target, [" @ "], domain)
+        foot = self._hmerge([" ← "], expr, [";"])
+
+        h = self._hmerge(head, foot)
+        v = self._vmerge(
+            head,
+            self._indent(self._indent(foot)),
+        )
+        return self._optimum(h, v)
+
     def visit_FencilDefinition(self, node: ir.FencilDefinition, *, prec: int) -> list[str]:
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)
@@ -290,6 +305,24 @@ class PrettyPrinter(NodeTranslator):
         return self._vmerge(
             params, self._indent(function_definitions), self._indent(closures), ["}"]
         )
+
+    def visit_Program(self, node: ir.Program, *, prec: int) -> list[str]:
+        assert prec == 0
+        function_definitions = self.visit(node.function_definitions, prec=0)
+        body = self.visit(node.body, prec=0)
+        # TODO declarations
+        params = self.visit(node.params, prec=0)
+
+        hparams = self._hmerge([node.id + "("], *self._hinterleave(params, ", "), [") {"])
+        vparams = self._vmerge(
+            [node.id + "("], *self._hinterleave(params, ",", indent=True), [") {"]
+        )
+        params = self._optimum(hparams, vparams)
+
+        function_definitions = self._vmerge(*function_definitions)
+        body = self._vmerge(*body)
+
+        return self._vmerge(params, self._indent(function_definitions), self._indent(body), ["}"])
 
     @classmethod
     def apply(cls, node: ir.Node, indent: int, width: int) -> str:

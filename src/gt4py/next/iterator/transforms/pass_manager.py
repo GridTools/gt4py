@@ -90,6 +90,8 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.Program:
+    if isinstance(ir, itir.Program):
+        return ir  # TODO upgrade transformations to work on Program
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
