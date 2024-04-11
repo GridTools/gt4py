@@ -340,15 +340,11 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                 case _:
                     raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-        ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[0]("it"))))
+        ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[0]("it"))))(self.visit(node.func, **kwargs))
         for i in range(len(shift_offsets) - 1):
-            ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[i + 1]("it"))))(
-                ret(self.visit(node.func, **kwargs))
-            )
-        if len(shift_offsets) == 1:
-            return ret(self.visit(node.func, **kwargs))
-        else:
-            return ret
+            ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[i + 1]("it"))))(ret)
+
+        return ret
 
     def visit_Call(self, node: foast.Call, **kwargs: Any) -> itir.Expr:
         if type_info.type_class(node.func.type) is ts.FieldType:
