@@ -30,8 +30,54 @@ from gt4py.next.ffront import (
     stages as ffront_stages,
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
-from gt4py.next.otf import recipes, workflow
+from gt4py.next.iterator import ir as itir
+from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
+
+
+@dataclasses.dataclass(frozen=True)
+class FieldopTransformWorkflow(workflow.NamedStepSequence):
+    """Modular workflow for transformations with access to intermediates."""
+
+    func_to_foast: workflow.SkippableStep[
+        ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
+        ffront_stages.FoastOperatorDefinition,
+    ]
+    foast_inject_args: workflow.Workflow[
+        ffront_stages.FoastOperatorDefinition, ffront_stages.FoastClosure
+    ]
+    foast_to_past_closure: workflow.Workflow[ffront_stages.FoastClosure, ffront_stages.PastClosure]
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
+    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
+
+    @property
+    def step_order(self) -> list[str]:
+        return [
+            "func_to_foast",
+            "foast_inject_args",
+            "foast_to_past_closure",
+            "past_transform_args",
+            "past_to_itir",
+        ]
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramTransformWorkflow(workflow.NamedStepSequence):
+    """Modular workflow for transformations with access to intermediates."""
+
+    func_to_past: workflow.SkippableStep[
+        ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
+        ffront_stages.PastProgramDefinition,
+    ]
+    past_lint: workflow.Workflow[
+        ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
+    ]
+    past_inject_args: workflow.Workflow[
+        ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
+    ]
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -64,7 +110,7 @@ class FopArgsInjector(workflow.Workflow):
         )
 
 
-DEFAULT_FIELDOP_TRANSFORMS = recipes.FieldopTransformWorkflow(
+DEFAULT_FIELDOP_TRANSFORMS = FieldopTransformWorkflow(
     func_to_foast=func_to_foast.OptionalFuncToFoastFactory(cached=True),
     foast_inject_args=FopArgsInjector(),
     foast_to_past_closure=foast_to_past.FoastToPastClosure(
@@ -81,7 +127,7 @@ DEFAULT_FIELDOP_TRANSFORMS = recipes.FieldopTransformWorkflow(
 )
 
 
-DEFAULT_PROG_TRANSFORMS = recipes.ProgramTransformWorkflow(
+DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow(
     func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
     past_lint=past_linters.LinterFactory(),
     past_inject_args=ProgArgsInjector(),
@@ -94,8 +140,8 @@ DEFAULT_PROG_TRANSFORMS = recipes.ProgramTransformWorkflow(
 class Backend(Generic[core_defs.DeviceTypeT]):
     executor: ppi.ProgramExecutor
     allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms_fop: recipes.FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
-    transforms_prog: recipes.ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
+    transforms_fop: FieldopTransformWorkflow = DEFAULT_FIELDOP_TRANSFORMS
+    transforms_prog: ProgramTransformWorkflow = DEFAULT_PROG_TRANSFORMS
 
     def __call__(
         self,
