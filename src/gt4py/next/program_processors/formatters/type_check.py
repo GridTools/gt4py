@@ -26,7 +26,7 @@ def check_type_inference(program: itir.FencilDefinition, *args: Any, **kwargs: A
         program, lift_mode=kwargs.get("lift_mode"), offset_provider=kwargs["offset_provider"]
     )
     if isinstance(transformed, global_tmps.FencilWithTemporaries):
-        raise AssertionError("TODO")  # transformed = transformed.fencil
+        transformed = transformed.fencil
     return type_inference.pformat(
         type_inference.infer(transformed, offset_provider=kwargs["offset_provider"])
     )

@@ -21,7 +21,6 @@ from gt4py.next.iterator.transforms.global_tmps import (
     AUTO_DOMAIN,
     FencilWithTemporaries,
     SimpleTemporaryExtractionHeuristics,
-    Temporary,
     collect_tmps_info,
     split_closures,
     update_domains,
@@ -87,7 +86,7 @@ def test_split_closures():
         ],
     )
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1"), ir.Temporary(id="_tmp_2")]
     assert actual.fencil == expected
 
 
@@ -141,7 +140,7 @@ def test_split_closures_simple_heuristics():
     actual = split_closures(
         testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
     )
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1")]
     assert actual.fencil == expected
 
 
@@ -211,7 +210,7 @@ def test_split_closures_lifted_scan():
     )
 
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [ir.Temporary(id="_tmp_1")]
     assert actual.fencil == expected
 
 
@@ -255,7 +254,7 @@ def test_update_cartesian_domains():
             ],
         ),
         params=[im.sym("i"), im.sym("j"), im.sym("k"), im.sym("inp"), im.sym("out")],
-        tmps=[Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")],
+        tmps=[ir.Temporary(id="_gtmp_0"), ir.Temporary(id="_gtmp_1")],
     )
     expected = copy.deepcopy(testee)
     assert expected.fencil.params.pop() == im.sym("_gtmp_auto_domain")
@@ -413,14 +412,14 @@ def test_collect_tmps_info():
             ],
         ),
         params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
-        tmps=[Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")],
+        tmps=[ir.Temporary(id="_gtmp_0"), ir.Temporary(id="_gtmp_1")],
     )
     expected = FencilWithTemporaries(
         fencil=testee.fencil,
         params=testee.params,
         tmps=[
-            Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
-            Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
+            ir.Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
+            ir.Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
         ],
     )
     actual = collect_tmps_info(testee, offset_provider={})
