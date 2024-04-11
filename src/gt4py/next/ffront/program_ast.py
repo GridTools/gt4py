@@ -22,7 +22,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class LocatedNode(Node):
-    location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
+    location: SourceLocation
 
 
 SymbolT = TypeVar("SymbolT", bound=ts.TypeSpec)

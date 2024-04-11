@@ -19,13 +19,14 @@
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import field
 import functools
 import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Generic, TypeVar, Any, Dict, Optional, Sequence, Tuple
+from dataclasses import field
+from types import ModuleType
+from typing import Dict, Generic, Sequence, Tuple, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -66,16 +67,17 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
-from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
+
 try:
     import dace
     from dace.frontend.python.common import SDFGConvertible
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
-    class SDFGConvertible:
-        ...
+
+    class SDFGConvertible: ...
 
 
 DEFAULT_BACKEND: Callable = None
@@ -247,13 +249,13 @@ class Program(SDFGConvertible):
     def __sdfg__(self, *args, **kwargs) -> Optional[Any]:
         if not dace:
             return None
-        
+
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-        offset_provider = {str(k):v for k,v in kwargs.get('offset_provider', {}).items()}
+        offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
         self.sdfgConvertible_dict["offset_provider"] = offset_provider
-        
-        params = {str(p.id) : p.dtype for p in self.itir.params}
-        fields = {str(p.id) : p.type  for p in self.past_stage.past_node.params}
+
+        params = {str(p.id): p.dtype for p in self.itir.params}
+        fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
         arg_types = [
             fields[pname]
             if pname in fields
@@ -269,7 +271,8 @@ class Program(SDFGConvertible):
             arg_types,
             offset_provider=offset_provider,
             column_axis=kwargs.get("column_axis", None),
-            runtime_lift_mode=kwargs.get("lift_mode", None))
+            runtime_lift_mode=kwargs.get("lift_mode", None),
+        )
 
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
@@ -278,7 +281,11 @@ class Program(SDFGConvertible):
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
         if self.sdfgConvertible_dict.get("offset_provider", None):
-            return {f"__connectivity_{k}":v.table for k,v in self.sdfgConvertible_dict["offset_provider"].items() if hasattr(v, "table")}
+            return {
+                f"__connectivity_{k}": v.table
+                for k, v in self.sdfgConvertible_dict["offset_provider"].items()
+                if hasattr(v, "table")
+            }
         else:
             return {}
 

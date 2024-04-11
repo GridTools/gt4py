@@ -105,13 +105,20 @@ def test_sdfgConvertible_laplap(cartesian_case):
                     return dace.program()(func)(*args, **kwargs)
                 else:
                     func(*args, **kwargs)
+
             return wrapper
+
         return decorator
 
     @jit(cartesian_case.executor)
     def sdfg():
-        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(in_field, out_field, offset_provider=cartesian_case.offset_provider)
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
+            in_field, out_field, offset_provider=cartesian_case.offset_provider
+        )
 
     sdfg()
 
-    assert np.allclose(gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2], lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))))
+    assert np.allclose(
+        gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
+        lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
+    )

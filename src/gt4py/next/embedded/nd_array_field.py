@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import ClassVar, Iterable, Any
+from typing import Any, ClassVar, Iterable
 
 import numpy as np
 from numpy import typing as npt
@@ -33,6 +33,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import experimental, fbuiltins
 from gt4py.next.iterator import embedded as itir_embedded
+
 
 try:
     import cupy as cp
@@ -131,12 +132,12 @@ class NdArrayField(
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
-        
+
     def data_ptr(self) -> int:
-        if self.ndarray.__dlpack_device__()[0] == 1:
-            return self.ndarray.__array_interface__["data"][0]
+        if self.ndarray.__dlpack_device__()[0] == 1:  # type: ignore
+            return self.ndarray.__array_interface__["data"][0]  # type: ignore
         else:
-            return self.ndarray.__cuda_array_interface__["data"][0]
+            return self.ndarray.__cuda_array_interface__["data"][0]  # type: ignore
 
     def __descriptor__(self) -> Optional[Any]:
         if not dace:
