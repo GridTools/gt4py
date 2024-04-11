@@ -202,7 +202,7 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
-    "apply_stencil",
+    *GTIR_BUILTINS,
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
 }
