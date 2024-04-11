@@ -231,7 +231,9 @@ class GTFNTranslationStep(
         runtime_lift_mode: Optional[LiftMode] = None,
     ) -> str:
         new_program = self._preprocess_program(program, offset_provider, runtime_lift_mode)
-        program_itir = fencil_to_program.FencilToProgram().apply(new_program)
+        program_itir = fencil_to_program.FencilToProgram().apply(
+            new_program
+        )  # TODO(havogt): should be removed after refactoring to combined IR
         gtfn_ir = GTFN_lowering.apply(
             program_itir, offset_provider=offset_provider, column_axis=column_axis
         )
