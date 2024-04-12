@@ -102,6 +102,11 @@ def test_sdfgConvertible_laplap(cartesian_case):
     if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
         pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
+    if cartesian_case.executor == run_dace_gpu:
+        import cupy as xp
+    else:
+        import numpy as xp
+
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
@@ -111,7 +116,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
         else dace.dtypes.DeviceType.CPU
     )
     def sdfg():
-        tmp_field = np.empty_like(out_field)
+        tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
             in_field, tmp_field, offset_provider=cartesian_case.offset_provider
         )
