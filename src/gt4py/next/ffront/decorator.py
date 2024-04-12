@@ -74,6 +74,8 @@ from gt4py.next.type_system import type_info, type_specifications as ts, type_tr
 try:
     import dace
     from dace.frontend.python.common import SDFGConvertible
+
+    from gt4py.next.program_processors.runners.dace import run_dace_gpu
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
 
@@ -265,7 +267,12 @@ class Program(SDFGConvertible):
             for pname, dtype in params.items()
         ]
 
-        translation = dace_workflow.DaCeTranslator(auto_optimize=False)
+        translation = dace_workflow.DaCeTranslator(
+            auto_optimize=False,
+            device_type=core_defs.DeviceType.CUDA
+            if self.backend == run_dace_gpu
+            else core_defs.DeviceType.CPU,
+        )
         sdfg = translation.generate_sdfg(
             self.itir,
             arg_types,
