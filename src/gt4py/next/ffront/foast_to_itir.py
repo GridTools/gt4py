@@ -310,22 +310,6 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                     if arg.op == dialect_ast_enums.BinaryOperator.SUB:  # type: ignore[attr-defined] # ensured by pattern
                         offset_index *= -1
                     shift_offsets.append(im.shift(f"{dimension}off", offset_index))
-                case foast.BinOp(
-                    op=dialect_ast_enums.BinaryOperator.ADD
-                    | dialect_ast_enums.BinaryOperator.SUB,
-                    left=foast.BinOp(
-                        op=dialect_ast_enums.BinaryOperator.ADD
-                        | dialect_ast_enums.BinaryOperator.SUB,
-                        left=foast.Name(id=dimension),
-                        right=foast.Constant(value=offset_index_left),
-                    ),
-                    right=foast.Constant(value=offset_index),
-                ):
-                    if arg.op == dialect_ast_enums.BinaryOperator.SUB:  # type: ignore[attr-defined] # ensured by pattern
-                        offset_index *= -1
-                    shift_offsets.append(
-                        im.shift(f"{dimension}off", offset_index_left + offset_index)
-                    )
                 case foast.Name(id=offset_name):
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.
