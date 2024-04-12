@@ -706,7 +706,7 @@ def function_signature_incompatibilities_field(
         return
     for arg in args:
         if not isinstance(arg, ts.OffsetType):
-            yield f"Expected argument to be of type '{ts.OffsetType}', got '{arg}'."  # Todo fix message
+            yield f"Expected arguments to be of type '{ts.OffsetType}', got '{arg}'."
             return
         if len(args) > 1 and len(arg.target) > 1:
             yield f"Function takes only 1 argument in unstructured case, but {len(args)} were given."

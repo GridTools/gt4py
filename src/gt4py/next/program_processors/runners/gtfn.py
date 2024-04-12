@@ -109,7 +109,7 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
         # As the frontend types contain lists they are not hashable. As a workaround we just
         # use content_hash here.
         content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
-        id(offset_provider) if offset_provider else None,
+        tuple((k, id(v)) for (k, v) in offset_provider.items()) if offset_provider else None,
         otf_closure.kwargs.get("column_axis", None),
         # TODO(tehrengruber): Remove `lift_mode` from call interface.
         otf_closure.kwargs.get("lift_mode", None),

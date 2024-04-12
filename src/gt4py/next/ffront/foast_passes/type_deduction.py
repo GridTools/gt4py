@@ -629,7 +629,7 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # this relies on the convention that for each dimension we have an offset provider
             # with the same name as the dimension
             return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
-        # e.g. `IDim+1+2`: this is currently only implemented for embedded
+        # e.g. `(IDim+1)+2`: this is currently only implemented for embedded
         if (
             isinstance(left.type, ts.OffsetType)
             and isinstance(right.type, ts.ScalarType)

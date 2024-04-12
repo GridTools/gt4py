@@ -88,7 +88,6 @@ class Dimension:
         return NamedIndex(self, val)
 
     def __add__(self, offset: int) -> ConnectivityField:
-        # avoid circular import
         # TODO(sf-n): just to avoid circular import. Move or refactor the FieldOffset to avoid this.
         from gt4py.next.ffront import fbuiltins
 
@@ -915,11 +914,12 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         raise NotImplementedError()
 
     def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        assert isinstance(other, int)
-        return dataclasses.replace(self, offset=self.offset + other)
+        if isinstance(other, numbers.Integral):
+            return dataclasses.replace(self, offset=self.offset + other)
+        else:
+            raise NotImplementedError()
 
     def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        assert isinstance(other, int)
         return self + (-other)
 
     def asnumpy(self) -> Never:

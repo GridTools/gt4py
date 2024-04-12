@@ -214,14 +214,20 @@ class Program:
             return self.backend.transformer.past_to_itir(no_args_past)
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
-    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+
+    @functools.cached_property
+    def _implicit_offset_provider(self):
+        implicit_offset_provider = {}
         params = self.past_stage.past_node.params
         for param in params:
             if isinstance(param.type, ts.FieldType):
                 for j in range(len(param.type.dims)):
-                    offset_provider = offset_provider | {
-                        f"{param.type.dims[j].value}off": param.type.dims[j]
-                    }
+                    implicit_offset_provider = implicit_offset_provider | {
+                        f"{param.type.dims[j].value}off": param.type.dims[j]}
+        return implicit_offset_provider
+
+    def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
+        offset_provider = offset_provider | self._implicit_offset_provider
         if self.backend is None:
             warnings.warn(
                 UserWarning(
