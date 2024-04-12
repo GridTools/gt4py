@@ -913,14 +913,14 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
     def ndarray(self) -> Never:
         raise NotImplementedError()
 
-    def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        if isinstance(other, numbers.Integral):
-            return dataclasses.replace(self, offset=self.offset + other)
-        else:
-            raise NotImplementedError()
-
-    def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
-        return self + (-other)
+    # def __add__(self, other: Field | core_defs.IntegralScalar) -> Field:
+    #     if isinstance(other, numbers.Integral):
+    #         return dataclasses.replace(self, offset=self.offset + other)
+    #     else:
+    #         raise NotImplementedError()
+    #
+    # def __sub__(self, other: Field | core_defs.IntegralScalar) -> Field:
+    #     return self + (-other)
 
     def asnumpy(self) -> Never:
         raise NotImplementedError()
