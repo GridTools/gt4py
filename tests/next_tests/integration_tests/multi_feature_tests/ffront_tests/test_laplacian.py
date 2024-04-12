@@ -13,10 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+from typing import Optional
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.program_processors.runners.dace import run_dace_cpu
+from gt4py.next import backend as next_backend
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
@@ -26,8 +27,10 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 try:
     import dace
+    from gt4py.next.program_processors.runners.dace import run_dace_cpu
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
+    run_dace_cpu: Optional[next_backend.Backend] = None
 
 
 pytestmark = pytest.mark.uses_cartesian_shift
@@ -95,25 +98,22 @@ def test_ffront_lap(cartesian_case):
 
 
 def test_sdfgConvertible_laplap(cartesian_case):
+    if cartesian_case.executor != run_dace_cpu:
+        pytest.skip(
+            "DaCe-related test: Test SDFGConvertible interface for GT4Py programs [CPU-only for now]"
+        )
+
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
-    def jit(executor):
-        def decorator(func):
-            def wrapper(*args, **kwargs):
-                if executor == run_dace_cpu:
-                    return dace.program()(func)(*args, **kwargs)
-                else:
-                    func(*args, **kwargs)
-
-            return wrapper
-
-        return decorator
-
-    @jit(cartesian_case.executor)
+    @dace.program
     def sdfg():
+        tmp_field = np.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
-            in_field, out_field, offset_provider=cartesian_case.offset_provider
+            in_field, tmp_field, offset_provider=cartesian_case.offset_provider
+        )
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
+            tmp_field, out_field, offset_provider=cartesian_case.offset_provider
         )
 
     sdfg()
