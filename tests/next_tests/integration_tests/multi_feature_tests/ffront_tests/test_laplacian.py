@@ -27,10 +27,11 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
 
 try:
     import dace
-    from gt4py.next.program_processors.runners.dace import run_dace_cpu
+    from gt4py.next.program_processors.runners.dace import run_dace_cpu, run_dace_gpu
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
     run_dace_cpu: Optional[next_backend.Backend] = None
+    run_dace_gpu: Optional[next_backend.Backend] = None
 
 
 pytestmark = pytest.mark.uses_cartesian_shift
@@ -98,10 +99,8 @@ def test_ffront_lap(cartesian_case):
 
 
 def test_sdfgConvertible_laplap(cartesian_case):
-    if cartesian_case.executor != run_dace_cpu:
-        pytest.skip(
-            "DaCe-related test: Test SDFGConvertible interface for GT4Py programs [CPU-only for now]"
-        )
+    if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
+        pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
