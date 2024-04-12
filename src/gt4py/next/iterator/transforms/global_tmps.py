@@ -53,7 +53,7 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 # Iterator IR extension nodes
 
 
-class FencilWithTemporaries(ir.Node, SymbolTableTrait):
+class FencilWithTemporaries(ir.Node, SymbolTableTrait): # TODO(havogt): will be removed after refactoring
     """Iterator IR extension: declaration of a fencil with temporary buffers."""
 
     fencil: ir.FencilDefinition
