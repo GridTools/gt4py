@@ -105,7 +105,7 @@ class Program(SDFGConvertible):
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    sdfgConvertible_dict: dict[str, Any] = field(default_factory=dict)
+    sdfgConvertible: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -252,7 +252,7 @@ class Program(SDFGConvertible):
 
         # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
         offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-        self.sdfgConvertible_dict["offset_provider"] = offset_provider
+        self.sdfgConvertible["offset_provider"] = offset_provider
 
         params = {str(p.id): p.dtype for p in self.itir.params}
         fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
@@ -280,10 +280,10 @@ class Program(SDFGConvertible):
         return sdfg
 
     def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        if self.sdfgConvertible_dict.get("offset_provider", None):
+        if self.sdfgConvertible.get("offset_provider", None):
             return {
                 f"__connectivity_{k}": v.table
-                for k, v in self.sdfgConvertible_dict["offset_provider"].items()
+                for k, v in self.sdfgConvertible["offset_provider"].items()
                 if hasattr(v, "table")
             }
         else:
