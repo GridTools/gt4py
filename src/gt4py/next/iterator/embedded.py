@@ -1503,7 +1503,7 @@ def closure(
     out,  #: MutableLocatedField,
     ins: list[common.Field],
 ) -> None:
-    assert embedded_context.within_context()
+    assert embedded_context.within_valid_context()
     offset_provider = embedded_context.offset_provider.get()
     _validate_domain(domain_, offset_provider)
     domain: dict[Tag, range] = _dimension_to_tag(domain_)

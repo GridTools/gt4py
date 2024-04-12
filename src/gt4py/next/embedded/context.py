@@ -59,5 +59,5 @@ def new_context(
     yield ctx
 
 
-def within_context() -> bool:
+def within_valid_context() -> bool:
     return offset_provider.get(eve.NOTHING) is not eve.NOTHING
