@@ -24,6 +24,8 @@ GRAMMAR = """
     start: fencil_definition
         | function_definition
         | stencil_closure
+        | set_at
+        | program
         | prec0
 
     SYM: CNAME
@@ -64,6 +66,7 @@ GRAMMAR = """
         | "·" prec7 -> deref
         | "¬" prec7 -> bool_not
         | "↑" prec7 -> lift
+        | "⇑" prec7 -> apply_stencil
 
     ?prec8: prec9
         | prec8 "[" prec0 "]" -> tuple_get
@@ -81,7 +84,9 @@ GRAMMAR = """
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
+    set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
+    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( set_at )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
@@ -167,6 +172,9 @@ class ToIrTransformer(lark_visitors.Transformer):
     def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
+    def apply_stencil(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="apply_stencil"), args=[arg])
+
     def astype(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])
 
@@ -202,6 +210,10 @@ class ToIrTransformer(lark_visitors.Transformer):
         output, stencil, *inputs, domain = args
         return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
 
+    def set_at(self, *args: ir.Expr) -> ir.SetAt:
+        target, domain, expr = args
+        return ir.SetAt(expr=expr, domain=domain, target=target)
+
     def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
         params = []
         function_definitions = []
@@ -216,6 +228,26 @@ class ToIrTransformer(lark_visitors.Transformer):
                 closures.append(arg)
         return ir.FencilDefinition(
             id=fid, function_definitions=function_definitions, params=params, closures=closures
+        )
+
+    def program(self, fid: str, *args: ir.Node) -> ir.Program:
+        params = []
+        function_definitions = []
+        body = []
+        for arg in args:
+            if isinstance(arg, ir.Sym):
+                params.append(arg)
+            elif isinstance(arg, ir.FunctionDefinition):
+                function_definitions.append(arg)
+            else:
+                assert isinstance(arg, ir.SetAt)
+                body.append(arg)
+        return ir.Program(
+            id=fid,
+            function_definitions=function_definitions,
+            params=params,
+            body=body,
+            declarations=[],  # TODO
         )
 
     def start(self, arg: ir.Node) -> ir.Node:

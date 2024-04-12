@@ -69,6 +69,13 @@ def test_lift():
     assert actual == expected
 
 
+def test_apply_stencil():
+    testee = "⇑x"
+    expected = ir.FunCall(fun=ir.SymRef(id="apply_stencil"), args=[ir.SymRef(id="x")])
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_bool_arithmetic():
     testee = "¬(¬a ∨ b ∧ (c ∨ d))"
     expected = ir.FunCall(
@@ -195,6 +202,17 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = "y @ cartesian_domain() ← x;"
+    expected = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(
@@ -211,6 +229,27 @@ def test_fencil_definition():
                 inputs=[ir.SymRef(id="x")],
             )
         ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_program():
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y @ cartesian_domain() ← x;\n}"
+    expected = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
+            )
+        ],
+        declarations=[],  # TODO
     )
     actual = pparse(testee)
     assert actual == expected
