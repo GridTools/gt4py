@@ -110,11 +110,7 @@ def test_sdfgConvertible_laplap(cartesian_case):
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
-    @dace.program(
-        device=dace.dtypes.DeviceType.GPU
-        if cartesian_case.executor == run_dace_gpu
-        else dace.dtypes.DeviceType.CPU
-    )
+    @dace.program
     def sdfg():
         tmp_field = xp.empty_like(out_field)
         lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
