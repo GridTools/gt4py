@@ -221,9 +221,8 @@ class Program:
         params = self.past_stage.past_node.params
         for param in params:
             if isinstance(param.type, ts.FieldType):
-                for j in range(len(param.type.dims)):
-                    implicit_offset_provider = implicit_offset_provider | {
-                        f"{param.type.dims[j].value}off": param.type.dims[j]}
+                for dim in param.type.dims:
+                    implicit_offset_provider.update({f"{dim.value}off": dim})
         return implicit_offset_provider
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs: Any) -> None:
