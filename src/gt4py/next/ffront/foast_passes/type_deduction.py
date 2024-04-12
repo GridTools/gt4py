@@ -629,8 +629,10 @@ class FieldOperatorTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTransla
             # this relies on the convention that for each dimension we have an offset provider
             # with the same name as the dimension
             return ts.OffsetType(source=left.type.dim, target=(left.type.dim,))
-        if (isinstance(left.type, ts.OffsetType)):
-            raise errors.DSLError(node.location, f"Type '{left.type}' can not be used in operator '{node.op}'.")
+        if isinstance(left.type, ts.OffsetType):
+            raise errors.DSLError(
+                node.location, f"Type '{left.type}' can not be used in operator '{node.op}'."
+            )
 
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,

@@ -307,31 +307,35 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
                     left=foast.Name(id=dimension),
                     right=foast.Constant(value=offset_index),
                 ):
-                    if arg.op == dialect_ast_enums.BinaryOperator.SUB:  # type: ignore[attr-defined] # ensured by pattern
+                    if arg.op == dialect_ast_enums.BinaryOperator.SUB:
                         offset_index *= -1
                     shift_offsets.append(im.shift(f"{dimension}off", offset_index))
                 case foast.Name(id=offset_name):
                     # only a single unstructured shift is supported so returning here is fine even though we
                     # are in a loop.
-                    assert (len(node.args) == 1 and len(arg.type.target) > 1)
-                    return im.lifted_neighbors(
-                        str(offset_name), self.visit(node.func, **kwargs)
-                    )
+                    assert len(node.args) == 1 and len(arg.type.target) > 1  # type: ignore[attr-defined] # ensured by pattern
+                    return im.lifted_neighbors(str(offset_name), self.visit(node.func, **kwargs))
                 case foast.Call(func=foast.Name(id="as_offset")):
                     func_args = arg
-                    offset_dim = func_args.args[0]  # type: ignore[attr-defined] # ensured by pattern
-                    assert isinstance(offset_dim, foast.Name)  # TODO(tehrengruber): fixme. use type instead.
+                    offset_dim = func_args.args[0]
+                    assert isinstance(
+                        offset_dim, foast.Name
+                    )  # TODO(tehrengruber): fixme. use type instead.
                     shift_offsets.append(
-                        im.shift(offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs)))  # type: ignore[attr-defined]  # ensured by pattern
+                        im.shift(offset_dim.id, im.deref(self.visit(func_args.args[1], **kwargs)))
                     )
                 case _:
                     raise FieldOperatorLoweringError("Unexpected shift arguments!")
 
-        ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[0]("it"))))(self.visit(node.func, **kwargs))
+        ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[0]("it"))))(
+            self.visit(node.func, **kwargs)
+        )
         for i in range(len(shift_offsets) - 1):
             ret = im.lift(im.lambda_("it")(im.deref(shift_offsets[i + 1]("it"))))(ret)
 
-        func = lambda ret, offset: im.lift(im.lambda_("it")(im.deref(offset("it"))))(ret)
+        def func(ret: itir.SymRef, offset: Any) -> itir.SymRef:
+            return im.lift(im.lambda_("it")(im.deref(offset("it"))))(ret)
+
         ret = functools.reduce(func, shift_offsets, self.visit(node.func, **kwargs))
         return ret
 

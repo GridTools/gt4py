@@ -214,7 +214,6 @@ class Program:
             return self.backend.transformer.past_to_itir(no_args_past)
         return past_to_itir.PastToItirFactory()(no_args_past).program
 
-
     @functools.cached_property
     def _implicit_offset_provider(self):
         implicit_offset_provider = {}

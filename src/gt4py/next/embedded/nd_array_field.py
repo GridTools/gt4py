@@ -232,7 +232,9 @@ class NdArrayField(
         *args: common.ConnectivityField | fbuiltins.FieldOffset,
     ) -> common.Field:
         return functools.reduce(
-            lambda field, current_index_field: field.remap(current_index_field), [index_field, *args], self
+            lambda field, current_index_field: field.remap(current_index_field),
+            [index_field, *args],
+            self,
         )
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayField:
