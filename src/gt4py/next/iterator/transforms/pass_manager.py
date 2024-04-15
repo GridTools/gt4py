@@ -23,7 +23,6 @@ from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
 from gt4py.next.iterator.transforms.cse import CommonSubexpressionElimination
 from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
-from gt4py.next.iterator.transforms.fencil_to_program import FencilToProgram
 from gt4py.next.iterator.transforms.fuse_maps import FuseMaps
 from gt4py.next.iterator.transforms.global_tmps import CreateGlobalTmps, FencilWithTemporaries
 from gt4py.next.iterator.transforms.inline_center_deref_lift_vars import InlineCenterDerefLiftVars
@@ -89,9 +88,7 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.Program:
-    if isinstance(ir, itir.Program):
-        return ir  # TODO upgrade transformations to work on Program
+) -> itir.FencilDefinition | FencilWithTemporaries:
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:
@@ -207,4 +204,4 @@ def apply_common_transforms(
     )
 
     assert isinstance(ir, (itir.FencilDefinition, FencilWithTemporaries))
-    return FencilToProgram.apply(ir)
+    return ir

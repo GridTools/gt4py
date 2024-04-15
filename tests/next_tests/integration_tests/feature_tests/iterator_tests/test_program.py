@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 import gt4py.next as gtx
-from gt4py.next.iterator.builtins import apply_stencil, cartesian_domain, deref, named_range
+from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
 from gt4py.next.iterator.runtime import fendef, fundef, set_at
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
@@ -48,8 +48,8 @@ def copy_stencil(inp):
 @fendef
 def copy_program(inp, out, size):
     set_at(
-        # apply_stencil(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
-        apply_stencil(copy_stencil)(inp),
+        # as_fieldop(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
+        as_fieldop(copy_stencil)(inp),
         cartesian_domain(named_range(I, 0, size)),
         out,
     )
@@ -60,8 +60,8 @@ def copy_program(inp, out, size):
 #     return plus(deref(inp0),deref(inp1))
 
 # set_at(
-#         # apply_stencil(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
-#         apply_stencil(plus_stencil)(inp0, apply_stencil(plus_stencil)(inp1,inp2)),
+#         # as_fieldop(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
+#         as_fieldop(plus_stencil)(inp0, as_fieldop(plus_stencil)(inp1,inp2)),
 #         cartesian_domain(named_range(I, 0, size)),
 #         out,
 #     )
@@ -87,4 +87,4 @@ def test_prog():
 #     return deref(a)+deref(b)
 
 # def sum_prog(a, b, c, out):
-#     set_at(apply_stencil(plus)(a, apply_stencil(plus)(b, c)), out.domain, out)
+#     set_at(as_fieldop(plus)(a, as_fieldop(plus)(b, c)), out.domain, out)

@@ -24,7 +24,7 @@ class BackendNotSelectedError(RuntimeError):
 
 
 @builtin_dispatch
-def apply_stencil(*args):
+def as_fieldop(*args):
     raise BackendNotSelectedError()
 
 
@@ -435,7 +435,7 @@ BUILTINS = {
     "cartesian_domain",
     "unstructured_domain",
     "named_range",
-    "apply_stencil",
+    "as_fieldop",
     *MATH_BUILTINS,
 }
 

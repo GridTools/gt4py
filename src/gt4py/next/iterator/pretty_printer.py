@@ -43,7 +43,7 @@ BINARY_OPS: Final = {
 }
 
 # replacements for builtin unary operations
-UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬"}
+UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬", "as_fieldop": "⇑"}
 
 # operator precedence
 PRECEDENCE: Final = {
@@ -63,6 +63,7 @@ PRECEDENCE: Final = {
     "deref": 7,
     "not_": 7,
     "lift": 7,
+    "as_fieldop": 7,
     "tuple_get": 8,
     "__call__": 8,
 }
@@ -272,6 +273,20 @@ class PrettyPrinter(NodeTranslator):
         )
         return self._optimum(h, v)
 
+    def visit_Temporary(self, node: ir.Temporary, *, prec: int) -> list[str]:
+        start, end = [node.id + " = temporary("], [");"]
+        args = []
+        if node.domain is not None:
+            args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
+        if node.dtype is not None:
+            args.append(self._hmerge(["dtype="], [str(node.dtype)]))
+        hargs = self._hmerge(*self._hinterleave(args, ", "))
+        vargs = self._vmerge(*self._hinterleave(args, ","))
+        oargs = self._optimum(hargs, vargs)
+        h = self._hmerge(start, oargs, end)
+        v = self._vmerge(start, self._indent(oargs), end)
+        return self._optimum(h, v)
+
     def visit_SetAt(self, node: ir.SetAt, *, prec: int) -> list[str]:
         expr = self.visit(node.expr, prec=0)
         domain = self.visit(node.domain, prec=0)
@@ -310,7 +325,7 @@ class PrettyPrinter(NodeTranslator):
         assert prec == 0
         function_definitions = self.visit(node.function_definitions, prec=0)
         body = self.visit(node.body, prec=0)
-        # TODO declarations
+        declarations = self.visit(node.declarations, prec=0)
         params = self.visit(node.params, prec=0)
 
         hparams = self._hmerge([node.id + "("], *self._hinterleave(params, ", "), [") {"])
@@ -320,9 +335,16 @@ class PrettyPrinter(NodeTranslator):
         params = self._optimum(hparams, vparams)
 
         function_definitions = self._vmerge(*function_definitions)
+        declarations = self._vmerge(*declarations)
         body = self._vmerge(*body)
 
-        return self._vmerge(params, self._indent(function_definitions), self._indent(body), ["}"])
+        return self._vmerge(
+            params,
+            self._indent(function_definitions),
+            self._indent(declarations),
+            self._indent(body),
+            ["}"],
+        )
 
     @classmethod
     def apply(cls, node: ir.Node, indent: int, width: int) -> str:

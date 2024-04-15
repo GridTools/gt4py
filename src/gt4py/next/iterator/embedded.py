@@ -1508,8 +1508,8 @@ def set_at(expr, domain, target) -> None:
         expr(target, lazy_domain=domain)
 
 
-@builtins.apply_stencil.register(EMBEDDED)
-def apply_stencil(fun, *, domain=None):
+@builtins.as_fieldop.register(EMBEDDED)
+def as_fieldop(fun, *, domain=None):
     def impl(*args, **kwargs):
         new_domain = None
         # if common.is_domain_like(domain):
@@ -1518,9 +1518,9 @@ def apply_stencil(fun, *, domain=None):
         #     assert callable(domain)
         #     new_domain = domain(*args, **kwargs)
 
-        # TODO this only works if the apply_stencil is directly in set_at
+        # TODO this only works if the as_fieldop is directly in set_at
         # for the clean solution we need to pre-allocate the result buffer (see strategy for scan in field_view embedded)
-        def lazy_apply_stencil(out, *, lazy_domain=None):
+        def lazy_as_fieldop(out, *, lazy_domain=None):
             if new_domain is None:
                 assert lazy_domain is not None
                 domain = lazy_domain
@@ -1538,7 +1538,7 @@ def apply_stencil(fun, *, domain=None):
             )
             return out
 
-        return lazy_apply_stencil
+        return lazy_as_fieldop
 
     return impl
 
