@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_parser import pparse
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def test_symref():
@@ -41,14 +42,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int32"),
-                            ir.Literal(value="2", type="int32"),
+                            im.literal("1", "int32"),
+                            im.literal("2", "int32"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int32"),
+                    im.literal("3", "int32"),
                 ],
             ),
-            ir.Literal(value="4", type="int32"),
+            im.literal("4", "int32"),
         ],
     )
     actual = pparse(testee)
@@ -108,7 +109,7 @@ def test_tuple_get():
     testee = "x[42]"
     expected = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     actual = pparse(testee)
     assert actual == expected

@@ -26,7 +26,7 @@ from gt4py.next.iterator import (
     type_inference as itir_typing,
 )
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
     Context,
@@ -68,7 +68,7 @@ def _get_scan_args(stencil: Expr) -> tuple[bool, Literal]:
     """
     stencil_fobj = cast(FunCall, stencil)
     is_forward = stencil_fobj.args[1]
-    assert isinstance(is_forward, Literal) and is_forward.type == "bool"
+    assert isinstance(is_forward, Literal) and type_info.is_logical(is_forward.type)
     init_carry = stencil_fobj.args[2]
     assert isinstance(init_carry, Literal)
     return is_forward.value == "True", init_carry

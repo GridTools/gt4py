@@ -20,6 +20,12 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
+def ensure_type(type_: str | ts.TypeSpec | None):
+    if isinstance(type_, str):
+        return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
+    return type_
+
+
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     """
     Convert to Sym if necessary.
@@ -292,7 +298,7 @@ def shift(offset, value=None):
 
 
 def literal(value: str, typename: str):
-    return itir.Literal(value=value, type=typename)
+    return itir.Literal(value=value, type=ensure_type(typename))
 
 
 def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
@@ -321,7 +327,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     typename = type_spec.kind.name.lower()
     assert typename in itir.TYPEBUILTINS
 
-    return itir.Literal(value=str(val), type=typename)
+    return literal(str(val), typename)
 
 
 def neighbors(offset, it):

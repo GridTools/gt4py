@@ -223,6 +223,25 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
 
 
+def is_integer(symbol_type: ts.TypeSpec) -> bool:
+    """
+    Check if ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.INT32))
+    True
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    False
+    >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+    False
+    """
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in [
+        ts.ScalarKind.INT32,
+        ts.ScalarKind.INT64,
+    ]
+
+
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
     """
     Check if the dtype of ``symbol_type`` is an integral type.
@@ -236,7 +255,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [ts.ScalarKind.INT32, ts.ScalarKind.INT64]
+    return is_integer(extract_dtype(symbol_type))
 
 
 def is_number(symbol_type: ts.TypeSpec) -> bool:

@@ -23,6 +23,7 @@ from gt4py.next import errors
 from gt4py.next.ffront.func_to_past import ProgramParser
 from gt4py.next.ffront.past_to_itir import ProgramLowering
 from gt4py.next.iterator import ir as itir
+from gt4py.next.type_system import type_specifications as ts
 
 from next_tests.past_common_fixtures import (
     IDim,
@@ -59,7 +60,7 @@ def test_copy_lowering(copy_program_def, itir_identity_fundef):
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="0", type="int32"),
+                        P(itir.Literal, value="0", type=ts.ScalarType(kind=ts.ScalarKind.INT32)),
                         P(itir.SymRef, id=eve.SymbolRef("__out_size_0")),
                     ],
                 )
@@ -118,8 +119,20 @@ def test_copy_restrict_lowering(copy_restrict_program_def, itir_identity_fundef)
                     fun=P(itir.SymRef, id=eve.SymbolRef("named_range")),
                     args=[
                         P(itir.AxisLiteral, value="IDim"),
-                        P(itir.Literal, value="1", type=itir.INTEGER_INDEX_BUILTIN),
-                        P(itir.Literal, value="2", type=itir.INTEGER_INDEX_BUILTIN),
+                        P(
+                            itir.Literal,
+                            value="1",
+                            type=ts.ScalarType(
+                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                            ),
+                        ),
+                        P(
+                            itir.Literal,
+                            value="2",
+                            type=ts.ScalarType(
+                                kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper())
+                            ),
+                        ),
                     ],
                 )
             ],

@@ -46,6 +46,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     UnstructuredDomain,
 )
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
+from gt4py.next.type_system import type_info
 
 
 def pytype_to_cpptype(t: str) -> Optional[str]:
@@ -184,7 +185,7 @@ def _collect_offset_definitions(
 
 
 def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
-    assert node.type in itir.INTEGER_BUILTINS
+    assert type_info.is_integer(node.type)
     return IntegralConstant(value=int(node.value))
 
 
@@ -194,7 +195,7 @@ def _is_scan(node: itir.Node) -> TypeGuard[itir.FunCall]:
 
 def _bool_from_literal(node: itir.Node) -> bool:
     assert isinstance(node, itir.Literal)
-    assert node.type == "bool" and node.value in ("True", "False")
+    assert type_info.is_logical(node.type) and node.value in ("True", "False")
     return node.value == "True"
 
 
@@ -293,7 +294,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type=node.type)
+        return Literal(value=node.value, type=node.type.kind.name.lower())
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
