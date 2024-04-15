@@ -298,7 +298,7 @@ def test_temporary():
     testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
     expected = "t = temporary(domain=domain, dtype=float64);"
     actual = pformat(testee)
-    assert actual == expected, actual
+    assert actual == expected
 
 
 def test_stencil_closure():

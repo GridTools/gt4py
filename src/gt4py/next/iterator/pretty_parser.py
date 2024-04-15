@@ -23,6 +23,7 @@ from gt4py.next.iterator.ir_utils import ir_makers as im
 GRAMMAR = """
     start: fencil_definition
         | function_definition
+        | declaration
         | stencil_closure
         | set_at
         | program
@@ -83,10 +84,11 @@ GRAMMAR = """
 
     named_range: AXIS_NAME ":" "[" prec0 "," prec0 ")"
     function_definition: ID_NAME "=" "λ(" ( SYM "," )* SYM? ")" "→" prec0 ";"
+    declaration: ID_NAME "=" "temporary(" "domain=" prec0 "," "dtype=" prec0 ")" ";"
     stencil_closure: prec0 "←" "(" prec0 ")" "(" ( SYM_REF ", " )* SYM_REF ")" "@" prec0 ";"
     set_at: prec0 "@" prec0 "←" prec1 ";"
     fencil_definition: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( stencil_closure )+ "}"
-    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( set_at )+ "}"
+    program: ID_NAME "(" ( SYM "," )* SYM ")" "{" ( function_definition )* ( declaration )* ( set_at )+ "}"
 
     %import common (CNAME, SIGNED_FLOAT, SIGNED_INT, WS)
     %ignore WS
@@ -210,6 +212,10 @@ class ToIrTransformer(lark_visitors.Transformer):
         output, stencil, *inputs, domain = args
         return ir.StencilClosure(domain=domain, stencil=stencil, output=output, inputs=inputs)
 
+    def declaration(self, *args: ir.Expr) -> ir.Temporary:
+        tid, domain, dtype = args
+        return ir.Temporary(id=tid, domain=domain, dtype=dtype)
+
     def set_at(self, *args: ir.Expr) -> ir.SetAt:
         target, domain, expr = args
         return ir.SetAt(expr=expr, domain=domain, target=target)
@@ -235,11 +241,14 @@ class ToIrTransformer(lark_visitors.Transformer):
         params = []
         function_definitions = []
         body = []
+        declarations = []
         for arg in args:
             if isinstance(arg, ir.Sym):
                 params.append(arg)
             elif isinstance(arg, ir.FunctionDefinition):
                 function_definitions.append(arg)
+            elif isinstance(arg, ir.Temporary):
+                declarations.append(arg)
             else:
                 assert isinstance(arg, ir.SetAt)
                 body.append(arg)
@@ -248,7 +257,7 @@ class ToIrTransformer(lark_visitors.Transformer):
             function_definitions=function_definitions,
             params=params,
             body=body,
-            declarations=[],  # TODO
+            declarations=declarations,
         )
 
     def start(self, arg: ir.Node) -> ir.Node:
