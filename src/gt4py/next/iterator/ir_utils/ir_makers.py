@@ -20,12 +20,6 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def ensure_type(type_: str | ts.TypeSpec | None):
-    if isinstance(type_, str):
-        return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
-    return type_
-
-
 def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     """
     Convert to Sym if necessary.
@@ -98,6 +92,13 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     if isinstance(str_or_offset, (str, int)):
         return itir.OffsetLiteral(value=str_or_offset)
     return str_or_offset
+
+
+def ensure_type(type_: str | ts.TypeSpec | None):
+    if isinstance(type_, str):
+        return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
+    assert isinstance(type_, ts.TypeSpec)
+    return type_
 
 
 class lambda_:
