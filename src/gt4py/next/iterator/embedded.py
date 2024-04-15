@@ -27,6 +27,7 @@ import warnings
 import numpy as np
 import numpy.typing as npt
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import extended_typing as xtyping
 from gt4py.eve.extended_typing import (
@@ -814,8 +815,8 @@ class MDIterator:
             if not all(axis.value in shifted_pos.keys() for axis in axes if axis is not None):
                 raise IndexError("Iterator position doesn't point to valid location for its field.")
         slice_column = dict[Tag, range]()
-        column_range = embedded_context.closure_column_range.get()
         if self.column_axis is not None:
+            column_range = embedded_context.closure_column_range.get()
             assert column_range is not None
             k_pos = shifted_pos.pop(self.column_axis)
             assert isinstance(k_pos, int)
@@ -1370,12 +1371,6 @@ class SparseListIterator:
 
 
 @dataclasses.dataclass(frozen=True)
-class ColumnDescriptor:
-    axis: str
-    col_range: range  # TODO(havogt) introduce range type that doesn't have step
-
-
-@dataclasses.dataclass(frozen=True)
 class ScanArgIterator:
     wrapped_iter: ItIterator
     k_pos: int
@@ -1550,51 +1545,52 @@ def closure(
     out,  #: MutableLocatedField,
     ins: list[common.Field],
 ) -> None:
+    assert embedded_context.within_valid_context()
     offset_provider = embedded_context.offset_provider.get()
     _validate_domain(domain_, offset_provider)
     domain: dict[Tag, range] = _dimension_to_tag(domain_)
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")
 
-    new_context: dict[str, Any] = {"offset_provider": offset_provider}
-
-    column: Optional[ColumnDescriptor] = None
-    column_range: Optional[common.NamedRange] = None
+    column_range: common.NamedRange | eve.NothingType = eve.NOTHING
     if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
         assert (
             col_range_placeholder.unit_range.is_empty()
         )  # check it's just the placeholder with empty range
         column_axis = col_range_placeholder.dim
         if column_axis is not None and column_axis.value in domain:
-            column = ColumnDescriptor(column_axis.value, domain[column_axis.value])
-            del domain[column_axis.value]
-
             column_range = common.NamedRange(
-                column_axis, common.UnitRange(column.col_range.start, column.col_range.stop)
+                column_axis,
+                common.UnitRange(domain[column_axis.value].start, domain[column_axis.value].stop),
             )
-
-    new_context["closure_column_range"] = column_range
+            del domain[column_axis.value]
 
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 
-    with embedded_context.new_context(**new_context) as ctx:
+    with embedded_context.new_context(closure_column_range=column_range) as ctx:
 
         def _iterate():
             for pos in _domain_iterator(domain):
                 promoted_ins = [promote_scalars(inp) for inp in ins]
                 ins_iters = list(
-                    make_in_iterator(inp, pos, column_axis=column.axis if column else None)
+                    make_in_iterator(
+                        inp,
+                        pos,
+                        column_axis=column_range.dim.value
+                        if column_range is not eve.NOTHING
+                        else None,
+                    )
                     for inp in promoted_ins
                 )
                 res = sten(*ins_iters)
 
-                if column is None:
+                if column_range is eve.NOTHING:
                     assert _is_concrete_position(pos)
                     out.field_setitem(pos, res)
                 else:
                     col_pos = pos.copy()
-                    for k in column.col_range:
-                        col_pos[column.axis] = k
+                    for k in column_range.unit_range:
+                        col_pos[column_range.dim.value] = k
                         assert _is_concrete_position(col_pos)
                         out.field_setitem(col_pos, res[k])
 
