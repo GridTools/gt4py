@@ -43,7 +43,7 @@ BINARY_OPS: Final = {
 }
 
 # replacements for builtin unary operations
-UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬", "apply_stencil": "⇑"}
+UNARY_OPS: Final = {"deref": "·", "lift": "↑", "not_": "¬", "as_field_operator": "⇑"}
 
 # operator precedence
 PRECEDENCE: Final = {
@@ -63,7 +63,7 @@ PRECEDENCE: Final = {
     "deref": 7,
     "not_": 7,
     "lift": 7,
-    "apply_stencil": 7,
+    "as_field_operator": 7,
     "tuple_get": 8,
     "__call__": 8,
 }

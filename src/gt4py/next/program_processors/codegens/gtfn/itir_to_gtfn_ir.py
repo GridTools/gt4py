@@ -20,7 +20,6 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -198,11 +197,11 @@ def _bool_from_literal(node: itir.Node) -> bool:
     return node.value == "True"
 
 
-def _is_applied_apply_stencil(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+def _is_applied_as_field_operator(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
         and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="apply_stencil")
+        and arg.fun.fun == itir.SymRef(id="as_field_operator")
     )
 
 
@@ -239,22 +238,15 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     @classmethod
     def apply(
         cls,
-        node: itir.Program | global_tmps.FencilWithTemporaries,
+        node: itir.Program,
         *,
         offset_provider: dict,
         column_axis: Optional[common.Dimension],
     ) -> FencilDefinition:
-        if isinstance(node, global_tmps.FencilWithTemporaries):
-            raise AssertionError()  # TODO
-            prog = node.fencil
-        elif isinstance(node, itir.Program):
-            prog = node
-        else:
-            raise TypeError(
-                f"Expected a 'FencilDefinition' or 'FencilWithTemporaries', got '{type(node).__name__}'."
-            )
+        if not isinstance(node, itir.Program):
+            raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
-        grid_type = _get_gridtype(prog.body)
+        grid_type = _get_gridtype(node.body)
         return cls(
             offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
         ).visit(node)
@@ -496,7 +488,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
-        assert _is_applied_apply_stencil(node.expr)
+        assert _is_applied_as_field_operator(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
         inputs = node.expr.args

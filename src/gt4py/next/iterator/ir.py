@@ -22,6 +22,11 @@ from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 
 
+# TODO(havogt):
+# After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
+# During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
+
+
 @noninstantiable
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
@@ -186,10 +191,6 @@ GRAMMAR_BUILTINS = {
     "cast_",
 }
 
-GTIR_BUILTINS = {
-    "apply_stencil",  # `apply_stencil(stencil)` creates field_operator from stencil
-}
-
 BUILTINS = {
     *GRAMMAR_BUILTINS,
     "named_range",
@@ -202,9 +203,15 @@ BUILTINS = {
     "can_deref",
     "scan",
     "if_",
-    *GTIR_BUILTINS,
     *ARITHMETIC_BUILTINS,
     *TYPEBUILTINS,
+}
+
+# only used in `Program`` not `FencilDefinition`
+# TODO(havogt): restructure after refactoring to GTIR
+GTIR_BUILTINS = {
+    *BUILTINS,
+    "as_field_operator",  # `as_field_operator(stencil)` creates field_operator from stencil
 }
 
 
@@ -221,7 +228,7 @@ class Stmt(Node): ...
 
 
 class SetAt(Stmt):  # from JAX array.at[...].set()
-    expr: Expr  # only `apply_stencil(stencil)(inp0, ...)` in first refactoring
+    expr: Expr  # only `as_field_operator(stencil)(inp0, ...)` in first refactoring
     domain: Expr
     target: Expr  # `make_tuple` or SymRef
 
@@ -239,7 +246,7 @@ class Program(Node, ValidatedSymbolTableTrait):
     declarations: List[Temporary]
     body: List[Stmt]
 
-    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)

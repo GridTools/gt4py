@@ -66,7 +66,7 @@ GRAMMAR = """
         | "·" prec7 -> deref
         | "¬" prec7 -> bool_not
         | "↑" prec7 -> lift
-        | "⇑" prec7 -> apply_stencil
+        | "⇑" prec7 -> as_field_operator
 
     ?prec8: prec9
         | prec8 "[" prec0 "]" -> tuple_get
@@ -172,8 +172,8 @@ class ToIrTransformer(lark_visitors.Transformer):
     def lift(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="lift"), args=[arg])
 
-    def apply_stencil(self, arg: ir.Expr) -> ir.FunCall:
-        return ir.FunCall(fun=ir.SymRef(id="apply_stencil"), args=[arg])
+    def as_field_operator(self, arg: ir.Expr) -> ir.FunCall:
+        return ir.FunCall(fun=ir.SymRef(id="as_field_operator"), args=[arg])
 
     def astype(self, arg: ir.Expr) -> ir.FunCall:
         return ir.FunCall(fun=ir.SymRef(id="cast_"), args=[arg])

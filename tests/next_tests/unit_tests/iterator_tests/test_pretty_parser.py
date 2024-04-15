@@ -69,9 +69,9 @@ def test_lift():
     assert actual == expected
 
 
-def test_apply_stencil():
+def test_as_field_operator():
     testee = "⇑x"
-    expected = ir.FunCall(fun=ir.SymRef(id="apply_stencil"), args=[ir.SymRef(id="x")])
+    expected = ir.FunCall(fun=ir.SymRef(id="as_field_operator"), args=[ir.SymRef(id="x")])
     actual = pparse(testee)
     assert actual == expected
 
