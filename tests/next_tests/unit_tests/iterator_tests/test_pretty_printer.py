@@ -294,6 +294,13 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
+    expected = "t = temporary(domain=domain, dtype=float64);"
+    actual = pformat(testee)
+    assert actual == expected, actual
+
+
 def test_stencil_closure():
     testee = ir.StencilClosure(
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -346,7 +353,13 @@ def test_program():
             ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
         ],
         params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
-        declarations=[],  # TODO
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype="float64",
+            ),
+        ],
         body=[
             ir.SetAt(
                 expr=ir.SymRef(id="x"),
@@ -356,5 +369,5 @@ def test_program():
         ],
     )
     actual = pformat(testee)
-    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y @ cartesian_domain() ← x;\n}"
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected

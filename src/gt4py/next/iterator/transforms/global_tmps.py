@@ -66,21 +66,6 @@ class FencilWithTemporaries(
 # Extensions for `PrettyPrinter` for easier debugging
 
 
-def pformat_Temporary(printer: PrettyPrinter, node: ir.Temporary, *, prec: int) -> list[str]:
-    start, end = [node.id + " = temporary("], [");"]
-    args = []
-    if node.domain is not None:
-        args.append(printer._hmerge(["domain="], printer.visit(node.domain, prec=0)))
-    if node.dtype is not None:
-        args.append(printer._hmerge(["dtype="], [str(node.dtype)]))
-    hargs = printer._hmerge(*printer._hinterleave(args, ", "))
-    vargs = printer._vmerge(*printer._hinterleave(args, ","))
-    oargs = printer._optimum(hargs, vargs)
-    h = printer._hmerge(start, oargs, end)
-    v = printer._vmerge(start, printer._indent(oargs), end)
-    return printer._optimum(h, v)
-
-
 def pformat_FencilWithTemporaries(
     printer: PrettyPrinter, node: FencilWithTemporaries, *, prec: int
 ) -> list[str]:
@@ -110,7 +95,6 @@ def pformat_FencilWithTemporaries(
     return printer._vmerge(params, printer._indent(body), ["}"])
 
 
-PrettyPrinter.visit_Temporary = pformat_Temporary  # type: ignore
 PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # type: ignore
 
 
