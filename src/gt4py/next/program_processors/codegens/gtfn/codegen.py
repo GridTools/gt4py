@@ -234,9 +234,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "auto {id} = gtfn::allocate_global_tmp<{dtype}>(tmp_alloc__, {tmp_sizes});"
     )
 
-    def visit_FencilDefinition(
-        self, node: gtfn_ir.FencilDefinition, **kwargs: Any
-    ) -> Union[str, Collection[str]]:
+    def visit_Program(self, node: gtfn_ir.Program, **kwargs: Any) -> Union[str, Collection[str]]:
         self.is_cartesian = node.grid_type == common.GridType.CARTESIAN
         self.user_defined_function_ids = list(
             str(fundef.id) for fundef in node.function_definitions
@@ -248,7 +246,7 @@ class GTFNCodegen(codegen.TemplatedGenerator):
             **kwargs,
         )
 
-    FencilDefinition = as_mako(
+    Program = as_mako(
         """
     #include <cmath>
     #include <cstdint>

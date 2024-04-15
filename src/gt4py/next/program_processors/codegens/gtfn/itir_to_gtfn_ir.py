@@ -25,13 +25,13 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     BinaryExpr,
     CartesianDomain,
     CastExpr,
-    FencilDefinition,
     FunCall,
     FunctionDefinition,
     IntegralConstant,
     Lambda,
     Literal,
     OffsetLiteral,
+    Program,
     Scan,
     ScanExecution,
     ScanPassDefinition,
@@ -242,7 +242,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         *,
         offset_provider: dict,
         column_axis: Optional[common.Dimension],
-    ) -> FencilDefinition:
+    ) -> Program:
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
@@ -527,7 +527,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             backend=backend,
         )
 
-    def visit_Program(self, node: itir.Program, **kwargs: Any) -> FencilDefinition:
+    def visit_Program(self, node: itir.Program, **kwargs: Any) -> Program:
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
         executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
@@ -536,7 +536,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
         }
-        return FencilDefinition(
+        return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=executions,
