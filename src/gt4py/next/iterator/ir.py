@@ -211,7 +211,7 @@ BUILTINS = {
 # TODO(havogt): restructure after refactoring to GTIR
 GTIR_BUILTINS = {
     *BUILTINS,
-    "as_field_operator",  # `as_field_operator(stencil)` creates field_operator from stencil
+    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
 }
 
 
@@ -228,7 +228,7 @@ class Stmt(Node): ...
 
 
 class SetAt(Stmt):  # from JAX array.at[...].set()
-    expr: Expr  # only `as_field_operator(stencil)(inp0, ...)` in first refactoring
+    expr: Expr  # only `as_fieldop(stencil)(inp0, ...)` in first refactoring
     domain: Expr
     target: Expr  # `make_tuple` or SymRef
 

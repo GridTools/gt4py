@@ -197,11 +197,11 @@ def _bool_from_literal(node: itir.Node) -> bool:
     return node.value == "True"
 
 
-def _is_applied_as_field_operator(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+def _is_applied_as_fieldop(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
     return (
         isinstance(arg, itir.FunCall)
         and isinstance(arg.fun, itir.FunCall)
-        and arg.fun.fun == itir.SymRef(id="as_field_operator")
+        and arg.fun.fun == itir.SymRef(id="as_fieldop")
     )
 
 
@@ -488,7 +488,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
     ) -> Union[StencilExecution, ScanExecution]:
-        assert _is_applied_as_field_operator(node.expr)
+        assert _is_applied_as_fieldop(node.expr)
         stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
         domain = node.domain
         inputs = node.expr.args

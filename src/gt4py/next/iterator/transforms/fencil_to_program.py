@@ -24,10 +24,8 @@ class FencilToProgram(eve.NodeTranslator):
         return cls().visit(node)
 
     def visit_StencilClosure(self, node: itir.StencilClosure) -> itir.SetAt:
-        as_field_operator = im.call(im.call("as_field_operator")(node.stencil, node.domain))(
-            *node.inputs
-        )
-        return itir.SetAt(expr=as_field_operator, domain=node.domain, target=node.output)
+        as_fieldop = im.call(im.call("as_fieldop")(node.stencil, node.domain))(*node.inputs)
+        return itir.SetAt(expr=as_fieldop, domain=node.domain, target=node.output)
 
     def visit_FencilDefinition(self, node: itir.FencilDefinition) -> itir.Program:
         return itir.Program(
