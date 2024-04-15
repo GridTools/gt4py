@@ -161,7 +161,7 @@ def test_lift():
 
 def test_as_field_operator():
     testee = ir.FunCall(fun=ir.SymRef(id="as_field_operator"), args=[ir.SymRef(id="x")])
-    expected = "⇑x"  # TODO consider ⇈
+    expected = "⇑x"
     actual = pformat(testee)
     assert actual == expected
 
