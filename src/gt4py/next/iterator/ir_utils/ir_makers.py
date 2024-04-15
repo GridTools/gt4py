@@ -97,7 +97,7 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
 def ensure_type(type_: str | ts.TypeSpec | None):
     if isinstance(type_, str):
         return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
-    assert isinstance(type_, ts.TypeSpec)
+    assert isinstance(type_, ts.TypeSpec) or type_ is None
     return type_
 
 
