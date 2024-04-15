@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-"""A pretty self for the functional IR.
+"""A pretty printer for the functional IR.
 
 Inspired by P. Yelland, “A New Approach to Optimal Code Formatting”, 2015
 """
