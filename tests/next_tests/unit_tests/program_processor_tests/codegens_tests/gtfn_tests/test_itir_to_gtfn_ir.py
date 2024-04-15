@@ -53,7 +53,7 @@ def test_get_domains():
         declarations=[],
         body=[
             itir.SetAt(
-                expr=im.call(im.call("as_field_operator")("deref"))(),
+                expr=im.call(im.call("as_fieldop")("deref"))(),
                 domain=domain,
                 target=itir.SymRef(id="bar"),
             )
