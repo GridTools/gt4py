@@ -214,6 +214,7 @@ class ToIrTransformer(lark_visitors.Transformer):
         target, domain, expr = args
         return ir.SetAt(expr=expr, domain=domain, target=target)
 
+    # TODO(havogt): remove after refactoring.
     def fencil_definition(self, fid: str, *args: ir.Node) -> ir.FencilDefinition:
         params = []
         function_definitions = []

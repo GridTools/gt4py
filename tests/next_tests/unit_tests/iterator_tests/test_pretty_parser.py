@@ -213,6 +213,7 @@ def test_set_at():
     assert actual == expected
 
 
+# TODO: remove after refactoring
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(

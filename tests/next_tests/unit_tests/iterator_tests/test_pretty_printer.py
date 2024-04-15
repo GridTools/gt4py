@@ -317,6 +317,7 @@ def test_set_at():
     assert actual == expected
 
 
+# TODO(havogt): remove after refactoring.
 def test_fencil_definition():
     testee = ir.FencilDefinition(
         id="f",

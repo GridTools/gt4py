@@ -491,7 +491,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         return res
 
     def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
-        raise AssertionError("Internal error: all Stmts need to be handled explicitly.")
+        raise AssertionError("All Stmts need to be handled explicitly.")
 
     def visit_SetAt(
         self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
