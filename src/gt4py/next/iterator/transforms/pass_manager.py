@@ -89,6 +89,9 @@ def apply_common_transforms(
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
 ) -> itir.FencilDefinition | FencilWithTemporaries:
+    if isinstance(ir, itir.Program):
+        # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
+        return ir
     icdlv_uids = eve_utils.UIDGenerator()
 
     if lift_mode is None:

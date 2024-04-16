@@ -28,7 +28,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
+from gt4py.next.iterator.transforms import fencil_to_program, global_tmps as gtmps_transform
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
@@ -145,6 +145,8 @@ def fencil_generator(
     ir = itir_transforms.apply_common_transforms(
         ir, lift_mode=lift_mode, offset_provider=offset_provider
     )
+
+    ir = fencil_to_program.FencilToProgram.apply(ir)
 
     program = EmbeddedDSL.apply(ir)
 

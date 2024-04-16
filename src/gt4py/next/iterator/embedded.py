@@ -1504,7 +1504,7 @@ def set_at(expr, domain, target) -> None:
 
 
 @builtins.as_fieldop.register(EMBEDDED)
-def as_fieldop(fun, *, domain=None):
+def as_fieldop(fun, domain=None):
     def impl(*args, **kwargs):
         new_domain = None
         # if common.is_domain_like(domain):
