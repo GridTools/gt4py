@@ -86,7 +86,7 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node: gtmps_transform.Temporary, **kwargs: Any) -> str:
+    def visit_Temporary(self, node: itir.Temporary, **kwargs: Any) -> str:
         assert (
             isinstance(node.domain, itir.FunCall)
             and isinstance(node.domain.fun, itir.SymRef)

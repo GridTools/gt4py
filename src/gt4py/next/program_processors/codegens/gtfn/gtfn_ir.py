@@ -155,7 +155,7 @@ class TagDefinition(Node):
     alias: Optional[Union[str, SymRef]] = None
 
 
-class FencilDefinition(Node, ValidatedSymbolTableTrait):
+class Program(Node, ValidatedSymbolTableTrait):
     id: SymbolName
     params: list[Sym]
     function_definitions: list[

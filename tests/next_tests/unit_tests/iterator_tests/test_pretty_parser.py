@@ -69,6 +69,13 @@ def test_lift():
     assert actual == expected
 
 
+def test_as_fieldop():
+    testee = "⇑x"
+    expected = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_bool_arithmetic():
     testee = "¬(¬a ∨ b ∧ (c ∨ d))"
     expected = ir.FunCall(
@@ -183,6 +190,13 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = "t = temporary(domain=domain, dtype=float64);"
+    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=ir.SymRef(id="float64"))
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_stencil_closure():
     testee = "y ← (deref)(x) @ cartesian_domain();"
     expected = ir.StencilClosure(
@@ -195,6 +209,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = "y @ cartesian_domain() ← x;"
+    expected = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring to GTIR
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(
@@ -209,6 +235,33 @@ def test_fencil_definition():
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="y"),
                 inputs=[ir.SymRef(id="x")],
+            )
+        ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_program():
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    expected = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype=ir.SymRef(id="float64"),
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
             )
         ],
     )
