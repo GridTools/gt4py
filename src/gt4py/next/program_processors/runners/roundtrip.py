@@ -162,8 +162,8 @@ def fencil_generator(
         .if_isinstance(str)
         .to_set()
     )
-    axis_literals: Iterable[str] = (
-        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).getattr("value").to_set()
+    axis_literals: Iterable[itir.AxisLiteral] = (
+        ir.pre_walk_values().if_isinstance(itir.AxisLiteral).to_set()
     )
 
     if use_embedded:
@@ -185,7 +185,10 @@ def fencil_generator(
         if debug:
             print(source_file_name)
         offset_literals = [f'{o} = offset("{o}")' for o in offset_literals]
-        axis_literals = [f'{o} = gtx.Dimension("{o}")' for o in axis_literals]
+        axis_literals = [
+            f'{o.value} = gtx.Dimension("{o.value}", kind=gtx.DimensionKind("{o.kind}"))'
+            for o in axis_literals
+        ]
         source_file.write(header)
         source_file.write("\n".join(offset_literals))
         source_file.write("\n")

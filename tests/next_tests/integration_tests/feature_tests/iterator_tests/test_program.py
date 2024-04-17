@@ -48,8 +48,8 @@ def copy_stencil(inp):
 @fendef
 def copy_program(inp, out, size):
     set_at(
-        # as_fieldop(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
-        as_fieldop(copy_stencil)(inp),
+        as_fieldop(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
+        # as_fieldop(copy_stencil)(inp),
         cartesian_domain(named_range(I, 0, size)),
         out,
     )

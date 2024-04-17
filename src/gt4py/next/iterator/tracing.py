@@ -148,7 +148,7 @@ def make_node(o):
     if isinstance(o, Node):
         return o
     if isinstance(o, common.Dimension):
-        return AxisLiteral(value=o.value)
+        return AxisLiteral(value=o.value, kind=o.kind)
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)

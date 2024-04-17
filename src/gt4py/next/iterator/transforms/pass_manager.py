@@ -88,7 +88,7 @@ def apply_common_transforms(
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None,
     symbolic_domain_sizes: Optional[dict[str, str]] = None,
-) -> itir.FencilDefinition | FencilWithTemporaries:
+) -> itir.FencilDefinition | FencilWithTemporaries | itir.Program:
     if isinstance(ir, itir.Program):
         # TODO(havogt): during refactoring to GTIR, we bypass transformations in case we already translated to itir.Program
         return ir

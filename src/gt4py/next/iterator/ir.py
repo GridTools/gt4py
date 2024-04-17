@@ -20,6 +20,7 @@ from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next import common
 
 
 # TODO(havogt):
@@ -91,6 +92,7 @@ class OffsetLiteral(Expr):
 
 class AxisLiteral(Expr):
     value: str
+    kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
 
 
 class SymRef(Expr):
@@ -211,7 +213,7 @@ BUILTINS = {
 # TODO(havogt): restructure after refactoring to GTIR
 GTIR_BUILTINS = {
     *BUILTINS,
-    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+    "as_fieldop",  # `as_fieldop(stencil, domain)` creates field_operator from stencil (domain is optional, but for now required for embedded execution)
 }
 
 

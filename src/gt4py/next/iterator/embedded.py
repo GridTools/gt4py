@@ -53,7 +53,11 @@ from gt4py.eve.extended_typing import (
     runtime_checkable,
 )
 from gt4py.next import common
-from gt4py.next.embedded import context as embedded_context, exceptions as embedded_exceptions
+from gt4py.next.embedded import (
+    context as embedded_context,
+    exceptions as embedded_exceptions,
+    operators,
+)
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
 
@@ -1498,42 +1502,44 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
 
 @runtime.set_at.register(EMBEDDED)
 def set_at(expr, domain, target) -> None:
-    # domain is assumed to match the domain of outer apply stencil / fields
-    if callable(expr):  # lazy apply stencil #TODO check
-        expr(target, lazy_domain=domain)
+    operators._tuple_assign_field(target, expr, common.domain(domain))
+
+
+def _compute_point(
+    sten: Callable, ins, pos, column_range: common.NamedRange | eve.NothingType = eve.NOTHING
+):
+    promoted_ins = [promote_scalars(inp) for inp in ins]
+    ins_iters = list(
+        make_in_iterator(
+            inp,
+            pos,
+            column_axis=column_range.dim.value if column_range is not eve.NOTHING else None,
+        )
+        for inp in promoted_ins
+    )
+    return sten(*ins_iters)
+
+
+# def _allocate_out(sten, ins, pos) -> common.MutableField:
 
 
 @builtins.as_fieldop.register(EMBEDDED)
-def as_fieldop(fun, domain=None):
-    def impl(*args, **kwargs):
-        new_domain = None
-        # if common.is_domain_like(domain):
-        new_domain = domain
-        # else:
-        #     assert callable(domain)
-        #     new_domain = domain(*args, **kwargs)
+def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
+    def impl(*args):
+        # TODO extract function, move private utils
+        pos = next(_domain_iterator(_dimension_to_tag(domain)))
+        single_point_result = _compute_point(fun, args, pos)
 
-        # TODO this only works if the as_fieldop is directly in set_at
-        # for the clean solution we need to pre-allocate the result buffer (see strategy for scan in field_view embedded)
-        def lazy_as_fieldop(out, *, lazy_domain=None):
-            if new_domain is None:
-                assert lazy_domain is not None
-                domain = lazy_domain
-            else:
-                domain = new_domain
+        xp = operators._get_array_ns(*args)
+        out = operators._construct_scan_array(common.domain(domain), xp)(single_point_result)
 
-            closure(
-                # cartesian_domain(
-                #     *(named_range(d, start, stop) for d, (start, stop) in domain.items())
-                # ),
-                domain,
-                fun,
-                out,
-                list(args),  # TODO kwargs
-            )
-            return out
-
-        return lazy_as_fieldop
+        closure(
+            domain,
+            fun,
+            out,
+            list(args),
+        )
+        return out
 
     return impl
 
@@ -1571,18 +1577,7 @@ def closure(
 
         def _iterate():
             for pos in _domain_iterator(domain):
-                promoted_ins = [promote_scalars(inp) for inp in ins]
-                ins_iters = list(
-                    make_in_iterator(
-                        inp,
-                        pos,
-                        column_axis=column_range.dim.value
-                        if column_range is not eve.NOTHING
-                        else None,
-                    )
-                    for inp in promoted_ins
-                )
-                res = sten(*ins_iters)
+                res = _compute_point(sten, ins, pos, column_range)
 
                 if column_range is eve.NOTHING:
                     assert _is_concrete_position(pos)
