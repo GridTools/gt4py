@@ -253,9 +253,12 @@ if dace:
         sdfgConvertible: dict[str, Any] = field(default_factory=dict)
 
         def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-            # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-            offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-            self.sdfgConvertible["offset_provider"] = offset_provider
+            translation = dace_workflow.DaCeTranslator(
+                auto_optimize=False,
+                device_type=core_defs.DeviceType.CUDA
+                if self.backend == run_dace_gpu
+                else core_defs.DeviceType.CPU,
+            )
 
             params = {str(p.id): p.dtype for p in self.itir.params}
             fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
@@ -268,12 +271,10 @@ if dace:
                 for pname, dtype in params.items()
             ]
 
-            translation = dace_workflow.DaCeTranslator(
-                auto_optimize=False,
-                device_type=core_defs.DeviceType.CUDA
-                if self.backend == run_dace_gpu
-                else core_defs.DeviceType.CPU,
-            )
+            # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
+            offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
+            self.sdfgConvertible["offset_provider"] = offset_provider
+
             sdfg = translation.generate_sdfg(
                 self.itir,
                 arg_types,
@@ -288,14 +289,11 @@ if dace:
             return sdfg
 
         def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-            if self.sdfgConvertible.get("offset_provider", None):
-                return {
-                    f"__connectivity_{k}": v.table
-                    for k, v in self.sdfgConvertible["offset_provider"].items()
-                    if hasattr(v, "table")
-                }
-            else:
-                return {}
+            return {
+                f"__connectivity_{k}": v.table
+                for k, v in self.sdfgConvertible.get("offset_provider", {}).items()
+                if hasattr(v, "table")
+            }
 
         def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
             args = []
