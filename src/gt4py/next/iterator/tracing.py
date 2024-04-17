@@ -231,6 +231,7 @@ class TracerContext:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
+        type(self).body = []
         iterator.builtins.builtin_dispatch.pop_key()
 
 
