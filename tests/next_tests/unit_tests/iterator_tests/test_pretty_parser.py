@@ -130,11 +130,25 @@ def test_make_tuple():
     assert actual == expected
 
 
-def test_named_range():
-    testee = "IDim: [x, y)"
+def test_named_range_horizontal():
+    testee = "IDimₕ: [x, y)"
     expected = ir.FunCall(
         fun=ir.SymRef(id="named_range"),
         args=[ir.AxisLiteral(value="IDim"), ir.SymRef(id="x"), ir.SymRef(id="y")],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_named_range_vertical():
+    testee = "IDimᵥ: [x, y)"
+    expected = ir.FunCall(
+        fun=ir.SymRef(id="named_range"),
+        args=[
+            ir.AxisLiteral(value="IDim", kind=ir.DimensionKind.VERTICAL),
+            ir.SymRef(id="x"),
+            ir.SymRef(id="y"),
+        ],
     )
     actual = pparse(testee)
     assert actual == expected

@@ -36,7 +36,7 @@ GRAMMAR = """
     OFFSET_LITERAL: ( INT_LITERAL | CNAME ) "ₒ"
     _literal: INT_LITERAL | FLOAT_LITERAL | OFFSET_LITERAL
     ID_NAME: CNAME
-    AXIS_NAME: CNAME
+    AXIS_NAME: CNAME ("ᵥ" | "ₕ")
 
     ?prec0: prec1
         | "λ(" ( SYM "," )* SYM? ")" "→" prec0 -> lam
@@ -123,7 +123,9 @@ class ToIrTransformer(lark_visitors.Transformer):
         return value.value
 
     def AXIS_NAME(self, value: lark_lexer.Token) -> ir.AxisLiteral:
-        return ir.AxisLiteral(value=value.value)
+        name = value.value[:-1]
+        kind = ir.DimensionKind.HORIZONTAL if value.value[-1] == "ₕ" else ir.DimensionKind.VERTICAL
+        return ir.AxisLiteral(value=name, kind=kind)
 
     def lam(self, *args: ir.Node) -> ir.Lambda:
         *params, expr = args

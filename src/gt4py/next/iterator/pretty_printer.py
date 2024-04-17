@@ -145,7 +145,12 @@ class PrettyPrinter(NodeTranslator):
         return [str(node.value) + "ₒ"]
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, *, prec: int) -> list[str]:
-        return [str(node.value)]
+        kind = ""
+        if node.kind == ir.DimensionKind.HORIZONTAL:
+            kind = "ₕ"
+        elif node.kind == ir.DimensionKind.VERTICAL:
+            kind = "ᵥ"
+        return [str(node.value) + kind]
 
     def visit_SymRef(self, node: ir.SymRef, *, prec: int) -> list[str]:
         return [node.id]

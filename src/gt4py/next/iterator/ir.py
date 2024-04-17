@@ -23,6 +23,8 @@ from gt4py.eve.utils import noninstantiable
 from gt4py.next import common
 
 
+DimensionKind = common.DimensionKind
+
 # TODO(havogt):
 # After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
 # During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
