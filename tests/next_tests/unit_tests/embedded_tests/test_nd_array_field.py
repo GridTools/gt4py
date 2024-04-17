@@ -395,6 +395,67 @@ def test_premap_dispatch():
     pass
 
 
+def test_identity_connectivities():
+    D0 = Dimension("D0")
+    D1 = Dimension("D1")
+    D2 = Dimension("D2")
+
+    domain = common.Domain(
+        dims=(D0, D1, D2),
+        ranges=(common.UnitRange(0, 3), common.UnitRange(0, 4), common.UnitRange(0, 5)),
+    )
+    codomains = [D0, D1, D2]
+
+    result = nd_array_field._identity_connectivities(
+        domain, codomains, cls=nd_array_field.NumPyArrayConnectivityField
+    )
+
+    expected = (
+        nd_array_field.NumPyArrayConnectivityField.from_array(
+            np.array(
+                [
+                    [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
+                    [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+                    [[2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2], [2, 2, 2, 2, 2]],
+                ],
+                dtype=int,
+            ),
+            codomain=D0,
+            domain=domain,
+        ),
+        nd_array_field.NumPyArrayConnectivityField.from_array(
+            np.array(
+                [
+                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
+                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
+                    [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
+                ],
+                dtype=int,
+            ),
+            codomain=D1,
+            domain=domain,
+        ),
+        nd_array_field.NumPyArrayConnectivityField.from_array(
+            np.array(
+                [
+                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
+                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
+                    [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
+                ],
+                dtype=int,
+            ),
+            codomain=D2,
+            domain=domain,
+        ),
+    )
+
+    for res, exp in zip(result, expected):
+        assert res.codomain == exp.codomain
+        assert res.domain == exp.domain
+        assert res.dtype == exp.dtype
+        assert np.allclose(res.ndarray, exp.ndarray)
+
+
 @pytest.mark.parametrize(
     "new_dims,field,expected_domain",
     [
