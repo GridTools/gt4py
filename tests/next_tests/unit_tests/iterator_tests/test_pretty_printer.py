@@ -220,7 +220,7 @@ def test_make_tuple():
 
 def test_axis_literal_horizontal():
     testee = ir.AxisLiteral(value="I", kind=ir.DimensionKind.HORIZONTAL)
-    expected = "Iₕ: [x, y)"
+    expected = "Iₕ"
     actual = pformat(testee)
     assert actual == expected
 
