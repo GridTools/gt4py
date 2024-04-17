@@ -67,7 +67,6 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
     sym,
 )
 from gt4py.next.program_processors import processor_interface as ppi
-from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -76,6 +75,7 @@ try:
     from dace.frontend.python.common import SDFGConvertible
 
     from gt4py.next.program_processors.runners.dace import run_dace_gpu
+    from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
 
