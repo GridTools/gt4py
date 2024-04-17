@@ -236,6 +236,7 @@ def simple_mesh() -> MeshDescriptor:
             C2E.value: gtx.NeighborTableOffsetProvider(
                 c2e_arr, Cell, Edge, 4, has_skip_values=False
             ),
+            # "KDim": KDim
         },
     )
 

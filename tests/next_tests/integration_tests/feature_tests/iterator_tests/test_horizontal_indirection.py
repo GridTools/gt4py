@@ -56,11 +56,6 @@ def test_simple_indirection(program_processor):
 
     pytest.xfail("Applied shifts in if_ statements are not supported in TraceShift pass.")
 
-    if program_processor in [type_check.check_type_inference, gtfn_format_sourcecode]:
-        pytest.xfail(
-            "We only support applied shifts in type_inference."
-        )  # TODO fix test or generalize itir?
-
     shape = [8]
     inp = gtx.as_field([IDim], np.arange(0, shape[0] + 2), origin={IDim: 1})
     rng = np.random.default_rng()

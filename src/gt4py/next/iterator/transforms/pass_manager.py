@@ -96,6 +96,7 @@ def apply_common_transforms(
     assert isinstance(lift_mode, LiftMode)
     ir = MergeLet().visit(ir)
     ir = InlineFundefs().visit(ir)
+
     ir = PruneUnreferencedFundefs().visit(ir)
     ir = PropagateDeref.apply(ir)
     ir = NormalizeShifts().visit(ir)
@@ -119,8 +120,7 @@ def apply_common_transforms(
         # is constant-folded the surrounding tuple_get calls can be removed.
         inlined = CollapseTuple.apply(
             inlined,
-            # to limit number of times global type inference is executed, only in the last iterations.
-            use_global_type_inference=inlined == ir,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )
@@ -166,7 +166,8 @@ def apply_common_transforms(
     if unconditionally_collapse_tuples:
         ir = CollapseTuple.apply(
             ir,
-            ignore_tuple_size=unconditionally_collapse_tuples,
+            ignore_tuple_size=True,
+            offset_provider=offset_provider,
             # TODO(tehrengruber): disabled since it increases compile-time too much right now
             flags=~CollapseTuple.Flag.PROPAGATE_TO_IF_ON_TUPLES,
         )

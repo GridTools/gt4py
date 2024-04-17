@@ -35,3 +35,13 @@ def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
 def is_if_call(node: itir.Expr) -> TypeGuard[itir.FunCall]:
     """Match expression of the form `if_(cond, true_branch, false_branch)`."""
     return isinstance(node, itir.FunCall) and node.fun == im.ref("if_")
+
+
+def is_call_to(node: itir.Node, fun: str | list[str]) -> TypeGuard[itir.FunCall]:
+    if isinstance(fun, (list, tuple, set)):
+        return any((is_call_to(node, f) for f in fun))
+    # TODO: fix in all places that we don't do node.fun == im.ref(...) because this breaks
+    #  when the lhs has a type
+    return (
+        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
+    )

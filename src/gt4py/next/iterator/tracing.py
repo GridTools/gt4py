@@ -277,6 +277,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
                 "Only 'POSITIONAL_OR_KEYWORD' or 'VAR_POSITIONAL' parameters are supported."
             )
 
+        arg_type = None
         kind, dtype = None, None
         if use_arg_types:
             # TODO(tehrengruber): Fields of tuples are not supported yet. Just ignore them for now.
@@ -290,7 +291,7 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
                         type_info.is_local_field(arg_type),  # is list
                     )
 
-        params.append(Sym(id=param_name, kind=kind, dtype=dtype))
+        params.append(Sym(id=param_name, type=arg_type, kind=kind, dtype=dtype))
     return params
 
 

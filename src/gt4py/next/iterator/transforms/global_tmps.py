@@ -23,7 +23,7 @@ from gt4py.eve import Coerced, NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
-from gt4py.next.iterator import ir, type_inference
+from gt4py.next.iterator import ir, type_system as itir_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
@@ -33,6 +33,8 @@ from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
+from gt4py.next.iterator.type_system import type_specifications as it_ts
+from gt4py.next.type_system import type_specifications as ts
 
 
 """Iterator IR extension for global temporaries.
@@ -59,7 +61,7 @@ class Temporary(ir.Node):
 
     id: Coerced[eve.SymbolName]
     domain: Optional[ir.Expr] = None
-    dtype: Optional[Any] = None
+    dtype: Optional[ts.ScalarType | ts.TupleType] = None
 
 
 class FencilWithTemporaries(ir.Node, SymbolTableTrait):
@@ -166,7 +168,7 @@ class TemporaryExtractionPredicate:
             return False
         # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
         # as we can not create temporaries for these stencils
-        if isinstance(expr.annex.type.dtype, type_inference.List):
+        if isinstance(expr.type, it_ts.ListType):
             return False
         if self.heuristics and not self.heuristics(expr):
             return False
@@ -255,9 +257,9 @@ def split_closures(
 
     uid_gen_tmps = UIDGenerator(prefix="_tmp")
 
-    type_inference.infer_all(node, offset_provider=offset_provider, save_to_annex=True)
+    node = itir_type_inference.infer(node, offset_provider=offset_provider)
 
-    tmps: list[ir.Sym] = []
+    tmps: list[tuple[str, ts.DataType]] = []
 
     closures: list[ir.StencilClosure] = []
     for closure in reversed(node.closures):
@@ -309,7 +311,9 @@ def split_closures(
                     stencil: ir.Node = lift_expr.fun.args[0]  # usually an ir.Lambda or scan
 
                     # allocate a new temporary
-                    tmps.append(tmp_sym)
+                    assert isinstance(stencil.type, ts.FunctionType)
+                    assert isinstance(stencil.type.returns, ts.DataType)
+                    tmps.append((tmp_sym.id, stencil.type.returns))
 
                     # create a new closure that executes the stencil of the applied lift and
                     # writes the result to the newly created temporary
@@ -361,13 +365,13 @@ def split_closures(
             id=node.id,
             function_definitions=node.function_definitions,
             params=node.params
-            + [ir.Sym(id=tmp.id) for tmp in tmps]
-            + [ir.Sym(id=AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
+            + [im.sym(name, type_) for name, type_ in tmps]
+            + [im.sym(AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
             location=node.location,
         ),
         params=node.params,
-        tmps=[Temporary(id=tmp.id) for tmp in tmps],
+        tmps=[Temporary(id=name, dtype=type_) for name, type_ in tmps],
     )
 
 
@@ -614,32 +618,10 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             assert output_field.id not in domains or domains[output_field.id] == closure.domain
             domains[output_field.id] = closure.domain
 
-    def convert_type(dtype):
-        if isinstance(dtype, type_inference.Primitive):
-            return dtype.name
-        elif isinstance(dtype, type_inference.Tuple):
-            return tuple(convert_type(el) for el in dtype)
-        elif isinstance(dtype, type_inference.List):
-            raise NotImplementedError("Temporaries with dtype list not supported.")
-        raise AssertionError()
-
-    all_types = type_inference.infer_all(node.fencil, offset_provider=offset_provider)
-    fencil_type = all_types[id(node.fencil)]
-    assert isinstance(fencil_type, type_inference.FencilDefinitionType)
-    assert isinstance(fencil_type.params, type_inference.Tuple)
-    types = dict[str, ir.Expr]()
-    for param in node.fencil.params:
-        if param.id in tmps:
-            dtype = all_types[id(param)]
-            assert isinstance(dtype, type_inference.Val)
-            types[param.id] = convert_type(dtype.dtype)
-
     return FencilWithTemporaries(
         fencil=node.fencil,
         params=node.params,
-        tmps=[
-            Temporary(id=tmp.id, domain=domains[tmp.id], dtype=types[tmp.id]) for tmp in node.tmps
-        ],
+        tmps=[Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps],
     )
 
 

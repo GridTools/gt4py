@@ -69,7 +69,6 @@ if dace_iterator:
         # pytest.param((definitions.ProgramBackendId.GTFN_GPU, True), marks=pytest.mark.requires_gpu), # TODO(havogt): update tests to use proper allocation
         (next_tests.definitions.ProgramFormatterId.LISP_FORMATTER, False),
         (next_tests.definitions.ProgramFormatterId.ITIR_PRETTY_PRINTER, False),
-        (next_tests.definitions.ProgramFormatterId.ITIR_TYPE_CHECKER, False),
         (next_tests.definitions.ProgramFormatterId.GTFN_CPP_FORMATTER, False),
     ]
     + OPTIONAL_PROCESSORS,

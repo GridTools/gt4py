@@ -18,14 +18,11 @@ import dace
 from dace.sdfg.state import LoopRegion
 
 import gt4py.eve as eve
-from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
+from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
-from gt4py.next.iterator import (
-    ir as itir,
-    transforms as itir_transforms,
-    type_inference as itir_typing,
-)
+from gt4py.next.iterator import ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
@@ -156,7 +153,6 @@ class ItirToSDFG(eve.NodeVisitor):
     storage_types: dict[str, ts.TypeSpec]
     column_axis: Optional[Dimension]
     offset_provider: dict[str, Any]
-    node_types: dict[int, next_typing.Type]
     unique_id: int
     use_field_canonical_representation: bool
 
@@ -202,6 +198,7 @@ class ItirToSDFG(eve.NodeVisitor):
         # Here we collect these values in a symbol map.
         tmp_ids = set(tmp.id for tmp in self.tmps)
         for sym in node_params:
+            breakpoint()
             if sym.id not in tmp_ids and sym.kind != "Iterator":
                 name_ = str(sym.id)
                 type_ = self.storage_types[name_]
@@ -214,6 +211,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # We visit the domain of the temporary field, passing the set of available symbols.
             assert isinstance(tmp.domain, itir.FunCall)
+            breakpoint()
             self.node_types.update(itir_typing.infer_all(tmp.domain))
             domain_ctx = Context(program_sdfg, defs_state, symbol_map)
             tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
@@ -275,12 +273,12 @@ class ItirToSDFG(eve.NodeVisitor):
         self, closure: itir.StencilClosure, sdfg: dace.SDFG, state: dace.SDFGState
     ) -> dict[str, dace.nodes.AccessNode]:
         # Visit output node, which could be a `make_tuple` expression, to collect the required access nodes
-        output_symbols_pass = GatherOutputSymbolsPass(sdfg, state, self.node_types)
+        output_symbols_pass = GatherOutputSymbolsPass(sdfg, state)
         output_symbols_pass.visit(closure.output)
         # Visit output node again to generate the corresponding tasklet
         context = Context(sdfg, state, output_symbols_pass.symbol_refs)
         translator = PythonTaskletCodegen(
-            self.offset_provider, context, self.node_types, self.use_field_canonical_representation
+            self.offset_provider, context, self.use_field_canonical_representation
         )
         output_nodes = flatten_list(translator.visit(closure.output))
         return {node.value.data: node.value for node in output_nodes}
@@ -289,7 +287,8 @@ class ItirToSDFG(eve.NodeVisitor):
         program_sdfg = dace.SDFG(name=node.id)
         program_sdfg.debuginfo = dace_debuginfo(node)
         entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
-        self.node_types = itir_typing.infer_all(node)
+
+        node = itir_type_inference.infer(node, offset_provider=self.offset_provider)
 
         # Filter neighbor tables from offset providers.
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
@@ -675,7 +674,6 @@ class ItirToSDFG(eve.NodeVisitor):
             lambda_domain,
             input_arrays,
             connectivity_arrays,
-            self.node_types,
             self.use_field_canonical_representation,
         )
 
@@ -760,7 +758,6 @@ class ItirToSDFG(eve.NodeVisitor):
             index_domain,
             input_arrays,
             connectivity_arrays,
-            self.node_types,
             self.use_field_canonical_representation,
         )
 
@@ -785,7 +782,6 @@ class ItirToSDFG(eve.NodeVisitor):
             translator = PythonTaskletCodegen(
                 self.offset_provider,
                 context,
-                self.node_types,
                 self.use_field_canonical_representation,
             )
             lb = translator.visit(lower_bound)[0]

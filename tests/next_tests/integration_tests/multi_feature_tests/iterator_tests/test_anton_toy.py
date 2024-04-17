@@ -23,6 +23,7 @@ from gt4py.next.program_processors.runners import gtfn
 from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
 
 
+# cross-reference why new type inference does not support this
 @fundef
 def ldif(d):
     return lambda inp: deref(shift(d, -1)(inp)) - deref(inp)
@@ -45,6 +46,16 @@ j = offset("j")
 @fundef
 def lap(inp):
     return dif2(i)(inp) + dif2(j)(inp)
+
+
+@fundef
+def lap2(inp):
+    return -4.0 * deref(inp) + (
+        deref(shift(i, 1)(inp))
+        + deref(shift(i, -1)(inp))
+        + deref(shift(j, 1)(inp))
+        + deref(shift(j, -1)(inp))
+    )
 
 
 IDim = gtx.Dimension("IDim")

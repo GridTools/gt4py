@@ -76,6 +76,7 @@ BUILD_CACHE_DIR: pathlib.Path = (
     pathlib.Path(os.environ.get(f"{_PREFIX}_BUILD_CACHE_DIR", tempfile.gettempdir()))
     / "gt4py_cache"
 )
+print(BUILD_CACHE_DIR)
 
 
 #: Whether generated code projects should be kept around between runs.

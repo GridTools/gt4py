@@ -37,7 +37,7 @@ def promote_scalars_to_zero_dim_field(type_: ts.TypeSpec) -> ts.TypeSpec:
             return ts.FieldType(dims=[], dtype=type_el)
         return type_el
 
-    return type_info.apply_to_primitive_constituents(type_, promote_el)
+    return type_info.apply_to_primitive_constituents(promote_el, type_)
 
 
 def promote_zero_dims(
@@ -69,11 +69,11 @@ def promote_zero_dims(
                     raise ValueError(f"'{arg_el}' is not compatible with '{param_el}'.")
             return arg_el
 
-        return type_info.apply_to_primitive_constituents(arg, _as_field, with_path_arg=True)
+        return type_info.apply_to_primitive_constituents(_as_field, arg, with_path_arg=True)
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(function_type.pos_only_args + list(function_type.pos_or_kw_args.values()), args)
+        zip(list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()), args)
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}
@@ -192,7 +192,7 @@ def _scan_param_promotion(param: ts.TypeSpec, arg: ts.TypeSpec) -> ts.FieldType 
             # TODO: we want some generic field type here, but our type system does not support it yet.
             return ts.FieldType(dims=[common.Dimension("...")], dtype=dtype)
 
-    res = type_info.apply_to_primitive_constituents(param, _as_field, with_path_arg=True)
+    res = type_info.apply_to_primitive_constituents(_as_field, param, with_path_arg=True)
     assert isinstance(res, (ts.FieldType, ts.TupleType))
     return res
 
@@ -309,5 +309,5 @@ def return_type_scanop(
         [callable_type.axis],
     )
     return type_info.apply_to_primitive_constituents(
-        carry_dtype, lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg))
+        lambda arg: ts.FieldType(dims=promoted_dims, dtype=cast(ts.ScalarType, arg)), carry_dtype
     )

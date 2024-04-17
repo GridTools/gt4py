@@ -15,6 +15,7 @@ import copy
 
 import gt4py.next as gtx
 from gt4py.eve.utils import UIDs
+from gt4py.next import common
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.transforms.global_tmps import (
@@ -26,6 +27,16 @@ from gt4py.next.iterator.transforms.global_tmps import (
     split_closures,
     update_domains,
 )
+from gt4py.next.type_system import type_specifications as ts
+
+
+IDim = common.Dimension(value="IDim")
+JDim = common.Dimension(value="JDim")
+KDim = common.Dimension(value="KDim", kind=common.DimensionKind.VERTICAL)
+index_type = ts.ScalarType(kind=getattr(ts.ScalarKind, ir.INTEGER_INDEX_BUILTIN.upper()))
+float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+i_field_type = ts.FieldType(dims=[IDim], dtype=float_type)
+index_field_type_factory = lambda dim: ts.FieldType(dims=[dim], dtype=index_type)
 
 
 def test_split_closures():
@@ -33,7 +44,11 @@ def test_split_closures():
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
+        params=[
+            im.sym("d", i_field_type),
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+        ],
         closures=[
             ir.StencilClosure(
                 domain=im.call("cartesian_domain")(),
@@ -58,12 +73,12 @@ def test_split_closures():
         id="f",
         function_definitions=[],
         params=[
-            im.sym("d"),
-            im.sym("inp"),
-            im.sym("out"),
-            im.sym("_tmp_1"),
-            im.sym("_tmp_2"),
-            im.sym("_gtmp_auto_domain"),
+            im.sym("d", i_field_type),
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+            im.sym("_tmp_1", i_field_type),
+            im.sym("_tmp_2", i_field_type),
+            im.sym("_gtmp_auto_domain", ts.DeferredType(constraint=None)),
         ],
         closures=[
             ir.StencilClosure(
@@ -87,7 +102,10 @@ def test_split_closures():
         ],
     )
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1"), Temporary(id="_tmp_2")]
+    assert actual.tmps == [
+        Temporary(id="_tmp_1", dtype=float_type),
+        Temporary(id="_tmp_2", dtype=float_type),
+    ]
     assert actual.fencil == expected
 
 
@@ -96,7 +114,11 @@ def test_split_closures_simple_heuristics():
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[im.sym("d"), im.sym("inp"), im.sym("out")],
+        params=[
+            im.sym("d", i_field_type),
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+        ],
         closures=[
             ir.StencilClosure(
                 domain=im.call("cartesian_domain")(),
@@ -115,11 +137,11 @@ def test_split_closures_simple_heuristics():
         id="f",
         function_definitions=[],
         params=[
-            im.sym("d"),
-            im.sym("inp"),
-            im.sym("out"),
-            im.sym("_tmp_1"),
-            im.sym("_gtmp_auto_domain"),
+            im.sym("d", i_field_type),
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+            im.sym("_tmp_1", i_field_type),
+            im.sym("_gtmp_auto_domain", ts.DeferredType(constraint=None)),
         ],
         closures=[
             ir.StencilClosure(
@@ -139,9 +161,11 @@ def test_split_closures_simple_heuristics():
         ],
     )
     actual = split_closures(
-        testee, extraction_heuristics=SimpleTemporaryExtractionHeuristics, offset_provider={}
+        testee,
+        extraction_heuristics=SimpleTemporaryExtractionHeuristics,
+        offset_provider={"I": IDim},
     )
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [Temporary(id="_tmp_1", dtype=float_type)]
     assert actual.fencil == expected
 
 
@@ -151,7 +175,7 @@ def test_split_closures_lifted_scan():
     testee = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[im.sym("inp"), im.sym("out")],
+        params=[im.sym("inp", i_field_type), im.sym("out", i_field_type)],
         closures=[
             ir.StencilClosure(
                 domain=im.call("cartesian_domain")(),
@@ -181,7 +205,12 @@ def test_split_closures_lifted_scan():
     expected = ir.FencilDefinition(
         id="f",
         function_definitions=[],
-        params=[im.sym("inp"), im.sym("out"), im.sym("_tmp_1"), im.sym("_gtmp_auto_domain")],
+        params=[
+            im.sym("inp", i_field_type),
+            im.sym("out", i_field_type),
+            im.sym("_tmp_1", i_field_type),
+            im.sym("_gtmp_auto_domain", ts.DeferredType(constraint=None)),
+        ],
         closures=[
             ir.StencilClosure(
                 domain=AUTO_DOMAIN,
@@ -211,7 +240,7 @@ def test_split_closures_lifted_scan():
     )
 
     actual = split_closures(testee, offset_provider={})
-    assert actual.tmps == [Temporary(id="_tmp_1")]
+    assert actual.tmps == [Temporary(id="_tmp_1", dtype=float_type)]
     assert actual.fencil == expected
 
 
@@ -221,8 +250,14 @@ def test_update_cartesian_domains():
             id="f",
             function_definitions=[],
             params=[
-                im.sym(name)
-                for name in ("i", "j", "k", "inp", "out", "_gtmp_0", "_gtmp_1", "_gtmp_auto_domain")
+                im.sym("i", index_type),
+                im.sym("j", index_type),
+                im.sym("k", index_type),
+                im.sym("inp", i_field_type),
+                im.sym("out", i_field_type),
+                im.sym("_gtmp_0", i_field_type),
+                im.sym("_gtmp_1", i_field_type),
+                im.sym("_gtmp_auto_domain", ts.DeferredType(constraint=None)),
             ],
             closures=[
                 ir.StencilClosure(
@@ -350,13 +385,13 @@ def test_collect_tmps_info():
             id="f",
             function_definitions=[],
             params=[
-                ir.Sym(id="i"),
-                ir.Sym(id="j"),
-                ir.Sym(id="k"),
-                ir.Sym(id="inp", dtype=("float64", False)),
-                ir.Sym(id="out", dtype=("float64", False)),
-                ir.Sym(id="_gtmp_0"),
-                ir.Sym(id="_gtmp_1"),
+                im.sym("i", index_type),
+                im.sym("j", index_type),
+                im.sym("k", index_type),
+                im.sym("inp", i_field_type),
+                im.sym("out", i_field_type),
+                im.sym("_gtmp_0", i_field_type),
+                im.sym("_gtmp_1", i_field_type),
             ],
             closures=[
                 ir.StencilClosure(
@@ -413,15 +448,15 @@ def test_collect_tmps_info():
             ],
         ),
         params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
-        tmps=[Temporary(id="_gtmp_0"), Temporary(id="_gtmp_1")],
+        tmps=[Temporary(id="_gtmp_0", dtype=float_type), Temporary(id="_gtmp_1", dtype=float_type)],
     )
     expected = FencilWithTemporaries(
         fencil=testee.fencil,
         params=testee.params,
         tmps=[
-            Temporary(id="_gtmp_0", domain=tmp_domain, dtype="float64"),
-            Temporary(id="_gtmp_1", domain=tmp_domain, dtype="float64"),
+            Temporary(id="_gtmp_0", domain=tmp_domain, dtype=float_type),
+            Temporary(id="_gtmp_1", domain=tmp_domain, dtype=float_type),
         ],
     )
-    actual = collect_tmps_info(testee, offset_provider={})
+    actual = collect_tmps_info(testee, offset_provider={"I": IDim, "J": JDim, "K": KDim})
     assert actual == expected

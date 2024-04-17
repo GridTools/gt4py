@@ -20,7 +20,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
+def sym(sym_or_name: Union[str, itir.Sym], type_=None) -> itir.Sym:
     """
     Convert to Sym if necessary.
 
@@ -33,11 +33,12 @@ def sym(sym_or_name: Union[str, itir.Sym]) -> itir.Sym:
     Sym(id=SymbolName('b'), kind=None, dtype=None)
     """
     if isinstance(sym_or_name, itir.Sym):
+        assert not type_
         return sym_or_name
-    return itir.Sym(id=sym_or_name)
+    return itir.Sym(id=sym_or_name, type=ensure_type(type_))
 
 
-def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
+def ref(ref_or_name: Union[str, itir.SymRef], type_=None) -> itir.SymRef:
     """
     Convert to SymRef if necessary.
 
@@ -50,8 +51,9 @@ def ref(ref_or_name: Union[str, itir.SymRef]) -> itir.SymRef:
     SymRef(id=SymbolRef('b'))
     """
     if isinstance(ref_or_name, itir.SymRef):
+        assert not type_
         return ref_or_name
-    return itir.SymRef(id=ref_or_name)
+    return itir.SymRef(id=ref_or_name, type=ensure_type(type_))
 
 
 def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> itir.Expr:

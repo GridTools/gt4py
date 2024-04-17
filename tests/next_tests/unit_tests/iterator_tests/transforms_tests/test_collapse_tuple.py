@@ -152,7 +152,9 @@ def test_inline_trivial_make_tuple():
 def test_propagate_to_if_on_tuples():
     testee = im.tuple_get(0, im.if_("cond", im.make_tuple(1, 2), im.make_tuple(3, 4)))
     expected = im.if_(
-        "cond", im.tuple_get(0, im.make_tuple(1, 2)), im.tuple_get(0, im.make_tuple(3, 4))
+        im.ref("cond", "bool"),
+        im.tuple_get(0, im.make_tuple(1, 2)),
+        im.tuple_get(0, im.make_tuple(3, 4)),
     )
     actual = CollapseTuple.apply(
         testee,
@@ -190,9 +192,9 @@ def test_propagate_nested_lift():
 
 
 def test_if_on_tuples_with_let():
-    testee = im.let("val", im.if_("cond", im.make_tuple(1, 2), im.make_tuple(3, 4)))(
-        im.tuple_get(0, "val")
-    )
+    testee = im.let(
+        "val", im.if_(im.ref("cond", "bool"), im.make_tuple(1, 2), im.make_tuple(3, 4))
+    )(im.tuple_get(0, "val"))
     expected = im.if_("cond", 1, 3)
     actual = CollapseTuple.apply(testee, remove_letified_make_tuple_elements=False)
     assert actual == expected
