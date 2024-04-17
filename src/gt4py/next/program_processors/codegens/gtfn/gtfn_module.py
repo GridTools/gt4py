@@ -183,7 +183,7 @@ class GTFNTranslationStep(
         program: itir.FencilDefinition,
         offset_provider: dict[str, Connectivity | Dimension],
         runtime_lift_mode: Optional[LiftMode],
-    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries:
+    ) -> itir.FencilDefinition | global_tmps.FencilWithTemporaries | itir.Program:
         # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
         #  to the interface of all (or at least all of concern) backends, but instead should be
         #  configured in the backend itself (like it is here), until then we respect the argument

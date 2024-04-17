@@ -26,7 +26,7 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import allocators as next_allocators, backend as next_backend, common
+from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import fencil_to_program, global_tmps as gtmps_transform
 from gt4py.next.otf import stages, workflow
@@ -225,7 +225,7 @@ def execute_roundtrip(
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = False,
+    debug: bool = config.DEBUG,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
@@ -246,7 +246,7 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = False
+    debug: bool = config.DEBUG
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 

@@ -286,8 +286,18 @@ def cast_(obj, new_dtype):
 @builtins.not_.register(EMBEDDED)
 def not_(a):
     if isinstance(a, Column):
-        return np.logical_not(a.data)
+        return np.logical_not(a)
     return not a
+
+
+@builtins.gamma.register(EMBEDDED)
+def gamma(a):
+    gamma_ = np.vectorize(math.gamma)
+    if isinstance(a, Column):
+        return Column(kstart=a.kstart, data=gamma_(a.data))
+    res = gamma_(a)
+    assert res.ndim == 0
+    return res.item()
 
 
 @builtins.and_.register(EMBEDDED)
@@ -491,8 +501,7 @@ for math_builtin_name in builtins.MATH_BUILTINS:
     decorator = getattr(builtins, math_builtin_name).register(EMBEDDED)
     impl: Callable
     if math_builtin_name == "gamma":
-        # numpy has no gamma function
-        impl = np.vectorize(math.gamma)
+        continue  # treated explicitly
     elif math_builtin_name in python_builtins:
         # TODO: Should potentially use numpy fixed size types to be consistent
         #   with compiled backends. Currently using Python types to preserve
@@ -500,6 +509,7 @@ for math_builtin_name in builtins.MATH_BUILTINS:
         impl = python_builtins[math_builtin_name]
     else:
         impl = getattr(np, math_builtin_name)
+
     globals()[math_builtin_name] = decorator(impl)
 
 
@@ -1502,6 +1512,7 @@ def _validate_domain(domain: Domain, offset_provider: OffsetProvider) -> None:
 
 @runtime.set_at.register(EMBEDDED)
 def set_at(expr, domain, target) -> None:
+    # TODO we can't set the column_range here, because it's too late: `expr` already evaluated
     operators._tuple_assign_field(target, expr, common.domain(domain))
 
 
@@ -1513,28 +1524,59 @@ def _compute_point(
         make_in_iterator(
             inp,
             pos,
-            column_axis=column_range.dim.value if column_range is not eve.NOTHING else None,
+            column_axis=column_range.dim.value
+            if isinstance(column_range, common.NamedRange)
+            else None,
         )
         for inp in promoted_ins
     )
     return sten(*ins_iters)
 
 
-# def _allocate_out(sten, ins, pos) -> common.MutableField:
+def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
+    if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
+        assert (
+            col_range_placeholder.unit_range.is_empty()
+        )  # check it's just the placeholder with empty range
+        column_axis = col_range_placeholder.dim
+        if column_axis is not None and column_axis.value in domain:
+            return common.NamedRange(
+                column_axis,
+                common.UnitRange(domain[column_axis.value].start, domain[column_axis.value].stop),
+            )
+    return eve.NOTHING
+
+
+# TODO handle in clean way
+def _np_void_to_tuple(a):
+    if isinstance(a, np.void):
+        return tuple(_np_void_to_tuple(elem) for elem in a)
+    return a
 
 
 @builtins.as_fieldop.register(EMBEDDED)
-def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
+def as_fieldop(fun: Callable, domain_: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
         # TODO extract function, move private utils
-        pos = next(_domain_iterator(_dimension_to_tag(domain)))
-        single_point_result = _compute_point(fun, args, pos)
+        domain = _dimension_to_tag(domain_)
+        col_range = _extract_column_range(domain)
+        if col_range is not eve.NOTHING:
+            del domain[col_range.dim.value]
+
+        pos = next(_domain_iterator(domain))
+        with embedded_context.new_context(closure_column_range=col_range) as ctx:
+            single_point_result = ctx.run(_compute_point, fun, args, pos, col_range)
+            if isinstance(single_point_result, Column):
+                single_point_result = single_point_result.data[0]
+            single_point_result = _np_void_to_tuple(single_point_result)
 
         xp = operators._get_array_ns(*args)
-        out = operators._construct_scan_array(common.domain(domain), xp)(single_point_result)
+        out = operators._construct_scan_array(common.domain(domain_), xp)(single_point_result)
+
+        # TODO `out` gets allocated in the order of domain_, but might not match the order of `target` in set_at
 
         closure(
-            domain,
+            _dimension_to_tag(domain_),
             fun,
             out,
             list(args),
@@ -1558,18 +1600,10 @@ def closure(
     if not (isinstance(out, common.Field) or is_tuple_of_field(out)):
         raise TypeError("'Out' needs to be a located field.")
 
-    column_range: common.NamedRange | eve.NothingType = eve.NOTHING
-    if (col_range_placeholder := embedded_context.closure_column_range.get(None)) is not None:
-        assert (
-            col_range_placeholder.unit_range.is_empty()
-        )  # check it's just the placeholder with empty range
-        column_axis = col_range_placeholder.dim
-        if column_axis is not None and column_axis.value in domain:
-            column_range = common.NamedRange(
-                column_axis,
-                common.UnitRange(domain[column_axis.value].start, domain[column_axis.value].stop),
-            )
-            del domain[column_axis.value]
+    column_range: common.NamedRange | eve.NothingType = _extract_column_range(domain)
+
+    if isinstance(column_range, common.NamedRange):
+        del domain[column_range.dim.value]
 
     out = as_tuple_field(out) if is_tuple_of_field(out) else _wrap_field(out)
 

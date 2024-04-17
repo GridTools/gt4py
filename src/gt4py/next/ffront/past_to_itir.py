@@ -340,7 +340,7 @@ class ProgramLowering(
             domain_args.append(
                 itir.FunCall(
                     fun=itir.SymRef(id="named_range"),
-                    args=[itir.AxisLiteral(value=dim.value), lower, upper],
+                    args=[itir.AxisLiteral(value=dim.value, kind=dim.kind), lower, upper],
                 )
             )
             domain_args_kind.append(dim.kind)
