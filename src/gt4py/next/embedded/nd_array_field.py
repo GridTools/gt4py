@@ -38,17 +38,17 @@ from gt4py.next.iterator import embedded as itir_embedded
 try:
     import cupy as cp
 except ImportError:
-    cp: Optional[ModuleType] = None  # type:ignore[no-redef]
+    cp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
     from jax import numpy as jnp
 except ImportError:
-    jnp: Optional[ModuleType] = None  # type:ignore[no-redef]
+    jnp: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 try:
     import dace
 except ImportError:
-    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
+    dace: Optional[ModuleType] = None  # type: ignore[no-redef]
 
 
 def _get_nd_array_class(*fields: common.Field | core_defs.Scalar) -> type[NdArrayField]:
@@ -335,7 +335,7 @@ class NdArrayField(
 if dace:
     # Extension of NdArrayField : Support for SDFGConvertible GT4Py Programs
     @dataclasses.dataclass(frozen=True)
-    class NdArrayField(  # type: ignore # redefinition
+    class NdArrayField(  # type: ignore[no-redef]
         NdArrayField,
         common.MutableField[common.DimsT, core_defs.ScalarT],
         common.FieldBuiltinFuncRegistry,

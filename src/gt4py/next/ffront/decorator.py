@@ -77,7 +77,7 @@ try:
     from gt4py.next.program_processors.runners.dace import run_dace_gpu
     from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
 except ImportError:
-    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
+    dace: Optional[ModuleType] = None  # type:ignore [no-redef]
 
 
 DEFAULT_BACKEND: Callable = None
@@ -249,7 +249,7 @@ class Program:
 if dace:
     # Extension of GT4Py Program : Implement SDFGConvertible interface
     @dataclasses.dataclass(frozen=True)
-    class Program(Program, SDFGConvertible):  # type: ignore # redefinition
+    class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfgConvertible: dict[str, Any] = field(default_factory=dict)
 
         def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
