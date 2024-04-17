@@ -94,7 +94,7 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     return str_or_offset
 
 
-def ensure_type(type_: str | ts.TypeSpec | None):
+def ensure_type(type_: str | ts.TypeSpec | None) -> ts.TypeSpec | None:
     if isinstance(type_, str):
         return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
     assert isinstance(type_, ts.TypeSpec) or type_ is None
@@ -298,7 +298,7 @@ def shift(offset, value=None):
     return call(call("shift")(*args))
 
 
-def literal(value: str, typename: str):
+def literal(value: str, typename: str) -> itir.Literal:
     return itir.Literal(value=value, type=ensure_type(typename))
 
 

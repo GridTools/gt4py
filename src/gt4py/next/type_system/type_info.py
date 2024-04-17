@@ -236,10 +236,10 @@ def is_integer(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     False
     """
-    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in [
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
         ts.ScalarKind.INT32,
         ts.ScalarKind.INT64,
-    ]
+    }
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
