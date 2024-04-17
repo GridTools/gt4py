@@ -88,7 +88,7 @@ DEFAULT_BACKEND: Callable = None
 # TODO(tehrengruber): Decide if and how programs can call other programs. As a
 #  result Program could become a GTCallable.
 @dataclasses.dataclass(frozen=True)
-class Program(SDFGConvertible):
+class Program:
     """
     Construct a program object from a PAST node.
 
@@ -107,7 +107,6 @@ class Program(SDFGConvertible):
 
     definition_stage: ffront_stages.ProgramDefinition
     backend: Optional[next_backend.Backend]
-    sdfgConvertible: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_function(
@@ -248,59 +247,63 @@ class Program(SDFGConvertible):
             self.definition_stage, *args, **(kwargs | {"offset_provider": offset_provider})
         )
 
-    def __sdfg__(self, *args, **kwargs) -> Optional[Any]:
-        if not dace:
-            return None
 
-        # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-        offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-        self.sdfgConvertible["offset_provider"] = offset_provider
+if dace:
+    # Extension of GT4Py Program : Implement SDFGConvertible interface
+    @dataclasses.dataclass(frozen=True)
+    class Program(Program, SDFGConvertible):  # type: ignore # redefinition
+        sdfgConvertible: dict[str, Any] = field(default_factory=dict)
 
-        params = {str(p.id): p.dtype for p in self.itir.params}
-        fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
-        arg_types = [
-            fields[pname]
-            if pname in fields
-            else ts.ScalarType(kind=type_translation.get_scalar_kind(dtype))
-            if dtype is not None
-            else ts.ScalarType(kind=ts.ScalarKind.INT32)
-            for pname, dtype in params.items()
-        ]
+        def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
+            # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
+            offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
+            self.sdfgConvertible["offset_provider"] = offset_provider
 
-        translation = dace_workflow.DaCeTranslator(
-            auto_optimize=False,
-            device_type=core_defs.DeviceType.CUDA
-            if self.backend == run_dace_gpu
-            else core_defs.DeviceType.CPU,
-        )
-        sdfg = translation.generate_sdfg(
-            self.itir,
-            arg_types,
-            offset_provider=offset_provider,
-            column_axis=kwargs.get("column_axis", None),
-            runtime_lift_mode=kwargs.get("lift_mode", None),
-        )
+            params = {str(p.id): p.dtype for p in self.itir.params}
+            fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
+            arg_types = [
+                fields[pname]
+                if pname in fields
+                else ts.ScalarType(kind=type_translation.get_scalar_kind(dtype))
+                if dtype is not None
+                else ts.ScalarType(kind=ts.ScalarKind.INT32)
+                for pname, dtype in params.items()
+            ]
 
-        sdfg.arg_names.extend(self.__sdfg_signature__()[0])
-        sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
+            translation = dace_workflow.DaCeTranslator(
+                auto_optimize=False,
+                device_type=core_defs.DeviceType.CUDA
+                if self.backend == run_dace_gpu
+                else core_defs.DeviceType.CPU,
+            )
+            sdfg = translation.generate_sdfg(
+                self.itir,
+                arg_types,
+                offset_provider=offset_provider,
+                column_axis=kwargs.get("column_axis", None),
+                runtime_lift_mode=kwargs.get("lift_mode", None),
+            )
 
-        return sdfg
+            sdfg.arg_names.extend(self.__sdfg_signature__()[0])
+            sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
-    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-        if self.sdfgConvertible.get("offset_provider", None):
-            return {
-                f"__connectivity_{k}": v.table
-                for k, v in self.sdfgConvertible["offset_provider"].items()
-                if hasattr(v, "table")
-            }
-        else:
-            return {}
+            return sdfg
 
-    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
-        args = []
-        for arg in self.past_stage.past_node.params:
-            args.append(arg.id)
-        return (args, [])
+        def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+            if self.sdfgConvertible.get("offset_provider", None):
+                return {
+                    f"__connectivity_{k}": v.table
+                    for k, v in self.sdfgConvertible["offset_provider"].items()
+                    if hasattr(v, "table")
+                }
+            else:
+                return {}
+
+        def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+            args = []
+            for arg in self.past_stage.past_node.params:
+                args.append(arg.id)
+            return (args, [])
 
 
 @dataclasses.dataclass(frozen=True)

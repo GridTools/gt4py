@@ -18,7 +18,7 @@ import dataclasses
 import functools
 from collections.abc import Callable, Sequence
 from types import ModuleType
-from typing import Any, ClassVar, Iterable
+from typing import ClassVar, Iterable
 
 import numpy as np
 from numpy import typing as npt
@@ -132,17 +132,6 @@ class NdArrayField(
     @property
     def ndarray(self) -> core_defs.NDArrayObject:
         return self._ndarray
-
-    def data_ptr(self) -> int:
-        if self.ndarray.__dlpack_device__()[0] == 1:  # type: ignore
-            return self.ndarray.__array_interface__["data"][0]  # type: ignore
-        else:
-            return self.ndarray.__cuda_array_interface__["data"][0]  # type: ignore
-
-    def __descriptor__(self) -> Optional[Any]:
-        if not dace:
-            return None
-        return dace.data.create_datadescriptor(self.ndarray)
 
     def asnumpy(self) -> np.ndarray:
         if self.array_ns == cp:
@@ -341,6 +330,30 @@ class NdArrayField(
         )
         assert common.is_relative_index_sequence(slice_)
         return new_domain, slice_
+
+
+if dace:
+    # Extension of NdArrayField : Support for SDFGConvertible GT4Py Programs
+    @dataclasses.dataclass(frozen=True)
+    class NdArrayField(  # type: ignore # redefinition
+        NdArrayField,
+        common.MutableField[common.DimsT, core_defs.ScalarT],
+        common.FieldBuiltinFuncRegistry,
+    ):
+        def data_ptr(self) -> int:
+            obj = self.ndarray
+            if dace.dtypes.is_array(obj) and (
+                hasattr(obj, "__array_interface__") or hasattr(obj, "__cuda_array_interface__")
+            ):
+                if dace.dtypes.is_gpu_array(obj):
+                    return obj.__cuda_array_interface__["data"][0]  # type: ignore
+                else:
+                    return self.ndarray.__array_interface__["data"][0]  # type: ignore
+            else:
+                raise ValueError("Unsupported data container.")
+
+        def __descriptor__(self) -> dace.data.Data:
+            return dace.data.create_datadescriptor(self.ndarray)
 
 
 @dataclasses.dataclass(frozen=True)
