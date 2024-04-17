@@ -79,8 +79,6 @@ try:
 except ImportError:
     dace: Optional[ModuleType] = None  # type:ignore[no-redef]
 
-    class SDFGConvertible: ...
-
 
 DEFAULT_BACKEND: Callable = None
 
