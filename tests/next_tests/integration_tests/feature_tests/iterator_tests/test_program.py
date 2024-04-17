@@ -18,26 +18,13 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next.iterator.builtins import as_fieldop, cartesian_domain, deref, named_range
 from gt4py.next.iterator.runtime import fendef, fundef, set_at
+from gt4py.next.program_processors.formatters import type_check
+from gt4py.next.program_processors.runners import dace, gtfn
 
 from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = gtx.Dimension("I")
-
-_isize = 10
-
-
-@pytest.fixture
-def dom():
-    return {I: range(_isize)}
-
-
-def a_field():
-    return gtx.as_field([I], np.arange(0, _isize, dtype=np.float64))
-
-
-def out_field():
-    return gtx.as_field([I], np.zeros(shape=(_isize,)))
 
 
 @fundef
@@ -54,36 +41,23 @@ def copy_program(inp, out, size):
     )
 
 
-# @fundef
-# def plus_stencil(inp0,inp1):
-#     return plus(deref(inp0),deref(inp1))
+def test_prog(program_processor):
+    program_processor, validate = program_processor
 
-# set_at(
-#         # as_fieldop(copy_stencil, domain=cartesian_domain(named_range(I, 0, size)))(inp),
-#         as_fieldop(plus_stencil)(inp0, as_fieldop(plus_stencil)(inp1,inp2)),
-#         cartesian_domain(named_range(I, 0, size)),
-#         out,
-#     )
+    if program_processor in [
+        gtfn.run_gtfn.executor,
+        gtfn.run_gtfn_imperative.executor,
+        gtfn.run_gtfn_with_temporaries.executor,
+        dace.run_dace_cpu.executor,
+        type_check.check_type_inference,
+    ]:
+        # TODO(havogt): Remove skip during refactoring to GTIR
+        pytest.skip("Executor requires to start from fencil.")
 
+    isize = 10
+    inp = gtx.as_field([I], np.arange(0, isize, dtype=np.float64))
+    out = gtx.as_field([I], np.zeros(shape=(isize,)))
 
-def test_prog():
-    validate = True
-
-    inp = a_field()
-    out = out_field()
-
-    copy_program(inp, out, _isize, offset_provider={})
+    run_processor(copy_program, program_processor, inp, out, isize, offset_provider={})
     if validate:
         assert np.allclose(inp.asnumpy(), out.asnumpy())
-
-
-# example for
-# @field_operator
-# def sum(a, b, c):
-#     a + b + c
-
-# def plus(a,b):
-#     return deref(a)+deref(b)
-
-# def sum_prog(a, b, c, out):
-#     set_at(as_fieldop(plus)(a, as_fieldop(plus)(b, c)), out.domain, out)
