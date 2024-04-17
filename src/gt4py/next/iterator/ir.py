@@ -12,7 +12,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import ClassVar, List, Optional, Union
+import typing
+from typing import Any, ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
@@ -20,6 +21,11 @@ from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
 from gt4py.next.type_system import type_specifications as ts
+
+
+# TODO(havogt):
+# After completion of refactoring to GTIR, FencilDefinition and StencilClosure should be removed everywhere.
+# During transition, we lower to FencilDefinitions and apply a transformation to GTIR-style afterwards.
 
 
 @noninstantiable
@@ -177,6 +183,13 @@ BUILTINS = {
     *TYPEBUILTINS,
 }
 
+# only used in `Program`` not `FencilDefinition`
+# TODO(havogt): restructure after refactoring to GTIR
+GTIR_BUILTINS = {
+    *BUILTINS,
+    "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+}
+
 
 class FencilDefinition(Node, ValidatedSymbolTableTrait):
     id: Coerced[SymbolName]
@@ -185,6 +198,31 @@ class FencilDefinition(Node, ValidatedSymbolTableTrait):
     closures: List[StencilClosure]
 
     _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in BUILTINS]
+
+
+class Stmt(Node): ...
+
+
+class SetAt(Stmt):  # from JAX array.at[...].set()
+    expr: Expr  # only `as_fieldop(stencil)(inp0, ...)` in first refactoring
+    domain: Expr
+    target: Expr  # `make_tuple` or SymRef
+
+
+class Temporary(Node):
+    id: Coerced[eve.SymbolName]
+    domain: Optional[Expr] = None
+    dtype: Optional[ts.ScalarType | ts.TupleType] = None
+
+
+class Program(Node, ValidatedSymbolTableTrait):
+    id: Coerced[SymbolName]
+    function_definitions: List[FunctionDefinition]
+    params: List[Sym]
+    declarations: List[Temporary]
+    body: List[Stmt]
+
+    _NODE_SYMBOLS_: ClassVar[List[Sym]] = [Sym(id=name) for name in GTIR_BUILTINS]
 
 
 # TODO(fthaler): just use hashable types in nodes (tuples instead of lists)

@@ -15,6 +15,7 @@
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_parser import pparse
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_symref():
@@ -66,6 +67,13 @@ def test_deref():
 def test_lift():
     testee = "↑x"
     expected = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_as_fieldop():
+    testee = "⇑x"
+    expected = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
     actual = pparse(testee)
     assert actual == expected
 
@@ -184,6 +192,14 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = "t = temporary(domain=domain, dtype=float64);"
+    float64_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=float64_type)
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_stencil_closure():
     testee = "y ← (deref)(x) @ cartesian_domain();"
     expected = ir.StencilClosure(
@@ -196,6 +212,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = "y @ cartesian_domain() ← x;"
+    expected = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring to GTIR
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(
@@ -210,6 +238,33 @@ def test_fencil_definition():
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="y"),
                 inputs=[ir.SymRef(id="x")],
+            )
+        ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_program():
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    expected = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype=ir.SymRef(id="float64"),
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
             )
         ],
     )

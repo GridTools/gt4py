@@ -21,7 +21,8 @@ from typing import Optional
 
 from gt4py import eve
 from gt4py.eve import utils as eve_utils
-from gt4py.next.iterator import ir, type_system as itir_type_inference
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_if_call, is_let
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda

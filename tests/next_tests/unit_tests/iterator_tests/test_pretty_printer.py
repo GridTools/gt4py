@@ -160,6 +160,13 @@ def test_lift():
     assert actual == expected
 
 
+def test_as_fieldop():
+    testee = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
+    expected = "⇑x"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_bool_arithmetic():
     testee = ir.FunCall(
         fun=ir.SymRef(id="not_"),
@@ -288,6 +295,13 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
+    expected = "t = temporary(domain=domain, dtype=float64);"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_stencil_closure():
     testee = ir.StencilClosure(
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -300,6 +314,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    expected = "y @ cartesian_domain() ← x;"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring.
 def test_fencil_definition():
     testee = ir.FencilDefinition(
         id="f",
@@ -318,4 +344,31 @@ def test_fencil_definition():
     )
     actual = pformat(testee)
     expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
+    assert actual == expected
+
+
+def test_program():
+    testee = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype="float64",
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
+            )
+        ],
+    )
+    actual = pformat(testee)
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected

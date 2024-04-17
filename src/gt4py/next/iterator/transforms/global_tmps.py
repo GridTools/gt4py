@@ -17,13 +17,13 @@ import functools
 from collections.abc import Mapping
 from typing import Any, Callable, Final, Iterable, Literal, Optional, Sequence
 
-import gt4py.eve as eve
 import gt4py.next as gtx
-from gt4py.eve import Coerced, NodeTranslator, PreserveLocationVisitor
+from gt4py.eve import NodeTranslator, PreserveLocationVisitor
 from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
-from gt4py.next.iterator import ir, type_system as itir_type_inference
+from gt4py.next.iterator import ir
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
@@ -56,38 +56,17 @@ AUTO_DOMAIN: Final = ir.FunCall(fun=ir.SymRef(id="_gtmp_auto_domain"), args=[])
 # Iterator IR extension nodes
 
 
-class Temporary(ir.Node):
-    """Iterator IR extension: declaration of a temporary buffer."""
-
-    id: Coerced[eve.SymbolName]
-    domain: Optional[ir.Expr] = None
-    dtype: Optional[ts.ScalarType | ts.TupleType] = None
-
-
-class FencilWithTemporaries(ir.Node, SymbolTableTrait):
+class FencilWithTemporaries(
+    ir.Node, SymbolTableTrait
+):  # TODO(havogt): remove and use new `itir.Program` instead.
     """Iterator IR extension: declaration of a fencil with temporary buffers."""
 
     fencil: ir.FencilDefinition
     params: list[ir.Sym]
-    tmps: list[Temporary]
+    tmps: list[ir.Temporary]
 
 
 # Extensions for `PrettyPrinter` for easier debugging
-
-
-def pformat_Temporary(printer: PrettyPrinter, node: Temporary, *, prec: int) -> list[str]:
-    start, end = [node.id + " = temporary("], [");"]
-    args = []
-    if node.domain is not None:
-        args.append(printer._hmerge(["domain="], printer.visit(node.domain, prec=0)))
-    if node.dtype is not None:
-        args.append(printer._hmerge(["dtype="], [str(node.dtype)]))
-    hargs = printer._hmerge(*printer._hinterleave(args, ", "))
-    vargs = printer._vmerge(*printer._hinterleave(args, ","))
-    oargs = printer._optimum(hargs, vargs)
-    h = printer._hmerge(start, oargs, end)
-    v = printer._vmerge(start, printer._indent(oargs), end)
-    return printer._optimum(h, v)
 
 
 def pformat_FencilWithTemporaries(
@@ -119,7 +98,6 @@ def pformat_FencilWithTemporaries(
     return printer._vmerge(params, printer._indent(body), ["}"])
 
 
-PrettyPrinter.visit_Temporary = pformat_Temporary  # type: ignore
 PrettyPrinter.visit_FencilWithTemporaries = pformat_FencilWithTemporaries  # type: ignore
 
 
@@ -371,7 +349,7 @@ def split_closures(
             location=node.location,
         ),
         params=node.params,
-        tmps=[Temporary(id=name, dtype=type_) for name, type_ in tmps],
+        tmps=[ir.Temporary(id=name, dtype=type_) for name, type_ in tmps],
     )
 
 
@@ -621,7 +599,7 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
     return FencilWithTemporaries(
         fencil=node.fencil,
         params=node.params,
-        tmps=[Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps],
+        tmps=[ir.Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps],
     )
 
 
