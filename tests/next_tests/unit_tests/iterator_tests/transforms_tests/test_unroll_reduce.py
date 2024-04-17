@@ -19,6 +19,7 @@ import pytest
 from gt4py.eve.utils import UIDs
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce, _get_partial_offset_tags
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 from next_tests.unit_tests.conftest import DummyConnectivity
 
@@ -34,7 +35,7 @@ def basic_reduction():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(
@@ -51,7 +52,7 @@ def reduction_with_shift_on_second_arg():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.SymRef(id="x"),
@@ -69,7 +70,7 @@ def reduction_with_incompatible_shifts():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(
@@ -90,7 +91,7 @@ def reduction_with_irrelevant_full_shift():
     return ir.FunCall(
         fun=ir.FunCall(
             fun=ir.SymRef(id="reduce"),
-            args=[ir.SymRef(id="foo"), ir.Literal(value="0.0", type="float64")],
+            args=[ir.SymRef(id="foo"), im.literal("0.0", "float64")],
         ),
         args=[
             ir.FunCall(

@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.inline_into_scan import InlineIntoScan
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 # TODO(havogt): remove duplication with test_eta_reduction
@@ -25,8 +26,8 @@ def _make_scan(*args: list[str], scanpass_body: ir.Expr) -> ir.Expr:
                 params=[ir.Sym(id="state")] + [ir.Sym(id=f"{arg}") for arg in args],
                 expr=scanpass_body,
             ),
-            ir.Literal(value="0.0", type="float64"),
-            ir.Literal(value="True", type="bool"),
+            im.literal("0.0", "float64"),
+            im.literal("True", "bool"),
         ],
     )
 
