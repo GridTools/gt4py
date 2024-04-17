@@ -391,10 +391,6 @@ def test_remapping_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_premap_dispatch():
-    pass
-
-
 def test_identity_connectivities():
     D0 = Dimension("D0")
     D1 = Dimension("D1")
@@ -449,11 +445,11 @@ def test_identity_connectivities():
         ),
     )
 
-    for res, exp in zip(result, expected):
-        assert res.codomain == exp.codomain
-        assert res.domain == exp.domain
-        assert res.dtype == exp.dtype
-        assert np.allclose(res.ndarray, exp.ndarray)
+    for r, e in zip(result, expected):
+        assert r.codomain == e.codomain
+        assert r.domain == e.domain
+        assert r.dtype == e.dtype
+        assert np.all(r.ndarray == e.ndarray)
 
 
 @pytest.mark.parametrize(

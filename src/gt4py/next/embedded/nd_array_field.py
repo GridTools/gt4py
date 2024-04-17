@@ -596,10 +596,13 @@ def _reshuffling_premap(
     # Create identity connectivities for the missing domain dimensions
     for dim in data.domain.dims:
         if dim not in conn_map:
-            conn_map[dim] = utils.first(_identity_connectivities(new_domain, [dim]))
+            conn_map[dim] = utils.first(
+                _identity_connectivities(new_domain, [dim], cls=type(connectivity))
+            )
 
     # Take data
-    new_buffer = data._ndarray.__getitem__(*(conn_map[dim] for dim in data.domain.dims))
+    take_indices = tuple(conn_map[dim].ndarray for dim in data.domain.dims)
+    new_buffer = data._ndarray.__getitem__(take_indices)
 
     return data.__class__.from_array(
         new_buffer,
@@ -655,17 +658,18 @@ def _identity_connectivities(
     domain: common.Domain,
     codomains: Sequence[common.DimT],
     *,
-    cls: type[_ConnT] = NdArrayConnectivityField,
+    cls: type[_ConnT],
 ) -> tuple[_ConnT, ...]:
+    xp = cls.array_ns
     shape = domain.shape
     identities = []
     for d in codomains:
         assert d in domain.dims
         d_idx = domain.dim_index(d)
-        indices = np.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
+        indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
         identities.append(
             cls.from_array(
-                np.broadcast_to(
+                xp.broadcast_to(
                     indices[
                         tuple(
                             slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims)
