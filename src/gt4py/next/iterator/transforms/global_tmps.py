@@ -253,9 +253,7 @@ def split_closures(
                 closures.append(current_closure)
                 continue
 
-            is_scan: bool = isinstance(current_closure.stencil, ir.FunCall) and cpm.is_call_to(
-                current_closure.stencil, "scan"
-            )
+            is_scan: bool = cpm.is_call_to(current_closure.stencil, "scan")
             current_closure_stencil = (
                 current_closure.stencil if not is_scan else current_closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
             )
