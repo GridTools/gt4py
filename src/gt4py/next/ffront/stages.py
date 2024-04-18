@@ -91,15 +91,17 @@ class PastClosure:
     kwargs: dict[str, Any]
 
 
-Hasher_T: typing.TypeAlias = eve.extended_typing.HashlibAlgorithm | xxhash.xxh64 | hashlib._Hash
+# TODO(ricoh): This type seems to not really catch the relevant types
+#   which leads to the ignores below
+Hasher_T: typing.TypeAlias = eve.extended_typing.HashlibAlgorithm
 
 
 def cache_key(obj: Any, algorithm: Optional[str | Hasher_T] = None) -> str:
     hasher: Hasher_T
     if not algorithm:
-        hasher = xxhash.xxh64()
+        hasher = xxhash.xxh64()  # type: ignore[assignment] # see todo above
     elif isinstance(algorithm, str):
-        hasher = hashlib.new(algorithm)
+        hasher = hashlib.new(algorithm)  # type: ignore[assignment] # see todo above
     else:
         hasher = algorithm
 
