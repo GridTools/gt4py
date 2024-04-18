@@ -77,7 +77,7 @@ array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
     dtype=np.float64,
-    allocator=gtx.itir_python
+    allocator=gtx.program_processors.runners.roundtrip.backend
 )
 ```
 
@@ -150,21 +150,10 @@ The sign of the edge difference in the sum of the pseudo-laplacian is always suc
 
 This section approaches the pseudo-laplacian by introducing the required APIs progressively through the following subsections:
 
-- [Getting started with the GT4Py declarative frontend](#getting-started-with-the-gt4py-declarative-frontend)
-  - [Installation](#installation)
-  - [Programming guide](#programming-guide)
-    - [Key concepts and application structure](#key-concepts-and-application-structure)
-      - [Importing features](#importing-features)
-      - [Fields](#fields)
-      - [Field operators](#field-operators)
-      - [Programs](#programs)
-      - [Composing field operators and programs](#composing-field-operators-and-programs)
-    - [Operations on unstructured meshes](#operations-on-unstructured-meshes)
-      - [Defining the mesh and its connectivities](#defining-the-mesh-and-its-connectivities)
-      - [Using connectivities in field operators](#using-connectivities-in-field-operators)
-      - [Using reductions on connected mesh elements](#using-reductions-on-connected-mesh-elements)
-      - [Using conditionals on fields](#using-conditionals-on-fields)
-      - [Implementing the pseudo-laplacian](#implementing-the-pseudo-laplacian)
+- [Defining the mesh and the connectivities (adjacencies) between cells and edges](#Defining-the-mesh-and-its-connectivities)
+- [Using connectivities in field operators](#Using-connectivities-in-field-operators)
+- [Using reductions on connected mesh elements](#Using-reductions-on-connected-mesh-elements)
+- [Implementing the actual pseudo-laplacian](#Implementing-the-pseudo-laplacian)
 
 +++
 
