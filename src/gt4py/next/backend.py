@@ -36,20 +36,56 @@ from gt4py.next.program_processors import processor_interface as ppi
 
 
 @dataclasses.dataclass(frozen=True)
+class FopArgsInjector(workflow.Workflow):
+    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
+    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
+    from_fieldop: Any = None
+
+    def __call__(self, inp: ffront_stages.FoastOperatorDefinition) -> ffront_stages.FoastClosure:
+        return ffront_stages.FoastClosure(
+            foast_op_def=inp,
+            args=self.args,
+            kwargs=self.kwargs,
+            closure_vars={inp.foast_node.id: self.from_fieldop},
+        )
+
+
+@dataclasses.dataclass(frozen=True)
 class FieldopTransformWorkflow(workflow.NamedStepSequence):
     """Modular workflow for transformations with access to intermediates."""
 
     func_to_foast: workflow.SkippableStep[
         ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition,
         ffront_stages.FoastOperatorDefinition,
-    ]
+    ] = dataclasses.field(
+        default_factory=lambda: func_to_foast.OptionalFuncToFoastFactory(cached=True)
+    )
     foast_inject_args: workflow.Workflow[
         ffront_stages.FoastOperatorDefinition, ffront_stages.FoastClosure
-    ]
-    foast_to_past_closure: workflow.Workflow[ffront_stages.FoastClosure, ffront_stages.PastClosure]
-    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
-    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
-    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr]
+    ] = dataclasses.field(default_factory=FopArgsInjector)
+    foast_to_past_closure: workflow.Workflow[
+        ffront_stages.FoastClosure, ffront_stages.PastClosure
+    ] = dataclasses.field(
+        default_factory=lambda: foast_to_past.FoastToPastClosure(
+            foast_to_past=workflow.CachedStep(
+                foast_to_past.foast_to_past, hash_function=eve_utils.content_hash
+            )
+        )
+    )
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
+        dataclasses.field(default=past_process_args.past_process_args)
+    )
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
+        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+    )
+
+    foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
+        dataclasses.field(
+            default_factory=lambda: workflow.CachedStep(
+                step=foast_to_itir.foast_to_itir, hash_function=eve_utils.content_hash
+            )
+        )
+    )
 
     @property
     def step_order(self) -> list[str]:
@@ -62,22 +98,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
         ]
 
 
-@dataclasses.dataclass(frozen=True)
-class ProgramTransformWorkflow(workflow.NamedStepSequence):
-    """Modular workflow for transformations with access to intermediates."""
-
-    func_to_past: workflow.SkippableStep[
-        ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
-        ffront_stages.PastProgramDefinition,
-    ]
-    past_lint: workflow.Workflow[
-        ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
-    ]
-    past_inject_args: workflow.Workflow[
-        ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
-    ]
-    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure]
-    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall]
+DEFAULT_FIELDOP_TRANSFORMS = FieldopTransformWorkflow()
 
 
 @dataclasses.dataclass(frozen=True)
@@ -96,44 +117,30 @@ class ProgArgsInjector(workflow.Workflow):
 
 
 @dataclasses.dataclass(frozen=True)
-class FopArgsInjector(workflow.Workflow):
-    args: tuple[Any, ...] = dataclasses.field(default_factory=tuple)
-    kwargs: dict[str, Any] = dataclasses.field(default_factory=dict)
-    from_fieldop: Any = None
+class ProgramTransformWorkflow(workflow.NamedStepSequence):
+    """Modular workflow for transformations with access to intermediates."""
 
-    def __call__(self, inp: ffront_stages.FoastOperatorDefinition) -> ffront_stages.FoastClosure:
-        return ffront_stages.FoastClosure(
-            foast_op_def=inp,
-            args=self.args,
-            kwargs=self.kwargs,
-            closure_vars={inp.foast_node.id: self.from_fieldop},
-        )
-
-
-DEFAULT_FIELDOP_TRANSFORMS = FieldopTransformWorkflow(
-    func_to_foast=func_to_foast.OptionalFuncToFoastFactory(cached=True),
-    foast_inject_args=FopArgsInjector(),
-    foast_to_past_closure=foast_to_past.FoastToPastClosure(
-        foast_to_past=workflow.CachedStep(
-            foast_to_past.foast_to_past,
-            hash_function=eve_utils.content_hash,
-        )
-    ),
-    past_transform_args=past_process_args.past_process_args,
-    past_to_itir=past_to_itir.PastToItirFactory(),
-    foast_to_itir=workflow.CachedStep(
-        step=foast_to_itir.foast_to_itir, hash_function=eve_utils.content_hash
-    ),
-)
+    func_to_past: workflow.SkippableStep[
+        ffront_stages.ProgramDefinition | ffront_stages.PastProgramDefinition,
+        ffront_stages.PastProgramDefinition,
+    ] = dataclasses.field(
+        default_factory=lambda: func_to_past.OptionalFuncToPastFactory(cached=True)
+    )
+    past_lint: workflow.Workflow[
+        ffront_stages.PastProgramDefinition, ffront_stages.PastProgramDefinition
+    ] = dataclasses.field(default_factory=past_linters.LinterFactory)
+    past_inject_args: workflow.Workflow[
+        ffront_stages.PastProgramDefinition, ffront_stages.PastClosure
+    ] = dataclasses.field(default_factory=ProgArgsInjector)
+    past_transform_args: workflow.Workflow[ffront_stages.PastClosure, ffront_stages.PastClosure] = (
+        dataclasses.field(default=past_process_args.past_process_args)
+    )
+    past_to_itir: workflow.Workflow[ffront_stages.PastClosure, stages.ProgramCall] = (
+        dataclasses.field(default_factory=past_to_itir.PastToItirFactory)
+    )
 
 
-DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow(
-    func_to_past=func_to_past.OptionalFuncToPastFactory(cached=True),
-    past_lint=past_linters.LinterFactory(),
-    past_inject_args=ProgArgsInjector(),
-    past_transform_args=past_process_args.past_process_args,
-    past_to_itir=past_to_itir.PastToItirFactory(),
-)
+DEFAULT_PROG_TRANSFORMS = ProgramTransformWorkflow()
 
 
 @dataclasses.dataclass(frozen=True)
