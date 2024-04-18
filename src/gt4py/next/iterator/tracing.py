@@ -278,7 +278,6 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
             )
 
         arg_type = None
-        kind, dtype = None, None
         if use_arg_types:
             arg_type = type_translation.from_value(arg)
 

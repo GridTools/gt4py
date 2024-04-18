@@ -112,6 +112,8 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         offset_provider=None,
         # manually passing flags is mostly for allowing separate testing of the modes
         flags=None,
+        # allow sym references without a symbol declaration, mostly for testing
+        allow_undeclared_symbols: bool = False,
     ) -> ir.Node:
         """
         Simplifies `make_tuple`, `tuple_get` calls.
@@ -130,7 +132,11 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         offset_provider = offset_provider or {}
 
         if not ignore_tuple_size:
-            node = itir_type_inference.infer(node, offset_provider=offset_provider)
+            node = itir_type_inference.infer(
+                node,
+                offset_provider=offset_provider,
+                allow_undeclared_symbols=allow_undeclared_symbols,
+            )
 
         new_node = cls(
             ignore_tuple_size=ignore_tuple_size,

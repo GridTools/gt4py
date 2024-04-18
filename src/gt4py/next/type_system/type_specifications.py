@@ -23,10 +23,8 @@ class TypeSpec:
     def __hash__(self) -> int:
         return hash(content_hash(self))
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
         cls.__hash__ = TypeSpec.__hash__
-
-    # TODO: use __init_subclass__
 
 
 @dataclass(frozen=True)

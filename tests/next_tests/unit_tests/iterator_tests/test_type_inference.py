@@ -14,11 +14,8 @@
 
 import pytest
 
-from gt4py import eve
-from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
 from gt4py.next.iterator.type_system import (
     inference as itir_type_inference,
     type_specifications as it_ts,
@@ -139,7 +136,9 @@ def test_expression_type(test_case):
     offset_provider = {**mesh.offset_provider, "Ioff": IDim, "Joff": JDim, "Koff": KDim}
 
     testee, expected_type = test_case
-    result = itir_type_inference.infer(testee, offset_provider=offset_provider)
+    result = itir_type_inference.infer(
+        testee, offset_provider=offset_provider, allow_undeclared_symbols=True
+    )
     assert result.type == expected_type
 
 
@@ -147,7 +146,7 @@ def test_adhoc_polymorphism():
     func = im.lambda_("a")(im.lambda_("b")(im.make_tuple("a", "b")))
     testee = im.call(im.call(func)(im.ref("a_", bool_type)))(im.ref("b_", int_type))
 
-    result = itir_type_inference.infer(testee, offset_provider={})
+    result = itir_type_inference.infer(testee, offset_provider={}, allow_undeclared_symbols=True)
 
     assert result.type == ts.TupleType(types=[bool_type, int_type])
 
@@ -180,7 +179,9 @@ def test_late_offset_axis():
     func = im.lambda_("dim")(im.shift(im.ref("dim"), 1)(im.ref("it", it_on_v_of_e_type)))
     testee = im.call(func)(im.ensure_offset("V2E"))
 
-    result = itir_type_inference.infer(testee, offset_provider=mesh.offset_provider)
+    result = itir_type_inference.infer(
+        testee, offset_provider=mesh.offset_provider, allow_undeclared_symbols=True
+    )
     assert result.type == it_on_e_of_e_type
 
 

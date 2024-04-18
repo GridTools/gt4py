@@ -78,33 +78,24 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
     return is_compatible
 
 
+# TODO(tehrengruber): remove after documentation is written
 # Problems:
-#  - how to get the kind of the dimension in here? X
-#    maybe directly attach the type to an axis literal?
-#  - lift X (also mention to Hannes)
-#  - is_compatible
-#  - late offset literal in  (also mention to Hannes)
-#    tests/next_tests/integration_tests/multi_feature_tests/iterator_tests/test_anton_toy.py
 #  - what happens when we get a lambda function whose params are already typed
 #  - write back params type in lambda
 #  - documentation
 #    describe why lambda can only have one type. Describe idea to solve e.g.
 #     let("f", lambda x: x)(f(1)+f(1.))
 #     -> let("f_int", lambda x: x, "f_float", lambda x: x)(f_int(1)+f_float(1.))
-#  - make types hashable
-#    - ~~either Eve with Coercion and no runtime checking,~~ dataclass hash with cached property
 #  - document how scans are handled (also mention to Hannes)
 #  - types are stored in the node, but will be incomplete after some passes
-#  - deferred type for testing
-#  - visit_FunctionDefinition
-
-
 # Design decisions
 #  Only the parameters of fencils need to be typed.
 #  Lambda functions are not polymorphic.
 
 
-def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, "DeferredFunctionType"]) -> None:
+def on_inferred(
+    callback: Callable, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
+) -> None:
     """
     Execute `callback` as soon as all `args` have a type.
     """
@@ -118,7 +109,7 @@ def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, "DeferredFunctionT
             callback(*inferred_args)
 
     for i, arg in enumerate(args):
-        if isinstance(arg, DeferredFunctionType):
+        if isinstance(arg, ObservableTypeInferenceRule):
             arg.on_type_ready(functools.partial(mark_ready, i))
         else:
             assert isinstance(arg, ts.TypeSpec)
@@ -126,23 +117,23 @@ def on_inferred(callback: Callable, *args: Union[ts.TypeSpec, "DeferredFunctionT
 
 
 @dataclasses.dataclass
-class DeferredFunctionType:
+class ObservableTypeInferenceRule:
     """
     This class wraps a raw type inference rule to handle typing of functions.
 
-    As functions are represented by type inference rules
+    TODO: As functions in ITIR are represented by type inference rules, i.e. regular callables,
     """
 
     #: type rule that given a set of types or type rules returns the return type or a type rule
     type_rule: rules.TypeInferenceRule
     #: offset provider used by some type rules
-    offset_provider: Any
+    offset_provider: common.OffsetProvider
     #: node that has this type
     node: Optional[itir.Node] = None
     #: list of references to this function
     aliases: list[itir.SymRef] = dataclasses.field(default_factory=list)
     #: list of callbacks executed as soon as the type is ready
-    callbacks: list[Any] = dataclasses.field(default_factory=list)
+    callbacks: list[Callable[[ts.TypeSpec], None]] = dataclasses.field(default_factory=list)
     #: the inferred type when ready and None until then
     inferred_type: Optional[ts.FunctionType] = None
     #: whether to store the type in the node or not
@@ -158,7 +149,7 @@ class DeferredFunctionType:
     def _infer_type_listener(self, return_type: ts.TypeSpec, *args: ts.TypeSpec) -> None:
         self.inferred_type = self.infer_type(return_type, *args)  # type: ignore[arg-type]  # ensured by assert above
 
-        # if the type has been fully inferred, notify all `DeferredFunctionType`s that depend on it.
+        # if the type has been fully inferred, notify all `ObservableTypeInferenceRule`s that depend on it.
         for cb in self.callbacks:
             cb(self.inferred_type)
 
@@ -183,7 +174,7 @@ class DeferredFunctionType:
 
         # return type is a typing rule by itself
         if callable(return_type):
-            return_type = DeferredFunctionType(
+            return_type = ObservableTypeInferenceRule(
                 node=None,  # node will be set by caller
                 type_rule=return_type,
                 offset_provider=self.offset_provider,
@@ -194,9 +185,6 @@ class DeferredFunctionType:
         on_inferred(self._infer_type_listener, return_type, *args)
 
         return return_type
-
-
-T = TypeVar("T", bound=itir.Node)
 
 
 def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Dimension]:
@@ -226,18 +214,68 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
     return {dim.value: dim for dim in dimensions}
 
 
+T = TypeVar("T", bound=itir.Node)
+
+
+def _convert_closure_input_to_iterator(
+    domain: it_ts.DomainType, input_: ts.TypeSpec
+) -> it_ts.IteratorType:
+    input_dims: list[common.Dimension] | None = None
+
+    def extract_dtype_and_dims(el_type: ts.TypeSpec):
+        nonlocal input_dims
+        assert isinstance(el_type, (ts.FieldType, ts.ScalarType))
+        el_type = type_info.promote(el_type, always_field=True)
+        if not input_dims:
+            input_dims = el_type.dims  # type: ignore[union-attr]  # ensured by always_field
+        else:
+            # tuple inputs must all have the same defined dimensions as we
+            # create an iterator of tuples from them
+            assert input_dims == el_type.dims  # type: ignore[union-attr]  # ensured by always_field
+        return el_type.dtype  # type: ignore[union-attr]  # ensured by always_field
+
+    element_type = type_info.apply_to_primitive_constituents(extract_dtype_and_dims, input_)
+
+    assert input_dims is not None
+
+    # handle neighbor / sparse input fields
+    defined_dims = []
+    is_nb_field = False
+    for dim in input_dims:
+        if dim.kind == common.DimensionKind.LOCAL:
+            assert not is_nb_field
+            is_nb_field = True
+        else:
+            defined_dims.append(dim)
+    if is_nb_field:
+        element_type = it_ts.ListType(element_type=element_type)
+
+    return it_ts.IteratorType(
+        position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
+    )
+
+
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
     """
     TODO
     """
 
-    offset_provider: Any
-
+    offset_provider: common.OffsetProvider
+    #: Mapping from a dimension name to the actual dimension instance
     dimensions: dict[str, common.Dimension]
+    #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
+    allow_undeclared_symbols: bool
 
     @classmethod
-    def apply(cls, node: T, *, offset_provider, inplace: bool = False) -> T:
+    def apply(
+        cls,
+        node: T,
+        *,
+        offset_provider: common.OffsetProvider,
+        inplace: bool = False,
+        allow_undeclared_symbols: bool = False,
+    ) -> T:
         instance = cls(
             offset_provider=offset_provider,
             dimensions=(
@@ -246,13 +284,14 @@ class ITIRTypeInference(eve.NodeTranslator):
                     node.pre_walk_values().if_isinstance(itir.Node).getattr("type").if_is_not(None)
                 )
             ),
+            allow_undeclared_symbols=allow_undeclared_symbols,
         )
         if not inplace:
             node = copy.deepcopy(node)
         instance.visit(
             node,
             ctx={
-                name: DeferredFunctionType(
+                name: ObservableTypeInferenceRule(
                     type_rule=rules.type_inference_rules[name],
                     # builtin functions are polymorphic
                     store_inferred_type_in_node=False,
@@ -267,13 +306,13 @@ class ITIRTypeInference(eve.NodeTranslator):
         result = super().visit(node, **kwargs)
         if isinstance(node, itir.Node):
             if isinstance(result, ts.TypeSpec):
-                # TODO: verify types match
+                if node.type:
+                    assert _is_compatible_type(node.type, result)
                 node.type = result
-            elif isinstance(result, DeferredFunctionType):
+            elif isinstance(result, ObservableTypeInferenceRule):
                 pass
             elif callable(result):
-                # TODO: only do for type rules not every callable
-                return DeferredFunctionType(
+                return ObservableTypeInferenceRule(
                     node=node,
                     type_rule=result,
                     store_inferred_type_in_node=True,
@@ -281,7 +320,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
             else:
                 raise AssertionError(
-                    f"Expected a 'TypeSpec' or 'DeferredFunctionType', but got "
+                    f"Expected a 'TypeSpec' or 'ObservableTypeInferenceRule', but got "
                     f"`{type(result).__name__}`"
                 )
         return result
@@ -308,35 +347,8 @@ class ITIRTypeInference(eve.NodeTranslator):
         for output_el in type_info.primitive_constituents(output):
             assert isinstance(output_el, ts.FieldType)
 
-        stencil_args = []
-        for input_ in inputs:
-            defined_dims: list[common.Dimension] | None = None
-
-            def extract_dtype_and_defined_dims(el_type: ts.TypeSpec):
-                nonlocal defined_dims
-                assert isinstance(el_type, (ts.FieldType, ts.ScalarType))
-                el_type = type_info.promote(el_type, always_field=True)
-                if not defined_dims:
-                    defined_dims = el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-                else:
-                    # tuple inputs must all have the same defined dimensions as we
-                    # create an iterator of tuples from them
-                    assert defined_dims == el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-                return el_type.dtype  # type: ignore[union-attr]  # ensured by always_field
-
-            element_type = type_info.apply_to_primitive_constituents(
-                extract_dtype_and_defined_dims, input_
-            )
-
-            assert defined_dims is not None
-
-            stencil_args.append(
-                it_ts.IteratorType(
-                    position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
-                )
-            )
-
         stencil_type_rule = self.visit(node.stencil, ctx=ctx)
+        stencil_args = [_convert_closure_input_to_iterator(domain, input_) for input_ in inputs]
         stencil_returns = stencil_type_rule(*stencil_args)
 
         return it_ts.StencilClosureType(
@@ -357,8 +369,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         ), f"Dimension {node.value} not present in offset provider."
         return ts.DimensionType(dim=self.dimensions[node.value])
 
+    # TODO: revisit what we want to do with OffsetLiterals as we already have an Offset type in
+    #  the frontend.
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
-        # TODO: this happens in tests/next_tests/integration_tests/multi_feature_tests/iterator_tests/test_anton_toy.py
         if _is_representable_as_int(node.value):
             return it_ts.OffsetLiteralType(value=int(node.value))
         else:
@@ -369,29 +382,29 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(node.type, ts.ScalarType)
         return node.type
 
-    def visit_SymRef(self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]) -> ts.TypeSpec | rules.TypeInferenceRule:
-        # for testing it is useful to be able to use types without a declaration, but just storing
-        # the type in the node itself.
-        if node.type:
-            assert node.id not in ctx or _is_compatible_type(ctx[node.id], node.type)
-            return node.type
-        # TODO: only allow in testing
-        if node.id not in ctx:
+    def visit_SymRef(
+        self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]
+    ) -> ts.TypeSpec | rules.TypeInferenceRule:
+        # for testing, it is useful to be able to use types without a declaration
+        if self.allow_undeclared_symbols and node.id not in ctx:
+            # type has been stored in the node itself
+            if node.type:
+                return node.type
             return ts.DeferredType(constraint=None)
         result = ctx[node.id]
-        if isinstance(result, DeferredFunctionType):
+        if isinstance(result, ObservableTypeInferenceRule):
             result.aliases.append(node)
         return result
 
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
-    ) -> DeferredFunctionType:
+    ) -> ObservableTypeInferenceRule:
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
             )
 
-        return DeferredFunctionType(
+        return ObservableTypeInferenceRule(
             node=node,
             type_rule=fun,
             store_inferred_type_in_node=True,
@@ -400,7 +413,9 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     visit_FunctionDefinition = visit_Lambda
 
-    def visit_FunCall(self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]) -> ts.TypeSpec | rules.TypeInferenceRule:
+    def visit_FunCall(
+        self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]
+    ) -> ts.TypeSpec | rules.TypeInferenceRule:
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
             assert (
@@ -422,7 +437,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
         result = fun(*args)
 
-        if isinstance(result, DeferredFunctionType):
+        if isinstance(result, ObservableTypeInferenceRule):
             assert not result.node
             result.node = node
 
