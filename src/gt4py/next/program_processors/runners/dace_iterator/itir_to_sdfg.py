@@ -20,10 +20,7 @@ from dace.sdfg.state import LoopRegion
 import gt4py.eve as eve
 from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
-from gt4py.next.iterator import (
-    ir as itir,
-    transforms as itir_transforms,
-)
+from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
 from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt

@@ -447,7 +447,10 @@ def test_collect_tmps_info():
             ],
         ),
         params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
-        tmps=[ir.Temporary(id="_gtmp_0", dtype=float_type), ir.Temporary(id="_gtmp_1", dtype=float_type)],
+        tmps=[
+            ir.Temporary(id="_gtmp_0", dtype=float_type),
+            ir.Temporary(id="_gtmp_1", dtype=float_type),
+        ],
     )
     expected = FencilWithTemporaries(
         fencil=testee.fencil,

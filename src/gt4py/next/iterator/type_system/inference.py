@@ -199,6 +199,32 @@ class DeferredFunctionType:
 T = TypeVar("T", bound=itir.Node)
 
 
+def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Dimension]:
+    dimensions: dict[str, common.Dimension] = {}
+    for offset_name, provider in offset_provider.items():
+        dimensions[offset_name] = common.Dimension(
+            value=offset_name, kind=common.DimensionKind.LOCAL
+        )
+        if isinstance(provider, common.Dimension):
+            dimensions[provider.value] = provider
+        elif isinstance(provider, common.Connectivity):
+            dimensions[provider.origin_axis.value] = provider.origin_axis
+            dimensions[provider.neighbor_axis.value] = provider.neighbor_axis
+    return dimensions
+
+
+def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
+    dimensions: list[common.Dimension] = []
+    for type_ in types:
+
+        def _get_dimensions(el_type):
+            if isinstance(el_type, ts.FieldType):
+                dimensions.extend(el_type.dims)
+
+        type_info.apply_to_primitive_constituents(_get_dimensions, type_)
+    return {dim.value: dim for dim in dimensions}
+
+
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
     """
@@ -207,23 +233,19 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     offset_provider: Any
 
-    @functools.cached_property
-    def dimensions(self) -> dict[str, common.Dimension]:
-        dimensions: dict[str, common.Dimension] = {}
-        for offset_name, provider in self.offset_provider.items():
-            dimensions[offset_name] = common.Dimension(
-                value=offset_name, kind=common.DimensionKind.LOCAL
-            )
-            if isinstance(provider, common.Dimension):
-                dimensions[provider.value] = provider
-            elif isinstance(provider, common.Connectivity):
-                dimensions[provider.origin_axis.value] = provider.origin_axis
-                dimensions[provider.neighbor_axis.value] = provider.neighbor_axis
-        return dimensions
+    dimensions: dict[str, common.Dimension]
 
     @classmethod
     def apply(cls, node: T, *, offset_provider, inplace: bool = False) -> T:
-        instance = cls(offset_provider=offset_provider)
+        instance = cls(
+            offset_provider=offset_provider,
+            dimensions=(
+                _get_dimensions_from_offset_provider(offset_provider)
+                | _get_dimensions_from_types(
+                    node.pre_walk_values().if_isinstance(itir.Node).getattr("type").if_is_not(None)
+                )
+            ),
+        )
         if not inplace:
             node = copy.deepcopy(node)
         instance.visit(
@@ -334,7 +356,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         )
 
     def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs):
-        assert node.value in self.dimensions
+        assert (
+            node.value in self.dimensions
+        ), f"Dimension {node.value} not present in offset provider."
         return ts.DimensionType(dim=self.dimensions[node.value])
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs):

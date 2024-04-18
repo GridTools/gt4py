@@ -12,8 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import typing
-from typing import Any, ClassVar, List, Optional, Union
+from typing import ClassVar, List, Optional, Union
 
 import gt4py.eve as eve
 from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels

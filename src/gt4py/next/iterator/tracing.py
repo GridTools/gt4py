@@ -35,7 +35,7 @@ from gt4py.next.iterator.ir import (
     SymRef,
 )
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.type_system import type_info, type_specifications, type_translation
+from gt4py.next.type_system import type_translation
 
 
 TRACING = "tracing"
@@ -280,18 +280,9 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
         arg_type = None
         kind, dtype = None, None
         if use_arg_types:
-            # TODO(tehrengruber): Fields of tuples are not supported yet. Just ignore them for now.
-            if not _contains_tuple_dtype_field(arg):
-                arg_type = type_translation.from_value(arg)
-                # TODO(tehrengruber): Support more types.
-                if isinstance(arg_type, type_specifications.FieldType):
-                    kind = "Iterator"
-                    dtype = (
-                        arg_type.dtype.kind.name.lower(),  # actual dtype
-                        type_info.is_local_field(arg_type),  # is list
-                    )
+            arg_type = type_translation.from_value(arg)
 
-        params.append(Sym(id=param_name, type=arg_type, kind=kind, dtype=dtype))
+        params.append(Sym(id=param_name, type=arg_type))
     return params
 
 

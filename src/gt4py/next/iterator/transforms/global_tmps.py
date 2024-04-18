@@ -23,7 +23,6 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
@@ -33,7 +32,10 @@ from gt4py.next.iterator.transforms.eta_reduction import EtaReduction
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.iterator.transforms.prune_closure_inputs import PruneClosureInputs
 from gt4py.next.iterator.transforms.symbol_ref_utils import collect_symbol_refs
-from gt4py.next.iterator.type_system import type_specifications as it_ts
+from gt4py.next.iterator.type_system import (
+    inference as itir_type_inference,
+    type_specifications as it_ts,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -599,7 +601,9 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
     return FencilWithTemporaries(
         fencil=node.fencil,
         params=node.params,
-        tmps=[ir.Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps],
+        tmps=[
+            ir.Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps
+        ],
     )
 
 
