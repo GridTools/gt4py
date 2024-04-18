@@ -28,7 +28,6 @@ from gt4py.next.iterator.ir_utils import (
     ir_makers as im,
     misc as ir_misc,
 )
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to, is_let
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 from gt4py.next.type_system import type_info
 
@@ -70,7 +69,7 @@ def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
 
 def _is_trivial_make_tuple_call(node: ir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
-    if not is_call_to(node, "make_tuple"):
+    if not cpm.is_call_to(node, "make_tuple"):
         return False
     if not all(
         isinstance(arg, (ir.SymRef, ir.Literal)) or _is_trivial_make_tuple_call(arg)
@@ -251,7 +250,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # TODO(tehrengruber): extend to general symbols as long as the tail call in the let
             #   does not capture
             # `tuple_get(i, let(...)(make_tuple()))` -> `let(...)(tuple_get(i, make_tuple()))`
-            if is_let(node.args[1]):
+            if cpm.is_let(node.args[1]):
                 idx, let_expr = node.args
                 return im.call(
                     im.lambda_(*let_expr.fun.params)(  # type: ignore[attr-defined]  # ensured by is_let
@@ -289,7 +288,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_inline_trivial_make_tuple(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if is_let(node):
+        if cpm.is_let(node):
             # `let(tup, make_tuple(trivial_expr1, trivial_expr2))(foo(tup))`
             #  -> `foo(make_tuple(trivial_expr1, trivial_expr2))`
             eligible_params = [_is_trivial_make_tuple_call(arg) for arg in node.args]
@@ -306,7 +305,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # `let (b, if cond then {1, 2} else {3, 4})) b[0]`
             #  -> `if cond then let(b, {1, 2})(b[0]) else let(b, {3, 4})(b[0])`
             for i, arg in enumerate(node.args):
-                if is_call_to(arg, "if_"):
+                if cpm.is_call_to(arg, "if_"):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch))
                     new_false_branch = self.fp_transform(_with_altered_arg(node, i, false_branch))
@@ -314,14 +313,14 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_nested_let(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if is_let(node):
+        if cpm.is_let(node):
             # `let((a, let(b, 1)(a_val)))(a)`-> `let(b, 1)(let(a, a_val)(a))`
             outer_vars = {}
             inner_vars = {}
             original_inner_expr = node.fun.expr  # type: ignore[attr-defined]  # ensured by is_let
             for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
                 assert arg_sym not in inner_vars  # TODO(tehrengruber): fix collisions
-                if is_let(arg):
+                if cpm.is_let(arg):
                     for sym, val in zip(arg.fun.params, arg.args):  # type: ignore[attr-defined]  # ensured by is_let
                         assert sym not in outer_vars  # TODO(tehrengruber): fix collisions
                         outer_vars[sym] = val
@@ -337,7 +336,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_inline_trivial_let(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if is_let(node) and isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
+        if cpm.is_let(node) and isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
             # `let(a, 1)(a)` -> `1`
             for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
                 if isinstance(node.fun.expr, ir.SymRef) and node.fun.expr.id == arg_sym.id:  # type: ignore[attr-defined]  # ensured by is_let

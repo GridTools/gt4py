@@ -32,7 +32,16 @@ def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
 
 
 def is_call_to(node: itir.Node, fun: str | list[str]) -> TypeGuard[itir.FunCall]:
-    """Match expression that are calls to a given function."""
+    """
+    Match expression that are calls to a given function.
+
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> node = im.call("make_tuple")(1, 2)
+    >>> is_call_to(node, "make_tuple")
+    True
+    >>> is_call_to(node, "plus")
+    False
+    """
     if isinstance(fun, (list, tuple, set)):
         return any((is_call_to(node, f) for f in fun))
     return (
