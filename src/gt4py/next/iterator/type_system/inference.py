@@ -215,13 +215,14 @@ def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Di
 
 def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
     dimensions: list[common.Dimension] = []
+
+    def _get_dimensions(el_type):
+        if isinstance(el_type, ts.FieldType):
+            dimensions.extend(el_type.dims)
+
     for type_ in types:
-
-        def _get_dimensions(el_type):
-            if isinstance(el_type, ts.FieldType):
-                dimensions.extend(el_type.dims)
-
         type_info.apply_to_primitive_constituents(_get_dimensions, type_)
+
     return {dim.value: dim for dim in dimensions}
 
 
@@ -285,7 +286,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
         return result
 
-    def visit_FencilDefinition(self, node: itir.FencilDefinition, *, ctx):
+    def visit_FencilDefinition(self, node: itir.FencilDefinition, *, ctx) -> it_ts.FencilType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
             assert isinstance(param.type, ts.DataType)
@@ -298,7 +299,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
         return it_ts.FencilType(params=list(params.values()), closures=closures)
 
-    def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx):
+    def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
         domain: it_ts.DomainType = self.visit(node.domain, ctx=ctx)
         inputs: list[ts.FieldType] = self.visit(node.inputs, ctx=ctx)
         output: ts.FieldType = self.visit(node.output, ctx=ctx)
@@ -350,18 +351,13 @@ class ITIRTypeInference(eve.NodeTranslator):
             inputs=inputs,
         )
 
-    def visit_Node(self, node: itir.Node, **kwargs):
-        raise NotImplementedError(
-            f"No type deduction rule for nodes of type " f"'{type(node).__name__}'."
-        )
-
-    def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs):
+    def visit_AxisLiteral(self, node: itir.AxisLiteral, **kwargs) -> ts.DimensionType:
         assert (
             node.value in self.dimensions
         ), f"Dimension {node.value} not present in offset provider."
         return ts.DimensionType(dim=self.dimensions[node.value])
 
-    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs):
+    def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
         # TODO: this happens in tests/next_tests/integration_tests/multi_feature_tests/iterator_tests/test_anton_toy.py
         if _is_representable_as_int(node.value):
             return it_ts.OffsetLiteralType(value=int(node.value))
@@ -369,11 +365,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(node.value, str) and node.value in self.dimensions
             return it_ts.OffsetLiteralType(value=self.dimensions[node.value])
 
-    def visit_Literal(self, node: itir.Literal, **kwargs):
+    def visit_Literal(self, node: itir.Literal, **kwargs) -> ts.ScalarType:
         assert isinstance(node.type, ts.ScalarType)
         return node.type
 
-    def visit_SymRef(self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]):
+    def visit_SymRef(self, node: itir.SymRef, *, ctx: dict[str, ts.TypeSpec]) -> ts.TypeSpec | rules.TypeInferenceRule:
         # for testing it is useful to be able to use types without a declaration, but just storing
         # the type in the node itself.
         if node.type:
@@ -389,7 +385,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     def visit_Lambda(
         self, node: itir.Lambda | itir.FunctionDefinition, *, ctx: dict[str, ts.TypeSpec]
-    ):
+    ) -> DeferredFunctionType:
         def fun(*args):
             return self.visit(
                 node.expr, ctx=ctx | {p.id: a for p, a in zip(node.params, args, strict=True)}
@@ -404,7 +400,7 @@ class ITIRTypeInference(eve.NodeTranslator):
 
     visit_FunctionDefinition = visit_Lambda
 
-    def visit_FunCall(self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]):
+    def visit_FunCall(self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]) -> ts.TypeSpec | rules.TypeInferenceRule:
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
             assert (
@@ -431,6 +427,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             result.node = node
 
         return result
+
+    def visit_Node(self, node: itir.Node, **kwargs):
+        raise NotImplementedError(
+            f"No type deduction rule for nodes of type " f"'{type(node).__name__}'."
+        )
 
 
 infer = ITIRTypeInference.apply
