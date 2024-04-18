@@ -30,7 +30,6 @@ class DomainType(ts.DataType):
     dims: list[common.Dimension]
 
 
-# TODO: how about ts.OffsetType?
 @dataclasses.dataclass(frozen=True)
 class OffsetLiteralType(ts.TypeSpec):
     value: IntegralScalar | common.Dimension
@@ -42,7 +41,7 @@ class ListType(ts.DataType):
 
 
 @dataclasses.dataclass(frozen=True)
-class IteratorType(ts.DataType, ts.CallableType):  # todo: rename to iterator
+class IteratorType(ts.DataType, ts.CallableType):
     position_dims: list[common.Dimension] | typing.Literal["unknown"]
     defined_dims: list[common.Dimension]
     element_type: ts.DataType
@@ -52,8 +51,15 @@ class IteratorType(ts.DataType, ts.CallableType):  # todo: rename to iterator
 class StencilClosureType(ts.TypeSpec):
     domain: DomainType
     stencil: ts.FunctionType
-    output: ts.FieldType | ts.TupleType  # todo: validate tuple of fields
+    output: ts.FieldType | ts.TupleType
     inputs: list[ts.FieldType]
+
+    def __post_init__(self):
+        # local import to avoid importing type_info from a type_specification module
+        from gt4py.next.type_system import type_info
+
+        for el_type in type_info.primitive_constituents(self.output):
+            assert isinstance(el_type, ts.FieldType), "All constituent types must be field types."
 
 
 @dataclasses.dataclass(frozen=True)
