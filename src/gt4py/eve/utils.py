@@ -85,14 +85,6 @@ except ModuleNotFoundError:
 T = TypeVar("T")
 
 
-@overload
-def first(iterable: Iterable[T], *, default: T) -> T: ...
-
-
-@overload
-def first(iterable: Iterable[T]) -> T: ...
-
-
 def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
     try:
         return next(iter(iterable))
@@ -254,10 +246,14 @@ class IndexerCallable(Generic[_S, _T]):
     """
     An indexer class applying the wrapped function to the index arguments.
 
-    Example:
+    Examples:
         >>> indexer = IndexerCallable(lambda x: x**2)
         >>> indexer[3]
         9
+
+        >>> indexer = IndexerCallable(lambda a, b: a + b)
+        >>> indexer[3, 4]
+        7
     """
 
     func: ArgsOnlyCallable[_S, _T]  # Variadic
