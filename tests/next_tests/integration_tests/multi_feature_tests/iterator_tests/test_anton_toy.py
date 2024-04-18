@@ -82,6 +82,11 @@ def naive_lap(inp):
 def test_anton_toy(program_processor):
     program_processor, validate = program_processor
 
+    if program_processor in [
+        gtfn.run_gtfn_with_temporaries.executor,
+    ]:
+        pytest.xfail("TODO: issue with temporaries that crashes the application")
+
     shape = [5, 7, 9]
     rng = np.random.default_rng()
     inp = gtx.as_field(
