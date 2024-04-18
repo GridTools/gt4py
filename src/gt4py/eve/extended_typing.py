@@ -130,8 +130,8 @@ def __dir__() -> List[str]:
 # -- Common type aliases --
 NoArgsCallable = Callable[[], Any]
 
-_A = TypeVar("_A")
-_R = TypeVar("_R")
+_A = TypeVar("_A", contravariant=True)
+_R = TypeVar("_R", covariant=True)
 
 
 class ArgsOnlyCallable(Protocol[_A, _R]):

@@ -484,12 +484,18 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     @functools.cached_property
     def loc(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
         def _domain_slicer(*args: RelativeIndexItem) -> Domain:
-            assert all(isinstance(arg, RelativeIndexItem) for arg in args)
+            if not all(isinstance(a, (int, slice)) for a in args):
+                raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
+            sanitized_args = cast(
+                tuple[int | slice], tuple(a if isinstance(a, slice) else int(a) for a in args)
+            )
             if len(args) != len(self):
                 raise ValueError(
                     f"Number of provided slices ({len(args)}) does not match number of dimensions ({len(self)})."
                 )
-            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, args)])
+            return Domain(
+                dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, sanitized_args)]
+            )
 
         return utils.IndexerCallable(_domain_slicer)
 
@@ -733,7 +739,7 @@ class MutableField(Field[DimsT, core_defs.ScalarT], Protocol[DimsT, core_defs.Sc
     def __setitem__(self, index: AnyIndexSpec, value: Field | core_defs.ScalarT) -> None: ...
 
 
-class ConnectivityKind(enum.IntFlag):
+class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
 

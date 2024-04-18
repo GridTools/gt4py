@@ -85,12 +85,20 @@ except ModuleNotFoundError:
 T = TypeVar("T")
 
 
-def first(iterable: Iterable[T], *, default: Union[T, Type[NOTHING]] = NOTHING) -> T:
+@overload
+def first(iterable: Iterable[T], *, default: T) -> T: ...
+
+
+@overload
+def first(iterable: Iterable[T]) -> T: ...
+
+
+def first(iterable: Iterable[T], *, default: Union[T, NothingType] = NOTHING) -> T:
     try:
         return next(iter(iterable))
     except StopIteration as error:
         if default is not NOTHING:
-            return default
+            return cast(T, default)
         raise error
 
 
