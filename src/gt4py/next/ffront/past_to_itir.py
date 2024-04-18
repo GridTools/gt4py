@@ -178,7 +178,7 @@ class ProgramLowering(
                     size_params.append(
                         itir.Sym(
                             id=_size_arg_from_field(param.id, dim_idx),
-                            type=ts.ScalarType(kind=ts.ScalarKind.INT32),
+                            type=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN)),
                         )
                     )
 

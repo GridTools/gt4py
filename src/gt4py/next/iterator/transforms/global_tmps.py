@@ -23,8 +23,7 @@ from gt4py.eve.traits import SymbolTableTrait
 from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_lift
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 from gt4py.next.iterator.pretty_printer import PrettyPrinter
 from gt4py.next.iterator.transforms import trace_shifts
 from gt4py.next.iterator.transforms.cse import extract_subexpression
@@ -144,7 +143,7 @@ class TemporaryExtractionPredicate:
 
     def __call__(self, expr: ir.Expr, num_occurences: int) -> bool:
         """Determine if `expr` is an applied lift that should be extracted as a temporary."""
-        if not is_applied_lift(expr):
+        if not cpm.is_applied_lift(expr):
             return False
         # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
         # as we can not create temporaries for these stencils
@@ -190,7 +189,7 @@ def _closure_parameter_argument_mapping(closure: ir.StencilClosure):
     to `arg`. In case the stencil is a scan, a mapping from closure inputs to scan pass (i.e. first
     arg is ignored) is returned.
     """
-    is_scan = isinstance(closure.stencil, ir.FunCall) and closure.stencil.fun == im.ref("scan")
+    is_scan = cpm.is_call_to(closure.stencil, "scan")
 
     if is_scan:
         stencil = closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
@@ -247,13 +246,16 @@ def split_closures(
         while closure_stack:
             current_closure: ir.StencilClosure = closure_stack.pop()
 
-            if current_closure.stencil == im.ref("deref"):
+            if (
+                isinstance(current_closure.stencil, ir.SymRef)
+                and current_closure.stencil.id == "deref"
+            ):
                 closures.append(current_closure)
                 continue
 
-            is_scan: bool = isinstance(
-                current_closure.stencil, ir.FunCall
-            ) and current_closure.stencil.fun == im.ref("scan")
+            is_scan: bool = isinstance(current_closure.stencil, ir.FunCall) and cpm.is_call_to(
+                current_closure.stencil, "scan"
+            )
             current_closure_stencil = (
                 current_closure.stencil if not is_scan else current_closure.stencil.args[0]  # type: ignore[attr-defined]  # ensured by is_scan
             )
@@ -578,7 +580,7 @@ def update_domains(
 
 
 def _tuple_constituents(node: ir.Expr) -> Iterable[ir.Expr]:
-    if isinstance(node, ir.FunCall) and node.fun == im.ref("make_tuple"):
+    if cpm.is_call_to(node, "make_tuple"):
         for arg in node.args:
             yield from _tuple_constituents(arg)
     else:
@@ -611,7 +613,7 @@ def validate_no_dynamic_offsets(node: ir.Node):
     """Vaidate we have no dynamic offsets, e.g. `shift(Ioff, deref(...))(...)`"""
     for call_node in node.walk_values().if_isinstance(ir.FunCall):
         assert isinstance(call_node, ir.FunCall)
-        if call_node.fun == im.ref("shift"):
+        if cpm.is_call_to(call_node, "shift"):
             if any(not isinstance(arg, ir.OffsetLiteral) for arg in call_node.args):
                 raise NotImplementedError("Dynamic offsets not supported in temporary pass.")
 

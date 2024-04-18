@@ -33,6 +33,7 @@ class Node(eve.Node):
 
     # be very careful here: this will break many places when compare is not False as we oftentimes
     # do comparisons like `node.fun == im.ref(...)`.
+    # TODO(tehrengruber):
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
 
     def __str__(self) -> str:
