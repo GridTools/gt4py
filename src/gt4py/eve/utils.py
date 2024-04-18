@@ -255,7 +255,7 @@ class IndexerCallable(Generic[_S, _T]):
     An indexer class applying the wrapped function to the index arguments.
 
     Example:
-        >>> indexer = CustomIndexer(lambda x: x**2)
+        >>> indexer = IndexerCallable(lambda x: x**2)
         >>> indexer[3]
         9
     """
