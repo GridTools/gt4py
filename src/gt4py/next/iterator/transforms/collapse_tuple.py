@@ -23,8 +23,12 @@ from gt4py import eve
 from gt4py.eve import utils as eve_utils
 from gt4py.next import type_inference
 from gt4py.next.iterator import ir, type_inference as it_type_inference
-from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
-from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_if_call, is_let
+from gt4py.next.iterator.ir_utils import (
+    common_pattern_matcher as cpm,
+    ir_makers as im,
+    misc as ir_misc,
+)
+from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to, is_let
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
 from gt4py.next.type_system import type_info
 
@@ -66,7 +70,7 @@ def _with_altered_arg(node: ir.FunCall, arg_idx: int, new_arg: ir.Expr):
 
 def _is_trivial_make_tuple_call(node: ir.Expr):
     """Return if node is a `make_tuple` call with all elements `SymRef`s, `Literal`s or tuples thereof."""
-    if not (isinstance(node, ir.FunCall) and node.fun == im.ref("make_tuple")):
+    if not is_call_to(node, "make_tuple"):
         return False
     if not all(
         isinstance(arg, (ir.SymRef, ir.Literal)) or _is_trivial_make_tuple_call(arg)
@@ -256,7 +260,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
                 )(
                     *let_expr.args  # type: ignore[attr-defined]  # ensured by is_let
                 )
-            elif isinstance(node.args[1], ir.FunCall) and node.args[1].fun == im.ref("if_"):
+            elif cpm.is_call_to(node.args[1], "if_"):
                 idx = node.args[0]
                 cond, true_branch, false_branch = node.args[1].args
                 return im.if_(
@@ -273,11 +277,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             bound_vars: dict[str, ir.Expr] = {}
             new_args: list[ir.Expr] = []
             for arg in node.args:
-                if (
-                    isinstance(node, ir.FunCall)
-                    and node.fun == im.ref("make_tuple")
-                    and not _is_trivial_make_tuple_call(node)
-                ):
+                if cpm.is_call_to(node, "make_tuple") and not _is_trivial_make_tuple_call(node):
                     el_name = self._letify_make_tuple_uids.sequential_id()
                     new_args.append(im.ref(el_name))
                     bound_vars[el_name] = arg
@@ -298,7 +298,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         return None
 
     def transform_propagate_to_if_on_tuples(self, node: ir.FunCall) -> Optional[ir.Node]:
-        if not node.fun == im.ref("if_"):
+        if not cpm.is_call_to(node, "if_"):
             # TODO(tehrengruber): This significantly increases the size of the tree. Revisit.
             # TODO(tehrengruber): Only inline if type of branch value is a tuple.
             # Examples:
@@ -306,7 +306,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             # `let (b, if cond then {1, 2} else {3, 4})) b[0]`
             #  -> `if cond then let(b, {1, 2})(b[0]) else let(b, {3, 4})(b[0])`
             for i, arg in enumerate(node.args):
-                if is_if_call(arg):
+                if is_call_to(arg, "if_"):
                     cond, true_branch, false_branch = arg.args
                     new_true_branch = self.fp_transform(_with_altered_arg(node, i, true_branch))
                     new_false_branch = self.fp_transform(_with_altered_arg(node, i, false_branch))
@@ -340,6 +340,6 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
         if is_let(node) and isinstance(node.fun.expr, ir.SymRef):  # type: ignore[attr-defined]  # ensured by is_let
             # `let(a, 1)(a)` -> `1`
             for arg_sym, arg in zip(node.fun.params, node.args):  # type: ignore[attr-defined]  # ensured by is_let
-                if node.fun.expr == im.ref(arg_sym.id):  # type: ignore[attr-defined]  # ensured by is_let
+                if isinstance(node.fun.expr, ir.SymRef) and node.fun.expr.id == arg_sym.id:  # type: ignore[attr-defined]  # ensured by is_let
                     return arg
         return None

@@ -14,7 +14,6 @@
 from typing import TypeGuard
 
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def is_applied_lift(arg: itir.Node) -> TypeGuard[itir.FunCall]:
@@ -32,6 +31,10 @@ def is_let(node: itir.Node) -> TypeGuard[itir.FunCall]:
     return isinstance(node, itir.FunCall) and isinstance(node.fun, itir.Lambda)
 
 
-def is_if_call(node: itir.Expr) -> TypeGuard[itir.FunCall]:
-    """Match expression of the form `if_(cond, true_branch, false_branch)`."""
-    return isinstance(node, itir.FunCall) and node.fun == im.ref("if_")
+def is_call_to(node: itir.Node, fun: str | list[str]) -> TypeGuard[itir.FunCall]:
+    """Match expression that are calls to a given function."""
+    if isinstance(fun, (list, tuple, set)):
+        return any((is_call_to(node, f) for f in fun))
+    return (
+        isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
+    )
