@@ -22,5 +22,5 @@ backend = next_backend.Backend(
     executor=roundtrip.RoundtripExecutorFactory(
         dispatch_backend=roundtrip.RoundtripExecutorFactory()
     ),
-    allocator=roundtrip.backend.allocator,
+    allocator=roundtrip.default.allocator,
 )

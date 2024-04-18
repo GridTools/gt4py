@@ -21,7 +21,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = offset("I")
@@ -78,7 +78,7 @@ def basic_stencils(request):
 
 
 @pytest.mark.uses_origin
-def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
+def test_basic_column_stencils(program_processor, basic_stencils):
     program_processor, validate = program_processor
     stencil, ref_fun, inp_fun = basic_stencils
 
@@ -99,7 +99,6 @@ def test_basic_column_stencils(program_processor, lift_mode, basic_stencils):
         out=out,
         offset_provider={"I": IDim, "K": KDim},
         column_axis=KDim,
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -153,7 +152,7 @@ def k_level_condition_upper_tuple(k_idx, k_level):
     ],
 )
 @pytest.mark.uses_tuple_args
-def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_function, ref_function):
+def test_k_level_condition(program_processor, fun, k_level, inp_function, ref_function):
     program_processor, validate = program_processor
 
     k_size = 5
@@ -170,7 +169,6 @@ def test_k_level_condition(program_processor, lift_mode, fun, k_level, inp_funct
         out=out,
         offset_provider={"K": KDim},
         column_axis=KDim,
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -201,7 +199,7 @@ def ksum_fencil(i_size, k_start, k_end, inp, out):
     "kstart, reference",
     [(0, np.asarray([[0, 1, 3, 6, 10, 15, 21]])), (2, np.asarray([[0, 0, 2, 5, 9, 14, 20]]))],
 )
-def test_ksum_scan(program_processor, lift_mode, kstart, reference):
+def test_ksum_scan(program_processor, kstart, reference):
     program_processor, validate = program_processor
     shape = [1, 7]
     inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
@@ -216,7 +214,6 @@ def test_ksum_scan(program_processor, lift_mode, kstart, reference):
         inp,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -238,7 +235,7 @@ def ksum_back_fencil(i_size, k_size, inp, out):
     )
 
 
-def test_ksum_back_scan(program_processor, lift_mode):
+def test_ksum_back_scan(program_processor):
     program_processor, validate = program_processor
     shape = [1, 7]
     inp = gtx.as_field([IDim, KDim], np.array(np.broadcast_to(np.arange(0.0, 7.0), shape)))
@@ -254,7 +251,6 @@ def test_ksum_back_scan(program_processor, lift_mode):
         inp,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        lift_mode=lift_mode,
     )
 
     if validate:
@@ -300,7 +296,7 @@ def kdoublesum_fencil(i_size, k_start, k_end, inp0, inp1, out):
         ),
     ],
 )
-def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
+def test_kdoublesum_scan(program_processor, kstart, reference):
     program_processor, validate = program_processor
     pytest.xfail("structured dtype input/output currently unsupported")
     shape = [1, 7]
@@ -321,7 +317,6 @@ def test_kdoublesum_scan(program_processor, lift_mode, kstart, reference):
         inp1,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        lift_mode=lift_mode,
     )
 
     if validate:

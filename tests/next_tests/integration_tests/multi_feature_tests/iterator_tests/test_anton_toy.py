@@ -20,7 +20,7 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, lift, named_ra
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 from gt4py.next.program_processors.runners import gtfn
 
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 @fundef
@@ -79,18 +79,8 @@ def naive_lap(inp):
 
 
 @pytest.mark.uses_origin
-def test_anton_toy(program_processor, lift_mode):
+def test_anton_toy(program_processor):
     program_processor, validate = program_processor
-
-    if program_processor in [
-        gtfn.run_gtfn.executor,
-        gtfn.run_gtfn_imperative.executor,
-        gtfn.run_gtfn_with_temporaries.executor,
-    ]:
-        from gt4py.next.iterator import transforms
-
-        if lift_mode != transforms.LiftMode.FORCE_INLINE:
-            pytest.xfail("TODO: issue with temporaries that crashes the application")
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()
@@ -102,9 +92,7 @@ def test_anton_toy(program_processor, lift_mode):
     out = gtx.as_field([IDim, JDim, KDim], np.zeros(shape))
     ref = naive_lap(inp)
 
-    run_processor(
-        fencil, program_processor, shape[0], shape[1], shape[2], out, inp, lift_mode=lift_mode
-    )
+    run_processor(fencil, program_processor, shape[0], shape[1], shape[2], out, inp)
 
     if validate:
         assert np.allclose(out.asnumpy(), ref)
