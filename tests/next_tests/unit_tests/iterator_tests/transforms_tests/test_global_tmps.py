@@ -241,7 +241,7 @@ def test_update_cartesian_domains():
                         *(
                             im.call("named_range")(
                                 ir.AxisLiteral(value=a),
-                                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                 im.ref(s),
                             )
                             for a, s in (("IDim", "i"), ("JDim", "j"), ("KDim", "k"))
@@ -269,7 +269,7 @@ def test_update_cartesian_domains():
                         im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                         im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
+                    im.plus(im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)),
                 ],
             )
         ]
@@ -296,7 +296,7 @@ def test_update_cartesian_domains():
                         im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                         im.literal("1", ir.INTEGER_INDEX_BUILTIN),
                     ),
-                    im.plus(im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)),
+                    im.plus(im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)),
                 ],
             )
         ]
@@ -305,7 +305,7 @@ def test_update_cartesian_domains():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     im.ref(s),
                 ],
             )
@@ -324,10 +324,10 @@ def test_collect_tmps_info():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value="IDim"),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     ir.FunCall(
                         fun=im.ref("plus"),
-                        args=[im.ref("i"), ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN)],
+                        args=[im.ref("i"), im.literal("1", ir.INTEGER_INDEX_BUILTIN)],
                     ),
                 ],
             )
@@ -337,7 +337,7 @@ def test_collect_tmps_info():
                 fun=im.ref("named_range"),
                 args=[
                     ir.AxisLiteral(value=a),
-                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                     im.ref(s),
                 ],
             )
@@ -381,7 +381,7 @@ def test_collect_tmps_info():
                                 fun=im.ref("named_range"),
                                 args=[
                                     ir.AxisLiteral(value=a),
-                                    ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                                    im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                                     im.ref(s),
                                 ],
                             )

@@ -26,6 +26,7 @@ from gt4py.next.iterator import ir, type_inference as it_type_inference
 from gt4py.next.iterator.ir_utils import ir_makers as im, misc as ir_misc
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_if_call, is_let
 from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas, inline_lambda
+from gt4py.next.type_system import type_info
 
 
 class UnknownLength:
@@ -232,7 +233,7 @@ class CollapseTuple(eve.PreserveLocationVisitor, eve.NodeTranslator):
             and isinstance(node.args[0], ir.Literal)
         ):
             # `tuple_get(i, make_tuple(e_0, e_1, ..., e_i, ..., e_N))` -> `e_i`
-            assert node.args[0].type in ir.INTEGER_BUILTINS
+            assert type_info.is_integer(node.args[0].type)
             make_tuple_call = node.args[1]
             idx = int(node.args[0].value)
             assert idx < len(

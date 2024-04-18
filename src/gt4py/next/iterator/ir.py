@@ -20,6 +20,7 @@ from gt4py.eve import Coerced, SymbolName, SymbolRef, datamodels
 from gt4py.eve.concepts import SourceLocation
 from gt4py.eve.traits import SymbolTableTrait, ValidatedSymbolTableTrait
 from gt4py.eve.utils import noninstantiable
+from gt4py.next.type_system import type_specifications as ts
 
 
 # TODO(havogt):
@@ -73,12 +74,7 @@ class Expr(Node): ...
 
 class Literal(Expr):
     value: str
-    type: str
-
-    @datamodels.validator("type")
-    def _type_validator(self: datamodels.DataModelTP, attribute: datamodels.Attribute, value):
-        if value not in TYPEBUILTINS:
-            raise ValueError(f"'{value}' is not a valid builtin type.")
+    type: ts.ScalarType
 
 
 class NoneLiteral(Expr):

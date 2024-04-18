@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.scan_eta_reduction import ScanEtaReduction
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def _make_scan(*args: list[str]):
@@ -24,8 +25,8 @@ def _make_scan(*args: list[str]):
                 params=[ir.Sym(id="state")] + [ir.Sym(id=f"{arg}") for arg in args],
                 expr=ir.SymRef(id="foo"),
             ),
-            ir.Literal(value="0.0", type="float64"),
-            ir.Literal(value="True", type="bool"),
+            im.literal("0.0", "float64"),
+            im.literal("True", "bool"),
         ],
     )
 
