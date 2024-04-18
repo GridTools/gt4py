@@ -31,9 +31,7 @@ from gt4py.next.type_system import type_specifications as ts
 class Node(eve.Node):
     location: Optional[SourceLocation] = eve.field(default=None, repr=False, compare=False)
 
-    # be very careful here: this will break many places when compare is not False as we oftentimes
-    # do comparisons like `node.fun == im.ref(...)`.
-    # TODO(tehrengruber):
+    # TODO(tehrengruber): include in comparison if value is not None
     type: Optional[ts.TypeSpec] = eve.field(default=None, repr=False, compare=False)
 
     def __str__(self) -> str:

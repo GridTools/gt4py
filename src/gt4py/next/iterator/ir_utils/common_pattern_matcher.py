@@ -11,7 +11,6 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import collections.abc
 from collections.abc import Iterable
 from typing import TypeGuard
 
@@ -46,7 +45,7 @@ def is_call_to(node: itir.Node, fun: str | Iterable[str]) -> TypeGuard[itir.FunC
     >>> is_call_to(node, ("plus", "minus"))
     True
     """
-    if isinstance(fun, (list, tuple, set, collections.abc.Iterable)) and not isinstance(fun, str):
+    if isinstance(fun, (list, tuple, set, Iterable)) and not isinstance(fun, str):
         return any((is_call_to(node, f) for f in fun))
     return (
         isinstance(node, itir.FunCall) and isinstance(node.fun, itir.SymRef) and node.fun.id == fun
