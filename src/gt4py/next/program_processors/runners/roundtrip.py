@@ -19,6 +19,7 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
+import warnings
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
@@ -28,7 +29,7 @@ from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
-from gt4py.next.iterator.transforms import fencil_to_program, global_tmps as gtmps_transform
+from gt4py.next.iterator.transforms import fencil_to_program
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
 
@@ -52,14 +53,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("(lambda ${','.join(params)}: ${expr})")
     StencilClosure = as_mako("closure(${domain}, ${stencil}, ${output}, [${','.join(inputs)}])")
-    FencilDefinition = as_mako(
-        """
-${''.join(function_definitions)}
-@fendef
-def ${id}(${','.join(params)}):
-    ${'\\n    '.join(closures)}
-    """
-    )
     FunctionDefinition = as_mako(
         """
 @fundef
@@ -72,28 +65,11 @@ def ${id}(${','.join(params)}):
 ${''.join(function_definitions)}
 @fendef
 def ${id}(${','.join(params)}):
+    ${'\\n    '.join(declarations)}
     ${'\\n    '.join(body)}
     """
     )
     SetAt = as_mako("set_at(${expr}, ${domain}, ${target})")
-
-    # extension required by global_tmps
-    def visit_FencilWithTemporaries(
-        self, node: gtmps_transform.FencilWithTemporaries, **kwargs: Any
-    ) -> str:
-        params = self.visit(node.params)
-
-        tmps = "\n    ".join(self.visit(node.tmps))
-        args = ", ".join(params + [tmp.id for tmp in node.tmps])
-        params = ", ".join(params)
-        fencil = self.visit(node.fencil)
-        return (
-            fencil
-            + "\n"
-            + f"def {node.fencil.id}_wrapper({params}, **kwargs):\n    "
-            + tmps
-            + f"\n    {node.fencil.id}({args}, **kwargs)\n"
-        )
 
     def visit_Temporary(self, node: itir.Temporary, **kwargs: Any) -> str:
         assert (
@@ -111,8 +87,6 @@ def ${id}(${','.join(params)}):
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
-
-_BACKEND_NAME = "roundtrip"
 
 _FENCIL_CACHE: dict[int, Callable] = {}
 
@@ -140,6 +114,8 @@ def fencil_generator(
     #  caching mechanism
     cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
+        if debug:
+            print(f"Using cached fencil for key {cache_key}")
         return _FENCIL_CACHE[cache_key]
 
     ir = itir_transforms.apply_common_transforms(
@@ -204,14 +180,8 @@ def fencil_generator(
         if not debug:
             pathlib.Path(source_file_name).unlink(missing_ok=True)
 
-    assert isinstance(
-        ir, (itir.FencilDefinition, gtmps_transform.FencilWithTemporaries, itir.Program)
-    )
-    fencil_name = (
-        ir.fencil.id + "_wrapper"
-        if isinstance(ir, gtmps_transform.FencilWithTemporaries)
-        else ir.id
-    )
+    assert isinstance(ir, itir.Program)
+    fencil_name = ir.id
     fencil = getattr(mod, fencil_name)
 
     _FENCIL_CACHE[cache_key] = fencil
@@ -251,11 +221,18 @@ class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
     use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+        lift_mode = inp.kwargs.get("lift_mode", self.lift_mode)
+        if lift_mode != self.lift_mode:
+            warnings.warn(
+                f"Roundtrip Backend was configured for LiftMode `{self.lift_mode!s}`, but "
+                f"overriden to be {lift_mode!s} at runtime.",
+                stacklevel=2,
+            )
         return fencil_generator(
             inp.program,
             offset_provider=inp.kwargs.get("offset_provider", None),
             debug=self.debug,
-            lift_mode=self.lift_mode,
+            lift_mode=lift_mode,
             use_embedded=self.use_embedded,
         )
 

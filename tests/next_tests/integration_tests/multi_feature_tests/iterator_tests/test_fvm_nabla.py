@@ -274,7 +274,9 @@ def test_nabla2(program_processor, lift_mode):
         AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
     )
 
-    nabla2(
+    run_processor(
+        nabla2,
+        program_processor,
         setup.nodes_size,
         (pnabla_MXX, pnabla_MYY),
         pp,
@@ -282,7 +284,6 @@ def test_nabla2(program_processor, lift_mode):
         sign,
         vol,
         offset_provider={"E2V": e2v, "V2E": v2e},
-        program_processor=program_processor,
         lift_mode=lift_mode,
     )
 

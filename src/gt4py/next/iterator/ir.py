@@ -93,6 +93,8 @@ class OffsetLiteral(Expr):
 
 
 class AxisLiteral(Expr):
+    # TODO(havogt): Refactor to use declare Axis/Dimension at the Program level.
+    # Now every use of the literal has to provide the kind, where usually we only care of the name.
     value: str
     kind: common.DimensionKind = common.DimensionKind.HORIZONTAL
 
