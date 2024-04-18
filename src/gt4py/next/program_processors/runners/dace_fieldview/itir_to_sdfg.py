@@ -36,12 +36,13 @@ class ItirToSDFG(eve.NodeVisitor):
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `it.Stmt` statements.
     Each statement is translated to a taskgraph inside a separate state. The parent SDFG and
-    the translation state define the translation context, implemented by `TaskgenContext`.
+    the translation state define the translation context, implemented by `ItirTaskgenContext`.
     Statement states are chained one after the other: potential concurrency between states should be
     extracted by the DaCe SDFG transformations.
     The program translation keeps track of entry and exit states: each statement is translated as
     a new state inserted just before the exit state. Note that statements with branch execution might
-    result in more than one state.
+    result in more than one state. However, each statement should provide a single termination state
+    (e.g. a join state for an if/else branch execution) on the exit state of the program SDFG.
     """
 
     _ctx_stack: deque[TaskgenContext]
@@ -114,7 +115,7 @@ class ItirToSDFG(eve.NodeVisitor):
             self._ctx_stack.pop()
 
         assert len(self._ctx_stack) == 1
-        assert self._ctx_stack[-1] == root_ctx
+        self._ctx_stack.pop()
 
         sdfg.validate()
         return sdfg
@@ -135,19 +136,17 @@ class ItirToSDFG(eve.NodeVisitor):
         # sanity check on stack status
         assert ctx == self._ctx_stack[-1]
 
-        # reset the list of visited symrefs to only discover output symrefs
-        tasklet_symrefs = ctx.symrefs.copy()
-        ctx.symrefs.clear()
-
         # the statement target will result in one or more access nodes to external data
+        target_ctx = ctx.clone()
+        self._ctx_stack.append(target_ctx)
         self.visit(stmt.target)
-        target_symrefs = ctx.symrefs.copy()
+        self._ctx_stack.pop()
 
         # sanity check on stack status
         assert ctx == self._ctx_stack[-1]
 
-        assert len(tasklet_symrefs) == len(target_symrefs)
-        for tasklet_sym, target_sym in zip(tasklet_symrefs, target_symrefs):
+        assert len(ctx.symrefs) == len(target_ctx.symrefs)
+        for tasklet_sym, target_sym in zip(ctx.symrefs, target_ctx.symrefs):
             target_array = ctx.sdfg.arrays[target_sym]
             assert not target_array.transient
 
