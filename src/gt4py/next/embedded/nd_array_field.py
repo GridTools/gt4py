@@ -200,7 +200,7 @@ class NdArrayField(
 
         The composition operation is only well-defined when the codomain of `c: A → B`
         matches the domain of `f: B → ℝ` and it would then result in a new mapping
-        `f∘c: A → ℝ` defined as `(f∘c)(x) = g(f(x))`. When remaping a field whose
+        `f∘c: A → ℝ` defined as `(f∘c)(x) = f(c(x))`. When remaping a field whose
         domain has multiple dimensions `f: A × B → ℝ`, the domain of the connectivity
         argument used in the right hand side of the operator should therefore have the
         same product of dimensions `c: S × T → A × B`. Such a mapping can also be
