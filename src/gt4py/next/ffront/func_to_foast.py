@@ -104,7 +104,9 @@ class OptionalFuncToFoastFactory(factory.Factory):
         ] = func_to_foast
         cached = factory.Trait(
             step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(step=o.workflow, hash_function=eve.utils.content_hash)
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.cache_key
+                )
             )
         )
 

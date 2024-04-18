@@ -18,7 +18,6 @@ import dataclasses
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils as eve_utils
 from gt4py.next import allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_itir,
@@ -68,7 +67,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     ] = dataclasses.field(
         default_factory=lambda: foast_to_past.FoastToPastClosure(
             foast_to_past=workflow.CachedStep(
-                foast_to_past.foast_to_past, hash_function=eve_utils.content_hash
+                foast_to_past.foast_to_past, hash_function=ffront_stages.cache_key
             )
         )
     )
@@ -82,7 +81,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
         dataclasses.field(
             default_factory=lambda: workflow.CachedStep(
-                step=foast_to_itir.foast_to_itir, hash_function=eve_utils.content_hash
+                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.cache_key
             )
         )
     )
