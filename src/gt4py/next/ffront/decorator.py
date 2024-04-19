@@ -100,6 +100,7 @@ class Program:
 
     @functools.cached_property
     def past_stage(self):
+        # backwards compatibility for backends that do not support the full toolchain
         if self.backend is not None and self.backend.transforms_prog is not None:
             return self.backend.transforms_prog.func_to_past(self.definition_stage)
         return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
