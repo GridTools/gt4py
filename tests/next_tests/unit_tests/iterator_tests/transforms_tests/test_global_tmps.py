@@ -379,19 +379,18 @@ def test_collect_tmps_info():
             for a, s in (("JDim", "j"), ("KDim", "k"))
         ],
     )
+
+    i = im.sym("i", index_type)
+    j = im.sym("j", index_type)
+    k = im.sym("k", index_type)
+    inp = im.sym("inp", i_field_type)
+    out = im.sym("out", i_field_type)
+
     testee = FencilWithTemporaries(
         fencil=ir.FencilDefinition(
             id="f",
             function_definitions=[],
-            params=[
-                im.sym("i", index_type),
-                im.sym("j", index_type),
-                im.sym("k", index_type),
-                im.sym("inp", i_field_type),
-                im.sym("out", i_field_type),
-                im.sym("_gtmp_0", i_field_type),
-                im.sym("_gtmp_1", i_field_type),
-            ],
+            params=[i, j, k, inp, out, im.sym("_gtmp_0", i_field_type), im.sym("_gtmp_1", i_field_type)],
             closures=[
                 ir.StencilClosure(
                     domain=tmp_domain,
@@ -446,7 +445,7 @@ def test_collect_tmps_info():
                 ),
             ],
         ),
-        params=[ir.Sym(id="i"), ir.Sym(id="j"), ir.Sym(id="k"), ir.Sym(id="inp"), ir.Sym(id="out")],
+        params=[i, j, k, inp, out],
         tmps=[
             ir.Temporary(id="_gtmp_0", dtype=float_type),
             ir.Temporary(id="_gtmp_1", dtype=float_type),

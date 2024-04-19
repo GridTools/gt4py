@@ -66,18 +66,25 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
     """
     is_compatible = True
 
-    def is_compatible_element(el_type_a: ts.TypeSpec, el_type_b: ts.TypeSpec):
-        nonlocal is_compatible
-        if isinstance(el_type_a, it_ts.IteratorType) and isinstance(el_type_b, it_ts.IteratorType):
-            if not any(el_type.position_dims == "unknown" for el_type in [el_type_a, el_type_b]):
-                is_compatible &= el_type_a.position_dims == el_type_b.position_dims
-            if el_type_a.defined_dims and el_type_b.defined_dims:
-                is_compatible &= el_type_a.defined_dims == el_type_b.defined_dims
-            is_compatible &= el_type_a.element_type == el_type_b.element_type
-        else:
-            is_compatible &= el_type_a == el_type_b
-
-    type_info.apply_to_primitive_constituents(is_compatible_element, type_a, type_b)
+    if isinstance(type_a, it_ts.IteratorType) and isinstance(type_b, it_ts.IteratorType):
+        if not any(el_type.position_dims == "unknown" for el_type in [type_a, type_b]):
+            is_compatible &= type_a.position_dims == type_b.position_dims
+        if type_a.defined_dims and type_b.defined_dims:
+            is_compatible &= type_a.defined_dims == type_b.defined_dims
+        is_compatible &= type_a.element_type == type_b.element_type
+    elif isinstance(type_a, ts.TupleType):
+        for el_type_a, el_type_b in zip(type_a.types, type_b.types, strict=True):
+            is_compatible &= _is_compatible_type(el_type_a, el_type_b)
+    elif isinstance(type_a, ts.FunctionType):
+        for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        for arg_a, arg_b in zip(type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True):
+            is_compatible &= _is_compatible_type(arg_a, arg_b)
+        is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
+    else:
+        is_compatible &= type_a == type_b
 
     return is_compatible
 
