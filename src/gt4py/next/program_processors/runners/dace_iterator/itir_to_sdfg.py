@@ -22,7 +22,6 @@ from gt4py.next import Dimension, DimensionKind
 from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation as tt
 
 from .itir_to_tasklet import (
@@ -268,8 +267,6 @@ class ItirToSDFG(eve.NodeVisitor):
         program_sdfg = dace.SDFG(name=node.id)
         program_sdfg.debuginfo = dace_debuginfo(node)
         entry_state = program_sdfg.add_state("program_entry", is_start_block=True)
-
-        node = itir_type_inference.infer(node, offset_provider=self.offset_provider)
 
         # Filter neighbor tables from offset providers.
         neighbor_tables = get_used_connectivities(node, self.offset_provider)
