@@ -55,7 +55,9 @@ _TYPE_MAPPING = {
 
 
 def itir_type_as_dace_type(type_: ts.TypeSpec):
-    # TODO: cleanup
+    # TODO(tehrengruber): this function just converts the scalar type of whatever it is given,
+    #  let it be a field, iterator, or directly a scalar. The caller should take care of the
+    #  extraction.
     dtype: ts.TypeSpec
     if isinstance(type_, ts.FieldType):
         dtype = type_.dtype

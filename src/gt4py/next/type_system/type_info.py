@@ -175,8 +175,6 @@ def apply_to_primitive_constituents(
     ... )
     {(0,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None), (1,): ScalarType(kind=<ScalarKind.INT64: 64>, shape=None)}
     """
-
-    # TODO: check structure matches
     if isinstance(symbol_types[0], ts.TupleType):
         assert all(isinstance(symbol_type, ts.TupleType) for symbol_type in symbol_types)
         return tuple_constructor(

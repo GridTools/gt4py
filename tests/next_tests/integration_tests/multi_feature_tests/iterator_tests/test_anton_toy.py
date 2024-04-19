@@ -49,7 +49,7 @@ def lap(inp):
 
 
 @fundef
-def lap2(inp):
+def lap_flat(inp):
     return -4.0 * deref(inp) + (
         deref(shift(i, 1)(inp))
         + deref(shift(i, -1)(inp))
@@ -61,16 +61,6 @@ def lap2(inp):
 IDim = gtx.Dimension("IDim")
 JDim = gtx.Dimension("JDim")
 KDim = gtx.Dimension("KDim")
-
-
-@fendef(offset_provider={"i": IDim, "j": JDim})
-def fencil(x, y, z, out, inp):
-    closure(
-        cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)),
-        lap,
-        out,
-        [inp],
-    )
 
 
 def naive_lap(inp):
@@ -90,7 +80,8 @@ def naive_lap(inp):
 
 
 @pytest.mark.uses_origin
-def test_anton_toy(program_processor, lift_mode):
+@pytest.mark.parametrize("stencil", [lap, lap_flat])
+def test_anton_toy(stencil, program_processor, lift_mode):
     program_processor, validate = program_processor
 
     if program_processor in [
@@ -102,6 +93,19 @@ def test_anton_toy(program_processor, lift_mode):
 
         if lift_mode != transforms.LiftMode.FORCE_INLINE:
             pytest.xfail("TODO: issue with temporaries that crashes the application")
+
+    if stencil is lap:
+        pytest.xfail("Type inference does not support calling lambdas with offset arguments of changing type.")
+
+    @fendef(offset_provider={"i": IDim, "j": JDim})
+    def fencil(x, y, z, out, inp):
+        closure(
+            cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y),
+                             named_range(KDim, 0, z)),
+            stencil,
+            out,
+            [inp],
+        )
 
     shape = [5, 7, 9]
     rng = np.random.default_rng()

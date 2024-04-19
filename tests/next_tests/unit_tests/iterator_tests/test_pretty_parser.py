@@ -257,7 +257,7 @@ def test_program():
             ir.Temporary(
                 id="tmp",
                 domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
-                dtype=ir.SymRef(id="float64"),
+                dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64),
             ),
         ],
         body=[

@@ -97,7 +97,10 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
 # Design decisions
 #  Only the parameters of fencils need to be typed.
 #  Lambda functions are not polymorphic.
-
+def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
+    if node.type:
+        assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
+    node.type = type_
 
 def on_inferred(
     callback: Callable, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
@@ -161,9 +164,10 @@ class ObservableTypeInferenceRule:
 
         if self.store_inferred_type_in_node:
             assert self.node
+            _set_node_type(self.node, self.inferred_type)
             self.node.type = self.inferred_type
             for alias in self.aliases:
-                alias.type = self.inferred_type
+                _set_node_type(alias, self.inferred_type)
 
     def on_type_ready(self, cb: Callable[[ts.TypeSpec], None]) -> None:
         if self.inferred_type:
