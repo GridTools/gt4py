@@ -38,7 +38,6 @@ from .itir_to_tasklet import (
 from .utility import (
     add_mapped_nested_sdfg,
     as_dace_type,
-    as_scalar_type,
     connectivity_identifier,
     dace_debuginfo,
     filter_connectivities,
@@ -196,14 +195,10 @@ class ItirToSDFG(eve.NodeVisitor):
         symbol_map: dict[str, TaskletExpr] = {}
         # The shape of temporary arrays might be defined based on scalar values passed as program arguments.
         # Here we collect these values in a symbol map.
-        tmp_ids = set(tmp.id for tmp in self.tmps)
         for sym in node_params:
-            breakpoint()
-            if sym.id not in tmp_ids and sym.kind != "Iterator":
+            if isinstance(sym.type, ts.ScalarType):
                 name_ = str(sym.id)
-                type_ = self.storage_types[name_]
-                assert isinstance(type_, ts.ScalarType)
-                symbol_map[name_] = SymbolExpr(name_, as_dace_type(type_))
+                symbol_map[name_] = SymbolExpr(name_, as_dace_type(sym.type))
 
         tmp_symbols: dict[str, str] = {}
         for tmp in self.tmps:
@@ -211,47 +206,33 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # We visit the domain of the temporary field, passing the set of available symbols.
             assert isinstance(tmp.domain, itir.FunCall)
-            breakpoint()
-            self.node_types.update(itir_typing.infer_all(tmp.domain))
             domain_ctx = Context(program_sdfg, defs_state, symbol_map)
             tmp_domain = self._visit_domain(tmp.domain, domain_ctx)
 
-            # We build the FieldType for this temporary array.
-            dims: list[Dimension] = []
-            for dim, _ in tmp_domain:
-                dims.append(
-                    Dimension(
-                        value=dim,
-                        kind=(
-                            DimensionKind.VERTICAL
-                            if self.column_axis is not None and self.column_axis.value == dim
-                            else DimensionKind.HORIZONTAL
-                        ),
-                    )
-                )
-            assert isinstance(tmp.dtype, str)
-            type_ = ts.FieldType(dims=dims, dtype=as_scalar_type(tmp.dtype))
-            self.storage_types[tmp_name] = type_
+            if isinstance(tmp.type, ts.TupleType):
+                raise NotImplementedError("Temporaries of tuples are not supported.")
+            assert isinstance(tmp.type, ts.FieldType) and isinstance(tmp.dtype, ts.ScalarType)
+
+            # We store the FieldType for this temporary array.
+            self.storage_types[tmp_name] = tmp.type
 
             # N.B.: skip generation of symbolic strides and just let dace assign default strides, for now.
             # Another option, in the future, is to use symbolic strides and apply auto-tuning or some heuristics
             # to assign optimal stride values.
-            tmp_shape, _ = new_array_symbols(tmp_name, len(dims))
+            tmp_shape, _ = new_array_symbols(tmp_name, len(tmp.type.dims))
             _, tmp_array = program_sdfg.add_array(
-                tmp_name, tmp_shape, as_dace_type(type_.dtype), transient=True
+                tmp_name, tmp_shape, as_dace_type(tmp.dtype), transient=True
             )
 
             # Loop through all dimensions to visit the symbolic expressions for array shape and offset.
             # These expressions are later mapped to interstate symbols.
             for (_, (begin, end)), shape_sym in zip(tmp_domain, tmp_array.shape):
-                """
-                The temporary field has a dimension range defined by `begin` and `end` values.
-                Therefore, the actual size is given by the difference `end.value - begin.value`.
-                Instead of allocating the actual size, we allocate space to enable indexing from 0
-                because we want to avoid using dace array offsets (which will be deprecated soon).
-                The result should still be valid, but the stencil will be using only a subset
-                of the array.
-                """
+                # The temporary field has a dimension range defined by `begin` and `end` values.
+                # Therefore, the actual size is given by the difference `end.value - begin.value`.
+                # Instead of allocating the actual size, we allocate space to enable indexing from 0
+                # because we want to avoid using dace array offsets (which will be deprecated soon).
+                # The result should still be valid, but the stencil will be using only a subset
+                # of the array.
                 if not (isinstance(begin, SymbolExpr) and begin.value == "0"):
                     warnings.warn(
                         f"Domain start offset for temporary {tmp_name} is ignored.", stacklevel=2

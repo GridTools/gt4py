@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
+import typing
 from collections import defaultdict
 from typing import Iterable, Optional, Sequence
 
@@ -22,7 +23,29 @@ from gt4py.next.iterator import ir as itir
 
 @dataclasses.dataclass
 class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
-    ref_counts: dict[str, int] = dataclasses.field(default_factory=lambda: defaultdict(int))
+    ref_counts: dict[itir.SymRef, int] = dataclasses.field(default_factory=dict)
+
+    @typing.overload
+    @classmethod
+    def apply(
+        cls,
+        node: itir.Node | Sequence[itir.Node],
+        symbol_names: Optional[Iterable[str]] = None,
+        *,
+        ignore_builtins: bool = True,
+        as_ref: typing.Literal[False] = False,
+    ) -> dict[str, int]: ...
+
+    @typing.overload
+    @classmethod
+    def apply(
+        cls,
+        node: itir.Node | Sequence[itir.Node],
+        symbol_names: Optional[Iterable[str]] = None,
+        *,
+        ignore_builtins: bool = True,
+        as_ref: typing.Literal[True],
+    ) -> dict[itir.SymRef, int]: ...
 
     @classmethod
     def apply(
@@ -31,7 +54,8 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
-    ) -> dict[str, int]:
+        as_ref: bool = False,
+    ) -> dict[str, int] | dict[itir.SymRef, int]:
         """
         Count references to given or all symbols in scope.
 
@@ -45,6 +69,11 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
 
             >>> CountSymbolRefs.apply(expr, symbol_names=["x", "z"])
             {'x': 2, 'z': 1}
+
+            In some cases, e.g. when the type of the reference is required, the references instead
+            of strings can be retrieved.
+            >>> CountSymbolRefs.apply(expr, as_ref=True)
+            {SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1}
         """
         if ignore_builtins:
             inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}
@@ -55,12 +84,22 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         obj.visit(node, inactive_refs=inactive_refs)
 
         if symbol_names:
-            return {k: obj.ref_counts.get(k, 0) for k in symbol_names}
-        return dict(obj.ref_counts)
+            ref_counts = {k: v for k, v in obj.ref_counts.items() if k.id in symbol_names}
+        else:
+            ref_counts = obj.ref_counts
+
+        result: dict[str, int] | dict[itir.SymRef, int]
+        if as_ref:
+            result = ref_counts
+        else:
+            result = {str(k.id): v for k, v in ref_counts.items()}
+
+        return defaultdict(int, result)
 
     def visit_SymRef(self, node: itir.SymRef, *, inactive_refs: set[str]):
         if node.id not in inactive_refs:
-            self.ref_counts[str(node.id)] += 1
+            self.ref_counts.setdefault(node, 0)
+            self.ref_counts[node] += 1
 
     def visit_Lambda(self, node: itir.Lambda, *, inactive_refs: set[str]):
         inactive_refs = inactive_refs | {param.id for param in node.params}
@@ -68,16 +107,41 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         self.generic_visit(node, inactive_refs=inactive_refs)
 
 
+@typing.overload
 def collect_symbol_refs(
     node: itir.Node | Sequence[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,
-) -> list[str]:
+    as_ref: typing.Literal[False] = False,
+) -> list[str]: ...
+
+
+@typing.overload
+def collect_symbol_refs(
+    node: itir.Node | Sequence[itir.Node],
+    symbol_names: Optional[Iterable[str]] = None,
+    *,
+    ignore_builtins: bool = True,
+    as_ref: typing.Literal[True],
+) -> list[itir.SymRef]: ...
+
+
+def collect_symbol_refs(
+    node: itir.Node | Sequence[itir.Node],
+    symbol_names: Optional[Iterable[str]] = None,
+    *,
+    ignore_builtins: bool = True,
+    as_ref: bool = False,
+):
+    assert as_ref in [True, False]
     return [
         symbol_name
         for symbol_name, count in CountSymbolRefs.apply(
-            node, symbol_names, ignore_builtins=ignore_builtins
+            node,
+            symbol_names,
+            ignore_builtins=ignore_builtins,
+            as_ref=typing.cast(typing.Literal[True, False], as_ref),
         ).items()
         if count > 0
     ]

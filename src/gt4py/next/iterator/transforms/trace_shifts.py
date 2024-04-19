@@ -51,10 +51,10 @@ def copy_recorded_shifts(from_: ir.Node, to: ir.Node) -> None:
 
 
 class Sentinel(enum.Enum):
-    VALUE = object()
-    TYPE = object()
+    VALUE = enum.auto()
+    TYPE = enum.auto()
 
-    ALL_NEIGHBORS = object()
+    ALL_NEIGHBORS = enum.auto()
 
 
 @dataclasses.dataclass(frozen=True)

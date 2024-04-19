@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-
+import collections.abc
 import copy
 import dataclasses
 import functools
@@ -23,6 +23,7 @@ from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
+from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.iterator.type_system import rules, type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
 
@@ -39,9 +40,11 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
     """
     Predicate to determine if two types are compatible.
 
-    This function gracefully handles iterators with unknown positions which are considered
-    compatible to any other positions of another iterator. Beside that this function
-    simply checks for equality of types.
+    This function gracefully handles:
+     - iterators with unknown positions which are considered compatible to any other positions
+       of another iterator.
+     - iterators which are defined everywhere, i.e. empty defined dimensions
+    Beside that this function simply checks for equality of types.
 
     >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
     >>> IDim = common.Dimension(value="IDim")
@@ -68,7 +71,8 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
         if isinstance(el_type_a, it_ts.IteratorType) and isinstance(el_type_b, it_ts.IteratorType):
             if not any(el_type.position_dims == "unknown" for el_type in [el_type_a, el_type_b]):
                 is_compatible &= el_type_a.position_dims == el_type_b.position_dims
-            is_compatible &= el_type_a.defined_dims == el_type_b.defined_dims
+            if el_type_a.defined_dims and el_type_b.defined_dims:
+                is_compatible &= el_type_a.defined_dims == el_type_b.defined_dims
             is_compatible &= el_type_a.element_type == el_type_b.element_type
         else:
             is_compatible &= el_type_a == el_type_b
@@ -84,8 +88,10 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
 #  - write back params type in lambda
 #  - documentation
 #    describe why lambda can only have one type. Describe idea to solve e.g.
-#     let("f", lambda x: x)(f(1)+f(1.))
-#     -> let("f_int", lambda x: x, "f_float", lambda x: x)(f_int(1)+f_float(1.))
+#     `let("f", lambda x: x)(f(1)+f(1.))
+#     -> let("f_int", lambda x: x, "f_float", lambda x: x)(f_int(1)+f_float(1.))`
+#    describe where this is needed, e.g.:
+#      `if_(cond, fun_tail(it_on_vertex), fun_tail(it_on_vertex_k))`
 #  - document how scans are handled (also mention to Hannes)
 #  - types are stored in the node, but will be incomplete after some passes
 # Design decisions
@@ -202,16 +208,20 @@ def _get_dimensions_from_offset_provider(offset_provider) -> dict[str, common.Di
 
 
 def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
-    dimensions: list[common.Dimension] = []
+    def _get_dimensions(obj: Any):
+        if isinstance(obj, common.Dimension):
+            yield obj
+        elif isinstance(obj, ts.TypeSpec):
+            for field in dataclasses.fields(obj.__class__):
+                yield from _get_dimensions(getattr(obj, field.name))
+        elif isinstance(obj, collections.abc.Mapping):
+            for el in obj.values():
+                yield from _get_dimensions(el)
+        elif isinstance(obj, collections.abc.Iterable) and not isinstance(obj, str):
+            for el in obj:
+                yield from _get_dimensions(el)
 
-    def _get_dimensions(el_type):
-        if isinstance(el_type, ts.FieldType):
-            dimensions.extend(el_type.dims)
-
-    for type_ in types:
-        type_info.apply_to_primitive_constituents(_get_dimensions, type_)
-
-    return {dim.value: dim for dim in dimensions}
+    return {dim.value: dim for dim in _get_dimensions(types)}
 
 
 T = TypeVar("T", bound=itir.Node)
@@ -255,6 +265,14 @@ def _convert_closure_input_to_iterator(
     )
 
 
+def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
+    def type_rule(*args, **kwargs):
+        assert type_info.accepts_args(fun_type, with_args=args, with_kwargs=kwargs)
+        return fun_type.returns
+
+    return type_rule
+
+
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
     """
@@ -281,7 +299,11 @@ class ITIRTypeInference(eve.NodeTranslator):
             dimensions=(
                 _get_dimensions_from_offset_provider(offset_provider)
                 | _get_dimensions_from_types(
-                    node.pre_walk_values().if_isinstance(itir.Node).getattr("type").if_is_not(None)
+                    node.pre_walk_values()
+                    .if_isinstance(itir.Node)
+                    .getattr("type")
+                    .if_is_not(None)
+                    .to_list()
                 )
             ),
             allow_undeclared_symbols=allow_undeclared_symbols,
@@ -338,6 +360,32 @@ class ITIRTypeInference(eve.NodeTranslator):
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
         return it_ts.FencilType(params=list(params.values()), closures=closures)
 
+    def visit_FencilWithTemporaries(self, node: global_tmps.FencilWithTemporaries, *, ctx):
+        # TODO(tehrengruber): This implementation is not very appealing. Since we are about to
+        #  refactor the PR anyway this is fine for now.
+        params: dict[str, ts.DataType] = {}
+        for param in node.params:
+            assert isinstance(param.type, ts.DataType)
+            params[param.id] = param.type
+        # infer types of temporary declarations
+        tmps: dict[str, ts.FieldType] = {}
+        for tmp_node in node.tmps:
+            tmps[tmp_node.id] = self.visit(tmp_node, ctx=ctx | params)
+        # and store them in the inner fencil
+        for fencil_param in node.fencil.params:
+            if fencil_param.id in tmps:
+                fencil_param.type = tmps[fencil_param.id]
+        self.visit(node.fencil, ctx=ctx)
+        return node.fencil.type
+
+    def visit_Temporary(self, node: itir.Temporary, *, ctx):
+        domain = self.visit(node.domain, ctx=ctx)
+        assert isinstance(domain, it_ts.DomainType)
+        assert node.dtype
+        return type_info.apply_to_primitive_constituents(
+            lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
+        )
+
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
         domain: it_ts.DomainType = self.visit(node.domain, ctx=ctx)
         inputs: list[ts.FieldType] = self.visit(node.inputs, ctx=ctx)
@@ -389,8 +437,11 @@ class ITIRTypeInference(eve.NodeTranslator):
         if self.allow_undeclared_symbols and node.id not in ctx:
             # type has been stored in the node itself
             if node.type:
+                if isinstance(node.type, ts.FunctionType):
+                    return _type_inference_rule_from_function_type(node.type)
                 return node.type
             return ts.DeferredType(constraint=None)
+        assert node.id in ctx
         result = ctx[node.id]
         if isinstance(result, ObservableTypeInferenceRule):
             result.aliases.append(node)

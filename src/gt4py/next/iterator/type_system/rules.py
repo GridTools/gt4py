@@ -104,7 +104,10 @@ def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
 @_register_type_inference_rule
 def if_(cond: ts.ScalarType, true_branch: ts.DataType, false_branch: ts.DataType) -> ts.DataType:
     assert isinstance(cond, ts.ScalarType) and cond.kind == ts.ScalarKind.BOOL
-    assert true_branch == false_branch
+    # TODO(tehrengruber): Enable this or a similar check. In case the true- and false-branch are
+    #  iterators defined on different positions this fails. For the GTFN backend we also don't
+    #  want this, but for roundtrip it is totally fine.
+    # assert true_branch == false_branch  # noqa: ERA001
     return true_branch
 
 

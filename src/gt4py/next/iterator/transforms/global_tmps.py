@@ -115,18 +115,20 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
     >>> print(canonicalize_applied_lift(["inp"], expr))
     (↑(λ(inp) → (λ(a) → ·a)((↑deref)(inp))))(inp)
     """
-    assert (
-        isinstance(node, ir.FunCall)
-        and isinstance(node.fun, ir.FunCall)
-        and node.fun.fun == ir.SymRef(id="lift")
-    )
-    stencil = node.fun.args[0]
+    assert cpm.is_applied_lift(node)
+    stencil = node.fun.args[0]  # type: ignore[attr-defined]  # ensured by is_applied lift
     it_args = node.args
     if any(not isinstance(it_arg, ir.SymRef) for it_arg in it_args):
-        used_closure_params = collect_symbol_refs(node)
-        assert not (set(used_closure_params) - set(closure_params))
-        return im.lift(im.lambda_(*used_closure_params)(im.call(stencil)(*it_args)))(
-            *used_closure_params
+        closure_param_refs = collect_symbol_refs(node, as_ref=True)
+        assert not ({str(ref.id) for ref in closure_param_refs} - set(closure_params))
+        new_node = im.lift(
+            im.lambda_(*[im.sym(param.id) for param in closure_param_refs])(
+                im.call(stencil)(*it_args)
+            )
+        )(*closure_param_refs)
+        # add types again
+        return itir_type_inference.infer(
+            new_node, inplace=True, allow_undeclared_symbols=True, offset_provider={}
         )
     return node
 
@@ -147,7 +149,8 @@ class TemporaryExtractionPredicate:
             return False
         # do not extract when the result is a list (i.e. a lift expression used in a `reduce` call)
         # as we can not create temporaries for these stencils
-        if isinstance(expr.type, it_ts.ListType):
+        assert isinstance(expr.type, it_ts.IteratorType)
+        if isinstance(expr.type.element_type, it_ts.ListType):
             return False
         if self.heuristics and not self.heuristics(expr):
             return False
@@ -175,6 +178,7 @@ class SimpleTemporaryExtractionHeuristics:
         return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
 
     def __call__(self, expr: ir.Expr) -> bool:
+        return True
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:
             return True
@@ -280,15 +284,17 @@ def split_closures(
                     )
 
                     # make sure the arguments to the applied lift are only symbols
-                    # (otherwise we would need to canonicalize using `canonicalize_applied_lift`
-                    # this doesn't seem to be necessary right now as we extract the lifts
-                    # in post-order of the tree)
+                    if not all(isinstance(arg, ir.SymRef) for arg in lift_expr.args):
+                        lift_expr = canonicalize_applied_lift(
+                            [str(param.id) for param in current_closure_stencil.params], lift_expr
+                        )
                     assert all(isinstance(arg, ir.SymRef) for arg in lift_expr.args)
 
                     # create a mapping from the closures parameters to the closure arguments
                     closure_param_arg_mapping = _closure_parameter_argument_mapping(current_closure)
 
-                    stencil: ir.Node = lift_expr.fun.args[0]  # usually an ir.Lambda or scan
+                    # usually an ir.Lambda or scan
+                    stencil: ir.Node = lift_expr.fun.args[0]  # type: ignore[attr-defined] # ensured by canonicalize_applied_lift
 
                     # allocate a new temporary
                     assert isinstance(stencil.type, ts.FunctionType)
@@ -344,9 +350,7 @@ def split_closures(
         fencil=ir.FencilDefinition(
             id=node.id,
             function_definitions=node.function_definitions,
-            params=node.params
-            + [im.sym(name, type_) for name, type_ in tmps]
-            + [im.sym(AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
+            params=node.params + [im.sym(name) for name, _ in tmps] + [im.sym(AUTO_DOMAIN.fun.id)],  # type: ignore[attr-defined]  # value is a global constant
             closures=list(reversed(closures)),
             location=node.location,
         ),
@@ -598,13 +602,17 @@ def collect_tmps_info(node: FencilWithTemporaries, *, offset_provider) -> Fencil
             assert output_field.id not in domains or domains[output_field.id] == closure.domain
             domains[output_field.id] = closure.domain
 
-    return FencilWithTemporaries(
+    new_node = FencilWithTemporaries(
         fencil=node.fencil,
         params=node.params,
         tmps=[
             ir.Temporary(id=tmp.id, domain=domains[tmp.id], dtype=tmp.dtype) for tmp in node.tmps
         ],
     )
+    # TODO(tehrengruber): type inference is only really needed to infer the types of the temporaries
+    #  and write them to the params of the inner fencil. This should be cleaned up after we
+    #  refactored the IR.
+    return itir_type_inference.infer(new_node, offset_provider=offset_provider)
 
 
 def validate_no_dynamic_offsets(node: ir.Node):

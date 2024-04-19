@@ -19,15 +19,15 @@ from gt4py.eve.utils import content_hash
 from gt4py.next import common as func_common
 
 
+@dataclass(frozen=True)
 class TypeSpec:
     def __hash__(self) -> int:
         return hash(content_hash(self))
 
     def __init_subclass__(cls) -> None:
-        cls.__hash__ = TypeSpec.__hash__
+        cls.__hash__ = TypeSpec.__hash__  # type: ignore[method-assign]
 
 
-@dataclass(frozen=True)
 class DataType(TypeSpec):
     """
     A base type for all types that represent data storage.

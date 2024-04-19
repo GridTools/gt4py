@@ -341,3 +341,6 @@ def test_fencil_with_nb_field_input():
 
     assert result.closures[0].stencil.expr.args[0].type == float64_list_type
     assert result.closures[0].stencil.type.returns == float64_type
+
+
+# TODO(tehrengruber): add tests for itir.Program
