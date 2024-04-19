@@ -17,7 +17,7 @@ Class to lower GTIR to SDFG.
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Dict
 
 import dace
 
@@ -25,38 +25,7 @@ from gt4py import eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
-from .fieldview_dataflow import FieldviewRegion
-from .gtir_to_tasklet import GtirToTasklet
-
-
-def create_ctx_in_new_state(new_state_name: Optional[str] = None) -> Callable:
-    """Decorator to execute the visit function in a separate context, in a new state."""
-
-    def decorator(func: Callable) -> Callable:
-        def newf(self: "GtirToSDFG", *args: Any, **kwargs: Optional[Any]) -> FieldviewRegion:
-            prev_ctx = self._ctx
-            assert prev_ctx is not None
-            new_ctx = prev_ctx.clone()
-            if new_state_name:
-                new_ctx.state = prev_ctx.sdfg.add_state_after(prev_ctx.state, new_state_name)
-            self._ctx = new_ctx
-
-            child_ctx = func(self, *args, **kwargs)
-
-            assert self._ctx == new_ctx
-            self._ctx = prev_ctx
-
-            return child_ctx
-
-        return newf
-
-    return decorator
-
-
-def create_ctx(func: Callable) -> Callable:
-    """Decorator to execute the visit function in a separate context, in current state."""
-
-    return create_ctx_in_new_state()(func)
+from .gtir_fieldview_builder import GtirFieldviewBuilder as FieldviewBuilder
 
 
 class GtirToSDFG(eve.NodeVisitor):
@@ -74,7 +43,6 @@ class GtirToSDFG(eve.NodeVisitor):
     (e.g. a join state for an if/else branch execution) on the exit state of the program SDFG.
     """
 
-    _ctx: Optional[FieldviewRegion]
     _param_types: list[ts.TypeSpec]
 
     def __init__(
@@ -120,7 +88,7 @@ class GtirToSDFG(eve.NodeVisitor):
 
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
             # TODO(edopao): use new `add_state_after` function in next dace release
-            head_state = sdfg.add_state_before(exit_state, "init_symbols_for_temporaries")
+            head_state = sdfg.add_state_before(exit_state, "init_temps")
             (sdfg.edges_between(entry_state, head_state))[0].assignments = temp_symbols
         else:
             head_state = entry_state
@@ -129,116 +97,24 @@ class GtirToSDFG(eve.NodeVisitor):
         for param, type_ in zip(node.params, self._param_types):
             self._add_storage(sdfg, str(param.id), type_)
 
-        self._ctx = FieldviewRegion(sdfg, head_state)
         # visit one statement at a time and put it into separate state
-        for stmt in node.body:
-            self.visit(stmt)
-
-        assert self._ctx.state == head_state
-        self._ctx = None
+        for i, stmt in enumerate(node.body):
+            head_state = sdfg.add_state_before(exit_state, f"stmt_{i}")
+            self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
         return sdfg
 
-    @create_ctx_in_new_state(new_state_name="set_at")
-    def visit_SetAt(self, stmt: itir.SetAt) -> None:
+    def visit_SetAt(self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         """Visits a statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of taskgraph writing to local (aka transient) storage.
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        stmt_ctx = self._ctx
-        assert stmt_ctx is not None
-
-        self.visit(stmt.expr)
+        fieldview_builder = FieldviewBuilder(sdfg, state)
+        fieldview_builder.visit(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        # TODO: Use GtirToTasklet with new context without updating self._ctx
-        self._ctx = stmt_ctx.clone()
-        self.visit(stmt.target)
-        # the visit of a target expression should only produce a set of access nodes (no tasklets, no output nodes)
-        assert len(self._ctx.output_nodes) == 0
-        stmt_ctx.output_nodes.extend(self._ctx.input_nodes)
-        self._ctx = stmt_ctx
-
-        assert len(stmt_ctx.input_nodes) == len(stmt_ctx.output_nodes)
-        for tasklet_node, target_node in zip(stmt_ctx.input_nodes, stmt_ctx.output_nodes):
-            target_array = stmt_ctx.sdfg.arrays[target_node]
-            target_array.transient = False
-
-            # TODO: visit statement domain to define the memlet subset
-            stmt_ctx.state.add_nedge(
-                stmt_ctx.node_mapping[tasklet_node],
-                stmt_ctx.node_mapping[target_node],
-                dace.Memlet.from_array(target_node, target_array),
-            )
-
-    @create_ctx
-    def _make_fieldop(self, fun_node: itir.FunCall, fun_args: List[itir.Expr]) -> FieldviewRegion:
-        ctx = self._ctx
-        assert ctx is not None
-
-        self.visit(fun_args)
-
-        # create ordered list of input nodes
-        input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
-
-        # TODO: define shape based on domain and dtype based on type inference
-        shape = [10]
-        dtype = dace.float64
-        output_name, output_array = ctx.sdfg.add_array(
-            ctx.var_name(), shape, dtype, transient=True, find_new_name=True
-        )
-        output_arrays = [(output_name, output_array)]
-
-        assert len(fun_node.args) == 1
-        assert isinstance(fun_node.args[0], itir.Lambda)
-
-        tletgen = GtirToTasklet(ctx)
-        tlet_code, tlet_inputs, tlet_outputs = tletgen.visit(fun_node.args[0])
-
-        # TODO: define map range based on domain
-        map_ranges = dict(i="0:10")
-
-        input_memlets: dict[str, dace.Memlet] = {}
-        for connector, (dname, _) in zip(tlet_inputs, input_arrays):
-            # TODO: define memlet subset based on domain
-            input_memlets[connector] = dace.Memlet(data=dname, subset="i")
-
-        output_memlets: dict[str, dace.Memlet] = {}
-        for connector, (dname, _) in zip(tlet_outputs, output_arrays):
-            # TODO: define memlet subset based on domain
-            output_memlets[connector] = dace.Memlet(data=dname, subset="i")
-            ctx.add_output_node(dname)
-
-        ctx.state.add_mapped_tasklet(
-            ctx.tasklet_name(),
-            map_ranges,
-            input_memlets,
-            tlet_code,
-            output_memlets,
-            input_nodes=ctx.node_mapping,
-            output_nodes=ctx.node_mapping,
-            external_edges=True,
-        )
-
-        return ctx
-
-    def visit_FunCall(self, node: itir.FunCall) -> None:
-        assert self._ctx is not None
-        if isinstance(node.fun, itir.FunCall) and isinstance(node.fun.fun, itir.SymRef):
-            if node.fun.fun.id == "as_fieldop":
-                child_ctx = self._make_fieldop(node.fun, node.args)
-                assert child_ctx.state == self._ctx.state
-                self._ctx.input_nodes.extend(child_ctx.output_nodes)
-            else:
-                raise NotImplementedError(f"Unexpected 'FunCall' with function {node.fun.fun.id}.")
-        else:
-            raise NotImplementedError(f"Unexpected 'FunCall' with type {type(node.fun)}.")
-
-    def visit_SymRef(self, node: itir.SymRef) -> None:
-        dname = str(node.id)
-        assert self._ctx is not None
-        self._ctx.add_input_node(dname)
+        fieldview_builder.write_to(stmt.target)

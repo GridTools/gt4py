@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from typing import Optional, Tuple, TypeAlias
+
 import dace
 
 
@@ -32,11 +34,16 @@ class FieldviewRegion:
     with all informatiion needed to construct the dataflow graph.
     """
 
+    Connection: TypeAlias = Tuple[dace.nodes.Node, Optional[str]]
+
     sdfg: dace.SDFG
     state: dace.SDFGState
     node_mapping: dict[str, dace.nodes.AccessNode]
 
     # ordered list of input/output data nodes used by the field operator being built in this dataflow region
+    input_connections: list[Connection]
+    output_connections: list[Connection]
+
     input_nodes: list[str]
     output_nodes: list[str]
 
@@ -50,6 +57,8 @@ class FieldviewRegion:
         self.node_mapping = {}
         self.input_nodes = []
         self.output_nodes = []
+        self.input_connections = []
+        self.output_connections = []
 
     def _add_node(self, data: str) -> dace.nodes.AccessNode:
         assert data in self.sdfg.arrays
