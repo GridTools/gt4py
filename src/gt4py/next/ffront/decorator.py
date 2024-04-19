@@ -206,6 +206,13 @@ class Program:
 
 @dataclasses.dataclass(frozen=True)
 class ProgramFromPast(Program):
+    """
+    This version of program has no DSL definition associated with it.
+
+    PAST nodes can be built programmatically from field operators or from scratch.
+    This wrapper provides the appropriate toolchain entry points.
+    """
+
     past_stage: ffront_stages.PastProgramDefinition
 
     def __call__(self, *args, offset_provider: dict[str, Dimension], **kwargs):
@@ -509,9 +516,9 @@ class FieldOperatorFromFoast(FieldOperator):
     """
     This version of the field operator does not have a DSL definition.
 
-    Instead, it is defined from a FieldOperator AST directly.
-    Current main use case is for tests that programmatically build FOAST
-    trees with specific features to be tested.
+    FieldOperator AST nodes can be programmatically built, which may be
+    particularly useful in testing and debugging.
+    This class provides the appropriate toolchain entry points.
     """
 
     foast_stage: ffront_stages.FoastOperatorDefinition
