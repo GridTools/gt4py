@@ -12,11 +12,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Sequence, Tuple
+from typing import Sequence
 
 import numpy as np
 
-import gt4py.eve as eve
+from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
 
 
@@ -75,33 +75,26 @@ _MATH_BUILTINS_MAPPING = {
 }
 
 
-class ItirToTasklet(eve.NodeVisitor):
-    """Translates ITIR to Python code to be used as tasklet body.
+class GtirTaskletCodegen(codegen.TemplatedGenerator):
+    """Translates GTIR to Python code to be used as tasklet body.
 
-    TODO: this class needs to be revisited in next commit.
+    This class is dace agnostic: it receives GTIR as input and produces Python code.
     """
 
-    def _visit_deref(self, node: itir.FunCall) -> str:
-        # TODO: build memlet subset / shift pattern for each tasklet connector
-        if not isinstance(node.args[0], itir.SymRef):
-            raise NotImplementedError(
-                f"Unexpected 'deref' argument with type '{type(node.args[0])}'."
-            )
-        return self.visit(node.args[0])
+    def _visit_deref(self, node: itir.FunCall) -> list[str]:
+        assert len(node.args) == 1
+        if isinstance(node.args[0], itir.SymRef):
+            return self.visit(node.args[0])
+        raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
 
-    def _visit_numeric_builtin(self, node: itir.FunCall) -> str:
+    def _visit_numeric_builtin(self, node: itir.FunCall) -> Sequence[str]:
         assert isinstance(node.fun, itir.SymRef)
         fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
-        args = [self.visit(arg_node) for arg_node in node.args]
-        return fmt.format(*args)
+        args = self.visit(node.args)
+        expr = fmt.format(*args)
+        return [expr]
 
-    def visit_Lambda(self, node: itir.Lambda) -> Tuple[str, Sequence[str], Sequence[str]]:
-        params = [str(p.id) for p in node.params]
-        tlet_code = "_out = " + self.visit(node.expr)
-
-        return tlet_code, params, ["_out"]
-
-    def visit_FunCall(self, node: itir.FunCall) -> str:
+    def visit_FunCall(self, node: itir.FunCall) -> Sequence[str]:
         if isinstance(node.fun, itir.SymRef) and node.fun.id == "deref":
             return self._visit_deref(node)
         if isinstance(node.fun, itir.SymRef):

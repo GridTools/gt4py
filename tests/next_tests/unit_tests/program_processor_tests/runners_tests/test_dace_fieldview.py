@@ -20,8 +20,8 @@ Note: this test module covers the fieldview flavour of ITIR.
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.program_processors.runners.dace_fieldview.itir_to_sdfg import (
-    ItirToSDFG as FieldviewItirToSDFG,
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
+    GtirToSDFG as FieldviewGtirToSDFG,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -37,7 +37,7 @@ DIM = Dimension("D")
 FTYPE = ts.FieldType(dims=[DIM], dtype=ts.ScalarKind.FLOAT64)
 
 
-def test_itir_sum2():
+def test_gtir_sum2():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, 10)
     )
@@ -63,7 +63,7 @@ def test_itir_sum2():
     b = np.random.rand(N)
     c = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewItirToSDFG(
+    sdfg_genenerator = FieldviewGtirToSDFG(
         param_types=([FTYPE] * 3),
     )
     sdfg = sdfg_genenerator.visit(testee)
@@ -74,7 +74,7 @@ def test_itir_sum2():
     assert np.allclose(c, (a + b))
 
 
-def test_itir_sum3():
+def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, 10)
     )
@@ -108,7 +108,7 @@ def test_itir_sum3():
     c = np.random.rand(N)
     d = np.empty_like(a)
 
-    sdfg_genenerator = FieldviewItirToSDFG(
+    sdfg_genenerator = FieldviewGtirToSDFG(
         param_types=([FTYPE] * 4),
     )
     sdfg = sdfg_genenerator.visit(testee)

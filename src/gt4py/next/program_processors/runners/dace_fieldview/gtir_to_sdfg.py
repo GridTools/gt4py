@@ -12,12 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Class to lower ITIR to SDFG.
+Class to lower GTIR to SDFG.
 
-Note: this module covers the fieldview flavour of ITIR.
+Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import dace
 
@@ -26,11 +26,41 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
 from .fieldview_dataflow import FieldviewRegion
-from .itir_to_tasklet import ItirToTasklet
+from .gtir_to_tasklet import GtirToTasklet
 
 
-class ItirToSDFG(eve.NodeVisitor):
-    """Provides translation capability from an ITIR program to a DaCe SDFG.
+def create_ctx_in_new_state(new_state_name: Optional[str] = None) -> Callable:
+    """Decorator to execute the visit function in a separate context, in a new state."""
+
+    def decorator(func: Callable) -> Callable:
+        def newf(self: "GtirToSDFG", *args: Any, **kwargs: Optional[Any]) -> FieldviewRegion:
+            prev_ctx = self._ctx
+            assert prev_ctx is not None
+            new_ctx = prev_ctx.clone()
+            if new_state_name:
+                new_ctx.state = prev_ctx.sdfg.add_state_after(prev_ctx.state, new_state_name)
+            self._ctx = new_ctx
+
+            child_ctx = func(self, *args, **kwargs)
+
+            assert self._ctx == new_ctx
+            self._ctx = prev_ctx
+
+            return child_ctx
+
+        return newf
+
+    return decorator
+
+
+def create_ctx(func: Callable) -> Callable:
+    """Decorator to execute the visit function in a separate context, in current state."""
+
+    return create_ctx_in_new_state()(func)
+
+
+class GtirToSDFG(eve.NodeVisitor):
+    """Provides translation capability from an GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `it.Stmt` statements.
@@ -110,6 +140,7 @@ class ItirToSDFG(eve.NodeVisitor):
         sdfg.validate()
         return sdfg
 
+    @create_ctx_in_new_state(new_state_name="set_at")
     def visit_SetAt(self, stmt: itir.SetAt) -> None:
         """Visits a statement expression and writes the local result to some external storage.
 
@@ -117,23 +148,20 @@ class ItirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        prev_ctx = self._ctx
-        assert prev_ctx is not None
+        stmt_ctx = self._ctx
+        assert stmt_ctx is not None
 
-        stmt_ctx = prev_ctx.clone()
-        stmt_ctx.state = prev_ctx.sdfg.add_state_after(prev_ctx.state, "set_at")
-
-        # the statement expression will result in a tasklet writing to one or more local data nodes
-        self._ctx = stmt_ctx
         self.visit(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
+        # TODO: Use GtirToTasklet with new context without updating self._ctx
         self._ctx = stmt_ctx.clone()
         self.visit(stmt.target)
         # the visit of a target expression should only produce a set of access nodes (no tasklets, no output nodes)
         assert len(self._ctx.output_nodes) == 0
         stmt_ctx.output_nodes.extend(self._ctx.input_nodes)
+        self._ctx = stmt_ctx
 
         assert len(stmt_ctx.input_nodes) == len(stmt_ctx.output_nodes)
         for tasklet_node, target_node in zip(stmt_ctx.input_nodes, stmt_ctx.output_nodes):
@@ -147,13 +175,10 @@ class ItirToSDFG(eve.NodeVisitor):
                 dace.Memlet.from_array(target_node, target_array),
             )
 
-        self._ctx = prev_ctx
-
+    @create_ctx
     def _make_fieldop(self, fun_node: itir.FunCall, fun_args: List[itir.Expr]) -> FieldviewRegion:
-        prev_ctx = self._ctx
-        assert prev_ctx is not None
-        ctx = prev_ctx.clone()
-        self._ctx = ctx
+        ctx = self._ctx
+        assert ctx is not None
 
         self.visit(fun_args)
 
@@ -171,7 +196,7 @@ class ItirToSDFG(eve.NodeVisitor):
         assert len(fun_node.args) == 1
         assert isinstance(fun_node.args[0], itir.Lambda)
 
-        tletgen = ItirToTasklet()
+        tletgen = GtirToTasklet(ctx)
         tlet_code, tlet_inputs, tlet_outputs = tletgen.visit(fun_node.args[0])
 
         # TODO: define map range based on domain
@@ -199,7 +224,6 @@ class ItirToSDFG(eve.NodeVisitor):
             external_edges=True,
         )
 
-        self._ctx = prev_ctx
         return ctx
 
     def visit_FunCall(self, node: itir.FunCall) -> None:
