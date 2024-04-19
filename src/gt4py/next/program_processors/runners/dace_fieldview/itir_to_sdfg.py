@@ -17,8 +17,7 @@ Class to lower ITIR to SDFG.
 Note: this module covers the fieldview flavour of ITIR.
 """
 
-from collections import deque
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional
 
 import dace
 
@@ -26,7 +25,7 @@ from gt4py import eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
-from .itir_taskgen import ItirTaskgenContext as TaskgenContext
+from .fieldview_dataflow import FieldviewRegion
 from .itir_to_tasklet import ItirToTasklet
 
 
@@ -45,14 +44,13 @@ class ItirToSDFG(eve.NodeVisitor):
     (e.g. a join state for an if/else branch execution) on the exit state of the program SDFG.
     """
 
-    _ctx_stack: deque[TaskgenContext]
+    _ctx: Optional[FieldviewRegion]
     _param_types: list[ts.TypeSpec]
 
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
     ):
-        self._ctx_stack = deque()
         self._param_types = param_types
 
     def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
@@ -82,6 +80,7 @@ class ItirToSDFG(eve.NodeVisitor):
 
         # we use entry/exit state to keep track of entry/exit point of graph execution
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
+        exit_state = sdfg.add_state_after(entry_state, "program_exit")
 
         # declarations of temporaries result in local (aka transient) array definitions in the SDFG
         if node.declarations:
@@ -91,31 +90,22 @@ class ItirToSDFG(eve.NodeVisitor):
 
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
             # TODO(edopao): use new `add_state_after` function in next dace release
-            temp_state = sdfg.add_state("init_symbols_for_temporaries")
-            sdfg.add_edge(entry_state, temp_state, dace.InterstateEdge(assignments=temp_symbols))
-
-            exit_state = sdfg.add_state_after(temp_state, "program_exit")
+            head_state = sdfg.add_state_before(exit_state, "init_symbols_for_temporaries")
+            (sdfg.edges_between(entry_state, head_state))[0].assignments = temp_symbols
         else:
-            exit_state = sdfg.add_state_after(entry_state, "program_exit")
+            head_state = entry_state
 
         # add global arrays (aka non-transient) to the SDFG
         for param, type_ in zip(node.params, self._param_types):
             self._add_storage(sdfg, str(param.id), type_)
 
-        # create root context with exit state
-        root_ctx = TaskgenContext(sdfg, exit_state)
-        self._ctx_stack.append(root_ctx)
-
+        self._ctx = FieldviewRegion(sdfg, head_state)
         # visit one statement at a time and put it into separate state
-        for i, stmt in enumerate(node.body):
-            stmt_state = sdfg.add_state_before(exit_state, f"stmt_{i}")
-            stmt_ctx = TaskgenContext(sdfg, stmt_state)
-            self._ctx_stack.append(stmt_ctx)
+        for stmt in node.body:
             self.visit(stmt)
-            self._ctx_stack.pop()
 
-        assert len(self._ctx_stack) == 1
-        self._ctx_stack.pop()
+        assert self._ctx.state == head_state
+        self._ctx = None
 
         sdfg.validate()
         return sdfg
@@ -127,48 +117,48 @@ class ItirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        assert len(self._ctx_stack) > 0
-        ctx = self._ctx_stack[-1]
+        prev_ctx = self._ctx
+        assert prev_ctx is not None
+
+        stmt_ctx = prev_ctx.clone()
+        stmt_ctx.state = prev_ctx.sdfg.add_state_after(prev_ctx.state, "set_at")
 
         # the statement expression will result in a tasklet writing to one or more local data nodes
+        self._ctx = stmt_ctx
         self.visit(stmt.expr)
 
-        # sanity check on stack status
-        assert ctx == self._ctx_stack[-1]
-
-        # the statement target will result in one or more access nodes to external data
-        target_ctx = ctx.clone()
-        self._ctx_stack.append(target_ctx)
+        # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
+        # in case the statement returns more than one field
+        self._ctx = stmt_ctx.clone()
         self.visit(stmt.target)
-        self._ctx_stack.pop()
+        # the visit of a target expression should only produce a set of access nodes (no tasklets, no output nodes)
+        assert len(self._ctx.output_nodes) == 0
+        stmt_ctx.output_nodes.extend(self._ctx.input_nodes)
 
-        # sanity check on stack status
-        assert ctx == self._ctx_stack[-1]
-
-        assert len(ctx.symrefs) == len(target_ctx.symrefs)
-        for tasklet_sym, target_sym in zip(ctx.symrefs, target_ctx.symrefs):
-            target_array = ctx.sdfg.arrays[target_sym]
-            assert not target_array.transient
+        assert len(stmt_ctx.input_nodes) == len(stmt_ctx.output_nodes)
+        for tasklet_node, target_node in zip(stmt_ctx.input_nodes, stmt_ctx.output_nodes):
+            target_array = stmt_ctx.sdfg.arrays[target_node]
+            target_array.transient = False
 
             # TODO: visit statement domain to define the memlet subset
-            ctx.state.add_nedge(
-                ctx.node_mapping[tasklet_sym],
-                ctx.node_mapping[target_sym],
-                dace.Memlet.from_array(target_sym, target_array),
+            stmt_ctx.state.add_nedge(
+                stmt_ctx.node_mapping[tasklet_node],
+                stmt_ctx.node_mapping[target_node],
+                dace.Memlet.from_array(target_node, target_array),
             )
 
-    def _make_fieldop(
-        self, fun_node: itir.FunCall, fun_args: List[itir.Expr]
-    ) -> Sequence[Tuple[str, dace.nodes.AccessNode]]:
-        assert len(self._ctx_stack) != 0
-        prev_ctx = self._ctx_stack[-1]
+        self._ctx = prev_ctx
+
+    def _make_fieldop(self, fun_node: itir.FunCall, fun_args: List[itir.Expr]) -> FieldviewRegion:
+        prev_ctx = self._ctx
+        assert prev_ctx is not None
         ctx = prev_ctx.clone()
-        self._ctx_stack.append(ctx)
+        self._ctx = ctx
 
         self.visit(fun_args)
 
         # create ordered list of input nodes
-        input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.symrefs]
+        input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
 
         # TODO: define shape based on domain and dtype based on type inference
         shape = [10]
@@ -179,6 +169,8 @@ class ItirToSDFG(eve.NodeVisitor):
         output_arrays = [(output_name, output_array)]
 
         assert len(fun_node.args) == 1
+        assert isinstance(fun_node.args[0], itir.Lambda)
+
         tletgen = ItirToTasklet()
         tlet_code, tlet_inputs, tlet_outputs = tletgen.visit(fun_node.args[0])
 
@@ -191,11 +183,10 @@ class ItirToSDFG(eve.NodeVisitor):
             input_memlets[connector] = dace.Memlet(data=dname, subset="i")
 
         output_memlets: dict[str, dace.Memlet] = {}
-        output_nodes: list[Tuple[str, dace.nodes.AccessNode]] = []
         for connector, (dname, _) in zip(tlet_outputs, output_arrays):
             # TODO: define memlet subset based on domain
             output_memlets[connector] = dace.Memlet(data=dname, subset="i")
-            output_nodes.append((dname, ctx.add_node(dname)))
+            ctx.add_output_node(dname)
 
         ctx.state.add_mapped_tasklet(
             ctx.tasklet_name(),
@@ -208,19 +199,16 @@ class ItirToSDFG(eve.NodeVisitor):
             external_edges=True,
         )
 
-        self._ctx_stack.pop()
-        assert prev_ctx == self._ctx_stack[-1]
-
-        return output_nodes
+        self._ctx = prev_ctx
+        return ctx
 
     def visit_FunCall(self, node: itir.FunCall) -> None:
-        assert len(self._ctx_stack) > 0
-        ctx = self._ctx_stack[-1]
-
+        assert self._ctx is not None
         if isinstance(node.fun, itir.FunCall) and isinstance(node.fun.fun, itir.SymRef):
             if node.fun.fun.id == "as_fieldop":
-                arg_nodes = self._make_fieldop(node.fun, node.args)
-                ctx.symrefs.extend([dname for dname, _ in arg_nodes])
+                child_ctx = self._make_fieldop(node.fun, node.args)
+                assert child_ctx.state == self._ctx.state
+                self._ctx.input_nodes.extend(child_ctx.output_nodes)
             else:
                 raise NotImplementedError(f"Unexpected 'FunCall' with function {node.fun.fun.id}.")
         else:
@@ -228,5 +216,5 @@ class ItirToSDFG(eve.NodeVisitor):
 
     def visit_SymRef(self, node: itir.SymRef) -> None:
         dname = str(node.id)
-        ctx = self._ctx_stack[-1]
-        ctx.add_node(dname)
+        assert self._ctx is not None
+        self._ctx.add_input_node(dname)

@@ -78,11 +78,11 @@ _MATH_BUILTINS_MAPPING = {
 class ItirToTasklet(eve.NodeVisitor):
     """Translates ITIR to Python code to be used as tasklet body.
 
-    This class is dace agnostic: it receives ITIR as input and produces Python code.
-    TODO: Use `TemplatedGenerator` to implement this functionality, see `EmbeddedDSL` implementation.
+    TODO: this class needs to be revisited in next commit.
     """
 
     def _visit_deref(self, node: itir.FunCall) -> str:
+        # TODO: build memlet subset / shift pattern for each tasklet connector
         if not isinstance(node.args[0], itir.SymRef):
             raise NotImplementedError(
                 f"Unexpected 'deref' argument with type '{type(node.args[0])}'."
