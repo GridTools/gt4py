@@ -286,6 +286,13 @@ if dace:
             sdfg.arg_names.extend(self.__sdfg_signature__()[0])
             sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
+            # Gather the output/modified fields : DaCe performs halo exchange on them (if needed)
+            if isinstance(self.itir.closures[-1].output, itir.FunCall):
+                output = [str(arg.id) for arg in self.itir.closures[-1].output.args]
+            else:
+                output = [str(self.itir.closures[-1].output.id)]
+            sdfg.GT4Py_Program_output_fields = output
+
             return sdfg
 
         def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
