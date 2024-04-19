@@ -111,15 +111,24 @@ def cache_key(obj: Any, algorithm: Optional[str | Hasher_T] = None) -> str:
 
 @functools.singledispatch
 def update_cache_key(obj: Any, hasher: Hasher_T) -> None:
-    if dataclasses.is_dataclass(obj):
-        update_cache_key(obj.__class__, hasher)
-        for field in dataclasses.fields(obj):
-            update_cache_key(getattr(obj, field.name), hasher)
     # the following is to avoid circular dependencies
-    elif hasattr(obj, "backend"):  # assume it is a decorator wrapper
+    if hasattr(obj, "backend"):  # assume it is a decorator wrapper
         update_cache_key_fielop(obj, hasher)
     else:
         hasher.update(str(obj).encode())
+
+
+@update_cache_key.register(FieldOperatorDefinition)
+@update_cache_key.register(FoastOperatorDefinition)
+@update_cache_key.register(FoastWithTypes)
+@update_cache_key.register(FoastClosure)
+@update_cache_key.register(ProgramDefinition)
+@update_cache_key.register(PastProgramDefinition)
+@update_cache_key.register(PastClosure)
+def update_cache_key_stages(obj: Any, hasher: Hasher_T) -> None:
+    update_cache_key(obj.__class__, hasher)
+    for field in dataclasses.fields(obj):
+        update_cache_key(getattr(obj, field.name), hasher)
 
 
 @update_cache_key.register
