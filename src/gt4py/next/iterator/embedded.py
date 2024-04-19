@@ -52,7 +52,7 @@ from gt4py.eve.extended_typing import (
     overload,
     runtime_checkable,
 )
-from gt4py.next import common
+from gt4py.next import common, field_utils
 from gt4py.next.embedded import (
     context as embedded_context,
     exceptions as embedded_exceptions,
@@ -60,6 +60,7 @@ from gt4py.next.embedded import (
 )
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import builtins, runtime
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 EMBEDDED = "embedded"
@@ -209,6 +210,10 @@ class Column(np.lib.mixins.NDArrayOperatorsMixin):
         self.data = (
             data if isinstance(data, np.ndarray) else np.full(len(column_range.unit_range), data)
         )
+
+    @property
+    def dtype(self) -> np.dtype:
+        return self.data.dtype
 
     def __getitem__(self, i: int) -> Any:
         result = self.data[i - self.kstart]
@@ -792,7 +797,7 @@ def _make_tuple(
             raise RuntimeError(
                 "Found 'Undefined' value, this should not happen for a legal program."
             )
-        dtype = _column_dtype(first)
+        dtype = _elem_dtype(first)
         return Column(column_range.start, np.asarray(col, dtype=dtype))
 
 
@@ -1472,11 +1477,12 @@ def as_tuple_field(field: tuple | TupleField) -> TupleField:
     return TupleOfFields(tuple(_wrap_field(f) for f in field))
 
 
-def _column_dtype(elem: Any) -> np.dtype:
+def _elem_dtype(elem: Any) -> np.dtype:
+    if hasattr(elem, "dtype"):
+        return elem.dtype
     if isinstance(elem, tuple):
-        return np.dtype([(f"f{i}", _column_dtype(e)) for i, e in enumerate(elem)])
-    else:
-        return np.dtype(type(elem))
+        return np.dtype([(f"f{i}", _elem_dtype(e)) for i, e in enumerate(elem)])
+    return np.dtype(type(elem))
 
 
 @builtins.scan.register(EMBEDDED)
@@ -1488,7 +1494,7 @@ def scan(scan_pass, is_forward: bool, init):
 
         sorted_column_range = column_range if is_forward else reversed(column_range)
         state = init
-        col = Column(column_range.start, np.zeros(len(column_range), dtype=_column_dtype(init)))
+        col = Column(column_range.start, np.zeros(len(column_range), dtype=_elem_dtype(init)))
         for i in sorted_column_range:
             state = scan_pass(state, *map(shifted_scan_arg(i), iters))
             col[i] = state
@@ -1547,36 +1553,43 @@ def _extract_column_range(domain) -> common.NamedRange | eve.NothingType:
     return eve.NOTHING
 
 
-# TODO handle in clean way
-def _np_void_to_tuple(a):
-    if isinstance(a, np.void):
-        return tuple(_np_void_to_tuple(elem) for elem in a)
-    return a
+def _structured_dtype_to_typespec(structured_dtype: np.dtype) -> ts.ScalarType | ts.TupleType:
+    if structured_dtype.names is None:
+        return type_translation.from_dtype(core_defs.dtype(structured_dtype))
+    return ts.TupleType(
+        types=[
+            _structured_dtype_to_typespec(structured_dtype[name]) for name in structured_dtype.names
+        ]
+    )
+
+
+def _get_output_type(
+    fun: Callable,
+    domain_: runtime.CartesianDomain | runtime.UnstructuredDomain,
+    args: tuple[Any, ...],
+) -> ts.TypeSpec:
+    domain = _dimension_to_tag(domain_)
+    col_range = _extract_column_range(domain)
+    if isinstance(col_range, common.NamedRange):
+        del domain[col_range.dim.value]
+
+    pos = next(iter(_domain_iterator(domain)))
+    with embedded_context.new_context(closure_column_range=col_range) as ctx:
+        single_point_result = ctx.run(_compute_point, fun, args, pos, col_range)
+    dtype = _elem_dtype(single_point_result)
+    return _structured_dtype_to_typespec(dtype)
 
 
 @builtins.as_fieldop.register(EMBEDDED)
-def as_fieldop(fun: Callable, domain_: runtime.CartesianDomain | runtime.UnstructuredDomain):
+def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
-        # TODO extract function, move private utils
-        domain = _dimension_to_tag(domain_)
-        col_range = _extract_column_range(domain)
-        if col_range is not eve.NOTHING:
-            del domain[col_range.dim.value]
-
-        pos = next(_domain_iterator(domain))
-        with embedded_context.new_context(closure_column_range=col_range) as ctx:
-            single_point_result = ctx.run(_compute_point, fun, args, pos, col_range)
-            if isinstance(single_point_result, Column):
-                single_point_result = single_point_result.data[0]
-            single_point_result = _np_void_to_tuple(single_point_result)
-
-        xp = operators._get_array_ns(*args)
-        out = operators._construct_scan_array(common.domain(domain_), xp)(single_point_result)
+        xp = field_utils.get_array_ns(*args)
+        type_ = _get_output_type(fun, domain, args)
+        out = field_utils.field_from_typespec(common.domain(domain), xp)(type_)
 
         # TODO `out` gets allocated in the order of domain_, but might not match the order of `target` in set_at
-
         closure(
-            _dimension_to_tag(domain_),
+            _dimension_to_tag(domain),
             fun,
             out,
             list(args),
