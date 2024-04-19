@@ -70,7 +70,6 @@ if __name__ == "__main__":
     generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
         prog,
         offset_provider=offset_provider,
-        runtime_lift_mode=LiftMode.SIMPLE_HEURISTIC,
         column_axis=KDim,
     )
 
