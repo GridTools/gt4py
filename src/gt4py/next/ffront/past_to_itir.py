@@ -328,7 +328,7 @@ class ProgramLowering(
             else:
                 lower = self._visit_slice_bound(
                     slices[dim_i].lower if slices else None,
-                    itir.Literal(value="0", type=itir.INTEGER_INDEX_BUILTIN),
+                    im.literal("0", itir.INTEGER_INDEX_BUILTIN),
                     dim_size,
                 )
                 upper = self._visit_slice_bound(
@@ -458,7 +458,7 @@ class ProgramLowering(
                         f"Scalars of kind '{node.type.kind}' not supported currently."
                     )
             typename = node.type.kind.name.lower()
-            return itir.Literal(value=str(node.value), type=typename)
+            return im.literal(str(node.value), typename)
 
         raise NotImplementedError("Only scalar literals supported currently.")
 

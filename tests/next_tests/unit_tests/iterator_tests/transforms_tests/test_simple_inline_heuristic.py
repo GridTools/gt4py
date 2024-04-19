@@ -16,6 +16,7 @@ import pytest
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.simple_inline_heuristic import is_eligible_for_inlining
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 @pytest.fixture
@@ -33,8 +34,8 @@ def scan():
                     ],
                 ),
             ),
-            ir.Literal(value="True", type="bool"),
-            ir.Literal(value="0.0", type="float64"),
+            im.literal("True", "bool"),
+            im.literal("0.0", "float64"),
         ],
     )
 

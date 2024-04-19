@@ -23,6 +23,7 @@ from gt4py.next.common import Connectivity
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.global_tmps import FencilWithTemporaries
 from gt4py.next.type_inference import Type, TypeVar, freshen, reindex_vars, unify
+from gt4py.next.type_system import type_info
 
 
 """Constraint-based inference for the iterator IR."""
@@ -643,7 +644,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         return TypeVar.fresh()
 
     def visit_Literal(self, node: ir.Literal, **kwargs) -> Val:
-        return Val(kind=Value(), dtype=Primitive(name=node.type))
+        return Val(kind=Value(), dtype=Primitive(name=node.type.kind.name.lower()))
 
     def visit_AxisLiteral(self, node: ir.AxisLiteral, **kwargs) -> Val:
         return Val(kind=Value(), dtype=AXIS_DTYPE, size=Scalar())
@@ -672,10 +673,7 @@ class _TypeInferrer(eve.traits.VisitorWithSymbolTableTrait, eve.NodeTranslator):
         # Calls to `tuple_get` are handled as being part of the grammar, not as function calls.
         if len(node.args) != 2:
             raise TypeError("'tuple_get' requires exactly two arguments.")
-        if (
-            not isinstance(node.args[0], ir.Literal)
-            or node.args[0].type != ir.INTEGER_INDEX_BUILTIN
-        ):
+        if not isinstance(node.args[0], ir.Literal) or not type_info.is_integer(node.args[0].type):
             raise TypeError(
                 f"The first argument to 'tuple_get' must be a literal of type '{ir.INTEGER_INDEX_BUILTIN}'."
             )

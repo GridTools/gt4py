@@ -102,14 +102,14 @@ class ToIrTransformer(lark_visitors.Transformer):
 
     def SYM_REF(self, value: lark_lexer.Token) -> Union[ir.SymRef, ir.Literal]:
         if value.value in ("True", "False"):
-            return ir.Literal(value=value.value, type="bool")
+            return im.literal(value.value, "bool")
         return ir.SymRef(id=value.value)
 
     def INT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
         return im.literal_from_value(int(value.value))
 
     def FLOAT_LITERAL(self, value: lark_lexer.Token) -> ir.Literal:
-        return ir.Literal(value=value.value, type="float64")
+        return im.literal(value.value, "float64")
 
     def OFFSET_LITERAL(self, value: lark_lexer.Token) -> ir.OffsetLiteral:
         v: Union[int, str] = value.value[:-1]

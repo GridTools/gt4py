@@ -80,7 +80,7 @@ def test_sym_ref():
 
 
 def test_bool_literal():
-    testee = ir.Literal(value="False", type="bool")
+    testee = im.literal_from_value(False)
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="bool"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -88,7 +88,7 @@ def test_bool_literal():
 
 
 def test_int_literal():
-    testee = ir.Literal(value="3", type="int32")
+    testee = im.literal("3", "int32")
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int32"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -96,7 +96,7 @@ def test_int_literal():
 
 
 def test_float_literal():
-    testee = ir.Literal(value="3.0", type="float64")
+    testee = im.literal("3.0", "float64")
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="float64"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
     assert inferred == expected
@@ -223,7 +223,7 @@ def test_and():
 def test_cast():
     testee = ir.FunCall(
         fun=ir.SymRef(id="cast_"),
-        args=[ir.Literal(value="1.", type="float64"), ir.SymRef(id="int64")],
+        args=[im.literal("1.", "float64"), ir.SymRef(id="int64")],
     )
     expected = ti.Val(kind=ti.Value(), dtype=ti.Primitive(name="int64"), size=ti.TypeVar(idx=0))
     inferred = ti.infer(testee)
@@ -342,8 +342,8 @@ def test_make_tuple():
     testee = ir.FunCall(
         fun=ir.SymRef(id="make_tuple"),
         args=[
-            ir.Literal(value="True", type="bool"),
-            ir.Literal(value="42.0", type="float64"),
+            im.literal("True", "bool"),
+            im.literal("42.0", "float64"),
             ir.SymRef(id="x"),
         ],
     )
@@ -363,12 +363,12 @@ def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
         args=[
-            ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN),
+            im.literal("1", ir.INTEGER_INDEX_BUILTIN),
             ir.FunCall(
                 fun=ir.SymRef(id="make_tuple"),
                 args=[
-                    ir.Literal(value="True", type="bool"),
-                    ir.Literal(value="42.0", type="float64"),
+                    im.literal("True", "bool"),
+                    im.literal("42.0", "float64"),
                 ],
             ),
         ],
@@ -384,7 +384,7 @@ def test_tuple_get_in_lambda():
         params=[ir.Sym(id="x")],
         expr=ir.FunCall(
             fun=ir.SymRef(id="tuple_get"),
-            args=[ir.Literal(value="1", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+            args=[im.literal("1", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
         ),
     )
     expected = ti.FunctionType(
@@ -449,9 +449,7 @@ def test_reduce():
             ],
         ),
     )
-    testee = ir.FunCall(
-        fun=ir.SymRef(id="reduce"), args=[reduction_f, ir.Literal(value="0", type="int64")]
-    )
+    testee = ir.FunCall(fun=ir.SymRef(id="reduce"), args=[reduction_f, im.literal("0", "int64")])
     expected = ti.FunctionType(
         args=ti.ValListTuple(
             kind=ti.Value(),
@@ -486,7 +484,7 @@ def test_scan():
     )
     testee = ir.FunCall(
         fun=ir.SymRef(id="scan"),
-        args=[scan_f, ir.Literal(value="True", type="bool"), ir.Literal(value="0", type="int64")],
+        args=[scan_f, im.literal("True", "bool"), im.literal("0", "int64")],
     )
     expected = ti.FunctionType(
         args=ti.Tuple.from_elems(
@@ -697,7 +695,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="IDim"),
-                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="i"),
             ],
         ),
@@ -705,7 +703,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="JDim"),
-                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="j"),
             ],
         ),
@@ -713,7 +711,7 @@ CARTESIAN_DOMAIN = ir.FunCall(
             fun=ir.SymRef(id="named_range"),
             args=[
                 ir.AxisLiteral(value="KDim"),
-                ir.Literal(value="0", type=ir.INTEGER_INDEX_BUILTIN),
+                im.literal("0", ir.INTEGER_INDEX_BUILTIN),
                 ir.SymRef(id="k"),
             ],
         ),
@@ -839,8 +837,8 @@ def test_fencil_definition_same_closure_input():
                 domain=im.call("unstructured_domain")(
                     im.call("named_range")(
                         ir.AxisLiteral(value="Edge"),
-                        ir.Literal(value="0", type="int32"),
-                        ir.Literal(value="10", type="int32"),
+                        im.literal("0", "int32"),
+                        im.literal("10", "int32"),
                     )
                 ),
                 stencil=im.ref("f1"),
@@ -851,8 +849,8 @@ def test_fencil_definition_same_closure_input():
                 domain=im.call("unstructured_domain")(
                     im.call("named_range")(
                         ir.AxisLiteral(value="Vertex"),
-                        ir.Literal(value="0", type="int32"),
-                        ir.Literal(value="10", type="int32"),
+                        im.literal("0", "int32"),
+                        im.literal("10", "int32"),
                     )
                 ),
                 stencil=im.ref("f2"),
