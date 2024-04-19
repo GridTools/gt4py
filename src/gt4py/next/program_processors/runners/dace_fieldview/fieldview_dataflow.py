@@ -31,6 +31,7 @@ class FieldviewRegion:
     We use this class as return type when we visit a fieldview expression. It can be extended
     with all informatiion needed to construct the dataflow graph.
     """
+
     sdfg: dace.SDFG
     state: dace.SDFGState
     node_mapping: dict[str, dace.nodes.AccessNode]
