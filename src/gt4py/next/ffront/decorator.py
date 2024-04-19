@@ -472,7 +472,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:
-        if not next_embedded.context.within_context() and self.backend is not None:
+        if not next_embedded.context.within_valid_context() and self.backend is not None:
             # non embedded execution
             if "offset_provider" not in kwargs:
                 raise errors.MissingArgumentError(None, "offset_provider", True)

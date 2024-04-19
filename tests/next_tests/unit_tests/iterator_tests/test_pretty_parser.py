@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_parser import pparse
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def test_symref():
@@ -41,14 +42,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int32"),
-                            ir.Literal(value="2", type="int32"),
+                            im.literal("1", "int32"),
+                            im.literal("2", "int32"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int32"),
+                    im.literal("3", "int32"),
                 ],
             ),
-            ir.Literal(value="4", type="int32"),
+            im.literal("4", "int32"),
         ],
     )
     actual = pparse(testee)
@@ -65,6 +66,13 @@ def test_deref():
 def test_lift():
     testee = "↑x"
     expected = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_as_fieldop():
+    testee = "⇑x"
+    expected = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
     actual = pparse(testee)
     assert actual == expected
 
@@ -108,7 +116,7 @@ def test_tuple_get():
     testee = "x[42]"
     expected = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     actual = pparse(testee)
     assert actual == expected
@@ -183,6 +191,13 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = "t = temporary(domain=domain, dtype=float64);"
+    expected = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=ir.SymRef(id="float64"))
+    actual = pparse(testee)
+    assert actual == expected
+
+
 def test_stencil_closure():
     testee = "y ← (deref)(x) @ cartesian_domain();"
     expected = ir.StencilClosure(
@@ -195,6 +210,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = "y @ cartesian_domain() ← x;"
+    expected = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring to GTIR
 def test_fencil_definition():
     testee = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
     expected = ir.FencilDefinition(
@@ -209,6 +236,33 @@ def test_fencil_definition():
                 stencil=ir.SymRef(id="deref"),
                 output=ir.SymRef(id="y"),
                 inputs=[ir.SymRef(id="x")],
+            )
+        ],
+    )
+    actual = pparse(testee)
+    assert actual == expected
+
+
+def test_program():
+    testee = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
+    expected = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype=ir.SymRef(id="float64"),
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
             )
         ],
     )

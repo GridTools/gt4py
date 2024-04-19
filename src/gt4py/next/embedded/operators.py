@@ -98,7 +98,7 @@ def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) ->
     if "out" in kwargs:
         # called from program or direct field_operator as program
         new_context_kwargs = {}
-        if embedded_context.within_context():
+        if embedded_context.within_valid_context():
             # called from program
             assert "offset_provider" not in kwargs
         else:
