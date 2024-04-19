@@ -506,6 +506,14 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
 
 @dataclasses.dataclass(frozen=True)
 class FieldOperatorFromFoast(FieldOperator):
+    """
+    This version of the field operator does not have a DSL definition.
+
+    Instead, it is defined from a FieldOperator AST directly.
+    Current main use case is for tests that programmatically build FOAST
+    trees with specific features to be tested.
+    """
+
     foast_stage: ffront_stages.FoastOperatorDefinition
 
     def __call__(self, *args, **kwargs) -> None:

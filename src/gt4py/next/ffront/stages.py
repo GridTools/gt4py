@@ -127,9 +127,11 @@ def update_cache_key_str(obj: str, hasher: Hasher_T) -> None:
     hasher.update(str(obj).encode())
 
 
-@update_cache_key.register
+@update_cache_key.register(int)
+@update_cache_key.register(bool)
+@update_cache_key.register(float)
 def update_cache_key_builtins(
-    obj: str | None | bool | int | float,
+    obj: None,
     hasher: Hasher_T,
 ) -> None:
     hasher.update(str(obj).encode())
@@ -155,9 +157,7 @@ def update_cache_key_type(obj: type, hasher: Hasher_T) -> None:
 
 
 @update_cache_key.register
-def update_cache_key_sequence(
-    obj: tuple | list | collections.abc.Iterable, hasher: Hasher_T
-) -> None:
+def update_cache_key_sequence(obj: collections.abc.Iterable, hasher: Hasher_T) -> None:
     for item in obj:
         update_cache_key(item, hasher)
 
