@@ -78,9 +78,13 @@ def _is_compatible_type(type_a: ts.TypeSpec, type_b: ts.TypeSpec):
     elif isinstance(type_a, ts.FunctionType):
         for arg_a, arg_b in zip(type_a.pos_only_args, type_b.pos_only_args, strict=True):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True):
+        for arg_a, arg_b in zip(
+            type_a.pos_or_kw_args.values(), type_b.pos_or_kw_args.values(), strict=True
+        ):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
-        for arg_a, arg_b in zip(type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True):
+        for arg_a, arg_b in zip(
+            type_a.kw_only_args.values(), type_b.kw_only_args.values(), strict=True
+        ):
             is_compatible &= _is_compatible_type(arg_a, arg_b)
         is_compatible &= _is_compatible_type(type_a.returns, type_b.returns)
     else:

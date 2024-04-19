@@ -390,7 +390,15 @@ def test_collect_tmps_info():
         fencil=ir.FencilDefinition(
             id="f",
             function_definitions=[],
-            params=[i, j, k, inp, out, im.sym("_gtmp_0", i_field_type), im.sym("_gtmp_1", i_field_type)],
+            params=[
+                i,
+                j,
+                k,
+                inp,
+                out,
+                im.sym("_gtmp_0", i_field_type),
+                im.sym("_gtmp_1", i_field_type),
+            ],
             closures=[
                 ir.StencilClosure(
                     domain=tmp_domain,
