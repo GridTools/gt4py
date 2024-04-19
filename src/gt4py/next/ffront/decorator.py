@@ -104,6 +104,7 @@ class Program:
             return self.backend.transforms_prog.func_to_past(self.definition_stage)
         return next_backend.DEFAULT_PROG_TRANSFORMS.func_to_past(self.definition_stage)
 
+    # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
@@ -224,6 +225,7 @@ class ProgramFromPast(Program):
         ppi.ensure_processor_kind(self.backend.executor, ppi.ProgramExecutor)
         self.backend(self.past_stage, *args, **(kwargs | {"offset_provider": offset_provider}))
 
+    # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         if self.backend is not None and self.backend.transforms_prog is not None:
             self.backend.transforms_prog.past_lint(self.past_stage)
@@ -399,6 +401,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
             backend=backend,
         )
 
+    # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self):
         """This ensures that DSL linting occurs at decoration time."""
         _ = self.foast_stage
