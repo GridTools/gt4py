@@ -297,7 +297,9 @@ def test_function_definition():
 
 
 def test_temporary():
-    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    testee = ir.Temporary(
+        id="t", domain=ir.SymRef(id="domain"), dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
     expected = "t = temporary(domain=domain, dtype=float64);"
     actual = pformat(testee)
     assert actual == expected

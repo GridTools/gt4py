@@ -102,6 +102,7 @@ def _set_node_type(node: itir.Node, type_: ts.TypeSpec) -> None:
         assert _is_compatible_type(node.type, type_), "Node already has a type which differs."
     node.type = type_
 
+
 def on_inferred(
     callback: Callable, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
 ) -> None:

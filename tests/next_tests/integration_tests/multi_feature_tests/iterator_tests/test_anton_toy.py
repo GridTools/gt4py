@@ -95,13 +95,16 @@ def test_anton_toy(stencil, program_processor, lift_mode):
             pytest.xfail("TODO: issue with temporaries that crashes the application")
 
     if stencil is lap:
-        pytest.xfail("Type inference does not support calling lambdas with offset arguments of changing type.")
+        pytest.xfail(
+            "Type inference does not support calling lambdas with offset arguments of changing type."
+        )
 
     @fendef(offset_provider={"i": IDim, "j": JDim})
     def fencil(x, y, z, out, inp):
         closure(
-            cartesian_domain(named_range(IDim, 0, x), named_range(JDim, 0, y),
-                             named_range(KDim, 0, z)),
+            cartesian_domain(
+                named_range(IDim, 0, x), named_range(JDim, 0, y), named_range(KDim, 0, z)
+            ),
             stencil,
             out,
             [inp],

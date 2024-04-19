@@ -25,6 +25,7 @@ from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
+from gt4py.next.type_system import type_specifications as ts
 
 
 # replacements for builtin binary operations
@@ -279,6 +280,7 @@ class PrettyPrinter(NodeTranslator):
         if node.domain is not None:
             args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
         if node.dtype is not None:
+            assert isinstance(node.dtype, ts.ScalarType)
             args.append(self._hmerge(["dtype="], [str(node.dtype.kind.name.lower())]))
         hargs = self._hmerge(*self._hinterleave(args, ", "))
         vargs = self._vmerge(*self._hinterleave(args, ","))
