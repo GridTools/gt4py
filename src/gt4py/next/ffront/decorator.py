@@ -642,3 +642,31 @@ def scan_operator(
         )
 
     return scan_operator_inner if definition is None else scan_operator_inner(definition)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: ffront_stages.HashlibAlgorithm) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_foast_fieldop_to_fingerprint(
+    obj: FieldOperatorFromFoast, hasher: ffront_stages.HashlibAlgorithm
+) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_program_to_fingerprint(obj: Program, hasher: ffront_stages.HashlibAlgorithm) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
+
+
+@ffront_stages.add_content_to_fingerprint.register
+def add_past_program_to_fingerprint(
+    obj: ProgramFromPast, hasher: ffront_stages.HashlibAlgorithm
+) -> None:
+    ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
+    ffront_stages.add_content_to_fingerprint(obj.backend, hasher)

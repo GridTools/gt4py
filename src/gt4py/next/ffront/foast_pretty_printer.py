@@ -126,6 +126,17 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    IfStmt = as_fmt(
+        textwrap.dedent(
+            """
+            if {condition}:
+                {true_branch}
+            else:
+                {false_branch}
+            """
+        ).strip()
+    )
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
