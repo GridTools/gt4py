@@ -441,7 +441,7 @@ def disabled(message: str, *, enabled_env_var: str) -> Callable[[Backend], Backe
     else:
 
         def _decorator(cls: Backend) -> Backend:
-            def _no_generate() -> Type["StencilObject"]:
+            def _no_generate(obj) -> Type["StencilObject"]:
                 raise NotImplementedError(
                     f"Disabled '{cls.name}' backend: 'f{message}'\n",
                     f"You can still enable the backend by hand using the environment variable '{enabled_env_var}=1'",
