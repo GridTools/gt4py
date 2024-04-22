@@ -21,16 +21,9 @@ import gt4py.next.iterator.pretty_printer as pretty_printer
 import gt4py.next.program_processors.processor_interface as ppi
 
 
-class _RemoveITIRSymTypes(eve.NodeTranslator):
-    def visit_Sym(self, node: itir.Sym) -> itir.Sym:
-        return itir.Sym(id=node.id, dtype=None, kind=None)
-
-
 @ppi.program_formatter
 def format_itir_and_check(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str:
-    # remove types from ITIR as they are not supported for the roundtrip
-    root = _RemoveITIRSymTypes().visit(program)
-    pretty = pretty_printer.pformat(root)
+    pretty = pretty_printer.pformat(program)
     parsed = pretty_parser.pparse(pretty)
-    assert parsed == root
+    assert parsed == program
     return pretty
