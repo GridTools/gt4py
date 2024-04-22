@@ -64,9 +64,7 @@ build_settings: Dict[str, Any] = {
     "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
-    "cpp_template_depth": os.environ.get(
-        "GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH
-    ),
+    "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
 }
 if GT4PY_USE_HIP:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib")
@@ -80,9 +78,7 @@ cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
     "load_retries": int(os.environ.get("GT_CACHE_LOAD_RETRIES", 3)),
-    "load_retry_delay": int(
-        os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)
-    ),  # unit milliseconds
+    "load_retry_delay": int(os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)),  # unit milliseconds
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
