@@ -11,20 +11,25 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+import dataclasses
 import warnings
+from dataclasses import field
 from inspect import currentframe, getframeinfo
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional, Sequence
+from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
 
 import dace
 import numpy as np
+from dace.frontend.python.common import SDFGConvertible
 from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
+from gt4py._core import definitions as core_defs
 from gt4py.next import common
+from gt4py.next.ffront.decorator import Program
 from gt4py.next.iterator import transforms as itir_transforms
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from .itir_to_sdfg import ItirToSDFG
 from .utility import connectivity_identifier, filter_connectivities, get_sorted_dims
@@ -307,3 +312,69 @@ def build_sdfg_from_itir(
         sdfg.save(sdfg_filename)
 
     return sdfg
+
+
+@dataclasses.dataclass(frozen=True)
+class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
+    """Extension of GT4Py Program : Implement SDFGConvertible interface"""
+
+    sdfg_convertible: dict[str, Any] = field(default_factory=dict)
+
+    def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
+        from gt4py.next.program_processors.runners.dace import run_dace_gpu
+        from gt4py.next.program_processors.runners.dace_iterator.workflow import DaCeTranslator
+
+        translation = DaCeTranslator(
+            auto_optimize=False,
+            device_type=core_defs.DeviceType.CUDA
+            if self.backend == run_dace_gpu
+            else core_defs.DeviceType.CPU,
+        )
+
+        params = {str(p.id): p.dtype for p in self.itir.params}
+        fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
+        arg_types = [
+            fields[pname]
+            if pname in fields
+            else ts.ScalarType(kind=tt.get_scalar_kind(dtype))
+            if dtype is not None
+            else ts.ScalarType(kind=ts.ScalarKind.INT32)
+            for pname, dtype in params.items()
+        ]
+
+        # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
+        offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
+        self.sdfg_convertible["offset_provider"] = offset_provider
+
+        sdfg = translation.generate_sdfg(
+            self.itir,
+            arg_types,
+            offset_provider=offset_provider,
+            column_axis=kwargs.get("column_axis", None),
+            runtime_lift_mode=kwargs.get("lift_mode", None),
+        )
+
+        sdfg.arg_names.extend(self.__sdfg_signature__()[0])
+        sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
+
+        # Gather the output/modified fields : DaCe performs halo exchange on them (if needed)
+        if isinstance(self.itir.closures[-1].output, itir.FunCall):
+            output = [str(arg.id) for arg in self.itir.closures[-1].output.args]  # type: ignore[attr-defined]
+        else:
+            output = [str(self.itir.closures[-1].output.id)]
+        sdfg.GT4Py_Program_output_fields = output
+
+        return sdfg
+
+    def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        return {
+            connectivity_identifier(k): v.table
+            for k, v in self.sdfg_convertible.get("offset_provider", {}).items()
+            if hasattr(v, "table")
+        }
+
+    def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
+        args = []
+        for arg in self.past_stage.past_node.params:
+            args.append(arg.id)
+        return (args, [])

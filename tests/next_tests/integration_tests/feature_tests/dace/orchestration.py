@@ -13,9 +13,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
+from typing import Optional
+from types import ModuleType
 import pytest
 
 import gt4py.next as gtx
+from gt4py.next import backend as next_backend
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import IDim, Ioff, JDim, Joff, cartesian_case
@@ -23,8 +26,13 @@ from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils i
     exec_alloc_descriptor,
 )
 
-
-pytestmark = pytest.mark.uses_cartesian_shift
+try:
+    import dace
+    from gt4py.next.program_processors.runners.dace import run_dace_cpu, run_dace_gpu
+except ImportError:
+    dace: Optional[ModuleType] = None  # type:ignore[no-redef]
+    run_dace_cpu: Optional[next_backend.Backend] = None
+    run_dace_gpu: Optional[next_backend.Backend] = None
 
 
 @gtx.field_operator
@@ -62,27 +70,31 @@ def lap_ref(inp):
     return -4.0 * inp[1:-1, 1:-1] + inp[:-2, 1:-1] + inp[2:, 1:-1] + inp[1:-1, :-2] + inp[1:-1, 2:]
 
 
-def test_ffront_lap(cartesian_case):
-    in_field = cases.allocate(cartesian_case, lap_program, "in_field")()
-    out_field = cases.allocate(cartesian_case, lap_program, "out_field")()
+def test_sdfgConvertible_laplap(cartesian_case):
+    if cartesian_case.executor not in [run_dace_cpu, run_dace_gpu]:
+        pytest.skip("DaCe-related test: Test SDFGConvertible interface for GT4Py programs")
 
-    cases.verify(
-        cartesian_case,
-        lap_program,
-        in_field,
-        out_field,
-        inout=out_field[1:-1, 1:-1],
-        ref=lap_ref(in_field.ndarray),
-    )
+    if cartesian_case.executor == run_dace_gpu:
+        import cupy as xp
+    else:
+        import numpy as xp
 
     in_field = cases.allocate(cartesian_case, laplap_program, "in_field")()
     out_field = cases.allocate(cartesian_case, laplap_program, "out_field")()
 
-    cases.verify(
-        cartesian_case,
-        laplap_program,
-        in_field,
-        out_field,
-        inout=out_field[2:-2, 2:-2],
-        ref=lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
+    @dace.program
+    def sdfg():
+        tmp_field = xp.empty_like(out_field)
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
+            in_field, tmp_field, offset_provider=cartesian_case.offset_provider
+        )
+        lap_program.with_grid_type(cartesian_case.grid_type).with_backend(cartesian_case.executor)(
+            tmp_field, out_field, offset_provider=cartesian_case.offset_provider
+        )
+
+    sdfg()
+
+    assert np.allclose(
+        gtx.field_utils.asnumpy(out_field)[2:-2, 2:-2],
+        lap_ref(lap_ref(in_field.array_ns.asarray(in_field.ndarray))),
     )

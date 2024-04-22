@@ -24,9 +24,7 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from dataclasses import field
-from types import ModuleType
-from typing import Dict, Generic, Sequence, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
@@ -68,16 +66,6 @@ from gt4py.next.iterator.ir_utils.ir_makers import (
 )
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
-
-
-try:
-    import dace
-    from dace.frontend.python.common import SDFGConvertible
-
-    from gt4py.next.program_processors.runners.dace import run_dace_gpu
-    from gt4py.next.program_processors.runners.dace_iterator import workflow as dace_workflow
-except ImportError:
-    dace: Optional[ModuleType] = None  # type:ignore [no-redef]
 
 
 DEFAULT_BACKEND: Callable = None
@@ -246,67 +234,12 @@ class Program:
         )
 
 
-if dace:
-    # Extension of GT4Py Program : Implement SDFGConvertible interface
-    @dataclasses.dataclass(frozen=True)
-    class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
-        sdfgConvertible: dict[str, Any] = field(default_factory=dict)
+try:
+    from gt4py.next.program_processors.runners.dace_iterator import Program as DaCeProgram
 
-        def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-            translation = dace_workflow.DaCeTranslator(
-                auto_optimize=False,
-                device_type=core_defs.DeviceType.CUDA
-                if self.backend == run_dace_gpu
-                else core_defs.DeviceType.CPU,
-            )
-
-            params = {str(p.id): p.dtype for p in self.itir.params}
-            fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
-            arg_types = [
-                fields[pname]
-                if pname in fields
-                else ts.ScalarType(kind=type_translation.get_scalar_kind(dtype))
-                if dtype is not None
-                else ts.ScalarType(kind=ts.ScalarKind.INT32)
-                for pname, dtype in params.items()
-            ]
-
-            # Do this because DaCe converts the offset_provider to an OrderedDict with StringLiteral keys
-            offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
-            self.sdfgConvertible["offset_provider"] = offset_provider
-
-            sdfg = translation.generate_sdfg(
-                self.itir,
-                arg_types,
-                offset_provider=offset_provider,
-                column_axis=kwargs.get("column_axis", None),
-                runtime_lift_mode=kwargs.get("lift_mode", None),
-            )
-
-            sdfg.arg_names.extend(self.__sdfg_signature__()[0])
-            sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
-
-            # Gather the output/modified fields : DaCe performs halo exchange on them (if needed)
-            if isinstance(self.itir.closures[-1].output, itir.FunCall):
-                output = [str(arg.id) for arg in self.itir.closures[-1].output.args]
-            else:
-                output = [str(self.itir.closures[-1].output.id)]
-            sdfg.GT4Py_Program_output_fields = output
-
-            return sdfg
-
-        def __sdfg_closure__(self, reevaluate: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-            return {
-                f"__connectivity_{k}": v.table
-                for k, v in self.sdfgConvertible.get("offset_provider", {}).items()
-                if hasattr(v, "table")
-            }
-
-        def __sdfg_signature__(self) -> Tuple[Sequence[str], Sequence[str]]:
-            args = []
-            for arg in self.past_stage.past_node.params:
-                args.append(arg.id)
-            return (args, [])
+    Program = DaCeProgram
+except ImportError:
+    pass
 
 
 @dataclasses.dataclass(frozen=True)
