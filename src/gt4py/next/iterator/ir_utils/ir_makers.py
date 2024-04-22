@@ -27,10 +27,10 @@ def sym(sym_or_name: Union[str, itir.Sym], type_=None) -> itir.Sym:
     Examples
     --------
     >>> sym("a")
-    Sym(id=SymbolName('a'), kind=None, dtype=None)
+    Sym(id=SymbolName('a'))
 
     >>> sym(itir.Sym(id="b"))
-    Sym(id=SymbolName('b'), kind=None, dtype=None)
+    Sym(id=SymbolName('b'))
     """
     if isinstance(sym_or_name, itir.Sym):
         assert not type_
@@ -110,7 +110,7 @@ class lambda_:
     Examples
     --------
     >>> lambda_("a")(deref("a"))  # doctest: +ELLIPSIS
-    Lambda(params=[Sym(id=SymbolName('a'), kind=None, dtype=None)], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
+    Lambda(params=[Sym(id=SymbolName('a'))], expr=FunCall(fun=SymRef(id=SymbolRef('deref')), args=[SymRef(id=SymbolRef('a'))]))
     """
 
     def __init__(self, *args):

@@ -63,17 +63,17 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
             >>> import gt4py.next.iterator.ir_utils.ir_makers as im
             >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
             >>> CountSymbolRefs.apply(expr)
-            {'x': 2, 'y': 2, 'z': 1}
+            defaultdict(<class 'int'>, {'x': 2, 'y': 2, 'z': 1})
 
             If only some symbols are of interests the search can be restricted:
 
             >>> CountSymbolRefs.apply(expr, symbol_names=["x", "z"])
-            {'x': 2, 'z': 1}
+            defaultdict(<class 'int'>, {'x': 2, 'z': 1})
 
             In some cases, e.g. when the type of the reference is required, the references instead
             of strings can be retrieved.
             >>> CountSymbolRefs.apply(expr, as_ref=True)
-            {SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1}
+            defaultdict(<class 'int'>, {SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1})
         """
         if ignore_builtins:
             inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}

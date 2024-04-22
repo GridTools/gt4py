@@ -109,7 +109,9 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
 
     Transform lift such that the arguments to the applied lift are only symbols.
 
-    >>> expr = im.lift(im.lambda_("a")(im.deref("a")))(im.lift("deref")("inp"))
+    >>> bool_type = ts.ScalarType(kind=ts.ScalarKind.BOOL)
+    >>> it_type = it_ts.IteratorType(position_dims=[], defined_dims=[], element_type=bool_type)
+    >>> expr = im.lift(im.lambda_("a")(im.deref("a")))(im.lift("deref")(im.ref("inp", it_type)))
     >>> print(expr)
     (↑(λ(a) → ·a))((↑deref)(inp))
     >>> print(canonicalize_applied_lift(["inp"], expr))
@@ -126,7 +128,7 @@ def canonicalize_applied_lift(closure_params: list[str], node: ir.FunCall) -> ir
                 im.call(stencil)(*it_args)
             )
         )(*closure_param_refs)
-        # add types again
+        # ensure all types are inferred
         return itir_type_inference.infer(
             new_node, inplace=True, allow_undeclared_symbols=True, offset_provider={}
         )

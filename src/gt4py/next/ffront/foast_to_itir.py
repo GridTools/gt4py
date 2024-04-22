@@ -63,7 +63,7 @@ class FieldOperatorLowering(PreserveLocationVisitor, NodeTranslator):
     >>> lowered.id
     SymbolName('fieldop')
     >>> lowered.params  # doctest: +ELLIPSIS
-    [Sym(id=SymbolName('inp'), kind='Iterator', dtype=('float64', False))]
+    [Sym(id=SymbolName('inp'))]
     """
 
     uid_generator: UIDGenerator = dataclasses.field(default_factory=UIDGenerator)
