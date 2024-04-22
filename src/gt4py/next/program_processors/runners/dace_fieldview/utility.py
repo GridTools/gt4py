@@ -11,20 +11,11 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-import itertools
-from typing import Any, Mapping, Optional, Sequence
 
 import dace
-import numpy as np
 
-import gt4py.eve as eve
-from gt4py.next import Dimension, DimensionKind, type_inference as next_typing
-from gt4py.next.common import Connectivity
-from gt4py.next.iterator import ir as itir, type_inference as itir_typing
-from gt4py.next.iterator.ir import Expr, FunCall, Literal, Sym, SymRef
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_specifications as ts
 
-import dace
 
 def as_dace_type(type_: ts.ScalarKind) -> dace.dtypes.typeclass:
     if type_ == ts.ScalarKind.BOOL:

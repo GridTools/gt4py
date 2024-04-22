@@ -118,7 +118,7 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
                 dace.Memlet.from_array(target_node, target_array),
             )
 
-    def _visit_domain(self, node: itir.FunCall) -> Sequence[Tuple[str, str, str]]:
+    def _make_fieldop_domain(self, node: itir.FunCall) -> Sequence[Tuple[str, str, str]]:
         assert isinstance(node.fun, itir.SymRef)
         assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
 
@@ -143,6 +143,8 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
     def _make_fieldop(self, fun_node: itir.FunCall, fun_args: List[itir.Expr]) -> FieldviewRegion:
         ctx = self._ctx
 
+        # TODO: add early inspection of compute pattern and call specialized builder
+
         self.visit(fun_args)
 
         # create ordered list of input nodes
@@ -153,7 +155,7 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
         self.visit(fun_node.args[0])
         # the domain of the field operator is passed as second argument
         assert isinstance(fun_node.args[1], itir.FunCall)
-        domain = self._visit_domain(fun_node.args[1])
+        domain = self._make_fieldop_domain(fun_node.args[1])
         map_ranges = {f"i_{d}": f"{lb}:{ub}" for d, lb, ub in domain}
         me, mx = ctx.state.add_map("fieldop", map_ranges)
 

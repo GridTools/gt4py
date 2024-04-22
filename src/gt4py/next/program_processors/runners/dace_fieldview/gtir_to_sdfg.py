@@ -96,7 +96,7 @@ class GtirToSDFG(eve.NodeVisitor):
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
             # TODO(edopao): use new `add_state_after` function in next dace release
             head_state = sdfg.add_state_after(entry_state, "init_temps")
-            (sdfg.edges_between(entry_state, head_state))[0].assignments = temp_symbols
+            sdfg.edges_between(entry_state, head_state)[0].assignments = temp_symbols
         else:
             head_state = entry_state
 
@@ -109,6 +109,7 @@ class GtirToSDFG(eve.NodeVisitor):
         for i, stmt in enumerate(node.body):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             self.visit(stmt, sdfg=sdfg, state=head_state)
+            # sanity check below: each statement should have a single exit state -- aka no branches
             sink_states = sdfg.sink_nodes()
             assert len(sink_states) == 1
             head_state = sink_states[0]
