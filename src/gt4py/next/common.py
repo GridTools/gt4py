@@ -782,7 +782,7 @@ class ConnectivityField(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, 
 
     @property
     def kind(self) -> ConnectivityKind:
-        return ~ConnectivityKind(0)
+        return ConnectivityKind.remapping()
 
     @abc.abstractmethod
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
