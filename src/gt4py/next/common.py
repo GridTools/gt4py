@@ -378,7 +378,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     ) -> None:
         if dims is not None or ranges is not None:
             if dims is None and ranges is None:
-                raise ValueError("Either one of 'dims' and 'ranges' must be specified.")
+                raise ValueError("Either specify both 'dims' and 'ranges' or neither.")
             if len(args) > 0:
                 raise ValueError(
                     "No extra 'args' allowed when constructing from 'dims' and 'ranges'."
