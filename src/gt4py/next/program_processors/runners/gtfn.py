@@ -14,7 +14,7 @@
 
 import functools
 import warnings
-from typing import Any
+from typing import Any, Callable
 
 import factory
 import numpy.typing as npt
@@ -23,6 +23,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import NeighborTableOffsetProvider, backend, common, config
+from gt4py.next.embedded.nd_array_field import CuPyArrayField, NumPyArrayField
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -34,16 +35,33 @@ from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
 
 
-# TODO(ricoh): Add support for the whole range of arguments that can be passed to a fencil.
+def handle_tuple(arg: Any, convert_arg: Callable) -> Any:
+    return tuple(convert_arg(a) for a in arg)
+
+
+def handle_field(arg: Any) -> tuple:
+    arr = arg.ndarray
+    origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
+    return arr, origin
+
+
+def handle_default(arg: Any) -> Any:
+    return arg
+
+
+type_handlers_convert_args = {
+    tuple: handle_tuple,
+    NumPyArrayField: handle_field,
+    CuPyArrayField: handle_field,
+}
+
+
 def convert_arg(arg: Any) -> Any:
-    if isinstance(arg, tuple):
-        return tuple(convert_arg(a) for a in arg)
-    if isinstance(arg, common.Field):
-        arr = arg.ndarray
-        origin = getattr(arg, "__gt_origin__", tuple([0] * len(arg.domain)))
-        return arr, origin
+    handler = type_handlers_convert_args.get(type(arg), handle_default)  # type: ignore
+    if handler is handle_tuple:
+        return handler(arg, convert_arg)
     else:
-        return arg
+        return handler(arg)
 
 
 def convert_args(
@@ -87,7 +105,7 @@ def handle_other_type(*args: Any, **kwargs: Any) -> None:
     return None
 
 
-type_handlers = {
+type_handlers_connectivity_args = {
     NeighborTableOffsetProvider: handle_connectivity,
     common.Dimension: handle_other_type,
 }
@@ -99,7 +117,7 @@ def extract_connectivity_args(
     zero_tuple = (0, 0)
     args = []
     for conn in offset_provider.values():
-        handler = type_handlers.get(type(conn), handle_other_type)
+        handler = type_handlers_connectivity_args.get(type(conn), handle_other_type)
         result = handler(conn, zero_tuple)  # type: ignore
         if result:
             args.append(result)
