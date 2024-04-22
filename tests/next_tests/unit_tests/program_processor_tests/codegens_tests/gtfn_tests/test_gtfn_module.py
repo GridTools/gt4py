@@ -20,7 +20,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.type_system import type_info, type_translation
+from gt4py.next.type_system import type_translation
 
 
 @pytest.fixture
