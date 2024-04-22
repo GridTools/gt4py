@@ -212,12 +212,12 @@ def test_cartesian_fencil_definition():
         stencil=ts.FunctionType(
             pos_only_args=[
                 it_ts.IteratorType(
-                    position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
+                    position_dims=[IDim], defined_dims=[IDim], element_type=float64_type
                 )
             ],
             pos_or_kw_args={},
             kw_only_args={},
-            returns=bool_type,
+            returns=float64_type,
         ),
         output=float_i_field,
         inputs=[float_i_field],
@@ -255,12 +255,12 @@ def test_unstructured_fencil_definition():
         stencil=ts.FunctionType(
             pos_only_args=[
                 it_ts.IteratorType(
-                    position_dims=[Vertex, KDim], defined_dims=[Edge, KDim], element_type=bool_type
+                    position_dims=[Vertex, KDim], defined_dims=[Edge, KDim], element_type=float64_type
                 )
             ],
             pos_or_kw_args={},
             kw_only_args={},
-            returns=bool_type,
+            returns=float64_type,
         ),
         output=float_vertex_k_field,
         inputs=[float_edge_k_field],
@@ -301,12 +301,12 @@ def test_function_definition():
         stencil=ts.FunctionType(
             pos_only_args=[
                 it_ts.IteratorType(
-                    position_dims=[IDim], defined_dims=[IDim], element_type=bool_type
+                    position_dims=[IDim], defined_dims=[IDim], element_type=float64_type
                 )
             ],
             pos_or_kw_args={},
             kw_only_args={},
-            returns=bool_type,
+            returns=float64_type,
         ),
         output=float_i_field,
         inputs=[float_i_field],

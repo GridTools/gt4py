@@ -20,17 +20,22 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import languages, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.type_system import type_info, type_translation
 
 
 @pytest.fixture
 def fencil_example():
+    IDim = gtx.Dimension("I")
+    params = [gtx.as_field([IDim], np.empty((1,), dtype=np.float32)), np.float32(3.14)]
+    param_types = [type_translation.from_value(param) for param in params]
+
     domain = itir.FunCall(
         fun=itir.SymRef(id="cartesian_domain"),
         args=[
             itir.FunCall(
                 fun=itir.SymRef(id="named_range"),
                 args=[
-                    itir.AxisLiteral(value="X"),
+                    itir.AxisLiteral(value="I"),
                     im.literal("0", itir.INTEGER_INDEX_BUILTIN),
                     im.literal("10", itir.INTEGER_INDEX_BUILTIN),
                 ],
@@ -39,7 +44,7 @@ def fencil_example():
     )
     fencil = itir.FencilDefinition(
         id="example",
-        params=[itir.Sym(id="buf"), itir.Sym(id="sc")],
+        params=[im.sym(name, type_) for name, type_ in zip(("buf", "sc"), param_types)],
         function_definitions=[
             itir.FunctionDefinition(
                 id="stencil",
@@ -56,8 +61,6 @@ def fencil_example():
             )
         ],
     )
-    IDim = gtx.Dimension("I")
-    params = [gtx.as_field([IDim], np.empty((1,), dtype=np.float32)), np.float32(3.14)]
     return fencil, params
 
 

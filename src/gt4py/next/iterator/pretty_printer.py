@@ -280,8 +280,7 @@ class PrettyPrinter(NodeTranslator):
         if node.domain is not None:
             args.append(self._hmerge(["domain="], self.visit(node.domain, prec=0)))
         if node.dtype is not None:
-            assert isinstance(node.dtype, ts.ScalarType)
-            args.append(self._hmerge(["dtype="], [str(node.dtype.kind.name.lower())]))
+            args.append(self._hmerge(["dtype="], [str(node.dtype)]))
         hargs = self._hmerge(*self._hinterleave(args, ", "))
         vargs = self._vmerge(*self._hinterleave(args, ","))
         oargs = self._optimum(hargs, vargs)
