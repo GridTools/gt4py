@@ -56,6 +56,7 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
+    NEW_EMBEDDED = "gt4py.next.embedded.backend.default_embedded"
 
 
 class ExecutionAndAllocatorDescriptor(Protocol):
@@ -174,6 +175,7 @@ GTFN_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
 BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
+    ProgramBackendId.NEW_EMBEDDED: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [

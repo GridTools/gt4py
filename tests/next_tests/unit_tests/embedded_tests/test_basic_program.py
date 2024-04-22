@@ -15,6 +15,7 @@
 import numpy as np
 
 import gt4py.next as gtx
+from gt4py.next.embedded import backend as embedded_backend
 
 
 IDim = gtx.Dimension("IDim")
@@ -28,7 +29,7 @@ def fop(
     return a(IOff[1]) + b
 
 
-@gtx.program
+@gtx.program(backend=embedded_backend.default_embedded)
 def prog(
     a: gtx.Field[[IDim], gtx.float64],
     b: gtx.Field[[IDim], gtx.float64],

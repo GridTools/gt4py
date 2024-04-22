@@ -36,7 +36,7 @@ from gt4py.next import (
     errors,
 )
 from gt4py.next.common import Dimension, GridType
-from gt4py.next.embedded import operators as embedded_operators
+from gt4py.next.embedded import operators as embedded_operators, backend as embedded_backend
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     past_process_args,
@@ -399,7 +399,7 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
                 node_class=operator_node_cls,
                 attributes=operator_attributes or {},
             ),
-            backend=backend,
+            backend=backend or embedded_backend.default_embedded,
         )
 
     # TODO(ricoh): linting should become optional, up to the backend.
@@ -472,47 +472,47 @@ class FieldOperator(GTCallable, Generic[OperatorNodeT]):
         return ProgramFromPast(definition_stage=None, past_stage=past_stage, backend=self.backend)
 
     def __call__(self, *args, **kwargs) -> None:
-        if not next_embedded.context.within_valid_context() and self.backend is not None:
-            # non embedded execution
-            if "offset_provider" not in kwargs:
-                raise errors.MissingArgumentError(None, "offset_provider", True)
-            offset_provider = kwargs.pop("offset_provider")
+        # if not next_embedded.context.within_valid_context() and self.backend is not None and not isinstance(self.backend, next_embedded.backend.EmbeddedBackend):
+        # non embedded execution
+        # if "offset_provider" not in kwargs:
+        #     raise errors.MissingArgumentError(None, "offset_provider", True)
+        # offset_provider = kwargs.pop("offset_provider")
 
-            if "out" not in kwargs:
-                raise errors.MissingArgumentError(None, "out", True)
-            out = kwargs.pop("out")
-            args, kwargs = type_info.canonicalize_arguments(
-                self.foast_stage.foast_node.type, args, kwargs
-            )
-            return self.backend(
-                self.definition_stage,
-                *args,
-                out=out,
-                offset_provider=offset_provider,
-                from_fieldop=self,
-                **kwargs,
-            )
-        else:
-            attributes = (
-                self.definition_stage.attributes
-                if self.definition_stage
-                else self.foast_stage.attributes
-            )
-            if attributes is not None and any(
-                has_scan_op_attribute := [
-                    attribute in attributes for attribute in ["init", "axis", "forward"]
-                ]
-            ):
-                assert all(has_scan_op_attribute)
-                forward = attributes["forward"]
-                init = attributes["init"]
-                axis = attributes["axis"]
-                op = embedded_operators.ScanOperator(
-                    self.definition_stage.definition, forward, init, axis
-                )
-            else:
-                op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
-            return embedded_operators.field_operator_call(op, args, kwargs)
+        # if "out" not in kwargs:
+        #     raise errors.MissingArgumentError(None, "out", True)
+        # out = kwargs.pop("out")
+        # args, kwargs = type_info.canonicalize_arguments(
+        #     self.foast_stage.foast_node.type, args, kwargs
+        # )  # TODO(ricoh): remove (push back into toolchain if necessary).
+        return self.backend(
+            self.definition_stage,
+            *args,
+            # out=out,
+            # offset_provider=offset_provider,
+            # from_fieldop=self,
+            **kwargs,
+        )
+        # else:
+        #     attributes = (
+        #         self.definition_stage.attributes
+        #         if self.definition_stage
+        #         else self.foast_stage.attributes
+        #     )
+        #     if attributes is not None and any(
+        #         has_scan_op_attribute := [
+        #             attribute in attributes for attribute in ["init", "axis", "forward"]
+        #         ]
+        #     ):
+        #         assert all(has_scan_op_attribute)
+        #         forward = attributes["forward"]
+        #         init = attributes["init"]
+        #         axis = attributes["axis"]
+        #         op = embedded_operators.ScanOperator(
+        #             self.definition_stage.definition, forward, init, axis
+        #         )
+        #     else:
+        #         op = embedded_operators.EmbeddedOperator(self.definition_stage.definition)
+        #     return embedded_operators.field_operator_call(op, args, kwargs)
 
 
 @dataclasses.dataclass(frozen=True)

@@ -71,6 +71,7 @@ if dace_iterator:
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         next_tests.definitions.ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES,
+        next_tests.definitions.ProgramBackendId.NEW_EMBEDDED,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),

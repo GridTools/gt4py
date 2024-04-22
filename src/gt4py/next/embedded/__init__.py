@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from . import common, context, exceptions, nd_array_field
+from . import backend, common, context, exceptions, nd_array_field
 
 
-__all__ = ["common", "context", "exceptions", "nd_array_field"]
+__all__ = ["backend", "common", "context", "exceptions", "nd_array_field"]
