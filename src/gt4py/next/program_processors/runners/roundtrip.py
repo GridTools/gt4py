@@ -209,10 +209,11 @@ def execute_roundtrip(
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = config.DEBUG,
+    debug: Optional[bool] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
+    debug = debug if debug is not None else config.DEBUG
     fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
@@ -230,15 +231,16 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = config.DEBUG
+    debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+        debug = config.DEBUG if self.debug is None else self.debug
         return fencil_generator(
             inp.program,
             offset_provider=inp.kwargs.get("offset_provider", None),
-            debug=self.debug,
+            debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
