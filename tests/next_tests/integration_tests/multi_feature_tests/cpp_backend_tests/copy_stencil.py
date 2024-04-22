@@ -19,6 +19,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef
 from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
+from gt4py.next.type_system import type_specifications as ts
 
 
 IDim = gtx.Dimension("IDim")
@@ -47,7 +48,10 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace_fencil_definition(copy_fencil, [None] * 5, use_arg_types=False)
+    ijk_field_type = ts.FieldType(
+        dims=[IDim, JDim, KDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    prog = trace_fencil_definition(copy_fencil, [ijk_field_type] * 5)
     generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
         prog, offset_provider={}, column_axis=None
     )

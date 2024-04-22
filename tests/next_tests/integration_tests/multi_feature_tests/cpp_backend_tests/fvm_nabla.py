@@ -20,6 +20,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef, offset
 from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.program_processors.runners.gtfn import run_gtfn, run_gtfn_imperative
+from gt4py.next.type_system import type_specifications as ts
 
 
 E2V = offset("E2V")
@@ -57,6 +58,8 @@ def zavgS_fencil(edge_domain, out, pp, S_M):
 
 
 Vertex = gtx.Dimension("Vertex")
+Edge = gtx.Dimension("Edge")
+V2EDim = gtx.Dimension("V2E", kind=gtx.DimensionKind.LOCAL)
 K = gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)
 
 
@@ -92,8 +95,31 @@ if __name__ == "__main__":
     else:
         backend = run_gtfn
 
+    int_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    vertex_k_field_type = ts.FieldType(
+        dims=[Vertex, K], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    vertex_field_type = ts.FieldType(dims=[Vertex, K],
+                                     dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    edge_k_field = ts.FieldType(dims=[Edge, K], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    edge_field = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    vertex_v2e_field = ts.FieldType(
+        dims=[Vertex, V2EDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+
     # prog = trace(zavgS_fencil, [None] * 4) # TODO allow generating of 2 fencils
-    prog = trace_fencil_definition(nabla_fencil, [None] * 7, use_arg_types=False)
+    prog = trace_fencil_definition(
+        nabla_fencil,
+        [
+            int_type,
+            int_type,
+            edge_k_field,
+            vertex_k_field_type,
+            ts.TupleType(types=[edge_field, edge_field]),
+            vertex_v2e_field,
+            vertex_field_type,
+        ],
+    )
     offset_provider = {
         "V2E": DummyConnectivity(max_neighbors=6, has_skip_values=True),
         "E2V": DummyConnectivity(max_neighbors=2, has_skip_values=False),

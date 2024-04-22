@@ -19,22 +19,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fundef, offset
 from gt4py.next.iterator.tracing import trace_fencil_definition
 from gt4py.next.program_processors.runners.gtfn import run_gtfn
-
-
-@fundef
-def ldif(d):
-    return lambda inp: deref(shift(d, -1)(inp)) - deref(inp)
-
-
-@fundef
-def rdif(d):
-    return lambda inp: ldif(d)(shift(d, 1)(inp))
-
-
-@fundef
-def dif2(d):
-    return lambda inp: ldif(d)(lift(rdif(d))(inp))
-
+from gt4py.next.type_system import type_specifications as ts
 
 i = offset("i")
 j = offset("j")
@@ -42,7 +27,12 @@ j = offset("j")
 
 @fundef
 def lap(inp):
-    return dif2(i)(inp) + dif2(j)(inp)
+    return -4.0 * deref(inp) + (
+        deref(shift(i, 1)(inp))
+        + deref(shift(i, -1)(inp))
+        + deref(shift(j, 1)(inp))
+        + deref(shift(j, -1)(inp))
+    )
 
 
 IDim = gtx.Dimension("IDim")
@@ -68,7 +58,10 @@ if __name__ == "__main__":
         raise RuntimeError(f"Usage: {sys.argv[0]} <output_file>")
     output_file = sys.argv[1]
 
-    prog = trace_fencil_definition(lap_fencil, [None] * 8, use_arg_types=False)
+    ijk_field_type = ts.FieldType(
+        dims=[IDim, JDim, KDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    )
+    prog = trace_fencil_definition(lap_fencil, [ijk_field_type] * 8)
     generated_code = run_gtfn.executor.otf_workflow.translation.generate_stencil_source(
         prog, offset_provider={"i": IDim, "j": JDim}, column_axis=None
     )

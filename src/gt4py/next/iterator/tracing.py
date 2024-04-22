@@ -35,7 +35,7 @@ from gt4py.next.iterator.ir import (
     SymRef,
 )
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 TRACING = "tracing"
@@ -252,7 +252,7 @@ def _contains_tuple_dtype_field(arg):
     return isinstance(arg, common.Field) and any(dim is None for dim in arg.domain.dims)
 
 
-def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
+def _make_fencil_params(fun, args) -> list[Sym]:
     params: list[Sym] = []
     param_infos = list(inspect.signature(fun).parameters.values())
 
@@ -278,30 +278,25 @@ def _make_fencil_params(fun, args, *, use_arg_types: bool) -> list[Sym]:
             )
 
         arg_type = None
-        if use_arg_types:
+        if isinstance(arg, ts.TypeSpec):
+            arg_type = arg
+        else:
             arg_type = type_translation.from_value(arg)
 
         params.append(Sym(id=param_name, type=arg_type))
     return params
 
 
-def trace_fencil_definition(
-    fun: typing.Callable, args: typing.Iterable, *, use_arg_types=True
-) -> FencilDefinition:
+def trace_fencil_definition(fun: typing.Callable, args: typing.Iterable) -> FencilDefinition:
     """
     Transform fencil given as a callable into `itir.FencilDefinition` using tracing.
 
     Arguments:
         fun: The fencil / callable to trace.
-        args: A list of arguments, e.g. fields, scalars or composites thereof. If `use_arg_types`
-            is `False` may also be dummy values.
-
-    Keyword arguments:
-        use_arg_types: Deduce type of the arguments and add them to the fencil parameter nodes
-            (i.e. `itir.Sym`s).
+        args: A list of arguments, e.g. fields, scalars, composites thereof, or directly a type.
     """
     with TracerContext() as _:
-        params = _make_fencil_params(fun, args, use_arg_types=use_arg_types)
+        params = _make_fencil_params(fun, args)
         trace_function_call(fun, args=(_s(param.id) for param in params))
 
         return FencilDefinition(
