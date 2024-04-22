@@ -44,7 +44,8 @@ def _get_backends_with_storage_info(storage_info_kind: str):
     for name in _ALL_BACKEND_NAMES:
         backend = gt4pyc.backend.from_name(name)
         if not hasattr(backend, "disabled") or not backend.disabled:
-            res.append(_backend_name_as_param(name))
+            if backend.storage_info["device"] == storage_info_kind:
+                res.append(_backend_name_as_param(name))
     return res
 
 
