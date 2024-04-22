@@ -485,7 +485,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     def inverse_image(self, image_range: common.UnitRange | common.NamedRange) -> common.Domain:
         cache_key = hash((id(self.ndarray), self.domain, image_range))
 
-        if (new_ranges := self._cache.get(cache_key, None)) is None:
+        if (new_domain := self._cache.get(cache_key, None)) is None:
             if not isinstance(
                 image_range, common.UnitRange
             ):  # TODO(havogt): cleanup duplication with CartesianConnectivity
@@ -504,10 +504,10 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_ranges = self.domain.loc[slices]
-            self._cache[cache_key] = new_ranges
+            new_domain = self.domain.loc[slices]
+            self._cache[cache_key] = new_domain
 
-        return new_ranges
+        return new_domain
 
     def restrict(self, index: common.AnyIndexSpec) -> NdArrayConnectivityField:
         cache_key = (id(self.ndarray), self.domain, index)
