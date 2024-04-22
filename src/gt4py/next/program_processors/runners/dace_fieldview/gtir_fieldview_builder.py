@@ -13,12 +13,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import dace
 
 import gt4py.eve as eve
+from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
+from gt4py.next.type_system import type_specifications as ts
 
 from .fieldview_dataflow import FieldviewRegion
 from .gtir_tasklet_codegen import GtirTaskletCodegen as TaskletCodegen
@@ -31,9 +34,13 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
     """
 
     _ctx: FieldviewRegion
+    _field_types: dict[str, ts.FieldType]
 
-    def __init__(self, sdfg: dace.SDFG, state: dace.SDFGState):
+    def __init__(
+        self, sdfg: dace.SDFG, state: dace.SDFGState, field_types: dict[str, ts.FieldType]
+    ):
         self._ctx = FieldviewRegion(sdfg, state)
+        self._field_types = field_types.copy()
 
     @staticmethod
     def create_ctx(func: Callable) -> Callable:
@@ -111,6 +118,27 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
                 dace.Memlet.from_array(target_node, target_array),
             )
 
+    def _visit_domain(self, node: itir.FunCall) -> Sequence[Tuple[str, str, str]]:
+        assert isinstance(node.fun, itir.SymRef)
+        assert node.fun.id == "cartesian_domain" or node.fun.id == "unstructured_domain"
+
+        domain = []
+        translator = TaskletCodegen()
+
+        for named_range in node.args:
+            assert isinstance(named_range, itir.FunCall)
+            assert isinstance(named_range.fun, itir.SymRef)
+            assert len(named_range.args) == 3
+            dimension = named_range.args[0]
+            assert isinstance(dimension, itir.AxisLiteral)
+            lower_bound = named_range.args[1]
+            upper_bound = named_range.args[2]
+            lb = translator.visit(lower_bound)
+            ub = translator.visit(upper_bound)
+            domain.append((dimension.value, lb, ub))
+
+        return domain
+
     @create_ctx
     def _make_fieldop(self, fun_node: itir.FunCall, fun_args: List[itir.Expr]) -> FieldviewRegion:
         ctx = self._ctx
@@ -120,33 +148,47 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
         # create ordered list of input nodes
         input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
 
-        # TODO: define shape based on domain and dtype based on type inference
-        shape = [10]
-        dtype = dace.float64
+        assert len(fun_node.args) == 2
+        # expect stencil (represented as a lambda function) as first argument
+        self.visit(fun_node.args[0])
+        # the domain of the field operator is passed as second argument
+        assert isinstance(fun_node.args[1], itir.FunCall)
+        domain = self._visit_domain(fun_node.args[1])
+        map_ranges = {f"i_{d}": f"{lb}:{ub}" for d, lb, ub in domain}
+        me, mx = ctx.state.add_map("fieldop", map_ranges)
+
+        # TODO: use type inference to determine the result type
+        type_ = ts.ScalarKind.FLOAT64
+        dtype = as_dace_type(type_)
+        shape = [f"{ub} - {lb}" for _, lb, ub in domain]
         output_name, output_array = ctx.sdfg.add_array(
             ctx.var_name(), shape, dtype, transient=True, find_new_name=True
         )
         output_arrays = [(output_name, output_array)]
-
-        assert len(fun_node.args) == 1
-        self.visit(fun_node.args[0])
-
-        # TODO: define map range based on domain
-        map_ranges = dict(i="0:10")
-        me, mx = ctx.state.add_map("fieldop", map_ranges)
+        self._field_types[output_name] = ts.FieldType(
+            dims=[Dimension(d) for d, _, _ in domain], dtype=ts.ScalarType(type_)
+        )
 
         for (node, connector), (dname, _) in zip(self._ctx.input_connections, input_arrays):
-            # TODO: define memlet subset based on domain
             src_node = self._ctx.node_mapping[dname]
+            subset = ",".join([f"i_{d.value}" for d in self._field_types[dname].dims])
             self._ctx.state.add_memlet_path(
-                src_node, me, node, dst_conn=connector, memlet=dace.Memlet(data=dname, subset="i")
+                src_node,
+                me,
+                node,
+                dst_conn=connector,
+                memlet=dace.Memlet(data=dname, subset=subset),
             )
 
         for (node, connector), (dname, _) in zip(self._ctx.output_connections, output_arrays):
-            # TODO: define memlet subset based on domain
             dst_node = ctx.add_output_node(dname)
+            subset = ",".join([f"i_{d}" for d, _, _ in domain])
             self._ctx.state.add_memlet_path(
-                node, mx, dst_node, src_conn=connector, memlet=dace.Memlet(data=dname, subset="i")
+                node,
+                mx,
+                dst_node,
+                src_conn=connector,
+                memlet=dace.Memlet(data=dname, subset=subset),
             )
 
         return ctx

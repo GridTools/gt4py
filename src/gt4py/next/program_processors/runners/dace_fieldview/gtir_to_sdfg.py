@@ -26,6 +26,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
 from .gtir_fieldview_builder import GtirFieldviewBuilder as FieldviewBuilder
+from .utility import as_dace_type
 
 
 class GtirToSDFG(eve.NodeVisitor):
@@ -44,19 +45,26 @@ class GtirToSDFG(eve.NodeVisitor):
     """
 
     _param_types: list[ts.TypeSpec]
+    _field_types: dict[str, ts.FieldType]
 
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
     ):
         self._param_types = param_types
+        self._field_types = {}
 
     def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
-        # TODO define shape based on domain and dtype based on type inference
-        shape = [10]
-        dtype = dace.float64
-        sdfg.add_array(name, shape, dtype, transient=False)
-        return
+        if isinstance(type_, ts.FieldType):
+            # TODO define shape based on domain and dtype based on type inference
+            shape = [10]
+            dtype = dace.float64
+            sdfg.add_array(name, shape, dtype, transient=False)
+            self._field_types[name] = type_
+        else:
+            assert isinstance(type_, ts.ScalarType)
+            dtype = as_dace_type(type_.kind)
+            sdfg.add_symbol(name, dtype)
 
     def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Dict[str, str]:
         raise NotImplementedError()
@@ -78,7 +86,6 @@ class GtirToSDFG(eve.NodeVisitor):
 
         # we use entry/exit state to keep track of entry/exit point of graph execution
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
-        exit_state = sdfg.add_state_after(entry_state, "program_exit")
 
         # declarations of temporaries result in local (aka transient) array definitions in the SDFG
         if node.declarations:
@@ -88,19 +95,23 @@ class GtirToSDFG(eve.NodeVisitor):
 
             # define symbols for shape and offsets of temporary arrays as interstate edge symbols
             # TODO(edopao): use new `add_state_after` function in next dace release
-            head_state = sdfg.add_state_before(exit_state, "init_temps")
+            head_state = sdfg.add_state_after(entry_state, "init_temps")
             (sdfg.edges_between(entry_state, head_state))[0].assignments = temp_symbols
         else:
             head_state = entry_state
 
         # add global arrays (aka non-transient) to the SDFG
+        assert len(node.params) == len(self._param_types)
         for param, type_ in zip(node.params, self._param_types):
             self._add_storage(sdfg, str(param.id), type_)
 
         # visit one statement at a time and put it into separate state
         for i, stmt in enumerate(node.body):
-            head_state = sdfg.add_state_before(exit_state, f"stmt_{i}")
+            head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             self.visit(stmt, sdfg=sdfg, state=head_state)
+            sink_states = sdfg.sink_nodes()
+            assert len(sink_states) == 1
+            head_state = sink_states[0]
 
         sdfg.validate()
         return sdfg
@@ -112,7 +123,7 @@ class GtirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        fieldview_builder = FieldviewBuilder(sdfg, state)
+        fieldview_builder = FieldviewBuilder(sdfg, state, self._field_types)
         fieldview_builder.visit(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression

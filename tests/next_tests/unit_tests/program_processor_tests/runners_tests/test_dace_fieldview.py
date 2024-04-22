@@ -39,18 +39,19 @@ FTYPE = ts.FieldType(dims=[DIM], dtype=ts.ScalarKind.FLOAT64)
 
 def test_gtir_sum2():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, 10)
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
     )
     testee = itir.Program(
         id="sum_2fields",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="z")],
+        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="z"), itir.Sym(id="size")],
         declarations=[],
         body=[
             itir.SetAt(
                 expr=im.call(
                     im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b")))
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        domain,
                     )
                 )("x", "y"),
                 domain=domain,
@@ -64,36 +65,44 @@ def test_gtir_sum2():
     c = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        param_types=([FTYPE] * 3),
+        [FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
     )
     sdfg = sdfg_genenerator.visit(testee)
 
     assert isinstance(sdfg, dace.SDFG)
 
-    sdfg(x=a, y=b, z=c)
+    sdfg(x=a, y=b, z=c, size=N)
     assert np.allclose(c, (a + b))
 
 
 def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, 10)
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
     )
     testee = itir.Program(
         id="sum_3fields",
         function_definitions=[],
-        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="w"), itir.Sym(id="z")],
+        params=[
+            itir.Sym(id="x"),
+            itir.Sym(id="y"),
+            itir.Sym(id="w"),
+            itir.Sym(id="z"),
+            itir.Sym(id="size"),
+        ],
         declarations=[],
         body=[
             itir.SetAt(
                 expr=im.call(
                     im.call("as_fieldop")(
-                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b")))
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        domain,
                     )
                 )(
                     "x",
                     im.call(
                         im.call("as_fieldop")(
-                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b")))
+                            im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                            domain,
                         )
                     )("y", "w"),
                 ),
@@ -109,11 +118,11 @@ def test_gtir_sum3():
     d = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        param_types=([FTYPE] * 4),
+        [FTYPE, FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
     )
     sdfg = sdfg_genenerator.visit(testee)
 
     assert isinstance(sdfg, dace.SDFG)
 
-    sdfg(x=a, y=b, w=c, z=d)
+    sdfg(x=a, y=b, w=c, z=d, size=N)
     assert np.allclose(d, (a + b + c))
