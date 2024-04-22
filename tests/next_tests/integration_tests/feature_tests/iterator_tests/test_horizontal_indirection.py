@@ -32,7 +32,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import fundef, offset
 
 from next_tests.integration_tests.cases import IDim
-from next_tests.unit_tests.conftest import run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = offset("I")
