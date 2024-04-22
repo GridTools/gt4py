@@ -24,7 +24,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import xxhash
 
-from gt4py import eve
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import common
 from gt4py.next.ffront import field_operator_ast as foast, program_ast as past, source_utils
 from gt4py.next.type_system import type_specifications as ts
@@ -91,31 +91,8 @@ class PastClosure:
     kwargs: dict[str, Any]
 
 
-class HashlibAlgorithm(typing.Protocol):
-    """Used in the hashlib module of the standard library."""
-
-    @property
-    def block_size(self) -> int: ...
-
-    @property
-    def digest_size(self) -> int: ...
-
-    @property
-    def name(self) -> str: ...
-
-    def __init__(self, data: eve.extended_typing.ReadableBuffer = ...) -> None: ...
-
-    def copy(self) -> eve.extended_typing.Self: ...
-
-    def update(self, data: eve.extended_typing.Buffer, /) -> None: ...
-
-    def digest(self) -> bytes: ...
-
-    def hexdigest(self) -> str: ...
-
-
-def fingerprint_stage(obj: Any, algorithm: Optional[str | HashlibAlgorithm] = None) -> str:
-    hasher: HashlibAlgorithm
+def fingerprint_stage(obj: Any, algorithm: Optional[str | xtyping.HashlibAlgorithm] = None) -> str:
+    hasher: xtyping.HashlibAlgorithm
     if not algorithm:
         hasher = xxhash.xxh64()
     elif isinstance(algorithm, str):
@@ -128,7 +105,7 @@ def fingerprint_stage(obj: Any, algorithm: Optional[str | HashlibAlgorithm] = No
 
 
 @functools.singledispatch
-def add_content_to_fingerprint(obj: Any, hasher: HashlibAlgorithm) -> None:
+def add_content_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     hasher.update(str(obj).encode())
 
 
@@ -139,14 +116,14 @@ def add_content_to_fingerprint(obj: Any, hasher: HashlibAlgorithm) -> None:
 @add_content_to_fingerprint.register(ProgramDefinition)
 @add_content_to_fingerprint.register(PastProgramDefinition)
 @add_content_to_fingerprint.register(PastClosure)
-def add_content_to_fingerprint_stages(obj: Any, hasher: HashlibAlgorithm) -> None:
+def add_content_to_fingerprint_stages(obj: Any, hasher: xtyping.HashlibAlgorithm) -> None:
     add_content_to_fingerprint(obj.__class__, hasher)
     for field in dataclasses.fields(obj):
         add_content_to_fingerprint(getattr(obj, field.name), hasher)
 
 
 @add_content_to_fingerprint.register
-def add_str_to_fingerprint(obj: str, hasher: HashlibAlgorithm) -> None:
+def add_str_to_fingerprint(obj: str, hasher: xtyping.HashlibAlgorithm) -> None:
     hasher.update(str(obj).encode())
 
 
@@ -155,37 +132,41 @@ def add_str_to_fingerprint(obj: str, hasher: HashlibAlgorithm) -> None:
 @add_content_to_fingerprint.register(float)
 def add_builtin_to_fingerprint(
     obj: None,
-    hasher: HashlibAlgorithm,
+    hasher: xtyping.HashlibAlgorithm,
 ) -> None:
     hasher.update(str(obj).encode())
 
 
 @add_content_to_fingerprint.register
-def add_func_to_fingerprint(obj: types.FunctionType, hasher: HashlibAlgorithm) -> None:
+def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgorithm) -> None:
     sourcedef = source_utils.SourceDefinition.from_function(obj)
     for item in sourcedef:
         add_content_to_fingerprint(item, hasher)
 
 
 @add_content_to_fingerprint.register
-def add_dict_to_fingerprint(obj: dict, hasher: HashlibAlgorithm) -> None:
+def add_dict_to_fingerprint(obj: dict, hasher: xtyping.HashlibAlgorithm) -> None:
     for key, value in obj.items():
         add_content_to_fingerprint(key, hasher)
         add_content_to_fingerprint(value, hasher)
 
 
 @add_content_to_fingerprint.register
-def add_type_to_fingerprint(obj: type, hasher: HashlibAlgorithm) -> None:
+def add_type_to_fingerprint(obj: type, hasher: xtyping.HashlibAlgorithm) -> None:
     hasher.update(obj.__name__.encode())
 
 
 @add_content_to_fingerprint.register
-def add_sequence_to_fingerprint(obj: collections.abc.Iterable, hasher: HashlibAlgorithm) -> None:
+def add_sequence_to_fingerprint(
+    obj: collections.abc.Iterable, hasher: xtyping.HashlibAlgorithm
+) -> None:
     for item in obj:
         add_content_to_fingerprint(item, hasher)
 
 
 @add_content_to_fingerprint.register
-def add_foast_located_node_to_fingerprint(obj: foast.LocatedNode, hasher: HashlibAlgorithm) -> None:
+def add_foast_located_node_to_fingerprint(
+    obj: foast.LocatedNode, hasher: xtyping.HashlibAlgorithm
+) -> None:
     add_content_to_fingerprint(obj.location, hasher)
     add_content_to_fingerprint(str(obj), hasher)

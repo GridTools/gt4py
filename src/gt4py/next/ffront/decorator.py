@@ -24,11 +24,11 @@ import types
 import typing
 import warnings
 from collections.abc import Callable
-from typing import Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from gt4py import eve
 from gt4py._core import definitions as core_defs
-from gt4py.eve.extended_typing import Any, Optional
+from gt4py.eve import extended_typing as xtyping
 from gt4py.next import (
     allocators as next_allocators,
     backend as next_backend,
@@ -645,28 +645,26 @@ def scan_operator(
 
 
 @ffront_stages.add_content_to_fingerprint.register
-def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: ffront_stages.HashlibAlgorithm) -> None:
+def add_fieldop_to_fingerprint(obj: FieldOperator, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
 
 
 @ffront_stages.add_content_to_fingerprint.register
 def add_foast_fieldop_to_fingerprint(
-    obj: FieldOperatorFromFoast, hasher: ffront_stages.HashlibAlgorithm
+    obj: FieldOperatorFromFoast, hasher: xtyping.HashlibAlgorithm
 ) -> None:
     ffront_stages.add_content_to_fingerprint(obj.foast_stage, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
 
 
 @ffront_stages.add_content_to_fingerprint.register
-def add_program_to_fingerprint(obj: Program, hasher: ffront_stages.HashlibAlgorithm) -> None:
+def add_program_to_fingerprint(obj: Program, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.definition_stage, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
 
 
 @ffront_stages.add_content_to_fingerprint.register
-def add_past_program_to_fingerprint(
-    obj: ProgramFromPast, hasher: ffront_stages.HashlibAlgorithm
-) -> None:
+def add_past_program_to_fingerprint(obj: ProgramFromPast, hasher: xtyping.HashlibAlgorithm) -> None:
     ffront_stages.add_content_to_fingerprint(obj.past_stage, hasher)
     ffront_stages.add_content_to_fingerprint(obj.backend, hasher)
