@@ -351,7 +351,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
             output = [str(arg.id) for arg in self.itir.closures[-1].output.args]  # type: ignore[attr-defined]
         else:
             output = [str(self.itir.closures[-1].output.id)]
-        sdfg.GT4Py_Program_output_fields = output
+        sdfg.GT4Py_Program_output_fields = {op: fields[op].dims for op in output}
 
         return sdfg
 

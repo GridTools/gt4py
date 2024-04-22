@@ -334,16 +334,7 @@ class NdArrayField(
     if dace:
         # Extension of NdArrayField : Support for SDFGConvertible GT4Py Programs
         def data_ptr(self) -> int:
-            obj = self.ndarray
-            if dace.dtypes.is_array(obj) and (
-                hasattr(obj, "__array_interface__") or hasattr(obj, "__cuda_array_interface__")
-            ):
-                if dace.dtypes.is_gpu_array(obj):
-                    return obj.__cuda_array_interface__["data"][0]  # type: ignore
-                else:
-                    return self.ndarray.__array_interface__["data"][0]  # type: ignore
-            else:
-                raise ValueError("Unsupported data container.")
+            return self.array_ns.byte_bounds(self.ndarray)[0]
 
         def __descriptor__(self) -> dace.data.Data:
             return dace.data.create_datadescriptor(self.ndarray)
