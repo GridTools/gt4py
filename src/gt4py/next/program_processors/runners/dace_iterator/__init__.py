@@ -25,7 +25,6 @@ from dace.sdfg import utils as sdutils
 from dace.transformation.auto import auto_optimize as autoopt
 
 import gt4py.next.iterator.ir as itir
-from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.iterator import transforms as itir_transforms
@@ -321,16 +320,6 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
     sdfg_convertible: dict[str, Any] = field(default_factory=dict)
 
     def __sdfg__(self, *args, **kwargs) -> dace.sdfg.sdfg.SDFG:
-        from gt4py.next.program_processors.runners.dace import run_dace_gpu
-        from gt4py.next.program_processors.runners.dace_iterator.workflow import DaCeTranslator
-
-        translation = DaCeTranslator(
-            auto_optimize=False,
-            device_type=core_defs.DeviceType.CUDA
-            if self.backend == run_dace_gpu
-            else core_defs.DeviceType.CPU,
-        )
-
         params = {str(p.id): p.dtype for p in self.itir.params}
         fields = {str(p.id): p.type for p in self.past_stage.past_node.params}
         arg_types = [
@@ -346,7 +335,7 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         offset_provider = {str(k): v for k, v in kwargs.get("offset_provider", {}).items()}
         self.sdfg_convertible["offset_provider"] = offset_provider
 
-        sdfg = translation.generate_sdfg(
+        sdfg = self.backend.executor.otf_workflow.step.translation.generate_sdfg(  # type: ignore[union-attr]
             self.itir,
             arg_types,
             offset_provider=offset_provider,
