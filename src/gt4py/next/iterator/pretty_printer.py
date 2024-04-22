@@ -25,7 +25,6 @@ from typing import Final
 
 from gt4py.eve import NodeTranslator
 from gt4py.next.iterator import ir
-from gt4py.next.type_system import type_specifications as ts
 
 
 # replacements for builtin binary operations

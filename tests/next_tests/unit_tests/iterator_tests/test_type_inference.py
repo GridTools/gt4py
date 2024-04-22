@@ -255,7 +255,9 @@ def test_unstructured_fencil_definition():
         stencil=ts.FunctionType(
             pos_only_args=[
                 it_ts.IteratorType(
-                    position_dims=[Vertex, KDim], defined_dims=[Edge, KDim], element_type=float64_type
+                    position_dims=[Vertex, KDim],
+                    defined_dims=[Edge, KDim],
+                    element_type=float64_type,
                 )
             ],
             pos_or_kw_args={},
