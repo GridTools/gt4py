@@ -22,7 +22,7 @@ import numpy.typing as npt
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
-from gt4py.next import backend, common, config
+from gt4py.next import NeighborTableOffsetProvider, backend, common, config
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -74,27 +74,35 @@ def _ensure_is_on_device(
     return connectivity_arg
 
 
+ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
+
+
+def handle_connectivity(
+    conn: NeighborTableOffsetProvider, zero_tuple: tuple[int, ...]
+) -> ConnectivityArg:
+    return (conn.table, zero_tuple)
+
+
+def handle_other_type(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+type_handlers = {
+    NeighborTableOffsetProvider: handle_connectivity,
+    common.Dimension: handle_other_type,
+}
+
+
 def extract_connectivity_args(
-    offset_provider: dict[str, common.Connectivity | common.Dimension], device: core_defs.DeviceType
-) -> list[tuple[npt.NDArray, tuple[int, ...]]]:
-    # note: the order here needs to agree with the order of the generated bindings
-    args: list[tuple[npt.NDArray, tuple[int, ...]]] = []
-    for name, conn in offset_provider.items():
-        if isinstance(conn, common.Connectivity):
-            if not isinstance(conn, common.NeighborTable):
-                raise NotImplementedError(
-                    "Only 'NeighborTable' connectivities implemented at this point."
-                )
-            # copying to device here is a fallback for easy testing and might be removed later
-            conn_arg = _ensure_is_on_device(conn.table, device)
-            args.append((conn_arg, tuple([0] * 2)))
-        elif isinstance(conn, common.Dimension):
-            pass
-        else:
-            raise AssertionError(
-                f"Expected offset provider '{name}' to be a 'Connectivity' or 'Dimension', "
-                f"but got '{type(conn).__name__}'."
-            )
+    offset_provider: dict[str, Any], device: core_defs.DeviceType
+) -> list[ConnectivityArg]:
+    zero_tuple = (0, 0)
+    args = []
+    for conn in offset_provider.values():
+        handler = type_handlers.get(type(conn), handle_other_type)
+        result = handler(conn, zero_tuple)  # type: ignore
+        if result:
+            args.append(result)
     return args
 
 
