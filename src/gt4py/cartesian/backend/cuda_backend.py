@@ -50,14 +50,18 @@ class CudaExtGenerator(BackendCodegen):
         base_oir = GTIRToOIR().visit(stencil_ir)
         oir_pipeline = self.backend.builder.options.backend_opts.get(
             "oir_pipeline",
-            DefaultPipeline(skip=[NoFieldAccessPruning], add_steps=[FillFlushToLocalKCaches]),
+            DefaultPipeline(
+                skip=[NoFieldAccessPruning], add_steps=[FillFlushToLocalKCaches]
+            ),
         )
         oir_node = oir_pipeline.run(base_oir)
         cuir_node = OIRToCUIR().visit(oir_node)
         cuir_node = kernel_fusion.FuseKernels().visit(cuir_node)
         cuir_node = extent_analysis.CacheExtents().visit(cuir_node)
         format_source = self.backend.builder.options.format_source
-        implementation = cuir_codegen.CUIRCodegen.apply(cuir_node, format_source=format_source)
+        implementation = cuir_codegen.CUIRCodegen.apply(
+            cuir_node, format_source=format_source
+        )
         bindings = CudaBindingsCodegen.apply_codegen(
             cuir_node,
             module_name=self.module_name,
@@ -105,9 +109,13 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
     def visit_ScalarDecl(self, node: cuir.ScalarDecl, **kwargs):
         if "external_arg" in kwargs:
             if kwargs["external_arg"]:
-                return "{dtype} {name}".format(name=node.name, dtype=self.visit(node.dtype))
+                return "{dtype} {name}".format(
+                    name=node.name, dtype=self.visit(node.dtype)
+                )
             else:
-                return "gridtools::stencil::global_parameter({name})".format(name=node.name)
+                return "gridtools::stencil::global_parameter({name})".format(
+                    name=node.name
+                )
 
     def visit_Program(self, node: cuir.Program, **kwargs):
         assert "module_name" in kwargs

@@ -64,7 +64,9 @@ build_settings: Dict[str, Any] = {
     "extra_compile_args": {"cxx": extra_compile_args, "cuda": extra_compile_args},
     "extra_link_args": [],
     "parallel_jobs": multiprocessing.cpu_count(),
-    "cpp_template_depth": os.environ.get("GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH),
+    "cpp_template_depth": os.environ.get(
+        "GT_CPP_TEMPLATE_DEPTH", GT_CPP_TEMPLATE_DEPTH
+    ),
 }
 if GT4PY_USE_HIP:
     build_settings["cuda_library_path"] = os.path.join(CUDA_ROOT, "lib")
@@ -78,7 +80,9 @@ cache_settings: Dict[str, Any] = {
     "dir_name": os.environ.get("GT_CACHE_DIR_NAME", ".gt_cache"),
     "root_path": os.environ.get("GT_CACHE_ROOT", os.path.abspath(".")),
     "load_retries": int(os.environ.get("GT_CACHE_LOAD_RETRIES", 3)),
-    "load_retry_delay": int(os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)),  # unit milliseconds
+    "load_retry_delay": int(
+        os.environ.get("GT_CACHE_LOAD_RETRY_DELAY", 100)
+    ),  # unit milliseconds
 }
 
 code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
@@ -86,7 +90,3 @@ code_settings: Dict[str, Any] = {"root_package_name": "_GT_"}
 os.environ.setdefault("DACE_CONFIG", os.path.join(os.path.abspath("."), ".dace.conf"))
 
 DACE_DEFAULT_BLOCK_SIZE: str = os.environ.get("DACE_DEFAULT_BLOCK_SIZE", "64,8,1")
-
-# Deerecate by default the gtc `cuda` backend. Use GT4PY_GTC_CUDA_USE=1 to turn it on
-# at user own risks.
-GT4PY_GTC_CUDA_USE = bool(int(os.environ.get("GT4PY_GTC_CUDA_USE", "0")))
