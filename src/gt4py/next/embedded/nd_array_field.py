@@ -263,7 +263,7 @@ class NdArrayField(
             codomains_counter[connectivity.codomain] += 1
 
         if unknown_dims := [
-            dim for dim, _ in codomains_counter.items() if dim not in self.domain.dims
+            dim for dim in codomains_counter.keys() if dim not in self.domain.dims
         ]:
             raise ValueError(
                 f"Incompatible dimensions in the connectivity codomain(s) {unknown_dims}"
