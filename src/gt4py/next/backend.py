@@ -67,7 +67,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     ] = dataclasses.field(
         default_factory=lambda: foast_to_past.FoastToPastClosure(
             foast_to_past=workflow.CachedStep(
-                foast_to_past.foast_to_past, hash_function=ffront_stages.cache_key
+                foast_to_past.foast_to_past, hash_function=ffront_stages.fingerprint_stage
             )
         )
     )
@@ -81,7 +81,7 @@ class FieldopTransformWorkflow(workflow.NamedStepSequence):
     foast_to_itir: workflow.Workflow[ffront_stages.FoastOperatorDefinition, itir.Expr] = (
         dataclasses.field(
             default_factory=lambda: workflow.CachedStep(
-                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.cache_key
+                step=foast_to_itir.foast_to_itir, hash_function=ffront_stages.fingerprint_stage
             )
         )
     )

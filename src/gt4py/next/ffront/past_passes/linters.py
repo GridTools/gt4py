@@ -56,4 +56,4 @@ class LinterFactory(factory.Factory):
         model = workflow.CachedStep
 
     step = lint_misnamed_functions.chain(lint_undefined_symbols)
-    hash_function = ffront_stages.cache_key
+    hash_function = ffront_stages.fingerprint_stage

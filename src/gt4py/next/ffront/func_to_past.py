@@ -73,7 +73,7 @@ class OptionalFuncToPastFactory(factory.Factory):
         cached = factory.Trait(
             step=factory.LazyAttribute(
                 lambda o: workflow.CachedStep(
-                    step=o.workflow, hash_function=ffront_stages.cache_key
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
                 )
             )
         )

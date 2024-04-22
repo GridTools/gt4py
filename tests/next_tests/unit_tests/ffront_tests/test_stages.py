@@ -88,10 +88,10 @@ def different_program(different_fieldop, jdim):
 
 
 def test_cache_key_field_op_def(fieldop, samecode_fieldop, different_fieldop):
-    assert stages.cache_key(samecode_fieldop.definition_stage) != stages.cache_key(
+    assert stages.fingerprint_stage(samecode_fieldop.definition_stage) != stages.fingerprint_stage(
         fieldop.definition_stage
     )
-    assert stages.cache_key(different_fieldop.definition_stage) != stages.cache_key(
+    assert stages.fingerprint_stage(different_fieldop.definition_stage) != stages.fingerprint_stage(
         fieldop.definition_stage
     )
 
@@ -105,8 +105,8 @@ def test_cache_key_foast_op_def(fieldop, samecode_fieldop, different_fieldop):
         different_fieldop.definition_stage
     )
 
-    assert stages.cache_key(samecode) != stages.cache_key(foast)
-    assert stages.cache_key(different) != stages.cache_key(foast)
+    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast)
+    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast)
 
 
 def test_cache_key_foast_closure(fieldop, samecode_fieldop, different_fieldop, idim, jdim):
@@ -139,16 +139,16 @@ def test_cache_key_foast_closure(fieldop, samecode_fieldop, different_fieldop, i
         )
     )(fieldop.definition_stage)
 
-    assert stages.cache_key(samecode) != stages.cache_key(foast_closure)
-    assert stages.cache_key(different) != stages.cache_key(foast_closure)
-    assert stages.cache_key(different_args) != stages.cache_key(foast_closure)
+    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(foast_closure)
+    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(foast_closure)
+    assert stages.fingerprint_stage(different_args) != stages.fingerprint_stage(foast_closure)
 
 
 def test_cache_key_program_def(program, samecode_program, different_program):
-    assert stages.cache_key(samecode_program.definition_stage) != stages.cache_key(
+    assert stages.fingerprint_stage(samecode_program.definition_stage) != stages.fingerprint_stage(
         program.definition_stage
     )
-    assert stages.cache_key(different_program.definition_stage) != stages.cache_key(
+    assert stages.fingerprint_stage(different_program.definition_stage) != stages.fingerprint_stage(
         program.definition_stage
     )
 
@@ -158,5 +158,5 @@ def test_cache_key_past_def(program, samecode_program, different_program):
     samecode = gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past(samecode_program.definition_stage)
     different = gtx.backend.DEFAULT_PROG_TRANSFORMS.func_to_past(different_program.definition_stage)
 
-    assert stages.cache_key(samecode) != stages.cache_key(past)
-    assert stages.cache_key(different) != stages.cache_key(past)
+    assert stages.fingerprint_stage(samecode) != stages.fingerprint_stage(past)
+    assert stages.fingerprint_stage(different) != stages.fingerprint_stage(past)

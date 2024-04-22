@@ -96,7 +96,7 @@ class PastClosure:
 Hasher_T: typing.TypeAlias = eve.extended_typing.HashlibAlgorithm
 
 
-def cache_key(obj: Any, algorithm: Optional[str | Hasher_T] = None) -> str:
+def fingerprint_stage(obj: Any, algorithm: Optional[str | Hasher_T] = None) -> str:
     hasher: Hasher_T
     if not algorithm:
         hasher = xxhash.xxh64()  # type: ignore[assignment] # see todo above
@@ -105,87 +105,87 @@ def cache_key(obj: Any, algorithm: Optional[str | Hasher_T] = None) -> str:
     else:
         hasher = algorithm
 
-    update_cache_key(obj, hasher)
+    add_content_to_fingerprint(obj, hasher)
     return hasher.hexdigest()
 
 
 @functools.singledispatch
-def update_cache_key(obj: Any, hasher: Hasher_T) -> None:
+def add_content_to_fingerprint(obj: Any, hasher: Hasher_T) -> None:
     # the following is to avoid circular dependencies
     if hasattr(obj, "backend"):  # assume it is a decorator wrapper
-        update_cache_key_fielop(obj, hasher)
+        add_content_to_fingerprint_fielop(obj, hasher)
     else:
         hasher.update(str(obj).encode())
 
 
-@update_cache_key.register(FieldOperatorDefinition)
-@update_cache_key.register(FoastOperatorDefinition)
-@update_cache_key.register(FoastWithTypes)
-@update_cache_key.register(FoastClosure)
-@update_cache_key.register(ProgramDefinition)
-@update_cache_key.register(PastProgramDefinition)
-@update_cache_key.register(PastClosure)
-def update_cache_key_stages(obj: Any, hasher: Hasher_T) -> None:
-    update_cache_key(obj.__class__, hasher)
+@add_content_to_fingerprint.register(FieldOperatorDefinition)
+@add_content_to_fingerprint.register(FoastOperatorDefinition)
+@add_content_to_fingerprint.register(FoastWithTypes)
+@add_content_to_fingerprint.register(FoastClosure)
+@add_content_to_fingerprint.register(ProgramDefinition)
+@add_content_to_fingerprint.register(PastProgramDefinition)
+@add_content_to_fingerprint.register(PastClosure)
+def add_content_to_fingerprint_stages(obj: Any, hasher: Hasher_T) -> None:
+    add_content_to_fingerprint(obj.__class__, hasher)
     for field in dataclasses.fields(obj):
-        update_cache_key(getattr(obj, field.name), hasher)
+        add_content_to_fingerprint(getattr(obj, field.name), hasher)
 
 
-@update_cache_key.register
-def update_cache_key_str(obj: str, hasher: Hasher_T) -> None:
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_str(obj: str, hasher: Hasher_T) -> None:
     hasher.update(str(obj).encode())
 
 
-@update_cache_key.register(int)
-@update_cache_key.register(bool)
-@update_cache_key.register(float)
-def update_cache_key_builtins(
+@add_content_to_fingerprint.register(int)
+@add_content_to_fingerprint.register(bool)
+@add_content_to_fingerprint.register(float)
+def add_content_to_fingerprint_builtins(
     obj: None,
     hasher: Hasher_T,
 ) -> None:
     hasher.update(str(obj).encode())
 
 
-@update_cache_key.register
-def update_cache_key_func(obj: types.FunctionType, hasher: Hasher_T) -> None:
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_func(obj: types.FunctionType, hasher: Hasher_T) -> None:
     sourcedef = source_utils.SourceDefinition.from_function(obj)
     for item in sourcedef:
-        update_cache_key(item, hasher)
+        add_content_to_fingerprint(item, hasher)
 
 
-@update_cache_key.register
-def update_cache_key_dict(obj: dict, hasher: Hasher_T) -> None:
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_dict(obj: dict, hasher: Hasher_T) -> None:
     for key, value in obj.items():
-        update_cache_key(key, hasher)
-        update_cache_key(value, hasher)
+        add_content_to_fingerprint(key, hasher)
+        add_content_to_fingerprint(value, hasher)
 
 
-@update_cache_key.register
-def update_cache_key_type(obj: type, hasher: Hasher_T) -> None:
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_type(obj: type, hasher: Hasher_T) -> None:
     hasher.update(obj.__name__.encode())
 
 
-@update_cache_key.register
-def update_cache_key_sequence(obj: collections.abc.Iterable, hasher: Hasher_T) -> None:
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_sequence(obj: collections.abc.Iterable, hasher: Hasher_T) -> None:
     for item in obj:
-        update_cache_key(item, hasher)
+        add_content_to_fingerprint(item, hasher)
 
 
-@update_cache_key.register
-def update_cache_key_foast(obj: foast.LocatedNode, hasher: Hasher_T) -> None:
-    update_cache_key(obj.location, hasher)
-    update_cache_key(str(obj), hasher)
+@add_content_to_fingerprint.register
+def add_content_to_fingerprint_foast(obj: foast.LocatedNode, hasher: Hasher_T) -> None:
+    add_content_to_fingerprint(obj.location, hasher)
+    add_content_to_fingerprint(str(obj), hasher)
 
 
 # not registered to avoid circular dependencies
-def update_cache_key_fielop(
+def add_content_to_fingerprint_fielop(
     obj: decorator.FieldOperator | decorator.Program,
     hasher: Hasher_T,
 ) -> None:
     if hasattr(obj, "definition_stage"):
-        update_cache_key(obj.definition_stage, hasher)
+        add_content_to_fingerprint(obj.definition_stage, hasher)
     elif hasattr(obj, "foast_stage"):
-        update_cache_key(obj.foast_stage, hasher)
+        add_content_to_fingerprint(obj.foast_stage, hasher)
     elif hasattr(obj, "past_stage"):
-        update_cache_key(obj.past_stage, hasher)
-    update_cache_key(obj.backend, hasher)
+        add_content_to_fingerprint(obj.past_stage, hasher)
+    add_content_to_fingerprint(obj.backend, hasher)
