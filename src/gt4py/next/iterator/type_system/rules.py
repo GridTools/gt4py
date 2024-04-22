@@ -221,7 +221,7 @@ def reduce(op: TypeInferenceRule, init: ts.TypeSpec) -> TypeInferenceRule:
 
 @_register_type_inference_rule
 def shift(*offset_literals, offset_provider) -> TypeInferenceRule:
-    def apply_shift(it: it_ts.IteratorType):
+    def apply_shift(it: it_ts.IteratorType) -> it_ts.IteratorType:
         assert isinstance(it, it_ts.IteratorType)
         if it.position_dims == "unknown":  # nothing to do here
             return it

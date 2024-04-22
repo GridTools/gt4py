@@ -288,6 +288,12 @@ def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
 
     return type_rule
 
+class RemoveTypes(eve.NodeTranslator):
+    def visit_Node(self, node: ts.TypeSpec):
+        node = self.generic_visit(node)
+        if not isinstance(node, (itir.Literal, itir.Sym)):
+            node.type = None
+        return node
 
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
@@ -310,6 +316,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         inplace: bool = False,
         allow_undeclared_symbols: bool = False,
     ) -> T:
+        if not allow_undeclared_symbols:
+            node = RemoveTypes().visit(node)
+
         instance = cls(
             offset_provider=offset_provider,
             dimensions=(
