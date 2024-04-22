@@ -14,7 +14,6 @@
 
 from typing import Any
 
-import gt4py.eve as eve
 import gt4py.next.iterator.ir as itir
 import gt4py.next.iterator.pretty_parser as pretty_parser
 import gt4py.next.iterator.pretty_printer as pretty_printer

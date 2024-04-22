@@ -288,12 +288,14 @@ def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
 
     return type_rule
 
+
 class RemoveTypes(eve.NodeTranslator):
-    def visit_Node(self, node: ts.TypeSpec):
+    def visit_Node(self, node: itir.Node):
         node = self.generic_visit(node)
         if not isinstance(node, (itir.Literal, itir.Sym)):
             node.type = None
         return node
+
 
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
