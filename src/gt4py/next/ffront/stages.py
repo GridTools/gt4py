@@ -123,21 +123,6 @@ def add_content_to_fingerprint_stages(obj: Any, hasher: xtyping.HashlibAlgorithm
 
 
 @add_content_to_fingerprint.register
-def add_str_to_fingerprint(obj: str, hasher: xtyping.HashlibAlgorithm) -> None:
-    hasher.update(str(obj).encode())
-
-
-@add_content_to_fingerprint.register(int)
-@add_content_to_fingerprint.register(bool)
-@add_content_to_fingerprint.register(float)
-def add_builtin_to_fingerprint(
-    obj: None,
-    hasher: xtyping.HashlibAlgorithm,
-) -> None:
-    hasher.update(str(obj).encode())
-
-
-@add_content_to_fingerprint.register
 def add_func_to_fingerprint(obj: types.FunctionType, hasher: xtyping.HashlibAlgorithm) -> None:
     sourcedef = source_utils.SourceDefinition.from_function(obj)
     for item in sourcedef:
