@@ -166,4 +166,4 @@ class GtirToSDFG(eve.NodeVisitor):
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        fieldview_builder.write_to(stmt.target)
+        fieldview_builder.write_to(stmt.target, stmt.domain)

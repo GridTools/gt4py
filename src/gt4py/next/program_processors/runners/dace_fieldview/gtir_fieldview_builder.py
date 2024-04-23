@@ -106,10 +106,13 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
         dname = str(node.id)
         self._ctx.add_input_node(dname)
 
-    def write_to(self, node: itir.Expr) -> None:
+    def write_to(self, target_expr: itir.Expr, domain_expr: itir.Expr) -> None:
         result_nodes = self._ctx.input_nodes.copy()
         self._ctx = self._ctx.clone()
-        self.visit(node)
+        self.visit(target_expr)
+        assert isinstance(domain_expr, itir.FunCall)
+        domain = self._make_fieldop_domain(domain_expr)
+        write_subset = ",".join(f"{lb}:{ub}" for _, lb, ub in domain)
         # the target expression should only produce a set of access nodes (no tasklets, no output nodes)
         assert len(self._ctx.output_nodes) == 0
         output_nodes = self._ctx.input_nodes
@@ -119,11 +122,10 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
             target_array = self._ctx.sdfg.arrays[target_node]
             target_array.transient = False
 
-            # TODO: visit statement domain to define the memlet subset
             self._ctx.state.add_nedge(
                 self._ctx.node_mapping[tasklet_node],
                 self._ctx.node_mapping[target_node],
-                dace.Memlet.from_array(target_node, target_array),
+                dace.Memlet(data=target_node, subset=write_subset),
             )
 
     def _make_fieldop_domain(self, node: itir.FunCall) -> Sequence[Tuple[str, str, str]]:
