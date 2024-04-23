@@ -19,8 +19,6 @@ from gt4py.next.program_processors.runners import roundtrip
 
 
 backend = next_backend.Backend(
-    executor=roundtrip.RoundtripExecutorFactory(
-        dispatch_backend=roundtrip.default.executor
-    ),
+    executor=roundtrip.RoundtripExecutorFactory(dispatch_backend=roundtrip.default.executor),
     allocator=roundtrip.default.allocator,
 )
