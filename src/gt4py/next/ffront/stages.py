@@ -109,6 +109,10 @@ def add_content_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> No
     hasher.update(str(obj).encode())
 
 
+for t in (str, int):
+    add_content_to_fingerprint.register(t, add_content_to_fingerprint.registry[object])
+
+
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
 @add_content_to_fingerprint.register(FoastWithTypes)
