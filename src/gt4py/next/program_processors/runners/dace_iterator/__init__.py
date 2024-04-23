@@ -346,12 +346,26 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
         sdfg.arg_names.extend(list(self.__sdfg_closure__().keys()))
 
+        # Gather the input fields : DaCe performs halo exchange on them (if needed)
+        sdfg.GT4Py_Program_input_fields = [
+            str(inpt.id)
+            for closure in self.itir.closures
+            for inpt in closure.inputs
+            if str(inpt.id) in sdfg.arrays
+        ]
+
         # Gather the output/modified fields : DaCe performs halo exchange on them (if needed)
-        if isinstance(self.itir.closures[-1].output, itir.FunCall):
-            output = [str(arg.id) for arg in self.itir.closures[-1].output.args]  # type: ignore[attr-defined]
-        else:
-            output = [str(self.itir.closures[-1].output.id)]
-        sdfg.GT4Py_Program_output_fields = {op: fields[op].dims for op in output}
+        output_fields = []
+        for closure in self.itir.closures:
+            output = closure.output
+            if isinstance(output, itir.SymRef):
+                if str(output.id) in sdfg.arrays:
+                    output_fields.append(str(output.id))
+            else:
+                for arg in output.args:
+                    if str(arg.id) in sdfg.arrays:  # type: ignore[attr-defined]
+                        output_fields.append(str(arg.id))  # type: ignore[attr-defined]
+        sdfg.GT4Py_Program_output_fields = {output: fields[output].dims for output in output_fields}
 
         return sdfg
 
