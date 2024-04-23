@@ -12,62 +12,99 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Class to lower GTIR to SDFG.
+Class to lower GTIR to a DaCe SDFG.
 
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Dict
+from typing import Any, Dict, Mapping, Sequence, Tuple
 
 import dace
 
 from gt4py import eve
+from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
 from .gtir_fieldview_builder import GtirFieldviewBuilder as FieldviewBuilder
-from .utility import as_dace_type
+from .utility import as_dace_type, filter_connectivities
 
 
 class GtirToSDFG(eve.NodeVisitor):
-    """Provides translation capability from an GTIR program to a DaCe SDFG.
+    """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
-    of a GT4Py program as a sequence of `it.Stmt` statements.
+    of a GT4Py program as a sequence of `ir.Stmt` (aka statement) expressions.
     Each statement is translated to a taskgraph inside a separate state. The parent SDFG and
-    the translation state define the translation context, implemented by `ItirTaskgenContext`.
+    the translation state define the statement context, implemented by `FieldviewRegion`.
     Statement states are chained one after the other: potential concurrency between states should be
     extracted by the DaCe SDFG transformations.
-    The program translation keeps track of entry and exit states: each statement is translated as
-    a new state inserted just before the exit state. Note that statements with branch execution might
-    result in more than one state. However, each statement should provide a single termination state
-    (e.g. a join state for an if/else branch execution) on the exit state of the program SDFG.
+    The program translation keeps track of entry and exit states: each statement is supposed to extend
+    the SDFG but maintain the property of single exit state (that is no branching on leaf nodes).
+    Branching is allowed within the context of one statement, but in that case the statement should
+    terminate with a join state; the join state will represent the head state for next statement,
+    that is where to continue building the SDFG.
     """
 
     _param_types: list[ts.TypeSpec]
     _field_types: dict[str, ts.FieldType]
+    _offset_providers: Mapping[str, Any]
 
     def __init__(
         self,
         param_types: list[ts.TypeSpec],
+        offset_providers: dict[str, Connectivity | Dimension],
     ):
         self._param_types = param_types
         self._field_types = {}
+        self._offset_providers = offset_providers
+
+    def _make_array_shape_and_strides(
+        self, name: str, dims: Sequence[Dimension]
+    ) -> Tuple[Sequence[dace.symbol], Sequence[dace.symbol]]:
+        """
+        Parse field dimensions and allocate symbols for array shape and strides.
+
+        For local dimensions, the size is known at compile-time and therefore
+        the corresponding array shape dimension is set to an integer literal value.
+
+        Returns
+        -------
+        tuple(shape, strides)
+            The output tuple fields are arrays of dace symbolic expressions.
+        """
+        dtype = dace.int32
+        neighbor_tables = filter_connectivities(self._offset_providers)
+        shape = [
+            (
+                # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+                neighbor_tables[dim.value].max_neighbors
+                if dim.kind == DimensionKind.LOCAL
+                # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+                else dace.symbol(f"__{name}_size_{i}", dtype)
+            )
+            for i, dim in enumerate(dims)
+        ]
+        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i, _ in enumerate(dims)]
+        return shape, strides
 
     def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
         if isinstance(type_, ts.FieldType):
-            # TODO define shape based on domain and dtype based on type inference
-            shape = [10]
-            dtype = dace.float64
-            sdfg.add_array(name, shape, dtype, transient=False)
+            dtype = as_dace_type(type_.dtype)
+            # use symbolic shape, which allows to invoke the program with fields of different size;
+            # and symbolic strides, which enables decoupling the memory layout from generated code.
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, type_.dims)
+            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=False)
             self._field_types[name] = type_
+
         else:
             assert isinstance(type_, ts.ScalarType)
-            dtype = as_dace_type(type_.kind)
+            dtype = as_dace_type(type_)
+            # scalar arguments passed to the program are represented as symbols in DaCe SDFG
             sdfg.add_symbol(name, dtype)
 
     def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Dict[str, str]:
-        raise NotImplementedError()
+        raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
         return {}
 
     def visit_Program(self, node: itir.Program) -> dace.SDFG:

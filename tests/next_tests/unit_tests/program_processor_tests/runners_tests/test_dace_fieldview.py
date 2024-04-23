@@ -17,7 +17,8 @@ Test that ITIR can be lowered to SDFG.
 Note: this test module covers the fieldview flavour of ITIR.
 """
 
-from gt4py.next.common import Dimension
+from typing import Union
+from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
@@ -34,7 +35,19 @@ dace = pytest.importorskip("dace")
 
 N = 10
 DIM = Dimension("D")
-FTYPE = ts.FieldType(dims=[DIM], dtype=ts.ScalarKind.FLOAT64)
+FTYPE = ts.FieldType(dims=[DIM], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+FSYMBOLS = dict(
+    __w_size_0=N,
+    __w_stride_0=1,
+    __x_size_0=N,
+    __x_stride_0=1,
+    __y_size_0=N,
+    __y_stride_0=1,
+    __z_size_0=N,
+    __z_stride_0=1,
+    size=N,
+)
+OFFSET_PROVIDERS: dict[str, Connectivity | Dimension] = {}
 
 
 def test_gtir_sum2():
@@ -65,13 +78,13 @@ def test_gtir_sum2():
     c = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+        [FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
     )
     sdfg = sdfg_genenerator.visit(testee)
 
     assert isinstance(sdfg, dace.SDFG)
 
-    sdfg(x=a, y=b, z=c, size=N)
+    sdfg(x=a, y=b, z=c, **FSYMBOLS)
     assert np.allclose(c, (a + b))
 
 
@@ -118,11 +131,11 @@ def test_gtir_sum3():
     d = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)]
+        [FTYPE, FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
     )
     sdfg = sdfg_genenerator.visit(testee)
 
     assert isinstance(sdfg, dace.SDFG)
 
-    sdfg(x=a, y=b, w=c, z=d, size=N)
+    sdfg(x=a, y=b, w=c, z=d, **FSYMBOLS)
     assert np.allclose(d, (a + b + c))

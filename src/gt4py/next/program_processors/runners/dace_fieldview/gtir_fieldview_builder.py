@@ -42,6 +42,14 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
         self._ctx = FieldviewRegion(sdfg, state)
         self._field_types = field_types.copy()
 
+    def _add_local_storage(
+        self, name: str, type_: ts.FieldType, shape: list[str]
+    ) -> Tuple[str, dace.data.Array]:
+        self._field_types[name] = type_
+        dtype = as_dace_type(type_.dtype)
+        # TODO: for now we let DaCe decide the array strides, evaluate if symblic strides should be used
+        return self._ctx.sdfg.add_array(name, shape, dtype, transient=True, find_new_name=True)
+
     @staticmethod
     def create_ctx(func: Callable) -> Callable:
         def newf(
@@ -161,15 +169,11 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
 
         # TODO: use type inference to determine the result type
         type_ = ts.ScalarKind.FLOAT64
-        dtype = as_dace_type(type_)
-        shape = [f"{ub} - {lb}" for _, lb, ub in domain]
-        output_name, output_array = ctx.sdfg.add_array(
-            ctx.var_name(), shape, dtype, transient=True, find_new_name=True
-        )
+        field_dims = [Dimension(d) for d, _, _ in domain]
+        field_type = ts.FieldType(field_dims, ts.ScalarType(type_))
+        field_shape = [f"{ub} - {lb}" for _, lb, ub in domain]
+        output_name, output_array = self._add_local_storage(ctx.var_name(), field_type, field_shape)
         output_arrays = [(output_name, output_array)]
-        self._field_types[output_name] = ts.FieldType(
-            dims=[Dimension(d) for d, _, _ in domain], dtype=ts.ScalarType(type_)
-        )
 
         for (node, connector), (dname, _) in zip(self._ctx.input_connections, input_arrays):
             src_node = self._ctx.node_mapping[dname]
