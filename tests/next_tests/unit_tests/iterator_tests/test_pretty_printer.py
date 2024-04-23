@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def test_hmerge():
@@ -111,14 +112,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int64"),
-                            ir.Literal(value="2", type="int64"),
+                            im.literal("1", "int64"),
+                            im.literal("2", "int64"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int64"),
+                    im.literal("3", "int64"),
                 ],
             ),
-            ir.Literal(value="4", type="int64"),
+            im.literal("4", "int64"),
         ],
     )
     expected = "(1 + 2) × 3 / 4"
@@ -132,11 +133,11 @@ def test_associativity():
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[ir.Literal(value="1", type="int64"), ir.Literal(value="2", type="int64")],
+                args=[im.literal("1", "int64"), im.literal("2", "int64")],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[ir.Literal(value="3", type="int64"), ir.Literal(value="4", type="int64")],
+                args=[im.literal("3", "int64"), im.literal("4", "int64")],
             ),
         ],
     )
@@ -204,7 +205,7 @@ def test_shift():
 def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     expected = "x[42]"
     actual = pformat(testee)

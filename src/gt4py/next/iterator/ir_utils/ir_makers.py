@@ -64,7 +64,7 @@ def ensure_expr(literal_or_expr: Union[str, core_defs.Scalar, itir.Expr]) -> iti
     SymRef(id=SymbolRef('a'))
 
     >>> ensure_expr(3)
-    Literal(value='3', type='int32')
+    Literal(value='3', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
 
     >>> ensure_expr(itir.OffsetLiteral(value="i"))
     OffsetLiteral(value='i')
@@ -94,6 +94,13 @@ def ensure_offset(str_or_offset: Union[str, int, itir.OffsetLiteral]) -> itir.Of
     return str_or_offset
 
 
+def ensure_type(type_: str | ts.TypeSpec | None) -> ts.TypeSpec | None:
+    if isinstance(type_, str):
+        return ts.ScalarType(kind=getattr(ts.ScalarKind, type_.upper()))
+    assert isinstance(type_, ts.TypeSpec) or type_ is None
+    return type_
+
+
 class lambda_:
     """
     Create a lambda from params and an expression.
@@ -118,7 +125,7 @@ class call:
     Examples
     --------
     >>> call("plus")(1, 1)
-    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type='int32'), Literal(value='1', type='int32')])
+    FunCall(fun=SymRef(id=SymbolRef('plus')), args=[Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None)), Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))])
     """
 
     def __init__(self, expr):
@@ -291,8 +298,8 @@ def shift(offset, value=None):
     return call(call("shift")(*args))
 
 
-def literal(value: str, typename: str):
-    return itir.Literal(value=value, type=typename)
+def literal(value: str, typename: str) -> itir.Literal:
+    return itir.Literal(value=value, type=ensure_type(typename))
 
 
 def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
@@ -300,13 +307,13 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     Make a literal node from a value.
 
     >>> literal_from_value(1.0)
-    Literal(value='1.0', type='float64')
+    Literal(value='1.0', type=ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None))
     >>> literal_from_value(1)
-    Literal(value='1', type='int32')
+    Literal(value='1', type=ScalarType(kind=<ScalarKind.INT32: 32>, shape=None))
     >>> literal_from_value(2147483648)
-    Literal(value='2147483648', type='int64')
+    Literal(value='2147483648', type=ScalarType(kind=<ScalarKind.INT64: 64>, shape=None))
     >>> literal_from_value(True)
-    Literal(value='True', type='bool')
+    Literal(value='True', type=ScalarType(kind=<ScalarKind.BOOL: 1>, shape=None))
     """
     if not isinstance(val, core_defs.Scalar):  # type: ignore[arg-type] # mypy bug #11673
         raise ValueError(f"Value must be a scalar, got '{type(val).__name__}'.")
@@ -321,7 +328,7 @@ def literal_from_value(val: core_defs.Scalar) -> itir.Literal:
     typename = type_spec.kind.name.lower()
     assert typename in itir.TYPEBUILTINS
 
-    return itir.Literal(value=str(val), type=typename)
+    return literal(str(val), typename)
 
 
 def neighbors(offset, it):
