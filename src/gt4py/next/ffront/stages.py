@@ -109,6 +109,18 @@ def add_content_to_fingerprint(obj: Any, hasher: xtyping.HashlibAlgorithm) -> No
     hasher.update(str(obj).encode())
 
 
+@add_content_to_fingerprint.register
+def add_str_to_fingerprint(obj: str, hasher: xtyping.HashlibAlgorithm) -> None:
+    hasher.update(str(obj).encode())
+
+
+@add_content_to_fingerprint.register(int)
+@add_content_to_fingerprint.register(float)
+@add_content_to_fingerprint.register(bool)
+def add_builtin_to_fingerprint(obj: None, hasher: xtyping.HashlibAlgorithm) -> None:
+    hasher.update(str(obj).encode())
+
+
 @add_content_to_fingerprint.register(FieldOperatorDefinition)
 @add_content_to_fingerprint.register(FoastOperatorDefinition)
 @add_content_to_fingerprint.register(FoastWithTypes)
