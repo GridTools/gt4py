@@ -18,7 +18,7 @@ import dataclasses
 from typing import Any, Generic
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import allocators as next_allocators
+from gt4py.next import allocators as next_allocators, errors
 from gt4py.next.ffront import (
     foast_to_itir,
     foast_to_past,
@@ -32,6 +32,7 @@ from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import processor_interface as ppi
+from gt4py.next.type_system import type_info
 
 
 @dataclasses.dataclass(frozen=True)
@@ -158,11 +159,19 @@ class Backend(Generic[core_defs.DeviceTypeT]):
         if isinstance(
             program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
         ):
+            if not kwargs.get("out", None):
+                raise errors.MissingArgumentError(None, "out", True)
+            out = kwargs.pop("out")
             offset_provider = kwargs.pop("offset_provider")
+            if offset_provider is None:
+                raise errors.MissingArgumentError(None, "offset_provider", True)
             from_fieldop = kwargs.pop("from_fieldop")
+            args, kwargs = type_info.canonicalize_arguments(
+                self.transforms_fop.func_to_foast(program).foast_node.type, args, kwargs
+            )
             transforms_fop = self.transforms_fop.replace(
                 foast_inject_args=FopArgsInjector(
-                    args=args, kwargs=kwargs, from_fieldop=from_fieldop
+                    args=args, kwargs=kwargs | {"out": out}, from_fieldop=from_fieldop
                 )
             )
             program_call = transforms_fop(program)
