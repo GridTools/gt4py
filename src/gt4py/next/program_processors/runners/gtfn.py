@@ -109,8 +109,6 @@ def compilation_hash(otf_closure: stages.ProgramCall) -> int:
             content_hash(tuple(from_value(arg) for arg in otf_closure.args)),
             id(offset_provider) if offset_provider else None,
             otf_closure.kwargs.get("column_axis", None),
-            # TODO(tehrengruber): Remove `lift_mode` from call interface.
-            otf_closure.kwargs.get("lift_mode", None),
         )
     )
 
