@@ -19,7 +19,6 @@ import importlib.util
 import pathlib
 import tempfile
 import textwrap
-import warnings
 from collections.abc import Callable, Iterable
 from typing import Any, Optional
 
@@ -195,10 +194,11 @@ def execute_roundtrip(
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = config.DEBUG,
+    debug: Optional[bool] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
+    debug = debug if debug is not None else config.DEBUG
     fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
@@ -216,23 +216,17 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = config.DEBUG
+    debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
-        lift_mode = inp.kwargs.get("lift_mode", self.lift_mode)
-        if lift_mode != self.lift_mode:
-            warnings.warn(
-                f"Roundtrip Backend was configured for LiftMode `{self.lift_mode!s}`, but "
-                f"overriden to be {lift_mode!s} at runtime.",
-                stacklevel=2,
-            )
+        debug = config.DEBUG if self.debug is None else self.debug
         return fencil_generator(
             inp.program,
             offset_provider=inp.kwargs.get("offset_provider", None),
-            debug=self.debug,
-            lift_mode=lift_mode,
+            debug=debug,
+            lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
 
@@ -268,7 +262,14 @@ class RoundtripExecutorFactory(factory.Factory):
 
 
 executor = RoundtripExecutorFactory(name="roundtrip")
+executor_with_temporaries = RoundtripExecutorFactory(
+    name="roundtrip_with_temporaries",
+    roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
+)
 
-backend = next_backend.Backend(
+default = next_backend.Backend(
     executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+with_temporaries = next_backend.Backend(
+    executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
 )
