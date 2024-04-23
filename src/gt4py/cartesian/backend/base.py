@@ -450,6 +450,8 @@ def disabled(message: str, *, enabled_env_var: str) -> Callable[[Backend], Backe
             # Flag that it got disabled for register lookup
             cls.disabled = True  # type: ignore
             # Replace generate method with raise
+            if not hasattr(cls, "generate"):
+                raise ValueError(f"Coding error. Expected a generate method on {cls}")
             cls.generate = _no_generate  # type: ignore
             return cls
 
