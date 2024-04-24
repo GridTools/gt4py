@@ -13,12 +13,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Optional, Tuple, TypeAlias
+from typing import Tuple
 
 import dace
 
+from gt4py.next.type_system import type_specifications as ts
 
-class FieldviewRegion:
+from .utility import as_dace_type
+
+
+class GtirFieldviewContext:
     """Defines the dataflow scope of a fieldview expression.
 
     This class defines a region of the dataflow which represents a fieldview expression.
@@ -34,15 +38,10 @@ class FieldviewRegion:
     with all informatiion needed to construct the dataflow graph.
     """
 
-    Connection: TypeAlias = Tuple[dace.nodes.Node, Optional[str]]
-
     sdfg: dace.SDFG
     state: dace.SDFGState
+    field_types: dict[str, ts.FieldType]
     node_mapping: dict[str, dace.nodes.AccessNode]
-
-    # ordered list of input/output data nodes used by the field operator being built in this dataflow region
-    input_connections: list[Connection]
-    output_connections: list[Connection]
 
     input_nodes: list[str]
     output_nodes: list[str]
@@ -51,14 +50,14 @@ class FieldviewRegion:
         self,
         current_sdfg: dace.SDFG,
         current_state: dace.SDFGState,
+        current_field_types: dict[str, ts.FieldType],
     ):
         self.sdfg = current_sdfg
         self.state = current_state
+        self.field_types = current_field_types
         self.node_mapping = {}
         self.input_nodes = []
         self.output_nodes = []
-        self.input_connections = []
-        self.output_connections = []
 
     def _add_node(self, data: str) -> dace.nodes.AccessNode:
         assert data in self.sdfg.arrays
@@ -77,8 +76,16 @@ class FieldviewRegion:
         self.output_nodes.append(data)
         return self._add_node(data)
 
-    def clone(self) -> "FieldviewRegion":
-        ctx = FieldviewRegion(self.sdfg, self.state)
+    def add_local_storage(
+        self, name: str, type_: ts.FieldType, shape: list[str]
+    ) -> Tuple[str, dace.data.Array]:
+        self.field_types[name] = type_
+        dtype = as_dace_type(type_.dtype)
+        # TODO: for now we let DaCe decide the array strides, evaluate if symblic strides should be used
+        return self.sdfg.add_transient(name, shape, dtype, find_new_name=True)
+
+    def clone(self) -> "GtirFieldviewContext":
+        ctx = GtirFieldviewContext(self.sdfg, self.state, self.field_types)
         ctx.node_mapping = self.node_mapping
         return ctx
 
