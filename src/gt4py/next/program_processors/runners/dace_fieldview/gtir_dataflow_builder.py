@@ -41,6 +41,12 @@ def _make_fieldop(
     tasklet_subgraph: TaskletSubgraph,
     domain: Sequence[tuple[str, str, str]],
 ) -> None:
+    """Put a `TaskletSubgraph` object into a map scope.
+
+    This helper method represents a field operator as mapped tasklet.
+    The map range is given by the domain.
+    """
+
     # create ordered list of input nodes
     input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
     assert len(tasklet_subgraph.input_connections) == len(input_arrays)
@@ -95,6 +101,12 @@ def _make_fieldop(
 def _make_fieldop_domain(
     ctx: DataflowContext, node: itir.FunCall
 ) -> Sequence[tuple[str, str, str]]:
+    """Visits the domain of a field operator.
+
+    Returns
+    -------
+    A list of tuples(dimension_name, lower_bound_value, upper_bound_value)
+    """
     assert cpm.is_call_to(node, ["cartesian_domain", "unstructured_domain"])
 
     domain = []
@@ -162,6 +174,10 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         self._ctx.add_input_node(dname)
 
     def write_to(self, target_expr: itir.Expr, domain_expr: itir.Expr) -> None:
+        """Write the current set of input nodes to external nodes.
+
+        The target arrays are supposed to be external, therefore non-transient.
+        """
         assert len(self._ctx.output_nodes) == 0
 
         # TODO: add support for tuple return
@@ -175,7 +191,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
         for tasklet_node, target_node in zip(self._ctx.input_nodes, self._ctx.output_nodes):
             target_array = self._ctx.sdfg.arrays[target_node]
-            target_array.transient = False
+            assert target_array.transient == False
 
             self._ctx.state.add_nedge(
                 self._ctx.node_mapping[tasklet_node],
