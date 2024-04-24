@@ -67,9 +67,8 @@ def empty(
         Initialize a field in one dimension with a backend and a range domain:
 
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=roundtrip.backend)
+        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
         >>> a.shape
         (7,)
 
@@ -109,9 +108,8 @@ def zeros(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.zeros({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
     field = empty(
@@ -137,9 +135,8 @@ def ones(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.ones({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
     field = empty(
@@ -171,9 +168,8 @@ def full(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.full({IDim: 3}, 5, allocator=roundtrip.backend).ndarray
+        >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
     field = empty(

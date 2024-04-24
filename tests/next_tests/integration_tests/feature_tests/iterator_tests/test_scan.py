@@ -20,11 +20,11 @@ from gt4py.next.iterator.builtins import cartesian_domain, deref, named_range, s
 from gt4py.next.iterator.runtime import fundef, offset
 
 from next_tests.integration_tests.cases import IDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 @pytest.mark.uses_index_fields
-def test_scan_in_stencil(program_processor, lift_mode):
+def test_scan_in_stencil(program_processor):
     program_processor, validate = program_processor
 
     isize = 1
@@ -54,7 +54,6 @@ def test_scan_in_stencil(program_processor, lift_mode):
         program_processor,
         inp,
         out=out,
-        lift_mode=lift_mode,
         offset_provider={"Koff": KDim},
         column_axis=KDim,
     )
