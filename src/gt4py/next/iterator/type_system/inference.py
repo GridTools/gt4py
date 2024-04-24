@@ -140,9 +140,57 @@ def on_inferred(
 @dataclasses.dataclass
 class ObservableTypeInferenceRule:
     """
-    This class wraps a raw type inference rule to handle typing of functions.
+    This class wraps a raw type inference rule to handle typing of nodes representing functions.
 
-    TODO: As functions in ITIR are represented by type inference rules, i.e. regular callables,
+    The type inference algorithm represents functions as type inference rules, i.e. regular
+    callables that given a set of arguments compute / deduce the return type. The return type of
+    functions, let it be a builtin like ``itir.plus`` or a user defined lambda function, is only
+    defined when all its arguments are typed.
+
+    Let's start with a small example to examplify this. The power function has a rather simple
+    type inference rule, where the output type is simply the type of the base.
+
+    >>> def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
+    ...     return base
+    >>> float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    >>> int_type = ts.ScalarType(kind=ts.ScalarKind.INT64)
+    >>> power(float_type, int_type)
+    ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
+
+    Now, consider a simple lambda function that, using the power builtin squares its argument. A
+    type inference rule for this function is simple to formulate, but merely gives us the return
+    type of the function.
+
+    >>> from gt4py.next.iterator.ir_utils import ir_makers as im
+    >>> square_func = im.lambda_("base")(im.call("power")("base", 2))
+    >>> square_func_type_rule = lambda base: power(base, int_type)
+    >>> square_func_type_rule(float_type)
+    ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
+
+    Note that without a corresponding call the function itself can not be fully typed and as such
+    the type inference algorithm has to defer typing until then. This task is handled transparently
+    (in the sense that an ``ObservableTypeInferenceRule`` is a type inference rule again) by this
+    class. Given a type inference rule and a node we obtain a new type inference rule that when
+    evaluated stores the type of the function in the node.
+
+    >>> o_type_rule = ObservableTypeInferenceRule(
+    ...     type_rule=square_func_type_rule,
+    ...     offset_provider={},
+    ...     node=square_func,
+    ...     store_inferred_type_in_node=True,
+    ... )
+    >>> o_type_rule(float_type)
+    ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
+    >>> square_func.type == ts.FunctionType(
+    ...     pos_only_args=[float_type], pos_or_kw_args={}, kw_only_args={}, returns=float_type
+    ... )
+    True
+
+    Note that this is a simple example where the type of the arguments and the return value is
+    available when the function is called. In order to support higher-order functions, where
+    arguments or return value are functions itself (i.e. passed as type rules) this class provides
+    additional functionality for multiple typing rules to notify each other about a type being
+    ready.
     """
 
     #: type rule that given a set of types or type rules returns the return type or a type rule
@@ -188,7 +236,9 @@ class ObservableTypeInferenceRule:
         else:
             self.callbacks.append(cb)
 
-    def __call__(self, *args) -> ts.TypeSpec | rules.TypeInferenceRule:
+    def __call__(
+        self, *args: Union[ts.TypeSpec, "ObservableTypeInferenceRule"]
+    ) -> Union[ts.TypeSpec, "ObservableTypeInferenceRule"]:
         if "offset_provider" in inspect.signature(self.type_rule).parameters:
             return_type = self.type_rule(*args, offset_provider=self.offset_provider)
         else:
@@ -240,9 +290,6 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
     return {dim.value: dim for dim in _get_dimensions(types)}
 
 
-T = TypeVar("T", bound=itir.Node)
-
-
 def _convert_closure_input_to_iterator(
     domain: it_ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
@@ -283,7 +330,7 @@ def _convert_closure_input_to_iterator(
 
 def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
     def type_rule(*args, **kwargs):
-        assert type_info.accepts_args(fun_type, with_args=args, with_kwargs=kwargs)
+        assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
         return fun_type.returns
 
     return type_rule
@@ -297,14 +344,19 @@ class RemoveTypes(eve.NodeTranslator):
         return node
 
 
+T = TypeVar("T", bound=itir.Node)
+
+
 @dataclasses.dataclass
 class ITIRTypeInference(eve.NodeTranslator):
     """
-    TODO
+    ITIR type inference algorithm.
+
+    See :py:method:ITIRTypeInference.apply for more details.
     """
 
     offset_provider: common.OffsetProvider
-    #: Mapping from a dimension name to the actual dimension instance
+    #: Mapping from a dimension name to the actual dimension instance.
     dimensions: dict[str, common.Dimension]
     #: Allow sym refs to symbols that have not been declared. Mostly used in testing.
     allow_undeclared_symbols: bool
@@ -318,6 +370,18 @@ class ITIRTypeInference(eve.NodeTranslator):
         inplace: bool = False,
         allow_undeclared_symbols: bool = False,
     ) -> T:
+        """
+        Infer the type of ``node`` and its sub-nodes.
+
+        Arguments:
+            node: The :py:class:`itir.Node` to infer the types of.
+
+        Keyword Arguments:
+            offset_provider: Offset provider dictionary.
+            inplace: Write types directly to the given ``node`` instead of returning a copy.
+            allow_undeclared_symbols: Allow references to symbols that don't have a corresponding
+              declaration. This is useful for testing or inference on partially inferred sub-nodes.
+        """
         if not allow_undeclared_symbols:
             node = RemoveTypes().visit(node)
 
@@ -369,7 +433,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
             else:
                 raise AssertionError(
-                    f"Expected a 'TypeSpec' or 'ObservableTypeInferenceRule', but got "
+                    f"Expected a 'TypeSpec', `callable` or 'ObservableTypeInferenceRule', but got "
                     f"`{type(result).__name__}`"
                 )
         return result
@@ -387,7 +451,9 @@ class ITIRTypeInference(eve.NodeTranslator):
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
         return it_ts.FencilType(params=list(params.values()), closures=closures)
 
-    def visit_FencilWithTemporaries(self, node: global_tmps.FencilWithTemporaries, *, ctx):
+    def visit_FencilWithTemporaries(
+        self, node: global_tmps.FencilWithTemporaries, *, ctx
+    ) -> it_ts.FencilType:
         # TODO(tehrengruber): This implementation is not very appealing. Since we are about to
         #  refactor the PR anyway this is fine for now.
         params: dict[str, ts.DataType] = {}
@@ -403,9 +469,10 @@ class ITIRTypeInference(eve.NodeTranslator):
             if fencil_param.id in tmps:
                 fencil_param.type = tmps[fencil_param.id]
         self.visit(node.fencil, ctx=ctx)
+        assert isinstance(node.fencil.type, it_ts.FencilType)
         return node.fencil.type
 
-    def visit_Temporary(self, node: itir.Temporary, *, ctx):
+    def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
         assert isinstance(domain, it_ts.DomainType)
         assert node.dtype
@@ -494,6 +561,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     def visit_FunCall(
         self, node: itir.FunCall, *, ctx: dict[str, ts.TypeSpec]
     ) -> ts.TypeSpec | rules.TypeInferenceRule:
+        # grammar builtins
         if is_call_to(node, "cast_"):
             value, type_constructor = node.args
             assert (
