@@ -26,7 +26,7 @@ import factory
 
 from gt4py.eve import codegen
 from gt4py.eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
-from gt4py.next import allocators as next_allocators, backend as next_backend, common
+from gt4py.next import allocators as next_allocators, backend as next_backend, common, config
 from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transforms
 from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
 from gt4py.next.otf import stages, workflow
@@ -86,7 +86,7 @@ def ${id}(${','.join(params)}):
             + f"\n    {node.fencil.id}({args}, **kwargs)\n"
         )
 
-    def visit_Temporary(self, node: gtmps_transform.Temporary, **kwargs: Any) -> str:
+    def visit_Temporary(self, node: itir.Temporary, **kwargs: Any) -> str:
         assert (
             isinstance(node.domain, itir.FunCall)
             and isinstance(node.domain.fun, itir.SymRef)
@@ -102,8 +102,6 @@ def ${id}(${','.join(params)}):
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
-
-_BACKEND_NAME = "roundtrip"
 
 _FENCIL_CACHE: dict[int, Callable] = {}
 
@@ -131,6 +129,8 @@ def fencil_generator(
     #  caching mechanism
     cache_key = hash((ir, lift_mode, debug, use_embedded, tuple(offset_provider.items())))
     if cache_key in _FENCIL_CACHE:
+        if debug:
+            print(f"Using cached fencil for key {cache_key}")
         return _FENCIL_CACHE[cache_key]
 
     ir = itir_transforms.apply_common_transforms(
@@ -209,10 +209,11 @@ def execute_roundtrip(
     *args: Any,
     column_axis: Optional[common.Dimension] = None,
     offset_provider: dict[str, embedded.NeighborTableOffsetProvider],
-    debug: bool = False,
+    debug: Optional[bool] = None,
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE,
     dispatch_backend: Optional[ppi.ProgramExecutor] = None,
 ) -> None:
+    debug = debug if debug is not None else config.DEBUG
     fencil = fencil_generator(
         ir,
         offset_provider=offset_provider,
@@ -230,15 +231,16 @@ def execute_roundtrip(
 
 @dataclasses.dataclass(frozen=True)
 class Roundtrip(workflow.Workflow[stages.ProgramCall, stages.CompiledProgram]):
-    debug: bool = False
+    debug: Optional[bool] = None
     lift_mode: itir_transforms.LiftMode = itir_transforms.LiftMode.FORCE_INLINE
     use_embedded: bool = True
 
     def __call__(self, inp: stages.ProgramCall) -> stages.CompiledProgram:
+        debug = config.DEBUG if self.debug is None else self.debug
         return fencil_generator(
             inp.program,
             offset_provider=inp.kwargs.get("offset_provider", None),
-            debug=self.debug,
+            debug=debug,
             lift_mode=self.lift_mode,
             use_embedded=self.use_embedded,
         )
@@ -275,7 +277,14 @@ class RoundtripExecutorFactory(factory.Factory):
 
 
 executor = RoundtripExecutorFactory(name="roundtrip")
+executor_with_temporaries = RoundtripExecutorFactory(
+    name="roundtrip_with_temporaries",
+    roundtrip_workflow=RoundtripFactory(lift_mode=itir_transforms.LiftMode.USE_TEMPORARIES),
+)
 
-backend = next_backend.Backend(
+default = next_backend.Backend(
     executor=executor, allocator=next_allocators.StandardCPUFieldBufferAllocator()
+)
+with_temporaries = next_backend.Backend(
+    executor=executor_with_temporaries, allocator=next_allocators.StandardCPUFieldBufferAllocator()
 )

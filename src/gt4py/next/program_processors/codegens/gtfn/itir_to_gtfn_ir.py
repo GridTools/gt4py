@@ -16,23 +16,22 @@ import dataclasses
 from typing import Any, ClassVar, Iterable, Optional, Type, TypeGuard, Union
 
 import gt4py.eve as eve
+from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
-from gt4py.eve.utils import UIDGenerator
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
     CartesianDomain,
     CastExpr,
-    FencilDefinition,
     FunCall,
     FunctionDefinition,
     IntegralConstant,
     Lambda,
     Literal,
     OffsetLiteral,
+    Program,
     Scan,
     ScanExecution,
     ScanPassDefinition,
@@ -46,6 +45,7 @@ from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     UnstructuredDomain,
 )
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir_common import Expr, Node, Sym, SymRef
+from gt4py.next.type_system import type_info
 
 
 def pytype_to_cpptype(t: str) -> Optional[str]:
@@ -66,8 +66,8 @@ _vertical_dimension = "gtfn::unstructured::dim::vertical"
 _horizontal_dimension = "gtfn::unstructured::dim::horizontal"
 
 
-def _get_domains(closures: Iterable[itir.StencilClosure]) -> Iterable[itir.FunCall]:
-    return (c.domain for c in closures)
+def _get_domains(node: Iterable[itir.Stmt]) -> Iterable[itir.FunCall]:
+    return eve_utils.xiter(node).if_isinstance(itir.SetAt).getattr("domain").to_set()
 
 
 def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
@@ -78,8 +78,8 @@ def _extract_grid_type(domain: itir.FunCall) -> common.GridType:
         return common.GridType.UNSTRUCTURED
 
 
-def _get_gridtype(closures: list[itir.StencilClosure]) -> common.GridType:
-    domains = _get_domains(closures)
+def _get_gridtype(body: list[itir.Stmt]) -> common.GridType:
+    domains = _get_domains(body)
     grid_types = {_extract_grid_type(d) for d in domains}
     if len(grid_types) != 1:
         raise ValueError(
@@ -97,9 +97,9 @@ def _name_from_named_range(named_range_call: itir.FunCall) -> str:
 
 
 def _collect_dimensions_from_domain(
-    closures: Iterable[itir.StencilClosure],
+    body: Iterable[itir.Stmt],
 ) -> dict[str, TagDefinition]:
-    domains = _get_domains(closures)
+    domains = _get_domains(body)
     offset_definitions = {}
     for domain in domains:
         if domain.fun == itir.SymRef(id="cartesian_domain"):
@@ -184,7 +184,7 @@ def _collect_offset_definitions(
 
 
 def _literal_as_integral_constant(node: itir.Literal) -> IntegralConstant:
-    assert node.type in itir.INTEGER_BUILTINS
+    assert type_info.is_integer(node.type)
     return IntegralConstant(value=int(node.value))
 
 
@@ -194,8 +194,16 @@ def _is_scan(node: itir.Node) -> TypeGuard[itir.FunCall]:
 
 def _bool_from_literal(node: itir.Node) -> bool:
     assert isinstance(node, itir.Literal)
-    assert node.type == "bool" and node.value in ("True", "False")
+    assert type_info.is_logical(node.type) and node.value in ("True", "False")
     return node.value == "True"
+
+
+def _is_applied_as_fieldop(arg: itir.Expr) -> TypeGuard[itir.FunCall]:
+    return (
+        isinstance(arg, itir.FunCall)
+        and isinstance(arg.fun, itir.FunCall)
+        and arg.fun.fun == itir.SymRef(id="as_fieldop")
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -224,26 +232,22 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
 
     # we use one UID generator per instance such that the generated ids are
     # stable across multiple runs (required for caching to properly work)
-    uids: UIDGenerator = dataclasses.field(init=False, repr=False, default_factory=UIDGenerator)
+    uids: eve_utils.UIDGenerator = dataclasses.field(
+        init=False, repr=False, default_factory=eve_utils.UIDGenerator
+    )
 
     @classmethod
     def apply(
         cls,
-        node: itir.FencilDefinition | global_tmps.FencilWithTemporaries,
+        node: itir.Program,
         *,
         offset_provider: dict,
         column_axis: Optional[common.Dimension],
-    ) -> FencilDefinition:
-        if isinstance(node, global_tmps.FencilWithTemporaries):
-            fencil_definition = node.fencil
-        elif isinstance(node, itir.FencilDefinition):
-            fencil_definition = node
-        else:
-            raise TypeError(
-                f"Expected a 'FencilDefinition' or 'FencilWithTemporaries', got '{type(node).__name__}'."
-            )
+    ) -> Program:
+        if not isinstance(node, itir.Program):
+            raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
-        grid_type = _get_gridtype(fencil_definition.closures)
+        grid_type = _get_gridtype(node.body)
         return cls(
             offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type
         ).visit(node)
@@ -293,7 +297,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )
 
     def visit_Literal(self, node: itir.Literal, **kwargs: Any) -> Literal:
-        return Literal(value=node.value, type=node.type)
+        return Literal(value=node.value, type=node.type.kind.name.lower())
 
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs: Any) -> OffsetLiteral:
         return OffsetLiteral(value=node.value)
@@ -434,44 +438,6 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
             return SidComposite(values=[self._visit_output_argument(v) for v in node.args])
         raise ValueError("Expected 'SymRef' or 'make_tuple' in output argument.")
 
-    def visit_StencilClosure(
-        self, node: itir.StencilClosure, extracted_functions: list, **kwargs: Any
-    ) -> Union[ScanExecution, StencilExecution]:
-        backend = Backend(domain=self.visit(node.domain, stencil=node.stencil, **kwargs))
-        if _is_scan(node.stencil):
-            scan_id = self.uids.sequential_id(prefix="_scan")
-            scan_lambda = self.visit(node.stencil.args[0], **kwargs)
-            forward = _bool_from_literal(node.stencil.args[1])
-            scan_def = ScanPassDefinition(
-                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
-            )
-            extracted_functions.append(scan_def)
-            scan = Scan(
-                function=SymRef(id=scan_id),
-                output=0,
-                inputs=[i + 1 for i, _ in enumerate(node.inputs)],
-                init=self.visit(node.stencil.args[2], **kwargs),
-            )
-            column_axis = self.column_axis
-            assert isinstance(column_axis, common.Dimension)
-            return ScanExecution(
-                backend=backend,
-                scans=[scan],
-                args=[self._visit_output_argument(node.output), *self.visit(node.inputs)],
-                axis=SymRef(id=column_axis.value),
-            )
-        return StencilExecution(
-            stencil=self.visit(
-                node.stencil,
-                force_function_extraction=True,
-                extracted_functions=extracted_functions,
-                **kwargs,
-            ),
-            output=self._visit_output_argument(node.output),
-            inputs=self.visit(node.inputs, **kwargs),
-            backend=backend,
-        )
-
     @staticmethod
     def _merge_scans(
         executions: list[Union[StencilExecution, ScanExecution]],
@@ -517,29 +483,72 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
                 res.append(execution)
         return res
 
-    def visit_FencilDefinition(
-        self, node: itir.FencilDefinition, **kwargs: Any
-    ) -> FencilDefinition:
+    def visit_Stmt(self, node: itir.Stmt, **kwargs: Any) -> None:
+        raise AssertionError("All Stmts need to be handled explicitly.")
+
+    def visit_SetAt(
+        self, node: itir.SetAt, *, extracted_functions: list, **kwargs: Any
+    ) -> Union[StencilExecution, ScanExecution]:
+        assert _is_applied_as_fieldop(node.expr)
+        stencil = node.expr.fun.args[0]  # type: ignore[attr-defined] # checked in assert
+        domain = node.domain
+        inputs = node.expr.args
+        backend = Backend(domain=self.visit(domain, stencil=stencil, **kwargs))
+        if _is_scan(stencil):
+            scan_id = self.uids.sequential_id(prefix="_scan")
+            scan_lambda = self.visit(stencil.args[0], **kwargs)
+            forward = _bool_from_literal(stencil.args[1])
+            scan_def = ScanPassDefinition(
+                id=scan_id, params=scan_lambda.params, expr=scan_lambda.expr, forward=forward
+            )
+            extracted_functions.append(scan_def)
+            scan = Scan(
+                function=SymRef(id=scan_id),
+                output=0,
+                inputs=[i + 1 for i, _ in enumerate(inputs)],
+                init=self.visit(stencil.args[2], **kwargs),
+            )
+            column_axis = self.column_axis
+            assert isinstance(column_axis, common.Dimension)
+            return ScanExecution(
+                backend=backend,
+                scans=[scan],
+                args=[self._visit_output_argument(node.target), *self.visit(inputs)],
+                axis=SymRef(id=column_axis.value),
+            )
+        return StencilExecution(
+            stencil=self.visit(
+                stencil,
+                force_function_extraction=True,
+                extracted_functions=extracted_functions,
+                **kwargs,
+            ),
+            output=self._visit_output_argument(node.target),
+            inputs=self.visit(inputs, **kwargs),
+            backend=backend,
+        )
+
+    def visit_Program(self, node: itir.Program, **kwargs: Any) -> Program:
         extracted_functions: list[Union[FunctionDefinition, ScanPassDefinition]] = []
-        executions = self.visit(node.closures, extracted_functions=extracted_functions)
+        executions = self.visit(node.body, extracted_functions=extracted_functions)
         executions = self._merge_scans(executions)
         function_definitions = self.visit(node.function_definitions) + extracted_functions
         offset_definitions = {
-            **_collect_dimensions_from_domain(node.closures),
+            **_collect_dimensions_from_domain(node.body),
             **_collect_offset_definitions(node, self.grid_type, self.offset_provider),
         }
-        return FencilDefinition(
+        return Program(
             id=SymbolName(node.id),
             params=self.visit(node.params),
             executions=executions,
             grid_type=self.grid_type,
             offset_definitions=list(offset_definitions.values()),
             function_definitions=function_definitions,
-            temporaries=[],
+            temporaries=self.visit(node.declarations, params=[p.id for p in node.params]),
         )
 
     def visit_Temporary(
-        self, node: global_tmps.Temporary, *, params: list, **kwargs: Any
+        self, node: itir.Temporary, *, params: list, **kwargs: Any
     ) -> TemporaryAllocation:
         def dtype_to_cpp(x: int | tuple | str) -> str:
             if isinstance(x, int):
@@ -556,18 +565,4 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         )  # TODO(havogt): this looks weird, consider refactoring
         return TemporaryAllocation(
             id=node.id, dtype=dtype_to_cpp(node.dtype), domain=self.visit(node.domain, **kwargs)
-        )
-
-    def visit_FencilWithTemporaries(
-        self, node: global_tmps.FencilWithTemporaries, **kwargs: Any
-    ) -> FencilDefinition:
-        fencil = self.visit(node.fencil, **kwargs)
-        return FencilDefinition(
-            id=fencil.id,
-            params=self.visit(node.params),
-            executions=fencil.executions,
-            grid_type=fencil.grid_type,
-            offset_definitions=fencil.offset_definitions,
-            function_definitions=fencil.function_definitions,
-            temporaries=self.visit(node.tmps, params=[p.id for p in node.params]),
         )

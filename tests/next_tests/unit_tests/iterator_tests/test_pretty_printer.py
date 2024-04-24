@@ -14,6 +14,7 @@
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.pretty_printer import PrettyPrinter, pformat
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 def test_hmerge():
@@ -111,14 +112,14 @@ def test_arithmetic():
                     ir.FunCall(
                         fun=ir.SymRef(id="plus"),
                         args=[
-                            ir.Literal(value="1", type="int64"),
-                            ir.Literal(value="2", type="int64"),
+                            im.literal("1", "int64"),
+                            im.literal("2", "int64"),
                         ],
                     ),
-                    ir.Literal(value="3", type="int64"),
+                    im.literal("3", "int64"),
                 ],
             ),
-            ir.Literal(value="4", type="int64"),
+            im.literal("4", "int64"),
         ],
     )
     expected = "(1 + 2) × 3 / 4"
@@ -132,11 +133,11 @@ def test_associativity():
         args=[
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[ir.Literal(value="1", type="int64"), ir.Literal(value="2", type="int64")],
+                args=[im.literal("1", "int64"), im.literal("2", "int64")],
             ),
             ir.FunCall(
                 fun=ir.SymRef(id="plus"),
-                args=[ir.Literal(value="3", type="int64"), ir.Literal(value="4", type="int64")],
+                args=[im.literal("3", "int64"), im.literal("4", "int64")],
             ),
         ],
     )
@@ -155,6 +156,13 @@ def test_deref():
 def test_lift():
     testee = ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="x")])
     expected = "↑x"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+def test_as_fieldop():
+    testee = ir.FunCall(fun=ir.SymRef(id="as_fieldop"), args=[ir.SymRef(id="x")])
+    expected = "⇑x"
     actual = pformat(testee)
     assert actual == expected
 
@@ -197,7 +205,7 @@ def test_shift():
 def test_tuple_get():
     testee = ir.FunCall(
         fun=ir.SymRef(id="tuple_get"),
-        args=[ir.Literal(value="42", type=ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
+        args=[im.literal("42", ir.INTEGER_INDEX_BUILTIN), ir.SymRef(id="x")],
     )
     expected = "x[42]"
     actual = pformat(testee)
@@ -287,6 +295,13 @@ def test_function_definition():
     assert actual == expected
 
 
+def test_temporary():
+    testee = ir.Temporary(id="t", domain=ir.SymRef(id="domain"), dtype="float64")
+    expected = "t = temporary(domain=domain, dtype=float64);"
+    actual = pformat(testee)
+    assert actual == expected
+
+
 def test_stencil_closure():
     testee = ir.StencilClosure(
         domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
@@ -299,6 +314,18 @@ def test_stencil_closure():
     assert actual == expected
 
 
+def test_set_at():
+    testee = ir.SetAt(
+        expr=ir.SymRef(id="x"),
+        domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+        target=ir.SymRef(id="y"),
+    )
+    expected = "y @ cartesian_domain() ← x;"
+    actual = pformat(testee)
+    assert actual == expected
+
+
+# TODO(havogt): remove after refactoring.
 def test_fencil_definition():
     testee = ir.FencilDefinition(
         id="f",
@@ -317,4 +344,31 @@ def test_fencil_definition():
     )
     actual = pformat(testee)
     expected = "f(d, x, y) {\n  g = λ(x) → x;\n  y ← (deref)(x) @ cartesian_domain();\n}"
+    assert actual == expected
+
+
+def test_program():
+    testee = ir.Program(
+        id="f",
+        function_definitions=[
+            ir.FunctionDefinition(id="g", params=[ir.Sym(id="x")], expr=ir.SymRef(id="x"))
+        ],
+        params=[ir.Sym(id="d"), ir.Sym(id="x"), ir.Sym(id="y")],
+        declarations=[
+            ir.Temporary(
+                id="tmp",
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                dtype="float64",
+            ),
+        ],
+        body=[
+            ir.SetAt(
+                expr=ir.SymRef(id="x"),
+                domain=ir.FunCall(fun=ir.SymRef(id="cartesian_domain"), args=[]),
+                target=ir.SymRef(id="y"),
+            )
+        ],
+    )
+    actual = pformat(testee)
+    expected = "f(d, x, y) {\n  g = λ(x) → x;\n  tmp = temporary(domain=cartesian_domain(), dtype=float64);\n  y @ cartesian_domain() ← x;\n}"
     assert actual == expected
