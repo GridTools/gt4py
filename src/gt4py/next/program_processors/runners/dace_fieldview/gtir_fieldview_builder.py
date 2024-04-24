@@ -31,6 +31,11 @@ from .gtir_tasklet_codegen import (
 )
 
 
+REGISTERED_TASKGENS: list[type[TaskletCodegen]] = [
+    GtirTaskletArithmetic,
+]
+
+
 def _make_fieldop(
     ctx: FieldviewContext,
     tasklet_subgraph: TaskletSubgraph,
@@ -113,7 +118,6 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
     """Translates GTIR fieldview operator to some kind of map scope in DaCe SDFG."""
 
     _ctx: FieldviewContext
-    _registered_taskgens: list[TaskletCodegen] = [GtirTaskletArithmetic]
 
     def __init__(
         self, sdfg: dace.SDFG, state: dace.SDFGState, field_types: dict[str, ts.FieldType]
@@ -121,7 +125,7 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
         self._ctx = FieldviewContext(sdfg, state, field_types.copy())
 
     def _get_tasklet_codegen(self, lambda_node: itir.Lambda) -> Optional[TaskletCodegen]:
-        for taskgen in self._registered_taskgens:
+        for taskgen in REGISTERED_TASKGENS:
             if taskgen.can_handle(lambda_node):
                 return taskgen(self._ctx)
         return None
@@ -138,7 +142,7 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
             assert isinstance(fun_node.args[0], itir.Lambda)
             taskgen = self._get_tasklet_codegen(fun_node.args[0])
             if not taskgen:
-                raise NotImplementedError(f"Failed to lower 'as_fieldop' node to SDFG ({node}).")
+                raise NotImplementedError(f"Unsupported 'as_fieldop' node ({node}).")
             # the domain of the field operator is passed as second argument
             assert isinstance(fun_node.args[1], itir.FunCall)
             domain = _make_fieldop_domain(self._ctx, fun_node.args[1])
