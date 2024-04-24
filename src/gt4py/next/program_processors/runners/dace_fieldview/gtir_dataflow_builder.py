@@ -191,7 +191,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
         for tasklet_node, target_node in zip(self._ctx.input_nodes, self._ctx.output_nodes):
             target_array = self._ctx.sdfg.arrays[target_node]
-            assert target_array.transient == False
+            assert not target_array.transient
 
             self._ctx.state.add_nedge(
                 self._ctx.node_mapping[tasklet_node],
