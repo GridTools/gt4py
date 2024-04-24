@@ -17,7 +17,7 @@ Class to lower GTIR to a DaCe SDFG.
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Dict, Mapping, Sequence, Tuple
+from typing import Any, Mapping, Sequence
 
 import dace
 
@@ -26,7 +26,7 @@ from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
-from .gtir_fieldview_builder import GtirFieldviewBuilder as FieldviewBuilder
+from .gtir_dataflow_builder import GtirDataflowBuilder as DataflowBuilder
 from .utility import as_dace_type, filter_connectivities
 
 
@@ -61,7 +61,7 @@ class GtirToSDFG(eve.NodeVisitor):
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[Dimension]
-    ) -> Tuple[Sequence[dace.symbol], Sequence[dace.symbol]]:
+    ) -> tuple[Sequence[dace.symbol], Sequence[dace.symbol]]:
         """
         Parse field dimensions and allocate symbols for array shape and strides.
 
@@ -103,7 +103,7 @@ class GtirToSDFG(eve.NodeVisitor):
             # scalar arguments passed to the program are represented as symbols in DaCe SDFG
             sdfg.add_symbol(name, dtype)
 
-    def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Dict[str, str]:
+    def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Mapping[str, str]:
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
         return {}
 
@@ -161,7 +161,7 @@ class GtirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        fieldview_builder = FieldviewBuilder(sdfg, state, self._field_types)
+        fieldview_builder = DataflowBuilder(sdfg, state, self._field_types)
         fieldview_builder.visit(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression

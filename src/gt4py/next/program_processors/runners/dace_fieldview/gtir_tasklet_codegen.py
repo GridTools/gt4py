@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Optional, Tuple
+from typing import Optional, final
 
 import dace
 
@@ -21,7 +21,7 @@ from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts
 
-from .gtir_fieldview_context import GtirFieldviewContext as FieldviewContext
+from .gtir_dataflow_context import GtirDataflowContext as DataflowContext
 
 
 @dataclasses.dataclass(frozen=True)
@@ -37,28 +37,29 @@ class GtirTaskletSubgraph:
     node: dace.nodes.Node
 
     # for each input/output connections, specify the field type or None if scalar
-    input_connections: list[Tuple[str, Optional[ts.FieldType]]]
-    output_connections: list[Tuple[str, Optional[ts.FieldType]]]
+    input_connections: list[tuple[str, Optional[ts.FieldType]]]
+    output_connections: list[tuple[str, Optional[ts.FieldType]]]
 
 
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
     """Base class to translate GTIR to Python code to be used as tasklet body."""
 
-    _ctx: FieldviewContext
+    _ctx: DataflowContext
     # list of input/output connectors and expected field type (None if scalar)
-    _input_connections: list[Tuple[str, Optional[ts.FieldType]]]
-    _output_connections: list[Tuple[str, Optional[ts.FieldType]]]
+    _input_connections: list[tuple[str, Optional[ts.FieldType]]]
+    _output_connections: list[tuple[str, Optional[ts.FieldType]]]
 
-    def __init__(self, ctx: FieldviewContext):
+    def __init__(self, ctx: DataflowContext):
         self._ctx = ctx
         self._input_connections = []
         self._output_connections = []
 
     @staticmethod
     def can_handle(lambda_node: itir.Lambda) -> bool:
-        raise NotImplementedError("")
+        raise NotImplementedError
 
-    def visit_Lambda(self, node: itir.Lambda) -> GtirTaskletSubgraph:
+    @final
+    def build_stencil(self, node: itir.Lambda) -> GtirTaskletSubgraph:
         tlet_expr = self.visit(node.expr)
 
         params = [str(p.id) for p in node.params]
@@ -76,3 +77,8 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         subgraph = GtirTaskletSubgraph(tlet_node, self._input_connections, self._output_connections)
 
         return subgraph
+
+    @final
+    def visit_Lambda(self, node: itir.Lambda) -> GtirTaskletSubgraph:
+        # This visitor class should never encounter `itir.Lambda` expressionsß
+        raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")

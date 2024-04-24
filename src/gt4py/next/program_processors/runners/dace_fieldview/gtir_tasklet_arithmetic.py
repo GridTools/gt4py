@@ -18,7 +18,7 @@ import numpy as np
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
-from .gtir_fieldview_context import GtirFieldviewContext as FieldviewContext
+from .gtir_dataflow_context import GtirDataflowContext as DataflowContext
 from .gtir_tasklet_codegen import GtirTaskletCodegen
 
 
@@ -80,7 +80,7 @@ _MATH_BUILTINS_MAPPING = {
 class GtirTaskletArithmetic(GtirTaskletCodegen):
     """Translates GTIR lambda exprressions with arithmetic builtin."""
 
-    def __init__(self, ctx: FieldviewContext):
+    def __init__(self, ctx: DataflowContext):
         super().__init__(ctx)
 
     @staticmethod

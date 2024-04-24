@@ -13,8 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Tuple
-
 import dace
 
 from gt4py.next.type_system import type_specifications as ts
@@ -22,8 +20,8 @@ from gt4py.next.type_system import type_specifications as ts
 from .utility import as_dace_type
 
 
-class GtirFieldviewContext:
-    """Defines the dataflow scope of a fieldview expression.
+class GtirDataflowContext:
+    """Defines the SDFG subgraph scope of a fieldview expression.
 
     This class defines a region of the dataflow which represents a fieldview expression.
     It usually consists of a map scope, with a set of input nodes that traverse the entry map;
@@ -78,14 +76,14 @@ class GtirFieldviewContext:
 
     def add_local_storage(
         self, name: str, type_: ts.FieldType, shape: list[str]
-    ) -> Tuple[str, dace.data.Array]:
+    ) -> tuple[str, dace.data.Array]:
         self.field_types[name] = type_
         dtype = as_dace_type(type_.dtype)
         # TODO: for now we let DaCe decide the array strides, evaluate if symblic strides should be used
         return self.sdfg.add_transient(name, shape, dtype, find_new_name=True)
 
-    def clone(self) -> "GtirFieldviewContext":
-        ctx = GtirFieldviewContext(self.sdfg, self.state, self.field_types)
+    def clone(self) -> "GtirDataflowContext":
+        ctx = GtirDataflowContext(self.sdfg, self.state, self.field_types)
         ctx.node_mapping = self.node_mapping
         return ctx
 

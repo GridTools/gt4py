@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 import dace
 
@@ -23,7 +23,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 
-from .gtir_fieldview_context import GtirFieldviewContext as FieldviewContext
+from .gtir_dataflow_context import GtirDataflowContext as DataflowContext
 from .gtir_tasklet_arithmetic import GtirTaskletArithmetic
 from .gtir_tasklet_codegen import (
     GtirTaskletCodegen as TaskletCodegen,
@@ -37,9 +37,9 @@ REGISTERED_TASKGENS: list[type[TaskletCodegen]] = [
 
 
 def _make_fieldop(
-    ctx: FieldviewContext,
+    ctx: DataflowContext,
     tasklet_subgraph: TaskletSubgraph,
-    domain: Sequence[Tuple[str, str, str]],
+    domain: Sequence[tuple[str, str, str]],
 ) -> None:
     # create ordered list of input nodes
     input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
@@ -47,7 +47,7 @@ def _make_fieldop(
 
     # TODO: use type inference to determine the result type
     type_ = ts.ScalarKind.FLOAT64
-    output_arrays: list[Tuple[str, dace.data.Array]] = []
+    output_arrays: list[tuple[str, dace.data.Array]] = []
     for _, field_type in tasklet_subgraph.output_connections:
         if field_type is None:
             field_dims = [Dimension(d) for d, _, _ in domain]
@@ -93,8 +93,8 @@ def _make_fieldop(
 
 
 def _make_fieldop_domain(
-    ctx: FieldviewContext, node: itir.FunCall
-) -> Sequence[Tuple[str, str, str]]:
+    ctx: DataflowContext, node: itir.FunCall
+) -> Sequence[tuple[str, str, str]]:
     assert cpm.is_call_to(node, ["cartesian_domain", "unstructured_domain"])
 
     domain = []
@@ -114,15 +114,15 @@ def _make_fieldop_domain(
     return domain
 
 
-class GtirFieldviewBuilder(eve.NodeVisitor):
-    """Translates GTIR fieldview operator to some kind of map scope in DaCe SDFG."""
+class GtirDataflowBuilder(eve.NodeVisitor):
+    """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
-    _ctx: FieldviewContext
+    _ctx: DataflowContext
 
     def __init__(
         self, sdfg: dace.SDFG, state: dace.SDFGState, field_types: dict[str, ts.FieldType]
     ):
-        self._ctx = FieldviewContext(sdfg, state, field_types.copy())
+        self._ctx = DataflowContext(sdfg, state, field_types.copy())
 
     def _get_tasklet_codegen(self, lambda_node: itir.Lambda) -> Optional[TaskletCodegen]:
         for taskgen in REGISTERED_TASKGENS:
@@ -148,7 +148,7 @@ class GtirFieldviewBuilder(eve.NodeVisitor):
             domain = _make_fieldop_domain(self._ctx, fun_node.args[1])
 
             self.visit(node.args)
-            tasklet_subgraph = taskgen.visit(fun_node.args[0])
+            tasklet_subgraph = taskgen.build_stencil(fun_node.args[0])
             _make_fieldop(self._ctx, tasklet_subgraph, domain)
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
