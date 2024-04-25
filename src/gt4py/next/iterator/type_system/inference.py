@@ -290,44 +290,6 @@ def _get_dimensions_from_types(types) -> dict[str, common.Dimension]:
     return {dim.value: dim for dim in _get_dimensions(types)}
 
 
-def _convert_closure_input_to_iterator(
-    domain: it_ts.DomainType, input_: ts.TypeSpec
-) -> it_ts.IteratorType:
-    input_dims: list[common.Dimension] | None = None
-
-    def extract_dtype_and_dims(el_type: ts.TypeSpec):
-        nonlocal input_dims
-        assert isinstance(el_type, (ts.FieldType, ts.ScalarType))
-        el_type = type_info.promote(el_type, always_field=True)
-        if not input_dims:
-            input_dims = el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-        else:
-            # tuple inputs must all have the same defined dimensions as we
-            # create an iterator of tuples from them
-            assert input_dims == el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-        return el_type.dtype  # type: ignore[union-attr]  # ensured by always_field
-
-    element_type = type_info.apply_to_primitive_constituents(extract_dtype_and_dims, input_)
-
-    assert input_dims is not None
-
-    # handle neighbor / sparse input fields
-    defined_dims = []
-    is_nb_field = False
-    for dim in input_dims:
-        if dim.kind == common.DimensionKind.LOCAL:
-            assert not is_nb_field
-            is_nb_field = True
-        else:
-            defined_dims.append(dim)
-    if is_nb_field:
-        element_type = it_ts.ListType(element_type=element_type)
-
-    return it_ts.IteratorType(
-        position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
-    )
-
-
 def _type_inference_rule_from_function_type(fun_type: ts.FunctionType):
     def type_rule(*args, **kwargs):
         assert type_info.accepts_args(fun_type, with_args=list(args), with_kwargs=kwargs)
@@ -422,7 +384,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 if node.type:
                     assert _is_compatible_type(node.type, result)
                 node.type = result
-            elif isinstance(result, ObservableTypeInferenceRule):
+            elif isinstance(result, ObservableTypeInferenceRule) or result is None:
                 pass
             elif callable(result):
                 return ObservableTypeInferenceRule(
@@ -438,6 +400,7 @@ class ITIRTypeInference(eve.NodeTranslator):
                 )
         return result
 
+    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_FencilDefinition(self, node: itir.FencilDefinition, *, ctx) -> it_ts.FencilType:
         params: dict[str, ts.DataType] = {}
         for param in node.params:
@@ -449,8 +412,9 @@ class ITIRTypeInference(eve.NodeTranslator):
             function_definitions[fun_def.id] = self.visit(fun_def, ctx=ctx | function_definitions)
 
         closures = self.visit(node.closures, ctx=ctx | params | function_definitions)
-        return it_ts.FencilType(params=list(params.values()), closures=closures)
+        return it_ts.FencilType(params=params, closures=closures)
 
+    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_FencilWithTemporaries(
         self, node: global_tmps.FencilWithTemporaries, *, ctx
     ) -> it_ts.FencilType:
@@ -472,6 +436,17 @@ class ITIRTypeInference(eve.NodeTranslator):
         assert isinstance(node.fencil.type, it_ts.FencilType)
         return node.fencil.type
 
+    def visit_Program(self, node: itir.Program, *, ctx):
+        params: dict[str, ts.DataType] = {}
+        for param in node.params:
+            assert isinstance(param.type, ts.DataType)
+            params[param.id] = param.type
+        decls: dict[str, ts.FieldType] = {}
+        for decl_node in node.declarations:
+            decls[decl_node.id] = self.visit(decl_node, ctx=ctx | params)
+        self.visit(node.body, ctx=ctx | params | decls)
+        return it_ts.ProgramType(params=params)
+
     def visit_Temporary(self, node: itir.Temporary, *, ctx) -> ts.FieldType | ts.TupleType:
         domain = self.visit(node.domain, ctx=ctx)
         assert isinstance(domain, it_ts.DomainType)
@@ -480,6 +455,12 @@ class ITIRTypeInference(eve.NodeTranslator):
             lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
         )
 
+    def visit_SetAt(self, node: itir.SetAt, *, ctx):
+        self.visit(node.target, ctx=ctx)
+        self.visit(node.expr, ctx=ctx)
+        assert node.target.type == node.expr.type
+
+    # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
         domain: it_ts.DomainType = self.visit(node.domain, ctx=ctx)
         inputs: list[ts.FieldType] = self.visit(node.inputs, ctx=ctx)
@@ -490,7 +471,9 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(output_el, ts.FieldType)
 
         stencil_type_rule = self.visit(node.stencil, ctx=ctx)
-        stencil_args = [_convert_closure_input_to_iterator(domain, input_) for input_ in inputs]
+        stencil_args = [
+            rules._convert_as_fieldop_input_to_iterator(domain, input_) for input_ in inputs
+        ]
         stencil_returns = stencil_type_rule(*stencil_args)
 
         return it_ts.StencilClosureType(

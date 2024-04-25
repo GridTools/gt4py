@@ -94,23 +94,31 @@ def expression_test_cases():
             ),
             it_ts.DomainType(dims=[Vertex]),
         ),
+        # make_tuple
         (
             im.make_tuple(im.ref("a", int_type), im.ref("b", bool_type)),
             ts.TupleType(types=[int_type, bool_type]),
         ),
+        # tuple_get
         (im.tuple_get(0, im.make_tuple(im.ref("a", int_type), im.ref("b", bool_type))), int_type),
         (im.tuple_get(1, im.make_tuple(im.ref("a", int_type), im.ref("b", bool_type))), bool_type),
+        # neighbors
         (
             im.neighbors("E2V", im.ref("a", it_on_e_of_e_type)),
             it_ts.ListType(element_type=it_on_e_of_e_type.element_type),
         ),
+        # cast
         (im.call("cast_")(1, "int32"), int_type),
         # lift
+        #  ...
         # scan
+        #  ...
+        # map
         (
             im.map_(im.ref("plus"))(im.ref("a", int_list_type), im.ref("b", int_list_type)),
             int_list_type,
         ),
+        # reduce
         (im.call(im.call("reduce")("plus", 0))(im.ref("l", int_list_type)), int_type),
         (
             im.call(
@@ -126,8 +134,44 @@ def expression_test_cases():
             )(im.ref("la", int_list_type), im.ref("lb", float64_list_type)),
             ts.TupleType(types=[int_type, float64_type]),
         ),
+        # shift
         (im.shift("V2E", 1)(im.ref("it", it_on_v_of_e_type)), it_on_e_of_e_type),
         (im.shift("Ioff", 1)(im.ref("it", it_ijk_type)), it_ijk_type),
+        # as_fieldop
+        (
+            im.call(
+                im.call("as_fieldop")(
+                    "deref",
+                    im.call("cartesian_domain")(
+                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    ),
+                )
+            )(im.ref("inp", float_i_field)),
+            float_i_field,
+        ),
+        (
+            im.call(
+                im.call("as_fieldop")(
+                    im.lambda_("it")(im.deref(im.shift("V2E", 0)("it"))),
+                    im.call("unstructured_domain")(
+                        im.call("named_range")(itir.AxisLiteral(value="Vertex"), 0, 1),
+                        im.call("named_range")(itir.AxisLiteral(value="KDim"), 0, 1),
+                    ),
+                )
+            )(im.ref("inp", float_edge_k_field)),
+            float_vertex_k_field,
+        ),
+        (
+            im.call(
+                im.call("as_fieldop")(
+                    im.lambda_("a", "b")(im.make_tuple(im.deref("a"), im.deref("b"))),
+                    im.call("cartesian_domain")(
+                        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+                    ),
+                )
+            )(im.ref("inp1", float_i_field), im.ref("inp2", float_i_field)),
+            ts.TupleType(types=[float_i_field, float_i_field]),
+        ),
     )
 
 
@@ -222,7 +266,9 @@ def test_cartesian_fencil_definition():
         output=float_i_field,
         inputs=[float_i_field],
     )
-    fencil_type = it_ts.FencilType(params=[float_i_field, float_i_field], closures=[closure_type])
+    fencil_type = it_ts.FencilType(
+        params={"inp": float_i_field, "out": float_i_field}, closures=[closure_type]
+    )
     assert result.type == fencil_type
     assert result.closures[0].type == closure_type
 
@@ -268,7 +314,7 @@ def test_unstructured_fencil_definition():
         inputs=[float_edge_k_field],
     )
     fencil_type = it_ts.FencilType(
-        params=[float_edge_k_field, float_vertex_k_field], closures=[closure_type]
+        params={"inp": float_edge_k_field, "out": float_vertex_k_field}, closures=[closure_type]
     )
     assert result.type == fencil_type
     assert result.closures[0].type == closure_type
@@ -313,7 +359,9 @@ def test_function_definition():
         output=float_i_field,
         inputs=[float_i_field],
     )
-    fencil_type = it_ts.FencilType(params=[float_i_field, float_i_field], closures=[closure_type])
+    fencil_type = it_ts.FencilType(
+        params={"inp": float_i_field, "out": float_i_field}, closures=[closure_type]
+    )
     assert result.type == fencil_type
     assert result.closures[0].type == closure_type
 

@@ -183,6 +183,58 @@ def lift(stencil: TypeInferenceRule) -> TypeInferenceRule:
     return apply_lift
 
 
+def _convert_as_fieldop_input_to_iterator(
+    domain: it_ts.DomainType, input_: ts.TypeSpec
+) -> it_ts.IteratorType:
+    input_dims: list[common.Dimension] | None = None
+
+    def extract_dtype_and_dims(el_type: ts.TypeSpec):
+        nonlocal input_dims
+        assert isinstance(el_type, (ts.FieldType, ts.ScalarType))
+        el_type = type_info.promote(el_type, always_field=True)
+        if not input_dims:
+            input_dims = el_type.dims  # type: ignore[union-attr]  # ensured by always_field
+        else:
+            # tuple inputs must all have the same defined dimensions as we
+            # create an iterator of tuples from them
+            assert input_dims == el_type.dims  # type: ignore[union-attr]  # ensured by always_field
+        return el_type.dtype  # type: ignore[union-attr]  # ensured by always_field
+
+    element_type = type_info.apply_to_primitive_constituents(extract_dtype_and_dims, input_)
+
+    assert input_dims is not None
+
+    # handle neighbor / sparse input fields
+    defined_dims = []
+    is_nb_field = False
+    for dim in input_dims:
+        if dim.kind == common.DimensionKind.LOCAL:
+            assert not is_nb_field
+            is_nb_field = True
+        else:
+            defined_dims.append(dim)
+    if is_nb_field:
+        element_type = it_ts.ListType(element_type=element_type)
+
+    return it_ts.IteratorType(
+        position_dims=domain.dims, defined_dims=defined_dims, element_type=element_type
+    )
+
+
+@_register_type_inference_rule
+def as_fieldop(stencil: TypeInferenceRule, domain: it_ts.DomainType) -> TypeInferenceRule:
+    def applied_as_fieldop(*fields) -> ts.FieldType:
+        stencil_return = stencil(
+            *(_convert_as_fieldop_input_to_iterator(domain, field) for field in fields)
+        )
+        assert isinstance(stencil_return, ts.DataType)
+        return type_info.apply_to_primitive_constituents(
+            lambda el_type: ts.FieldType(dims=domain.dims, dtype=el_type), stencil_return
+        )
+
+    return applied_as_fieldop
+
+
 @_register_type_inference_rule
 def scan(
     scan_pass: TypeInferenceRule, direction: ts.ScalarType, init: ts.ScalarType

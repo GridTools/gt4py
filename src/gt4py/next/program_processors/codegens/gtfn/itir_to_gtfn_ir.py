@@ -20,6 +20,7 @@ from gt4py.eve import utils as eve_utils
 from gt4py.eve.concepts import SymbolName
 from gt4py.next import common
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.type_system import inference as itir_type_inference
 from gt4py.next.program_processors.codegens.gtfn.gtfn_ir import (
     Backend,
     BinaryExpr,
@@ -249,6 +250,7 @@ class GTFN_lowering(eve.NodeTranslator, eve.VisitorWithSymbolTableTrait):
         if not isinstance(node, itir.Program):
             raise TypeError(f"Expected a 'Program', got '{type(node).__name__}'.")
 
+        node = itir_type_inference.infer(node, offset_provider=offset_provider)
         grid_type = _get_gridtype(node.body)
         return cls(
             offset_provider=offset_provider, column_axis=column_axis, grid_type=grid_type

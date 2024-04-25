@@ -62,7 +62,13 @@ class StencilClosureType(ts.TypeSpec):
             assert isinstance(el_type, ts.FieldType), "All constituent types must be field types."
 
 
+# TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
 @dataclasses.dataclass(frozen=True)
 class FencilType(ts.TypeSpec):
-    params: list[ts.DataType]
+    params: dict[str, ts.DataType]
     closures: list[StencilClosureType]
+
+
+@dataclasses.dataclass(frozen=True)
+class ProgramType(ts.TypeSpec):
+    params: dict[str, ts.DataType]
