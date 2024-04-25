@@ -34,7 +34,7 @@ from gt4py.next.program_processors import modular_executor, processor_interface 
 from gt4py.next.type_system import type_specifications as ts
 
 
-def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.ScalarType | ts.TupleType) -> str:
+def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.TypeSpec) -> str:
     if isinstance(dtype, ts.TupleType):
         return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype.types)},)"
     else:
@@ -102,6 +102,7 @@ def ${id}(${','.join(params)}):
         axes = ", ".join(label for label, _, _ in domain_ranges)
         origin = "{" + ", ".join(f"{label}: -{start}" for label, start, _ in domain_ranges) + "}"
         shape = "(" + ", ".join(f"{stop}-{start}" for _, start, stop in domain_ranges) + ")"
+        assert node.dtype
         return f"{node.id} = {_create_tmp(axes, origin, shape, node.dtype)}"
 
 
