@@ -31,12 +31,14 @@ from gt4py.next.iterator import embedded, ir as itir, transforms as itir_transfo
 from gt4py.next.iterator.transforms import global_tmps as gtmps_transform
 from gt4py.next.otf import stages, workflow
 from gt4py.next.program_processors import modular_executor, processor_interface as ppi
+from gt4py.next.type_system import type_specifications as ts
 
 
-def _create_tmp(axes: str, origin: str, shape: str, dtype: Any) -> str:
-    if isinstance(dtype, tuple):
-        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype)},)"
+def _create_tmp(axes: str, origin: str, shape: str, dtype: ts.ScalarType | ts.TupleType) -> str:
+    if isinstance(dtype, ts.TupleType):
+        return f"({','.join(_create_tmp(axes, origin, shape, dt) for dt in dtype.types)},)"
     else:
+        assert isinstance(dtype, ts.ScalarType)
         return (
             f"gtx.as_field([{axes}], np.empty({shape}, dtype=np.dtype('{dtype}')), origin={origin})"
         )

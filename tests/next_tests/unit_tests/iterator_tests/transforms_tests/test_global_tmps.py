@@ -11,6 +11,9 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
+# TODO(tehrengruber): add integration tests for temporaries starting from manually written
+#  itir. Currently we only test temporaries from frontend code which makes testing changes
+#  to anything related to temporaries tedious.
 import copy
 
 import gt4py.next as gtx
