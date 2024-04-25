@@ -180,7 +180,6 @@ class SimpleTemporaryExtractionHeuristics:
         return trace_shifts.TraceShifts.apply(self.closure, inputs_only=False)
 
     def __call__(self, expr: ir.Expr) -> bool:
-        return True
         shifts = self.closure_shifts[id(expr)]
         if len(shifts) > 1:
             return True
