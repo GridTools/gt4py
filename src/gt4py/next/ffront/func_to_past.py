@@ -21,7 +21,6 @@ from typing import Any, cast
 
 import factory
 
-from gt4py.eve import utils as eve_utils
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -73,7 +72,9 @@ class OptionalFuncToPastFactory(factory.Factory):
         workflow = func_to_past
         cached = factory.Trait(
             step=factory.LazyAttribute(
-                lambda o: workflow.CachedStep(step=o.workflow, hash_function=eve_utils.content_hash)
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
+                )
             )
         )
 
