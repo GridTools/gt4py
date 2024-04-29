@@ -13,72 +13,141 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-from typing import Optional, final
+from typing import Any, final
 
 import dace
+import numpy as np
 
 from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
 
-from .gtir_dataflow_context import GtirDataflowContext as DataflowContext
+
+_MATH_BUILTINS_MAPPING = {
+    "abs": "abs({})",
+    "sin": "math.sin({})",
+    "cos": "math.cos({})",
+    "tan": "math.tan({})",
+    "arcsin": "asin({})",
+    "arccos": "acos({})",
+    "arctan": "atan({})",
+    "sinh": "math.sinh({})",
+    "cosh": "math.cosh({})",
+    "tanh": "math.tanh({})",
+    "arcsinh": "asinh({})",
+    "arccosh": "acosh({})",
+    "arctanh": "atanh({})",
+    "sqrt": "math.sqrt({})",
+    "exp": "math.exp({})",
+    "log": "math.log({})",
+    "gamma": "tgamma({})",
+    "cbrt": "cbrt({})",
+    "isfinite": "isfinite({})",
+    "isinf": "isinf({})",
+    "isnan": "isnan({})",
+    "floor": "math.ifloor({})",
+    "ceil": "ceil({})",
+    "trunc": "trunc({})",
+    "minimum": "min({}, {})",
+    "maximum": "max({}, {})",
+    "fmod": "fmod({}, {})",
+    "power": "math.pow({}, {})",
+    "float": "dace.float64({})",
+    "float32": "dace.float32({})",
+    "float64": "dace.float64({})",
+    "int": "dace.int32({})" if np.dtype(int).itemsize == 4 else "dace.int64({})",
+    "int32": "dace.int32({})",
+    "int64": "dace.int64({})",
+    "bool": "dace.bool_({})",
+    "plus": "({} + {})",
+    "minus": "({} - {})",
+    "multiplies": "({} * {})",
+    "divides": "({} / {})",
+    "floordiv": "({} // {})",
+    "eq": "({} == {})",
+    "not_eq": "({} != {})",
+    "less": "({} < {})",
+    "less_equal": "({} <= {})",
+    "greater": "({} > {})",
+    "greater_equal": "({} >= {})",
+    "and_": "({} & {})",
+    "or_": "({} | {})",
+    "xor_": "({} ^ {})",
+    "mod": "({} % {})",
+    "not_": "(not {})",  # ~ is not bitwise in numpy
+}
 
 
-@dataclasses.dataclass(frozen=True)
-class GtirTaskletSubgraph:
-    """Defines a tasklet subgraph representing a stencil expression.
+@dataclasses.dataclass
+class SymbolExpr:
+    value: dace.symbolic.SymbolicType
+    dtype: dace.typeclass
 
-    The tasklet subgraph will be used by the consumer to build a fieldview expression.
-    For example, it could be used in a map scope to build a fieldview expression;
-    or it could become the body of a scan expression.
-    """
 
-    # generic DaCe node, most often this will be a tasklet node but it could also be a nested SDFG
-    node: dace.nodes.Node
-
-    # for each input/output connections, specify the field type or None if scalar
-    input_connections: list[tuple[str, Optional[ts.FieldType]]]
-    output_connections: list[tuple[str, Optional[ts.FieldType]]]
+@dataclasses.dataclass
+class ValueExpr:
+    value: dace.nodes.AccessNode
+    dtype: dace.typeclass
 
 
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
-    """Base class to translate GTIR to Python code to be used as tasklet body."""
+    _sdfg: dace.SDFG
+    _state: dace.SDFGState
 
-    _ctx: DataflowContext
-    # list of input/output connectors and expected field type (None if scalar)
-    _input_connections: list[tuple[str, Optional[ts.FieldType]]]
-    _output_connections: list[tuple[str, Optional[ts.FieldType]]]
+    def __init__(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
+        self._sdfg = sdfg
+        self._state = state
 
-    def __init__(self, ctx: DataflowContext):
-        self._ctx = ctx
-        self._input_connections = []
-        self._output_connections = []
+    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType]]:
+        """ "Creates the dataflow representing the given GTIR builtin.
 
-    @staticmethod
-    def can_handle(lambda_node: itir.Lambda) -> bool:
+        Returns a list of connections, where each connectio is defined as:
+        tuple(node, connector_name)
+        """
         raise NotImplementedError
 
     @final
-    def build_stencil(self, node: itir.Lambda) -> GtirTaskletSubgraph:
-        tlet_expr = self.visit(node.expr)
+    def _add_local_storage(self, data_type: ts.DataType, shape: list[str]) -> dace.nodes.AccessNode:
+        name = f"{self._state.label}_var"
+        if isinstance(data_type, ts.FieldType):
+            assert len(data_type.dims) == len(shape)
+            dtype = as_dace_type(data_type.dtype)
+            return self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
+        else:
+            assert isinstance(data_type, ts.ScalarType)
+            assert len(shape) == 0
+            dtype = as_dace_type(data_type)
+            return self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
 
-        params = [str(p.id) for p in node.params]
-        assert len(self._input_connections) == len(params)
+    def _visit_deref(self, node: itir.FunCall) -> str:
+        assert len(node.args) == 1
+        if isinstance(node.args[0], itir.SymRef):
+            return self.visit(node.args[0])
+        raise NotImplementedError(f"Unexpected deref with arg type '{type(node.args[0])}'.")
 
-        outvar = "__out"
-        tlet_code = f"{outvar} = {tlet_expr}"
-        results = [outvar]
-        self._output_connections.append((outvar, None))
+    def _visit_numeric_builtin(self, node: itir.FunCall) -> str:
+        assert isinstance(node.fun, itir.SymRef)
+        fmt = _MATH_BUILTINS_MAPPING[str(node.fun.id)]
+        args = self.visit(node.args)
+        return fmt.format(*args)
 
-        tlet_node: dace.tasklet = self._ctx.state.add_tasklet(
-            f"{self._ctx.tasklet_name()}_lambda", set(params), set(results), tlet_code
-        )
-
-        subgraph = GtirTaskletSubgraph(tlet_node, self._input_connections, self._output_connections)
-
-        return subgraph
+    def visit_FunCall(self, node: itir.FunCall) -> str:
+        if cpm.is_call_to(node, "deref"):
+            return self._visit_deref(node)
+        elif isinstance(node.fun, itir.SymRef):
+            builtin_name = str(node.fun.id)
+            if builtin_name in _MATH_BUILTINS_MAPPING:
+                return self._visit_numeric_builtin(node)
+            else:
+                raise NotImplementedError(f"'{builtin_name}' not implemented.")
+        raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
 
     @final
-    def visit_Lambda(self, node: itir.Lambda) -> GtirTaskletSubgraph:
-        # This visitor class should never encounter `itir.Lambda` expressionsß
+    def visit_Lambda(self, node: itir.Lambda) -> Any:
+        # This visitor class should never encounter `itir.Lambda` expressions
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
+
+    def visit_SymRef(self, node: itir.SymRef) -> str:
+        raise NotImplementedError

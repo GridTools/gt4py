@@ -13,7 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from typing import Optional, Sequence
+from typing import Callable, Sequence
 
 import dace
 
@@ -21,180 +21,170 @@ import gt4py.eve as eve
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.type_system import type_specifications as ts
-
-from .gtir_dataflow_context import GtirDataflowContext as DataflowContext
-from .gtir_tasklet_arithmetic import GtirTaskletArithmetic
-from .gtir_tasklet_codegen import (
-    GtirTaskletCodegen as TaskletCodegen,
-    GtirTaskletSubgraph as TaskletSubgraph,
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translator import (
+    GtirBuiltinAsFieldOp as AsFieldOp,
+    GtirBuiltinSelect as Select,
 )
-
-
-REGISTERED_TASKGENS: list[type[TaskletCodegen]] = [
-    GtirTaskletArithmetic,
-]
-
-
-def _make_fieldop(
-    ctx: DataflowContext,
-    tasklet_subgraph: TaskletSubgraph,
-    domain: Sequence[tuple[str, str, str]],
-) -> None:
-    """Put a `TaskletSubgraph` object into a map scope.
-
-    This helper method represents a field operator as mapped tasklet.
-    The map range is given by the domain.
-    """
-
-    # create ordered list of input nodes
-    input_arrays = [(name, ctx.sdfg.arrays[name]) for name in ctx.input_nodes]
-    assert len(tasklet_subgraph.input_connections) == len(input_arrays)
-
-    # TODO: use type inference to determine the result type
-    type_ = ts.ScalarKind.FLOAT64
-    output_arrays: list[tuple[str, dace.data.Array]] = []
-    for _, field_type in tasklet_subgraph.output_connections:
-        if field_type is None:
-            field_dims = [Dimension(d) for d, _, _ in domain]
-            field_type = ts.FieldType(field_dims, ts.ScalarType(type_))
-        field_shape = [f"{ub} - {lb}" for d, lb, ub in domain if Dimension(d) in field_type.dims]
-        output_name, output_array = ctx.add_local_storage(ctx.var_name(), field_type, field_shape)
-        output_arrays.append((output_name, output_array))
-
-    map_ranges = {f"i_{d}": f"{lb}:{ub}" for d, lb, ub in domain}
-    me, mx = ctx.state.add_map("fieldop", map_ranges)
-
-    for (connector, field_type), (dname, _) in zip(
-        tasklet_subgraph.input_connections, input_arrays
-    ):
-        src_node = ctx.node_mapping[dname]
-        if field_type is None:
-            subset = ",".join([f"i_{d.value}" for d in ctx.field_types[dname].dims])
-        else:
-            raise NotImplementedError("Array subset on tasklet connector not supported.")
-        ctx.state.add_memlet_path(
-            src_node,
-            me,
-            tasklet_subgraph.node,
-            dst_conn=connector,
-            memlet=dace.Memlet(data=dname, subset=subset),
-        )
-
-    for (connector, field_type), (dname, _) in zip(
-        tasklet_subgraph.output_connections, output_arrays
-    ):
-        dst_node = ctx.add_output_node(dname)
-        if field_type is None:
-            subset = ",".join([f"i_{d}" for d, _, _ in domain])
-        else:
-            raise NotImplementedError("Array subset on tasklet connector not supported.")
-        ctx.state.add_memlet_path(
-            tasklet_subgraph.node,
-            mx,
-            dst_node,
-            src_conn=connector,
-            memlet=dace.Memlet(data=dname, subset=subset),
-        )
-
-
-def _make_fieldop_domain(
-    ctx: DataflowContext, node: itir.FunCall
-) -> Sequence[tuple[str, str, str]]:
-    """Visits the domain of a field operator.
-
-    Returns
-    -------
-    A list of tuples(dimension_name, lower_bound_value, upper_bound_value)
-    """
-    assert cpm.is_call_to(node, ["cartesian_domain", "unstructured_domain"])
-
-    domain = []
-    translator = TaskletCodegen(ctx)
-
-    for named_range in node.args:
-        assert cpm.is_call_to(named_range, "named_range")
-        assert len(named_range.args) == 3
-        dimension = named_range.args[0]
-        assert isinstance(dimension, itir.AxisLiteral)
-        lower_bound = named_range.args[1]
-        upper_bound = named_range.args[2]
-        lb = translator.visit(lower_bound)
-        ub = translator.visit(upper_bound)
-        domain.append((dimension.value, lb, ub))
-
-    return domain
+from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
+from gt4py.next.type_system import type_specifications as ts
 
 
 class GtirDataflowBuilder(eve.NodeVisitor):
     """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
-    _ctx: DataflowContext
+    _sdfg: dace.SDFG
+    _head_state: dace.SDFGState
+    _field_types: dict[str, ts.FieldType]
+    _node_mapping: dict[str, dace.nodes.AccessNode]
 
     def __init__(
         self, sdfg: dace.SDFG, state: dace.SDFGState, field_types: dict[str, ts.FieldType]
     ):
-        self._ctx = DataflowContext(sdfg, state, field_types.copy())
+        self._sdfg = sdfg
+        self._head_state = state
+        self._field_types = field_types
+        self._node_mapping = {}
 
-    def _get_tasklet_codegen(self, lambda_node: itir.Lambda) -> Optional[TaskletCodegen]:
-        for taskgen in REGISTERED_TASKGENS:
-            if taskgen.can_handle(lambda_node):
-                return taskgen(self._ctx)
-        return None
+    def _add_local_storage(
+        self, type_: ts.DataType, shape: list[str]
+    ) -> tuple[str, dace.data.Data]:
+        name = f"{self._head_state.label}_var"
+        if isinstance(type_, ts.FieldType):
+            dtype = as_dace_type(type_.dtype)
+            assert len(type_.dims) == len(shape)
+            # TODO: for now we let DaCe decide the array strides, evaluate if symblic strides should be used
+            name, data = self._sdfg.add_array(
+                name, shape, dtype, find_new_name=True, transient=True
+            )
+        else:
+            assert isinstance(type_, ts.ScalarType)
+            dtype = as_dace_type(type_)
+            assert len(shape) == 0
+            name, data = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
+        return name, data
 
-    def visit_FunCall(self, node: itir.FunCall) -> None:
-        parent_ctx = self._ctx
-        child_ctx = parent_ctx.clone()
-        self._ctx = child_ctx
+    def _add_access_node(self, data: str) -> dace.nodes.AccessNode:
+        assert data in self._sdfg.arrays
+        if data in self._node_mapping:
+            node = self._node_mapping[data]
+        else:
+            node = self._head_state.add_access(data)
+            self._node_mapping[data] = node
+        return node
 
+    def visit_domain(self, node: itir.Expr) -> Sequence[tuple[Dimension, str, str]]:
+        domain = []
+        assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
+        for named_range in node.args:
+            assert cpm.is_call_to(named_range, "named_range")
+            assert len(named_range.args) == 3
+            axis = named_range.args[0]
+            assert isinstance(axis, itir.AxisLiteral)
+            dim = Dimension(axis.value)
+            bounds = [self.visit_symbolic(arg) for arg in named_range.args[1:3]]
+            domain.append((dim, bounds[0], bounds[1]))
+
+        return domain
+
+    def visit_expression(self, node: itir.Expr) -> list[dace.nodes.AccessNode]:
+        expr_builder = self.visit(node)
+        assert callable(expr_builder)
+        results = expr_builder()
+        expressions_nodes = []
+        for node, _type in results:
+            assert isinstance(node, dace.nodes.AccessNode)
+            self._node_mapping[node.data] = node
+            expressions_nodes.append(node)
+            if isinstance(_type, ts.FieldType):
+                self._field_types[node.data] = _type
+            else:
+                assert isinstance(_type, ts.ScalarType)
+        return expressions_nodes
+
+    def visit_symbolic(self, node: itir.Expr) -> str:
+        if isinstance(node, itir.Literal):
+            return node.value
+
+        elif isinstance(node, itir.SymRef):
+            sym = str(node.id)
+            assert sym in self._sdfg.symbols
+            return sym
+
+        else:
+            # TODO: add support for symbolic expressions
+            return "1 > 2"
+
+    def visit_FunCall(self, node: itir.FunCall) -> Callable:
         if cpm.is_call_to(node.fun, "as_fieldop"):
             fun_node = node.fun
             assert len(fun_node.args) == 2
             # expect stencil (represented as a lambda function) as first argument
             assert isinstance(fun_node.args[0], itir.Lambda)
-            taskgen = self._get_tasklet_codegen(fun_node.args[0])
-            if not taskgen:
-                raise NotImplementedError(f"Unsupported 'as_fieldop' node ({node}).")
             # the domain of the field operator is passed as second argument
             assert isinstance(fun_node.args[1], itir.FunCall)
-            domain = _make_fieldop_domain(self._ctx, fun_node.args[1])
+            field_domain = self.visit_domain(fun_node.args[1])
 
-            self.visit(node.args)
-            tasklet_subgraph = taskgen.build_stencil(fun_node.args[0])
-            _make_fieldop(self._ctx, tasklet_subgraph, domain)
+            stencil_args = [self.visit(arg) for arg in node.args]
+
+            # add local storage to compute the field operator over the given domain
+            # TODO: use type inference to determine the result type
+            node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+
+            return AsFieldOp(
+                sdfg=self._sdfg,
+                state=self._head_state,
+                stencil=fun_node.args[0],
+                domain=field_domain,
+                args=stencil_args,
+                field_dtype=node_type,
+            )
+
+        elif cpm.is_call_to(node.fun, "select"):
+            fun_node = node.fun
+            assert len(fun_node.args) == 3
+
+            # expect condition as first argument
+            cond = self.visit_symbolic(fun_node.args[0])
+
+            # use join state to terminate the dataflow on a single exit node
+            _join_state = self._sdfg.add_state(self._head_state.label + "_join")
+
+            # expect true branch as second argument
+            _true_state = self._sdfg.add_state(self._head_state.label + "_true_branch")
+            self._sdfg.add_edge(self._head_state, _true_state, dace.InterstateEdge(condition=cond))
+            self._sdfg.add_edge(_true_state, _join_state, dace.InterstateEdge())
+
+            # and false branch as third argument
+            _false_state = self._sdfg.add_state(self._head_state.label + "_false_branch")
+            self._sdfg.add_edge(
+                self._head_state, _false_state, dace.InterstateEdge(condition=f"not {cond}")
+            )
+            self._sdfg.add_edge(_false_state, _join_state, dace.InterstateEdge())
+
+            self._head_state = _true_state
+            self._node_mapping = {}
+            true_br_args = self.visit(fun_node.args[1])
+
+            self._head_state = _false_state
+            self._node_mapping = {}
+            false_br_args = self.visit(fun_node.args[2])
+
+            self._head_state = _join_state
+            self._node_mapping = {}
+
+            return Select(
+                sdfg=self._sdfg,
+                state=self._head_state,
+                true_br_args=true_br_args,
+                false_br_args=false_br_args,
+            )
+
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
-        assert self._ctx == child_ctx
-        parent_ctx.input_nodes.extend(child_ctx.output_nodes)
-        self._ctx = parent_ctx
-
-    def visit_SymRef(self, node: itir.SymRef) -> None:
-        dname = str(node.id)
-        self._ctx.add_input_node(dname)
-
-    def write_to(self, target_expr: itir.Expr, domain_expr: itir.Expr) -> None:
-        """Write the current set of input nodes to external nodes.
-
-        The target arrays are supposed to be external, therefore non-transient.
-        """
-        assert len(self._ctx.output_nodes) == 0
-
-        # TODO: add support for tuple return
-        assert len(self._ctx.input_nodes) == 1
-        assert isinstance(target_expr, itir.SymRef)
-        self._ctx.add_output_node(target_expr.id)
-
-        assert isinstance(domain_expr, itir.FunCall)
-        domain = _make_fieldop_domain(self._ctx, domain_expr)
-        write_subset = ",".join(f"{lb}:{ub}" for _, lb, ub in domain)
-
-        for tasklet_node, target_node in zip(self._ctx.input_nodes, self._ctx.output_nodes):
-            target_array = self._ctx.sdfg.arrays[target_node]
-            assert not target_array.transient
-
-            self._ctx.state.add_nedge(
-                self._ctx.node_mapping[tasklet_node],
-                self._ctx.node_mapping[target_node],
-                dace.Memlet(data=target_node, subset=write_subset),
-            )
+    def visit_SymRef(self, node: itir.SymRef) -> Callable:
+        name = str(node.id)
+        access_node = self._add_access_node(name)
+        assert name in self._field_types
+        data_type = self._field_types[name]
+        return lambda: [(access_node, data_type)]

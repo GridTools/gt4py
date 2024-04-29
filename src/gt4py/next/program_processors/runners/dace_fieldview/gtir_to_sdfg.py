@@ -161,9 +161,28 @@ class GtirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        fieldview_builder = DataflowBuilder(sdfg, state, self._field_types)
-        fieldview_builder.visit(stmt.expr)
+        dataflow_builder = DataflowBuilder(sdfg, state, self._field_types)
+        expr_nodes = dataflow_builder.visit_expression(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        fieldview_builder.write_to(stmt.target, stmt.domain)
+        target_nodes = dataflow_builder.visit_expression(stmt.target)
+        assert len(expr_nodes) == len(target_nodes)
+
+        domain = dataflow_builder.visit_domain(stmt.domain)
+        # convert domain to dictionary to ease access to dimension boundaries
+        domain_map = {dim: (lb, ub) for dim, lb, ub in domain}
+
+        for expr_node, target_node in zip(expr_nodes, target_nodes):
+            target_array = sdfg.arrays[target_node.data]
+            assert not target_array.transient
+
+            subset = ",".join(
+                f"{domain_map[dim][0]}:{domain_map[dim][1]}"
+                for dim in self._field_types[target_node.data].dims
+            )
+            state.add_nedge(
+                expr_node,
+                target_node,
+                dace.Memlet(data=target_node.data, subset=subset),
+            )
