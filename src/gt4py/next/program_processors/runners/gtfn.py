@@ -68,10 +68,14 @@ def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args: Any, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any, conn_args = None, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ) -> None:
+
+        # If we don't pass them as in the case of a CachedProgram extract connectivities here.
+        if conn_args is None:
+            conn_args = extract_connectivity_args(offset_provider, device)
+
         converted_args = [convert_arg(arg) for arg in args]
-        conn_args = extract_connectivity_args(offset_provider, device)
         return inp(*converted_args, *conn_args)
 
     return decorated_program
