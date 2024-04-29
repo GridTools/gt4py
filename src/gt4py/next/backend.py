@@ -146,19 +146,14 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     def __call__(
         self,
         program: ffront_stages.ProgramDefinition | ffront_stages.FieldOperatorDefinition,
-        *args: tuple[Any],
-        **kwargs: dict[str, Any],
+        *args: Any,
+        **kwargs: Any,
     ) -> None:
         if isinstance(
             program, (ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition)
         ):
             offset_provider = kwargs.pop("offset_provider")
             from_fieldop = kwargs.pop("from_fieldop")
-            # transforms_fop = self.transforms_fop.replace(
-            #     foast_inject_args=FopArgsInjector(
-            #         args=args, kwargs=kwargs, from_fieldop=from_fieldop
-            #     )
-            # )
             program_call = self.transforms_fop(
                 workflow.InputWithArgs(program, args, kwargs | {"from_fieldop": from_fieldop})
             )
@@ -166,9 +161,6 @@ class Backend(Generic[core_defs.DeviceTypeT]):
                 program_call, kwargs=program_call.kwargs | {"offset_provider": offset_provider}
             )
         else:
-            # transforms_prog = self.transforms_prog.replace(
-            #     past_inject_args=ProgArgsInjector(args=args, kwargs=kwargs)
-            # )
             program_call = self.transforms_prog(workflow.InputWithArgs(program, args, kwargs))
         self.executor(program_call.program, *program_call.args, **program_call.kwargs)
 

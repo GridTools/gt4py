@@ -77,7 +77,7 @@ array_of_ones_numpy = np.ones((grid_shape[0], grid_shape[1]))
 field_of_ones = gtx.ones(
     domain={I: range(grid_shape[0]), J: range(grid_shape[0])},
     dtype=np.float64,
-    allocator=gtx.program_processors.runners.roundtrip.backend
+    allocator=gtx.itir_python
 )
 ```
 
