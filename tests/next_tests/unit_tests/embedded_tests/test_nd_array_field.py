@@ -391,7 +391,7 @@ def test_remapping_premap():
     assert np.all(result.ndarray == expected.ndarray)
 
 
-def test_identity_connectivities():
+def test_identity_connectivity():
     D0 = Dimension("D0")
     D1 = Dimension("D1")
     D2 = Dimension("D2")
@@ -402,12 +402,8 @@ def test_identity_connectivities():
     )
     codomains = [D0, D1, D2]
 
-    result = nd_array_field._identity_connectivities(
-        domain, codomains, cls=nd_array_field.NumPyArrayConnectivityField
-    )
-
-    expected = (
-        nd_array_field.NumPyArrayConnectivityField.from_array(
+    expected = {
+        D0: nd_array_field.NumPyArrayConnectivityField.from_array(
             np.array(
                 [
                     [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]],
@@ -419,7 +415,7 @@ def test_identity_connectivities():
             codomain=D0,
             domain=domain,
         ),
-        nd_array_field.NumPyArrayConnectivityField.from_array(
+        D1: nd_array_field.NumPyArrayConnectivityField.from_array(
             np.array(
                 [
                     [[0, 0, 0, 0, 0], [1, 1, 1, 1, 1], [2, 2, 2, 2, 2], [3, 3, 3, 3, 3]],
@@ -431,7 +427,7 @@ def test_identity_connectivities():
             codomain=D1,
             domain=domain,
         ),
-        nd_array_field.NumPyArrayConnectivityField.from_array(
+        D2: nd_array_field.NumPyArrayConnectivityField.from_array(
             np.array(
                 [
                     [[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
@@ -443,13 +439,16 @@ def test_identity_connectivities():
             codomain=D2,
             domain=domain,
         ),
-    )
+    }
 
-    for r, e in zip(result, expected):
-        assert r.codomain == e.codomain
-        assert r.domain == e.domain
-        assert r.dtype == e.dtype
-        assert np.all(r.ndarray == e.ndarray)
+    for codomain in codomains:
+        result = nd_array_field._identity_connectivity(
+            domain, codomain, cls=nd_array_field.NumPyArrayConnectivityField
+        )
+        assert result.codomain == expected[codomain].codomain
+        assert result.domain == expected[codomain].domain
+        assert result.dtype == expected[codomain].dtype
+        assert np.all(result.ndarray == expected[codomain].ndarray)
 
 
 @pytest.mark.parametrize(

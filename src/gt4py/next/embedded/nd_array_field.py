@@ -24,7 +24,6 @@ import numpy as np
 from numpy import typing as npt
 
 from gt4py._core import definitions as core_defs
-from gt4py.eve import utils
 from gt4py.eve.extended_typing import (
     ClassVar,
     Iterable,
@@ -262,9 +261,7 @@ class NdArrayField(
             conn_fields.append(connectivity)
             codomains_counter[connectivity.codomain] += 1
 
-        if unknown_dims := [
-            dim for dim in codomains_counter.keys() if dim not in self.domain.dims
-        ]:
+        if unknown_dims := [dim for dim in codomains_counter.keys() if dim not in self.domain.dims]:
             raise ValueError(
                 f"Incompatible dimensions in the connectivity codomain(s) {unknown_dims}"
                 f"while pre-mapping a field with domain {self.domain}."
@@ -596,9 +593,7 @@ def _reshuffling_premap(
     # Create identity connectivities for the missing domain dimensions
     for dim in data.domain.dims:
         if dim not in conn_map:
-            conn_map[dim] = utils.first(
-                _identity_connectivities(new_domain, [dim], cls=type(connectivity))
-            )
+            conn_map[dim] = _identity_connectivity(new_domain, dim, cls=type(connectivity))
 
     # Take data
     take_indices = tuple(conn_map[dim].ndarray for dim in data.domain.dims)
@@ -654,36 +649,26 @@ def _remapping_premap(data: NdArrayField, connectivity: common.ConnectivityField
 _ConnT = TypeVar("_ConnT", bound=common.ConnectivityField)
 
 
-def _identity_connectivities(
-    domain: common.Domain,
-    codomains: Sequence[common.DimT],
-    *,
-    cls: type[_ConnT],
+def _identity_connectivity(
+    domain: common.Domain, codomain: common.DimT, *, cls: type[_ConnT]
 ) -> tuple[_ConnT, ...]:
+    assert codomain in domain.dims
     xp = cls.array_ns
     shape = domain.shape
-    identities = []
-    for d in codomains:
-        assert d in domain.dims
-        d_idx = domain.dim_index(d)
-        indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
-        identities.append(
-            cls.from_array(
-                xp.broadcast_to(
-                    indices[
-                        tuple(
-                            slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims)
-                        )
-                    ],
-                    shape,
-                ),
-                codomain=d,
-                domain=domain,
-                dtype=int,
-            )
-        )
+    d_idx = domain.dim_index(codomain)
+    indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
 
-    return tuple(identities)
+    return cls.from_array(
+        xp.broadcast_to(
+            indices[
+                tuple(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
+            ],
+            shape,
+        ),
+        codomain=codomain,
+        domain=domain,
+        dtype=int,
+    )
 
 
 def _hyperslice(
