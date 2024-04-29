@@ -23,7 +23,11 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translator import (
     GtirBuiltinAsFieldOp as AsFieldOp,
+    GtirBuiltinScalarAccess as ScalarAccess,
     GtirBuiltinSelect as Select,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
+    GtirTaskletCodegen,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
@@ -34,15 +38,18 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
     _sdfg: dace.SDFG
     _head_state: dace.SDFGState
-    _field_types: dict[str, ts.FieldType]
+    _data_types: dict[str, ts.FieldType | ts.ScalarType]
     _node_mapping: dict[str, dace.nodes.AccessNode]
 
     def __init__(
-        self, sdfg: dace.SDFG, state: dace.SDFGState, field_types: dict[str, ts.FieldType]
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+        data_types: dict[str, ts.FieldType | ts.ScalarType],
     ):
         self._sdfg = sdfg
         self._head_state = state
-        self._field_types = field_types
+        self._data_types = data_types
         self._node_mapping = {}
 
     def _add_local_storage(
@@ -91,28 +98,15 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         assert callable(expr_builder)
         results = expr_builder()
         expressions_nodes = []
-        for node, _type in results:
+        for node, _ in results:
             assert isinstance(node, dace.nodes.AccessNode)
-            self._node_mapping[node.data] = node
             expressions_nodes.append(node)
-            if isinstance(_type, ts.FieldType):
-                self._field_types[node.data] = _type
-            else:
-                assert isinstance(_type, ts.ScalarType)
+
         return expressions_nodes
 
     def visit_symbolic(self, node: itir.Expr) -> str:
-        if isinstance(node, itir.Literal):
-            return node.value
-
-        elif isinstance(node, itir.SymRef):
-            sym = str(node.id)
-            assert sym in self._sdfg.symbols
-            return sym
-
-        else:
-            # TODO: add support for symbolic expressions
-            return "1 > 2"
+        codegen = GtirTaskletCodegen(self._sdfg, self._head_state)
+        return codegen.visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> Callable:
         if cpm.is_call_to(node.fun, "as_fieldop"):
@@ -163,11 +157,11 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
             self._head_state = _true_state
             self._node_mapping = {}
-            true_br_args = self.visit(fun_node.args[1])
+            true_br_callable = self.visit(fun_node.args[1])
 
             self._head_state = _false_state
             self._node_mapping = {}
-            false_br_args = self.visit(fun_node.args[2])
+            false_br_callable = self.visit(fun_node.args[2])
 
             self._head_state = _join_state
             self._node_mapping = {}
@@ -175,8 +169,8 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             return Select(
                 sdfg=self._sdfg,
                 state=self._head_state,
-                true_br_args=true_br_args,
-                false_br_args=false_br_args,
+                true_br_builder=true_br_callable,
+                false_br_builder=false_br_callable,
             )
 
         else:
@@ -184,7 +178,12 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
     def visit_SymRef(self, node: itir.SymRef) -> Callable:
         name = str(node.id)
-        access_node = self._add_access_node(name)
-        assert name in self._field_types
-        data_type = self._field_types[name]
-        return lambda: [(access_node, data_type)]
+        assert name in self._data_types
+        data_type = self._data_types[name]
+        if isinstance(data_type, ts.FieldType):
+            access_node = self._add_access_node(name)
+            return lambda: [(access_node, data_type)]
+        else:
+            # scalar symbols are passed to the SDFG as symbols
+            assert name in self._sdfg.symbols
+            return ScalarAccess(self._sdfg, self._head_state, name, data_type)

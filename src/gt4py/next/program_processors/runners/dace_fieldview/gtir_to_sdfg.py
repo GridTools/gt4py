@@ -47,7 +47,7 @@ class GtirToSDFG(eve.NodeVisitor):
     """
 
     _param_types: list[ts.TypeSpec]
-    _field_types: dict[str, ts.FieldType]
+    _data_types: dict[str, ts.FieldType | ts.ScalarType]
     _offset_providers: Mapping[str, Any]
 
     def __init__(
@@ -56,7 +56,7 @@ class GtirToSDFG(eve.NodeVisitor):
         offset_providers: dict[str, Connectivity | Dimension],
     ):
         self._param_types = param_types
-        self._field_types = {}
+        self._data_types = {}
         self._offset_providers = offset_providers
 
     def _make_array_shape_and_strides(
@@ -89,16 +89,16 @@ class GtirToSDFG(eve.NodeVisitor):
         return shape, strides
 
     def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
+        assert isinstance(type_, (ts.FieldType, ts.ScalarType))
+        self._data_types[name] = type_
+
         if isinstance(type_, ts.FieldType):
             dtype = as_dace_type(type_.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, type_.dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=False)
-            self._field_types[name] = type_
-
         else:
-            assert isinstance(type_, ts.ScalarType)
             dtype = as_dace_type(type_)
             # scalar arguments passed to the program are represented as symbols in DaCe SDFG
             sdfg.add_symbol(name, dtype)
@@ -161,7 +161,7 @@ class GtirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        dataflow_builder = DataflowBuilder(sdfg, state, self._field_types)
+        dataflow_builder = DataflowBuilder(sdfg, state, self._data_types)
         expr_nodes = dataflow_builder.visit_expression(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
@@ -176,12 +176,13 @@ class GtirToSDFG(eve.NodeVisitor):
         for expr_node, target_node in zip(expr_nodes, target_nodes):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
+            target_field_type = self._data_types[target_node.data]
+            assert isinstance(target_field_type, ts.FieldType)
 
             subset = ",".join(
-                f"{domain_map[dim][0]}:{domain_map[dim][1]}"
-                for dim in self._field_types[target_node.data].dims
+                f"{domain_map[dim][0]}:{domain_map[dim][1]}" for dim in target_field_type.dims
             )
-            state.add_nedge(
+            dataflow_builder._head_state.add_nedge(
                 expr_node,
                 target_node,
                 dace.Memlet(data=target_node.data, subset=subset),

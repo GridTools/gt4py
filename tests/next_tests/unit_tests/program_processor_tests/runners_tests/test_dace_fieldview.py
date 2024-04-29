@@ -139,3 +139,69 @@ def test_gtir_sum3():
 
     sdfg(x=a, y=b, w=c, z=d, **FSYMBOLS)
     assert np.allclose(d, (a + b + c))
+
+
+def test_gtir_select():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="select_2sums",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x"),
+            itir.Sym(id="y"),
+            itir.Sym(id="w"),
+            itir.Sym(id="z"),
+            itir.Sym(id="cond"),
+            itir.Sym(id="size"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("select")(
+                        im.deref("cond"),
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                domain,
+                            )
+                        )("x", "y"),
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                                domain,
+                            )
+                        )("y", "w"),
+                    )
+                )(),
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.random.rand(N)
+    c = np.random.rand(N)
+    d = np.empty_like(a)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [
+            FTYPE,
+            FTYPE,
+            FTYPE,
+            FTYPE,
+            ts.ScalarType(ts.ScalarKind.BOOL),
+            ts.ScalarType(ts.ScalarKind.INT32),
+        ],
+        OFFSET_PROVIDERS,
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+
+    for s in [False, True]:
+        sdfg(cond=s, x=a, y=b, w=c, z=d, **FSYMBOLS)
+        assert np.allclose(d, (a + b) if s else (b + c))

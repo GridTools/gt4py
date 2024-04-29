@@ -208,6 +208,7 @@ BUILTINS = {
 GTIR_BUILTINS = {
     *BUILTINS,
     "as_fieldop",  # `as_fieldop(stencil)` creates field_operator from stencil
+    "select",  # `select(cond, field_a, field_b)` creates the field on one branch or the other
 }
 
 

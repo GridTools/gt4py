@@ -100,7 +100,7 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         self._sdfg = sdfg
         self._state = state
 
-    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType]]:
+    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         """ "Creates the dataflow representing the given GTIR builtin.
 
         Returns a list of connections, where each connectio is defined as:
@@ -114,12 +114,13 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         if isinstance(data_type, ts.FieldType):
             assert len(data_type.dims) == len(shape)
             dtype = as_dace_type(data_type.dtype)
-            return self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
+            name, _ = self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
         else:
             assert isinstance(data_type, ts.ScalarType)
             assert len(shape) == 0
             dtype = as_dace_type(data_type)
-            return self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
+            name, _ = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
+        return self._state.add_access(name)
 
     def _visit_deref(self, node: itir.FunCall) -> str:
         assert len(node.args) == 1
@@ -149,5 +150,10 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         # This visitor class should never encounter `itir.Lambda` expressions
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
+    @final
+    def visit_Literal(self, node: itir.Literal) -> str:
+        return node.value
+
+    @final
     def visit_SymRef(self, node: itir.SymRef) -> str:
-        raise NotImplementedError
+        return str(node.id)
