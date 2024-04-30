@@ -148,7 +148,7 @@ class GtirToSDFG(eve.NodeVisitor):
             self.visit(stmt, sdfg=sdfg, state=head_state)
             # sanity check below: each statement should have a single exit state -- aka no branches
             sink_states = sdfg.sink_nodes()
-            assert len(sink_states) == 1
+            assert sink_states == [head_state]
             head_state = sink_states[0]
 
         sdfg.validate()
@@ -162,12 +162,12 @@ class GtirToSDFG(eve.NodeVisitor):
         """
 
         dataflow_builder = DataflowBuilder(sdfg, self._data_types)
-        expr_nodes, state = dataflow_builder.visit_expression(stmt.expr, state)
+        expr_nodes = dataflow_builder.visit_expression(stmt.expr, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
         target_builder = DataflowBuilder(sdfg, self._data_types)
-        target_nodes, state = target_builder.visit_expression(stmt.target, state)
+        target_nodes = target_builder.visit_expression(stmt.target, state)
         assert len(expr_nodes) == len(target_nodes)
 
         domain = dataflow_builder.visit_domain(stmt.domain)

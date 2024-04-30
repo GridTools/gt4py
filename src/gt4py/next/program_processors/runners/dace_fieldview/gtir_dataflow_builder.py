@@ -60,17 +60,17 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
     def visit_expression(
         self, node: itir.Expr, head_state: dace.SDFGState
-    ) -> tuple[list[dace.nodes.AccessNode], dace.SDFGState]:
+    ) -> list[dace.nodes.AccessNode]:
         expr_builder = self.visit(node, state=head_state)
         assert callable(expr_builder)
-        results, head_state = expr_builder()
+        results = expr_builder()
 
         expressions_nodes = []
         for node, _ in results:
             assert isinstance(node, dace.nodes.AccessNode)
             expressions_nodes.append(node)
 
-        return expressions_nodes, head_state
+        return expressions_nodes
 
     def visit_symbolic(self, node: itir.Expr) -> str:
         state = self._sdfg.start_state
@@ -110,23 +110,26 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             cond = self.visit_symbolic(fun_node.args[0])
 
             # use join state to terminate the dataflow on a single exit node
-            join_state = self._sdfg.add_state(state.label + "_join")
+            select_state = self._sdfg.add_state_before(state, state.label + "_select")
+            self._sdfg.remove_edge(self._sdfg.out_edges(select_state)[0])
 
             # expect true branch as second argument
             true_state = self._sdfg.add_state(state.label + "_true_branch")
-            self._sdfg.add_edge(state, true_state, dace.InterstateEdge(condition=cond))
-            self._sdfg.add_edge(true_state, join_state, dace.InterstateEdge())
+            self._sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond))
+            self._sdfg.add_edge(true_state, state, dace.InterstateEdge())
             true_br_callable = self.visit(fun_node.args[1], state=true_state)
 
             # and false branch as third argument
             false_state = self._sdfg.add_state(state.label + "_false_branch")
-            self._sdfg.add_edge(state, false_state, dace.InterstateEdge(condition=f"not {cond}"))
-            self._sdfg.add_edge(false_state, join_state, dace.InterstateEdge())
+            self._sdfg.add_edge(
+                select_state, false_state, dace.InterstateEdge(condition=f"not {cond}")
+            )
+            self._sdfg.add_edge(false_state, state, dace.InterstateEdge())
             false_br_callable = self.visit(fun_node.args[2], state=false_state)
 
             return Select(
                 sdfg=self._sdfg,
-                state=join_state,
+                state=state,
                 true_br_builder=true_br_callable,
                 false_br_builder=false_br_callable,
             )

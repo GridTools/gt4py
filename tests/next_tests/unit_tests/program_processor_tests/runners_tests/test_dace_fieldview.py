@@ -224,22 +224,30 @@ def test_gtir_select():
         body=[
             itir.SetAt(
                 expr=im.call(
-                    im.call("select")(
-                        im.deref("cond"),
-                        im.call(
-                            im.call("as_fieldop")(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )
-                        )("x", "y"),
-                        im.call(
-                            im.call("as_fieldop")(
-                                im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
-                                domain,
-                            )
-                        )("y", "w"),
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        domain,
                     )
-                )(),
+                )(
+                    "x",
+                    im.call(
+                        im.call("select")(
+                            im.deref("cond"),
+                            im.call(
+                                im.call("as_fieldop")(
+                                    im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                    domain,
+                                )
+                            )("y"),
+                            im.call(
+                                im.call("as_fieldop")(
+                                    im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                    domain,
+                                )
+                            )("w"),
+                        )
+                    )(),
+                ),
                 domain=domain,
                 target=itir.SymRef(id="z"),
             )
@@ -268,4 +276,4 @@ def test_gtir_select():
 
     for s in [False, True]:
         sdfg(cond=s, x=a, y=b, w=c, z=d, **FSYMBOLS)
-        assert np.allclose(d, (a + b) if s else (b + c))
+        assert np.allclose(d, (a + b + 1) if s else (a + c + 1))
