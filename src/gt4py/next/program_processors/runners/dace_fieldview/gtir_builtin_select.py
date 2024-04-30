@@ -37,8 +37,8 @@ class GtirBuiltinSelect(GtirTaskletCodegen):
         self._false_br_builder = false_br_builder
 
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        true_br_args = self._true_br_builder()
-        false_br_args = self._false_br_builder()
+        true_br_args, _ = self._true_br_builder()
+        false_br_args, _ = self._false_br_builder()
         assert len(true_br_args) == len(false_br_args)
 
         output_nodes = []

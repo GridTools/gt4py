@@ -101,13 +101,15 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         self._state = state
 
     @final
-    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def __call__(
+        self,
+    ) -> tuple[list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]], dace.SDFGState]:
         """ "Creates the dataflow representing the given GTIR builtin.
 
         Returns a list of connections, where each connectio is defined as:
         tuple(node, connector_name)
         """
-        return self._build()
+        return self._build(), self._state
 
     @final
     def _add_local_storage(self, data_type: ts.DataType, shape: list[str]) -> dace.nodes.AccessNode:

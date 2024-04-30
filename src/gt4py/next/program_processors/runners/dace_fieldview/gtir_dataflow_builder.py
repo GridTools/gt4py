@@ -37,27 +37,31 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace
 from gt4py.next.type_system import type_specifications as ts
 
 
+def unique_name(prefix: str) -> str:
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
+
+    return f"{prefix}_{unique_id}"
+
+
 class GtirDataflowBuilder(eve.NodeVisitor):
     """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
     _sdfg: dace.SDFG
-    _head_state: dace.SDFGState
     _data_types: dict[str, ts.FieldType | ts.ScalarType]
 
     def __init__(
         self,
         sdfg: dace.SDFG,
-        state: dace.SDFGState,
         data_types: dict[str, ts.FieldType | ts.ScalarType],
     ):
         self._sdfg = sdfg
-        self._head_state = state
         self._data_types = data_types
 
     def _add_local_storage(
         self, type_: ts.DataType, shape: list[str]
     ) -> tuple[str, dace.data.Data]:
-        name = f"{self._head_state.label}_var"
+        name = unique_name("var")
         if isinstance(type_, ts.FieldType):
             dtype = as_dace_type(type_.dtype)
             assert len(type_.dims) == len(shape)
@@ -86,22 +90,26 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
         return domain
 
-    def visit_expression(self, node: itir.Expr) -> list[dace.nodes.AccessNode]:
-        expr_builder = self.visit(node)
+    def visit_expression(
+        self, node: itir.Expr, head_state: dace.SDFGState
+    ) -> tuple[list[dace.nodes.AccessNode], dace.SDFGState]:
+        expr_builder = self.visit(node, state=head_state)
         assert callable(expr_builder)
-        results = expr_builder()
+        results, head_state = expr_builder()
+
         expressions_nodes = []
         for node, _ in results:
             assert isinstance(node, dace.nodes.AccessNode)
             expressions_nodes.append(node)
 
-        return expressions_nodes
+        return expressions_nodes, head_state
 
     def visit_symbolic(self, node: itir.Expr) -> str:
-        codegen = GtirTaskletCodegen(self._sdfg, self._head_state)
+        state = self._sdfg.start_state
+        codegen = GtirTaskletCodegen(self._sdfg, state)
         return codegen.visit(node)
 
-    def visit_FunCall(self, node: itir.FunCall) -> Callable:
+    def visit_FunCall(self, node: itir.FunCall, state: dace.SDFGState) -> Callable:
         if cpm.is_call_to(node.fun, "as_fieldop"):
             fun_node = node.fun
             assert len(fun_node.args) == 2
@@ -111,7 +119,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             assert isinstance(fun_node.args[1], itir.FunCall)
             field_domain = self.visit_domain(fun_node.args[1])
 
-            stencil_args = [self.visit(arg) for arg in node.args]
+            stencil_args = [self.visit(arg, state=state) for arg in node.args]
 
             # add local storage to compute the field operator over the given domain
             # TODO: use type inference to determine the result type
@@ -119,7 +127,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
             return AsFieldOp(
                 sdfg=self._sdfg,
-                state=self._head_state,
+                state=state,
                 stencil=fun_node.args[0],
                 domain=field_domain,
                 args=stencil_args,
@@ -134,31 +142,23 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             cond = self.visit_symbolic(fun_node.args[0])
 
             # use join state to terminate the dataflow on a single exit node
-            _join_state = self._sdfg.add_state(self._head_state.label + "_join")
+            join_state = self._sdfg.add_state(state.label + "_join")
 
             # expect true branch as second argument
-            _true_state = self._sdfg.add_state(self._head_state.label + "_true_branch")
-            self._sdfg.add_edge(self._head_state, _true_state, dace.InterstateEdge(condition=cond))
-            self._sdfg.add_edge(_true_state, _join_state, dace.InterstateEdge())
+            true_state = self._sdfg.add_state(state.label + "_true_branch")
+            self._sdfg.add_edge(state, true_state, dace.InterstateEdge(condition=cond))
+            self._sdfg.add_edge(true_state, join_state, dace.InterstateEdge())
+            true_br_callable = self.visit(fun_node.args[1], state=true_state)
 
             # and false branch as third argument
-            _false_state = self._sdfg.add_state(self._head_state.label + "_false_branch")
-            self._sdfg.add_edge(
-                self._head_state, _false_state, dace.InterstateEdge(condition=f"not {cond}")
-            )
-            self._sdfg.add_edge(_false_state, _join_state, dace.InterstateEdge())
-
-            self._head_state = _true_state
-            true_br_callable = self.visit(fun_node.args[1])
-
-            self._head_state = _false_state
-            false_br_callable = self.visit(fun_node.args[2])
-
-            self._head_state = _join_state
+            false_state = self._sdfg.add_state(state.label + "_false_branch")
+            self._sdfg.add_edge(state, false_state, dace.InterstateEdge(condition=f"not {cond}"))
+            self._sdfg.add_edge(false_state, join_state, dace.InterstateEdge())
+            false_br_callable = self.visit(fun_node.args[2], state=false_state)
 
             return Select(
                 sdfg=self._sdfg,
-                state=self._head_state,
+                state=join_state,
                 true_br_builder=true_br_callable,
                 false_br_builder=false_br_callable,
             )
@@ -166,8 +166,8 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
-    def visit_SymRef(self, node: itir.SymRef) -> Callable:
+    def visit_SymRef(self, node: itir.SymRef, state: dace.SDFGState) -> Callable:
         arg_name = str(node.id)
         assert arg_name in self._data_types
         arg_type = self._data_types[arg_name]
-        return SymbolRef(self._sdfg, self._head_state, arg_name, arg_type)
+        return SymbolRef(self._sdfg, state, arg_name, arg_type)

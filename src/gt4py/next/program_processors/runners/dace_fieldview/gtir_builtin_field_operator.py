@@ -69,7 +69,7 @@ class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
         input_memlets: dict[str, dace.Memlet] = {}
         assert len(self._args) == len(self._stencil.params)
         for arg, param in zip(self._args, self._stencil.params):
-            arg_nodes = arg()
+            arg_nodes, _ = arg()
             assert len(arg_nodes) == 1
             arg_node, arg_type = arg_nodes[0]
             connector = str(param.id)

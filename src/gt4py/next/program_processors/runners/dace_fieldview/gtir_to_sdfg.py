@@ -161,12 +161,13 @@ class GtirToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        dataflow_builder = DataflowBuilder(sdfg, state, self._data_types)
-        expr_nodes = dataflow_builder.visit_expression(stmt.expr)
+        dataflow_builder = DataflowBuilder(sdfg, self._data_types)
+        expr_nodes, state = dataflow_builder.visit_expression(stmt.expr, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_nodes = dataflow_builder.visit_expression(stmt.target)
+        target_builder = DataflowBuilder(sdfg, self._data_types)
+        target_nodes, state = target_builder.visit_expression(stmt.target, state)
         assert len(expr_nodes) == len(target_nodes)
 
         domain = dataflow_builder.visit_domain(stmt.domain)
@@ -186,7 +187,7 @@ class GtirToSDFG(eve.NodeVisitor):
                 assert len(domain) == 0
                 subset = "0"
 
-            dataflow_builder._head_state.add_nedge(
+            state.add_nedge(
                 expr_node,
                 target_node,
                 dace.Memlet(data=target_node.data, subset=subset),
