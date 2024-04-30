@@ -277,3 +277,77 @@ def test_gtir_select():
     for s in [False, True]:
         sdfg(cond=s, x=a, y=b, w=c, z=d, **FSYMBOLS)
         assert np.allclose(d, (a + b + 1) if s else (a + c + 1))
+
+
+def test_gtir_select_nested():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="select_nested",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x"),
+            itir.Sym(id="z"),
+            itir.Sym(id="cond_1"),
+            itir.Sym(id="cond_2"),
+            itir.Sym(id="size"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("select")(
+                        im.deref("cond_1"),
+                        im.call(
+                            im.call("as_fieldop")(
+                                im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                domain,
+                            )
+                        )("x"),
+                        im.call(
+                            im.call("select")(
+                                im.deref("cond_2"),
+                                im.call(
+                                    im.call("as_fieldop")(
+                                        im.lambda_("a")(im.plus(im.deref("a"), 2)),
+                                        domain,
+                                    )
+                                )("x"),
+                                im.call(
+                                    im.call("as_fieldop")(
+                                        im.lambda_("a")(im.plus(im.deref("a"), 3)),
+                                        domain,
+                                    )
+                                )("x"),
+                            )
+                        )(),
+                    )
+                )(),
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [
+            FTYPE,
+            FTYPE,
+            ts.ScalarType(ts.ScalarKind.BOOL),
+            ts.ScalarType(ts.ScalarKind.BOOL),
+            ts.ScalarType(ts.ScalarKind.INT32),
+        ],
+        OFFSET_PROVIDERS,
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+
+    for s1 in [False, True]:
+        for s2 in [False, True]:
+            sdfg(cond_1=s1, cond_2=s2, x=a, z=b, **FSYMBOLS)
+            assert np.allclose(b, (a + 1) if s1 else (a + 2) if s2 else (a + 3))

@@ -145,7 +145,7 @@ class GtirToSDFG(eve.NodeVisitor):
             self.visit(stmt, sdfg=sdfg, state=head_state)
             # sanity check: each statement should result in a single exit state, i.e. only internal branches
             sink_states = sdfg.sink_nodes()
-            assert sink_states == [head_state]
+            assert len(sink_states) == 1
             head_state = sink_states[0]
 
         sdfg.validate()
