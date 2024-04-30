@@ -129,7 +129,7 @@ def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
     )
-    testee = itir.Program(
+    testee_fieldview = itir.Program(
         id="sum_3fields",
         function_definitions=[],
         params=[
@@ -161,6 +161,32 @@ def test_gtir_sum3():
             )
         ],
     )
+    testee_inlined = itir.Program(
+        id="sum_3fields",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x"),
+            itir.Sym(id="y"),
+            itir.Sym(id="w"),
+            itir.Sym(id="z"),
+            itir.Sym(id="size"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b", "c")(
+                            im.plus(im.deref("a"), im.plus(im.deref("b"), im.deref("c")))
+                        ),
+                        domain,
+                    )
+                )("x", "y", "w"),
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
 
     a = np.random.rand(N)
     b = np.random.rand(N)
@@ -170,12 +196,13 @@ def test_gtir_sum3():
     sdfg_genenerator = FieldviewGtirToSDFG(
         [FTYPE, FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
     )
-    sdfg = sdfg_genenerator.visit(testee)
 
-    assert isinstance(sdfg, dace.SDFG)
+    for testee in [testee_fieldview, testee_inlined]:
+        sdfg = sdfg_genenerator.visit(testee)
+        assert isinstance(sdfg, dace.SDFG)
 
-    sdfg(x=a, y=b, w=c, z=d, **FSYMBOLS)
-    assert np.allclose(d, (a + b + c))
+        sdfg(x=a, y=b, w=c, z=d, **FSYMBOLS)
+        assert np.allclose(d, (a + b + c))
 
 
 def test_gtir_select():
