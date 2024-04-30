@@ -326,23 +326,34 @@ class DaCeIRBuilder(eve.NodeTranslator):
         *,
         is_target: bool,
         targets: Set[eve.SymbolRef],
-        var_offset_fields: Set[eve.SymbolRef],
+        offset_in_K_fields: Set[eve.SymbolRef],
         **kwargs: Any,
     ) -> Union[dcir.IndexAccess, dcir.ScalarAccess]:
+        """Generate the relevant accessor to match the memlet that was previously setup
+
+        This function was written when offset writing was forbidden. It has been refactor
+        to allow offset write in K with minimum changes.
+        """
+
         res: Union[dcir.IndexAccess, dcir.ScalarAccess]
-        if node.name in var_offset_fields:
-            res = dcir.IndexAccess(
-                name=node.name + "__",
-                offset=self.visit(
-                    node.offset,
-                    is_target=False,
-                    targets=targets,
-                    var_offset_fields=var_offset_fields,
-                    **kwargs,
-                ),
-                data_index=node.data_index,
-                dtype=node.dtype,
-            )
+        if node.name in offset_in_K_fields:
+            is_target = is_target or node.name in targets
+            name = get_tasklet_symbol(node.name, node.offset, is_target=is_target)
+            if is_target:
+                res = dcir.IndexAccess(
+                    name=name,
+                    offset=self.visit(
+                        node.offset,
+                        is_target=is_target,
+                        targets=targets,
+                        offset_in_K_fields=offset_in_K_fields,
+                        **kwargs,
+                    ),
+                    data_index=node.data_index,
+                    dtype=node.dtype,
+                )
+            else:
+                res = dcir.ScalarAccess(name=name, dtype=node.dtype)
         else:
             is_target = is_target or (
                 node.name in targets and node.offset == common.CartesianOffset.zero()
@@ -354,11 +365,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 )
             else:
                 res = dcir.ScalarAccess(name=name, dtype=node.dtype)
-        # Because we allow writing in K, we allow targets who have been
-        # writing in K to be omitted so the original connector can be re-used.
-        # Previous guardrails in `gtscript` restrict the writes
-        # to non-parallel K-loop so we don't have issues.
-        if is_target and node.offset.to_dict()["k"] == 0:
+        if is_target:
             targets.add(node.name)
         return res
 
@@ -826,11 +833,22 @@ class DaCeIRBuilder(eve.NodeTranslator):
             )
         )
 
-        var_offset_fields = {
+        # Offsets in K can be both:
+        # - read indexed via an expression,
+        # - write offset in K (both in expression and on scalar)
+        # We get all indexed via expression
+        offset_in_K_fields = {
             acc.name
             for acc in node.walk_values().if_isinstance(oir.FieldAccess)
             if isinstance(acc.offset, oir.VariableKOffset)
         }
+        # We add write offset to K
+        for assign_node in node.walk_values().if_isinstance(oir.AssignStmt):
+            if isinstance(assign_node.left, oir.FieldAccess):
+                acc = assign_node.left
+                if isinstance(acc.offset, common.CartesianOffset) and acc.offset.k != 0:
+                    offset_in_K_fields.add(acc.name)
+
         sections_idx = next(
             idx
             for idx, item in enumerate(global_ctx.library_node.expansion_specification)
@@ -847,7 +865,7 @@ class DaCeIRBuilder(eve.NodeTranslator):
                 global_ctx=global_ctx,
                 iteration_ctx=iteration_ctx,
                 symbol_collector=symbol_collector,
-                var_offset_fields=var_offset_fields,
+                offset_in_K_fields=offset_in_K_fields,
                 **kwargs,
             )
         )

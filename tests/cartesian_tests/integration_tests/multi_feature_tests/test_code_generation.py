@@ -673,11 +673,8 @@ def test_K_offset_write(backend):
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_K_offset_write_conditional(backend):
     # While loop have a bug in `dace:X` backends where
-    # the read-connector is used which means you can never
-    # update the field in a while.
-    # Logged in: https://github.com/GridTools/gt4py/issues/1496
-    if backend.startswith("dace") or backend == "cuda":
-        pytest.skip("DaCe backends have a bug when handling while loop.")
+    if backend == "cuda":
+        pytest.skip("Cuda backend is not capable of K offset write")
 
     arraylib = _get_array_library(backend)
     array_shape = (1, 1, 4)
