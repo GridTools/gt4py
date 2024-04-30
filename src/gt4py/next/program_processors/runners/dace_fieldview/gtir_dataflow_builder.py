@@ -21,10 +21,14 @@ import gt4py.eve as eve
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_translator import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_field_operator import (
     GtirBuiltinAsFieldOp as AsFieldOp,
-    GtirBuiltinScalarAccess as ScalarAccess,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_select import (
     GtirBuiltinSelect as Select,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_symbol_ref import (
+    GtirBuiltinSymbolRef as SymbolRef,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
     GtirTaskletCodegen,
@@ -39,7 +43,6 @@ class GtirDataflowBuilder(eve.NodeVisitor):
     _sdfg: dace.SDFG
     _head_state: dace.SDFGState
     _data_types: dict[str, ts.FieldType | ts.ScalarType]
-    _node_mapping: dict[str, dace.nodes.AccessNode]
 
     def __init__(
         self,
@@ -50,7 +53,6 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         self._sdfg = sdfg
         self._head_state = state
         self._data_types = data_types
-        self._node_mapping = {}
 
     def _add_local_storage(
         self, type_: ts.DataType, shape: list[str]
@@ -65,19 +67,10 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             )
         else:
             assert isinstance(type_, ts.ScalarType)
-            dtype = as_dace_type(type_)
             assert len(shape) == 0
+            dtype = as_dace_type(type_)
             name, data = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
         return name, data
-
-    def _add_access_node(self, data: str) -> dace.nodes.AccessNode:
-        assert data in self._sdfg.arrays
-        if data in self._node_mapping:
-            node = self._node_mapping[data]
-        else:
-            node = self._head_state.add_access(data)
-            self._node_mapping[data] = node
-        return node
 
     def visit_domain(self, node: itir.Expr) -> Sequence[tuple[Dimension, str, str]]:
         domain = []
@@ -156,15 +149,12 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             self._sdfg.add_edge(_false_state, _join_state, dace.InterstateEdge())
 
             self._head_state = _true_state
-            self._node_mapping = {}
             true_br_callable = self.visit(fun_node.args[1])
 
             self._head_state = _false_state
-            self._node_mapping = {}
             false_br_callable = self.visit(fun_node.args[2])
 
             self._head_state = _join_state
-            self._node_mapping = {}
 
             return Select(
                 sdfg=self._sdfg,
@@ -177,13 +167,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
 
     def visit_SymRef(self, node: itir.SymRef) -> Callable:
-        name = str(node.id)
-        assert name in self._data_types
-        data_type = self._data_types[name]
-        if isinstance(data_type, ts.FieldType):
-            access_node = self._add_access_node(name)
-            return lambda: [(access_node, data_type)]
-        else:
-            # scalar symbols are passed to the SDFG as symbols
-            assert name in self._sdfg.symbols
-            return ScalarAccess(self._sdfg, self._head_state, name, data_type)
+        arg_name = str(node.id)
+        assert arg_name in self._data_types
+        arg_type = self._data_types[arg_name]
+        return SymbolRef(self._sdfg, self._head_state, arg_name, arg_type)

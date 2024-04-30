@@ -95,18 +95,24 @@ class ValueExpr:
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
     _sdfg: dace.SDFG
     _state: dace.SDFGState
+    _nodes: list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]
 
     def __init__(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         self._sdfg = sdfg
         self._state = state
+        self._nodes = []
 
+    @final
     def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         """ "Creates the dataflow representing the given GTIR builtin.
 
         Returns a list of connections, where each connectio is defined as:
         tuple(node, connector_name)
         """
-        raise NotImplementedError
+        if not self._nodes:
+            self._nodes = self._build()
+            assert self._nodes
+        return self._nodes
 
     @final
     def _add_local_storage(self, data_type: ts.DataType, shape: list[str]) -> dace.nodes.AccessNode:
@@ -121,6 +127,9 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
             dtype = as_dace_type(data_type)
             name, _ = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
         return self._state.add_access(name)
+
+    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+        raise NotImplementedError
 
     def _visit_deref(self, node: itir.FunCall) -> str:
         assert len(node.args) == 1

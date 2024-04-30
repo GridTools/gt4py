@@ -22,35 +22,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
     GtirTaskletCodegen,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
-
-
-class GtirBuiltinScalarAccess(GtirTaskletCodegen):
-    _sym_name: str
-    _data_type: ts.ScalarType
-
-    def __init__(
-        self, sdfg: dace.SDFG, state: dace.SDFGState, sym_name: str, data_type: ts.ScalarType
-    ):
-        super().__init__(sdfg, state)
-        self._sym_name = sym_name
-        self._data_type = data_type
-
-    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        tasklet_node = self._state.add_tasklet(
-            f"get_{self._sym_name}",
-            {},
-            {"__out"},
-            f"__out = {self._sym_name}",
-        )
-        name = f"{self._state.label}_var"
-        dtype = as_dace_type(self._data_type)
-        output_node = self._state.add_scalar(name, dtype, find_new_name=True, transient=True)
-        self._state.add_edge(
-            tasklet_node, "__out", output_node, None, dace.Memlet(data=output_node.data, subset="0")
-        )
-        return [(output_node, self._data_type)]
 
 
 class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
@@ -74,7 +46,7 @@ class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
         self._domain = {dim: (lb, ub) for dim, lb, ub in domain}
         self._field_type = ts.FieldType([dim for dim, _, _ in domain], field_dtype)
 
-    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         # generate the python code for this stencil
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
@@ -137,55 +109,3 @@ class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
         )
 
         return [(field_node, self._field_type)]
-
-
-class GtirBuiltinSelect(GtirTaskletCodegen):
-    _true_br_builder: GtirTaskletCodegen
-    _false_br_builder: GtirTaskletCodegen
-
-    def __init__(
-        self,
-        sdfg: dace.SDFG,
-        state: dace.SDFGState,
-        true_br_builder: GtirTaskletCodegen,
-        false_br_builder: GtirTaskletCodegen,
-    ):
-        super().__init__(sdfg, state)
-        self._true_br_builder = true_br_builder
-        self._false_br_builder = false_br_builder
-
-    def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        true_br_args = self._true_br_builder()
-        false_br_args = self._false_br_builder()
-        assert len(true_br_args) == len(false_br_args)
-
-        output_nodes = []
-        for true_br, false_br in zip(true_br_args, false_br_args):
-            true_br_node, true_br_type = true_br
-            assert isinstance(true_br_node, dace.nodes.AccessNode)
-            false_br_node, false_br_type = false_br
-            assert isinstance(false_br_node, dace.nodes.AccessNode)
-            assert true_br_type == false_br_type
-            array_type = self._sdfg.arrays[true_br_node.data]
-            access_node = self._add_local_storage(true_br_type, array_type.shape)
-            output_nodes.append((access_node, true_br_type))
-
-            data_name = access_node.data
-            true_br_output_node = self._true_br_builder._state.add_access(data_name)
-            self._true_br_builder._state.add_nedge(
-                true_br_node,
-                true_br_output_node,
-                dace.Memlet.from_array(
-                    true_br_output_node.data, true_br_output_node.desc(self._sdfg)
-                ),
-            )
-
-            false_br_output_node = self._false_br_builder._state.add_access(data_name)
-            self._false_br_builder._state.add_nedge(
-                false_br_node,
-                false_br_output_node,
-                dace.Memlet.from_array(
-                    false_br_output_node.data, false_br_output_node.desc(self._sdfg)
-                ),
-            )
-        return output_nodes
