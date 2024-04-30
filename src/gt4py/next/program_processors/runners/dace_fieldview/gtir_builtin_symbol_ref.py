@@ -13,6 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from typing import Optional
+
 import dace
 
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
@@ -37,8 +39,24 @@ class GtirBuiltinSymbolRef(GtirTaskletCodegen):
         self._sym_name = sym_name
         self._sym_type = data_type
 
+    def _get_access_node(self) -> Optional[dace.nodes.AccessNode]:
+        access_nodes = [
+            node
+            for node in self._state.nodes()
+            if isinstance(node, dace.nodes.AccessNode) and node.data == self._sym_name
+        ]
+        if len(access_nodes) == 0:
+            return None
+        assert len(access_nodes) == 1
+        return access_nodes[0]
+
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        if isinstance(self._sym_type, ts.FieldType):
+        sym_node = self._get_access_node()
+        if sym_node:
+            # share access node in same state
+            pass
+
+        elif isinstance(self._sym_type, ts.FieldType):
             sym_node = self._state.add_access(self._sym_name)
 
         else:

@@ -95,12 +95,10 @@ class ValueExpr:
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
     _sdfg: dace.SDFG
     _state: dace.SDFGState
-    _nodes: list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]
 
     def __init__(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         self._sdfg = sdfg
         self._state = state
-        self._nodes = []
 
     @final
     def __call__(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
@@ -109,10 +107,7 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         Returns a list of connections, where each connectio is defined as:
         tuple(node, connector_name)
         """
-        if not self._nodes:
-            self._nodes = self._build()
-            assert self._nodes
-        return self._nodes
+        return self._build()
 
     @final
     def _add_local_storage(self, data_type: ts.DataType, shape: list[str]) -> dace.nodes.AccessNode:

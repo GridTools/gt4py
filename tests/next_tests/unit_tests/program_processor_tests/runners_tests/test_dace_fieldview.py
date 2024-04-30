@@ -88,6 +88,43 @@ def test_gtir_sum2():
     assert np.allclose(c, (a + b))
 
 
+def test_gtir_sum2_sym():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="sum_2fields",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="z"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
+                        domain,
+                    )
+                )("x", "x"),
+                domain=domain,
+                target=itir.SymRef(id="z"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+
+    sdfg(x=a, z=b, **FSYMBOLS)
+    assert np.allclose(b, (a + a))
+
+
 def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
