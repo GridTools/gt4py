@@ -79,14 +79,14 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
     def visit_FunCall(self, node: itir.FunCall, state: dace.SDFGState) -> Callable:
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            fun_node = node.fun
-            assert len(fun_node.args) == 2
+            assert len(node.fun.args) == 2
+            stencil_expr, domain_expr = node.fun.args
             # expect stencil (represented as a lambda function) as first argument
-            assert isinstance(fun_node.args[0], itir.Lambda)
+            assert isinstance(stencil_expr, itir.Lambda)
             # the domain of the field operator is passed as second argument
-            assert isinstance(fun_node.args[1], itir.FunCall)
-            field_domain = self.visit_domain(fun_node.args[1])
+            assert isinstance(domain_expr, itir.FunCall)
 
+            field_domain = self.visit_domain(domain_expr)
             stencil_args = [self.visit(arg, state=state) for arg in node.args]
 
             # add local storage to compute the field operator over the given domain
@@ -96,18 +96,18 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             return AsFieldOp(
                 sdfg=self._sdfg,
                 state=state,
-                stencil=fun_node.args[0],
+                stencil=stencil_expr,
                 domain=field_domain,
                 args=stencil_args,
                 field_dtype=node_type,
             )
 
         elif cpm.is_call_to(node.fun, "select"):
-            fun_node = node.fun
-            assert len(fun_node.args) == 3
+            assert len(node.fun.args) == 3
+            cond_expr, true_expr, false_expr = node.fun.args
 
             # expect condition as first argument
-            cond = self.visit_symbolic(fun_node.args[0])
+            cond = self.visit_symbolic(cond_expr)
 
             # use join state to terminate the dataflow on a single exit node
             select_state = self._sdfg.add_state_before(state, state.label + "_select")
@@ -117,7 +117,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             true_state = self._sdfg.add_state(state.label + "_true_branch")
             self._sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond))
             self._sdfg.add_edge(true_state, state, dace.InterstateEdge())
-            true_br_callable = self.visit(fun_node.args[1], state=true_state)
+            true_br_callable = self.visit(true_expr, state=true_state)
 
             # and false branch as third argument
             false_state = self._sdfg.add_state(state.label + "_false_branch")
@@ -125,7 +125,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
                 select_state, false_state, dace.InterstateEdge(condition=f"not {cond}")
             )
             self._sdfg.add_edge(false_state, state, dace.InterstateEdge())
-            false_br_callable = self.visit(fun_node.args[2], state=false_state)
+            false_br_callable = self.visit(false_expr, state=false_state)
 
             return Select(
                 sdfg=self._sdfg,

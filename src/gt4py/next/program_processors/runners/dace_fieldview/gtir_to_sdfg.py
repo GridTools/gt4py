@@ -35,15 +35,12 @@ class GtirToSDFG(eve.NodeVisitor):
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `ir.Stmt` (aka statement) expressions.
-    Each statement is translated to a taskgraph inside a separate state. The parent SDFG and
-    the translation state define the statement context, implemented by `FieldviewRegion`.
-    Statement states are chained one after the other: potential concurrency between states should be
-    extracted by the DaCe SDFG transformations.
-    The program translation keeps track of entry and exit states: each statement is supposed to extend
-    the SDFG but maintain the property of single exit state (that is no branching on leaf nodes).
-    Branching is allowed within the context of one statement, but in that case the statement should
+    Each statement is translated to a taskgraph inside a separate state. Statement states are chained
+    one after the other: concurrency between states should be extracted by the DaCe SDFG transformations.
+    The translator will extend the SDFG while preserving the property of single exit state:
+    branching is allowed within the context of one statement, but in that case the statement should
     terminate with a join state; the join state will represent the head state for next statement,
-    that is where to continue building the SDFG.
+    from where to continue building the SDFG.
     """
 
     _param_types: list[ts.TypeSpec]
@@ -146,7 +143,7 @@ class GtirToSDFG(eve.NodeVisitor):
         for i, stmt in enumerate(node.body):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             self.visit(stmt, sdfg=sdfg, state=head_state)
-            # sanity check below: each statement should have a single exit state -- aka no branches
+            # sanity check: each statement should result in a single exit state, i.e. only internal branches
             sink_states = sdfg.sink_nodes()
             assert sink_states == [head_state]
             head_state = sink_states[0]
@@ -155,7 +152,7 @@ class GtirToSDFG(eve.NodeVisitor):
         return sdfg
 
     def visit_SetAt(self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        """Visits a statement expression and writes the local result to some external storage.
+        """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of taskgraph writing to local (aka transient) storage.
         The translation of `SetAt` ensures that the result is written to the external storage.

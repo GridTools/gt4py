@@ -47,7 +47,8 @@ class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
         self._field_type = ts.FieldType([dim for dim, _, _ in domain], field_dtype)
 
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        # generate the python code for this stencil
+        # generate a tasklet implementing the stencil and represent the field operator
+        # as a mapped tasklet, which will range over the field domain.
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
             var=output_connector, code=self.visit(self._stencil.expr)
@@ -86,6 +87,7 @@ class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
                     )
                 else:
                     memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self._sdfg))
+                    # TODO: assume for now that all stencils (aka tasklets) perform single element access
                     memlet.volume = 1
                     input_memlets[connector] = memlet
             else:

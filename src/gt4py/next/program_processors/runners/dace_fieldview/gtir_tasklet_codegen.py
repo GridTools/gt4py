@@ -89,10 +89,13 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
     def __call__(
         self,
     ) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        """ "Creates the dataflow representing the given GTIR builtin.
+        """Creates the dataflow representing the given GTIR builtin.
 
-        Returns a list of connections, where each connectio is defined as:
-        tuple(node, connector_name)
+        Returns a list of SDFG nodes and the associated GT4Py data types:
+        tuple(node, data_type)
+
+        The GT4Py data type is useful in the case of fields, because it provides
+        information on the field domain (e.g. order of dimensions, types of dimensions).
         """
         return self._build()
 
@@ -140,6 +143,8 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
     @final
     def visit_Lambda(self, node: itir.Lambda) -> Any:
         # This visitor class should never encounter `itir.Lambda` expressions
+        # because a lambda represents a stencil, which translates from iterator to value.
+        # In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
     @final
