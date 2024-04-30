@@ -21,7 +21,7 @@ import numpy as np
 from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
+from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -112,14 +112,15 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
         return self._build(), self._state
 
     @final
-    def _add_local_storage(self, data_type: ts.DataType, shape: list[str]) -> dace.nodes.AccessNode:
-        name = f"{self._state.label}_var"
+    def _add_local_storage(
+        self, data_type: ts.FieldType | ts.ScalarType, shape: list[str]
+    ) -> dace.nodes.AccessNode:
+        name = unique_name("var")
         if isinstance(data_type, ts.FieldType):
             assert len(data_type.dims) == len(shape)
             dtype = as_dace_type(data_type.dtype)
             name, _ = self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
         else:
-            assert isinstance(data_type, ts.ScalarType)
             assert len(shape) == 0
             dtype = as_dace_type(data_type)
             name, _ = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)

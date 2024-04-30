@@ -33,15 +33,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_symbol_re
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
     GtirTaskletCodegen,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
-
-
-def unique_name(prefix: str) -> str:
-    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
-    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
-
-    return f"{prefix}_{unique_id}"
 
 
 class GtirDataflowBuilder(eve.NodeVisitor):
@@ -57,24 +49,6 @@ class GtirDataflowBuilder(eve.NodeVisitor):
     ):
         self._sdfg = sdfg
         self._data_types = data_types
-
-    def _add_local_storage(
-        self, type_: ts.DataType, shape: list[str]
-    ) -> tuple[str, dace.data.Data]:
-        name = unique_name("var")
-        if isinstance(type_, ts.FieldType):
-            dtype = as_dace_type(type_.dtype)
-            assert len(type_.dims) == len(shape)
-            # TODO: for now we let DaCe decide the array strides, evaluate if symblic strides should be used
-            name, data = self._sdfg.add_array(
-                name, shape, dtype, find_new_name=True, transient=True
-            )
-        else:
-            assert isinstance(type_, ts.ScalarType)
-            assert len(shape) == 0
-            dtype = as_dace_type(type_)
-            name, data = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
-        return name, data
 
     def visit_domain(self, node: itir.Expr) -> Sequence[tuple[Dimension, str, str]]:
         domain = []

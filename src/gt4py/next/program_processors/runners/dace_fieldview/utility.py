@@ -40,3 +40,10 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
         for offset, table in offset_provider.items()
         if isinstance(table, Connectivity)
     }
+
+
+def unique_name(prefix: str) -> str:
+    unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
+    setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
+
+    return f"{prefix}_{unique_id}"
