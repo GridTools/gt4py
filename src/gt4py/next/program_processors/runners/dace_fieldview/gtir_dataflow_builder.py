@@ -13,6 +13,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
+from dataclasses import dataclass
 from typing import Callable, Sequence
 
 import dace
@@ -36,19 +37,12 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen i
 from gt4py.next.type_system import type_specifications as ts
 
 
+@dataclass(frozen=True)
 class GtirDataflowBuilder(eve.NodeVisitor):
     """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
     _sdfg: dace.SDFG
     _data_types: dict[str, ts.FieldType | ts.ScalarType]
-
-    def __init__(
-        self,
-        sdfg: dace.SDFG,
-        data_types: dict[str, ts.FieldType | ts.ScalarType],
-    ):
-        self._sdfg = sdfg
-        self._data_types = data_types
 
     def visit_domain(self, node: itir.Expr) -> Sequence[tuple[Dimension, str, str]]:
         domain = []

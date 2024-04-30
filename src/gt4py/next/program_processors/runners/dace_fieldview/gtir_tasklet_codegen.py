@@ -12,7 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import dataclasses
+from dataclasses import dataclass
 from typing import Any, final
 
 import dace
@@ -80,25 +80,10 @@ _MATH_BUILTINS_MAPPING = {
 }
 
 
-@dataclasses.dataclass
-class SymbolExpr:
-    value: dace.symbolic.SymbolicType
-    dtype: dace.typeclass
-
-
-@dataclasses.dataclass
-class ValueExpr:
-    value: dace.nodes.AccessNode
-    dtype: dace.typeclass
-
-
+@dataclass(frozen=True)
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
     _sdfg: dace.SDFG
     _state: dace.SDFGState
-
-    def __init__(self, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
-        self._sdfg = sdfg
-        self._state = state
 
     @final
     def __call__(

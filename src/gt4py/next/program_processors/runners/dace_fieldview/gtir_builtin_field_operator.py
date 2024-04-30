@@ -27,8 +27,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 class GtirBuiltinAsFieldOp(GtirTaskletCodegen):
     _stencil: itir.Lambda
-    _domain: dict[Dimension, tuple[str, str]]
     _args: Sequence[GtirTaskletCodegen]
+    _domain: dict[Dimension, tuple[str, str]]
     _field_type: ts.FieldType
 
     def __init__(
