@@ -1447,7 +1447,11 @@ class IRMaker(ast.NodeVisitor):
                         message="Assignment to non-zero offsets is not supported in IJ.",
                         loc=nodes.Location.from_ast_node(t),
                     )
-                if spatial_offset[2] != 0 and self.iteration_order == nodes.IterationOrder.PARALLEL:
+                if (
+                    len(spatial_offset) == 3
+                    and spatial_offset[2] != 0
+                    and self.iteration_order == nodes.IterationOrder.PARALLEL
+                ):
                     raise GTScriptSyntaxError(
                         message="Assignment to non-zero offsets in K is not available in PARALLEL. Choose FORWARD or BACKWARD.",
                         loc=nodes.Location.from_ast_node(t),
