@@ -142,29 +142,27 @@ class GtirToSDFG(eve.NodeVisitor):
         # visit one statement at a time and put it into separate state
         for i, stmt in enumerate(node.body):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            self.visit(stmt, sdfg=sdfg, state=head_state)
-            # sanity check: each statement should result in a single exit state, i.e. only internal branches
-            sink_states = sdfg.sink_nodes()
-            assert len(sink_states) == 1
-            head_state = sink_states[0]
+            head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
         return sdfg
 
-    def visit_SetAt(self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
+    def visit_SetAt(
+        self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState
+    ) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of taskgraph writing to local (aka transient) storage.
         The translation of `SetAt` ensures that the result is written to the external storage.
         """
 
-        dataflow_builder = DataflowBuilder(sdfg, self._data_types)
-        expr_nodes = dataflow_builder.visit_expression(stmt.expr, state)
+        dataflow_builder = DataflowBuilder(sdfg, state, self._data_types)
+        head_state, expr_nodes = dataflow_builder.visit_expression(stmt.expr)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_builder = DataflowBuilder(sdfg, self._data_types)
-        target_nodes = target_builder.visit_expression(stmt.target, state)
+        target_builder = DataflowBuilder(sdfg, head_state, self._data_types)
+        head_state, target_nodes = target_builder.visit_expression(stmt.target)
         assert len(expr_nodes) == len(target_nodes)
 
         domain = dataflow_builder.visit_domain(stmt.domain)
@@ -184,8 +182,10 @@ class GtirToSDFG(eve.NodeVisitor):
                 assert len(domain) == 0
                 subset = "0"
 
-            state.add_nedge(
+            head_state.add_nedge(
                 expr_node,
                 target_node,
                 dace.Memlet(data=target_node.data, subset=subset),
             )
+
+        return head_state

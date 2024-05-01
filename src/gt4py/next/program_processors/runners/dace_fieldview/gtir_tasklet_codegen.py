@@ -13,16 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import Any, final
+from typing import final
 
-import dace
 import numpy as np
 
 from gt4py.eve import codegen
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
-from gt4py.next.type_system import type_specifications as ts
 
 
 _MATH_BUILTINS_MAPPING = {
@@ -82,40 +79,7 @@ _MATH_BUILTINS_MAPPING = {
 
 @dataclass(frozen=True)
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
-    _sdfg: dace.SDFG
-    _state: dace.SDFGState
-
-    @final
-    def __call__(
-        self,
-    ) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        """Creates the dataflow representing the given GTIR builtin.
-
-        Returns a list of SDFG nodes and the associated GT4Py data types:
-        tuple(node, data_type)
-
-        The GT4Py data type is useful in the case of fields, because it provides
-        information on the field domain (e.g. order of dimensions, types of dimensions).
-        """
-        return self._build()
-
-    @final
-    def _add_local_storage(
-        self, data_type: ts.FieldType | ts.ScalarType, shape: list[str]
-    ) -> dace.nodes.AccessNode:
-        name = unique_name("var")
-        if isinstance(data_type, ts.FieldType):
-            assert len(data_type.dims) == len(shape)
-            dtype = as_dace_type(data_type.dtype)
-            name, _ = self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
-        else:
-            assert len(shape) == 0
-            dtype = as_dace_type(data_type)
-            name, _ = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
-        return self._state.add_access(name)
-
-    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        raise NotImplementedError
+    """Stateless class to visit pure tasklet expressions."""
 
     def _visit_deref(self, node: itir.FunCall) -> str:
         assert len(node.args) == 1
@@ -139,13 +103,6 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
             else:
                 raise NotImplementedError(f"'{builtin_name}' not implemented.")
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
-
-    @final
-    def visit_Lambda(self, node: itir.Lambda) -> Any:
-        # This visitor class should never encounter `itir.Lambda` expressions
-        # because a lambda represents a stencil, which translates from iterator to value.
-        # In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
-        raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
     @final
     def visit_Literal(self, node: itir.Literal) -> str:

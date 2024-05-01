@@ -15,26 +15,49 @@
 
 import dace
 
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
-    GtirTaskletCodegen,
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
+    GtirDataflowBuilder,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinSelect(GtirTaskletCodegen):
-    _true_br_builder: GtirTaskletCodegen
-    _false_br_builder: GtirTaskletCodegen
+class GtirBuiltinSelect(GtirDataflowBuilder):
+    _true_br_builder: GtirDataflowBuilder
+    _false_br_builder: GtirDataflowBuilder
 
     def __init__(
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        true_br_builder: GtirTaskletCodegen,
-        false_br_builder: GtirTaskletCodegen,
+        data_types: dict[str, ts.FieldType | ts.ScalarType],
+        node: itir.FunCall,
     ):
-        super().__init__(sdfg, state)
-        self._true_br_builder = true_br_builder
-        self._false_br_builder = false_br_builder
+        super().__init__(sdfg, state, data_types)
+
+        assert cpm.is_call_to(node.fun, "select")
+        assert len(node.fun.args) == 3
+        cond_expr, true_expr, false_expr = node.fun.args
+
+        # expect condition as first argument
+        cond = self.visit_symbolic(cond_expr)
+
+        # use join state to terminate the dataflow on a single exit node
+        select_state = sdfg.add_state_before(state, state.label + "_select")
+        sdfg.remove_edge(sdfg.out_edges(select_state)[0])
+
+        # expect true branch as second argument
+        true_state = sdfg.add_state(state.label + "_true_branch")
+        sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond))
+        sdfg.add_edge(true_state, state, dace.InterstateEdge())
+        self._true_br_builder = self.fork(true_state).visit(true_expr)
+
+        # and false branch as third argument
+        false_state = sdfg.add_state(state.label + "_false_branch")
+        sdfg.add_edge(select_state, false_state, dace.InterstateEdge(condition=f"not {cond}"))
+        sdfg.add_edge(false_state, state, dace.InterstateEdge())
+        self._false_br_builder = self.fork(false_state).visit(false_expr)
 
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         true_br_args = self._true_br_builder()

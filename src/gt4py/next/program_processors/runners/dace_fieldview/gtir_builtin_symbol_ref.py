@@ -17,14 +17,15 @@ from typing import Optional
 
 import dace
 
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
-    GtirTaskletCodegen,
+from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
+    GtirDataflowBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinSymbolRef(GtirTaskletCodegen):
+class GtirBuiltinSymbolRef(GtirDataflowBuilder):
     _sym_name: str
     _sym_type: ts.FieldType | ts.ScalarType
 
@@ -32,12 +33,14 @@ class GtirBuiltinSymbolRef(GtirTaskletCodegen):
         self,
         sdfg: dace.SDFG,
         state: dace.SDFGState,
-        sym_name: str,
-        data_type: ts.FieldType | ts.ScalarType,
+        data_types: dict[str, ts.FieldType | ts.ScalarType],
+        node: itir.SymRef,
     ):
-        super().__init__(sdfg, state)
+        super().__init__(sdfg, state, data_types)
+        sym_name = str(node.id)
+        assert sym_name in self._data_types
         self._sym_name = sym_name
-        self._sym_type = data_type
+        self._sym_type = self._data_types[sym_name]
 
     def _get_access_node(self) -> Optional[dace.nodes.AccessNode]:
         access_nodes = [
