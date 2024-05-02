@@ -127,6 +127,8 @@ def make_const_list(scalar: ts.ScalarType) -> it_ts.ListType:
 
 @_register_type_inference_rule
 def list_get(index: ts.ScalarType, list_: it_ts.ListType) -> ts.DataType:
+    if isinstance(index, it_ts.OffsetLiteralType):
+        index = index.value
     assert isinstance(index, ts.ScalarType) and type_info.is_integral(index)
     assert isinstance(list_, it_ts.ListType)
     return list_.element_type
