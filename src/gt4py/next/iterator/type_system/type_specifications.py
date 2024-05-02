@@ -15,7 +15,6 @@
 import dataclasses
 import typing
 
-from gt4py._core.definitions import IntegralScalar
 from gt4py.next import common
 from gt4py.next.type_system import type_specifications as ts
 
@@ -32,7 +31,7 @@ class DomainType(ts.DataType):
 
 @dataclasses.dataclass(frozen=True)
 class OffsetLiteralType(ts.TypeSpec):
-    value: IntegralScalar | common.Dimension
+    value: ts.ScalarType | common.Dimension
 
 
 @dataclasses.dataclass(frozen=True)

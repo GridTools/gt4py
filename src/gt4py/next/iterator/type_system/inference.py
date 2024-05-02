@@ -498,7 +498,9 @@ class ITIRTypeInference(eve.NodeTranslator):
     #  the frontend.
     def visit_OffsetLiteral(self, node: itir.OffsetLiteral, **kwargs) -> it_ts.OffsetLiteralType:
         if _is_representable_as_int(node.value):
-            return it_ts.OffsetLiteralType(value=int(node.value))
+            return it_ts.OffsetLiteralType(
+                value=ts.ScalarType(kind=getattr(ts.ScalarKind, itir.INTEGER_INDEX_BUILTIN.upper()))
+            )
         else:
             assert isinstance(node.value, str) and node.value in self.dimensions
             return it_ts.OffsetLiteralType(value=self.dimensions[node.value])

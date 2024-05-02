@@ -97,7 +97,15 @@ def deref(it: it_ts.IteratorType) -> ts.DataType:
 @_register_type_inference_rule
 def can_deref(it: it_ts.IteratorType) -> ts.ScalarType:
     assert isinstance(it, it_ts.IteratorType)
-    assert _is_derefable_iterator_type(it)
+    # note: We don't check if the iterator is derefable here as the iterator only needs to
+    # to have a valid position. Consider a nested reduction, e.g.
+    #  `reduce(plus, 0)(neighbors(V2Eₒ, (↑(λ(a) → reduce(plus, 0)(neighbors(E2Vₒ, a))))(it))`
+    # When written using a `can_deref` we only care if the edge neighbor of the vertex of `it`
+    # is valid, i.e. we want `can_deref(shift(V2Eₒ, i)(it))` to return true. But since `it` is an
+    # iterator backed by a vertex field, the iterator is not derefable in the sense that
+    # its position is a valid position of the backing field.
+    # TODO(tehrengruber): Consider renaming can_deref to something that better reflects its
+    #  meaning.
     return ts.ScalarType(kind=ts.ScalarKind.BOOL)
 
 
@@ -186,23 +194,23 @@ def lift(stencil: TypeInferenceRule) -> TypeInferenceRule:
 def _convert_as_fieldop_input_to_iterator(
     domain: it_ts.DomainType, input_: ts.TypeSpec
 ) -> it_ts.IteratorType:
-    input_dims: list[common.Dimension] | None = None
+    # get the dimensions of all non-zero-dimensional field inputs and check they agree
+    all_input_dims = (
+        type_info.primitive_constituents(input_)
+        .if_isinstance(ts.FieldType)
+        .getattr("dims")
+        .filter(lambda dims: len(dims) > 0)
+        .to_list()
+    )
+    input_dims: list[common.Dimension]
+    if all_input_dims:
+        assert all(cur_input_dims == all_input_dims[0] for cur_input_dims in all_input_dims)
+        input_dims = all_input_dims[0]
+    else:
+        input_dims = []
 
-    def extract_dtype_and_dims(el_type: ts.TypeSpec):
-        nonlocal input_dims
-        assert isinstance(el_type, (ts.FieldType, ts.ScalarType))
-        el_type = type_info.promote(el_type, always_field=True)
-        if not input_dims:
-            input_dims = el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-        else:
-            # tuple inputs must all have the same defined dimensions as we
-            # create an iterator of tuples from them
-            assert input_dims == el_type.dims  # type: ignore[union-attr]  # ensured by always_field
-        return el_type.dtype  # type: ignore[union-attr]  # ensured by always_field
-
-    element_type = type_info.apply_to_primitive_constituents(extract_dtype_and_dims, input_)
-
-    assert input_dims is not None
+    element_type: ts.DataType
+    element_type = type_info.apply_to_primitive_constituents(type_info.extract_dtype, input_)
 
     # handle neighbor / sparse input fields
     defined_dims = []
