@@ -459,21 +459,25 @@ class ITIRTypeInference(eve.NodeTranslator):
         )
 
     def visit_SetAt(self, node: itir.SetAt, *, ctx) -> None:
-        self.visit(node.target, ctx=ctx)
         self.visit(node.expr, ctx=ctx)
-        # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
-        #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
-        #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
-        #  probably just change the behaviour of the lowering. Until then we do this more
-        #  complicated comparison.
+        self.visit(node.domain, ctx=ctx)
+        self.visit(node.target, ctx=ctx)
         assert node.target.type is not None and node.expr.type is not None
-        for target_type, expr_type in zip(
-            primitive_constituents(node.target.type),
-            primitive_constituents(node.expr.type),
-            strict=True,
-        ):
+        for target_type, path in primitive_constituents(node.target.type, with_path_arg=True):
+            # the target can have fewer elements than the expr in which case the output from the
+            # expression is simply discarded.
+            expr_type = functools.reduce(
+                lambda tuple_type, i: tuple_type.types[i],  # type: ignore[attr-defined]  # format ensured by primitive_constituents
+                path,
+                node.expr.type,
+            )
             assert isinstance(target_type, ts.FieldType)
             assert isinstance(expr_type, ts.FieldType)
+            # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
+            #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
+            #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
+            #  probably just change the behaviour of the lowering. Until then we do this more
+            #  complicated comparison.
             assert (
                 set(expr_type.dims) == set(target_type.dims)
                 and target_type.dtype == expr_type.dtype
