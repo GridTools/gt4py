@@ -230,6 +230,7 @@ def test_late_offset_axis():
     assert result.type == it_on_e_of_e_type
 
 
+# TODO(tehrengruber): Rewrite tests to use itir.Program
 def test_cartesian_fencil_definition():
     cartesian_domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
@@ -391,6 +392,3 @@ def test_fencil_with_nb_field_input():
 
     assert result.closures[0].stencil.expr.args[0].type == float64_list_type
     assert result.closures[0].stencil.type.returns == float64_type
-
-
-# TODO(tehrengruber): add tests for itir.Program

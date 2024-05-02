@@ -443,8 +443,10 @@ class ITIRTypeInference(eve.NodeTranslator):
             assert isinstance(param.type, ts.DataType)
             params[param.id] = param.type
         decls: dict[str, ts.FieldType] = {}
+        for fun_def in node.function_definitions:
+            decls[fun_def.id] = self.visit(fun_def, ctx=ctx | params | decls)
         for decl_node in node.declarations:
-            decls[decl_node.id] = self.visit(decl_node, ctx=ctx | params)
+            decls[decl_node.id] = self.visit(decl_node, ctx=ctx | params | decls)
         self.visit(node.body, ctx=ctx | params | decls)
         return it_ts.ProgramType(params=params)
 
