@@ -392,3 +392,36 @@ def test_fencil_with_nb_field_input():
 
     assert result.closures[0].stencil.expr.args[0].type == float64_list_type
     assert result.closures[0].stencil.type.returns == float64_type
+
+
+def test_program_tuple_setat_short_target():
+    cartesian_domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value="IDim"), 0, 1)
+    )
+
+    testee = itir.Program(
+        id="f",
+        function_definitions=[],
+        params=[im.sym("out", float_i_field)],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(im.lambda_()(im.make_tuple(1.0, 2.0)), cartesian_domain)
+                )(),
+                domain=cartesian_domain,
+                target=im.make_tuple("out"),
+            )
+        ],
+    )
+
+    result = itir_type_inference.infer(testee, offset_provider={"Ioff": IDim})
+
+    assert (
+        isinstance(result.body[0].expr.type, ts.TupleType)
+        and len(result.body[0].expr.type.types) == 2
+    )
+    assert (
+        isinstance(result.body[0].target.type, ts.TupleType)
+        and len(result.body[0].target.type.types) == 1
+    )
