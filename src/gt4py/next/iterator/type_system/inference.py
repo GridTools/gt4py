@@ -26,6 +26,7 @@ from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_call_to
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.iterator.type_system import rules, type_specifications as it_ts
 from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system.type_info import primitive_constituents
 
 
 def _is_representable_as_int(s: int | str) -> bool:
@@ -455,10 +456,26 @@ class ITIRTypeInference(eve.NodeTranslator):
             lambda dtype: ts.FieldType(dims=domain.dims, dtype=dtype), node.dtype
         )
 
-    def visit_SetAt(self, node: itir.SetAt, *, ctx):
+    def visit_SetAt(self, node: itir.SetAt, *, ctx) -> None:
         self.visit(node.target, ctx=ctx)
         self.visit(node.expr, ctx=ctx)
-        assert node.target.type == node.expr.type
+        # TODO(tehrengruber): The lowering emits domains that always have the horizontal domain
+        #  first. Since the expr inherits the ordering from the domain this can lead to a mismatch
+        #  between the target and expr (e.g. when the target has dimension K, Vertex). We should
+        #  probably just change the behaviour of the lowering. Until then we do this more
+        #  complicated comparison.
+        assert node.target.type is not None and node.expr.type is not None
+        for target_type, expr_type in zip(
+            primitive_constituents(node.target.type),
+            primitive_constituents(node.expr.type),
+            strict=True,
+        ):
+            assert isinstance(target_type, ts.FieldType)
+            assert isinstance(expr_type, ts.FieldType)
+            assert (
+                set(expr_type.dims) == set(target_type.dims)
+                and target_type.dtype == expr_type.dtype
+            )
 
     # TODO(tehrengruber): Remove after new ITIR format with apply_stencil is used everywhere
     def visit_StencilClosure(self, node: itir.StencilClosure, *, ctx) -> it_ts.StencilClosureType:
