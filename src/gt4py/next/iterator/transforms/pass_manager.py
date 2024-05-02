@@ -17,7 +17,6 @@ from typing import Callable, Optional
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.iterator import ir as itir
-from gt4py.next.iterator.transforms import simple_inline_heuristic
 from gt4py.next.iterator.transforms.collapse_list_get import CollapseListGet
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
@@ -41,14 +40,11 @@ from gt4py.next.iterator.transforms.unroll_reduce import UnrollReduce
 class LiftMode(enum.Enum):
     FORCE_INLINE = enum.auto()
     USE_TEMPORARIES = enum.auto()
-    SIMPLE_HEURISTIC = enum.auto()
 
 
 def _inline_lifts(ir, lift_mode):
     if lift_mode == LiftMode.FORCE_INLINE:
         return InlineLifts().visit(ir)
-    elif lift_mode == LiftMode.SIMPLE_HEURISTIC:
-        return InlineLifts(simple_inline_heuristic.is_eligible_for_inlining).visit(ir)
     elif lift_mode == LiftMode.USE_TEMPORARIES:
         return InlineLifts(
             flags=InlineLifts.Flag.INLINE_TRIVIAL_DEREF_LIFT

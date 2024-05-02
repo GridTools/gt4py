@@ -84,8 +84,10 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         return dataclasses.replace(self, **kwargs)
 
 
-class ChainableWorkflowMixin(Workflow[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
+class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co]):
+    def chain(
+        self, next_step: Workflow[EndT_co, NewEndT]
+    ) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
 
