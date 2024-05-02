@@ -22,7 +22,6 @@ import dataclasses
 import itertools
 import math
 import sys
-import warnings
 
 import numpy as np
 import numpy.typing as npt
@@ -1000,7 +999,6 @@ def _shift_field_indices(
 def np_as_located_field(
     *axes: common.Dimension, origin: Optional[dict[common.Dimension, int]] = None
 ) -> Callable[[np.ndarray], common.Field]:
-
     origin = origin or {}
 
     def _maker(a) -> common.Field:

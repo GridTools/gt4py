@@ -163,17 +163,16 @@ class NdArrayField(
         xp = cls.array_ns
         xp_dtype = None if dtype is None else xp.dtype(core_defs.dtype(dtype).scalar_type)
         array = xp.asarray(data, dtype=xp_dtype)
+        domain = common.domain(domain)
 
-        if __debug__:
-            domain = common.domain(domain)
-            if dtype is not None:
-                assert array.dtype.type == core_defs.dtype(dtype).scalar_type
+        if dtype is not None:
+            assert array.dtype.type == core_defs.dtype(dtype).scalar_type
 
-            assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
+        assert issubclass(array.dtype.type, core_defs.SCALAR_TYPES)
 
-            assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
-            assert len(domain) == array.ndim
-            assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
+        assert all(isinstance(d, common.Dimension) for d in domain.dims), domain
+        assert len(domain) == array.ndim
+        assert all(s == 1 or len(r) == s for r, s in zip(domain.ranges, array.shape))
 
         return cls(domain, array)
 

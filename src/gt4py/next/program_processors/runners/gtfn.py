@@ -13,11 +13,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
-import warnings
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import factory
-import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -33,6 +31,7 @@ from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
+
 
 def handle_tuple(arg: Any, convert_arg: Callable) -> Any:
     return tuple(convert_arg(a) for a in arg)
@@ -51,7 +50,9 @@ type_handlers_convert_args = {
 
 try:
     import cupy as cp
+
     from gt4py.next.embedded.nd_array_field import CuPyArrayField
+
     type_handlers_convert_args[CuPyArrayField] = handle_field
 except ImportError:
     cp = None
@@ -73,12 +74,13 @@ def convert_args(
     inp: stages.CompiledProgram, device: core_defs.DeviceType = core_defs.DeviceType.CPU
 ) -> stages.CompiledProgram:
     def decorated_program(
-        *args: Any, conn_args = None, offset_provider: dict[str, common.Connectivity | common.Dimension]
+        *args: Any,
+        conn_args: Optional[list[ConnectivityArg]] = None,
+        offset_provider: dict[str, common.Connectivity | common.Dimension],
     ) -> None:
-
         # If we don't pass them as in the case of a CachedProgram extract connectivities here.
         if conn_args is None:
-            conn_args = extract_connectivity_args(offset_provider, device)
+            conn_args = extract_connectivity_args(offset_provider)
 
         converted_args = [convert_arg(arg) for arg in args]
         return inp(*converted_args, *conn_args)
@@ -106,7 +108,7 @@ type_handlers_connectivity_args = {
 
 
 def extract_connectivity_args(
-    offset_provider: dict[str, Any], device: core_defs.DeviceType
+    offset_provider: dict[str, Any],
 ) -> list[ConnectivityArg]:
     zero_tuple = (0, 0)
     args = []
