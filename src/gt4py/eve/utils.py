@@ -401,12 +401,12 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+        hash_algorithm = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
+        hash_algorithm = hashlib.new(hash_algorithm)
 
-    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
-    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
+    hash_algorithm.update(pickle.dumps(args))
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result

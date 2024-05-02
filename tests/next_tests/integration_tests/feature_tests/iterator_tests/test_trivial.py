@@ -21,7 +21,7 @@ from gt4py.next.iterator.builtins import *
 from gt4py.next.iterator.runtime import closure, fendef, fundef, offset
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 I = offset("I")
@@ -44,7 +44,7 @@ def baz(baz_inp):
     return deref(lift(bar)(baz_inp))
 
 
-def test_trivial(program_processor, lift_mode):
+def test_trivial(program_processor):
     program_processor, validate = program_processor
 
     rng = np.random.default_rng()
@@ -60,7 +60,6 @@ def test_trivial(program_processor, lift_mode):
         program_processor,
         inp_s,
         out=out_s,
-        lift_mode=lift_mode,
         offset_provider={"I": IDim, "J": JDim},
     )
 
@@ -73,11 +72,8 @@ def stencil_shifted_arg_to_lift(inp):
     return deref(lift(deref)(shift(I, -1)(inp)))
 
 
-def test_shifted_arg_to_lift(program_processor, lift_mode):
+def test_shifted_arg_to_lift(program_processor):
     program_processor, validate = program_processor
-
-    if lift_mode != transforms.LiftMode.FORCE_INLINE:
-        pytest.xfail("shifted input arguments not supported for lift_mode != LiftMode.FORCE_INLINE")
 
     rng = np.random.default_rng()
     inp = rng.uniform(size=(5, 7))
@@ -95,7 +91,6 @@ def test_shifted_arg_to_lift(program_processor, lift_mode):
         program_processor,
         inp_s,
         out=out_s,
-        lift_mode=lift_mode,
         offset_provider={"I": IDim, "J": JDim},
     )
 
@@ -113,7 +108,7 @@ def fen_direct_deref(i_size, j_size, out, inp):
     )
 
 
-def test_direct_deref(program_processor, lift_mode):
+def test_direct_deref(program_processor):
     program_processor, validate = program_processor
 
     rng = np.random.default_rng()
@@ -129,7 +124,6 @@ def test_direct_deref(program_processor, lift_mode):
         *out.shape,
         out_s,
         inp_s,
-        lift_mode=lift_mode,
         offset_provider=dict(),
     )
 

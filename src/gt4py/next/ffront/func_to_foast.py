@@ -16,11 +16,21 @@ from __future__ import annotations
 
 import ast
 import builtins
-from typing import Any, Callable, Iterable, Mapping, Type, cast
+import dataclasses
+import typing
+from typing import Any, Callable, Iterable, Mapping, Type
+
+import factory
 
 import gt4py.eve as eve
 from gt4py.next import errors
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
+from gt4py.next.ffront import (
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    source_utils,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.ast_passes import (
     SingleAssignTargetPass,
     SingleStaticAssignPass,
@@ -35,7 +45,72 @@ from gt4py.next.ffront.foast_passes.dead_closure_var_elimination import DeadClos
 from gt4py.next.ffront.foast_passes.iterable_unpack import UnpackedAssignPass
 from gt4py.next.ffront.foast_passes.type_alias_replacement import TypeAliasReplacement
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+
+
+@workflow.make_step
+def func_to_foast(
+    inp: ffront_stages.FieldOperatorDefinition[ffront_stages.OperatorNodeT],
+) -> ffront_stages.FoastOperatorDefinition[ffront_stages.OperatorNodeT]:
+    source_def = source_utils.SourceDefinition.from_function(inp.definition)
+    closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
+    annotations = typing.get_type_hints(inp.definition)
+    foast_definition_node = FieldOperatorParser.apply(source_def, closure_vars, annotations)
+    loc = foast_definition_node.location
+    operator_attribute_nodes = {
+        key: foast.Constant(value=value, type=type_translation.from_value(value), location=loc)
+        for key, value in inp.attributes.items()
+    }
+    untyped_foast_node = inp.node_class(
+        id=foast_definition_node.id,
+        definition=foast_definition_node,
+        location=loc,
+        **operator_attribute_nodes,
+    )
+    foast_node = FieldOperatorTypeDeduction.apply(untyped_foast_node)
+    return ffront_stages.FoastOperatorDefinition(
+        foast_node=foast_node,
+        closure_vars=closure_vars,
+        grid_type=inp.grid_type,
+        attributes=inp.attributes,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToFoast(workflow.SkippableStep):
+    step: workflow.Workflow[
+        ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
+    ] = func_to_foast
+
+    def skip_condition(
+        self, inp: ffront_stages.FieldOperatorDefinition | ffront_stages.FoastOperatorDefinition
+    ) -> bool:
+        match inp:
+            case ffront_stages.FieldOperatorDefinition():
+                return False
+            case ffront_stages.FoastOperatorDefinition():
+                return True
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToFoastFactory(factory.Factory):
+    class Meta:
+        model = OptionalFuncToFoast
+
+    class Params:
+        workflow: workflow.Workflow[
+            ffront_stages.FieldOperatorDefinition, ffront_stages.FoastOperatorDefinition
+        ] = func_to_foast
+        cached = factory.Trait(
+            step=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
+                )
+            )
+        )
+
+    step = factory.LazyAttribute(lambda o: o.workflow)
 
 
 class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
@@ -141,7 +216,7 @@ class FieldOperatorParser(DialectParser[foast.FunctionDefinition]):
                         ],  # this is a constraint type that will not be inferred (as the function is polymorphic)
                         pos_or_kw_args={},
                         kw_only_args={},
-                        returns=cast(ts.DataType, type_translation.from_type_hint(value)),
+                        returns=typing.cast(ts.DataType, type_translation.from_type_hint(value)),
                     ),
                     namespace=dialect_ast_enums.Namespace.CLOSURE,
                     location=location,
