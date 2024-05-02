@@ -23,7 +23,7 @@ import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
 from gt4py.eve.utils import content_hash
 from gt4py.next import NeighborTableOffsetProvider, backend, common, config
-from gt4py.next.embedded.nd_array_field import CuPyArrayField, NumPyArrayField
+from gt4py.next.embedded.nd_array_field import NumPyArrayField
 from gt4py.next.iterator import transforms
 from gt4py.next.iterator.transforms import global_tmps
 from gt4py.next.otf import recipes, stages, workflow
@@ -33,7 +33,6 @@ from gt4py.next.otf.compilation.build_systems import compiledb
 from gt4py.next.program_processors import modular_executor
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.type_system.type_translation import from_value
-
 
 def handle_tuple(arg: Any, convert_arg: Callable) -> Any:
     return tuple(convert_arg(a) for a in arg)
@@ -45,15 +44,21 @@ def handle_field(arg: Any) -> tuple:
     return arr, origin
 
 
-def handle_default(arg: Any) -> Any:
-    return arg
-
-
 type_handlers_convert_args = {
     tuple: handle_tuple,
     NumPyArrayField: handle_field,
-    CuPyArrayField: handle_field,
 }
+
+try:
+    import cupy as cp
+    from gt4py.next.embedded.nd_array_field import CuPyArrayField
+    type_handlers_convert_args[CuPyArrayField] = handle_field
+except ImportError:
+    cp = None
+
+
+def handle_default(arg: Any) -> Any:
+    return arg
 
 
 def convert_arg(arg: Any) -> Any:
@@ -79,21 +84,6 @@ def convert_args(
         return inp(*converted_args, *conn_args)
 
     return decorated_program
-
-
-def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
-    if device == core_defs.DeviceType.CUDA:
-        import cupy as cp
-
-        if not isinstance(connectivity_arg, cp.ndarray):
-            warnings.warn(
-                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
-                stacklevel=2,
-            )
-            return cp.asarray(connectivity_arg)
-    return connectivity_arg
 
 
 ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
