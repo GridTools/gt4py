@@ -26,6 +26,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class GtirBuiltinSymbolRef(GtirDataflowBuilder):
+    """Generates the dataflow subgraph for a `itir.SymRef` node."""
+
     _sym_name: str
     _sym_type: ts.FieldType | ts.ScalarType
 
@@ -43,6 +45,7 @@ class GtirBuiltinSymbolRef(GtirDataflowBuilder):
         self._sym_type = self._data_types[sym_name]
 
     def _get_access_node(self) -> Optional[dace.nodes.AccessNode]:
+        """Returns, if present, the access node in current state for the data symbol."""
         access_nodes = [
             node
             for node in self._state.nodes()
@@ -56,14 +59,16 @@ class GtirBuiltinSymbolRef(GtirDataflowBuilder):
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         sym_node = self._get_access_node()
         if sym_node:
-            # share access node in same state
+            # if already present in current state, share access node
             pass
 
         elif isinstance(self._sym_type, ts.FieldType):
+            # add access node to current state
             sym_node = self._state.add_access(self._sym_name)
 
         else:
-            # scalar symbols are passed to the SDFG as symbols
+            # scalar symbols are passed to the SDFG as symbols: build tasklet node
+            # to write the symbol to a scalar access node
             assert self._sym_name in self._sdfg.symbols
             tasklet_node = self._state.add_tasklet(
                 f"get_{self._sym_name}",

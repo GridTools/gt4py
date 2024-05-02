@@ -41,13 +41,11 @@ class GtirDataflowBuilder(eve.NodeVisitor):
     def __call__(
         self,
     ) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        """Creates the dataflow representing the given GTIR builtin.
+        """The callable interface is used by the caller to build the dataflow graph.
 
-        Returns a list of SDFG nodes and the associated GT4Py data types:
-        tuple(node, data_type)
-
-        The GT4Py data type is useful in the case of fields, because it provides
-        information on the field domain (e.g. order of dimensions, types of dimensions).
+        It allows to build the dataflow graph inside a given state starting
+        from the innermost nodes, by propagating the intermediate results
+        as access nodes to temporary local storage.
         """
         return self._build()
 
@@ -55,6 +53,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
     def _add_local_storage(
         self, data_type: ts.FieldType | ts.ScalarType, shape: list[str]
     ) -> dace.nodes.AccessNode:
+        """Allocates temporary storage to be used in the local scope for intermediate results."""
         name = unique_name("var")
         if isinstance(data_type, ts.FieldType):
             assert len(data_type.dims) == len(shape)
@@ -67,15 +66,28 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         return self._state.add_access(name)
 
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        raise NotImplementedError
+        """Creates the dataflow subgraph representing a given GTIR builtin.
 
-    def _visit_node(self, node: itir.FunCall) -> None:
+        This method is used by derived classes of `GtirDataflowBuilder`,
+        which build a specialized subgraph for a certain GTIR builtin.
+
+        Returns a list of SDFG nodes and the associated GT4Py data type:
+        tuple(node, data_type)
+
+        The GT4Py data type is useful in the case of fields, because it provides
+        information on the field domain (e.g. order of dimensions, types of dimensions).
+        """
         raise NotImplementedError
 
     def fork(self, state: dace.SDFGState) -> "GtirDataflowBuilder":
         return GtirDataflowBuilder(self._sdfg, state, self._data_types)
 
     def visit_domain(self, node: itir.Expr) -> list[tuple[Dimension, str, str]]:
+        """
+        Specialized visit method for domain expressions.
+
+        Returns a list of dimensions and the corresponding range.
+        """
         domain = []
         assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
         for named_range in node.args:
@@ -92,6 +104,14 @@ class GtirDataflowBuilder(eve.NodeVisitor):
     def visit_expression(
         self, node: itir.Expr
     ) -> tuple[dace.SDFGState, list[dace.nodes.AccessNode]]:
+        """
+        Specialized visit method for fieldview expressions.
+
+        This method represents the entry point to visit 'Stmt' expressions.
+        As such, it must preserve the property of single exit state in the SDFG.
+
+        TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
+        """
         expr_builder = self.visit(node)
         assert callable(expr_builder)
         results = expr_builder()
@@ -109,6 +129,13 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         return head_state, expressions_nodes
 
     def visit_symbolic(self, node: itir.Expr) -> str:
+        """
+        Specialized visit method for pure stencil expressions.
+
+        Returns a string represnting the Python code to be used as tasklet body.
+        TODO: should we return a list of code strings in case of tuple returns,
+        one for each output value?
+        """
         return GtirTaskletCodegen().visit(node)
 
     def visit_FunCall(self, node: itir.FunCall) -> Callable:
@@ -143,9 +170,11 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
     @final
     def visit_Lambda(self, node: itir.Lambda) -> Any:
-        # This visitor class should never encounter `itir.Lambda` expressions
-        # because a lambda represents a stencil, which translates from iterator to value.
-        # In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
+        """
+        This visitor class should never encounter `itir.Lambda` expressions
+        because a lambda represents a stencil, which translates from iterator to values.
+        In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
+        """
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
     def visit_SymRef(self, node: itir.SymRef) -> Callable:

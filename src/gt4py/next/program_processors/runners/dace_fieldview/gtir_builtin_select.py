@@ -24,6 +24,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class GtirBuiltinSelect(GtirDataflowBuilder):
+    """Generates the dataflow subgraph for the `select` builtin function."""
+
     _true_br_builder: GtirDataflowBuilder
     _false_br_builder: GtirDataflowBuilder
 
@@ -43,7 +45,21 @@ class GtirBuiltinSelect(GtirDataflowBuilder):
         # expect condition as first argument
         cond = self.visit_symbolic(cond_expr)
 
-        # use join state to terminate the dataflow on a single exit node
+        # use current head state to terminate the dataflow, and add a entry state
+        # to connect the true/false branch states as follows:
+        #
+        #               ------------
+        #           === |  select  | ===
+        #          ||   ------------   ||
+        #          \/                  \/
+        #     ------------       -------------
+        #     |   true   |       |   false   |
+        #     ------------       -------------
+        #          ||                  ||
+        #          ||   ------------   ||
+        #           ==> |   head   | <==
+        #               ------------
+        #
         select_state = sdfg.add_state_before(state, state.label + "_select")
         sdfg.remove_edge(sdfg.out_edges(select_state)[0])
 

@@ -21,6 +21,7 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
+    """Converts GT4Py scalar type to corresponding DaCe type."""
     if type_.kind == ts.ScalarKind.BOOL:
         return dace.bool_
     elif type_.kind == ts.ScalarKind.INT32:
@@ -35,6 +36,12 @@ def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
+    """
+    Filter offset providers of type `Connectivity`.
+
+    In other words, filter out the cartesian offset providers.
+    Returns a new dictionary containing only `Connectivity` values.
+    """
     return {
         offset: table
         for offset, table in offset_provider.items()
@@ -43,6 +50,7 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
 
 
 def unique_name(prefix: str) -> str:
+    """Generate a string containing a unique integer id, which is updated incrementally."""
     unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
     setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
 

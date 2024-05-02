@@ -27,6 +27,8 @@ from gt4py.next.type_system import type_specifications as ts
 
 
 class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
+    """Generates the dataflow subgraph for the `as_field_op` builtin function."""
+
     _stencil_expr: itir.Lambda
     _stencil_args: list[Callable]
     _field_domain: dict[Dimension, tuple[str, str]]
@@ -63,14 +65,14 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
         self._stencil_args = stencil_args
 
     def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        # generate a tasklet implementing the stencil and represent the field operator
-        # as a mapped tasklet, which will range over the field domain.
+        # generate a tasklet node implementing the stencil function and represent
+        # the field operator as a mapped tasklet, which will range over the field domain
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
             var=output_connector, code=self.visit_symbolic(self._stencil_expr.expr)
         )
 
-        # allocate local (aka transient) storage for the field
+        # allocate local temporary storage for the result field
         field_shape = [
             # diff between upper and lower bound
             f"{self._field_domain[dim][1]} - {self._field_domain[dim][0]}"
@@ -104,7 +106,8 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
                     )
                 else:
                     memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self._sdfg))
-                    # TODO: assume for now that all stencils (aka tasklets) perform single element access
+                    # set volume to 1 because the stencil function always performs single element access
+                    # TODO: check validity of this assumption
                     memlet.volume = 1
                     input_memlets[connector] = memlet
             else:

@@ -23,6 +23,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_symbol_re
 )
 
 
+# export short names of translation classes for GTIR builtin functions
 __all__ = [
     "AsFieldOp",
     "Select",

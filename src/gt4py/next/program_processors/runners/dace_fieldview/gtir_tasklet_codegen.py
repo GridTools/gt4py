@@ -79,7 +79,12 @@ _MATH_BUILTINS_MAPPING = {
 
 @dataclass(frozen=True)
 class GtirTaskletCodegen(codegen.TemplatedGenerator):
-    """Stateless class to visit pure tasklet expressions."""
+    """
+    Stateless class to visit pure tasklet expressions.
+
+    This visitor class is responsible for building the string representing
+    the Python code inside a tasklet node.
+    """
 
     def _visit_deref(self, node: itir.FunCall) -> str:
         assert len(node.args) == 1

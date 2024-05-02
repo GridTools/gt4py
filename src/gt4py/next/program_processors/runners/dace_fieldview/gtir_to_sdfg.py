@@ -36,7 +36,7 @@ class GtirToSDFG(eve.NodeVisitor):
     This class is responsible for translation of `ir.Program`, that is the top level representation
     of a GT4Py program as a sequence of `ir.Stmt` (aka statement) expressions.
     Each statement is translated to a taskgraph inside a separate state. Statement states are chained
-    one after the other: concurrency between states should be extracted by the DaCe SDFG transformations.
+    one after the other: concurrency between states should be extracted by means of SDFG analysis.
     The translator will extend the SDFG while preserving the property of single exit state:
     branching is allowed within the context of one statement, but in that case the statement should
     terminate with a join state; the join state will represent the head state for next statement,
@@ -86,6 +86,11 @@ class GtirToSDFG(eve.NodeVisitor):
         return shape, strides
 
     def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
+        """
+        Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
+
+        For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
+        """
         assert isinstance(type_, (ts.FieldType, ts.ScalarType))
         self._data_types[name] = type_
 
@@ -101,27 +106,30 @@ class GtirToSDFG(eve.NodeVisitor):
             sdfg.add_symbol(name, dtype)
 
     def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Mapping[str, str]:
+        """
+        Add temporary storage (aka transient) for data containers used as GTIR temporaries.
+
+        Assume all temporaries to be fields, therefore represented as dace arrays.
+        """
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
         return {}
 
     def visit_Program(self, node: itir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
 
-        First, it will allocate array and scalar storage for external (aka non-transient)
-        and local (aka transient) data. The local data, at this stage, is used
-        for temporary declarations, which should be available everywhere in the SDFG
-        but not outside.
-        Then, all statements are translated, one after the other in separate states.
+        First, it will allocate field and scalar storage for global data. The storage
+        represents global data, available everywhere in the SDFG, either containing
+        external data (aka non-transient data) or temporary data (aka transient data).
+        The temporary data is global, therefore available everywhere in the SDFG
+        but not outside. Then, all statements are translated, one after the other.
         """
         if node.function_definitions:
             raise NotImplementedError("Functions expected to be inlined as lambda calls.")
 
         sdfg = dace.SDFG(node.id)
-
-        # we use entry/exit state to keep track of entry/exit point of graph execution
         entry_state = sdfg.add_state("program_entry", is_start_block=True)
 
-        # declarations of temporaries result in local (aka transient) array definitions in the SDFG
+        # declarations of temporaries result in transient array definitions in the SDFG
         if node.declarations:
             temp_symbols: dict[str, str] = {}
             for decl in node.declarations:
@@ -134,14 +142,16 @@ class GtirToSDFG(eve.NodeVisitor):
         else:
             head_state = entry_state
 
-        # add global arrays (aka non-transient) to the SDFG
+        # add non-transient arrays and/or SDFG symbols for the program arguments
         assert len(node.params) == len(self._param_types)
         for param, type_ in zip(node.params, self._param_types):
             self._add_storage(sdfg, str(param.id), type_)
 
-        # visit one statement at a time and put it into separate state
+        # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
+            # the statement could eventually modify the head state by appending new states
+            # however, it should preserve the property of single exit state (aka head state)
             head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
@@ -152,8 +162,8 @@ class GtirToSDFG(eve.NodeVisitor):
     ) -> dace.SDFGState:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
-        Each statement expression results in some sort of taskgraph writing to local (aka transient) storage.
-        The translation of `SetAt` ensures that the result is written to the external storage.
+        Each statement expression results in some sort of dataflow gragh writing to temporary storage.
+        The translation of `SetAt` ensures that the result is written to some global storage.
         """
 
         dataflow_builder = DataflowBuilder(sdfg, state, self._data_types)
