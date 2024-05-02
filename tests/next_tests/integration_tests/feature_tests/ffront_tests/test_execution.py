@@ -208,6 +208,37 @@ def test_nested_scalar_arg(unstructured_case):
     )
 
 
+@pytest.mark.uses_tuple_args
+def test_scalar_tuple_arg(unstructured_case):
+    @gtx.field_operator
+    def testee(a: tuple[int32, tuple[int32, int32]]) -> cases.VField:
+        return broadcast(a[0] + 2 * a[1][0] + 3 * a[1][1], (Vertex,))
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.full(
+            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 3 * a[1][1], dtype=int32
+        ),
+    )
+
+
+@pytest.mark.uses_tuple_args
+def test_mixed_field_scalar_tuple_arg(unstructured_case):
+    @gtx.field_operator
+    def testee(a: tuple[int32, tuple[int32, cases.VField, int32]]) -> cases.VField:
+        return a[0] + 2 * a[1][0] + 3 * a[1][1] + 5 * a[1][2]
+
+    cases.verify_with_default_data(
+        unstructured_case,
+        testee,
+        ref=lambda a: np.full(
+            [unstructured_case.default_sizes[Vertex]], a[0] + 2 * a[1][0] + 5 * a[1][2], dtype=int32
+        )
+        + 3 * field_utils.asnumpy(a[1][1]),
+    )
+
+
 @pytest.mark.uses_index_fields
 @pytest.mark.uses_cartesian_shift
 def test_scalar_arg_with_field(cartesian_case):
@@ -225,11 +256,6 @@ def test_scalar_arg_with_field(cartesian_case):
 
 
 def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
-    pytest.xfail(
-        "Scalar arguments not supported to be used in both domain specification "
-        "and as an argument to a field operator."
-    )
-
     @gtx.field_operator
     def testee_op(size: gtx.IndexType) -> gtx.Field[[IDim], gtx.IndexType]:
         return broadcast(size, (IDim,))

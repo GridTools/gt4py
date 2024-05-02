@@ -78,15 +78,16 @@ def _process_args(
     for param_idx, param in enumerate(past_node.params):
         if implicit_domain and isinstance(param.type, (ts.FieldType, ts.TupleType)):
             shapes_and_dims = [*_field_constituents_shape_and_dims(args[param_idx], param.type)]
-            shape, dims = shapes_and_dims[0]
-            if not all(
-                el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
-            ):
-                raise ValueError(
-                    "Constituents of composite arguments (e.g. the elements of a"
-                    " tuple) need to have the same shape and dimensions."
-                )
-            size_args.extend(shape if shape else [None] * len(dims))
+            if shapes_and_dims:  # scalar or zero-dim field otherwise
+                shape, dims = shapes_and_dims[0]
+                if not all(
+                    el_shape == shape and el_dims == dims for (el_shape, el_dims) in shapes_and_dims
+                ):
+                    raise ValueError(
+                        "Constituents of composite arguments (e.g. the elements of a"
+                        " tuple) need to have the same shape and dimensions."
+                    )
+                size_args.extend(shape if shape else [None] * len(dims))
     return tuple(rewritten_args), tuple(size_args), kwargs
 
 
@@ -106,6 +107,6 @@ def _field_constituents_shape_and_dims(
             else:
                 yield (tuple(), dims)
         case ts.ScalarType():
-            yield (tuple(), [])
+            pass
         case _:
             raise ValueError("Expected 'FieldType' or 'TupleType' thereof.")

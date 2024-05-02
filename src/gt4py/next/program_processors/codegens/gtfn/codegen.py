@@ -138,6 +138,8 @@ class GTFNCodegen(codegen.TemplatedGenerator):
         "::gridtools::sid::composite::keys<${','.join(f'::gridtools::integral_constant<int,{i}>' for i in range(len(values)))}>::make_values(${','.join(values)})"
     )
 
+    SidFromScalar = as_fmt("gridtools::stencil::global_parameter({arg})")
+
     def visit_FunCall(self, node: gtfn_ir.FunCall, **kwargs: Any) -> str:
         if (
             isinstance(node.fun, gtfn_ir_common.SymRef)
