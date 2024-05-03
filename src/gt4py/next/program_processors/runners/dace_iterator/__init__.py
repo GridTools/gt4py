@@ -254,9 +254,6 @@ def build_sdfg_from_itir(
         load_sdfg_from_file: Allows to read the SDFG from file, instead of generating it, for debug only.
         save_sdfg:           If `True`, the default the SDFG is stored as a file and can be loaded, this allows to skip the lowering step, requires `load_sdfg_from_file` set to `True`.
         use_field_canonical_representation: If `True`,  assume that the fields dimensions are sorted alphabetically.
-
-    Notes:
-        Currently only the `FORCE_INLINE` liftmode is supported and the value of `lift_mode` is ignored.
     """
 
     sdfg_filename = f"_dacegraphs/gt4py/{program.id}.sdfg"
