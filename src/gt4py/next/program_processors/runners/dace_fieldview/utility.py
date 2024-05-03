@@ -22,17 +22,19 @@ from gt4py.next.type_system import type_specifications as ts
 
 def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
-    if type_.kind == ts.ScalarKind.BOOL:
-        return dace.bool_
-    elif type_.kind == ts.ScalarKind.INT32:
-        return dace.int32
-    elif type_.kind == ts.ScalarKind.INT64:
-        return dace.int64
-    elif type_.kind == ts.ScalarKind.FLOAT32:
-        return dace.float32
-    elif type_.kind == ts.ScalarKind.FLOAT64:
-        return dace.float64
-    raise ValueError(f"Scalar type '{type_}' not supported.")
+    match type_.kind:
+        case ts.ScalarKind.BOOL:
+            return dace.bool_
+        case ts.ScalarKind.INT32:
+            return dace.int32
+        case ts.ScalarKind.INT64:
+            return dace.int64
+        case ts.ScalarKind.FLOAT32:
+            return dace.float32
+        case ts.ScalarKind.FLOAT64:
+            return dace.float64
+        case _:
+            raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:

@@ -22,7 +22,7 @@ from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
-    GtirToSDFG as FieldviewGtirToSDFG,
+    GTIRToSDFG as FieldviewGtirToSDFG,
 )
 from gt4py.next.type_system import type_specifications as ts
 

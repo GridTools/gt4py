@@ -13,11 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from dataclasses import dataclass
-from typing import final
 
 import numpy as np
 
 from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 
@@ -78,13 +78,16 @@ _MATH_BUILTINS_MAPPING = {
 
 
 @dataclass(frozen=True)
-class GtirTaskletCodegen(codegen.TemplatedGenerator):
+class GTIRTaskletCodegen(codegen.TemplatedGenerator):
     """
     Stateless class to visit pure tasklet expressions.
 
     This visitor class is responsible for building the string representing
     the Python code inside a tasklet node.
     """
+
+    Literal = as_fmt("{value}")
+    SymRef = as_fmt("{id}")
 
     def _visit_deref(self, node: itir.FunCall) -> str:
         assert len(node.args) == 1
@@ -108,11 +111,3 @@ class GtirTaskletCodegen(codegen.TemplatedGenerator):
             else:
                 raise NotImplementedError(f"'{builtin_name}' not implemented.")
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
-
-    @final
-    def visit_Literal(self, node: itir.Literal) -> str:
-        return node.value
-
-    @final
-    def visit_SymRef(self, node: itir.SymRef) -> str:
-        return str(node.id)

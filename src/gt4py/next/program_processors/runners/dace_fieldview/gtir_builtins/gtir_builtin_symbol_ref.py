@@ -19,16 +19,16 @@ import dace
 
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    GtirBuiltinTranslator,
+    GTIRBuiltinTranslator,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GtirDataflowBuilder,
+    GTIRDataflowBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinSymbolRef(GtirBuiltinTranslator):
+class GTIRBuiltinSymbolRef(GTIRBuiltinTranslator):
     """Generates the dataflow subgraph for a `itir.SymRef` node."""
 
     sym_name: str
@@ -36,7 +36,7 @@ class GtirBuiltinSymbolRef(GtirBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GtirDataflowBuilder,
+        dataflow_builder: GTIRDataflowBuilder,
         state: dace.SDFGState,
         node: itir.SymRef,
     ):

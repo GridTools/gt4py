@@ -20,15 +20,15 @@ import dace
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    GtirBuiltinTranslator,
+    GTIRBuiltinTranslator,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GtirDataflowBuilder,
+    GTIRDataflowBuilder,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinSelect(GtirBuiltinTranslator):
+class GTIRBuiltinSelect(GTIRBuiltinTranslator):
     """Generates the dataflow subgraph for the `select` builtin function."""
 
     true_br_builder: Callable
@@ -36,7 +36,7 @@ class GtirBuiltinSelect(GtirBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GtirDataflowBuilder,
+        dataflow_builder: GTIRDataflowBuilder,
         state: dace.SDFGState,
         node: itir.FunCall,
     ):
@@ -81,10 +81,6 @@ class GtirBuiltinSelect(GtirBuiltinTranslator):
         self.false_br_builder = dataflow_builder.visit(false_expr, head_state=false_state)
 
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        true_br_args = self.true_br_builder()
-        false_br_args = self.false_br_builder()
-        assert len(true_br_args) == len(false_br_args)
-
         # retrieve true/false states as predecessors of head state
         branch_states = tuple(edge.src for edge in self.sdfg.in_edges(self.head_state))
         assert len(branch_states) == 2
@@ -93,9 +89,11 @@ class GtirBuiltinSelect(GtirBuiltinTranslator):
         else:
             false_state, true_state = branch_states
 
+        true_br_args = self.true_br_builder()
+        false_br_args = self.false_br_builder()
 
         output_nodes = []
-        for true_br, false_br in zip(true_br_args, false_br_args):
+        for true_br, false_br in zip(true_br_args, false_br_args, strict=True):
             true_br_node, true_br_type = true_br
             assert isinstance(true_br_node, dace.nodes.AccessNode)
             false_br_node, false_br_type = false_br

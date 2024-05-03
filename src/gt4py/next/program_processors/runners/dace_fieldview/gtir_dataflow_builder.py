@@ -23,13 +23,13 @@ from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
-    GtirTaskletCodegen,
+    GTIRTaskletCodegen,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclass(frozen=True)
-class GtirDataflowBuilder(eve.NodeVisitor):
+class GTIRDataflowBuilder(eve.NodeVisitor):
     """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
     sdfg: dace.SDFG
@@ -90,7 +90,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         TODO: should we return a list of code strings in case of tuple returns,
         one for each output value?
         """
-        return GtirTaskletCodegen().visit(node)
+        return GTIRTaskletCodegen().visit(node)
 
     def visit_FunCall(self, node: itir.FunCall, head_state: dace.SDFGState) -> Callable:
         from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins

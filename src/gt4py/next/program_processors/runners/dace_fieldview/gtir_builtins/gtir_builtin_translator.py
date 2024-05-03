@@ -16,15 +16,16 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from typing import final
-from gt4py import eve
 
 import dace
+
+from gt4py import eve
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclass(frozen=True)
-class GtirBuiltinTranslator(eve.NodeVisitor):
+class GTIRBuiltinTranslator(eve.NodeVisitor):
     head_state: dace.SDFGState
     sdfg: dace.SDFG
 
@@ -60,7 +61,7 @@ class GtirBuiltinTranslator(eve.NodeVisitor):
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         """Creates the dataflow subgraph representing a given GTIR builtin.
 
-        This method is used by derived classes of `GtirDataflowBuilder`,
+        This method is used by derived classes of `GTIRBuiltinTranslator`,
         which build a specialized subgraph for a certain GTIR builtin.
 
         Returns a list of SDFG nodes and the associated GT4Py data type:
@@ -69,4 +70,3 @@ class GtirBuiltinTranslator(eve.NodeVisitor):
         The GT4Py data type is useful in the case of fields, because it provides
         information on the field domain (e.g. order of dimensions, types of dimensions).
         """
-        raise NotImplementedError

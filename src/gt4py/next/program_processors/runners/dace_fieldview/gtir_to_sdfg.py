@@ -25,7 +25,7 @@ from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GtirDataflowBuilder as DataflowBuilder,
+    GTIRDataflowBuilder as DataflowBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     as_dace_type,
@@ -34,7 +34,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import (
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirToSDFG(eve.NodeVisitor):
+class GTIRToSDFG(eve.NodeVisitor):
     """Provides translation capability from a GTIR program to a DaCe SDFG.
 
     This class is responsible for translation of `ir.Program`, that is the top level representation
@@ -47,13 +47,13 @@ class GtirToSDFG(eve.NodeVisitor):
     from where to continue building the SDFG.
     """
 
-    _param_types: list[ts.TypeSpec]
+    _param_types: list[ts.DataType]
     _data_types: dict[str, ts.FieldType | ts.ScalarType]
     _offset_providers: Mapping[str, Any]
 
     def __init__(
         self,
-        param_types: list[ts.TypeSpec],
+        param_types: list[ts.DataType],
         offset_providers: dict[str, Connectivity | Dimension],
     ):
         self._param_types = param_types
@@ -78,36 +78,38 @@ class GtirToSDFG(eve.NodeVisitor):
         neighbor_tables = filter_connectivities(self._offset_providers)
         shape = [
             (
-                # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
                 neighbor_tables[dim.value].max_neighbors
                 if dim.kind == DimensionKind.LOCAL
-                # we reuse the same gt4py symbol for field size passed as scalar argument which is used in closure domain
+                # we reuse the same symbol for field size passed as scalar argument to the gt4py program
                 else dace.symbol(f"__{name}_size_{i}", dtype)
             )
             for i, dim in enumerate(dims)
         ]
-        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i, _ in enumerate(dims)]
+        strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
         return shape, strides
 
-    def _add_storage(self, sdfg: dace.SDFG, name: str, type_: ts.TypeSpec) -> None:
+    def _add_storage(self, sdfg: dace.SDFG, name: str, data_type: ts.DataType) -> None:
         """
         Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
 
         For fields, it allocates dace arrays, while scalars are stored as SDFG symbols.
         """
-        assert isinstance(type_, (ts.FieldType, ts.ScalarType))
-        self._data_types[name] = type_
-
-        if isinstance(type_, ts.FieldType):
-            dtype = as_dace_type(type_.dtype)
+        if isinstance(data_type, ts.FieldType):
+            dtype = as_dace_type(data_type.dtype)
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
-            sym_shape, sym_strides = self._make_array_shape_and_strides(name, type_.dims)
+            sym_shape, sym_strides = self._make_array_shape_and_strides(name, data_type.dims)
             sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=False)
-        else:
-            dtype = as_dace_type(type_)
+        elif isinstance(data_type, ts.ScalarType):
+            dtype = as_dace_type(data_type)
             # scalar arguments passed to the program are represented as symbols in DaCe SDFG
             sdfg.add_symbol(name, dtype)
+        else:
+            raise RuntimeError(f"Data type '{type(data_type)}' not supported.")
+
+        # TODO: unclear why mypy complains about incompatible types
+        assert isinstance(data_type, (ts.FieldType, ts.ScalarType))
+        self._data_types[name] = data_type
 
     def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Mapping[str, str]:
         """
@@ -116,7 +118,6 @@ class GtirToSDFG(eve.NodeVisitor):
         Assume all temporaries to be fields, therefore represented as dace arrays.
         """
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
-        return {}
 
     def visit_Program(self, node: itir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
@@ -147,8 +148,7 @@ class GtirToSDFG(eve.NodeVisitor):
             head_state = entry_state
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
-        assert len(node.params) == len(self._param_types)
-        for param, type_ in zip(node.params, self._param_types):
+        for param, type_ in zip(node.params, self._param_types, strict=True):
             self._add_storage(sdfg, str(param.id), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
@@ -172,13 +172,12 @@ class GtirToSDFG(eve.NodeVisitor):
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
         target_nodes = dataflow_builder.visit_expression(stmt.target, state)
-        assert len(expr_nodes) == len(target_nodes)
 
         domain = dataflow_builder.visit_domain(stmt.domain)
         # convert domain to dictionary to ease access to dimension boundaries
         domain_map = {dim: (lb, ub) for dim, lb, ub in domain}
 
-        for expr_node, target_node in zip(expr_nodes, target_nodes):
+        for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
             target_field_type = self._data_types[target_node.data]

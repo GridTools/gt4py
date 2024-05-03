@@ -21,18 +21,18 @@ from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
-    GtirBuiltinTranslator,
+    GTIRBuiltinTranslator,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GtirDataflowBuilder,
+    GTIRDataflowBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
-    GtirTaskletCodegen,
+    GTIRTaskletCodegen,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinAsFieldOp(GtirBuiltinTranslator):
+class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
     stencil_expr: itir.Lambda
@@ -42,7 +42,7 @@ class GtirBuiltinAsFieldOp(GtirBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GtirDataflowBuilder,
+        dataflow_builder: GTIRDataflowBuilder,
         state: dace.SDFGState,
         node: itir.FunCall,
         stencil_args: list[Callable],
@@ -74,7 +74,7 @@ class GtirBuiltinAsFieldOp(GtirBuiltinTranslator):
         # the field operator as a mapped tasklet, which will range over the field domain
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
-            var=output_connector, code=GtirTaskletCodegen().visit(self.stencil_expr.expr)
+            var=output_connector, code=GTIRTaskletCodegen().visit(self.stencil_expr.expr)
         )
 
         # allocate local temporary storage for the result field
@@ -90,8 +90,7 @@ class GtirBuiltinAsFieldOp(GtirBuiltinTranslator):
 
         input_nodes: dict[str, dace.nodes.AccessNode] = {}
         input_memlets: dict[str, dace.Memlet] = {}
-        assert len(self.stencil_args) == len(self.stencil_expr.params)
-        for arg, param in zip(self.stencil_args, self.stencil_expr.params):
+        for arg, param in zip(self.stencil_args, self.stencil_expr.params, strict=True):
             arg_nodes = arg()
             assert len(arg_nodes) == 1
             arg_node, arg_type = arg_nodes[0]
