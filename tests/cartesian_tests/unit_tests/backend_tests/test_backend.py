@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 from typing import Any, Dict, cast
 
 import numpy as np
@@ -175,6 +176,8 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
 @pytest.mark.parametrize("backend_name", ["cuda"])
 def test_deprecation_gtc_cuda(backend_name: str):
     # Default deprecation, raise an error
+    # Assumes that the GT4PY_GTC_ENABLE_CUDA env variable is not set or set to "0"
+    # Renders the "cuda" backend untestable
     build_info: Dict[str, Any] = {}
     builder = (
         StencilBuilder(cast(StencilFunc, stencil_def))
