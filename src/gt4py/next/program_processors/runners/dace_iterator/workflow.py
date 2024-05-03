@@ -23,6 +23,7 @@ from typing import Callable, Optional
 
 import dace
 import factory
+from dace.codegen.compiled_sdfg import _array_interface_ptr as get_array_interface_ptr
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
@@ -201,30 +202,39 @@ def convert_args(
     def decorated_program(
         *args, offset_provider: dict[str, common.Connectivity | common.Dimension]
     ):
-        if not sdfg_program._lastargs:
-            sdfg_args = get_sdfg_args(
-                sdfg,
-                *args,
-                check_args=False,
-                offset_provider=offset_provider,
-                on_gpu=on_gpu,
-                use_field_canonical_representation=use_field_canonical_representation,
-            )
-            with dace.config.temporary_config():
-                dace.config.Config.set("compiler", "allow_view_arguments", value=True)
-                return inp(**sdfg_args)
+        if sdfg_program._lastargs:
+            # The scalar arguments should be replaced with the actual value; for field arguments,
+            # the data pointer should remain the same otherwise reconstruct the args list.
+            use_fast_call = True
+            scalar_args_table: dict[str, ctypes._SimpleCData] = {}
+            for pos, (param, arg) in enumerate(zip(sdfg.arg_names, args), start=1):
+                if isinstance(arg, common.Field):
+                    storage_type = sdfg.arrays[param].storage
+                    assert isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
+                    if sdfg_program._lastargs[0][pos].value != get_array_interface_ptr(
+                        arg.ndarray, storage_type
+                    ):
+                        use_fast_call = False
+                        break
+                else:
+                    scalar_args_table[param] = arg
 
-        else:
-            # the scalar arguments should be replaced with the actual value
-            # for field arguments, the data pointer and array symbols should remain the same
-            scalar_args_table = {
-                param: arg
-                for param, arg in zip(sdfg.arg_names, args)
-                if not isinstance(arg, common.Field)
-            }
-            for param, pos in inp.sdfg_scalar_args.items():
-                assert not isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
-                sdfg_program._lastargs[0][pos].value = scalar_args_table[param]
-            return sdfg_program.fast_call(*sdfg_program._lastargs)
+            if use_fast_call:
+                for param, pos in inp.sdfg_scalar_args.items():
+                    assert not isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)
+                    sdfg_program._lastargs[0][pos].value = scalar_args_table[param]
+                return sdfg_program.fast_call(*sdfg_program._lastargs)
+
+        sdfg_args = get_sdfg_args(
+            sdfg,
+            *args,
+            check_args=False,
+            offset_provider=offset_provider,
+            on_gpu=on_gpu,
+            use_field_canonical_representation=use_field_canonical_representation,
+        )
+        with dace.config.temporary_config():
+            dace.config.Config.set("compiler", "allow_view_arguments", value=True)
+            return inp(**sdfg_args)
 
     return decorated_program
