@@ -96,6 +96,7 @@ test py38:
     SLURM_TIMELIMIT: 120
     NUM_PROCESSES: auto
     VIRTUALENV_SYSTEM_SITE_PACKAGES: 1
+    GT4PY_GTC_ENABLE_CUDA: 1
     <<: *py38
 
 test py39:
