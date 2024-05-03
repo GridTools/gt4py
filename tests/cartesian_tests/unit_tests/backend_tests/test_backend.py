@@ -176,7 +176,7 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
 @pytest.fixture
 def enable_cuda_not_set():
     value = os.environ.pop("GT4PY_GTC_ENABLE_CUDA", None)
-    yield
+    yield "GT4PY_GTC_ENABLE_CUDA" not in os.environ
     if value:
         os.environ["GT4PY_GTC_ENABLE_CUDA"] = value
 
