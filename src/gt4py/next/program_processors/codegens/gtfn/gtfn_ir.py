@@ -147,11 +147,7 @@ GTFN_BUILTINS = [
 ARITHMETIC_BUILTINS = itir.ARITHMETIC_BUILTINS
 TYPEBUILTINS = itir.TYPEBUILTINS
 
-BUILTINS = {
-    *GTFN_BUILTINS,
-    *ARITHMETIC_BUILTINS,
-    *TYPEBUILTINS,
-}
+BUILTINS = {*GTFN_BUILTINS, *ARITHMETIC_BUILTINS, *TYPEBUILTINS}
 
 
 class TagDefinition(Node):
@@ -159,7 +155,7 @@ class TagDefinition(Node):
     alias: Optional[Union[str, SymRef]] = None
 
 
-class FencilDefinition(Node, ValidatedSymbolTableTrait):
+class Program(Node, ValidatedSymbolTableTrait):
     id: SymbolName
     params: list[Sym]
     function_definitions: list[

@@ -96,10 +96,7 @@ class DialectParser(ast.NodeVisitor, Generic[DialectRootT]):
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls,
-        output_ast: DialectRootT,
-        closure_vars: dict[str, Any],
-        annotations: dict[str, Any],
+        cls, output_ast: DialectRootT, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> DialectRootT:
         return output_ast
 

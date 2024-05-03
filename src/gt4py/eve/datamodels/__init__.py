@@ -61,7 +61,7 @@ Examples:
     ...     name: str
     ...     amount: int
     ...
-    ...     @validator('name')
+    ...     @validator("name")
     ...     def _name_validator(self, attribute, value):
     ...         if len(value) < 3:
     ...             raise ValueError(
@@ -99,7 +99,7 @@ Examples:
     ...     num_instances: ClassVar[int] = 0
     ...
     ...     def __init__(self, a: int, b: int) -> None:
-    ...         self.__auto_init__(a/b)
+    ...         self.__auto_init__(a / b)
     ...
     ...     def __pre_init__(self) -> None:
     ...         self.__class__.num_instances += 1

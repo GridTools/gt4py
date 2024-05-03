@@ -42,12 +42,14 @@ class ModuleGenerator(BaseModuleGenerator):
         comp_pkg = (
             self.builder.caching.module_prefix + "computation" + self.builder.caching.module_postfix
         )
-        return "\n".join([
-            *super().generate_imports().splitlines(),
-            "import pathlib",
-            "from gt4py.cartesian.utils import make_module_from_file",
-            f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
-        ])
+        return "\n".join(
+            [
+                *super().generate_imports().splitlines(),
+                "import pathlib",
+                "from gt4py.cartesian.utils import make_module_from_file",
+                f'computation = make_module_from_file("{comp_pkg}", pathlib.Path(__file__).parent / "{comp_pkg}.py")',
+            ]
+        )
 
     def generate_implementation(self) -> str:
         params = [f"{p.name}={p.name}" for p in self.builder.gtir.params]
@@ -115,12 +117,7 @@ class NumpyBackend(BaseBackend, CLIBackendMixin):
         oir_pipeline = self.builder.options.backend_opts.get(
             "oir_pipeline",
             DefaultPipeline(
-                skip=[
-                    IJCacheDetection,
-                    KCacheDetection,
-                    PruneKCacheFills,
-                    PruneKCacheFlushes,
-                ]
+                skip=[IJCacheDetection, KCacheDetection, PruneKCacheFills, PruneKCacheFlushes]
             ),
         )
         oir_node = oir_pipeline.run(base_oir)

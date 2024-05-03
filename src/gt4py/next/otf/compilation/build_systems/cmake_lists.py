@@ -119,11 +119,13 @@ class CMakeListsGenerator(eve.codegen.TemplatedGenerator):
 
         cfg = ""
         if dep.name == "nanobind":
-            cfg = "\n".join([
-                "nanobind_build_library(nanobind-static)",
-                f"nanobind_compile_options({dep.target})",
-                f"nanobind_link_options({dep.target})",
-            ])
+            cfg = "\n".join(
+                [
+                    "nanobind_build_library(nanobind-static)",
+                    f"nanobind_compile_options({dep.target})",
+                    f"nanobind_link_options({dep.target})",
+                ]
+            )
         lnk = f"target_link_libraries({dep.target} PUBLIC {lib_name})"
         return cfg + "\n" + lnk
 

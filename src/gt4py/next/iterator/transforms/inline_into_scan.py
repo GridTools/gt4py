@@ -93,10 +93,7 @@ class InlineIntoScan(
             )
             new_scanpass_body = _lambda_and_lift_inliner(new_scanpass_body)
             new_scanpass = ir.Lambda(
-                params=[
-                    original_scanpass.params[0],
-                    *(ir.Sym(id=ref) for ref in refs_in_args),
-                ],
+                params=[original_scanpass.params[0], *(ir.Sym(id=ref) for ref in refs_in_args)],
                 expr=new_scanpass_body,
             )
             new_scan = ir.FunCall(

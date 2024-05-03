@@ -6,10 +6,10 @@ Currently, GT4Py releases are published in PyPI (and TestPyPI) and also as commi
 
 1. Make sure all the expected changes (new features, bug fixes, documentation changes, etc.) are already included in the `main` public branch.
 
-2. Use **bump2version** to update the version number.
+2. Use **bump-my-version** to update the version number.
 
    ```bash
-   $ bump2version minor # or patch
+   $ bump-my-version bump minor # or patch
    ```
 
 3. Update the [CHANGELOG.md](CHANGELOG.md) file to document the changes included in the new release. Note that this step becomes much simpler when commit messages follow the [Conventional Commits][conventional-commits] convention as encouraged in the [Pull Request and Merge Guidelines](CONTRIBUTING.md#pull-request-and-merge-guidelines) section of the contributing guidelines.

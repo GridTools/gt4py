@@ -50,10 +50,7 @@ def _validate_args(past_node: past.Program, args: list, kwargs: dict[str, Any]) 
 
     try:
         type_info.accepts_args(
-            past_node.type,
-            with_args=arg_types,
-            with_kwargs=kwarg_types,
-            raise_exception=True,
+            past_node.type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
         )
     except ValueError as err:
         raise errors.DSLError(

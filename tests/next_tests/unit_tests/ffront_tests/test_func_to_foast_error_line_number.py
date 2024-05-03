@@ -36,10 +36,7 @@ def test_invalid_syntax_error_empty_return():
     def wrong_syntax(inp: gtx.Field[[TDim], float]):
         return  # <-- this line triggers the syntax error
 
-    with pytest.raises(
-        f2f.errors.DSLError,
-        match=(r".*return.*"),
-    ) as exc_info:
+    with pytest.raises(f2f.errors.DSLError, match=(r".*return.*")) as exc_info:
         _ = f2f.FieldOperatorParser.apply_to_function(wrong_syntax)
 
     assert exc_info.value.location

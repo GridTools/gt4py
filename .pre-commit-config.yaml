@@ -1,5 +1,7 @@
+# -----------------------------------------------------------------------
 # This file contains 'cog' snippets (https://nedbatchelder.com/code/cog/) 
 # to keep version numbers in sync with 'constraints.txt'
+# -----------------------------------------------------------------------
 
 default_language_version:
   python: python3.10
@@ -42,7 +44,13 @@ repos:
   - id: debug-statements
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.2.0
+  ##[[[cog
+  ## import re
+  ## version = re.search('ruff==([0-9\.]*)', open("constraints.txt").read())[1]
+  ## print(f"rev: v{version}")
+  ##]]]
+  rev: v0.3.5
+  ##[[[end]]]
   hooks:
     # Run the linter.
     # TODO: include tests here
@@ -58,9 +66,9 @@ repos:
   ## version = re.search('mypy==([0-9\.]*)', open("constraints.txt").read())[1]
   ## print(f"#========= FROM constraints.txt: v{version} =========")
   ##]]]
-  #========= FROM constraints.txt: v1.8.0 =========
+  #========= FROM constraints.txt: v1.9.0 =========
   ##[[[end]]]
-  rev: v1.8.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
+  rev: v1.9.0  # MUST match version ^^^^ in constraints.txt (if the mirror is up-to-date)
   hooks:
   - id: mypy
     additional_dependencies:  # versions from constraints.txt
@@ -78,29 +86,29 @@ repos:
     ##]]]
     - astunparse==1.6.3
     - attrs==23.2.0
-    - black==24.2.0
-    - boltons==23.1.1
+    - black==24.3.0
+    - boltons==24.0.0
     - cached-property==1.5.2
     - click==8.1.7
-    - cmake==3.28.3
+    - cmake==3.29.0.1
     - cytoolz==0.12.3
     - deepdiff==6.7.1
     - devtools==0.12.2
     - factory-boy==3.3.0
-    - frozendict==2.4.0
+    - frozendict==2.4.1
     - gridtools-cpp==2.3.2
-    - importlib-resources==6.1.2
+    - importlib-resources==6.4.0
     - jinja2==3.1.3
     - lark==1.1.9
     - mako==1.3.2
     - nanobind==1.9.2
     - ninja==1.11.1.1
     - numpy==1.24.4
-    - packaging==23.2
-    - pybind11==2.11.1
-    - setuptools==69.1.1
+    - packaging==24.0
+    - pybind11==2.12.0
+    - setuptools==69.2.0
     - tabulate==0.9.0
-    - typing-extensions==4.5.0
+    - typing-extensions==4.10.0
     - xxhash==3.0.0
     ##[[[end]]]
     # Add all type stubs from typeshed

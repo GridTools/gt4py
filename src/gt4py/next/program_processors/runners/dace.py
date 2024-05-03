@@ -77,12 +77,17 @@ class DaCeBackendFactory(GTFNBackendFactory):
             lambda o: f"run_dace_{o.name_device}{o.name_temps}{o.name_cached}{o.name_postfix}"
         )
         auto_optimize = factory.Trait(
-            otf_workflow__translation__auto_optimize=True,
-            name_temps="_opt",
+            otf_workflow__translation__auto_optimize=True, name_temps="_opt"
         )
         use_field_canonical_representation: bool = False
 
 
 run_dace_cpu = DaCeBackendFactory(cached=True, auto_optimize=True)
+run_dace_cpu_with_temporaries = DaCeBackendFactory(
+    cached=True, auto_optimize=True, use_temporaries=True
+)
 
 run_dace_gpu = DaCeBackendFactory(gpu=True, cached=True, auto_optimize=True)
+run_dace_gpu_with_temporaries = DaCeBackendFactory(
+    gpu=True, cached=True, auto_optimize=True, use_temporaries=True
+)

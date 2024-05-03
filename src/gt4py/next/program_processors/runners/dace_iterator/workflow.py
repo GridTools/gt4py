@@ -19,7 +19,6 @@ import dataclasses
 import functools
 import itertools
 import operator
-import warnings
 from typing import Callable, Optional
 
 import dace
@@ -27,14 +26,13 @@ import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, config
-from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.transforms import LiftMode
 from gt4py.next.otf import languages, stages, step_types, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache
 from gt4py.next.otf.languages import LanguageSettings
-from gt4py.next.type_system import type_translation as tt
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from . import build_sdfg_from_itir, get_sdfg_args
 
@@ -42,14 +40,14 @@ from . import build_sdfg_from_itir, get_sdfg_args
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        stages.ProgramCall,
-        stages.ProgramSource[languages.SDFG, languages.LanguageSettings],
+        stages.ProgramCall, stages.ProgramSource[languages.SDFG, languages.LanguageSettings]
     ],
     step_types.TranslationStep[languages.SDFG, languages.LanguageSettings],
 ):
     auto_optimize: bool = False
     lift_mode: LiftMode = LiftMode.FORCE_INLINE
     device_type: core_defs.DeviceType = core_defs.DeviceType.CPU
+    symbolic_domain_sizes: Optional[dict[str, str]] = None
     temporary_extraction_heuristics: Optional[
         Callable[[itir.StencilClosure], Callable[[itir.Expr], bool]]
     ] = None
@@ -57,59 +55,55 @@ class DaCeTranslator(
 
     def _language_settings(self) -> languages.LanguageSettings:
         return languages.LanguageSettings(
-            formatter_key="",
-            formatter_style="",
-            file_extension="sdfg",
+            formatter_key="", formatter_style="", file_extension="sdfg"
         )
 
-    def __call__(
+    def generate_sdfg(
         self,
-        inp: stages.ProgramCall,
-    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
-        """Generate DaCe SDFG file from the ITIR definition."""
-        program: itir.FencilDefinition = inp.program
+        program: itir.FencilDefinition,
+        arg_types: list[ts.TypeSpec],
+        offset_provider: dict[str, common.Dimension | common.Connectivity],
+        column_axis: Optional[common.Dimension],
+    ) -> dace.SDFG:
         on_gpu = True if self.device_type == core_defs.DeviceType.CUDA else False
 
-        # ITIR parameters
-        column_axis: Optional[Dimension] = inp.kwargs.get("column_axis", None)
-        offset_provider: dict[str, common.Dimension | common.Connectivity] = inp.kwargs[
-            "offset_provider"
-        ]
-        runtime_lift_mode: Optional[LiftMode] = inp.kwargs.get("lift_mode", None)
-
-        # TODO(tehrengruber): Remove `lift_mode` from call interface. It has been implicitly added
-        #  to the interface of all (or at least all of concern) backends, but instead should be
-        #  configured in the backend itself (like it is here), until then we respect the argument
-        #  here and warn the user if it differs from the one configured.
-        lift_mode = runtime_lift_mode or self.lift_mode
-        if runtime_lift_mode and runtime_lift_mode != self.lift_mode:
-            warnings.warn(
-                f"DaCe Backend was configured for LiftMode `{self.lift_mode!s}`, but "
-                f"overriden to be {runtime_lift_mode!s} at runtime.",
-                stacklevel=2,
-            )
-
-        sdfg = build_sdfg_from_itir(
+        return build_sdfg_from_itir(
             program,
-            *inp.args,
+            arg_types,
             offset_provider=offset_provider,
             auto_optimize=self.auto_optimize,
             on_gpu=on_gpu,
             column_axis=column_axis,
-            lift_mode=lift_mode,
+            lift_mode=self.lift_mode,
+            symbolic_domain_sizes=self.symbolic_domain_sizes,
+            temporary_extraction_heuristics=self.temporary_extraction_heuristics,
             load_sdfg_from_file=False,
             save_sdfg=False,
             use_field_canonical_representation=self.use_field_canonical_representation,
         )
 
-        arg_types = tuple(
+    def __call__(
+        self, inp: stages.ProgramCall
+    ) -> stages.ProgramSource[languages.SDFG, LanguageSettings]:
+        """Generate DaCe SDFG file from the ITIR definition."""
+        program: itir.FencilDefinition = inp.program
+        arg_types = [tt.from_value(arg) for arg in inp.args]
+
+        sdfg = self.generate_sdfg(
+            program,
+            arg_types,
+            inp.kwargs["offset_provider"],
+            inp.kwargs.get("column_axis", None),
+        )
+
+        param_types = tuple(
             interface.Parameter(param, tt.from_value(arg))
             for param, arg in zip(sdfg.arg_names, inp.args)
         )
 
         module: stages.ProgramSource[languages.SDFG, languages.LanguageSettings] = (
             stages.ProgramSource(
-                entry_point=interface.Function(program.id, arg_types),
+                entry_point=interface.Function(program.id, param_types),
                 source_code=sdfg.to_json(),
                 library_deps=tuple(),
                 language=languages.SDFG,
@@ -224,7 +218,9 @@ def convert_args(
             # the scalar arguments should be replaced with the actual value
             # for field arguments, the data pointer and array symbols should remain the same
             scalar_args_table = {
-                param: arg for param, arg in zip(sdfg.arg_names, args) if not common.is_field(arg)
+                param: arg
+                for param, arg in zip(sdfg.arg_names, args)
+                if not isinstance(arg, common.Field)
             }
             for param, pos in inp.sdfg_scalar_args.items():
                 assert not isinstance(sdfg_program._lastargs[0][pos], ctypes.c_void_p)

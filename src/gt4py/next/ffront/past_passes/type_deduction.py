@@ -52,10 +52,7 @@ def _validate_operator_call(new_func: past.Name, new_kwargs: dict) -> None:
 
     Domain has to be of type dictionary, including dimensions with values expressed as tuples of 2 numbers.
     """
-    if not isinstance(
-        new_func.type,
-        (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType),
-    ):
+    if not isinstance(new_func.type, (ts_ffront.FieldOperatorType, ts_ffront.ScanOperatorType)):
         raise ValueError(
             f"Only calls to 'FieldOperators' and 'ScanOperators' "
             f"allowed in 'Program', got '{new_func.type}'."
@@ -126,18 +123,11 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
     def visit_TupleExpr(self, node: past.TupleExpr, **kwargs: Any) -> past.TupleExpr:
         elts = self.visit(node.elts, **kwargs)
         return past.TupleExpr(
-            elts=elts,
-            type=ts.TupleType(types=[el.type for el in elts]),
-            location=node.location,
+            elts=elts, type=ts.TupleType(types=[el.type for el in elts]), location=node.location
         )
 
     def _deduce_binop_type(
-        self,
-        node: past.BinOp,
-        *,
-        left: past.Expr,
-        right: past.Expr,
-        **kwargs: Any,
+        self, node: past.BinOp, *, left: past.Expr, right: past.Expr, **kwargs: Any
     ) -> Optional[ts.TypeSpec]:
         logical_ops = {
             dialect_ast_enums.BinaryOperator.BIT_AND,
@@ -149,8 +139,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         for arg in (left, right):
             if not isinstance(arg.type, ts.ScalarType) or not is_compatible(arg.type):
                 raise errors.DSLError(
-                    arg.location,
-                    f"Type '{arg.type}' can not be used in operator '{node.op}'.",
+                    arg.location, f"Type '{arg.type}' can not be used in operator '{node.op}'."
                 )
 
         left_type = cast(ts.ScalarType, left.type)
@@ -181,11 +170,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_right = self.visit(node.right, **kwargs)
         new_type = self._deduce_binop_type(node, left=new_left, right=new_right)
         return past.BinOp(
-            op=node.op,
-            left=new_left,
-            right=new_right,
-            location=node.location,
-            type=new_type,
+            op=node.op, left=new_left, right=new_right, location=node.location, type=new_type
         )
 
     def visit_Call(self, node: past.Call, **kwargs: Any) -> past.Call:
@@ -207,10 +192,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             }
 
             type_info.accepts_args(
-                new_func.type,
-                with_args=arg_types,
-                with_kwargs=kwarg_types,
-                raise_exception=True,
+                new_func.type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
             )
             return_type = ts.VoidType()
             if is_operator:

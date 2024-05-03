@@ -69,8 +69,7 @@ def tuple_st(min_value, max_value):
 
 
 @pytest.mark.parametrize(
-    "backend",
-    ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])],
+    "backend", ["dace:cpu", pytest.param("dace:gpu", marks=[pytest.mark.requires_gpu])]
 )
 def test_basic(decorator, backend):
     @decorator(backend=backend)
@@ -255,8 +254,7 @@ def test_optional_arg_noprovide():
             outp = inp  # noqa: F841 [unused-variable]
 
     frozen_stencil = stencil.freeze(
-        domain=(3, 3, 10),
-        origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)},
+        domain=(3, 3, 10), origin={"inp": (2, 2, 0), "outp": (2, 2, 0), "unused_field": (0, 0, 0)}
     )
 
     inp = OriginWrapper(
@@ -419,10 +417,7 @@ def test_nondace_raises(decorator):
     )
     outp = OriginWrapper(
         array=gt_storage.zeros(
-            dtype=np.float64,
-            shape=(10, 10, 10),
-            aligned_index=(0, 0, 0),
-            backend="numpy",
+            dtype=np.float64, shape=(10, 10, 10), aligned_index=(0, 0, 0), backend="numpy"
         ),
         origin=(0, 0, 0),
     )

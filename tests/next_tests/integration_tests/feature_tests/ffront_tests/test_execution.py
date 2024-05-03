@@ -187,11 +187,7 @@ def test_scalar_arg(unstructured_case):
     cases.verify_with_default_data(
         unstructured_case,
         testee,
-        ref=lambda a: np.full(
-            [unstructured_case.default_sizes[Vertex]],
-            a + 1,
-            dtype=int32,
-        ),
+        ref=lambda a: np.full([unstructured_case.default_sizes[Vertex]], a + 1, dtype=int32),
         comparison=lambda a, b: np.all(a == b),
     )
 
@@ -246,11 +242,7 @@ def test_scalar_in_domain_spec_and_fo_call(cartesian_case):
     out = cases.allocate(cartesian_case, testee, "out").zeros()()
 
     cases.verify(
-        cartesian_case,
-        testee,
-        size,
-        out=out,
-        ref=np.full_like(out, size, dtype=gtx.IndexType),
+        cartesian_case, testee, size, out=out, ref=np.full_like(out, size, dtype=gtx.IndexType)
     )
 
 
@@ -363,30 +355,17 @@ def test_astype_on_tuples(cartesian_case):
 
     @gtx.field_operator
     def cast_tuple(
-        a: cases.IFloatField,
-        b: cases.IFloatField,
-        a_asint: cases.IField,
-        b_asint: cases.IField,
+        a: cases.IFloatField, b: cases.IFloatField, a_asint: cases.IField, b_asint: cases.IField
     ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
         result = astype(field_op_returning_a_tuple(a, b), int32)
-        return (
-            result[0] == a_asint,
-            result[1] == b_asint,
-        )
+        return (result[0] == a_asint, result[1] == b_asint)
 
     @gtx.field_operator
     def cast_nested_tuple(
-        a: cases.IFloatField,
-        b: cases.IFloatField,
-        a_asint: cases.IField,
-        b_asint: cases.IField,
+        a: cases.IFloatField, b: cases.IFloatField, a_asint: cases.IField, b_asint: cases.IField
     ) -> tuple[gtx.Field[[IDim], bool], gtx.Field[[IDim], bool], gtx.Field[[IDim], bool]]:
         result = astype((a, field_op_returning_a_tuple(a, b)), int32)
-        return (
-            result[0] == a_asint,
-            result[1][0] == a_asint,
-            result[1][1] == b_asint,
-        )
+        return (result[0] == a_asint, result[1][0] == a_asint, result[1][1] == b_asint)
 
     a = cases.allocate(cartesian_case, cast_tuple, "a")()
     b = cases.allocate(cartesian_case, cast_tuple, "b")()
@@ -432,10 +411,7 @@ def test_astype_bool_field(cartesian_case):
         return b
 
     cases.verify_with_default_data(
-        cartesian_case,
-        testee,
-        ref=lambda a: a.astype(bool),
-        comparison=lambda a, b: np.all(a == b),
+        cartesian_case, testee, ref=lambda a: a.astype(bool), comparison=lambda a, b: np.all(a == b)
     )
 
 
@@ -526,11 +502,9 @@ def test_nested_reduction(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a: np.sum(
-            np.sum(
-                a[unstructured_case.offset_provider["E2V"].table],
-                axis=1,
-                initial=0,
-            )[unstructured_case.offset_provider["V2E"].table],
+            np.sum(a[unstructured_case.offset_provider["E2V"].table], axis=1, initial=0)[
+                unstructured_case.offset_provider["V2E"].table
+            ],
             axis=1,
             where=unstructured_case.offset_provider["V2E"].table != common._DEFAULT_SKIP_VALUE,
         ),
@@ -733,12 +707,7 @@ def test_ternary_builtin_neighbor_sum(unstructured_case):
         unstructured_case,
         testee,
         ref=lambda a, b: (
-            np.sum(
-                b[v2e_table],
-                axis=1,
-                initial=0,
-                where=v2e_table != common._DEFAULT_SKIP_VALUE,
-            )
+            np.sum(b[v2e_table], axis=1, initial=0, where=v2e_table != common._DEFAULT_SKIP_VALUE)
         ),
     )
 
@@ -814,10 +783,12 @@ def test_scan_nested_tuple_input(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray([
-        reduce(lambda prev, i: prev + inp1_np[i] + inp2_np[i], prev_levels_iterator(i), init)
-        for i in range(k_size)
-    ])
+    expected = np.asarray(
+        [
+            reduce(lambda prev, i: prev + inp1_np[i] + inp2_np[i], prev_levels_iterator(i), init)
+            for i in range(k_size)
+        ]
+    )
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def simple_scan_operator(carry: float, a: tuple[float, float]) -> float:
@@ -832,10 +803,7 @@ def test_scan_different_domain_in_tuple(cartesian_case):
     i_size = cartesian_case.default_sizes[IDim]
     k_size = cartesian_case.default_sizes[KDim]
 
-    inp1_np = np.ones((
-        i_size + 1,
-        k_size,
-    ))  # i_size bigger than in the other argument
+    inp1_np = np.ones((i_size + 1, k_size))  # i_size bigger than in the other argument
     inp2_np = np.fromfunction(lambda i, k: k, shape=(i_size, k_size), dtype=float)
     inp1 = cartesian_case.as_field([IDim, KDim], inp1_np)
     inp2 = cartesian_case.as_field([IDim, KDim], inp2_np)
@@ -844,14 +812,16 @@ def test_scan_different_domain_in_tuple(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray([
-        reduce(
-            lambda prev, k: prev + inp1_np[:-1, k] + inp2_np[:, k],
-            prev_levels_iterator(k),
-            init,
-        )
-        for k in range(k_size)
-    ]).transpose()
+    expected = np.asarray(
+        [
+            reduce(
+                lambda prev, k: prev + inp1_np[:-1, k] + inp2_np[:, k],
+                prev_levels_iterator(k),
+                init,
+            )
+            for k in range(k_size)
+        ]
+    ).transpose()
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def scan_op(carry: float, a: tuple[float, float]) -> float:
@@ -879,14 +849,12 @@ def test_scan_tuple_field_scalar_mixed(cartesian_case):
     def prev_levels_iterator(i):
         return range(i + 1)
 
-    expected = np.asarray([
-        reduce(
-            lambda prev, k: prev + 1.0 + inp2_np[:, k],
-            prev_levels_iterator(k),
-            init,
-        )
-        for k in range(k_size)
-    ]).transpose()
+    expected = np.asarray(
+        [
+            reduce(lambda prev, k: prev + 1.0 + inp2_np[:, k], prev_levels_iterator(k), init)
+            for k in range(k_size)
+        ]
+    ).transpose()
 
     @gtx.scan_operator(axis=KDim, forward=True, init=init)
     def scan_op(carry: float, a: tuple[float, float]) -> float:
@@ -946,11 +914,7 @@ def test_domain_input_bounds(cartesian_case):
     def program_domain(
         inp: cases.IField, out: cases.IField, lower_i: gtx.IndexType, upper_i: gtx.IndexType
     ):
-        fieldop_domain(
-            inp,
-            out=out,
-            domain={IDim: (lower_i, upper_i // 2)},
-        )
+        fieldop_domain(inp, out=out, domain={IDim: (lower_i, upper_i // 2)})
 
     inp = cases.allocate(cartesian_case, program_domain, "inp")()
     out = cases.allocate(cartesian_case, fieldop_domain, cases.RETURN)()
@@ -958,16 +922,7 @@ def test_domain_input_bounds(cartesian_case):
     ref = out.asnumpy().copy()
     ref[lower_i : int(upper_i / 2)] = inp.asnumpy()[lower_i : int(upper_i / 2)] * 2
 
-    cases.verify(
-        cartesian_case,
-        program_domain,
-        inp,
-        out,
-        lower_i,
-        upper_i,
-        inout=out,
-        ref=ref,
-    )
+    cases.verify(cartesian_case, program_domain, inp, out, lower_i, upper_i, inout=out, ref=ref)
 
 
 def test_domain_input_bounds_1(cartesian_case):
@@ -990,9 +945,7 @@ def test_domain_input_bounds_1(cartesian_case):
         upper_j: gtx.IndexType,
     ):
         fieldop_domain(
-            a,
-            out=out,
-            domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)},
+            a, out=out, domain={IDim: (1 * lower_i, upper_i + 0), JDim: (lower_j - 0, upper_j)}
         )
 
     a = cases.allocate(cartesian_case, program_domain, "a")()
@@ -1026,10 +979,7 @@ def test_domain_tuple(cartesian_case):
 
     @gtx.program
     def program_domain_tuple(
-        inp0: cases.IJField,
-        inp1: cases.IJField,
-        out0: cases.IJField,
-        out1: cases.IJField,
+        inp0: cases.IJField, inp1: cases.IJField, out0: cases.IJField, out1: cases.IJField
     ):
         fieldop_domain_tuple(inp0, inp1, out=(out0, out1), domain={IDim: (1, 9), JDim: (4, 6)})
 
@@ -1095,14 +1045,7 @@ def test_implicit_broadcast_mixed_dim(cartesian_case):
 @pytest.mark.uses_tuple_returns
 def test_tuple_unpacking(cartesian_case):
     @gtx.field_operator
-    def unpack(
-        inp: cases.IField,
-    ) -> tuple[
-        cases.IField,
-        cases.IField,
-        cases.IField,
-        cases.IField,
-    ]:
+    def unpack(inp: cases.IField) -> tuple[cases.IField, cases.IField, cases.IField, cases.IField]:
         a, b, c, d = (inp + 2, inp + 3, inp + 5, inp + 7)
         return a, b, c, d
 
@@ -1129,9 +1072,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
     ]
 
     @gtx.field_operator
-    def unpack(
-        inp: cases.IField,
-    ) -> OutType:
+    def unpack(inp: cases.IField) -> OutType:
         *a, a2, a3 = (inp, inp + 1, inp + 2, inp + 3)
         b1, *b, b3 = (inp + 4, inp + 5, inp + 6, inp + 7)
         c1, c2, *c = (inp + 8, inp + 9, inp + 10, inp + 11)
@@ -1158,10 +1099,7 @@ def test_tuple_unpacking_star_multi(cartesian_case):
 
 
 def test_tuple_unpacking_too_many_values(cartesian_case):
-    with pytest.raises(
-        errors.DSLError,
-        match=(r"Too many values to unpack \(expected 3\)."),
-    ):
+    with pytest.raises(errors.DSLError, match=(r"Too many values to unpack \(expected 3\).")):
 
         @gtx.field_operator(backend=cartesian_case.executor)
         def _star_unpack() -> tuple[int32, float64, int32]:
@@ -1183,17 +1121,12 @@ def test_tuple_unpacking_too_few_values(cartesian_case):
 def test_constant_closure_vars(cartesian_case):
     from gt4py.eve.utils import FrozenNamespace
 
-    constants = FrozenNamespace(
-        PI=np.float64(3.142),
-        E=np.float64(2.718),
-    )
+    constants = FrozenNamespace(PI=np.float64(3.142), E=np.float64(2.718))
 
     @gtx.field_operator
     def consume_constants(input: cases.IFloatField) -> cases.IFloatField:
         return constants.PI * constants.E * input
 
     cases.verify_with_default_data(
-        cartesian_case,
-        consume_constants,
-        ref=lambda input: constants.PI * constants.E * input,
+        cartesian_case, consume_constants, ref=lambda input: constants.PI * constants.E * input
     )

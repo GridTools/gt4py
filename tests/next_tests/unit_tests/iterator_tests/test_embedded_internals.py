@@ -13,13 +13,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import contextvars as cvars
-import threading
 from typing import Any, Callable, Optional
 
 import numpy as np
 import pytest
 
 from gt4py.next import common
+from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded
 
 
@@ -30,8 +30,8 @@ def _run_within_context(
     offset_provider: Optional[embedded.OffsetProvider] = None,
 ) -> Any:
     def wrapped_func():
-        embedded.column_range_cvar.set(column_range)
-        embedded.offset_provider_cvar.set(offset_provider)
+        embedded_context.closure_column_range.set(column_range)
+        embedded_context.offset_provider.set(offset_provider)
         func()
 
     cvars.copy_context().run(wrapped_func)
@@ -59,7 +59,7 @@ def test_column_ufunc():
         assert res.kstart == 1
 
     # Setting an invalid column_range here shouldn't affect other contexts
-    embedded.column_range_cvar.set(range(2, 999))
+    embedded_context.closure_column_range.set(range(2, 999))
     _run_within_context(
         lambda: test_func(2, 3),
         column_range=common.NamedRange(

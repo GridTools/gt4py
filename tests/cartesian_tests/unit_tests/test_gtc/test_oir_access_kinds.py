@@ -35,7 +35,7 @@ def test_access_readwrite():
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(left__name="output_field", right__name="inout_field"),
             AssignStmtFactory(left__name="inout_field", right__name="other_field"),
-        ],
+        ]
     )
     access = compute_access_kinds(testee)
 
@@ -48,7 +48,7 @@ def test_access_write_only():
         vertical_loops__0__sections__0__horizontal_executions__0__body=[
             AssignStmtFactory(left__name="inout_field", right__name="other_field"),
             AssignStmtFactory(left__name="output_field", right__name="inout_field"),
-        ],
+        ]
     )
     access = compute_access_kinds(testee)
 

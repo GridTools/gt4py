@@ -162,7 +162,7 @@ class NodeTranslator(NodeVisitor):
                     name: new_child
                     for name, child in node.iter_children_items()
                     if (new_child := self.visit(child, **kwargs)) is not NOTHING
-                },
+                }
             )
             if self.PRESERVED_ANNEX_ATTRS and (old_annex := getattr(node, "__node_annex__", None)):
                 # access to `new_node.annex` implicitly creates the `__node_annex__` attribute in the property getter

@@ -54,7 +54,8 @@ class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
         "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"
     )
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
-    ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.backend"
+    ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
+    ROUNDTRIP_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.roundtrip.with_temporaries"
     DOUBLE_ROUNDTRIP = "gt4py.next.program_processors.runners.double_roundtrip.backend"
 
 
@@ -146,6 +147,7 @@ DACE_SKIP_TEST_LIST = COMMON_SKIP_TEST_LIST + [
     (USES_INDEX_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_LIFT_EXPRESSIONS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ORIGIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
     (USES_TUPLE_ARGS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_TUPLE_RETURNS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_ZERO_DIMENSIONAL_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -177,7 +179,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST
     + [
         # awaiting dace fix, see https://github.com/spcl/dace/pull/1442
-        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
+        (USES_FLOORDIV, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE)
     ],
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
@@ -186,11 +188,14 @@ BACKEND_SKIP_TEST_MATRIX = {
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_CPU_WITH_TEMPORARIES: GTFN_SKIP_TEST_LIST
-    + [
-        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
-    ],
+    + [(USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramFormatterId.GTFN_CPP_FORMATTER: [
-        (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE),
+        (USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS, XFAIL, REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE)
     ],
     ProgramBackendId.ROUNDTRIP: [(USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE)],
+    ProgramBackendId.ROUNDTRIP_WITH_TEMPORARIES: [
+        (USES_SPARSE_FIELDS_AS_OUTPUT, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_DYNAMIC_OFFSETS, XFAIL, UNSUPPORTED_MESSAGE),
+        (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, UNSUPPORTED_MESSAGE),
+    ],
 }
