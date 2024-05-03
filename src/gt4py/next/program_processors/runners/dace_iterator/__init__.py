@@ -28,6 +28,8 @@ import gt4py.next.iterator.ir as itir
 from gt4py.next import common
 from gt4py.next.ffront.decorator import Program
 from gt4py.next.iterator import transforms as itir_transforms
+from gt4py.next.iterator.transforms.pass_manager import apply_common_transforms
+from gt4py.next.iterator.transforms.trace_shifts import TraceShifts
 from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 from .itir_to_sdfg import ItirToSDFG
@@ -366,6 +368,20 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
                     if str(arg.id) in sdfg.arrays:  # type: ignore[attr-defined]
                         output_fields.append(str(arg.id))  # type: ignore[attr-defined]
         sdfg.GT4Py_Program_output_fields = {output: fields[output].dims for output in output_fields}
+
+        # TODO: update once Till optimizes TraceShifts class
+        # Fields that do not access neighbors, do not need updated halos
+        sdfg.neighbor_access = {}  # per field
+        itir_tmp = apply_common_transforms(self.itir)
+        for closure in itir_tmp.closures:  # type: ignore[union-attr]
+            shifts = TraceShifts.apply(closure)
+            for k, v in shifts.items():
+                if k not in sdfg.GT4Py_Program_input_fields:
+                    continue
+                list_v = list(v)
+                sdfg.neighbor_access[k] = (
+                    False if len(list_v) == 1 and len(list_v[0]) == 0 else True
+                )
 
         return sdfg
 
