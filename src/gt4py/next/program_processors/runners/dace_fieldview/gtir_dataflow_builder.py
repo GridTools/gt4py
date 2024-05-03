@@ -25,7 +25,6 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
     GtirTaskletCodegen,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -33,54 +32,8 @@ from gt4py.next.type_system import type_specifications as ts
 class GtirDataflowBuilder(eve.NodeVisitor):
     """Translates a GTIR `ir.Stmt` node to a dataflow graph."""
 
-    _sdfg: dace.SDFG
-    _state: dace.SDFGState
-    _data_types: dict[str, ts.FieldType | ts.ScalarType]
-
-    @final
-    def __call__(
-        self,
-    ) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        """The callable interface is used by the caller to build the dataflow graph.
-
-        It allows to build the dataflow graph inside a given state starting
-        from the innermost nodes, by propagating the intermediate results
-        as access nodes to temporary local storage.
-        """
-        return self._build()
-
-    @final
-    def _add_local_storage(
-        self, data_type: ts.FieldType | ts.ScalarType, shape: list[str]
-    ) -> dace.nodes.AccessNode:
-        """Allocates temporary storage to be used in the local scope for intermediate results."""
-        name = unique_name("var")
-        if isinstance(data_type, ts.FieldType):
-            assert len(data_type.dims) == len(shape)
-            dtype = as_dace_type(data_type.dtype)
-            name, _ = self._sdfg.add_array(name, shape, dtype, find_new_name=True, transient=True)
-        else:
-            assert len(shape) == 0
-            dtype = as_dace_type(data_type)
-            name, _ = self._sdfg.add_scalar(name, dtype, find_new_name=True, transient=True)
-        return self._state.add_access(name)
-
-    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
-        """Creates the dataflow subgraph representing a given GTIR builtin.
-
-        This method is used by derived classes of `GtirDataflowBuilder`,
-        which build a specialized subgraph for a certain GTIR builtin.
-
-        Returns a list of SDFG nodes and the associated GT4Py data type:
-        tuple(node, data_type)
-
-        The GT4Py data type is useful in the case of fields, because it provides
-        information on the field domain (e.g. order of dimensions, types of dimensions).
-        """
-        raise NotImplementedError
-
-    def fork(self, state: dace.SDFGState) -> "GtirDataflowBuilder":
-        return GtirDataflowBuilder(self._sdfg, state, self._data_types)
+    sdfg: dace.SDFG
+    data_types: dict[str, ts.FieldType | ts.ScalarType]
 
     def visit_domain(self, node: itir.Expr) -> list[tuple[Dimension, str, str]]:
         """
@@ -102,8 +55,8 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         return domain
 
     def visit_expression(
-        self, node: itir.Expr
-    ) -> tuple[dace.SDFGState, list[dace.nodes.AccessNode]]:
+        self, node: itir.Expr, head_state: dace.SDFGState
+    ) -> list[dace.nodes.AccessNode]:
         """
         Specialized visit method for fieldview expressions.
 
@@ -112,7 +65,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
 
         TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
         """
-        expr_builder = self.visit(node)
+        expr_builder = self.visit(node, head_state=head_state)
         assert callable(expr_builder)
         results = expr_builder()
 
@@ -121,12 +74,13 @@ class GtirDataflowBuilder(eve.NodeVisitor):
             assert isinstance(node, dace.nodes.AccessNode)
             expressions_nodes.append(node)
 
-        # sanity check: each statement should result in a single exit state, i.e. only internal branches
-        sink_states = self._sdfg.sink_nodes()
+        # sanity check: each statement should preserve the property of single exit state (aka head state),
+        # i.e. eventually only introduce internal branches, and keep the same head state
+        sink_states = self.sdfg.sink_nodes()
         assert len(sink_states) == 1
-        head_state = sink_states[0]
+        assert sink_states[0] == head_state
 
-        return head_state, expressions_nodes
+        return expressions_nodes
 
     def visit_symbolic(self, node: itir.Expr) -> str:
         """
@@ -138,32 +92,21 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         """
         return GtirTaskletCodegen().visit(node)
 
-    def visit_FunCall(self, node: itir.FunCall) -> Callable:
+    def visit_FunCall(self, node: itir.FunCall, head_state: dace.SDFGState) -> Callable:
         from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins
 
         arg_builders: list[Callable] = []
         for arg in node.args:
-            arg_builder = self.visit(arg)
+            arg_builder = self.visit(arg, head_state=head_state)
             assert callable(arg_builder)
             arg_builders.append(arg_builder)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtins.AsFieldOp(
-                self._sdfg,
-                self._state,
-                self._data_types,
-                node,
-                arg_builders,
-            )
+            return gtir_builtins.AsFieldOp(self, head_state, node, arg_builders)
 
         elif cpm.is_call_to(node.fun, "select"):
             assert len(arg_builders) == 0
-            return gtir_builtins.Select(
-                self._sdfg,
-                self._state,
-                self._data_types,
-                node,
-            )
+            return gtir_builtins.Select(self, head_state, node)
 
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
@@ -177,7 +120,7 @@ class GtirDataflowBuilder(eve.NodeVisitor):
         """
         raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
-    def visit_SymRef(self, node: itir.SymRef) -> Callable:
+    def visit_SymRef(self, node: itir.SymRef, head_state: dace.SDFGState) -> Callable:
         from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins
 
-        return gtir_builtins.SymbolRef(self._sdfg, self._state, self._data_types, node)
+        return gtir_builtins.SymbolRef(self, head_state, node)

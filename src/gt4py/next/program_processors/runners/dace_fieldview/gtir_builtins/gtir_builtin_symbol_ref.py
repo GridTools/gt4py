@@ -18,6 +18,9 @@ from typing import Optional
 import dace
 
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
+    GtirBuiltinTranslator,
+)
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
     GtirDataflowBuilder,
 )
@@ -25,62 +28,61 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinSymbolRef(GtirDataflowBuilder):
+class GtirBuiltinSymbolRef(GtirBuiltinTranslator):
     """Generates the dataflow subgraph for a `itir.SymRef` node."""
 
-    _sym_name: str
-    _sym_type: ts.FieldType | ts.ScalarType
+    sym_name: str
+    sym_type: ts.FieldType | ts.ScalarType
 
     def __init__(
         self,
-        sdfg: dace.SDFG,
+        dataflow_builder: GtirDataflowBuilder,
         state: dace.SDFGState,
-        data_types: dict[str, ts.FieldType | ts.ScalarType],
         node: itir.SymRef,
     ):
-        super().__init__(sdfg, state, data_types)
+        super().__init__(state, dataflow_builder.sdfg)
         sym_name = str(node.id)
-        assert sym_name in self._data_types
-        self._sym_name = sym_name
-        self._sym_type = self._data_types[sym_name]
+        assert sym_name in dataflow_builder.data_types
+        self.sym_name = sym_name
+        self.sym_type = dataflow_builder.data_types[sym_name]
 
     def _get_access_node(self) -> Optional[dace.nodes.AccessNode]:
         """Returns, if present, the access node in current state for the data symbol."""
         access_nodes = [
             node
-            for node in self._state.nodes()
-            if isinstance(node, dace.nodes.AccessNode) and node.data == self._sym_name
+            for node in self.head_state.nodes()
+            if isinstance(node, dace.nodes.AccessNode) and node.data == self.sym_name
         ]
         if len(access_nodes) == 0:
             return None
         assert len(access_nodes) == 1
         return access_nodes[0]
 
-    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         sym_node = self._get_access_node()
         if sym_node:
             # if already present in current state, share access node
             pass
 
-        elif isinstance(self._sym_type, ts.FieldType):
+        elif isinstance(self.sym_type, ts.FieldType):
             # add access node to current state
-            sym_node = self._state.add_access(self._sym_name)
+            sym_node = self.head_state.add_access(self.sym_name)
 
         else:
             # scalar symbols are passed to the SDFG as symbols: build tasklet node
             # to write the symbol to a scalar access node
-            assert self._sym_name in self._sdfg.symbols
-            tasklet_node = self._state.add_tasklet(
-                f"get_{self._sym_name}",
+            assert self.sym_name in self.sdfg.symbols
+            tasklet_node = self.head_state.add_tasklet(
+                f"get_{self.sym_name}",
                 {},
                 {"__out"},
-                f"__out = {self._sym_name}",
+                f"__out = {self.sym_name}",
             )
-            name = f"{self._state.label}_var"
-            dtype = as_dace_type(self._sym_type)
-            sym_node = self._state.add_scalar(name, dtype, find_new_name=True, transient=True)
-            self._state.add_edge(
+            name = f"{self.head_state.label}_var"
+            dtype = as_dace_type(self.sym_type)
+            sym_node = self.head_state.add_scalar(name, dtype, find_new_name=True, transient=True)
+            self.head_state.add_edge(
                 tasklet_node, "__out", sym_node, None, dace.Memlet(data=sym_node.data, subset="0")
             )
 
-        return [(sym_node, self._sym_type)]
+        return [(sym_node, self.sym_type)]

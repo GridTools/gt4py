@@ -20,29 +20,34 @@ import dace
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
+    GtirBuiltinTranslator,
+)
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
     GtirDataflowBuilder,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
+    GtirTaskletCodegen,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
+class GtirBuiltinAsFieldOp(GtirBuiltinTranslator):
     """Generates the dataflow subgraph for the `as_field_op` builtin function."""
 
-    _stencil_expr: itir.Lambda
-    _stencil_args: list[Callable]
-    _field_domain: dict[Dimension, tuple[str, str]]
-    _field_type: ts.FieldType
+    stencil_expr: itir.Lambda
+    stencil_args: list[Callable]
+    field_domain: dict[Dimension, tuple[str, str]]
+    field_type: ts.FieldType
 
     def __init__(
         self,
-        sdfg: dace.SDFG,
+        dataflow_builder: GtirDataflowBuilder,
         state: dace.SDFGState,
-        data_types: dict[str, ts.FieldType | ts.ScalarType],
         node: itir.FunCall,
         stencil_args: list[Callable],
     ):
-        super().__init__(sdfg, state, data_types)
+        super().__init__(state, dataflow_builder.sdfg)
 
         assert cpm.is_call_to(node.fun, "as_fieldop")
         assert len(node.fun.args) == 2
@@ -53,42 +58,40 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
         assert isinstance(domain_expr, itir.FunCall)
 
         # visit field domain
-        domain = self.visit_domain(domain_expr)
+        domain = dataflow_builder.visit_domain(domain_expr)
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 
-        self._field_domain = {dim: (lb, ub) for dim, lb, ub in domain}
-        self._field_type = ts.FieldType([dim for dim, _, _ in domain], node_type)
-        self._stencil_expr = stencil_expr
-        self._stencil_args = stencil_args
+        self.field_domain = {dim: (lb, ub) for dim, lb, ub in domain}
+        self.field_type = ts.FieldType([dim for dim, _, _ in domain], node_type)
+        self.stencil_expr = stencil_expr
+        self.stencil_args = stencil_args
 
-    def _build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+    def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         # generate a tasklet node implementing the stencil function and represent
         # the field operator as a mapped tasklet, which will range over the field domain
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
-            var=output_connector, code=self.visit_symbolic(self._stencil_expr.expr)
+            var=output_connector, code=GtirTaskletCodegen().visit(self.stencil_expr.expr)
         )
 
         # allocate local temporary storage for the result field
         field_shape = [
             # diff between upper and lower bound
-            f"{self._field_domain[dim][1]} - {self._field_domain[dim][0]}"
-            for dim in self._field_type.dims
+            f"{self.field_domain[dim][1]} - {self.field_domain[dim][0]}"
+            for dim in self.field_type.dims
         ]
-        field_node = self._add_local_storage(self._field_type, field_shape)
+        field_node = self.add_local_storage(self.field_type, field_shape)
 
         # create map range corresponding to the field operator domain
-        map_ranges = {
-            f"i_{dim.value}": f"{lb}:{ub}" for dim, (lb, ub) in self._field_domain.items()
-        }
+        map_ranges = {f"i_{dim.value}": f"{lb}:{ub}" for dim, (lb, ub) in self.field_domain.items()}
 
         input_nodes: dict[str, dace.nodes.AccessNode] = {}
         input_memlets: dict[str, dace.Memlet] = {}
-        assert len(self._stencil_args) == len(self._stencil_expr.params)
-        for arg, param in zip(self._stencil_args, self._stencil_expr.params):
+        assert len(self.stencil_args) == len(self.stencil_expr.params)
+        for arg, param in zip(self.stencil_args, self.stencil_expr.params):
             arg_nodes = arg()
             assert len(arg_nodes) == 1
             arg_node, arg_type = arg_nodes[0]
@@ -98,14 +101,14 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
             input_nodes[arg_node.data] = arg_node
             if isinstance(arg_type, ts.FieldType):
                 # support either single element access (general case) or full array shape
-                is_scalar = all(dim in self._field_domain for dim in arg_type.dims)
+                is_scalar = all(dim in self.field_domain for dim in arg_type.dims)
                 if is_scalar:
                     subset = ",".join(f"i_{dim.value}" for dim in arg_type.dims)
                     input_memlets[connector] = dace.Memlet(
                         data=arg_node.data, subset=subset, volume=1
                     )
                 else:
-                    memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self._sdfg))
+                    memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self.sdfg))
                     # set volume to 1 because the stencil function always performs single element access
                     # TODO: check validity of this assumption
                     memlet.volume = 1
@@ -114,12 +117,12 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
                 input_memlets[connector] = dace.Memlet(data=arg_node.data, subset="0")
 
         # assume tasklet with single output
-        output_index = ",".join(f"i_{dim.value}" for dim in self._field_type.dims)
+        output_index = ",".join(f"i_{dim.value}" for dim in self.field_type.dims)
         output_memlets = {output_connector: dace.Memlet(data=field_node.data, subset=output_index)}
         output_nodes = {field_node.data: field_node}
 
         # create a tasklet inside a parallel-map scope
-        self._state.add_mapped_tasklet(
+        self.head_state.add_mapped_tasklet(
             "tasklet",
             map_ranges,
             input_memlets,
@@ -130,4 +133,4 @@ class GtirBuiltinAsFieldOp(GtirDataflowBuilder):
             external_edges=True,
         )
 
-        return [(field_node, self._field_type)]
+        return [(field_node, self.field_type)]

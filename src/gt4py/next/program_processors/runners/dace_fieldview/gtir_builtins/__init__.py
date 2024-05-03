@@ -12,13 +12,13 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_field_operator import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_field_operator import (
     GtirBuiltinAsFieldOp as AsFieldOp,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_select import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_select import (
     GtirBuiltinSelect as Select,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtin_symbol_ref import (
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_symbol_ref import (
     GtirBuiltinSymbolRef as SymbolRef,
 )
 

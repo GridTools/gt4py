@@ -24,10 +24,14 @@ import dace
 from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
+    GtirDataflowBuilder as DataflowBuilder,
+)
+from gt4py.next.program_processors.runners.dace_fieldview.utility import (
+    as_dace_type,
+    filter_connectivities,
+)
 from gt4py.next.type_system import type_specifications as ts
-
-from .gtir_dataflow_builder import GtirDataflowBuilder as DataflowBuilder
-from .utility import as_dace_type, filter_connectivities
 
 
 class GtirToSDFG(eve.NodeVisitor):
@@ -150,29 +154,24 @@ class GtirToSDFG(eve.NodeVisitor):
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
-            # the statement could eventually modify the head state by appending new states
-            # however, it should preserve the property of single exit state (aka head state)
-            head_state = self.visit(stmt, sdfg=sdfg, state=head_state)
+            self.visit(stmt, sdfg=sdfg, state=head_state)
 
         sdfg.validate()
         return sdfg
 
-    def visit_SetAt(
-        self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState
-    ) -> dace.SDFGState:
+    def visit_SetAt(self, stmt: itir.SetAt, sdfg: dace.SDFG, state: dace.SDFGState) -> None:
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
         The translation of `SetAt` ensures that the result is written to some global storage.
         """
 
-        dataflow_builder = DataflowBuilder(sdfg, state, self._data_types)
-        head_state, expr_nodes = dataflow_builder.visit_expression(stmt.expr)
+        dataflow_builder = DataflowBuilder(sdfg, self._data_types)
+        expr_nodes = dataflow_builder.visit_expression(stmt.expr, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_builder = DataflowBuilder(sdfg, head_state, self._data_types)
-        head_state, target_nodes = target_builder.visit_expression(stmt.target)
+        target_nodes = dataflow_builder.visit_expression(stmt.target, state)
         assert len(expr_nodes) == len(target_nodes)
 
         domain = dataflow_builder.visit_domain(stmt.domain)
@@ -192,10 +191,8 @@ class GtirToSDFG(eve.NodeVisitor):
                 assert len(domain) == 0
                 subset = "0"
 
-            head_state.add_nedge(
+            state.add_nedge(
                 expr_node,
                 target_node,
                 dace.Memlet(data=target_node.data, subset=subset),
             )
-
-        return head_state
