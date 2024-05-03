@@ -339,7 +339,6 @@ class Program(Program, SDFGConvertible):  # type: ignore[no-redef]
             arg_types,
             offset_provider=offset_provider,
             column_axis=kwargs.get("column_axis", None),
-            runtime_lift_mode=kwargs.get("lift_mode", None),
         )
 
         sdfg.arg_names.extend(self.__sdfg_signature__()[0])
