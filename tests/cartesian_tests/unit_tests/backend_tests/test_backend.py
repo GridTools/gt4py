@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 from typing import Any, Dict, cast
 
 import numpy as np
@@ -172,8 +173,16 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
         assert build_info["load_time"] > 0.0
 
 
+@pytest.fixture
+def enable_cuda_not_set():
+    value = os.environ.pop("GT4PY_GTC_ENABLE_CUDA", None)
+    yield
+    if value:
+        os.environ["GT4PY_GTC_ENABLE_CUDA"] = value
+
+
 @pytest.mark.parametrize("backend_name", ["cuda"])
-def test_deprecation_gtc_cuda(backend_name: str):
+def test_deprecation_gtc_cuda(backend_name: str, enable_cuda_not_set):
     # Default deprecation, raise an error
     build_info: Dict[str, Any] = {}
     builder = (
