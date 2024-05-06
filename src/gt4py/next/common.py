@@ -484,7 +484,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     @functools.cached_property
     def sub(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
         def _domain_slicer(*args: RelativeIndexItem) -> Domain:
-            if not all(isinstance(a, (int, slice)) for a in args):
+            if not all(isinstance(a, RelativeIndexItem) for a in args):
                 raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
             slices: tuple[slice, ...] = tuple(
                 a if isinstance(a, slice) else slice(int(a), int(a) + 1) for a in args
