@@ -55,11 +55,10 @@ from gt4py.eve.type_definitions import StrEnum
 
 
 DimT = TypeVar("DimT", bound="Dimension")  # , covariant=True)
-ShapeT = TypeVarTuple("ShapeT")
+ShapeTs = TypeVarTuple("ShapeTs")
 
 
-class Dims(Generic[Unpack[ShapeT]]):
-    shape: tuple[Unpack[ShapeT]]
+class Dims(tuple[Unpack[ShapeTs]]): ...
 
 
 DimsT = TypeVar("DimsT", bound=Dims, covariant=True)
@@ -898,10 +897,13 @@ OffsetProviderElem: TypeAlias = Dimension | Connectivity
 OffsetProvider: TypeAlias = Mapping[Tag, OffsetProviderElem]
 
 
+DomainDimT = TypeVar("DomainDimT", bound="Dimension")
+
+
 @dataclasses.dataclass(frozen=True, eq=False)
-class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
-    dimension: DimT
-    offset: int = 0
+class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
+    dimension: DomainDimT
+    target: DimT | int = 0
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -931,7 +933,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
     @functools.cached_property
     def codomain(self) -> DimT:
-        return self.dimension
+        return self.target if isinstance(self.target, Dimension) else self.dimension
 
     @property
     def skip_value(self) -> None:
@@ -954,7 +956,21 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
         *,
         domain: Optional[DomainLike] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
-    ) -> CartesianConnectivity:
+    ) -> CartesianConnectivity[Dims[DimT], DimT]:
+        assert domain is None
+        assert dtype is None
+        return cls(codomain, definition)
+
+    @classmethod
+    def from_target(
+        cls,
+        definition: DomainDimT,
+        /,
+        codomain: DimT,
+        *,
+        domain: Optional[DomainLike] = None,
+        dtype: Optional[core_defs.DTypeLike] = None,
+    ) -> CartesianConnectivity[Dims[DomainDimT], DimT]:
         assert domain is None
         assert dtype is None
         return cls(codomain, definition)
@@ -969,7 +985,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
             image_range = image_range.unit_range
 
         assert isinstance(image_range, UnitRange)
-        return (named_range((self.codomain, image_range - self.offset)),)
+        return (named_range((self.codomain, image_range - self.target)),)
 
     def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
         raise NotImplementedError()
@@ -983,6 +999,7 @@ class CartesianConnectivity(ConnectivityField[DimsT, DimT]):
 
 
 _connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
+_connectivity.register(Dimension, CartesianConnectivity.from_target)
 
 
 @enum.unique
