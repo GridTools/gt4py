@@ -17,13 +17,11 @@ from typing import Callable
 
 import dace
 
+from gt4py import eve
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GTIRDataflowBuilder,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -36,19 +34,19 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GTIRDataflowBuilder,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
+        dataflow_builder: eve.NodeVisitor,
         node: itir.FunCall,
     ):
-        super().__init__(state, dataflow_builder.sdfg)
-        sdfg = dataflow_builder.sdfg
+        super().__init__(sdfg, state)
 
         assert cpm.is_call_to(node.fun, "select")
         assert len(node.fun.args) == 3
         cond_expr, true_expr, false_expr = node.fun.args
 
         # expect condition as first argument
-        cond = dataflow_builder.visit_symbolic(cond_expr)
+        cond = self.visit(cond_expr)
 
         # use current head state to terminate the dataflow, and add a entry state
         # to connect the true/false branch states as follows:
@@ -72,13 +70,15 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
         true_state = sdfg.add_state(state.label + "_true_branch")
         sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond))
         sdfg.add_edge(true_state, state, dace.InterstateEdge())
-        self.true_br_builder = dataflow_builder.visit(true_expr, head_state=true_state)
+        self.true_br_builder = dataflow_builder.visit(true_expr, sdfg=sdfg, head_state=true_state)
 
         # and false branch as third argument
         false_state = sdfg.add_state(state.label + "_false_branch")
         sdfg.add_edge(select_state, false_state, dace.InterstateEdge(condition=f"not {cond}"))
         sdfg.add_edge(false_state, state, dace.InterstateEdge())
-        self.false_br_builder = dataflow_builder.visit(false_expr, head_state=false_state)
+        self.false_br_builder = dataflow_builder.visit(
+            false_expr, sdfg=sdfg, head_state=false_state
+        )
 
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         # retrieve true/false states as predecessors of head state

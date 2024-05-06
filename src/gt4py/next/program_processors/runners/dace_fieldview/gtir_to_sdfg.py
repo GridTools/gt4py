@@ -17,16 +17,15 @@ Class to lower GTIR to a DaCe SDFG.
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence, final
 
 import dace
 
-from gt4py import eve
+import gt4py.eve as eve
 from gt4py.next.common import Connectivity, Dimension, DimensionKind
 from gt4py.next.iterator import ir as itir
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GTIRDataflowBuilder as DataflowBuilder,
-)
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins
 from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     as_dace_type,
     filter_connectivities,
@@ -119,6 +118,34 @@ class GTIRToSDFG(eve.NodeVisitor):
         """
         raise NotImplementedError("Temporaries not supported yet by GTIR DaCe backend.")
 
+    def _visit_expression(
+        self, node: itir.Expr, sdfg: dace.SDFG, head_state: dace.SDFGState
+    ) -> list[dace.nodes.AccessNode]:
+        """
+        Specialized visit method for fieldview expressions.
+
+        This method represents the entry point to visit 'Stmt' expressions.
+        As such, it must preserve the property of single exit state in the SDFG.
+
+        TODO: do we need to return the GT4Py `FieldType`/`ScalarType`?
+        """
+        expr_builder = self.visit(node, sdfg=sdfg, head_state=head_state)
+        assert callable(expr_builder)
+        results = expr_builder()
+
+        expressions_nodes = []
+        for node, _ in results:
+            assert isinstance(node, dace.nodes.AccessNode)
+            expressions_nodes.append(node)
+
+        # sanity check: each statement should preserve the property of single exit state (aka head state),
+        # i.e. eventually only introduce internal branches, and keep the same head state
+        sink_states = sdfg.sink_nodes()
+        assert len(sink_states) == 1
+        assert sink_states[0] == head_state
+
+        return expressions_nodes
+
     def visit_Program(self, node: itir.Program) -> dace.SDFG:
         """Translates `ir.Program` to `dace.SDFG`.
 
@@ -166,14 +193,13 @@ class GTIRToSDFG(eve.NodeVisitor):
         The translation of `SetAt` ensures that the result is written to some global storage.
         """
 
-        dataflow_builder = DataflowBuilder(sdfg, self._data_types)
-        expr_nodes = dataflow_builder.visit_expression(stmt.expr, state)
+        expr_nodes = self._visit_expression(stmt.expr, sdfg, state)
 
         # the target expression could be a `SymRef` to an output node or a `make_tuple` expression
         # in case the statement returns more than one field
-        target_nodes = dataflow_builder.visit_expression(stmt.target, state)
+        target_nodes = self._visit_expression(stmt.target, sdfg, state)
 
-        domain = dataflow_builder.visit_domain(stmt.domain)
+        domain = gtir_builtins.FieldDomain(sdfg, state).visit_domain(stmt.domain)
         # convert domain to dictionary to ease access to dimension boundaries
         domain_map = {dim: (lb, ub) for dim, lb, ub in domain}
 
@@ -195,3 +221,39 @@ class GTIRToSDFG(eve.NodeVisitor):
                 target_node,
                 dace.Memlet(data=target_node.data, subset=subset),
             )
+
+    def visit_FunCall(
+        self, node: itir.FunCall, sdfg: dace.SDFG, head_state: dace.SDFGState
+    ) -> Callable:
+        arg_builders: list[Callable] = []
+        for arg in node.args:
+            arg_builder = self.visit(arg, sdfg=sdfg, head_state=head_state)
+            assert callable(arg_builder)
+            arg_builders.append(arg_builder)
+
+        if cpm.is_call_to(node.fun, "as_fieldop"):
+            return gtir_builtins.AsFieldOp(sdfg, head_state, node, arg_builders)
+
+        elif cpm.is_call_to(node.fun, "select"):
+            assert len(arg_builders) == 0
+            return gtir_builtins.Select(sdfg, head_state, self, node)
+
+        else:
+            raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
+
+    @final
+    def visit_Lambda(self, node: itir.Lambda) -> Any:
+        """
+        This visitor class should never encounter `itir.Lambda` expressions
+        because a lambda represents a stencil, which translates from iterator to values.
+        In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
+        """
+        raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
+
+    def visit_SymRef(
+        self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
+    ) -> Callable:
+        sym_name = str(node.id)
+        assert sym_name in self._data_types
+        sym_type = self._data_types[sym_name]
+        return gtir_builtins.SymbolRef(sdfg, head_state, sym_name, sym_type)

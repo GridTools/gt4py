@@ -17,12 +17,8 @@ from typing import Optional
 
 import dace
 
-from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GTIRDataflowBuilder,
 )
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
@@ -36,15 +32,14 @@ class GTIRBuiltinSymbolRef(GTIRBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GTIRDataflowBuilder,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
-        node: itir.SymRef,
+        sym_name: str,
+        sym_type: ts.FieldType | ts.ScalarType,
     ):
-        super().__init__(state, dataflow_builder.sdfg)
-        sym_name = str(node.id)
-        assert sym_name in dataflow_builder.data_types
+        super().__init__(sdfg, state)
         self.sym_name = sym_name
-        self.sym_type = dataflow_builder.data_types[sym_name]
+        self.sym_type = sym_type
 
     def _get_access_node(self) -> Optional[dace.nodes.AccessNode]:
         """Returns, if present, the access node in current state for the data symbol."""

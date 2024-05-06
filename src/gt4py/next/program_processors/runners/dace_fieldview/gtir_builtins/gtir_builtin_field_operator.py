@@ -20,14 +20,11 @@ import dace
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_domain import (
+    GTIRBuiltinDomain,
+)
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_dataflow_builder import (
-    GTIRDataflowBuilder,
-)
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_tasklet_codegen import (
-    GTIRTaskletCodegen,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -42,12 +39,12 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
 
     def __init__(
         self,
-        dataflow_builder: GTIRDataflowBuilder,
+        sdfg: dace.SDFG,
         state: dace.SDFGState,
         node: itir.FunCall,
         stencil_args: list[Callable],
     ):
-        super().__init__(state, dataflow_builder.sdfg)
+        super().__init__(sdfg, state)
 
         assert cpm.is_call_to(node.fun, "as_fieldop")
         assert len(node.fun.args) == 2
@@ -58,7 +55,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         assert isinstance(domain_expr, itir.FunCall)
 
         # visit field domain
-        domain = dataflow_builder.visit_domain(domain_expr)
+        domain = GTIRBuiltinDomain(sdfg, state).visit_domain(domain_expr)
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
@@ -74,7 +71,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         # the field operator as a mapped tasklet, which will range over the field domain
         output_connector = "__out"
         tlet_code = "{var} = {code}".format(
-            var=output_connector, code=GTIRTaskletCodegen().visit(self.stencil_expr.expr)
+            var=output_connector, code=self.visit(self.stencil_expr.expr)
         )
 
         # allocate local temporary storage for the result field

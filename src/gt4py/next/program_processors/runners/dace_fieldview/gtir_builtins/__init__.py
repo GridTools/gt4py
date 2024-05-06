@@ -12,6 +12,9 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_domain import (
+    GTIRBuiltinDomain as FieldDomain,
+)
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_field_operator import (
     GTIRBuiltinAsFieldOp as AsFieldOp,
 )
@@ -26,6 +29,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_bui
 # export short names of translation classes for GTIR builtin functions
 __all__ = [
     "AsFieldOp",
+    "FieldDomain",
     "Select",
     "SymbolRef",
 ]
