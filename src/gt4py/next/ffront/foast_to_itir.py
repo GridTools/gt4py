@@ -23,6 +23,7 @@ from gt4py.next.ffront import (
     fbuiltins,
     field_operator_ast as foast,
     lowering_utils,
+    stages as ffront_stages,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.experimental import EXPERIMENTAL_FUN_BUILTIN_NAMES
@@ -31,6 +32,10 @@ from gt4py.next.ffront.foast_introspection import StmtReturnKind, deduce_stmt_re
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.type_system import type_info, type_specifications as ts
+
+
+def foast_to_itir(inp: ffront_stages.FoastOperatorDefinition) -> itir.Expr:
+    return FieldOperatorLowering.apply(inp.foast_node)
 
 
 def promote_to_list(node: foast.Symbol | foast.Expr) -> Callable[[itir.Expr], itir.Expr]:

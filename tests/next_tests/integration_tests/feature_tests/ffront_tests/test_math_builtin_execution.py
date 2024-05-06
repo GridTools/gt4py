@@ -18,9 +18,13 @@ from typing import Callable, Optional
 import numpy as np
 import pytest
 
-import gt4py.next as gtx
-from gt4py.next.ffront import dialect_ast_enums, fbuiltins, field_operator_ast as foast
-from gt4py.next.ffront.decorator import FieldOperator
+from gt4py.next.ffront import (
+    decorator,
+    dialect_ast_enums,
+    fbuiltins,
+    field_operator_ast as foast,
+    stages as ffront_stages,
+)
 from gt4py.next.ffront.foast_passes.type_deduction import FieldOperatorTypeDeduction
 from gt4py.next.program_processors import processor_interface as ppi
 from gt4py.next.type_system import type_translation
@@ -107,12 +111,14 @@ def make_builtin_field_operator(builtin_name: str, backend: Optional[ppi.Program
     )
     typed_foast_node = FieldOperatorTypeDeduction.apply(foast_node)
 
-    return FieldOperator(
-        foast_node=typed_foast_node,
-        closure_vars=closure_vars,
-        definition=None,
+    return decorator.FieldOperatorFromFoast(
+        definition_stage=None,
+        foast_stage=ffront_stages.FoastOperatorDefinition(
+            foast_node=typed_foast_node,
+            closure_vars=closure_vars,
+            grid_type=None,
+        ),
         backend=backend,
-        grid_type=None,
     )
 
 

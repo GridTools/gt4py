@@ -126,6 +126,17 @@ class _PrettyPrinter(TemplatedGenerator):
 
     UnaryOp = as_fmt("{op}{operand}")
 
+    IfStmt = as_fmt(
+        textwrap.dedent(
+            """
+            if {condition}:
+                {true_branch}
+            else:
+                {false_branch}
+            """
+        ).strip()
+    )
+
     def visit_UnaryOp(self, node: foast.UnaryOp, **kwargs: Any) -> str:
         if node.op is dialect_ast_enums.UnaryOperator.NOT:
             op = "not "
@@ -234,7 +245,7 @@ def pretty_format(node: foast.LocatedNode) -> str:
     >>> @field_operator
     ... def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
     ...     return a + 1.0
-    >>> print(pretty_format(field_op.foast_node))
+    >>> print(pretty_format(field_op.foast_stage.foast_node))
     @field_operator
     def field_op(a: Field[[IDim], float64]) -> Field[[IDim], float64]:
       return a + 1.0
