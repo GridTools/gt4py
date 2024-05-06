@@ -20,7 +20,6 @@ import dace
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -73,9 +72,7 @@ class GTIRBuiltinSymbolRef(GTIRBuiltinTranslator):
                 {"__out"},
                 f"__out = {self.sym_name}",
             )
-            name = f"{self.head_state.label}_var"
-            dtype = as_dace_type(self.sym_type)
-            sym_node = self.head_state.add_scalar(name, dtype, find_new_name=True, transient=True)
+            sym_node = self.add_local_storage(self.sym_type, shape=[])
             self.head_state.add_edge(
                 tasklet_node, "__out", sym_node, None, dace.Memlet(data=sym_node.data, subset="0")
             )

@@ -20,7 +20,7 @@ from gt4py.next.common import Connectivity
 from gt4py.next.type_system import type_specifications as ts
 
 
-def as_dace_type(type_: ts.ScalarType) -> dace.dtypes.typeclass:
+def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
     """Converts GT4Py scalar type to corresponding DaCe type."""
     match type_.kind:
         case ts.ScalarKind.BOOL:
@@ -53,6 +53,7 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
 
 def unique_name(prefix: str) -> str:
     """Generate a string containing a unique integer id, which is updated incrementally."""
+
     unique_id = getattr(unique_name, "_unique_id", 0)  # static variable
     setattr(unique_name, "_unique_id", unique_id + 1)  # noqa: B010 [set-attr-with-constant]
 

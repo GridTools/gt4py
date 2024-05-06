@@ -13,8 +13,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-from dataclasses import dataclass
-
 import dace
 
 from gt4py.next.common import Dimension
@@ -22,11 +20,12 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
+    LiteralExpr,
+    SymbolExpr,
 )
 from gt4py.next.type_system import type_specifications as ts
 
 
-@dataclass(frozen=True)
 class GTIRBuiltinDomain(GTIRBuiltinTranslator):
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         raise NotImplementedError
@@ -46,7 +45,15 @@ class GTIRBuiltinDomain(GTIRBuiltinTranslator):
             axis = named_range.args[0]
             assert isinstance(axis, itir.AxisLiteral)
             dim = Dimension(axis.value)
-            bounds = [self.visit(arg) for arg in named_range.args[1:3]]
+            bounds = []
+            for arg in named_range.args[1:3]:
+                bound = self.visit(arg)
+                if isinstance(bound, SymbolExpr):
+                    assert bound.data in self.sdfg.symbols
+                    bounds.append(bound.data)
+                else:
+                    assert isinstance(bound, LiteralExpr)
+                    bounds.append(bound.value)
             domain.append((dim, bounds[0], bounds[1]))
 
         return domain

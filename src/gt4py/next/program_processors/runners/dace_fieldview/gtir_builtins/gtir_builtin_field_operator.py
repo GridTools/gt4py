@@ -25,7 +25,9 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_bui
 )
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
+    ValueExpr,
 )
+from gt4py.next.program_processors.runners.dace_fieldview.utility import unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -67,12 +69,12 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         self.stencil_args = stencil_args
 
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
+        assert len(self.input_connections) == 0
+
         # generate a tasklet node implementing the stencil function and represent
         # the field operator as a mapped tasklet, which will range over the field domain
-        output_connector = "__out"
-        tlet_code = "{var} = {code}".format(
-            var=output_connector, code=self.visit(self.stencil_expr.expr)
-        )
+        output_expr = self.visit(self.stencil_expr.expr)
+        assert isinstance(output_expr, ValueExpr)
 
         # allocate local temporary storage for the result field
         field_shape = [
@@ -82,51 +84,50 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         ]
         field_node = self.add_local_storage(self.field_type, field_shape)
 
-        # create map range corresponding to the field operator domain
-        map_ranges = {f"i_{dim.value}": f"{lb}:{ub}" for dim, (lb, ub) in self.field_domain.items()}
-
-        input_nodes: dict[str, dace.nodes.AccessNode] = {}
+        data_nodes: dict[str, dace.nodes.AccessNode] = {}
         input_memlets: dict[str, dace.Memlet] = {}
         for arg, param in zip(self.stencil_args, self.stencil_expr.params, strict=True):
             arg_nodes = arg()
             assert len(arg_nodes) == 1
             arg_node, arg_type = arg_nodes[0]
-            connector = str(param.id)
+            data = str(param.id)
             # require (for now) all input nodes to be data access nodes
             assert isinstance(arg_node, dace.nodes.AccessNode)
-            input_nodes[arg_node.data] = arg_node
+            data_nodes[data] = arg_node
             if isinstance(arg_type, ts.FieldType):
                 # support either single element access (general case) or full array shape
                 is_scalar = all(dim in self.field_domain for dim in arg_type.dims)
                 if is_scalar:
                     subset = ",".join(f"i_{dim.value}" for dim in arg_type.dims)
-                    input_memlets[connector] = dace.Memlet(
-                        data=arg_node.data, subset=subset, volume=1
-                    )
+                    input_memlets[data] = dace.Memlet(data=arg_node.data, subset=subset, volume=1)
                 else:
                     memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self.sdfg))
                     # set volume to 1 because the stencil function always performs single element access
                     # TODO: check validity of this assumption
                     memlet.volume = 1
-                    input_memlets[connector] = memlet
+                    input_memlets[data] = memlet
             else:
-                input_memlets[connector] = dace.Memlet(data=arg_node.data, subset="0")
+                input_memlets[data] = dace.Memlet(data=arg_node.data, subset="0")
 
         # assume tasklet with single output
         output_index = ",".join(f"i_{dim.value}" for dim in self.field_type.dims)
-        output_memlets = {output_connector: dace.Memlet(data=field_node.data, subset=output_index)}
-        output_nodes = {field_node.data: field_node}
+        output_memlet = dace.Memlet(data=field_node.data, subset=output_index)
 
-        # create a tasklet inside a parallel-map scope
-        self.head_state.add_mapped_tasklet(
-            "tasklet",
-            map_ranges,
-            input_memlets,
-            tlet_code,
-            output_memlets,
-            input_nodes=input_nodes,
-            output_nodes=output_nodes,
-            external_edges=True,
+        # create map range corresponding to the field operator domain
+        map_ranges = {f"i_{dim.value}": f"{lb}:{ub}" for dim, (lb, ub) in self.field_domain.items()}
+        me, mx = self.head_state.add_map(unique_name("map"), map_ranges)
+
+        for (input_node, input_connector), input_param in self.input_connections:
+            assert input_param in data_nodes
+            self.head_state.add_memlet_path(
+                data_nodes[input_param],
+                me,
+                input_node,
+                dst_conn=input_connector,
+                memlet=input_memlets[input_param],
+            )
+        self.head_state.add_memlet_path(
+            output_expr.node, mx, field_node, src_conn=output_expr.connector, memlet=output_memlet
         )
 
         return [(field_node, self.field_type)]

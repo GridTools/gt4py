@@ -12,12 +12,12 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 """
-Class to lower GTIR to a DaCe SDFG.
+Class to lower GTIR to DaCe SDFG.
 
 Note: this module covers the fieldview flavour of GTIR.
 """
 
-from typing import Any, Callable, Mapping, Sequence, final
+from typing import Any, Callable, Mapping, Sequence
 
 import dace
 
@@ -68,10 +68,8 @@ class GTIRToSDFG(eve.NodeVisitor):
         For local dimensions, the size is known at compile-time and therefore
         the corresponding array shape dimension is set to an integer literal value.
 
-        Returns
-        -------
-        tuple(shape, strides)
-            The output tuple fields are arrays of dace symbolic expressions.
+        Returns:
+            Two list of symbols, one for the shape and another for the strides of the array.
         """
         dtype = dace.int32
         neighbor_tables = filter_connectivities(self.offset_providers)
@@ -190,7 +188,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         """Visits a `SetAt` statement expression and writes the local result to some external storage.
 
         Each statement expression results in some sort of dataflow gragh writing to temporary storage.
-        The translation of `SetAt` ensures that the result is written to some global storage.
+        The translation of `SetAt` ensures that the result is written back to some global storage.
         """
 
         expr_nodes = self._visit_expression(stmt.expr, sdfg, state)
@@ -225,6 +223,7 @@ class GTIRToSDFG(eve.NodeVisitor):
     def visit_FunCall(
         self, node: itir.FunCall, sdfg: dace.SDFG, head_state: dace.SDFGState
     ) -> Callable:
+        # first visit the argument nodes
         arg_builders: list[Callable] = []
         for arg in node.args:
             arg_builder = self.visit(arg, sdfg=sdfg, head_state=head_state)
@@ -240,15 +239,6 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
-
-    @final
-    def visit_Lambda(self, node: itir.Lambda) -> Any:
-        """
-        This visitor class should never encounter `itir.Lambda` expressions
-        because a lambda represents a stencil, which translates from iterator to values.
-        In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
-        """
-        raise RuntimeError("Unexpected 'itir.Lambda' node encountered by 'GtirTaskletCodegen'.")
 
     def visit_SymRef(
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState

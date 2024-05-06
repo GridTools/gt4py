@@ -218,6 +218,7 @@ def test_gtir_select():
             itir.Sym(id="w"),
             itir.Sym(id="z"),
             itir.Sym(id="cond"),
+            itir.Sym(id="scalar"),
             itir.Sym(id="size"),
         ],
         declarations=[],
@@ -235,16 +236,16 @@ def test_gtir_select():
                             im.deref("cond"),
                             im.call(
                                 im.call("as_fieldop")(
-                                    im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                                     domain,
                                 )
-                            )("y"),
+                            )("y", "scalar"),
                             im.call(
                                 im.call("as_fieldop")(
-                                    im.lambda_("a")(im.plus(im.deref("a"), 1)),
+                                    im.lambda_("a", "b")(im.plus(im.deref("a"), im.deref("b"))),
                                     domain,
                                 )
-                            )("w"),
+                            )("w", "scalar"),
                         )
                     )(),
                 ),
@@ -266,6 +267,7 @@ def test_gtir_select():
             FTYPE,
             FTYPE,
             ts.ScalarType(ts.ScalarKind.BOOL),
+            ts.ScalarType(ts.ScalarKind.FLOAT64),
             ts.ScalarType(ts.ScalarKind.INT32),
         ],
         OFFSET_PROVIDERS,
@@ -275,7 +277,7 @@ def test_gtir_select():
     assert isinstance(sdfg, dace.SDFG)
 
     for s in [False, True]:
-        sdfg(cond=s, x=a, y=b, w=c, z=d, **FSYMBOLS)
+        sdfg(cond=s, scalar=1, x=a, y=b, w=c, z=d, **FSYMBOLS)
         assert np.allclose(d, (a + b + 1) if s else (a + c + 1))
 
 
