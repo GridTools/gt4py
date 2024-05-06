@@ -16,6 +16,7 @@ from typing import Optional, Pattern
 
 import pytest
 
+import gt4py.next.common as common
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -622,3 +623,37 @@ def test_dimension_promotion(
             promote_dims(*dim_list)
 
         assert exc_info.match(expected_error_msg)
+
+
+class TestCartesianConnectivity:
+    def test_from_offset(self):
+        offset = 5
+        dimension = common.Dimension("I")
+
+        result = common.CartesianConnectivity.from_offset(offset, dimension)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.dimension == dimension
+        assert result.codomain == dimension
+        assert result.target == offset
+
+        result = common._connectivity(offset, dimension)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.dimension == dimension
+        assert result.codomain == dimension
+        assert result.target == offset
+
+    def test_from_target(self):
+        I_half = common.Dimension("I_half")
+        dimension = common.Dimension("I")
+
+        result = common.CartesianConnectivity.from_target(I_half, dimension)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.dimension == dimension
+        assert result.codomain == I_half
+        assert result.target == I_half
+
+        result = common._connectivity(I_half, dimension)
+        assert isinstance(result, common.CartesianConnectivity)
+        assert result.dimension == dimension
+        assert result.codomain == I_half
+        assert result.target == I_half
