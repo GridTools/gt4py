@@ -414,7 +414,7 @@ def test_sub_domain():
     )
 
     # Test indexing with integers
-    sub_result = domain.sub[2, 5, 7]
+    sub_result = domain.slice_at[2, 5, 7]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 11)),
@@ -423,7 +423,7 @@ def test_sub_domain():
     assert sub_result == expected_result
 
     # Test indexing with slices
-    sub_result = domain.sub[slice(2, 5), slice(5, 7), slice(7, 10)]
+    sub_result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 5)),
         NamedRange(JDim, UnitRange(10, 12)),
@@ -432,7 +432,7 @@ def test_sub_domain():
     assert sub_result == expected_result
 
     # Test indexing with mixed integers and slices
-    sub_result = domain.sub[2, slice(5, 7), 9]
+    sub_result = domain.slice_at[2, slice(5, 7), 9]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 12)),
@@ -442,11 +442,11 @@ def test_sub_domain():
 
     # Test indexing with incorrect types
     with pytest.raises(TypeError):
-        domain.sub["a", 7, 25]
+        domain.slice_at["a", 7, 25]
 
     # Test indexing with incorrect number of indices
     with pytest.raises(ValueError, match="not match the number of dimensions"):
-        domain.sub[2, 7]
+        domain.slice_at[2, 7]
 
 
 def test_domain_dim_index():

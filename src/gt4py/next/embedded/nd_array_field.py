@@ -501,7 +501,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
             if slices is None:
                 raise ValueError("Restriction generates non-contiguous dimensions.")
 
-            new_domain = self.domain.sub[slices]
+            new_domain = self.domain.slice_at[slices]
             self._cache[cache_key] = new_domain
 
         return new_domain
@@ -870,7 +870,7 @@ def _concat_where(
         mask_field.ndarray
     )
     mask_values_to_domain_mapping: Iterable[tuple[bool, common.Domain]] = (
-        (mask, mask_field.domain.sub[domain_slice])
+        (mask, mask_field.domain.slice_at[domain_slice])
         for mask, domain_slice in mask_values_to_slices_mapping
     )
     # mask domains intersected with the respective fields

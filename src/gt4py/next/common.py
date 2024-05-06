@@ -458,17 +458,16 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         Intersect `Domain`s, missing `Dimension`s are considered infinite.
 
         Examples:
-        ---------
-        >>> I = Dimension("I")
-        >>> J = Dimension("J")
+            >>> I = Dimension("I")
+            >>> J = Dimension("J")
 
-        >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
+            >>> Domain(NamedRange(I, UnitRange(-1, 3))) & Domain(NamedRange(I, UnitRange(1, 6)))
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>),), ranges=(UnitRange(1, 3),))
 
-        >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
-        ...     NamedRange(I, UnitRange(1, 6))
-        ... )
-        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
+            >>> Domain(NamedRange(I, UnitRange(-1, 3)), NamedRange(J, UnitRange(2, 4))) & Domain(
+            ...     NamedRange(I, UnitRange(1, 6))
+            ... )
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(1, 3), UnitRange(2, 4)))
         """
         broadcast_dims = tuple(promote_dims(self.dims, other.dims))
         intersected_ranges = tuple(
@@ -481,7 +480,18 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
     @functools.cached_property
-    def sub(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
+    def slice_at(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
+        """
+        Create a new domain by slicing the domain ranges at the provided relative slices.
+
+        Examples:
+            >>> I, J = Dimension("I"), Dimension("J")
+            >>> domain = Domain(NamedRange(I, UnitRange(0, 10)), NamedRange(J, UnitRange(5, 15)))
+            >>> domain.slice_at[2, 2:5]
+            Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 3), UnitRange(7, 10)))
+
+        """
+
         def _domain_slicer(*args: RelativeIndexItem) -> Domain:
             if not all(isinstance(a, RelativeIndexItem) for a in args):
                 raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
@@ -551,21 +561,20 @@ def domain(domain_like: DomainLike) -> Domain:
     Construct `Domain` from `DomainLike` object.
 
     Examples:
-    ---------
-    >>> I = Dimension("I")
-    >>> J = Dimension("J")
+        >>> I = Dimension("I")
+        >>> J = Dimension("J")
 
-    >>> domain(((I, (2, 4)), (J, (3, 5))))
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        >>> domain(((I, (2, 4)), (J, (3, 5))))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
-    >>> domain({I: (2, 4), J: (3, 5)})
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
+        >>> domain({I: (2, 4), J: (3, 5)})
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(2, 4), UnitRange(3, 5)))
 
-    >>> domain(((I, 2), (J, 4)))
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        >>> domain(((I, 2), (J, 4)))
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
 
-    >>> domain({I: 2, J: 4})
-    Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
+        >>> domain({I: 2, J: 4})
+        Domain(dims=(Dimension(value='I', kind=<DimensionKind.HORIZONTAL: 'horizontal'>), Dimension(value='J', kind=<DimensionKind.HORIZONTAL: 'horizontal'>)), ranges=(UnitRange(0, 2), UnitRange(0, 4)))
     """
     if isinstance(domain_like, Domain):
         return domain_like
@@ -1019,18 +1028,22 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
     A modified version (ensuring uniqueness of the order) of
     `Kahn's algorithm <https://en.wikipedia.org/wiki/Topological_sorting#Kahn's_algorithm>`_
     is used to topologically sort the arguments.
-    >>> from gt4py.next.common import Dimension
-    >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
-    >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
-    True
-    >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
-    >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
-    Traceback (most recent call last):
-     ...
-    ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
+
+    Examples:
+        >>> from gt4py.next.common import Dimension
+        >>> I, J, K = (Dimension(value=dim) for dim in ["I", "J", "K"])
+        >>> promote_dims([I, J], [I, J, K]) == [I, J, K]
+        True
+
+        >>> promote_dims([I, J], [K])  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        ValueError: Dimensions can not be promoted. Could not determine order of the following dimensions: J, K.
+
+        >>> promote_dims([I, J], [J, I])  # doctest: +ELLIPSIS
+        Traceback (most recent call last):
+        ...
+        ValueError: Dimensions can not be promoted. The following dimensions appear in contradicting order: I, J.
     """
     # build a graph with the vertices being dimensions and edges representing
     #  the order between two dimensions. The graph is encoded as a dictionary
