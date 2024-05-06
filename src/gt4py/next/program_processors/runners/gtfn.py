@@ -17,7 +17,6 @@ import warnings
 from typing import Any, Callable, Optional
 
 import factory
-import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -94,9 +93,9 @@ ConnectivityArg = tuple[core_defs.NDArrayObject, tuple[int, ...]]
 
 
 def handle_connectivity(
-    conn: NeighborTableOffsetProvider, zero_tuple: tuple[int, ...]
+    conn: NeighborTableOffsetProvider, zero_tuple: tuple[int, ...], device: core_defs.DeviceType
 ) -> ConnectivityArg:
-    return (conn.table, zero_tuple)
+    return (_ensure_is_on_device(conn.table, device), zero_tuple)
 
 
 def handle_other_type(*args: Any, **kwargs: Any) -> None:
@@ -110,8 +109,8 @@ type_handlers_connectivity_args = {
 
 
 def _ensure_is_on_device(
-    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
-) -> npt.NDArray:
+    connectivity_arg: core_defs.NDArrayObject, device: core_defs.DeviceType
+) -> core_defs.NDArrayObject:
     if device == core_defs.DeviceType.CUDA:
         import cupy as cp
 
@@ -130,9 +129,8 @@ def extract_connectivity_args(
     zero_tuple = (0, 0)
     args = []
     for conn in offset_provider.values():
-        conn_arg = _ensure_is_on_device(conn.table, device)
-        handler = type_handlers_connectivity_args.get(type(conn_arg), handle_other_type)
-        result = handler(conn_arg, zero_tuple)  # type: ignore
+        handler = type_handlers_connectivity_args.get(type(conn), handle_other_type)
+        result = handler(conn, zero_tuple, device)  # type: ignore
         if result:
             args.append(result)
     return args
