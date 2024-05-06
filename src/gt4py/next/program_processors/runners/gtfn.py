@@ -13,9 +13,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import functools
+import warnings
 from typing import Any, Callable, Optional
 
 import factory
+import numpy.typing as npt
 
 import gt4py._core.definitions as core_defs
 import gt4py.next.allocators as next_allocators
@@ -80,7 +82,7 @@ def convert_args(
     ) -> None:
         # If we don't pass them as in the case of a CachedProgram extract connectivities here.
         if conn_args is None:
-            conn_args = extract_connectivity_args(offset_provider)
+            conn_args = extract_connectivity_args(offset_provider, device)
 
         converted_args = [convert_arg(arg) for arg in args]
         return inp(*converted_args, *conn_args)
@@ -107,14 +109,30 @@ type_handlers_connectivity_args = {
 }
 
 
+def _ensure_is_on_device(
+    connectivity_arg: npt.NDArray, device: core_defs.DeviceType
+) -> npt.NDArray:
+    if device == core_defs.DeviceType.CUDA:
+        import cupy as cp
+
+        if not isinstance(connectivity_arg, cp.ndarray):
+            warnings.warn(
+                "Copying connectivity to device. For performance make sure connectivity is provided on device.",
+                stacklevel=2,
+            )
+            return cp.asarray(connectivity_arg)
+    return connectivity_arg
+
+
 def extract_connectivity_args(
-    offset_provider: dict[str, Any],
+    offset_provider: dict[str, Any], device: core_defs.DeviceType
 ) -> list[ConnectivityArg]:
     zero_tuple = (0, 0)
     args = []
     for conn in offset_provider.values():
-        handler = type_handlers_connectivity_args.get(type(conn), handle_other_type)
-        result = handler(conn, zero_tuple)  # type: ignore
+        conn_arg = _ensure_is_on_device(conn.table, device)
+        handler = type_handlers_connectivity_args.get(type(conn_arg), handle_other_type)
+        result = handler(conn_arg, zero_tuple)  # type: ignore
         if result:
             args.append(result)
     return args
