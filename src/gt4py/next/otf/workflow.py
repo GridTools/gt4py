@@ -84,15 +84,16 @@ class ReplaceEnabledWorkflowMixin(Workflow[StartT_contra, EndT_co], Protocol):
         return dataclasses.replace(self, **kwargs)
 
 
-class ChainableWorkflowMixin(Workflow[StartT, EndT]):
-    def chain(self, next_step: Workflow[EndT, NewEndT]) -> ChainableWorkflowMixin[StartT, NewEndT]:
+class ChainableWorkflowMixin(Workflow[StartT, EndT_co], Protocol[StartT, EndT_co]):
+    def chain(
+        self, next_step: Workflow[EndT_co, NewEndT]
+    ) -> ChainableWorkflowMixin[StartT, NewEndT]:
         return make_step(self).chain(next_step)
 
 
 @dataclasses.dataclass(frozen=True)
 class NamedStepSequence(
-    ChainableWorkflowMixin[StartT, EndT],
-    ReplaceEnabledWorkflowMixin[StartT, EndT],
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
 ):
     """
     Workflow with linear succession of named steps.
@@ -249,3 +250,18 @@ class CachedStep(
         except KeyError:
             result = self._cache[hash_] = self.step(inp)
         return result
+
+
+@dataclasses.dataclass(frozen=True)
+class SkippableStep(
+    ChainableWorkflowMixin[StartT, EndT], ReplaceEnabledWorkflowMixin[StartT, EndT]
+):
+    step: Workflow[StartT, EndT]
+
+    def __call__(self, inp: StartT) -> EndT:
+        if not self.skip_condition(inp):
+            return self.step(inp)
+        return inp  # type: ignore[return-value]  # up to the implementer to make sure StartT == EndT
+
+    def skip_condition(self, inp: StartT) -> bool:
+        raise NotImplementedError()

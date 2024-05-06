@@ -15,7 +15,8 @@
 import functools
 import types
 import typing
-from typing import Any, Callable, Iterator, Type, TypeGuard, cast
+from collections.abc import Callable, Iterator
+from typing import Any, Generic, Protocol, Type, TypeGuard, TypeVar, cast
 
 import numpy as np
 
@@ -89,22 +90,19 @@ def type_class(symbol_type: ts.TypeSpec) -> Type[ts.TypeSpec]:
 
 @typing.overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[False] = False,
+    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[False] = False
 ) -> XIterable[ts.TypeSpec]: ...
 
 
 @typing.overload
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: typing.Literal[True],
-) -> XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]: ...
+    symbol_type: ts.TypeSpec, with_path_arg: typing.Literal[True]
+) -> XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]: ...
 
 
 def primitive_constituents(
-    symbol_type: ts.TypeSpec,
-    with_path_arg: bool = False,
-) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[str, ...]]]:
+    symbol_type: ts.TypeSpec, with_path_arg: bool = False
+) -> XIterable[ts.TypeSpec] | XIterable[tuple[ts.TypeSpec, tuple[int, ...]]]:
     """
     Return the primitive types contained in a composite type.
 
@@ -122,7 +120,9 @@ def primitive_constituents(
     [FieldType(...), ScalarType(...), FieldType(...)]
     """
 
-    def constituents_yielder(symbol_type: ts.TypeSpec, path: tuple[int, ...]):
+    def constituents_yielder(
+        symbol_type: ts.TypeSpec, path: tuple[int, ...]
+    ) -> Iterator[ts.TypeSpec] | Iterator[tuple[ts.TypeSpec, tuple[int, ...]]]:
         if isinstance(symbol_type, ts.TupleType):
             for i, el_type in enumerate(symbol_type.types):
                 yield from constituents_yielder(el_type, (*path, i))
@@ -132,19 +132,26 @@ def primitive_constituents(
             else:
                 yield symbol_type
 
-    return xiter(constituents_yielder(symbol_type, ()))
+    return xiter(constituents_yielder(symbol_type, ()))  # type: ignore[return-value] # why resolved to XIterable[object]?
 
 
+_R = TypeVar("_R", covariant=True)
+_T = TypeVar("_T")
+
+
+class TupleConstructorType(Protocol, Generic[_R]):
+    def __call__(self, *args: Any) -> _R: ...
+
+
+# TODO(havogt): the complicated typing is a hint that this function needs refactoring
 def apply_to_primitive_constituents(
     symbol_type: ts.TypeSpec,
-    fun: (
-        Callable[[ts.TypeSpec], ts.TypeSpec] | Callable[[ts.TypeSpec, tuple[int, ...]], ts.TypeSpec]
-    ),
-    _path=(),
+    fun: (Callable[[ts.TypeSpec], _T] | Callable[[ts.TypeSpec, tuple[int, ...]], _T]),
+    _path: tuple[int, ...] = (),
     *,
-    with_path_arg=False,
-    tuple_constructor=lambda *elements: ts.TupleType(types=[*elements]),
-):
+    with_path_arg: bool = False,
+    tuple_constructor: TupleConstructorType[_R] = lambda *elements: ts.TupleType(types=[*elements]),  # type: ignore[assignment] # probably related to https://github.com/python/mypy/issues/10854
+) -> _T | _R:
     """
     Apply function to all primitive constituents of a type.
 
@@ -158,16 +165,18 @@ def apply_to_primitive_constituents(
     tuple[Field[[], int64], Field[[], int64]]
     """
     if isinstance(symbol_type, ts.TupleType):
-        return tuple_constructor(*[
-            apply_to_primitive_constituents(
-                el,
-                fun,
-                _path=(*_path, i),
-                with_path_arg=with_path_arg,
-                tuple_constructor=tuple_constructor,
-            )
-            for i, el in enumerate(symbol_type.types)
-        ])
+        return tuple_constructor(
+            *[
+                apply_to_primitive_constituents(
+                    el,
+                    fun,
+                    _path=(*_path, i),
+                    with_path_arg=with_path_arg,
+                    tuple_constructor=tuple_constructor,
+                )
+                for i, el in enumerate(symbol_type.types)
+            ]
+        )
     if with_path_arg:
         return fun(symbol_type, _path)  # type: ignore[call-arg] # mypy not aware of `with_path_arg`
     else:
@@ -211,10 +220,26 @@ def is_floating_point(symbol_type: ts.TypeSpec) -> bool:
     >>> is_floating_point(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.FLOAT32,
-        ts.ScalarKind.FLOAT64,
-    ]
+    return extract_dtype(symbol_type).kind in [ts.ScalarKind.FLOAT32, ts.ScalarKind.FLOAT64]
+
+
+def is_integer(symbol_type: ts.TypeSpec) -> bool:
+    """
+    Check if ``symbol_type`` is an integral type.
+
+    Examples:
+    ---------
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.INT32))
+    True
+    >>> is_integer(ts.ScalarType(kind=ts.ScalarKind.FLOAT32))
+    False
+    >>> is_integer(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
+    False
+    """
+    return isinstance(symbol_type, ts.ScalarType) and symbol_type.kind in {
+        ts.ScalarKind.INT32,
+        ts.ScalarKind.INT64,
+    }
 
 
 def is_integral(symbol_type: ts.TypeSpec) -> bool:
@@ -230,10 +255,7 @@ def is_integral(symbol_type: ts.TypeSpec) -> bool:
     >>> is_integral(ts.FieldType(dims=[], dtype=ts.ScalarType(kind=ts.ScalarKind.INT32)))
     True
     """
-    return extract_dtype(symbol_type).kind in [
-        ts.ScalarKind.INT32,
-        ts.ScalarKind.INT64,
-    ]
+    return is_integer(extract_dtype(symbol_type))
 
 
 def is_number(symbol_type: ts.TypeSpec) -> bool:
@@ -280,9 +302,9 @@ def is_arithmetic(symbol_type: ts.TypeSpec) -> bool:
     return is_floating_point(symbol_type) or is_integral(symbol_type)
 
 
-def arithmetic_bounds(arithmetic_type: ts.ScalarType):
+def arithmetic_bounds(arithmetic_type: ts.ScalarType) -> tuple[np.number, np.number]:
     assert is_arithmetic(arithmetic_type)
-    return {
+    return {  # type: ignore[return-value] # why resolved to `tuple[object, object]`?
         ts.ScalarKind.FLOAT32: (np.finfo(np.float32).min, np.finfo(np.float32).max),
         ts.ScalarKind.FLOAT64: (np.finfo(np.float64).min, np.finfo(np.float64).max),
         ts.ScalarKind.INT32: (np.iinfo(np.int32).min, np.iinfo(np.int32).max),
@@ -482,28 +504,17 @@ def return_type(
 
 @return_type.register
 def return_type_func(
-    func_type: ts.FunctionType,
-    *,
-    with_args: list[ts.TypeSpec],
-    with_kwargs: dict[str, ts.TypeSpec],
+    func_type: ts.FunctionType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
 ) -> ts.TypeSpec:
     return func_type.returns
 
 
 @return_type.register
 def return_type_field(
-    field_type: ts.FieldType,
-    *,
-    with_args: list[ts.TypeSpec],
-    with_kwargs: dict[str, ts.TypeSpec],
+    field_type: ts.FieldType, *, with_args: list[ts.TypeSpec], with_kwargs: dict[str, ts.TypeSpec]
 ) -> ts.FieldType:
     try:
-        accepts_args(
-            field_type,
-            with_args=with_args,
-            with_kwargs=with_kwargs,
-            raise_exception=True,
-        )
+        accepts_args(field_type, with_args=with_args, with_kwargs=with_kwargs, raise_exception=True)
     except ValueError as ex:
         raise ValueError("Could not deduce return type of invalid remap operation.") from ex
 
@@ -532,8 +543,8 @@ def canonicalize_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     raise NotImplementedError(f"Not implemented for type '{type(func_type).__name__}'.")
 
@@ -544,8 +555,8 @@ def canonicalize_function_arguments(
     args: tuple | list,
     kwargs: dict,
     *,
-    ignore_errors=False,
-    use_signature_ordering=False,
+    ignore_errors: bool = False,
+    use_signature_ordering: bool = False,
 ) -> tuple[list, dict]:
     num_pos_params = len(func_type.pos_only_args) + len(func_type.pos_or_kw_args)
     cargs = [UNDEFINED_ARG] * max(num_pos_params, len(args))
@@ -614,8 +625,7 @@ def structural_function_signature_incompatibilities(
 
     missing_positional_args = []
     for i, arg_type in zip(
-        range(len(func_type.pos_only_args), num_pos_params),
-        func_type.pos_or_kw_args.keys(),
+        range(len(func_type.pos_only_args), num_pos_params), func_type.pos_or_kw_args.keys()
     ):
         if args[i] is UNDEFINED_ARG:
             missing_positional_args.append(f"'{arg_type}'")
@@ -649,8 +659,8 @@ def function_signature_incompatibilities_func(
     args: list[ts.TypeSpec],
     kwargs: dict[str, ts.TypeSpec],
     *,
-    skip_canonicalization=False,
-    skip_structural_checks=False,
+    skip_canonicalization: bool = False,
+    skip_structural_checks: bool = False,
 ) -> Iterator[str]:
     if not skip_canonicalization:
         args, kwargs = canonicalize_arguments(func_type, args, kwargs, ignore_errors=True)
@@ -687,9 +697,7 @@ def function_signature_incompatibilities_func(
 
 @function_signature_incompatibilities.register
 def function_signature_incompatibilities_field(
-    field_type: ts.FieldType,
-    args: list[ts.TypeSpec],
-    kwargs: dict[str, ts.TypeSpec],
+    field_type: ts.FieldType, args: list[ts.TypeSpec], kwargs: dict[str, ts.TypeSpec]
 ) -> Iterator[str]:
     if len(args) != 1:
         yield f"Function takes 1 argument, but {len(args)} were given."

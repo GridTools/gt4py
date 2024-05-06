@@ -47,8 +47,8 @@ by calling `next_tests.get_processor_id()`, which returns the so-called processo
 The following backend processors are defined:
 
 ```python
-DACE_CPU = "dace_iterator.run_dace_cpu"
-DACE_GPU = "dace_iterator.run_dace_gpu"
+DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
+DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
 GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
 GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
 GTFN_CPU_WITH_TEMPORARIES = "gt4py.next.program_processors.runners.gtfn.run_gtfn_with_temporaries"

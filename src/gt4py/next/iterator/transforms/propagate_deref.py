@@ -13,9 +13,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gt4py.eve import NodeTranslator, PreserveLocationVisitor
-from gt4py.eve.pattern_matching import ObjectPattern as P
 from gt4py.next.iterator import ir
-from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm, ir_makers as im
 
 
 # TODO(tehrengruber): This pass can be generalized to all builtins, e.g.
@@ -44,24 +43,11 @@ class PropagateDeref(PreserveLocationVisitor, NodeTranslator):
         return cls().visit(node)
 
     def visit_FunCall(self, node: ir.FunCall):
-        if P(ir.FunCall, fun=ir.SymRef(id="deref"), args=[P(ir.FunCall, fun=P(ir.Lambda))]).match(
-            node
-        ):
-            builtin = node.fun
-            lambda_fun: ir.Lambda = node.args[0].fun  # type: ignore[attr-defined] # invariant ensured by pattern match above
-            lambda_args: list[ir.Expr] = node.args[0].args  # type: ignore[attr-defined] # invariant ensured by pattern match above
-            node = ir.FunCall(
-                fun=ir.Lambda(
-                    params=lambda_fun.params,
-                    expr=ir.FunCall(fun=builtin, args=[lambda_fun.expr]),
-                ),
-                args=lambda_args,
-            )
-        elif (
-            node.fun == im.ref("deref")
-            and isinstance(node.args[0], ir.FunCall)
-            and node.args[0].fun == im.ref("if_")
-        ):
+        if cpm.is_call_to(node, "deref") and cpm.is_let(node.args[0]):
+            fun: ir.Lambda = node.args[0].fun  # type: ignore[assignment]  # ensured by is_let
+            args: list[ir.Expr] = node.args[0].args
+            node = im.let(*zip(fun.params, args))(im.deref(fun.expr))  # type: ignore[arg-type] # mypy not smart enough
+        elif cpm.is_call_to(node, "deref") and cpm.is_call_to(node.args[0], "if_"):
             cond, true_branch, false_branch = node.args[0].args
             return im.if_(cond, im.deref(true_branch), im.deref(false_branch))
 

@@ -16,6 +16,7 @@ import pytest
 
 from gt4py.next.iterator import ir
 from gt4py.next.iterator.transforms.simple_inline_heuristic import is_eligible_for_inlining
+from gt4py.next.iterator.ir_utils import ir_makers as im
 
 
 @pytest.fixture
@@ -33,8 +34,8 @@ def scan():
                     ],
                 ),
             ),
-            ir.Literal(value="True", type="bool"),
-            ir.Literal(value="0.0", type="float64"),
+            im.literal("True", "bool"),
+            im.literal("0.0", "float64"),
         ],
     )
 
@@ -45,10 +46,7 @@ def test_trivial(is_scan_context):
     # `↑(scan(λ(acc, it) → acc + ·↑(deref)(it)))(...)` where the inner lift should not be inlined.
     expected = not is_scan_context
     testee = ir.FunCall(
-        fun=ir.FunCall(
-            fun=ir.SymRef(id="lift"),
-            args=[ir.SymRef(id="deref")],
-        ),
+        fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
         args=[ir.SymRef(id="it")],
     )
     assert expected == is_eligible_for_inlining(testee, is_scan_context)
@@ -66,10 +64,7 @@ def test_scan_with_lifted_arg(scan):
         fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[scan]),
         args=[
             ir.FunCall(
-                fun=ir.FunCall(
-                    fun=ir.SymRef(id="lift"),
-                    args=[ir.SymRef(id="deref")],
-                ),
+                fun=ir.FunCall(fun=ir.SymRef(id="lift"), args=[ir.SymRef(id="deref")]),
                 args=[ir.SymRef(id="x")],
             )
         ],

@@ -74,10 +74,7 @@ class IJCacheDetection(eve.NodeTranslator):
             oir.IJCache(name=field) for field in cacheable
         ]
         return oir.VerticalLoop(
-            sections=node.sections,
-            loop_order=node.loop_order,
-            caches=caches,
-            loc=node.loc,
+            sections=node.sections, loop_order=node.loop_order, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:
@@ -149,10 +146,7 @@ class KCacheDetection(eve.NodeTranslator):
             oir.KCache(name=field, fill=True, flush=True) for field in cacheable
         ]
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=node.sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=node.sections, caches=caches, loc=node.loc
         )
 
 
@@ -459,9 +453,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
             lmin = max(lmin, first_unfilled.get(field, lmin))
             for offset in range(lmin, lmax + 1):
                 k_offset = common.CartesianOffset(
-                    i=0,
-                    j=0,
-                    k=offset if loop_order == common.LoopOrder.FORWARD else -offset,
+                    i=0, j=0, k=offset if loop_order == common.LoopOrder.FORWARD else -offset
                 )
                 fill_stmts.append(
                     oir.AssignStmt(
@@ -586,10 +578,7 @@ class FillFlushToLocalKCaches(eve.NodeTranslator, eve.VisitorWithSymbolTableTrai
         ]
 
         return oir.VerticalLoop(
-            loop_order=node.loop_order,
-            sections=sections,
-            caches=caches,
-            loc=node.loc,
+            loop_order=node.loop_order, sections=sections, caches=caches, loc=node.loc
         )
 
     def visit_Stencil(self, node: oir.Stencil, **kwargs: Any) -> oir.Stencil:

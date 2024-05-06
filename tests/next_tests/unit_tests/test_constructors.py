@@ -121,8 +121,7 @@ def test_as_field():
 def test_as_field_domain():
     ref = np.random.rand(sizes[I] - 1, sizes[J] - 1).astype(gtx.float32)
     domain = common.Domain(
-        dims=(I, J),
-        ranges=(common.UnitRange(0, sizes[I] - 1), common.UnitRange(0, sizes[J] - 1)),
+        dims=(I, J), ranges=(common.UnitRange(0, sizes[I] - 1), common.UnitRange(0, sizes[J] - 1))
     )
     a = gtx.as_field(domain, ref)
     assert np.array_equal(a.ndarray, ref)
@@ -137,18 +136,12 @@ def test_as_field_origin():
 
 # check that `as_field()` domain is correct depending on data origin and domain itself
 def test_field_wrong_dims():
-    with pytest.raises(
-        ValueError,
-        match=(r"Cannot construct 'Field' from array of shape"),
-    ):
+    with pytest.raises(ValueError, match=(r"Cannot construct 'Field' from array of shape")):
         gtx.as_field([I, J], np.random.rand(sizes[I]).astype(gtx.float32))
 
 
 def test_field_wrong_domain():
-    with pytest.raises(
-        ValueError,
-        match=(r"Cannot construct 'Field' from array of shape"),
-    ):
+    with pytest.raises(ValueError, match=(r"Cannot construct 'Field' from array of shape")):
         domain = common.Domain(
             dims=(I, J),
             ranges=(common.UnitRange(0, sizes[I] - 1), common.UnitRange(0, sizes[J] - 1)),
@@ -157,16 +150,10 @@ def test_field_wrong_domain():
 
 
 def test_field_wrong_origin():
-    with pytest.raises(
-        ValueError,
-        match=(r"Origin keys {'J'} not in domain"),
-    ):
+    with pytest.raises(ValueError, match=(r"Origin keys {'J'} not in domain")):
         gtx.as_field([I], np.random.rand(sizes[I]).astype(gtx.float32), origin={"J": 0})
 
-    with pytest.raises(
-        ValueError,
-        match=(r"Cannot specify origin for domain I"),
-    ):
+    with pytest.raises(ValueError, match=(r"Cannot specify origin for domain I")):
         gtx.as_field("I", np.random.rand(sizes[J]).astype(gtx.float32), origin={"J": 0})
 
 

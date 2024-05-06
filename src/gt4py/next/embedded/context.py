@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import contextvars as cvars
+from collections.abc import Generator
 from typing import Any
 
 import gt4py.eve as eve
@@ -26,12 +27,8 @@ import gt4py.next.common as common
 #: closure execution context.
 closure_column_range: cvars.ContextVar[common.NamedRange] = cvars.ContextVar("column_range")
 
-_undefined_offset_provider: common.OffsetProvider = {}
-
 #: Offset provider dict in the current embedded execution context.
-offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar(
-    "offset_provider", default=_undefined_offset_provider
-)
+offset_provider: cvars.ContextVar[common.OffsetProvider] = cvars.ContextVar("offset_provider")
 
 
 @contextlib.contextmanager
@@ -39,7 +36,9 @@ def new_context(
     *,
     closure_column_range: common.NamedRange | eve.NothingType = eve.NOTHING,
     offset_provider: common.OffsetProvider | eve.NothingType = eve.NOTHING,
-):
+) -> Generator[cvars.Context, None, None]:
+    """Create a new context, updating the provided values."""
+
     import gt4py.next.embedded.context as this_module
 
     updates: list[tuple[cvars.ContextVar[Any], Any]] = []
@@ -51,7 +50,7 @@ def new_context(
     # Create new context with provided values
     ctx = cvars.copy_context()
 
-    def ctx_updater(*args):
+    def ctx_updater(*args: tuple[cvars.ContextVar[Any], Any]) -> None:
         for cvar, value in args:
             cvar.set(value)
 
@@ -60,5 +59,5 @@ def new_context(
     yield ctx
 
 
-def within_context() -> bool:
-    return offset_provider.get() is not _undefined_offset_provider
+def within_valid_context() -> bool:
+    return offset_provider.get(eve.NOTHING) is not eve.NOTHING

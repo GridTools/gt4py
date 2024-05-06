@@ -15,7 +15,7 @@
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 
 from gt4py import storage as gt_storage
-from gt4py.cartesian.backend.base import CLIBackendMixin, register
+from gt4py.cartesian.backend.base import CLIBackendMixin, disabled, register
 from gt4py.cartesian.backend.gtc_common import (
     BackendCodegen,
     bindings_main_template,
@@ -89,8 +89,7 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
             sid_ndim = domain_ndim + data_ndim
             if kwargs["external_arg"]:
                 return "py::object {name}, std::array<gt::int_t,{sid_ndim}> {name}_origin".format(
-                    name=node.name,
-                    sid_ndim=sid_ndim,
+                    name=node.name, sid_ndim=sid_ndim
                 )
             else:
                 return pybuffer_to_sid(
@@ -113,12 +112,7 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
         assert "module_name" in kwargs
         entry_params = self.visit(node.params, external_arg=True, **kwargs)
         sid_params = self.visit(node.params, external_arg=False, **kwargs)
-        return self.generic_visit(
-            node,
-            entry_params=entry_params,
-            sid_params=sid_params,
-            **kwargs,
-        )
+        return self.generic_visit(node, entry_params=entry_params, sid_params=sid_params, **kwargs)
 
     Program = bindings_main_template()
 
@@ -131,12 +125,19 @@ class CudaBindingsCodegen(codegen.TemplatedGenerator):
         return generated_code
 
 
+@disabled(
+    message="CUDA backend is deprecated. New features developed after February 2024 are not available.",
+    enabled_env_var="GT4PY_GTC_ENABLE_CUDA",
+)
 @register
 class CudaBackend(BaseGTBackend, CLIBackendMixin):
     """CUDA backend using gtc."""
 
     name = "cuda"
-    options = {**BaseGTBackend.GT_BACKEND_OPTS, "device_sync": {"versioning": True, "type": bool}}
+    options = {
+        **BaseGTBackend.GT_BACKEND_OPTS,
+        "device_sync": {"versioning": True, "type": bool},
+    }
     languages = {"computation": "cuda", "bindings": ["python"]}
     storage_info = gt_storage.layout.CUDALayout
     PYEXT_GENERATOR_CLASS = CudaExtGenerator  # type: ignore
@@ -157,6 +158,5 @@ class CudaBackend(BaseGTBackend, CLIBackendMixin):
 
         # Generate and return the Python wrapper class
         return self.make_module(
-            pyext_module_name=pyext_module_name,
-            pyext_file_path=pyext_file_path,
+            pyext_module_name=pyext_module_name, pyext_file_path=pyext_file_path
         )

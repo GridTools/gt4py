@@ -15,31 +15,79 @@
 from __future__ import annotations
 
 import ast
-from dataclasses import dataclass
+import dataclasses
+import typing
 from typing import Any, cast
+
+import factory
 
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
+    source_utils,
+    stages as ffront_stages,
     type_specifications as ts_ffront,
 )
 from gt4py.next.ffront.dialect_parser import DialectParser
 from gt4py.next.ffront.past_passes.closure_var_type_deduction import ClosureVarTypeDeduction
 from gt4py.next.ffront.past_passes.type_deduction import ProgramTypeDeduction
+from gt4py.next.otf import workflow
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-@dataclass(frozen=True, kw_only=True)
+@workflow.make_step
+def func_to_past(inp: ffront_stages.ProgramDefinition) -> ffront_stages.PastProgramDefinition:
+    source_def = source_utils.SourceDefinition.from_function(inp.definition)
+    closure_vars = source_utils.get_closure_vars_from_function(inp.definition)
+    annotations = typing.get_type_hints(inp.definition)
+    return ffront_stages.PastProgramDefinition(
+        past_node=ProgramParser.apply(source_def, closure_vars, annotations),
+        closure_vars=closure_vars,
+        grid_type=inp.grid_type,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class OptionalFuncToPast(workflow.SkippableStep):
+    step: workflow.Workflow[
+        ffront_stages.ProgramDefinition, ffront_stages.PastProgramDefinition
+    ] = func_to_past
+
+    def skip_condition(
+        self, inp: ffront_stages.PastProgramDefinition | ffront_stages.ProgramDefinition
+    ) -> bool:
+        match inp:
+            case ffront_stages.ProgramDefinition():
+                return False
+            case ffront_stages.PastProgramDefinition():
+                return True
+
+
+class OptionalFuncToPastFactory(factory.Factory):
+    class Meta:
+        model = OptionalFuncToPast
+
+    class Params:
+        workflow = func_to_past
+        cached = factory.Trait(
+            step=factory.LazyAttribute(
+                lambda o: workflow.CachedStep(
+                    step=o.workflow, hash_function=ffront_stages.fingerprint_stage
+                )
+            )
+        )
+
+        step = factory.LazyAttribute(lambda o: o.workflow)
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
 class ProgramParser(DialectParser[past.Program]):
     """Parse program definition from Python source code into PAST."""
 
     @classmethod
     def _postprocess_dialect_ast(
-        cls,
-        output_node: past.Program,
-        closure_vars: dict[str, Any],
-        annotations: dict[str, Any],
+        cls, output_node: past.Program, closure_vars: dict[str, Any], annotations: dict[str, Any]
     ) -> past.Program:
         output_node = ClosureVarTypeDeduction.apply(output_node, closure_vars)
         return ProgramTypeDeduction.apply(output_node)

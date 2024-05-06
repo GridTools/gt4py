@@ -401,12 +401,12 @@ def content_hash(*args: Any, hash_algorithm: str | xtyping.HashlibAlgorithm | No
 
     """
     if hash_algorithm is None:
-        hash_algorithm = xxhash.xxh64()  # type: ignore[assignment]
+        hash_algorithm = xxhash.xxh64()
     elif isinstance(hash_algorithm, str):
-        hash_algorithm = hashlib.new(hash_algorithm)  # type: ignore[assignment]
+        hash_algorithm = hashlib.new(hash_algorithm)
 
-    hash_algorithm.update(pickle.dumps(args))  # type: ignore[union-attr]
-    result = hash_algorithm.hexdigest()  # type: ignore[union-attr]
+    hash_algorithm.update(pickle.dumps(args))
+    result = hash_algorithm.hexdigest()
     assert isinstance(result, str)
 
     return result
@@ -428,11 +428,7 @@ def dhash(obj: Any, **kwargs: Any) -> str:
 
 
 def pprint_ddiff(
-    old: Any,
-    new: Any,
-    *,
-    pprint_opts: Optional[Dict[str, Any]] = None,
-    **kwargs: Any,
+    old: Any, new: Any, *, pprint_opts: Optional[Dict[str, Any]] = None, **kwargs: Any
 ) -> None:
     """Pretty printing of deepdiff.DeepDiff objects.
 
@@ -987,12 +983,14 @@ class XIterable(Iterable[T]):
             >>> list(it.getitem(0))
             ['a', 'b', 'c']
 
-            >>> it = xiter([
-            ...     dict(name="AA", age=20, country="US"),
-            ...     dict(name="BB", age=30, country="UK"),
-            ...     dict(name="CC", age=40, country="EU"),
-            ...     dict(country="CH"),
-            ... ])
+            >>> it = xiter(
+            ...     [
+            ...         dict(name="AA", age=20, country="US"),
+            ...         dict(name="BB", age=30, country="UK"),
+            ...         dict(name="CC", age=40, country="EU"),
+            ...         dict(country="CH"),
+            ...     ]
+            ... )
             >>> list(it.getitem("name", "age", default=None))
             [('AA', 20), ('BB', 30), ('CC', 40), (None, None)]
 
@@ -1028,10 +1026,7 @@ class XIterable(Iterable[T]):
         return XIterable(itertools.chain(self.iterator, *iterators))
 
     def diff(
-        self,
-        *others: Iterable,
-        default: Any = NOTHING,
-        key: Union[NOTHING, Callable] = NOTHING,
+        self, *others: Iterable, default: Any = NOTHING, key: Union[NOTHING, Callable] = NOTHING
     ) -> XIterable[Tuple[T, S]]:
         """Diff iterators.
 
@@ -1314,10 +1309,7 @@ class XIterable(Iterable[T]):
     ) -> XIterable[Tuple[Any, List[T]]]: ...
 
     def groupby(
-        self,
-        key: Union[str, List[Any], Callable[[T], Any]],
-        *attr_keys: str,
-        as_dict: bool = False,
+        self, key: Union[str, List[Any], Callable[[T], Any]], *attr_keys: str, as_dict: bool = False
     ) -> Union[XIterable[Tuple[Any, List[T]]], Dict]:
         """Group a sequence by a given key.
 

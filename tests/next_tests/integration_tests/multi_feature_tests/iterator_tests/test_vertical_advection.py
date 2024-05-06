@@ -23,7 +23,7 @@ from gt4py.next.program_processors.formatters import gtfn as gtfn_formatters
 from gt4py.next.program_processors.runners import gtfn
 
 from next_tests.integration_tests.cases import IDim, JDim, KDim
-from next_tests.unit_tests.conftest import lift_mode, program_processor, run_processor
+from next_tests.unit_tests.conftest import program_processor, run_processor
 
 
 @fundef
@@ -88,9 +88,7 @@ def tridiag_reference():
 def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
     closure(
         cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-            named_range(KDim, 0, k_size),
+            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
         ),
         solve_tridiag,
         x,
@@ -102,9 +100,7 @@ def fen_solve_tridiag(i_size, j_size, k_size, a, b, c, d, x):
 def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
     closure(
         cartesian_domain(
-            named_range(IDim, 0, i_size),
-            named_range(JDim, 0, j_size),
-            named_range(KDim, 0, k_size),
+            named_range(IDim, 0, i_size), named_range(JDim, 0, j_size), named_range(KDim, 0, k_size)
         ),
         solve_tridiag2,
         x,
@@ -114,23 +110,15 @@ def fen_solve_tridiag2(i_size, j_size, k_size, a, b, c, d, x):
 
 @pytest.mark.parametrize("fencil", [fen_solve_tridiag, fen_solve_tridiag2])
 @pytest.mark.uses_lift_expressions
-def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
+def test_tridiag(fencil, tridiag_reference, program_processor):
     program_processor, validate = program_processor
-    if (
-        program_processor
-        in [
-            gtfn.run_gtfn.executor,
-            gtfn.run_gtfn_imperative.executor,
-            gtfn.run_gtfn_with_temporaries.executor,
-            gtfn_formatters.format_cpp,
-        ]
-        and lift_mode == LiftMode.FORCE_INLINE
-    ):
+    if program_processor in [
+        gtfn.run_gtfn.executor,
+        gtfn.run_gtfn_imperative.executor,
+        gtfn_formatters.format_cpp,
+    ]:
         pytest.skip("gtfn does only support lifted scans when using temporaries")
-    if (
-        program_processor == gtfn.run_gtfn_with_temporaries.executor
-        or lift_mode == LiftMode.USE_TEMPORARIES
-    ):
+    if program_processor == gtfn.run_gtfn_with_temporaries.executor:
         pytest.xfail("tuple_get on columns not supported.")
     a, b, c, d, x = tridiag_reference
     shape = a.shape
@@ -154,7 +142,6 @@ def test_tridiag(fencil, tridiag_reference, program_processor, lift_mode):
         x_s,
         offset_provider={},
         column_axis=KDim,
-        lift_mode=lift_mode,
     )
 
     if validate:

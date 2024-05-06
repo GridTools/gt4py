@@ -29,5 +29,4 @@ def format_cpp(program: itir.FencilDefinition, *args: Any, **kwargs: Any) -> str
         program,
         offset_provider=kwargs.get("offset_provider", None),
         column_axis=kwargs.get("column_axis", None),
-        runtime_lift_mode=kwargs.get("lift_mode", None),
     )

@@ -89,7 +89,7 @@ class BuiltInFunction(Generic[_R, _P]):
     # e.g. a fused multiply add could have a default implementation as a*b+c, but an optimized implementation for a specific `Field`
     function: Callable[_P, _R]
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(self, "name", f"{self.function.__module__}.{self.function.__name__}")
         object.__setattr__(self, "__doc__", self.function.__doc__)
 
@@ -156,37 +156,23 @@ class WhereBuiltinFunction(
 
 
 @BuiltInFunction
-def neighbor_sum(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def neighbor_sum(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def max_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def max_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
-def min_over(
-    field: common.Field,
-    /,
-    axis: common.Dimension,
-) -> common.Field:
+def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
     raise NotImplementedError()
 
 
 @BuiltInFunction
 def broadcast(
-    field: common.Field | core_defs.ScalarT,
-    dims: tuple[common.Dimension, ...],
-    /,
+    field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
     assert core_defs.is_scalar_type(
         field
@@ -207,9 +193,7 @@ def where(
 
 @BuiltInFunction
 def astype(
-    value: common.Field | core_defs.ScalarT | Tuple,
-    type_: type,
-    /,
+    value: common.Field | core_defs.ScalarT | Tuple, type_: type, /
 ) -> common.Field | core_defs.ScalarT | Tuple:
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
@@ -246,7 +230,7 @@ UNARY_MATH_FP_BUILTIN_NAMES = [
 UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES = ["isfinite", "isinf", "isnan"]
 
 
-def _make_unary_math_builtin(name):
+def _make_unary_math_builtin(name: str) -> None:
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable once we have a failing test (see `test_math_builtin_execution.py`)
         # assert core_defs.is_scalar_type(value) # default implementation for scalars, Fields are handled via dispatch # noqa: ERA001 [commented-out-code]
@@ -267,11 +251,9 @@ for f in (
 BINARY_MATH_NUMBER_BUILTIN_NAMES = ["minimum", "maximum", "fmod", "power"]
 
 
-def _make_binary_math_builtin(name):
+def _make_binary_math_builtin(name: str) -> None:
     def impl(
-        lhs: common.Field | core_defs.ScalarT,
-        rhs: common.Field | core_defs.ScalarT,
-        /,
+        lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
         assert core_defs.is_scalar_type(lhs)
@@ -322,11 +304,11 @@ class FieldOffset(runtime.Offset):
     def _cache(self) -> dict:
         return {}
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
-    def __gt_type__(self):
+    def __gt_type__(self) -> ts.OffsetType:
         return ts.OffsetType(source=self.source, target=self.target)
 
     def __getitem__(self, offset: int) -> common.ConnectivityField:
@@ -340,18 +322,18 @@ class FieldOffset(runtime.Offset):
         if isinstance(offset_definition, common.Dimension):
             connectivity = common.CartesianConnectivity(offset_definition, offset)
         elif isinstance(
-            offset_definition, gtx.NeighborTableOffsetProvider
-        ) or common.is_connectivity_field(offset_definition):
+            offset_definition, (gtx.NeighborTableOffsetProvider, common.ConnectivityField)
+        ):
             unrestricted_connectivity = self.as_connectivity_field()
             assert unrestricted_connectivity.domain.ndim > 1
-            named_index = (self.target[-1], offset)
+            named_index = common.NamedIndex(self.target[-1], offset)
             connectivity = unrestricted_connectivity[named_index]
         else:
             raise NotImplementedError()
 
         return connectivity
 
-    def as_connectivity_field(self):
+    def as_connectivity_field(self) -> common.ConnectivityField:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
         assert isinstance(self.value, str)
         current_offset_provider = embedded.context.offset_provider.get(None)
@@ -360,7 +342,7 @@ class FieldOffset(runtime.Offset):
 
         cache_key = id(offset_definition)
         if (connectivity := self._cache.get(cache_key, None)) is None:
-            if common.is_connectivity_field(offset_definition):
+            if isinstance(offset_definition, common.ConnectivityField):
                 connectivity = offset_definition
             elif isinstance(offset_definition, gtx.NeighborTableOffsetProvider):
                 connectivity = gtx.as_connectivity(

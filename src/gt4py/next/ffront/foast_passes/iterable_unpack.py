@@ -79,32 +79,22 @@ class UnpackedAssignPass(NodeTranslator, traits.VisitorWithSymbolTableTrait):
                         slice_indices = list(range(lower, upper))
                         tuple_slice = [
                             foast.Subscript(
-                                value=tuple_name,
-                                index=i,
-                                type=el_type,
-                                location=stmt.location,
+                                value=tuple_name, index=i, type=el_type, location=stmt.location
                             )
                             for i in slice_indices
                         ]
 
                         new_tuple = foast.TupleExpr(
-                            elts=tuple_slice,
-                            type=el_type,
-                            location=stmt.location,
+                            elts=tuple_slice, type=el_type, location=stmt.location
                         )
                         new_assign = foast.Assign(
-                            target=subtarget.id,
-                            value=new_tuple,
-                            location=stmt.location,
+                            target=subtarget.id, value=new_tuple, location=stmt.location
                         )
                     else:
                         new_assign = foast.Assign(
                             target=subtarget,
                             value=foast.Subscript(
-                                value=tuple_name,
-                                index=index,
-                                type=el_type,
-                                location=stmt.location,
+                                value=tuple_name, index=index, type=el_type, location=stmt.location
                             ),
                             location=stmt.location,
                         )

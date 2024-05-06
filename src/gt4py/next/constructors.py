@@ -67,9 +67,8 @@ def empty(
         Initialize a field in one dimension with a backend and a range domain:
 
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=roundtrip.backend)
+        >>> a = gtx.empty({IDim: range(3, 10)}, allocator=gtx.itir_python)
         >>> a.shape
         (7,)
 
@@ -88,7 +87,7 @@ def empty(
         domain, dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     res = common._field(buffer.ndarray, domain=domain)
-    assert common.is_mutable_field(res)
+    assert isinstance(res, common.MutableField)
     assert isinstance(res, nd_array_field.NdArrayField)
     return res
 
@@ -109,17 +108,12 @@ def zeros(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.zeros({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        >>> gtx.zeros({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([0., 0., 0., 0., 0., 0., 0.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(0)
     return field
@@ -141,17 +135,12 @@ def ones(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.ones({IDim: range(3, 10)}, allocator=roundtrip.backend).ndarray
+        >>> gtx.ones({IDim: range(3, 10)}, allocator=gtx.itir_python).ndarray
         array([1., 1., 1., 1., 1., 1., 1.])
     """
     field = empty(
-        domain=domain,
-        dtype=dtype,
-        aligned_index=aligned_index,
-        allocator=allocator,
-        device=device,
+        domain=domain, dtype=dtype, aligned_index=aligned_index, allocator=allocator, device=device
     )
     field[...] = field.dtype.scalar_type(1)
     return field
@@ -179,9 +168,8 @@ def full(
 
     Examples:
         >>> from gt4py import next as gtx
-        >>> from gt4py.next.program_processors.runners import roundtrip
         >>> IDim = gtx.Dimension("I")
-        >>> gtx.full({IDim: 3}, 5, allocator=roundtrip.backend).ndarray
+        >>> gtx.full({IDim: 3}, 5, allocator=gtx.itir_python).ndarray
         array([5, 5, 5])
     """
     field = empty(
@@ -262,10 +250,12 @@ def as_field(
                 raise ValueError(f"Origin keys {unknown_dims} not in domain {domain}.")
         else:
             origin = {}
-        actual_domain = common.domain([
-            (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
-            for d, s in zip(domain, data.shape)
-        ])
+        actual_domain = common.domain(
+            [
+                (d, (-(start_offset := origin.get(d, 0)), s - start_offset))
+                for d, s in zip(domain, data.shape)
+            ]
+        )
     else:
         if origin:
             raise ValueError(f"Cannot specify origin for domain {domain}")

@@ -138,11 +138,7 @@ def arithmetic_and_logical_test_data():
         (minus, [2.0, 3.0], -1.0),
         (multiplies, [2.0, 3.0], 6.0),
         (divides, [6.0, 2.0], 3.0),
-        (
-            if_,
-            [[True, False], [1.0, 1.0], [2.0, 2.0]],
-            [1.0, 2.0],
-        ),
+        (if_, [[True, False], [1.0, 1.0], [2.0, 2.0]], [1.0, 2.0]),
         (mod, [5, 2], 1),
         (greater, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, False]),
         (greater_equal, [[2.0, 1.0, 1.0], [1.0, 2.0, 1.0]], [True, False, True]),
@@ -192,9 +188,7 @@ def test_arithmetic_and_logical_functors_gtfn(builtin, inputs, expected):
     gtfn_without_transforms = dataclasses.replace(
         gtfn_executor,
         otf_workflow=gtfn_executor.otf_workflow.replace(
-            translation=gtfn_executor.otf_workflow.translation.replace(
-                enable_itir_transforms=False
-            ),
+            translation=gtfn_executor.otf_workflow.translation.replace(enable_itir_transforms=False)
         ),
     )  # avoid inlining the function
     fencil(builtin, out, *inps, processor=gtfn_without_transforms)

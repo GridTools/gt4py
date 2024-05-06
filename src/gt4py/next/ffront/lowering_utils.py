@@ -11,7 +11,7 @@
 # distribution for a copy of the license or check <https://www.gnu.org/licenses/>.
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 from gt4py.eve import utils as eve_utils
 from gt4py.next.ffront import type_info as ti_ffront
@@ -38,7 +38,7 @@ def to_tuples_of_iterator(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
     """
     param = f"__toi_{eve_utils.content_hash(expr)}"
 
-    def fun(primitive_type, path):
+    def fun(primitive_type: ts.TypeSpec, path: tuple[int, ...]) -> itir.Expr:
         inner_expr = im.deref("it")
         for path_part in path:
             inner_expr = im.tuple_get(path_part, inner_expr)
@@ -79,7 +79,7 @@ def to_iterator_of_tuples(expr: itir.Expr | str, arg_type: ts.TypeSpec) -> itir.
         for type_ in type_constituents
     )
 
-    def fun(_, path):
+    def fun(_: Any, path: tuple[int, ...]) -> itir.FunCall:
         param_name = "__iot_el"
         for path_part in path:
             param_name = f"{param_name}_{path_part}"
@@ -134,19 +134,19 @@ T = TypeVar("T", bound=itir.Expr, covariant=True)
 
 
 def _process_elements_impl(
-    process_func: Callable[..., itir.Expr],
-    _current_el_exprs: list[T],
-    current_el_type: ts.TypeSpec,
+    process_func: Callable[..., itir.Expr], _current_el_exprs: list[T], current_el_type: ts.TypeSpec
 ) -> itir.Expr:
     if isinstance(current_el_type, ts.TupleType):
-        result = im.make_tuple(*[
-            _process_elements_impl(
-                process_func,
-                [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
-                current_el_type.types[i],
-            )
-            for i in range(len(current_el_type.types))
-        ])
+        result = im.make_tuple(
+            *[
+                _process_elements_impl(
+                    process_func,
+                    [im.tuple_get(i, current_el_expr) for current_el_expr in _current_el_exprs],
+                    current_el_type.types[i],
+                )
+                for i in range(len(current_el_type.types))
+            ]
+        )
     elif type_info.contains_local_field(current_el_type):
         raise NotImplementedError("Processing fields with local dimension is not implemented.")
     else:

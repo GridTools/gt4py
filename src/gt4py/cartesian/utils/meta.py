@@ -96,12 +96,14 @@ def ast_dump(
                     for name, value in sorted(ast.iter_fields(node))
                 ]
 
-            return "".join([
-                node.__class__.__name__,
-                "({content})".format(
-                    content=", ".join("{}={}".format(name, value) for name, value in fields)
-                ),
-            ])
+            return "".join(
+                [
+                    node.__class__.__name__,
+                    "({content})".format(
+                        content=", ".join("{}={}".format(name, value) for name, value in fields)
+                    ),
+                ]
+            )
 
         elif isinstance(node, list):
             lines = ["[", *[_dump(i, excluded_names) + "," for i in node], "]"]

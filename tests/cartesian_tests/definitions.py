@@ -44,7 +44,7 @@ def _get_backends_with_storage_info(storage_info_kind: str):
     res = []
     for name in _ALL_BACKEND_NAMES:
         backend = gt4pyc.backend.from_name(name)
-        if backend is not None:
+        if not getattr(backend, "disabled", False):
             if backend.storage_info["device"] == storage_info_kind:
                 res.append(_backend_name_as_param(name))
     return res
@@ -54,7 +54,7 @@ CPU_BACKENDS = _get_backends_with_storage_info("cpu")
 GPU_BACKENDS = _get_backends_with_storage_info("gpu")
 ALL_BACKENDS = CPU_BACKENDS + GPU_BACKENDS
 
-_PERFORMANCE_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name != "numpy"]
+_PERFORMANCE_BACKEND_NAMES = [name for name in _ALL_BACKEND_NAMES if name not in ("numpy", "cuda")]
 PERFORMANCE_BACKENDS = [_backend_name_as_param(name) for name in _PERFORMANCE_BACKEND_NAMES]
 
 

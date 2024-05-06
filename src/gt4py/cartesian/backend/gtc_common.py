@@ -59,15 +59,10 @@ def pybuffer_to_sid(
 
     sid_def = """gt::{as_sid}<{ctype}, {sid_ndim},
         gt::integral_constant<int, {unique_index}>>({name})""".format(
-        name=name,
-        ctype=ctype,
-        unique_index=stride_kind_index,
-        sid_ndim=sid_ndim,
-        as_sid=as_sid,
+        name=name, ctype=ctype, unique_index=stride_kind_index, sid_ndim=sid_ndim, as_sid=as_sid
     )
     sid_def = "gt::sid::shift_sid_origin({sid_def}, {name}_origin)".format(
-        sid_def=sid_def,
-        name=name,
+        sid_def=sid_def, name=name
     )
     if domain_ndim != 3:
         gt_dims = [
@@ -145,10 +140,7 @@ class PyExtModuleGenerator(BaseModuleGenerator):
         self.pyext_file_path = None
 
     def __call__(
-        self,
-        args_data: ModuleData,
-        builder: Optional["StencilBuilder"] = None,
-        **kwargs: Any,
+        self, args_data: ModuleData, builder: Optional["StencilBuilder"] = None, **kwargs: Any
     ) -> str:
         self.pyext_module_name = kwargs["pyext_module_name"]
         self.pyext_file_path = kwargs["pyext_file_path"]
@@ -286,7 +278,10 @@ class BaseGTBackend(gt_backend.BasePyExtBackend, gt_backend.CLIBackendMixin):
         gt_pyext_sources: Dict[str, Any]
         if not self.builder.options._impl_opts.get("disable-code-generation", False):
             gt_pyext_files = self.make_extension_sources(stencil_ir=stencil_ir)
-            gt_pyext_sources = {**gt_pyext_files["computation"], **gt_pyext_files["bindings"]}
+            gt_pyext_sources = {
+                **gt_pyext_files["computation"],
+                **gt_pyext_files["bindings"],
+            }
         else:
             # Pass NOTHING to the self.builder means try to reuse the source code files
             gt_pyext_files = {}

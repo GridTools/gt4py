@@ -127,7 +127,7 @@ def test_horiz_exec_merging_complexity():
         + [
             HorizontalExecutionFactory(
                 body=[AssignStmtFactory(left__name="output", right__name=f"tmp{n}")]
-            ),
+            )
         ],
         declarations=[TemporaryFactory(name=f"tmp{i}") for i in range(n)],
     )
@@ -317,8 +317,7 @@ def test_on_the_fly_merging_localscalars():
             HorizontalExecutionFactory(
                 body=[
                     AssignStmtFactory(
-                        left=ScalarAccessFactory(name="scalar_tmp"),
-                        right__name="in",
+                        left=ScalarAccessFactory(name="scalar_tmp"), right__name="in"
                     ),
                     AssignStmtFactory(
                         left__name="tmp", right=ScalarAccessFactory(name="scalar_tmp")

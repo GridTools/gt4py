@@ -12,6 +12,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import os
 from typing import Any, Dict, cast
 
 import numpy as np
@@ -48,7 +49,11 @@ def stencil_def(
             out = pa * fa + pb * fb - pc * fc  # type: ignore  # noqa
 
 
-field_info_val = {0: ("out", "fa"), 1: ("out", "fa", "fb"), 2: ("out", "fa", "fb", "fc")}
+field_info_val = {
+    0: ("out", "fa"),
+    1: ("out", "fa", "fb"),
+    2: ("out", "fa", "fb", "fc"),
+}
 parameter_info_val = {0: ("pa",), 1: ("pa", "pb"), 2: ("pa", "pb", "pc")}
 unreferenced_val = {0: ("pb", "fb", "pc", "fc"), 1: ("pc", "fc"), 2: ()}
 
@@ -166,6 +171,26 @@ def test_toolchain_profiling(backend_name: str, mode: int, rebuild: bool):
             assert build_info["build_time"] > 0.0
     else:
         assert build_info["load_time"] > 0.0
+
+
+@pytest.mark.parametrize("backend_name", ["cuda"])
+def test_deprecation_gtc_cuda(backend_name: str):
+    # Default deprecation, raise an error
+    # Assumes that the GT4PY_GTC_ENABLE_CUDA env variable is not set or set to "0"
+    # Renders the "cuda" backend untestable
+    build_info: Dict[str, Any] = {}
+    builder = (
+        StencilBuilder(cast(StencilFunc, stencil_def))
+        .with_backend(backend_name)
+        .with_externals({"MODE": 2})
+        .with_options(
+            name=stencil_def.__name__,
+            module=stencil_def.__module__,
+            build_info=build_info,
+        )
+    )
+    with pytest.raises(NotImplementedError):
+        builder.build()
 
 
 if __name__ == "__main__":

@@ -33,12 +33,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     opts = pyext_builder.get_gt_pyext_build_opts(uses_cuda=True)
     assert isinstance(opts["include_dirs"], list)
     opts["include_dirs"].append(gridtools_cpp.get_include_dir())
-    ext_module = setuptools.Extension(
-        "test",
-        [str(tmp_src.absolute())],
-        language="c++",
-        **opts,
-    )
+    ext_module = setuptools.Extension("test", [str(tmp_src.absolute())], language="c++", **opts)
     args = [
         "build_ext",
         "--build-temp=" + str(tmp_src.parent),
@@ -47,9 +42,7 @@ def build_gridtools_test(tmp_path: Path, code: str):
     ]
     setuptools.setup(
         name="test",
-        ext_modules=[
-            ext_module,
-        ],
+        ext_modules=[ext_module],
         script_args=args,
         cmdclass={"build_ext": pyext_builder.CUDABuildExtension},
     )

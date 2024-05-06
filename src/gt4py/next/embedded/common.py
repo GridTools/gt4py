@@ -17,8 +17,9 @@ from __future__ import annotations
 import functools
 import itertools
 import operator
+from collections.abc import Iterator, Sequence
 
-from gt4py.eve.extended_typing import Any, Optional, Sequence, cast
+from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
@@ -50,7 +51,7 @@ def _relative_sub_domain(
         if isinstance(idx, slice):
             try:
                 sliced = _slice_range(rng, idx)
-                named_ranges.append((dim, sliced))
+                named_ranges.append(common.NamedRange(dim, sliced))
             except IndexError as ex:
                 raise embedded_exceptions.IndexOutOfBounds(
                     domain=domain, indices=index, index=idx, dim=dim
@@ -75,14 +76,14 @@ def _absolute_sub_domain(
     for i, (dim, rng) in enumerate(domain):
         if (pos := _find_index_of_dim(dim, index)) is not None:
             named_idx = index[pos]
-            idx = named_idx[1]
+            _, idx = named_idx
             if isinstance(idx, common.UnitRange):
                 if not idx <= rng:
                     raise embedded_exceptions.IndexOutOfBounds(
                         domain=domain, indices=index, index=named_idx, dim=dim
                     )
 
-                named_ranges.append((dim, idx))
+                named_ranges.append(common.NamedRange(dim, idx))
             else:
                 # not in new domain
                 assert common.is_int_index(idx)
@@ -92,14 +93,12 @@ def _absolute_sub_domain(
                     )
         else:
             # dimension not mentioned in slice
-            named_ranges.append((dim, domain.ranges[i]))
+            named_ranges.append(common.NamedRange(dim, domain.ranges[i]))
 
     return common.Domain(*named_ranges)
 
 
-def domain_intersection(
-    *domains: common.Domain,
-) -> common.Domain:
+def domain_intersection(*domains: common.Domain) -> common.Domain:
     """
     Return the intersection of the given domains.
 
@@ -110,11 +109,7 @@ def domain_intersection(
         ... )  # doctest: +ELLIPSIS
         Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
-    return functools.reduce(
-        operator.and_,
-        domains,
-        common.Domain(dims=tuple(), ranges=tuple()),
-    )
+    return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
 
 
 def restrict_to_intersection(
@@ -135,22 +130,26 @@ def restrict_to_intersection(
         >>> assert res == (common.domain({I: (1, 3), J: (1, 2)}), common.domain({I: (1, 3), J: (0, 3)}))
     """
     ignore_dims_tuple = ignore_dims if isinstance(ignore_dims, tuple) else (ignore_dims,)
-    intersection_without_ignore_dims = domain_intersection(*[
-        common.Domain(*[(d, r) for d, r in domain if d not in ignore_dims_tuple])
-        for domain in domains
-    ])
+    intersection_without_ignore_dims = domain_intersection(
+        *[
+            common.Domain(*[nr for nr in domain if nr.dim not in ignore_dims_tuple])
+            for domain in domains
+        ]
+    )
     return tuple(
-        common.Domain(*[
-            (d, r if d in ignore_dims_tuple else intersection_without_ignore_dims[d][1])
-            for d, r in domain
-        ])
+        common.Domain(
+            *[
+                (nr if nr.dim in ignore_dims_tuple else intersection_without_ignore_dims[nr.dim])
+                for nr in domain
+            ]
+        )
         for domain in domains
     )
 
 
-def iterate_domain(domain: common.Domain):
-    for i in itertools.product(*[list(r) for r in domain.ranges]):
-        yield tuple(zip(domain.dims, i))
+def iterate_domain(domain: common.Domain) -> Iterator[tuple[common.NamedIndex]]:
+    for idx in itertools.product(*(list(r) for r in domain.ranges)):
+        yield tuple(common.NamedIndex(d, i) for d, i in zip(domain.dims, idx))  # type: ignore[misc] # trust me, `idx` is `tuple[int, ...]`
 
 
 def _expand_ellipsis(
@@ -166,7 +165,7 @@ def _expand_ellipsis(
 
 def _slice_range(input_range: common.UnitRange, slice_obj: slice) -> common.UnitRange:
     if slice_obj == slice(None):
-        return common.UnitRange(input_range.start, input_range.stop)
+        return input_range
 
     start = (
         input_range.start if slice_obj.start is None or slice_obj.start >= 0 else input_range.stop
@@ -191,9 +190,7 @@ def _find_index_of_dim(
     return None
 
 
-def canonicalize_any_index_sequence(
-    index: common.AnyIndexSpec,
-) -> common.AnyIndexSpec:
+def canonicalize_any_index_sequence(index: common.AnyIndexSpec) -> common.AnyIndexSpec:
     # TODO: instead of canonicalizing to `NamedRange`, we should canonicalize to `NamedSlice`
     new_index: common.AnyIndexSpec = (index,) if isinstance(index, slice) else index
     if isinstance(new_index, tuple) and all(isinstance(i, slice) for i in new_index):
@@ -201,25 +198,19 @@ def canonicalize_any_index_sequence(
     return new_index
 
 
-def _named_slice_to_named_range(
-    idx: common.NamedSlice,
-) -> common.NamedRange | common.NamedSlice:
+def _named_slice_to_named_range(idx: common.NamedSlice) -> common.NamedRange | common.NamedSlice:
     assert hasattr(idx, "start") and hasattr(idx, "stop")
     if common.is_named_slice(idx):
-        idx_start_0, idx_start_1, idx_stop_0, idx_stop_1 = (
-            idx.start[0],  # type: ignore[attr-defined]
-            idx.start[1],  # type: ignore[attr-defined]
-            idx.stop[0],  # type: ignore[attr-defined]
-            idx.stop[1],  # type: ignore[attr-defined]
-        )
-        if idx_start_0 != idx_stop_0:
+        start_dim, start_value = idx.start
+        stop_dim, stop_value = idx.stop
+        if start_dim != stop_dim:
             raise IndexError(
-                f"Dimensions slicing mismatch between '{idx_start_0.value}' and '{idx_stop_0.value}'."
+                f"Dimensions slicing mismatch between '{start_dim.value}' and '{stop_dim.value}'."
             )
-        assert isinstance(idx_start_1, int) and isinstance(idx_stop_1, int)
-        return (idx_start_0, common.UnitRange(idx_start_1, idx_stop_1))
-    if common.is_named_index(idx.start) and idx.stop is None:
+        assert isinstance(start_value, int) and isinstance(stop_value, int)
+        return common.NamedRange(start_dim, common.UnitRange(start_value, stop_value))
+    if isinstance(idx.start, common.NamedIndex) and idx.stop is None:
         raise IndexError(f"Upper bound needs to be specified for {idx}.")
-    if common.is_named_index(idx.stop) and idx.start is None:
+    if isinstance(idx.stop, common.NamedIndex) and idx.start is None:
         raise IndexError(f"Lower bound needs to be specified for {idx}.")
     return idx

@@ -178,9 +178,9 @@ def derived_shape_st(shape_st, extra: Sequence[Optional[int]]):
     both shape and extra elements are summed together.
     """
     return hyp_st.builds(
-        lambda shape: tuple([
-            d + e for d, e in itertools.zip_longest(shape, extra, fillvalue=0) if e is not None
-        ]),
+        lambda shape: tuple(
+            [d + e for d, e in itertools.zip_longest(shape, extra, fillvalue=0) if e is not None]
+        ),
         shape_st,
     )
 

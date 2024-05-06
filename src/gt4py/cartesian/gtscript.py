@@ -485,7 +485,7 @@ class AxisIndex:
     def __eq__(self, other):
         return repr(self) == repr(other)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.index}] + {self.offset}"
 
     def __add__(self, offset: int):
@@ -516,7 +516,7 @@ class AxisInterval:
     def __repr__(self):
         return f"AxisInterval(axis={self.axis}, start={self.start}, end={self.end})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.axis}[{self.start}:{self.end}]"
 
     def __len__(self):
@@ -532,7 +532,7 @@ class ShiftedAxis:
     def __repr__(self):
         return f"ShiftedAxis(name={self.name}, shift={self.shift})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name}+{self.shift}"
 
     def __add__(self, shift):
@@ -559,7 +559,7 @@ class Axis:
     def __repr__(self):
         return f"Axis(name={self.name})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
     def __getitem__(self, interval):
@@ -654,7 +654,7 @@ class _FieldDescriptor:
         args = f"dtype={self.dtype!r}, axes={self.axes!r}, data_dims={self.data_dims!r}"
         return f"_FieldDescriptor({args})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
             f"Field<[{', '.join(str(ax) for ax in self.axes)}], ({self.dtype}, {self.data_dims})>"
         )

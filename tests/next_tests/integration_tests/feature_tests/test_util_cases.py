@@ -92,9 +92,7 @@ def test_verify_fails_with_wrong_type(cartesian_case):
 
 
 @pytest.mark.parametrize("exec_alloc_descriptor", [definitions.ProgramBackendId.ROUNDTRIP.load()])
-def test_verify_with_default_data_fails_with_wrong_reference(
-    cartesian_case,
-):
+def test_verify_with_default_data_fails_with_wrong_reference(cartesian_case):
     def wrong_ref(a, b):
         return a - b
 

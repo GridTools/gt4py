@@ -27,7 +27,7 @@ class CartesianSpace:
         J = 1
         K = 2
 
-        def __str__(self):
+        def __str__(self) -> str:
             return self.name
 
     names = [ax.name for ax in Axis]
@@ -191,7 +191,7 @@ class NumericTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -384,7 +384,7 @@ class FrameTuple(tuple):
     def __hash__(self):
         return tuple.__hash__(self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return tuple.__repr__(self)
 
     @property
@@ -436,9 +436,9 @@ class FrameTuple(tuple):
             raise ValueError("Incompatible instance '{obj}'".format(obj=other))
 
         right_func = right_func or left_func
-        return type(self)([
-            tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)
-        ])
+        return type(self)(
+            [tuple([left_func(a[0], b[0]), right_func(a[1], b[1])]) for a, b in zip(self, other)]
+        )
 
     def _reduce(self, reduce_func, out_type=tuple):
         return out_type([reduce_func(d[0], d[1]) for d in self])
