@@ -413,31 +413,31 @@ def test_sub_domain():
     )
 
     # Test indexing with integers
-    loc_result = domain.sub[2, 5, 7]
+    sub_result = domain.sub[2, 5, 7]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 11)),
         NamedRange(KDim, UnitRange(27, 28)),
     )
-    assert loc_result == expected_result
+    assert sub_result == expected_result
 
     # Test indexing with slices
-    loc_result = domain.sub[slice(2, 5), slice(5, 7), slice(7, 10)]
+    sub_result = domain.sub[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 5)),
         NamedRange(JDim, UnitRange(10, 12)),
         NamedRange(KDim, UnitRange(27, 30)),
     )
-    assert loc_result == expected_result
+    assert sub_result == expected_result
 
     # Test indexing with mixed integers and slices
-    loc_result = domain.sub[2, slice(5, 7), 9]
+    sub_result = domain.sub[2, slice(5, 7), 9]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 12)),
         NamedRange(KDim, UnitRange(29, 30)),
     )
-    assert loc_result == expected_result
+    assert sub_result == expected_result
 
     # Test indexing with incorrect types
     with pytest.raises(TypeError):

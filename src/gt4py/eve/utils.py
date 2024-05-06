@@ -256,7 +256,7 @@ class IndexerCallable(Generic[_S, _T]):
         7
     """
 
-    func: ArgsOnlyCallable[_S, _T]  # Variadic
+    func: ArgsOnlyCallable[_S, _T]
 
     def __getitem__(self, key: _S | Tuple[_S, ...]) -> _T:
         return self.func(*key) if isinstance(key, tuple) else self.func(key)
