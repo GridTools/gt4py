@@ -14,23 +14,20 @@
 
 
 from dataclasses import dataclass
-from typing import final
 
 import dace
-import numpy as np
 
-from gt4py import eve
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import GTIRBuiltinTranslator
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
+    GTIRBuiltinTranslator,
+)
 from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclass(frozen=True)
 class GTIRBuiltinDomain(GTIRBuiltinTranslator):
-
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         raise NotImplementedError
 
