@@ -482,20 +482,18 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         return Domain(dims=broadcast_dims, ranges=intersected_ranges)
 
     @functools.cached_property
-    def loc(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
+    def sub(self) -> utils.IndexerCallable[RelativeIndexItem, Domain]:
         def _domain_slicer(*args: RelativeIndexItem) -> Domain:
             if not all(isinstance(a, (int, slice)) for a in args):
                 raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
-            sanitized_args = cast(
-                tuple[int | slice], tuple(a if isinstance(a, slice) else int(a) for a in args)
+            slices: tuple[slice, ...] = tuple(
+                a if isinstance(a, slice) else slice(int(a), int(a) + 1) for a in args
             )
             if len(args) != len(self):
                 raise ValueError(
-                    f"Number of provided slices ({len(args)}) does not match number of dimensions ({len(self)})."
+                    f"Number of provided slices ({len(args)}) does not match the number of dimensions ({len(self)})."
                 )
-            return Domain(
-                dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, sanitized_args)]
-            )
+            return Domain(dims=self.dims, ranges=[r[s] for r, s in zip(self.ranges, slices)])
 
         return utils.IndexerCallable(_domain_slicer)
 

@@ -30,8 +30,8 @@ from gt4py.next.common import (
 )
 
 
-IDim = Dimension("IDim")
 ECDim = Dimension("ECDim")
+IDim = Dimension("IDim")
 JDim = Dimension("JDim")
 KDim = Dimension("KDim", kind=DimensionKind.VERTICAL)
 
@@ -402,6 +402,50 @@ def test_domain_dims_ranges_length_mismatch():
         dims = [Dimension("X"), Dimension("Y"), Dimension("Z")]
         ranges = [UnitRange(0, 1), UnitRange(0, 1)]
         Domain(dims=dims, ranges=ranges)
+
+
+def test_sub_domain():
+    # Create a sample domain
+    domain = Domain(
+        NamedRange(IDim, UnitRange(0, 10)),
+        NamedRange(JDim, UnitRange(5, 15)),
+        NamedRange(KDim, UnitRange(20, 30)),
+    )
+
+    # Test indexing with integers
+    loc_result = domain.sub[2, 5, 7]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 3)),
+        NamedRange(JDim, UnitRange(10, 11)),
+        NamedRange(KDim, UnitRange(27, 28)),
+    )
+    assert loc_result == expected_result
+
+    # Test indexing with slices
+    loc_result = domain.sub[slice(2, 5), slice(5, 7), slice(7, 10)]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 5)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(27, 30)),
+    )
+    assert loc_result == expected_result
+
+    # Test indexing with mixed integers and slices
+    loc_result = domain.sub[2, slice(5, 7), 9]
+    expected_result = Domain(
+        NamedRange(IDim, UnitRange(2, 3)),
+        NamedRange(JDim, UnitRange(10, 12)),
+        NamedRange(KDim, UnitRange(29, 30)),
+    )
+    assert loc_result == expected_result
+
+    # Test indexing with incorrect types
+    with pytest.raises(TypeError):
+        domain.sub["a", 7, 25]
+
+    # Test indexing with incorrect number of indices
+    with pytest.raises(ValueError, match="not match the number of dimensions"):
+        domain.sub[2, 7]
 
 
 def test_domain_dim_index():
