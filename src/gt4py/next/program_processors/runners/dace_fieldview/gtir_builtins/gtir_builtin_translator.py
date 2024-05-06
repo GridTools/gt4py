@@ -20,7 +20,8 @@ from typing import final
 import dace
 import numpy as np
 
-from gt4py import eve
+from gt4py.eve import codegen
+from gt4py.eve.codegen import FormatTemplate as as_fmt
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
@@ -83,9 +84,12 @@ _MATH_BUILTINS_MAPPING = {
 
 
 @dataclass(frozen=True)
-class GTIRBuiltinTranslator(eve.NodeVisitor):
+class GTIRBuiltinTranslator(codegen.TemplatedGenerator):
     sdfg: dace.SDFG
     head_state: dace.SDFGState
+
+    Literal = as_fmt("{value}")
+    SymRef = as_fmt("{id}")
 
     @final
     def __call__(
@@ -151,11 +155,3 @@ class GTIRBuiltinTranslator(eve.NodeVisitor):
             else:
                 raise NotImplementedError(f"'{builtin_name}' not implemented.")
         raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
-
-    @final
-    def visit_Literal(self, node: itir.Literal) -> str:
-        return node.value
-
-    @final
-    def visit_SymRef(self, node: itir.SymRef) -> str:
-        return str(node.id)

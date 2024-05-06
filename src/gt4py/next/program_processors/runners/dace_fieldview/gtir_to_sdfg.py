@@ -46,18 +46,18 @@ class GTIRToSDFG(eve.NodeVisitor):
     from where to continue building the SDFG.
     """
 
-    _param_types: list[ts.DataType]
-    _data_types: dict[str, ts.FieldType | ts.ScalarType]
-    _offset_providers: Mapping[str, Any]
+    data_types: dict[str, ts.FieldType | ts.ScalarType]
+    param_types: list[ts.DataType]
+    offset_providers: Mapping[str, Any]
 
     def __init__(
         self,
         param_types: list[ts.DataType],
         offset_providers: dict[str, Connectivity | Dimension],
     ):
-        self._param_types = param_types
-        self._data_types = {}
-        self._offset_providers = offset_providers
+        self.data_types = {}
+        self.param_types = param_types
+        self.offset_providers = offset_providers
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[Dimension]
@@ -74,7 +74,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             The output tuple fields are arrays of dace symbolic expressions.
         """
         dtype = dace.int32
-        neighbor_tables = filter_connectivities(self._offset_providers)
+        neighbor_tables = filter_connectivities(self.offset_providers)
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
@@ -108,7 +108,7 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         # TODO: unclear why mypy complains about incompatible types
         assert isinstance(data_type, (ts.FieldType, ts.ScalarType))
-        self._data_types[name] = data_type
+        self.data_types[name] = data_type
 
     def _add_storage_for_temporary(self, temp_decl: itir.Temporary) -> Mapping[str, str]:
         """
@@ -175,7 +175,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             head_state = entry_state
 
         # add non-transient arrays and/or SDFG symbols for the program arguments
-        for param, type_ in zip(node.params, self._param_types, strict=True):
+        for param, type_ in zip(node.params, self.param_types, strict=True):
             self._add_storage(sdfg, str(param.id), type_)
 
         # visit one statement at a time and expand the SDFG from the current head state
@@ -206,7 +206,7 @@ class GTIRToSDFG(eve.NodeVisitor):
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
             assert not target_array.transient
-            target_field_type = self._data_types[target_node.data]
+            target_field_type = self.data_types[target_node.data]
 
             if isinstance(target_field_type, ts.FieldType):
                 subset = ",".join(
@@ -254,6 +254,6 @@ class GTIRToSDFG(eve.NodeVisitor):
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState
     ) -> Callable:
         sym_name = str(node.id)
-        assert sym_name in self._data_types
-        sym_type = self._data_types[sym_name]
+        assert sym_name in self.data_types
+        sym_type = self.data_types[sym_name]
         return gtir_builtins.SymbolRef(sdfg, head_state, sym_name, sym_type)
