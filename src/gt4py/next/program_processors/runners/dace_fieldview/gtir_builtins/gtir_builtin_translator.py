@@ -84,16 +84,22 @@ _MATH_BUILTINS_MAPPING = {
 
 @dataclass(frozen=True)
 class LiteralExpr:
+    """Any symbolic expression that can be evaluated at compile time."""
+
     value: dace.symbolic.SymbolicType
 
 
 @dataclass(frozen=True)
 class SymbolExpr:
+    """The data access to a scalar or field through a symbolic reference."""
+
     data: str
 
 
 @dataclass(frozen=True)
 class ValueExpr:
+    """The result of a computation provided by a tasklet node."""
+
     node: dace.nodes.Tasklet
     connector: str
 

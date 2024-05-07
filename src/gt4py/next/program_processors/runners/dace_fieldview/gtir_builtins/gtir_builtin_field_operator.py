@@ -33,7 +33,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
 
     stencil_expr: itir.Lambda
     stencil_args: list[Callable]
-    field_domain: dict[Dimension, tuple[str, str]]
+    field_domain: dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]
     field_type: ts.FieldType
 
     def __init__(
@@ -53,8 +53,8 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         # the domain of the field operator is passed as second argument
         assert isinstance(domain_expr, itir.FunCall)
 
-        # visit field domain
         domain = get_domain(domain_expr)
+        # define field domain with all dimensions in alphabetical order
         sorted_domain_dims = sorted(domain.keys(), key=lambda x: x.value)
 
         # add local storage to compute the field operator over the given domain
@@ -77,7 +77,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         # allocate local temporary storage for the result field
         field_shape = [
             # diff between upper and lower bound
-            f"{self.field_domain[dim][1]} - {self.field_domain[dim][0]}"
+            self.field_domain[dim][1] - self.field_domain[dim][0]
             for dim in self.field_type.dims
         ]
         field_node = self.add_local_storage(self.field_type, field_shape)

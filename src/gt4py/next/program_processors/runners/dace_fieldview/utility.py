@@ -53,7 +53,9 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
     }
 
 
-def get_domain(node: itir.Expr) -> dict[Dimension, tuple[str, str]]:
+def get_domain(
+    node: itir.Expr,
+) -> dict[Dimension, tuple[dace.symbolic.SymbolicType, dace.symbolic.SymbolicType]]:
     """
     Specialized visit method for domain expressions.
 
@@ -70,11 +72,9 @@ def get_domain(node: itir.Expr) -> dict[Dimension, tuple[str, str]]:
         dim = Dimension(axis.value)
         bounds = []
         for arg in named_range.args[1:3]:
-            if isinstance(arg, itir.Literal):
-                val = arg.value
-            else:
-                val = str(arg)
-            bounds.append(val)
+            str_val = str(arg)
+            sym_val = dace.symbolic.SymExpr(str_val)
+            bounds.append(sym_val)
         domain[dim] = (bounds[0], bounds[1])
 
     return domain
