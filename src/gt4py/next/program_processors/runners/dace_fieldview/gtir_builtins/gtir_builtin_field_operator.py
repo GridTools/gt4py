@@ -17,7 +17,6 @@ from dataclasses import dataclass
 from typing import Callable, TypeAlias
 
 import dace
-import numpy as np
 
 from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension
@@ -26,67 +25,13 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
 )
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_types import MATH_BUILTINS_MAPPING
 from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     as_dace_type,
     get_domain,
     unique_name,
 )
 from gt4py.next.type_system import type_specifications as ts
-
-
-_MATH_BUILTINS_MAPPING = {
-    "abs": "abs({})",
-    "sin": "math.sin({})",
-    "cos": "math.cos({})",
-    "tan": "math.tan({})",
-    "arcsin": "asin({})",
-    "arccos": "acos({})",
-    "arctan": "atan({})",
-    "sinh": "math.sinh({})",
-    "cosh": "math.cosh({})",
-    "tanh": "math.tanh({})",
-    "arcsinh": "asinh({})",
-    "arccosh": "acosh({})",
-    "arctanh": "atanh({})",
-    "sqrt": "math.sqrt({})",
-    "exp": "math.exp({})",
-    "log": "math.log({})",
-    "gamma": "tgamma({})",
-    "cbrt": "cbrt({})",
-    "isfinite": "isfinite({})",
-    "isinf": "isinf({})",
-    "isnan": "isnan({})",
-    "floor": "math.ifloor({})",
-    "ceil": "ceil({})",
-    "trunc": "trunc({})",
-    "minimum": "min({}, {})",
-    "maximum": "max({}, {})",
-    "fmod": "fmod({}, {})",
-    "power": "math.pow({}, {})",
-    "float": "dace.float64({})",
-    "float32": "dace.float32({})",
-    "float64": "dace.float64({})",
-    "int": "dace.int32({})" if np.dtype(int).itemsize == 4 else "dace.int64({})",
-    "int32": "dace.int32({})",
-    "int64": "dace.int64({})",
-    "bool": "dace.bool_({})",
-    "plus": "({} + {})",
-    "minus": "({} - {})",
-    "multiplies": "({} * {})",
-    "divides": "({} / {})",
-    "floordiv": "({} // {})",
-    "eq": "({} == {})",
-    "not_eq": "({} != {})",
-    "less": "({} < {})",
-    "less_equal": "({} <= {})",
-    "greater": "({} > {})",
-    "greater_equal": "({} >= {})",
-    "and_": "({} & {})",
-    "or_": "({} | {})",
-    "xor_": "({} ^ {})",
-    "mod": "({} % {})",
-    "not_": "(not {})",  # ~ is not bitwise in numpy
-}
 
 
 @dataclass(frozen=True)
@@ -258,8 +203,8 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator, eve.NodeVisitor):
         elif isinstance(node.fun, itir.SymRef):
             # create a tasklet node implementing the builtin function
             builtin_name = str(node.fun.id)
-            if builtin_name in _MATH_BUILTINS_MAPPING:
-                fmt = _MATH_BUILTINS_MAPPING[builtin_name]
+            if builtin_name in MATH_BUILTINS_MAPPING:
+                fmt = MATH_BUILTINS_MAPPING[builtin_name]
                 code = fmt.format(*node_internals)
             else:
                 raise NotImplementedError(f"'{builtin_name}' not implemented.")
@@ -286,7 +231,7 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator, eve.NodeVisitor):
 
     def visit_Literal(self, node: itir.Literal) -> LiteralExpr:
         cast_sym = str(as_dace_type(node.type))
-        cast_fmt = _MATH_BUILTINS_MAPPING[cast_sym]
+        cast_fmt = MATH_BUILTINS_MAPPING[cast_sym]
         typed_value = cast_fmt.format(node.value)
         return LiteralExpr(typed_value)
 
