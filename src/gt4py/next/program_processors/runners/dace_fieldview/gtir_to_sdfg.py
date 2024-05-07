@@ -49,16 +49,16 @@ class GTIRToSDFG(eve.NodeVisitor):
 
     data_types: dict[str, ts.FieldType | ts.ScalarType]
     param_types: list[ts.DataType]
-    offset_providers: Mapping[str, Any]
+    offset_provider: dict[str, Connectivity | Dimension]
 
     def __init__(
         self,
         param_types: list[ts.DataType],
-        offset_providers: dict[str, Connectivity | Dimension],
+        offset_provider: dict[str, Connectivity | Dimension],
     ):
         self.data_types = {}
         self.param_types = param_types
-        self.offset_providers = offset_providers
+        self.offset_provider = offset_provider
 
     def _make_array_shape_and_strides(
         self, name: str, dims: Sequence[Dimension]
@@ -73,7 +73,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             Two list of symbols, one for the shape and another for the strides of the array.
         """
         dtype = dace.int32
-        neighbor_tables = filter_connectivities(self.offset_providers)
+        neighbor_tables = filter_connectivities(self.offset_provider)
         shape = [
             (
                 neighbor_tables[dim.value].max_neighbors
@@ -231,7 +231,9 @@ class GTIRToSDFG(eve.NodeVisitor):
             arg_builders.append(arg_builder)
 
         if cpm.is_call_to(node.fun, "as_fieldop"):
-            return gtir_builtins.AsFieldOp(sdfg, head_state, node, arg_builders)
+            return gtir_builtins.AsFieldOp(
+                sdfg, head_state, node, arg_builders, self.offset_provider
+            )
 
         elif cpm.is_call_to(node.fun, "select"):
             assert len(arg_builders) == 0
@@ -239,6 +241,14 @@ class GTIRToSDFG(eve.NodeVisitor):
 
         else:
             raise NotImplementedError(f"Unexpected 'FunCall' expression ({node}).")
+
+    def visit_Lambda(self, node: itir.Lambda) -> Any:
+        """
+        This visitor class should never encounter `itir.Lambda` expressions
+        because a lambda represents a stencil, which operates from iterator to values.
+        In fieldview, lambdas should only be arguments to field operators (`as_field_op`).
+        """
+        raise RuntimeError("Unexpected 'itir.Lambda' node encountered in GTIR.")
 
     def visit_SymRef(
         self, node: itir.SymRef, sdfg: dace.SDFG, head_state: dace.SDFGState

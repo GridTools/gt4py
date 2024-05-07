@@ -22,8 +22,8 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
-    SymbolExpr,
 )
+from gt4py.next.program_processors.runners.dace_fieldview.utility import get_symbolic_expr
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -47,8 +47,7 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
         cond_expr, true_expr, false_expr = node.fun.args
 
         # expect condition as first argument
-        cond = self.visit(cond_expr)
-        assert isinstance(cond, SymbolExpr)
+        cond = get_symbolic_expr(cond_expr)
 
         # use current head state to terminate the dataflow, and add a entry state
         # to connect the true/false branch states as follows:
@@ -70,13 +69,13 @@ class GTIRBuiltinSelect(GTIRBuiltinTranslator):
 
         # expect true branch as second argument
         true_state = sdfg.add_state(state.label + "_true_branch")
-        sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond.data))
+        sdfg.add_edge(select_state, true_state, dace.InterstateEdge(condition=cond))
         sdfg.add_edge(true_state, state, dace.InterstateEdge())
         self.true_br_builder = dataflow_builder.visit(true_expr, sdfg=sdfg, head_state=true_state)
 
         # and false branch as third argument
         false_state = sdfg.add_state(state.label + "_false_branch")
-        sdfg.add_edge(select_state, false_state, dace.InterstateEdge(condition=f"not {cond.data}"))
+        sdfg.add_edge(select_state, false_state, dace.InterstateEdge(condition=(f"not {cond}")))
         sdfg.add_edge(false_state, state, dace.InterstateEdge())
         self.false_br_builder = dataflow_builder.visit(
             false_expr, sdfg=sdfg, head_state=false_state
