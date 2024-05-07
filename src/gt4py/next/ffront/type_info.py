@@ -73,7 +73,11 @@ def promote_zero_dims(
 
     new_args = [*args]
     for i, (param, arg) in enumerate(
-        zip(list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()), args)
+        zip(
+            list(function_type.pos_only_args) + list(function_type.pos_or_kw_args.values()),
+            args,
+            strict=True,
+        )
     ):
         new_args[i] = promote_arg(param, arg)
     new_kwargs = {**kwargs}

@@ -13,19 +13,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import dataclasses
-import typing
-from collections import defaultdict
-from typing import Iterable, Optional, Sequence
+from collections import Counter
 
 import gt4py.eve as eve
+from gt4py.eve.extended_typing import Iterable, Literal, Optional, Sequence, cast, overload
 from gt4py.next.iterator import ir as itir
 
 
 @dataclasses.dataclass
 class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
-    ref_counts: dict[itir.SymRef, int] = dataclasses.field(default_factory=dict)
+    ref_counts: Counter[itir.SymRef] = dataclasses.field(default_factory=Counter)
 
-    @typing.overload
+    @overload
     @classmethod
     def apply(
         cls,
@@ -33,10 +32,10 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
-        as_ref: typing.Literal[False] = False,
-    ) -> dict[str, int]: ...
+        as_ref: Literal[False] = False,
+    ) -> Counter[str]: ...
 
-    @typing.overload
+    @overload
     @classmethod
     def apply(
         cls,
@@ -44,8 +43,8 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         symbol_names: Optional[Iterable[str]] = None,
         *,
         ignore_builtins: bool = True,
-        as_ref: typing.Literal[True],
-    ) -> dict[itir.SymRef, int]: ...
+        as_ref: Literal[True],
+    ) -> Counter[itir.SymRef]: ...
 
     @classmethod
     def apply(
@@ -55,7 +54,7 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         *,
         ignore_builtins: bool = True,
         as_ref: bool = False,
-    ) -> dict[str, int] | dict[itir.SymRef, int]:
+    ) -> Counter[str] | Counter[itir.SymRef]:
         """
         Count references to given or all symbols in scope.
 
@@ -63,17 +62,17 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
             >>> import gt4py.next.iterator.ir_utils.ir_makers as im
             >>> expr = im.plus(im.plus("x", "y"), im.plus(im.plus("x", "y"), "z"))
             >>> CountSymbolRefs.apply(expr)
-            defaultdict(<class 'int'>, {'x': 2, 'y': 2, 'z': 1})
+            Counter({'x': 2, 'y': 2, 'z': 1})
 
             If only some symbols are of interests the search can be restricted:
 
             >>> CountSymbolRefs.apply(expr, symbol_names=["x", "z"])
-            defaultdict(<class 'int'>, {'x': 2, 'z': 1})
+            Counter({'x': 2, 'z': 1})
 
             In some cases, e.g. when the type of the reference is required, the references instead
             of strings can be retrieved.
             >>> CountSymbolRefs.apply(expr, as_ref=True)
-            defaultdict(<class 'int'>, {SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1})
+            Counter({SymRef(id=SymbolRef('x')): 2, SymRef(id=SymbolRef('y')): 2, SymRef(id=SymbolRef('z')): 1})
         """
         if ignore_builtins:
             inactive_refs = {str(n.id) for n in itir.FencilDefinition._NODE_SYMBOLS_}
@@ -84,21 +83,20 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         obj.visit(node, inactive_refs=inactive_refs)
 
         if symbol_names:
-            ref_counts = {k: v for k, v in obj.ref_counts.items() if k.id in symbol_names}
+            ref_counts = Counter({k: v for k, v in obj.ref_counts.items() if k.id in symbol_names})
         else:
             ref_counts = obj.ref_counts
 
-        result: dict[str, int] | dict[itir.SymRef, int]
+        result: Counter[str] | Counter[itir.SymRef]
         if as_ref:
             result = ref_counts
         else:
-            result = {str(k.id): v for k, v in ref_counts.items()}
+            result = Counter({str(k.id): v for k, v in ref_counts.items()})
 
-        return defaultdict(int, result)
+        return result
 
     def visit_SymRef(self, node: itir.SymRef, *, inactive_refs: set[str]):
         if node.id not in inactive_refs:
-            self.ref_counts.setdefault(node, 0)
             self.ref_counts[node] += 1
 
     def visit_Lambda(self, node: itir.Lambda, *, inactive_refs: set[str]):
@@ -107,23 +105,23 @@ class CountSymbolRefs(eve.PreserveLocationVisitor, eve.NodeVisitor):
         self.generic_visit(node, inactive_refs=inactive_refs)
 
 
-@typing.overload
+@overload
 def collect_symbol_refs(
     node: itir.Node | Sequence[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,
-    as_ref: typing.Literal[False] = False,
+    as_ref: Literal[False] = False,
 ) -> list[str]: ...
 
 
-@typing.overload
+@overload
 def collect_symbol_refs(
     node: itir.Node | Sequence[itir.Node],
     symbol_names: Optional[Iterable[str]] = None,
     *,
     ignore_builtins: bool = True,
-    as_ref: typing.Literal[True],
+    as_ref: Literal[True],
 ) -> list[itir.SymRef]: ...
 
 
@@ -141,7 +139,7 @@ def collect_symbol_refs(
             node,
             symbol_names,
             ignore_builtins=ignore_builtins,
-            as_ref=typing.cast(typing.Literal[True, False], as_ref),
+            as_ref=cast(Literal[True, False], as_ref),
         ).items()
         if count > 0
     ]

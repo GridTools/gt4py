@@ -148,7 +148,7 @@ class ObservableTypeInferenceRule:
     functions, let it be a builtin like ``itir.plus`` or a user defined lambda function, is only
     defined when all its arguments are typed.
 
-    Let's start with a small example to examplify this. The power function has a rather simple
+    Let's start with a small example to exemplify this. The power function has a rather simple
     type inference rule, where the output type is simply the type of the base.
 
     >>> def power(base: ts.ScalarType, exponent: ts.ScalarType) -> ts.ScalarType:
@@ -158,7 +158,7 @@ class ObservableTypeInferenceRule:
     >>> power(float_type, int_type)
     ScalarType(kind=<ScalarKind.FLOAT64: 1064>, shape=None)
 
-    Now, consider a simple lambda function that, using the power builtin squares its argument. A
+    Now, consider a simple lambda function that squares its argument using the power builtin. A
     type inference rule for this function is simple to formulate, but merely gives us the return
     type of the function.
 
@@ -315,7 +315,7 @@ class ITIRTypeInference(eve.NodeTranslator):
     """
     ITIR type inference algorithm.
 
-    See :py:method:ITIRTypeInference.apply for more details.
+    See :method:ITIRTypeInference.apply for more details.
     """
 
     offset_provider: common.OffsetProvider
@@ -337,7 +337,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         Infer the type of ``node`` and its sub-nodes.
 
         Arguments:
-            node: The :py:class:`itir.Node` to infer the types of.
+            node: The :class:`itir.Node` to infer the types of.
 
         Keyword Arguments:
             offset_provider: Offset provider dictionary.

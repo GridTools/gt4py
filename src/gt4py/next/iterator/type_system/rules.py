@@ -30,29 +30,23 @@ type_inference_rules: dict[str, TypeInferenceRule] = {}
 
 
 def _is_derefable_iterator_type(it_type: it_ts.IteratorType) -> bool:
+    # for an iterator with unknown position we can not tell if it is derefable, we just assume
+    #  yes here.
     if it_type.position_dims == "unknown":
         return True
-    it_position_dim_names = [dim.value for dim in it_type.position_dims]  # TODO
-    return all(dim.value in it_position_dim_names for dim in it_type.defined_dims)
+    return set(it_type.defined_dims).issubset(set(it_type.position_dims))
 
 
 def _register_type_inference_rule(
     rule: Optional[TypeInferenceRule] = None, *, fun_names: Optional[Iterable[str]] = None
 ):
     def wrapper(rule):
-        nonlocal fun_names
-        if not fun_names:
-            fun_names = [rule.__name__]
-        else:
-            # store names in function object for better debuggability
-            rule.fun_names = fun_names
-        for fun_ in fun_names:
-            type_inference_rules[fun_] = rule
+        # store names in function object for better debuggability
+        rule.fun_names = fun_names or [rule.__name__]
+        for f in rule.fun_names:
+            type_inference_rules[f] = rule
 
-    if rule:
-        return wrapper(rule)
-    else:
-        return wrapper
+    return wrapper(rule) if rule else wrapper
 
 
 @_register_type_inference_rule(

@@ -20,7 +20,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
-def sym(sym_or_name: Union[str, itir.Sym], type_=None) -> itir.Sym:
+def sym(sym_or_name: Union[str, itir.Sym], type_: str | ts.TypeSpec | None = None) -> itir.Sym:
     """
     Convert to Sym if necessary.
 
@@ -31,6 +31,10 @@ def sym(sym_or_name: Union[str, itir.Sym], type_=None) -> itir.Sym:
 
     >>> sym(itir.Sym(id="b"))
     Sym(id=SymbolName('b'))
+
+    >>> a = sym("a", "float32")
+    >>> a.id, a.type
+    (SymbolName('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
     """
     if isinstance(sym_or_name, itir.Sym):
         assert not type_
@@ -38,7 +42,9 @@ def sym(sym_or_name: Union[str, itir.Sym], type_=None) -> itir.Sym:
     return itir.Sym(id=sym_or_name, type=ensure_type(type_))
 
 
-def ref(ref_or_name: Union[str, itir.SymRef], type_=None) -> itir.SymRef:
+def ref(
+    ref_or_name: Union[str, itir.SymRef], type_: str | ts.TypeSpec | None = None
+) -> itir.SymRef:
     """
     Convert to SymRef if necessary.
 
@@ -49,6 +55,10 @@ def ref(ref_or_name: Union[str, itir.SymRef], type_=None) -> itir.SymRef:
 
     >>> ref(itir.SymRef(id="b"))
     SymRef(id=SymbolRef('b'))
+
+    >>> a = ref("a", "float32")
+    >>> a.id, a.type
+    (SymbolRef('a'), ScalarType(kind=<ScalarKind.FLOAT32: 1032>, shape=None))
     """
     if isinstance(ref_or_name, itir.SymRef):
         assert not type_
