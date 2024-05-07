@@ -405,7 +405,7 @@ def test_domain_dims_ranges_length_mismatch():
         Domain(dims=dims, ranges=ranges)
 
 
-def test_sub_domain():
+def test_domain_slice_at():
     # Create a sample domain
     domain = Domain(
         NamedRange(IDim, UnitRange(0, 10)),
@@ -414,31 +414,31 @@ def test_sub_domain():
     )
 
     # Test indexing with integers
-    sub_result = domain.slice_at[2, 5, 7]
+    result = domain.slice_at[2, 5, 7]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 11)),
         NamedRange(KDim, UnitRange(27, 28)),
     )
-    assert sub_result == expected_result
+    assert result == expected_result
 
     # Test indexing with slices
-    sub_result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
+    result = domain.slice_at[slice(2, 5), slice(5, 7), slice(7, 10)]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 5)),
         NamedRange(JDim, UnitRange(10, 12)),
         NamedRange(KDim, UnitRange(27, 30)),
     )
-    assert sub_result == expected_result
+    assert result == expected_result
 
     # Test indexing with mixed integers and slices
-    sub_result = domain.slice_at[2, slice(5, 7), 9]
+    result = domain.slice_at[2, slice(5, 7), 9]
     expected_result = Domain(
         NamedRange(IDim, UnitRange(2, 3)),
         NamedRange(JDim, UnitRange(10, 12)),
         NamedRange(KDim, UnitRange(29, 30)),
     )
-    assert sub_result == expected_result
+    assert result == expected_result
 
     # Test indexing with incorrect types
     with pytest.raises(TypeError):
