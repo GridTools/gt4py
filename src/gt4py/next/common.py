@@ -944,6 +944,10 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
     def codomain(self) -> DimT:
         return self.target if isinstance(self.target, Dimension) else self.dimension
 
+    @functools.cached_property
+    def offset(self) -> int:
+        return self.target if isinstance(self.target, int) else 0
+
     @property
     def skip_value(self) -> None:
         return None
@@ -994,7 +998,7 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
             image_range = image_range.unit_range
 
         assert isinstance(image_range, UnitRange)
-        return (named_range((self.codomain, image_range - self.target)),)
+        return (named_range((self.dimension, image_range - self.offset)),)
 
     def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
         raise NotImplementedError()
