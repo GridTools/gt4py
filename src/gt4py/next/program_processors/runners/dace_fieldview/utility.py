@@ -16,7 +16,9 @@ from typing import Any, Mapping
 
 import dace
 
-from gt4py.next.common import Connectivity
+from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -49,6 +51,33 @@ def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Conne
         for offset, table in offset_provider.items()
         if isinstance(table, Connectivity)
     }
+
+
+def get_domain(node: itir.Expr) -> dict[Dimension, tuple[str, str]]:
+    """
+    Specialized visit method for domain expressions.
+
+    Returns a list of dimensions and the corresponding range.
+    """
+    assert cpm.is_call_to(node, ("cartesian_domain", "unstructured_domain"))
+
+    domain = {}
+    for named_range in node.args:
+        assert cpm.is_call_to(named_range, "named_range")
+        assert len(named_range.args) == 3
+        axis = named_range.args[0]
+        assert isinstance(axis, itir.AxisLiteral)
+        dim = Dimension(axis.value)
+        bounds = []
+        for arg in named_range.args[1:3]:
+            if isinstance(arg, itir.Literal):
+                val = arg.value
+            else:
+                val = str(arg)
+            bounds.append(val)
+        domain[dim] = (bounds[0], bounds[1])
+
+    return domain
 
 
 def unique_name(prefix: str) -> str:

@@ -29,6 +29,7 @@ from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins
 from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     as_dace_type,
     filter_connectivities,
+    get_domain,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -197,9 +198,8 @@ class GTIRToSDFG(eve.NodeVisitor):
         # in case the statement returns more than one field
         target_nodes = self._visit_expression(stmt.target, sdfg, state)
 
-        domain = gtir_builtins.FieldDomain(sdfg, state).visit_domain(stmt.domain)
-        # convert domain to dictionary to ease access to dimension boundaries
-        domain_map = {dim: (lb, ub) for dim, lb, ub in domain}
+        # convert domain expression to dictionary to ease access to dimension boundaries
+        domain = get_domain(stmt.domain)
 
         for expr_node, target_node in zip(expr_nodes, target_nodes, strict=True):
             target_array = sdfg.arrays[target_node.data]
@@ -208,7 +208,7 @@ class GTIRToSDFG(eve.NodeVisitor):
 
             if isinstance(target_field_type, ts.FieldType):
                 subset = ",".join(
-                    f"{domain_map[dim][0]}:{domain_map[dim][1]}" for dim in target_field_type.dims
+                    f"{domain[dim][0]}:{domain[dim][1]}" for dim in target_field_type.dims
                 )
             else:
                 assert len(domain) == 0

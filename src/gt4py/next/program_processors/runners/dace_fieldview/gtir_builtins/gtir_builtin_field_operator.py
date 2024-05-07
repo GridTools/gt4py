@@ -20,14 +20,11 @@ import dace
 from gt4py.next.common import Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_domain import (
-    GTIRBuiltinDomain,
-)
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_builtin_translator import (
     GTIRBuiltinTranslator,
     ValueExpr,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import unique_name
+from gt4py.next.program_processors.runners.dace_fieldview.utility import get_domain, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -57,14 +54,15 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         assert isinstance(domain_expr, itir.FunCall)
 
         # visit field domain
-        domain = GTIRBuiltinDomain(sdfg, state).visit_domain(domain_expr)
+        domain = get_domain(domain_expr)
+        sorted_domain_dims = sorted(domain.keys(), key=lambda x: x.value)
 
         # add local storage to compute the field operator over the given domain
         # TODO: use type inference to determine the result type
         node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 
-        self.field_domain = {dim: (lb, ub) for dim, lb, ub in domain}
-        self.field_type = ts.FieldType([dim for dim, _, _ in domain], node_type)
+        self.field_domain = domain
+        self.field_type = ts.FieldType(sorted_domain_dims, node_type)
         self.stencil_expr = stencil_expr
         self.stencil_args = stencil_args
 
