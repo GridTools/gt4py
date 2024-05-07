@@ -277,7 +277,7 @@ def test_gtir_select():
     assert isinstance(sdfg, dace.SDFG)
 
     for s in [False, True]:
-        sdfg(cond=s, scalar=1, x=a, y=b, w=c, z=d, **FSYMBOLS)
+        sdfg(cond=np.bool_(s), scalar=1.0, x=a, y=b, w=c, z=d, **FSYMBOLS)
         assert np.allclose(d, (a + b + 1) if s else (a + c + 1))
 
 
@@ -351,5 +351,5 @@ def test_gtir_select_nested():
 
     for s1 in [False, True]:
         for s2 in [False, True]:
-            sdfg(cond_1=s1, cond_2=s2, x=a, z=b, **FSYMBOLS)
-            assert np.allclose(b, (a + 1) if s1 else (a + 2) if s2 else (a + 3))
+            sdfg(cond_1=np.bool_(s1), cond_2=np.bool_(s2), x=a, z=b, **FSYMBOLS)
+            assert np.allclose(b, (a + 1.0) if s1 else (a + 2.0) if s2 else (a + 3.0))

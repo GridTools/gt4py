@@ -47,13 +47,14 @@ class GTIRBuiltinDomain(GTIRBuiltinTranslator):
             dim = Dimension(axis.value)
             bounds = []
             for arg in named_range.args[1:3]:
-                bound = self.visit(arg)
-                if isinstance(bound, SymbolExpr):
-                    assert bound.data in self.sdfg.symbols
-                    bounds.append(bound.data)
+                if isinstance(arg, itir.Literal):
+                    val = arg.value
                 else:
-                    assert isinstance(bound, LiteralExpr)
-                    bounds.append(bound.value)
+                    arg_expr = self.visit(arg)
+                    assert isinstance(arg_expr, SymbolExpr)
+                    val = arg_expr.data
+                    assert val in self.sdfg.symbols
+                bounds.append(val)
             domain.append((dim, bounds[0], bounds[1]))
 
         return domain

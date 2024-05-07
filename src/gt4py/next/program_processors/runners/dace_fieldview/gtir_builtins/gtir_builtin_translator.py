@@ -219,7 +219,10 @@ class GTIRBuiltinTranslator(eve.NodeVisitor):
 
     @final
     def visit_Literal(self, node: itir.Literal) -> LiteralExpr:
-        return LiteralExpr(node.value)
+        cast_sym = str(as_dace_type(node.type))
+        cast_fmt = _MATH_BUILTINS_MAPPING[cast_sym]
+        typed_value = cast_fmt.format(node.value)
+        return LiteralExpr(typed_value)
 
     @final
     def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr:
