@@ -21,7 +21,9 @@ from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
-from gt4py.next.program_processors.runners.dace_fieldview.gtir_types import MATH_BUILTINS_MAPPING
+from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
+    MATH_BUILTINS_MAPPING,
+)
 from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
 
 
