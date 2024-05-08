@@ -749,18 +749,18 @@ class ConnectivityKind(enum.Flag):
     """
     Describes the kind of connectivity field.
 
-    - `TRANSFORM_DIMS`: change the dimensions of the data field domain.
-    - `TRANSFORM_DATA`: rearranges and moves around data in the field.
+    - `ALTER_DIMS`: change the dimensions of the data field domain.
+    - `ALTER_STRUCT`: transform structured of the data inside the field (non-compact transformation).
 
-    | Dims \ Data |     No                   |     Yes                  |
-    | ----------- | ------------------------ | ------------------------ |
-    |        No   | Translation (I -> I)     | Reshuffling (I x K -> K) |
-    |        Yes  | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
+    | Dims \ Struct |    No                    |    Yes                   |
+    | ------------- | ------------------------ | ------------------------ |
+    |   No          | Translation (I -> I)     | Reshuffling (I x K -> K) |
+    |   Yes         | Relocation (I -> I_half) | Remapping (V x V2E -> E) |
 
     """
 
-    TRANSFORM_DIMS = enum.auto()
-    TRANSFORM_DATA = enum.auto()
+    ALTER_DIMS = enum.auto()
+    ALTER_STRUCT = enum.auto()
 
     @classmethod
     def translation(cls) -> ConnectivityKind:
@@ -768,15 +768,15 @@ class ConnectivityKind(enum.Flag):
 
     @classmethod
     def relocation(cls) -> ConnectivityKind:
-        return cls.TRANSFORM_DIMS
+        return cls.ALTER_DIMS
 
     @classmethod
     def reshuffling(cls) -> ConnectivityKind:
-        return cls.TRANSFORM_DATA
+        return cls.ALTER_STRUCT
 
     @classmethod
     def remapping(cls) -> ConnectivityKind:
-        return cls.TRANSFORM_DIMS | cls.TRANSFORM_DATA
+        return cls.ALTER_DIMS | cls.ALTER_STRUCT
 
 
 @runtime_checkable
