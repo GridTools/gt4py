@@ -544,7 +544,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
         assert all(isinstance(nr, NamedRange) for nr in named_ranges)
         if isinstance(index, Dimension):
-            dim_index = self.dim_index(index, allow_missing=True)
+            dim_index = self.dim_index(index)
             if dim_index is None:
                 raise ValueError(f"Dimension '{index}' not found in Domain.")
             index = dim_index

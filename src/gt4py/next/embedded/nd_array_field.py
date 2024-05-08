@@ -310,8 +310,7 @@ class NdArrayField(
 
         if not (conn_fields[0].kind & common.ConnectivityKind.ALTER_DIMS):
             assert all(isinstance(c, NdArrayConnectivityField) for c in conn_fields)
-            conn_fields = cast(list[NdArrayConnectivityField], conn_fields)
-            return _reshuffling_premap(self, *conn_fields)
+            return _reshuffling_premap(self, *cast(list[NdArrayConnectivityField], conn_fields))
 
         assert len(conn_fields) == 1
         return _remapping_premap(self, conn_fields[0])
@@ -681,8 +680,7 @@ def _identity_connectivity(
     shape = domain.shape
     d_idx = domain.dim_index(codomain, allow_missing=False)
     indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
-
-    return cls.from_array(
+    result = cls.from_array(
         xp.broadcast_to(
             indices[
                 tuple(slice(None) if i == d_idx else None for i, dim in enumerate(domain.dims))
@@ -693,6 +691,8 @@ def _identity_connectivity(
         domain=domain,
         dtype=int,
     )
+
+    return cast(_NdConnT, result)
 
 
 def _hyperslice(
