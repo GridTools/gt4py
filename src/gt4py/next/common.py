@@ -36,6 +36,7 @@ from gt4py.eve.extended_typing import (
     ClassVar,
     Final,
     Generic,
+    Literal,
     NamedTuple,
     Never,
     Optional,
@@ -493,7 +494,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
         """
 
         def _domain_slicer(*args: RelativeIndexItem) -> Domain:
-            if not all(isinstance(a, RelativeIndexItem) for a in args):
+            if not all(isinstance(a, RelativeIndexItem) for a in args):  # type: ignore[misc,arg-type]  # mypy doesn't understand RelativeIndexItem
                 raise TypeError(f"Indices must be either 'int' or 'slice' but got '{args}'")
             slices: tuple[slice, ...] = tuple(
                 a if isinstance(a, slice) else slice(int(a), int(a) + 1) for a in args
@@ -514,8 +515,21 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def is_empty(self) -> bool:
         return any(rng.is_empty() for rng in self.ranges)
 
-    def dim_index(self, dim: Dimension) -> Optional[int]:
-        return self.dims.index(dim) if dim in self.dims else None
+    @overload
+    def dim_index(self, dim: Dimension, *, allow_missing: Literal[False]) -> int: ...
+
+    @overload
+    def dim_index(
+        self, dim: Dimension, *, allow_missing: Literal[True] = True
+    ) -> Optional[int]: ...
+
+    def dim_index(self, dim: Dimension, *, allow_missing: bool = True) -> Optional[int]:
+        if dim in self.dims:
+            return self.dims.index(dim)
+        elif allow_missing:
+            return None
+        else:
+            raise ValueError(f"Dimension '{dim}' not found in Domain.")
 
     def pop(self, index: int | Dimension = -1) -> Domain:
         return self.replace(index)
@@ -530,7 +544,7 @@ class Domain(Sequence[NamedRange[_Rng]], Generic[_Rng]):
     def replace(self, index: int | Dimension, *named_ranges: NamedRange) -> Domain:
         assert all(isinstance(nr, NamedRange) for nr in named_ranges)
         if isinstance(index, Dimension):
-            dim_index = self.dim_index(index)
+            dim_index = self.dim_index(index, allow_missing=True)
             if dim_index is None:
                 raise ValueError(f"Dimension '{index}' not found in Domain.")
             index = dim_index
@@ -942,7 +956,7 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
 
     @functools.cached_property
     def codomain(self) -> DimT:
-        return self.target if isinstance(self.target, Dimension) else self.dimension
+        return cast(DimT, self.target if isinstance(self.target, Dimension) else self.dimension)
 
     @functools.cached_property
     def offset(self) -> int:
@@ -965,14 +979,14 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
         cls,
         definition: int,
         /,
-        codomain: DimT,
+        codomain: DomainDimT,
         *,
         domain: Optional[DomainLike] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
-    ) -> CartesianConnectivity[Dims[DimT], DimT]:
+    ) -> CartesianConnectivity[DomainDimT, DomainDimT]:
         assert domain is None
         assert dtype is None
-        return cls(codomain, definition)
+        return cast(CartesianConnectivity[DomainDimT, DomainDimT], cls(codomain, definition))
 
     @classmethod
     def from_target(
@@ -983,10 +997,10 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
         *,
         domain: Optional[DomainLike] = None,
         dtype: Optional[core_defs.DTypeLike] = None,
-    ) -> CartesianConnectivity[Dims[DomainDimT], DimT]:
+    ) -> CartesianConnectivity[DomainDimT, DimT]:
         assert domain is None
         assert dtype is None
-        return cls(codomain, definition)
+        return cls(definition, codomain)
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):

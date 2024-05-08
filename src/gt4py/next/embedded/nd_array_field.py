@@ -32,6 +32,7 @@ from gt4py.eve.extended_typing import (
     ParamSpec,
     TypeAlias,
     TypeVar,
+    cast,
 )
 from gt4py.next import common
 from gt4py.next.embedded import (
@@ -308,6 +309,8 @@ class NdArrayField(
             )
 
         if not (conn_fields[0].kind & common.ConnectivityKind.ALTER_DIMS):
+            assert all(isinstance(c, NdArrayConnectivityField) for c in conn_fields)
+            conn_fields = cast(list[NdArrayConnectivityField], conn_fields)
             return _reshuffling_premap(self, *conn_fields)
 
         assert len(conn_fields) == 1
@@ -462,6 +465,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
                     else common.ConnectivityKind(0)
                 ),
             )
+            assert self._kind is not None
 
         return self._kind
 
@@ -538,9 +542,7 @@ class NdArrayConnectivityField(  # type: ignore[misc] # for __ne__, __eq__
     __getitem__ = restrict
 
 
-def _domain_premap(
-    data: NdArrayField, *connectivities: common.ConnectivityField | fbuiltins.FieldOffset
-) -> NdArrayField:
+def _domain_premap(data: NdArrayField, *connectivities: common.ConnectivityField) -> NdArrayField:
     new_domain = data.domain
     for connectivity in connectivities:
         dim = connectivity.codomain
@@ -559,7 +561,7 @@ def _domain_premap(
 
 
 def _reshuffling_premap(
-    data: NdArrayField, *connectivities: common.ConnectivityField | fbuiltins.FieldOffset
+    data: NdArrayField, *connectivities: NdArrayConnectivityField
 ) -> NdArrayField:
     # Check that all connectivities have the same domain
     assert len(connectivities) == 1 or all(
@@ -573,7 +575,7 @@ def _reshuffling_premap(
     # It should be enough to check this only the first connectivity
     # since all connectivities must have the same domain
     transposed_axes = []
-    expanded_axes = []
+    expanded_axes: list[int] = []
     transpose_needed = False
     for new_dim_idx, dim in enumerate(data.domain.dims):
         if (dim_idx := connectivity.domain.dim_index(dim)) is None:
@@ -598,8 +600,7 @@ def _reshuffling_premap(
                 conn_ndarray, domain=data.domain, codomain=conn.codomain
             )
         conn_map[conn.codomain] = conn
-
-        dim_idx = data.domain.dim_index(conn.codomain)
+        dim_idx = data.domain.dim_index(conn.codomain, allow_missing=False)
         current_range: common.UnitRange = data.domain.ranges[dim_idx]
         new_conn_ranges = connectivity.inverse_image(current_range).ranges
         new_ranges = tuple(r & s for r, s in zip(new_ranges, new_conn_ranges))
@@ -669,16 +670,16 @@ def _remapping_premap(data: NdArrayField, connectivity: common.ConnectivityField
     )
 
 
-_ConnT = TypeVar("_ConnT", bound=common.ConnectivityField)
+_NdConnT = TypeVar("_NdConnT", bound=NdArrayConnectivityField)
 
 
 def _identity_connectivity(
-    domain: common.Domain, codomain: common.DimT, *, cls: type[_ConnT]
-) -> tuple[_ConnT, ...]:
+    domain: common.Domain, codomain: common.DimT, *, cls: type[_NdConnT]
+) -> _NdConnT:
     assert codomain in domain.dims
     xp = cls.array_ns
     shape = domain.shape
-    d_idx = domain.dim_index(codomain)
+    d_idx = domain.dim_index(codomain, allow_missing=False)
     indices = xp.arange(domain[d_idx].unit_range.start, domain[d_idx].unit_range.stop)
 
     return cls.from_array(
@@ -699,7 +700,7 @@ def _hyperslice(
     image_range: common.UnitRange,
     xp: ModuleType,
     skip_value: Optional[core_defs.IntegralScalar] = None,
-) -> Optional[list[slice]]:
+) -> Optional[tuple[slice, ...]]:
     """
     Return the hypercube slice that contains all indices in `index_array` that are within `image_range`, or `None` if no such hypercube exists.
 
@@ -867,7 +868,7 @@ def _concat(*fields: common.Field, dim: common.Dimension) -> common.Field:
     return nd_array_class.from_array(
         nd_array_class.array_ns.concatenate(
             [nd_array_class.array_ns.broadcast_to(f.ndarray, f.domain.shape) for f in fields],
-            axis=new_domain.dim_index(dim),
+            axis=new_domain.dim_index(dim, allow_missing=False),
         ),
         domain=new_domain,
     )
