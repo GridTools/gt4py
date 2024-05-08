@@ -191,7 +191,7 @@ class NdArrayField(
         *connectivities: common.ConnectivityField | fbuiltins.FieldOffset,
     ) -> NdArrayField:
         """
-        Remap the field using the provided connectivity field.
+        Rearrange the field content using the provided connectivity fields as index mappings.
 
         This operation is conceptually equivalent to a regular composition of mappings
         `f∘c`, being `c` the `connectivity` argument and `f` the `self` data field.
