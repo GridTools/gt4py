@@ -26,8 +26,12 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_python_codegen import (
     MATH_BUILTINS_MAPPING,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace_type, unique_name
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.program_processors.runners.dace_fieldview.utility import (
+    as_dace_type,
+    connectivity_identifier,
+    unique_name,
+)
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 @dataclass(frozen=True)
@@ -116,30 +120,30 @@ class GTIRToTasklet(eve.NodeVisitor):
                 )
             else:
                 index_connectors = [
-                    f"i_{dim}"
+                    f"__i_{dim}"
                     for dim, index in it.indices.items()
                     if isinstance(index, TaskletExpr | ValueError)
                 ]
                 sorted_indices = [it.indices[dim] for dim in it.dimensions]
                 index_internals = ",".join(
-                    index.value if isinstance(index, SymbolExpr) else f"i_{dim}"
+                    index.value if isinstance(index, SymbolExpr) else f"__i_{dim}"
                     for dim, index in zip(it.dimensions, sorted_indices)
                 )
                 deref_node = self.state.add_tasklet(
                     "deref_field_indirecton",
-                    set("field", *index_connectors),
+                    {"field"} | set(index_connectors),
                     {"val"},
                     code=f"val = field[{index_internals}]",
                 )
                 for dim, index_expr in it.indices.items():
-                    deref_connector = f"i_{dim}"
+                    deref_connector = f"__i_{dim}"
                     if isinstance(index_expr, TaskletExpr):
                         self.state.add_edge(
                             index_expr.node,
                             index_expr.connector,
                             deref_node,
                             deref_connector,
-                            dace.Memlet(data=index_expr.node.data, subset="0"),
+                            dace.Memlet(),
                         )
                     elif isinstance(index_expr, ValueExpr):
                         self.state.add_edge(
@@ -207,7 +211,33 @@ class GTIRToTasklet(eve.NodeVisitor):
             shifted_it = IteratorExpr(it.field, it.dimensions, new_offset, it.indices, it.dtype)
         else:
             # shift in unstructured domain by means of a neighbor table
-            raise NotImplementedError
+            origin_dim = offset_provider.origin_axis.value
+            assert origin_dim not in it.indices
+            neighbor_dim = offset_provider.neighbor_axis.value
+            assert neighbor_dim not in it.indices
+            dim_index = it.dimensions.index(neighbor_dim)
+
+            shift_node = self.state.add_tasklet(
+                "shift",
+                {"table"},
+                {"target_index"},
+                f"target_index = table[i_{origin_dim}, {offset_value}]",
+            )
+
+            offset_table = connectivity_identifier(offset)
+            offset_table_node = self.state.add_access(offset_table)
+            self.input_connections.append((offset_table_node, (shift_node, "table", [0, 0])))
+
+            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
+            dtype = as_dace_type(ts.ScalarType(scalar_kind))
+
+            shifted_it = IteratorExpr(
+                it.field,
+                [origin_dim if i == dim_index else dim for i, dim in enumerate(it.dimensions)],
+                it.offset,
+                {origin_dim: TaskletExpr(shift_node, "target_index", dtype)},
+                it.dtype,
+            )
 
         return shifted_it
 

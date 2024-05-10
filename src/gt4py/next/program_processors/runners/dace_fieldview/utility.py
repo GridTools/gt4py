@@ -42,6 +42,10 @@ def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
             raise ValueError(f"Scalar type '{type_}' not supported.")
 
 
+def connectivity_identifier(name: str) -> str:
+    return f"__connectivity_{name}"
+
+
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:
     """
     Filter offset providers of type `Connectivity`.

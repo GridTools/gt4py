@@ -18,7 +18,7 @@ Note: this test module covers the fieldview flavour of ITIR.
 """
 
 from typing import Union
-from gt4py.next.common import Connectivity, Dimension
+from gt4py.next.common import Connectivity, Dimension, NeighborTable
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_sdfg import (
@@ -30,14 +30,31 @@ import numpy as np
 
 import pytest
 
-from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import IDim
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import (
+    V2E,
+    Edge,
+    IDim,
+    MeshDescriptor,
+    Vertex,
+    simple_mesh,
+)
+from next_tests.integration_tests.cases import EField, IFloatField, VField
 
 dace = pytest.importorskip("dace")
 
 
 N = 10
-FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+IFTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+EFTYPE = ts.FieldType(dims=[Edge], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+VFTYPE = ts.FieldType(dims=[Vertex], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+SIMPLE_MESH: MeshDescriptor = simple_mesh()
 FSYMBOLS = dict(
+    __edges_size_0=SIMPLE_MESH.num_edges,
+    __edges_stride_0=1,
+    __vertices_size_0=SIMPLE_MESH.num_vertices,
+    __vertices_stride_0=1,
+    nedges=SIMPLE_MESH.num_edges,
+    nvertices=SIMPLE_MESH.num_vertices,
     __w_size_0=N,
     __w_stride_0=1,
     __x_size_0=N,
@@ -48,7 +65,6 @@ FSYMBOLS = dict(
     __z_stride_0=1,
     size=N,
 )
-OFFSET_PROVIDERS: dict[str, Connectivity | Dimension] = {}
 
 
 def test_gtir_sum2():
@@ -79,7 +95,7 @@ def test_gtir_sum2():
     c = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
+        [IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
     )
     sdfg = sdfg_genenerator.visit(testee)
 
@@ -116,7 +132,8 @@ def test_gtir_sum2_sym():
     b = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
+        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
+        offset_provider={},
     )
     sdfg = sdfg_genenerator.visit(testee)
 
@@ -195,7 +212,8 @@ def test_gtir_sum3():
     d = np.empty_like(a)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], OFFSET_PROVIDERS
+        [IFTYPE, IFTYPE, IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)],
+        offset_provider={},
     )
 
     for testee in [testee_fieldview, testee_inlined]:
@@ -263,15 +281,15 @@ def test_gtir_select():
 
     sdfg_genenerator = FieldviewGtirToSDFG(
         [
-            FTYPE,
-            FTYPE,
-            FTYPE,
-            FTYPE,
+            IFTYPE,
+            IFTYPE,
+            IFTYPE,
+            IFTYPE,
             ts.ScalarType(ts.ScalarKind.BOOL),
             ts.ScalarType(ts.ScalarKind.FLOAT64),
             ts.ScalarType(ts.ScalarKind.INT32),
         ],
-        OFFSET_PROVIDERS,
+        offset_provider={},
     )
     sdfg = sdfg_genenerator.visit(testee)
 
@@ -338,13 +356,13 @@ def test_gtir_select_nested():
 
     sdfg_genenerator = FieldviewGtirToSDFG(
         [
-            FTYPE,
-            FTYPE,
+            IFTYPE,
+            IFTYPE,
             ts.ScalarType(ts.ScalarKind.BOOL),
             ts.ScalarType(ts.ScalarKind.BOOL),
             ts.ScalarType(ts.ScalarKind.INT32),
         ],
-        OFFSET_PROVIDERS,
+        offset_provider={},
     )
     sdfg = sdfg_genenerator.visit(testee)
 
@@ -383,7 +401,7 @@ def test_gtir_cartesian_shift():
     b = np.empty(N)
 
     sdfg_genenerator = FieldviewGtirToSDFG(
-        [FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={"IDim": IDim}
+        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={"IDim": IDim}
     )
     sdfg = sdfg_genenerator.visit(testee)
 
@@ -393,3 +411,55 @@ def test_gtir_cartesian_shift():
     FSYMBOLS_tmp["__x_size_0"] = N + 1
     sdfg(x=a, y=b, **FSYMBOLS_tmp)
     assert np.allclose(a[1:] + 1, b)
+
+
+def test_gtir_connectivity_shift():
+    vertex_domain = im.call("unstructured_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=Vertex.value), 0, "nvertices")
+    )
+    testee = itir.Program(
+        id="connectivity_shift",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="edges"),
+            itir.Sym(id="vertices"),
+            itir.Sym(id="nedges"),
+            itir.Sym(id="nvertices"),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("it")(im.deref(im.shift("V2E", 1)("it"))),
+                        vertex_domain,
+                    )
+                )("edges"),
+                domain=vertex_domain,
+                target=itir.SymRef(id="vertices"),
+            )
+        ],
+    )
+
+    e = np.random.rand(SIMPLE_MESH.num_edges)
+    v = np.empty(SIMPLE_MESH.num_vertices)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [EFTYPE, VFTYPE, ts.ScalarType(ts.ScalarKind.INT32), ts.ScalarType(ts.ScalarKind.INT32)],
+        offset_provider=SIMPLE_MESH.offset_provider,
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+    connectivity_V2E = SIMPLE_MESH.offset_provider["V2E"]
+    assert isinstance(connectivity_V2E, NeighborTable)
+
+    sdfg(
+        edges=e,
+        vertices=v,
+        __connectivity_V2E=connectivity_V2E.table,
+        **FSYMBOLS,
+        ____connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
+        ____connectivity_V2E_stride_1=1,
+    )
+    assert np.allclose(v, e[connectivity_V2E.table[:, 1]])

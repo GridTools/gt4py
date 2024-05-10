@@ -28,10 +28,11 @@ from gt4py.next.iterator.ir_utils import common_pattern_matcher as cpm
 from gt4py.next.program_processors.runners.dace_fieldview import gtir_builtins
 from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     as_dace_type,
+    connectivity_identifier,
     filter_connectivities,
     get_domain,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 class GTIRToSDFG(eve.NodeVisitor):
@@ -86,7 +87,9 @@ class GTIRToSDFG(eve.NodeVisitor):
         strides = [dace.symbol(f"__{name}_stride_{i}", dtype) for i in range(len(dims))]
         return shape, strides
 
-    def _add_storage(self, sdfg: dace.SDFG, name: str, data_type: ts.DataType) -> None:
+    def _add_storage(
+        self, sdfg: dace.SDFG, name: str, data_type: ts.DataType, transient: bool = False
+    ) -> None:
         """
         Add external storage (aka non-transient) for data containers passed as arguments to the SDFG.
 
@@ -97,7 +100,7 @@ class GTIRToSDFG(eve.NodeVisitor):
             # use symbolic shape, which allows to invoke the program with fields of different size;
             # and symbolic strides, which enables decoupling the memory layout from generated code.
             sym_shape, sym_strides = self._make_array_shape_and_strides(name, data_type.dims)
-            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=False)
+            sdfg.add_array(name, sym_shape, dtype, strides=sym_strides, transient=transient)
         elif isinstance(data_type, ts.ScalarType):
             dtype = as_dace_type(data_type)
             # scalar arguments passed to the program are represented as symbols in DaCe SDFG
@@ -176,6 +179,19 @@ class GTIRToSDFG(eve.NodeVisitor):
         # add non-transient arrays and/or SDFG symbols for the program arguments
         for param, type_ in zip(node.params, self.param_types, strict=True):
             self._add_storage(sdfg, str(param.id), type_)
+
+        # add SDFG storage for connectivity tables
+        for offset, offset_provider in filter_connectivities(self.offset_provider).items():
+            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
+            local_dim = Dimension(offset, kind=DimensionKind.LOCAL)
+            type_ = ts.FieldType(
+                [offset_provider.origin_axis, local_dim], ts.ScalarType(scalar_kind)
+            )
+            # We store all connectivity tables as transient arrays here; later, while building
+            # the field operator expressions, we change to non transient the tables
+            # that are actually used. This way, we avoid adding SDFG arguments for
+            # the connectivity tabkes that are not used.
+            self._add_storage(sdfg, connectivity_identifier(offset), type_, transient=True)
 
         # visit one statement at a time and expand the SDFG from the current head state
         for i, stmt in enumerate(node.body):

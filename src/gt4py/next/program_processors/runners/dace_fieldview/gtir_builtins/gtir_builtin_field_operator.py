@@ -35,7 +35,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     get_domain,
     unique_name,
 )
-from gt4py.next.type_system import type_specifications as ts
+from gt4py.next.type_system import type_specifications as ts, type_translation as tt
 
 
 # Define type of variables used for field indexing
@@ -139,10 +139,20 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         map_ranges = {f"i_{dim.value}": f"{lb}:{ub}" for dim, (lb, ub) in self.field_domain.items()}
         me, mx = self.head_state.add_map(unique_name("map"), map_ranges)
 
-        for arg_node, (lambda_node, lambda_connector, offset) in input_connections:
-            assert arg_node.data in data_types
-            arg_type = data_types[arg_node.data]
-            if len(lambda_node.in_connectors) != 1:
+        for arg_node, (lambda_node, lambda_connector, index_offset) in input_connections:
+            offset = None
+            if arg_node.data.startswith("__connectivity"):
+                self.sdfg.arrays[arg_node.data].transient = False
+                offset = arg_node.data.removeprefix("__connectivity")
+                offset_provider = self.offset_provider[offset]
+                assert isinstance(offset_provider, Connectivity)
+                type_ = tt.from_type_hint(offset_provider.index_type)
+                assert isinstance(type_, ts.ScalarType)
+                arg_type = ts.FieldType([offset_provider.origin_axis], type_)
+            else:
+                assert arg_node.data in data_types
+                arg_type = data_types[arg_node.data]
+            if len(lambda_node.in_connectors) != 1 or offset is not None:
                 # indirection tasklet with explicit indexes
                 memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self.sdfg))
             elif isinstance(arg_type, ts.ScalarType):
@@ -151,8 +161,8 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
                 # read one field element through memlet subset
                 assert all(dim in self.field_domain for dim in arg_type.dims)
                 subset = ",".join(
-                    f"i_{dim.value} + ({offset})"
-                    for dim, off in zip(arg_type.dims, offset, strict=True)
+                    f"i_{dim.value} + ({off})"
+                    for dim, off in zip(arg_type.dims, index_offset, strict=True)
                 )
                 memlet = dace.Memlet(data=arg_node.data, subset=subset, volume=1)
             self.head_state.add_memlet_path(
