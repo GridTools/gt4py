@@ -30,12 +30,13 @@ import numpy as np
 
 import pytest
 
+from next_tests.integration_tests.feature_tests.ffront_tests.ffront_test_utils import IDim
+
 dace = pytest.importorskip("dace")
 
 
 N = 10
-DIM = Dimension("D")
-FTYPE = ts.FieldType(dims=[DIM], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+FTYPE = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
 FSYMBOLS = dict(
     __w_size_0=N,
     __w_stride_0=1,
@@ -52,7 +53,7 @@ OFFSET_PROVIDERS: dict[str, Connectivity | Dimension] = {}
 
 def test_gtir_sum2():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
         id="sum_2fields",
@@ -90,7 +91,7 @@ def test_gtir_sum2():
 
 def test_gtir_sum2_sym():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
         id="sum_2fields",
@@ -127,7 +128,7 @@ def test_gtir_sum2_sym():
 
 def test_gtir_sum3():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee_fieldview = itir.Program(
         id="sum_3fields",
@@ -207,7 +208,7 @@ def test_gtir_sum3():
 
 def test_gtir_select():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
         id="select_2sums",
@@ -283,7 +284,7 @@ def test_gtir_select():
 
 def test_gtir_select_nested():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
     )
     testee = itir.Program(
         id="select_nested",
@@ -353,3 +354,42 @@ def test_gtir_select_nested():
         for s2 in [False, True]:
             sdfg(cond_1=np.bool_(s1), cond_2=np.bool_(s2), x=a, z=b, **FSYMBOLS)
             assert np.allclose(b, (a + 1.0) if s1 else (a + 2.0) if s2 else (a + 3.0))
+
+
+def test_gtir_cartesian_shift():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="caresian_shift",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a")(im.plus(im.deref(im.shift("IDim", 1)("a")), 1)),
+                        domain,
+                    )
+                )("x"),
+                domain=domain,
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N + 1)
+    b = np.empty(N)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [FTYPE, FTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={"IDim": IDim}
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+
+    FSYMBOLS_tmp = FSYMBOLS.copy()
+    FSYMBOLS_tmp["__x_size_0"] = N + 1
+    sdfg(x=a, y=b, **FSYMBOLS_tmp)
+    assert np.allclose(a[1:] + 1, b)
