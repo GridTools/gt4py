@@ -14,8 +14,10 @@
 
 
 from dataclasses import dataclass
+from typing import TypeAlias
 
 import dace
+import dace.subsets as sbs
 
 from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension
@@ -28,25 +30,45 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace
 
 
 @dataclass(frozen=True)
-class LiteralExpr:
-    """Any symbolic expression that can be evaluated at compile time."""
+class MemletExpr:
+    """Scalar or array data access thorugh a memlet."""
 
-    value: dace.symbolic.SymbolicType
+    data: dace.nodes.AccessNode
+    subset: sbs.Indices | sbs.Range
 
 
 @dataclass(frozen=True)
 class SymbolExpr:
-    """The data access to a scalar or field through a symbolic reference."""
+    """Any symbolic expression that is constant in the context of current SDFG."""
 
-    data: str
+    value: dace.symbolic.SymExpr
+    dtype: dace.typeclass
 
 
 @dataclass(frozen=True)
-class ValueExpr:
-    """The result of a computation provided by a tasklet node."""
+class TaskletExpr:
+    """Result of the computation provided by a tasklet node."""
 
     node: dace.nodes.Tasklet
     connector: str
+
+
+@dataclass(frozen=True)
+class IteratorExpr:
+    """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
+
+    field: dace.nodes.AccessNode
+    dimensions: list[str]
+    offset: list[dace.symbolic.SymExpr]
+    indices: dict[str, MemletExpr | SymbolExpr | TaskletExpr]
+
+
+InputConnection: TypeAlias = tuple[
+    dace.nodes.AccessNode,
+    sbs.Range,
+    dace.nodes.Tasklet,
+    str,
+]
 
 
 class GTIRToTasklet(eve.NodeVisitor):
@@ -54,8 +76,9 @@ class GTIRToTasklet(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    input_connections: list[tuple[ValueExpr, str]]
+    input_connections: list[InputConnection]
     offset_provider: dict[str, Connectivity | Dimension]
+    symbol_map: dict[str, SymbolExpr | IteratorExpr | MemletExpr]
 
     def __init__(
         self,
@@ -67,87 +90,110 @@ class GTIRToTasklet(eve.NodeVisitor):
         self.state = state
         self.input_connections = []
         self.offset_provider = offset_provider
+        self.symbol_map = {}
 
-    def _visit_shift(self, node: itir.FunCall) -> str:
-        assert len(node.args) == 2
-        raise NotImplementedError
+    def _visit_deref(self, node: itir.FunCall) -> MemletExpr | TaskletExpr:
+        assert len(node.args) == 1
+        it = self.visit(node.args[0])
 
-    def visit_FunCall(self, node: itir.FunCall) -> ValueExpr | SymbolExpr:
-        inp_tasklets = {}
-        inp_symbols = set()
-        inp_connectors = set()
-        node_internals = []
-        for i, arg in enumerate(node.args):
-            arg_expr = self.visit(arg)
-            if isinstance(arg_expr, LiteralExpr):
-                # use the value without adding any connector
-                node_internals.append(arg_expr.value)
-            else:
-                if isinstance(arg_expr, ValueExpr):
-                    # the value is the result of a tasklet node
-                    connector = f"__inp_{i}"
-                    inp_tasklets[connector] = arg_expr
-                else:
-                    # the value is the result of a tasklet node
-                    assert isinstance(arg_expr, SymbolExpr)
-                    connector = f"__inp_{arg_expr.data}"
-                    inp_symbols.add((connector, arg_expr.data))
-                inp_connectors.add(connector)
-                node_internals.append(connector)
-
-        if cpm.is_call_to(node, "deref"):
-            assert len(inp_tasklets) == 0
-            assert len(inp_symbols) == 1
-            _, data = inp_symbols.pop()
-            return SymbolExpr(data)
-
-        elif cpm.is_call_to(node.fun, "shift"):
-            code = self._visit_shift(node.fun)
-
-        elif isinstance(node.fun, itir.SymRef):
-            # create a tasklet node implementing the builtin function
-            builtin_name = str(node.fun.id)
-            if builtin_name in MATH_BUILTINS_MAPPING:
-                fmt = MATH_BUILTINS_MAPPING[builtin_name]
-                code = fmt.format(*node_internals)
-            else:
-                raise NotImplementedError(f"'{builtin_name}' not implemented.")
-
-            out_connector = "__out"
-            tasklet_node = self.state.add_tasklet(
-                unique_name("tasklet"),
-                inp_connectors,
-                {out_connector},
-                "{} = {}".format(out_connector, code),
+        if isinstance(it, SymbolExpr):
+            cast_sym = str(it.dtype)
+            cast_fmt = MATH_BUILTINS_MAPPING[cast_sym]
+            deref_node = self.state.add_tasklet(
+                "deref_symbol", {}, {"val"}, code=f"val = {cast_fmt.format(it.value)}"
             )
+            return TaskletExpr(deref_node, "val")
+
+        elif isinstance(it, IteratorExpr):
+            if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
+                # use direct field access through memlet subset
+                data_index = sbs.Indices(
+                    [
+                        it.indices[dim].value + off  # type: ignore[union-attr]
+                        for dim, off in zip(it.dimensions, it.offset, strict=True)
+                    ]
+                )
+                return MemletExpr(it.field, data_index)
+
+            else:
+                raise NotImplementedError
 
         else:
-            raise NotImplementedError(f"Unexpected 'FunCall' node ({node}).")
+            assert isinstance(it, MemletExpr)
+            return it
 
-        for input_conn, inp_expr in inp_tasklets.items():
-            self.state.add_edge(
-                inp_expr.node, inp_expr.connector, tasklet_node, input_conn, dace.Memlet()
-            )
-        self.input_connections.extend(
-            (ValueExpr(tasklet_node, connector), data) for connector, data in inp_symbols
+    def _visit_shift(self, node: itir.FunCall) -> IteratorExpr:
+        raise NotImplementedError
+
+    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | TaskletExpr | MemletExpr:
+        if cpm.is_call_to(node, "deref"):
+            return self._visit_deref(node)
+
+        elif cpm.is_call_to(node.fun, "shift"):
+            return self._visit_shift(node)
+
+        else:
+            assert isinstance(node.fun, itir.SymRef)
+
+        node_internals = []
+        node_connections: dict[str, MemletExpr | TaskletExpr] = {}
+        for i, arg in enumerate(node.args):
+            arg_expr = self.visit(arg)
+            if isinstance(arg_expr, MemletExpr | TaskletExpr):
+                # the argument value is the result of a tasklet node or direct field access
+                connector = f"__inp_{i}"
+                node_connections[connector] = arg_expr
+                node_internals.append(connector)
+            else:
+                assert isinstance(arg_expr, SymbolExpr)
+                # use the argument value without adding any connector
+                node_internals.append(arg_expr.value)
+
+        # create a tasklet node implementing the builtin function
+        builtin_name = str(node.fun.id)
+        if builtin_name in MATH_BUILTINS_MAPPING:
+            fmt = MATH_BUILTINS_MAPPING[builtin_name]
+            code = fmt.format(*node_internals)
+        else:
+            raise NotImplementedError(f"'{builtin_name}' not implemented.")
+
+        out_connector = "result"
+        tasklet_node = self.state.add_tasklet(
+            unique_name("tasklet"),
+            node_connections.keys(),
+            {out_connector},
+            "{} = {}".format(out_connector, code),
         )
-        return ValueExpr(tasklet_node, out_connector)
 
-    def visit_Lambda(self, node: itir.Lambda) -> tuple[list[tuple[ValueExpr, str]], ValueExpr]:
-        assert len(self.input_connections) == 0
+        for connector, arg_expr in node_connections.items():
+            if isinstance(arg_expr, TaskletExpr):
+                self.state.add_edge(
+                    arg_expr.node, arg_expr.connector, tasklet_node, connector, dace.Memlet()
+                )
+            else:
+                self.input_connections.append(
+                    (arg_expr.data, arg_expr.subset, tasklet_node, connector)
+                )
+
+        return TaskletExpr(tasklet_node, "result")
+
+    def visit_Lambda(
+        self, node: itir.Lambda, args: list[SymbolExpr | IteratorExpr | MemletExpr]
+    ) -> tuple[
+        list[InputConnection],
+        TaskletExpr,
+    ]:
+        for p, arg in zip(node.params, args, strict=True):
+            self.symbol_map[str(p.id)] = arg
         output_expr = self.visit(node.expr)
-        assert isinstance(output_expr, ValueExpr)
+        assert isinstance(output_expr, TaskletExpr)
         return self.input_connections, output_expr
 
-    def visit_Literal(self, node: itir.Literal) -> LiteralExpr:
-        cast_sym = str(as_dace_type(node.type))
-        cast_fmt = MATH_BUILTINS_MAPPING[cast_sym]
-        typed_value = cast_fmt.format(node.value)
-        return LiteralExpr(typed_value)
+    def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
+        dtype = as_dace_type(node.type)
+        return SymbolExpr(node.value, dtype)
 
-    def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr:
-        """
-        Symbol references are mapped to tasklet connectors that access some kind of data.
-        """
-        sym_name = str(node.id)
-        return SymbolExpr(sym_name)
+    def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr | IteratorExpr | MemletExpr:
+        param = str(node.id)
+        assert param in self.symbol_map
+        return self.symbol_map[param]
