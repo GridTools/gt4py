@@ -20,7 +20,6 @@ import dataclasses
 import enum
 import functools
 import math
-import numbers
 import types
 from collections.abc import Mapping, Sequence
 
@@ -925,8 +924,16 @@ DomainDimT = TypeVar("DomainDimT", bound="Dimension")
 
 @dataclasses.dataclass(frozen=True, eq=False)
 class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
-    dimension: DomainDimT
-    target: DimT | int = 0
+    domain_dim: DomainDimT
+    codomain: DimT
+    offset: int = 0
+
+    def __init__(
+        self, domain_dim: DomainDimT, offset: int = 0, *, codomain: Optional[DimT] = None
+    ) -> None:
+        object.__setattr__(self, "domain_dim", domain_dim)
+        object.__setattr__(self, "codomain", codomain if codomain is not None else domain_dim)
+        object.__setattr__(self, "offset", offset)
 
     @classmethod
     def __gt_builtin_func__(cls, _: fbuiltins.BuiltInFunction) -> Never:  # type: ignore[override]
@@ -944,7 +951,7 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
 
     @functools.cached_property
     def domain(self) -> Domain:
-        return Domain(dims=(self.dimension,), ranges=(UnitRange.infinite(),))
+        return Domain(dims=(self.domain_dim,), ranges=(UnitRange.infinite(),))
 
     @property
     def __gt_origin__(self) -> Never:
@@ -954,13 +961,13 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
     def dtype(self) -> core_defs.DType[core_defs.IntegralScalar]:
         return core_defs.Int32DType()  # type: ignore[return-value]
 
-    @functools.cached_property
-    def codomain(self) -> DimT:
-        return cast(DimT, self.target if isinstance(self.target, Dimension) else self.dimension)
+    # This is a workaround to make this class concrete, since `codomain` is an
+    # abstract property of the `ConnectivityField` Protocol.
+    if not TYPE_CHECKING:
 
-    @functools.cached_property
-    def offset(self) -> int:
-        return self.target if isinstance(self.target, int) else 0
+        @functools.cached_property
+        def codomain(self) -> DimT:
+            raise RuntimeError("This property should be always set in the constructor.")
 
     @property
     def skip_value(self) -> None:
@@ -970,37 +977,19 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
     def kind(self) -> ConnectivityKind:
         return (
             ConnectivityKind.translation()
-            if self.dimension == self.codomain
+            if self.domain_dim == self.codomain
             else ConnectivityKind.relocation()
         )
 
     @classmethod
-    def from_offset(
-        cls,
-        definition: int,
-        /,
-        codomain: DomainDimT,
-        *,
-        domain: Optional[DomainLike] = None,
-        dtype: Optional[core_defs.DTypeLike] = None,
+    def for_translation(
+        cls, dimension: DomainDimT, offset: int
     ) -> CartesianConnectivity[DomainDimT, DomainDimT]:
-        assert domain is None
-        assert dtype is None
-        return cast(CartesianConnectivity[DomainDimT, DomainDimT], cls(codomain, definition))
+        return cast(CartesianConnectivity[DomainDimT, DomainDimT], cls(dimension, offset))
 
     @classmethod
-    def from_target(
-        cls,
-        definition: DomainDimT,
-        /,
-        codomain: DimT,
-        *,
-        domain: Optional[DomainLike] = None,
-        dtype: Optional[core_defs.DTypeLike] = None,
-    ) -> CartesianConnectivity[DomainDimT, DimT]:
-        assert domain is None
-        assert dtype is None
-        return cls(definition, codomain)
+    def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
+        return cls(new, codomain=old)
 
     def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
         if not isinstance(image_range, UnitRange):
@@ -1012,7 +1001,7 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
             image_range = image_range.unit_range
 
         assert isinstance(image_range, UnitRange)
-        return (named_range((self.dimension, image_range - self.offset)),)
+        return (named_range((self.domain_dim, image_range - self.offset)),)
 
     def premap(self, index_field: ConnectivityField | fbuiltins.FieldOffset) -> ConnectivityField:
         raise NotImplementedError()
@@ -1023,10 +1012,6 @@ class CartesianConnectivity(ConnectivityField[Dims[DomainDimT], DimT]):
         raise NotImplementedError()  # we could possibly implement with a FunctionField, but we don't have a use-case
 
     __getitem__ = restrict
-
-
-_connectivity.register(numbers.Integral, CartesianConnectivity.from_offset)
-_connectivity.register(Dimension, CartesianConnectivity.from_target)
 
 
 @enum.unique

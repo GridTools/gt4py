@@ -626,34 +626,22 @@ def test_dimension_promotion(
 
 
 class TestCartesianConnectivity:
-    def test_from_offset(self):
+    def test_for_translation(self):
         offset = 5
-        dimension = common.Dimension("I")
+        I = common.Dimension("I")
 
-        result = common.CartesianConnectivity.from_offset(offset, dimension)
+        result = common.CartesianConnectivity.for_translation(I, offset)
         assert isinstance(result, common.CartesianConnectivity)
-        assert result.dimension == dimension
-        assert result.codomain == dimension
-        assert result.target == offset
+        assert result.domain_dim == I
+        assert result.codomain == I
+        assert result.offset == offset
 
-        result = common._connectivity(offset, dimension)
-        assert isinstance(result, common.CartesianConnectivity)
-        assert result.dimension == dimension
-        assert result.codomain == dimension
-        assert result.target == offset
-
-    def test_from_target(self):
+    def test_for_relocation(self):
+        I = common.Dimension("I")
         I_half = common.Dimension("I_half")
-        dimension = common.Dimension("I")
 
-        result = common.CartesianConnectivity.from_target(I_half, dimension)
+        result = common.CartesianConnectivity.for_relocation(I, I_half)
         assert isinstance(result, common.CartesianConnectivity)
-        assert result.dimension == dimension
-        assert result.codomain == I_half
-        assert result.target == I_half
-
-        result = common._connectivity(I_half, dimension)
-        assert isinstance(result, common.CartesianConnectivity)
-        assert result.dimension == dimension
-        assert result.codomain == I_half
-        assert result.target == I_half
+        assert result.domain_dim == I_half
+        assert result.codomain == I
+        assert result.offset == 0
