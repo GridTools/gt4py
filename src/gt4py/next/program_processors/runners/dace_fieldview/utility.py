@@ -43,7 +43,7 @@ def as_dace_type(type_: ts.ScalarType) -> dace.typeclass:
 
 
 def connectivity_identifier(name: str) -> str:
-    return f"__connectivity_{name}"
+    return f"connectivity_{name}"
 
 
 def filter_connectivities(offset_provider: Mapping[str, Any]) -> dict[str, Connectivity]:

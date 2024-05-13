@@ -457,11 +457,11 @@ def test_gtir_connectivity_shift():
     sdfg(
         edges=e,
         vertices=v,
-        __connectivity_V2E=connectivity_V2E.table,
+        connectivity_V2E=connectivity_V2E.table,
         **FSYMBOLS,
-        ____connectivity_V2E_size_0=SIMPLE_MESH.num_vertices,
-        ____connectivity_V2E_size_1=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-        ____connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
-        ____connectivity_V2E_stride_1=1,
+        __connectivity_V2E_size_0=SIMPLE_MESH.num_vertices,
+        __connectivity_V2E_size_1=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_0=SIMPLE_MESH.offset_provider["V2E"].max_neighbors,
+        __connectivity_V2E_stride_1=1,
     )
     assert np.allclose(v, e[connectivity_V2E.table[:, 1]])
