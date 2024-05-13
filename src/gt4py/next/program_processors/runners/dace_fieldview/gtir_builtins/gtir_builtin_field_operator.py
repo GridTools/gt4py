@@ -16,6 +16,7 @@
 from typing import Callable, TypeAlias
 
 import dace
+import dace.subsets as sbs
 
 from gt4py.next.common import Connectivity, Dimension
 from gt4py.next.iterator import ir as itir
@@ -26,15 +27,11 @@ from gt4py.next.program_processors.runners.dace_fieldview.gtir_builtins.gtir_bui
 from gt4py.next.program_processors.runners.dace_fieldview.gtir_to_tasklet import (
     GTIRToTasklet,
     IteratorExpr,
+    MemletExpr,
     SymbolExpr,
     TaskletExpr,
-    ValueExpr,
 )
-from gt4py.next.program_processors.runners.dace_fieldview.utility import (
-    as_dace_type,
-    get_domain,
-    unique_name,
-)
+from gt4py.next.program_processors.runners.dace_fieldview.utility import get_domain, unique_name
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -88,31 +85,31 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
     def build(self) -> list[tuple[dace.nodes.Node, ts.FieldType | ts.ScalarType]]:
         dimension_index_fmt = "i_{dim}"
         # first visit the list of arguments and build a symbol map
-        stencil_args: list[IteratorExpr | ValueExpr] = []
+        stencil_args: list[IteratorExpr | MemletExpr] = []
         for arg in self.stencil_args:
             arg_nodes = arg()
             assert len(arg_nodes) == 1
-            arg_node, arg_type = arg_nodes[0]
+            data_node, arg_type = arg_nodes[0]
             # require all argument nodes to be data access nodes (no symbols)
-            assert isinstance(arg_node, dace.nodes.AccessNode)
+            assert isinstance(data_node, dace.nodes.AccessNode)
 
             if isinstance(arg_type, ts.ScalarType):
-                dtype = as_dace_type(arg_type)
-                scalar_arg = ValueExpr(arg_node, [0], dtype)
+                scalar_arg = MemletExpr(data_node, sbs.Indices([0]))
                 stencil_args.append(scalar_arg)
             else:
                 assert isinstance(arg_type, ts.FieldType)
-                dtype = as_dace_type(arg_type.dtype)
-                indices: dict[str, SymbolExpr | TaskletExpr | ValueExpr] = {
-                    dim.value: SymbolExpr(f"i_{dim.value}", _INDEX_DTYPE)
+                indices: dict[str, MemletExpr | SymbolExpr | TaskletExpr] = {
+                    dim.value: SymbolExpr(
+                        dace.symbolic.SymExpr(dimension_index_fmt.format(dim=dim.value)),
+                        _INDEX_DTYPE,
+                    )
                     for dim in self.field_domain.keys()
                 }
                 iterator_arg = IteratorExpr(
-                    arg_node,
+                    data_node,
                     [dim.value for dim in arg_type.dims],
-                    [0] * len(arg_type.dims),
+                    sbs.Indices([0] * len(arg_type.dims)),
                     indices,
-                    dtype,
                 )
                 stencil_args.append(iterator_arg)
 
@@ -142,16 +139,10 @@ class GTIRBuiltinAsFieldOp(GTIRBuiltinTranslator):
         }
         me, mx = self.head_state.add_map(unique_name("map"), map_ranges)
 
-        for arg_node, lambda_node, lambda_connector, data_index in input_connections:
-            if lambda_node.label == "deref_field_indirection" and lambda_connector == "field":
-                # indirection tasklet with explicit indexes besides the field argument
-                memlet = dace.Memlet.from_array(arg_node.data, arg_node.desc(self.sdfg))
-            else:
-                # read one field element through memlet subset
-                data_subset = ",".join(str(index) for index in data_index)
-                memlet = dace.Memlet(data=arg_node.data, subset=data_subset, volume=1)
+        for data_node, data_subset, lambda_node, lambda_connector in input_connections:
+            memlet = dace.Memlet(data=data_node.data, subset=data_subset, volume=1)
             self.head_state.add_memlet_path(
-                arg_node,
+                data_node,
                 me,
                 lambda_node,
                 dst_conn=lambda_connector,

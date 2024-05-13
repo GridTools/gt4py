@@ -15,9 +15,10 @@
 
 import itertools
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TypeAlias
 
 import dace
+import dace.subsets as sbs
 
 from gt4py import eve
 from gt4py.next.common import Connectivity, Dimension
@@ -31,14 +32,21 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     connectivity_identifier,
     unique_name,
 )
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+
+
+@dataclass(frozen=True)
+class MemletExpr:
+    """Scalar or array data access thorugh a memlet."""
+
+    data: dace.nodes.AccessNode
+    subset: sbs.Indices | sbs.Range
 
 
 @dataclass(frozen=True)
 class SymbolExpr:
     """Any symbolic expression that is constant in the context of current SDFG."""
 
-    value: dace.symbolic.SymbolicType
+    value: dace.symbolic.SymExpr
     dtype: dace.typeclass
 
 
@@ -48,27 +56,24 @@ class TaskletExpr:
 
     node: dace.nodes.Tasklet
     connector: str
-    dtype: dace.typeclass
-
-
-@dataclass(frozen=True)
-class ValueExpr:
-    """Data provided by a scalar access node."""
-
-    data: dace.nodes.AccessNode
-    subset: list[dace.symbolic.SymbolicType]
-    dtype: dace.typeclass
 
 
 @dataclass(frozen=True)
 class IteratorExpr:
-    """Iterator to access the field provided by an array access node."""
+    """Iterator for field access to be consumed by `deref` or `shift` builtin functions."""
 
     field: dace.nodes.AccessNode
     dimensions: list[str]
-    offset: list[dace.symbolic.SymbolicType]
-    indices: dict[str, SymbolExpr | TaskletExpr | ValueExpr]
-    dtype: dace.typeclass
+    offset: list[dace.symbolic.SymExpr]
+    indices: dict[str, MemletExpr | SymbolExpr | TaskletExpr]
+
+
+InputConnection: TypeAlias = tuple[
+    dace.nodes.AccessNode,
+    sbs.Range,
+    dace.nodes.Tasklet,
+    str,
+]
 
 
 class GTIRToTasklet(eve.NodeVisitor):
@@ -76,11 +81,9 @@ class GTIRToTasklet(eve.NodeVisitor):
 
     sdfg: dace.SDFG
     state: dace.SDFGState
-    input_connections: list[
-        tuple[dace.nodes.AccessNode, dace.nodes.Tasklet, str, list[dace.symbolic.SymbolicType]]
-    ]
+    input_connections: list[InputConnection]
     offset_provider: dict[str, Connectivity | Dimension]
-    symbol_map: dict[str, IteratorExpr | SymbolExpr | ValueExpr]
+    symbol_map: dict[str, SymbolExpr | IteratorExpr | MemletExpr]
 
     def __init__(
         self,
@@ -94,7 +97,7 @@ class GTIRToTasklet(eve.NodeVisitor):
         self.offset_provider = offset_provider
         self.symbol_map = {}
 
-    def _visit_deref(self, node: itir.FunCall) -> TaskletExpr | ValueExpr:
+    def _visit_deref(self, node: itir.FunCall) -> MemletExpr | TaskletExpr:
         assert len(node.args) == 1
         it = self.visit(node.args[0])
 
@@ -104,16 +107,18 @@ class GTIRToTasklet(eve.NodeVisitor):
             deref_node = self.state.add_tasklet(
                 "deref_symbol", {}, {"val"}, code=f"val = {cast_fmt.format(it.value)}"
             )
-            return TaskletExpr(deref_node, "val", it.dtype)
+            return TaskletExpr(deref_node, "val")
 
         elif isinstance(it, IteratorExpr):
             if all(isinstance(index, SymbolExpr) for index in it.indices.values()):
                 # use direct field access through memlet subset
-                data_index = [
-                    dace.symbolic.SymExpr(it.indices[dim].value) + off  # type: ignore[union-attr]
-                    for dim, off in zip(it.dimensions, it.offset, strict=True)
-                ]
-                return ValueExpr(it.field, data_index, it.dtype)
+                data_index = sbs.Indices(
+                    [
+                        it.indices[dim].value + off  # type: ignore[union-attr]
+                        for dim, off in zip(it.dimensions, it.offset, strict=True)
+                    ]
+                )
+                return MemletExpr(it.field, data_index)
 
             else:
                 input_connector_fmt = "__inp_{dim}"
@@ -137,11 +142,22 @@ class GTIRToTasklet(eve.NodeVisitor):
                     code=f"val = field[{index_internals}]",
                 )
                 # add new termination point for this field parameter
-                self.input_connections.append((it.field, deref_node, "field", it.offset))
+                field_desc = it.field.desc(self.sdfg)
+                field_fullset = sbs.Range.from_array(field_desc)
+                self.input_connections.append((it.field, field_fullset, deref_node, "field"))
 
                 for dim, index_expr in it.indices.items():
                     deref_connector = input_connector_fmt.format(dim=dim)
-                    if isinstance(index_expr, TaskletExpr):
+                    if isinstance(index_expr, MemletExpr):
+                        self.input_connections.append(
+                            (
+                                index_expr.data,
+                                index_expr.subset,
+                                deref_node,
+                                deref_connector,
+                            )
+                        )
+                    elif isinstance(index_expr, TaskletExpr):
                         self.state.add_edge(
                             index_expr.node,
                             index_expr.connector,
@@ -149,22 +165,13 @@ class GTIRToTasklet(eve.NodeVisitor):
                             deref_connector,
                             dace.Memlet(),
                         )
-                    elif isinstance(index_expr, ValueExpr):
-                        self.input_connections.append(
-                            (
-                                index_expr.data,
-                                deref_node,
-                                deref_connector,
-                                index_expr.subset,
-                            )
-                        )
                     else:
                         assert isinstance(index_expr, SymbolExpr)
 
-                return TaskletExpr(deref_node, "val", it.dtype)
+                return TaskletExpr(deref_node, "val")
 
         else:
-            assert isinstance(it, ValueExpr)
+            assert isinstance(it, MemletExpr)
             return it
 
     def _split_shift_args(
@@ -200,19 +207,18 @@ class GTIRToTasklet(eve.NodeVisitor):
         offset_provider = self.offset_provider[offset]
         # second argument should be the offset value
         if isinstance(head[1], itir.OffsetLiteral):
+            assert isinstance(head[1].value, int)
             offset_value = head[1].value
-            assert isinstance(offset_value, int)
         else:
             raise NotImplementedError("Dynamic offset not supported.")
 
         if isinstance(offset_provider, Dimension):
             # cartesian offset along one dimension
-            dim_index = it.dimensions.index(offset_provider.value)
             new_offset = [
-                prev_offset + offset_value if i == dim_index else prev_offset
-                for i, prev_offset in enumerate(it.offset)
+                prev_offset + offset_value if dim == offset_provider.value else prev_offset
+                for dim, prev_offset in zip(it.dimensions, it.offset, strict=True)
             ]
-            shifted_it = IteratorExpr(it.field, it.dimensions, new_offset, it.indices, it.dtype)
+            shifted_it = IteratorExpr(it.field, it.dimensions, new_offset, it.indices)
         else:
             # shift in unstructured domain by means of a neighbor table
             origin_dim = offset_provider.origin_axis.value
@@ -222,8 +228,6 @@ class GTIRToTasklet(eve.NodeVisitor):
             neighbor_dim = offset_provider.neighbor_axis.value
             assert neighbor_dim in it.dimensions
             offset_table = connectivity_identifier(offset)
-            index_scalar_type = ts.ScalarType(tt.get_scalar_kind(offset_provider.index_type))
-            offset_dtype = as_dace_type(index_scalar_type)
             # initially, the storage for the connectivty tables is created as transient
             # when the tables are used, the storage is changed to non-transient,
             # so the corresponding arrays are supposed to be allocated by the SDFG caller
@@ -234,16 +238,16 @@ class GTIRToTasklet(eve.NodeVisitor):
                 [origin_dim if dim == neighbor_dim else dim for dim in it.dimensions],
                 it.offset,
                 {
-                    origin_dim: ValueExpr(
-                        offset_table_node, [origin_index.value, offset_value], offset_dtype
+                    origin_dim: MemletExpr(
+                        offset_table_node,
+                        sbs.Indices([origin_index.value, offset_value]),
                     )
                 },
-                it.dtype,
             )
 
         return shifted_it
 
-    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | TaskletExpr | ValueExpr:
+    def visit_FunCall(self, node: itir.FunCall) -> IteratorExpr | TaskletExpr | MemletExpr:
         if cpm.is_call_to(node, "deref"):
             return self._visit_deref(node)
 
@@ -254,10 +258,10 @@ class GTIRToTasklet(eve.NodeVisitor):
             assert isinstance(node.fun, itir.SymRef)
 
         node_internals = []
-        node_connections: dict[str, TaskletExpr | ValueExpr] = {}
+        node_connections: dict[str, MemletExpr | TaskletExpr] = {}
         for i, arg in enumerate(node.args):
             arg_expr = self.visit(arg)
-            if isinstance(arg_expr, TaskletExpr | ValueExpr):
+            if isinstance(arg_expr, MemletExpr | TaskletExpr):
                 # the argument value is the result of a tasklet node or direct field access
                 connector = f"__inp_{i}"
                 node_connections[connector] = arg_expr
@@ -266,9 +270,6 @@ class GTIRToTasklet(eve.NodeVisitor):
                 assert isinstance(arg_expr, SymbolExpr)
                 # use the argument value without adding any connector
                 node_internals.append(arg_expr.value)
-
-        # TODO: use type inference to determine the result type
-        node_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 
         # create a tasklet node implementing the builtin function
         builtin_name = str(node.fun.id)
@@ -293,23 +294,15 @@ class GTIRToTasklet(eve.NodeVisitor):
                 )
             else:
                 self.input_connections.append(
-                    (arg_expr.data, tasklet_node, connector, arg_expr.subset)
+                    (arg_expr.data, arg_expr.subset, tasklet_node, connector)
                 )
 
-        dtype = as_dace_type(node_type)
-        return TaskletExpr(tasklet_node, "result", dtype)
+        return TaskletExpr(tasklet_node, "result")
 
     def visit_Lambda(
-        self, node: itir.Lambda, args: list[IteratorExpr | SymbolExpr | ValueExpr]
+        self, node: itir.Lambda, args: list[SymbolExpr | IteratorExpr | MemletExpr]
     ) -> tuple[
-        list[
-            tuple[
-                dace.nodes.AccessNode,
-                dace.nodes.Tasklet,
-                str,
-                list[dace.symbolic.SymbolicType],
-            ]
-        ],
+        list[InputConnection],
         TaskletExpr,
     ]:
         for p, arg in zip(node.params, args, strict=True):
@@ -322,7 +315,7 @@ class GTIRToTasklet(eve.NodeVisitor):
         dtype = as_dace_type(node.type)
         return SymbolExpr(node.value, dtype)
 
-    def visit_SymRef(self, node: itir.SymRef) -> IteratorExpr | SymbolExpr | ValueExpr:
+    def visit_SymRef(self, node: itir.SymRef) -> SymbolExpr | IteratorExpr | MemletExpr:
         param = str(node.id)
         assert param in self.symbol_map
         return self.symbol_map[param]
