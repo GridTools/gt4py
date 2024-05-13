@@ -67,6 +67,43 @@ FSYMBOLS = dict(
 )
 
 
+def test_gtir_copy():
+    domain = im.call("cartesian_domain")(
+        im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
+    )
+    testee = itir.Program(
+        id="gtir_copy",
+        function_definitions=[],
+        params=[itir.Sym(id="x"), itir.Sym(id="y"), itir.Sym(id="size")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.call(
+                    im.call("as_fieldop")(
+                        im.lambda_("a")(im.deref("a")),
+                        domain,
+                    )
+                )("x"),
+                domain=domain,
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    a = np.random.rand(N)
+    b = np.empty_like(a)
+
+    sdfg_genenerator = FieldviewGtirToSDFG(
+        [IFTYPE, IFTYPE, ts.ScalarType(ts.ScalarKind.INT32)], offset_provider={}
+    )
+    sdfg = sdfg_genenerator.visit(testee)
+
+    assert isinstance(sdfg, dace.SDFG)
+
+    sdfg(x=a, y=b, **FSYMBOLS)
+    assert np.allclose(a, b)
+
+
 def test_gtir_sum2():
     domain = im.call("cartesian_domain")(
         im.call("named_range")(itir.AxisLiteral(value=IDim.value), 0, "size")
