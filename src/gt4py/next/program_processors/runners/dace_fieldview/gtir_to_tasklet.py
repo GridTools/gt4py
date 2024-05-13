@@ -31,7 +31,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import (
     connectivity_identifier,
     unique_name,
 )
-from gt4py.next.type_system import type_specifications as ts, type_translation as tt
+from gt4py.next.type_system import type_specifications as ts
 
 
 @dataclass(frozen=True)
@@ -60,13 +60,22 @@ class ValueExpr:
 
 
 @dataclass(frozen=True)
+class ConnectivityExpr:
+    """Provides access to connectivity table by means of memlet."""
+
+    table: dace.nodes.AccessNode
+    # TODO: should value be `int | str` instead?
+    value: int
+
+
+@dataclass(frozen=True)
 class IteratorExpr:
     """Iterator to access the field provided by an array access node."""
 
     field: dace.nodes.AccessNode
     dimensions: list[str]
     offset: list[int]
-    indices: dict[str, SymbolExpr | TaskletExpr | ValueExpr]
+    indices: dict[str, SymbolExpr | TaskletExpr | ConnectivityExpr]
     dtype: dace.typeclass
 
 
@@ -119,10 +128,11 @@ class GTIRToTasklet(eve.NodeVisitor):
                     "deref_field", {"field"}, {"val"}, code="val = field"
                 )
             else:
+                assert all(dim in it.dimensions for dim in it.indices.keys())
                 index_connectors = [
                     f"__i_{dim}"
                     for dim, index in it.indices.items()
-                    if isinstance(index, TaskletExpr | ValueError)
+                    if isinstance(index, TaskletExpr | ConnectivityExpr)
                 ]
                 sorted_indices = [it.indices[dim] for dim in it.dimensions]
                 index_internals = ",".join(
@@ -130,7 +140,7 @@ class GTIRToTasklet(eve.NodeVisitor):
                     for dim, index in zip(it.dimensions, sorted_indices)
                 )
                 deref_node = self.state.add_tasklet(
-                    "deref_field_indirecton",
+                    "deref_field_indirection",
                     {"field"} | set(index_connectors),
                     {"val"},
                     code=f"val = field[{index_internals}]",
@@ -145,13 +155,9 @@ class GTIRToTasklet(eve.NodeVisitor):
                             deref_connector,
                             dace.Memlet(),
                         )
-                    elif isinstance(index_expr, ValueExpr):
-                        self.state.add_edge(
-                            index_expr.value,
-                            None,
-                            deref_node,
-                            deref_connector,
-                            dace.Memlet(data=index_expr.value.data, subset="0"),
+                    elif isinstance(index_expr, ConnectivityExpr):
+                        self.input_connections.append(
+                            (index_expr.table, (deref_node, deref_connector, [0, index_expr.value]))
                         )
                     else:
                         assert isinstance(index_expr, SymbolExpr)
@@ -214,28 +220,18 @@ class GTIRToTasklet(eve.NodeVisitor):
             origin_dim = offset_provider.origin_axis.value
             assert origin_dim not in it.indices
             neighbor_dim = offset_provider.neighbor_axis.value
-            assert neighbor_dim not in it.indices
-            dim_index = it.dimensions.index(neighbor_dim)
-
-            shift_node = self.state.add_tasklet(
-                "shift",
-                {"table"},
-                {"target_index"},
-                f"target_index = table[i_{origin_dim}, {offset_value}]",
-            )
-
+            assert neighbor_dim in it.dimensions
             offset_table = connectivity_identifier(offset)
+            # initially, the storage for the connectivty tables is created as transient
+            # when the tables are used, the storage is changed to non-transient,
+            # so the corresponding arrays are supposed to be allocated by the SDFG caller
+            self.sdfg.arrays[offset_table].transient = False
             offset_table_node = self.state.add_access(offset_table)
-            self.input_connections.append((offset_table_node, (shift_node, "table", [0, 0])))
-
-            scalar_kind = tt.get_scalar_kind(offset_provider.index_type)
-            dtype = as_dace_type(ts.ScalarType(scalar_kind))
-
             shifted_it = IteratorExpr(
                 it.field,
-                [origin_dim if i == dim_index else dim for i, dim in enumerate(it.dimensions)],
+                [origin_dim if dim == neighbor_dim else dim for dim in it.dimensions],
                 it.offset,
-                {origin_dim: TaskletExpr(shift_node, "target_index", dtype)},
+                {origin_dim: ConnectivityExpr(offset_table_node, offset_value)},
                 it.dtype,
             )
 
