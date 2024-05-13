@@ -52,7 +52,7 @@ OFFSET_PROVIDERS: dict[str, Connectivity | Dimension] = {}
 
 def test_gtir_copy():
     domain = im.call("cartesian_domain")(
-        im.call("named_range")(itir.AxisLiteral(value=Dim.value), 0, "size")
+        im.call("named_range")(itir.AxisLiteral(value=DIM.value), 0, "size")
     )
     testee = itir.Program(
         id="gtir_copy",
