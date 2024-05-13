@@ -33,7 +33,7 @@ from gt4py.next.program_processors.runners.dace_fieldview.utility import as_dace
 class MemletExpr:
     """Scalar or array data access thorugh a memlet."""
 
-    data: dace.nodes.AccessNode
+    source: dace.nodes.AccessNode
     subset: sbs.Indices | sbs.Range
 
 
@@ -172,7 +172,7 @@ class GTIRToTasklet(eve.NodeVisitor):
                 )
             else:
                 self.input_connections.append(
-                    (arg_expr.data, arg_expr.subset, tasklet_node, connector)
+                    (arg_expr.source, arg_expr.subset, tasklet_node, connector)
                 )
 
         return TaskletExpr(tasklet_node, "result")
@@ -186,8 +186,16 @@ class GTIRToTasklet(eve.NodeVisitor):
         for p, arg in zip(node.params, args, strict=True):
             self.symbol_map[str(p.id)] = arg
         output_expr = self.visit(node.expr)
-        assert isinstance(output_expr, TaskletExpr)
-        return self.input_connections, output_expr
+        if isinstance(output_expr, TaskletExpr):
+            return self.input_connections, output_expr
+
+        # special case where the field operator is simply copying data from source to destination node
+        assert isinstance(output_expr, MemletExpr)
+        tasklet_node = self.state.add_tasklet("copy", {"__inp"}, {"__out"}, "__out = __inp")
+        self.input_connections.append(
+            (output_expr.source, output_expr.subset, tasklet_node, "__inp")
+        )
+        return self.input_connections, TaskletExpr(tasklet_node, "__out")
 
     def visit_Literal(self, node: itir.Literal) -> SymbolExpr:
         dtype = as_dace_type(node.type)
